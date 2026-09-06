@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -16,9 +17,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 
-@Composable fun CompanionTheme(content: @Composable () -> Unit) {
+@Composable fun CompanionTheme(dark: Boolean = true, accent: String = "Mint", content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = darkColorScheme(
+        colorScheme = (if (dark) darkColorScheme(
             primary = Color(0xFF81E6CF), onPrimary = Color(0xFF00382E),
             primaryContainer = Color(0xFF244B45), onPrimaryContainer = Color(0xFFB7F5E6),
             secondary = Color(0xFFA8B5BD), onSecondary = Color(0xFF19242D),
@@ -31,7 +32,20 @@ import androidx.compose.ui.unit.dp
             surfaceContainerHighest = Color(0xFF293640),
             outline = Color(0xFF71818B), outlineVariant = Color(0xFF364650),
             error = Color(0xFFFFB4AB), errorContainer = Color(0xFF5E2422),
-        ),
+        ) else lightColorScheme(
+            background=Color(0xFFEAF0F4), surface=Color(0xFFFFFFFF),
+            onBackground=Color(0xFF19242D), onSurface=Color(0xFF19242D),
+            surfaceVariant=Color(0xFFDDE5EA), onSurfaceVariant=Color(0xFF3E4D57)
+        )).let { scheme ->
+            val primary = when(accent) {
+                "Blue" -> if(dark) Color(0xFFA8C8FF) else Color(0xFF245B9D)
+                "Lavender" -> if(dark) Color(0xFFD3BFFF) else Color(0xFF69429A)
+                else -> if(dark) Color(0xFF81E6CF) else Color(0xFF006B58)
+            }
+            scheme.copy(primary=primary, onPrimary=if(dark) Color(0xFF10171D) else Color.White,
+                primaryContainer=primary.copy(alpha=1f), onPrimaryContainer=if(dark) Color(0xFF10171D) else Color.White,
+                secondaryContainer=if(dark) Color(0xFF293640) else Color(0xFFDDE5EA), onSecondaryContainer=primary)
+        },
         shapes = Shapes(medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(20.dp)),
         content = content,
     )

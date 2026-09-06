@@ -56,7 +56,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState);receiveShare(intent); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
-            CompanionTheme {
+            val appearancePrefs = remember { getSharedPreferences("appearance", 0) }
+            var appearance by remember { mutableStateOf(DashboardOptions.decode(runCatching { appearancePrefs.getString("options", null) }.getOrNull())) }
+            val dark = appearance.mode == "Dark" || (appearance.mode == "System" && androidx.compose.foundation.isSystemInDarkTheme())
+            SideEffect {
+                val style = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT) else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
+            CompanionTheme(dark = dark, accent = appearance.accent) {
                 val model: PrinterModel = viewModel(factory = viewModelFactory {
                     initializer {
                         val prefs = getSharedPreferences("printer", 0)
@@ -75,7 +86,7 @@ class MainActivity : ComponentActivity() {
                     model.foreground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
-                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null})
+                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() })
             }
         }
     }
@@ -83,7 +94,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
-    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}) {
+    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}) {
+    var customize by rememberSaveable { mutableStateOf(false) }
+    if(customize) DashboardEditor(appearance, saveAppearance) { customize=false }
     val listState = rememberLazyListState()
     val uiScope = rememberCoroutineScope()
     val context=LocalContext.current
@@ -149,6 +162,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
+            if(tab == 0 || tab == 3) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
             if(tab == 3 || (state.address.isEmpty() && tab != 2)) {
                 if(state.savedPrinters.isNotEmpty()) {
                     item { Text("Saved printers", style = MaterialTheme.typography.titleMedium)
@@ -186,7 +200,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             } else when(tab) {
                 0 -> {
-                    item {
+                    items(appearance.order.filterNot { it in appearance.hidden }, key={"dashboard:$it"}) { card ->
+                        when(card) {
+                            "Camera" -> {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
                             Column(Modifier.padding(12.dp).onGloballyPositioned { coordinates ->
                                 val bounds=coordinates.boundsInWindow()
@@ -203,7 +219,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             }
                         }
                     }
-                    item {
+                            "Print" -> {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(state.snapshot?.state?.replaceFirstChar { it.uppercase() } ?: "Awaiting printer", style = MaterialTheme.typography.titleLarge)
@@ -221,7 +237,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             }
                         }
                     }
-                    item {
+                            "Temperatures" -> {
                         if (LocalDensity.current.fontScale > 1.3f) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Temperature("NOZZLE", state.snapshot?.nozzle, state.snapshot?.nozzleTarget, Modifier.fillMaxWidth())
                             Temperature("BED", state.snapshot?.bed, state.snapshot?.bedTarget, Modifier.fillMaxWidth())
@@ -230,12 +246,14 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             Temperature("BED", state.snapshot?.bed, state.snapshot?.bedTarget, Modifier.weight(1f))
                         }
                     }
-                    item {
+                            "Quick tools" -> {
                         Text("Quick tools", style = MaterialTheme.typography.titleMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton({ tab = 1 }) { Text("Macros") }
                             OutlinedButton({ tab = 2 }) { Text("Browse files") }
                             OutlinedButton({ tab = 3 }) { Text("Printers") }
+                        }
+                    }
                         }
                     }
                 }

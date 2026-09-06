@@ -75,7 +75,7 @@ turned into a paid unlock.
 | P07 | Heating presets, fans, speed/flow, movement/extrusion; Mobileraker/OctoApp | Temperature readings | M2 | L | Local; capability discovery and owner-operated physical acceptance |
 | P08 | Upload/download/rename/delete, share-to-app; Mobileraker/OctoApp | Missing | M2 | M | Local; bounded transfers and explicit overwrite/delete handling |
 | P09 | G-code preview with layers and print position; Mobileraker/OctoApp | Missing | M2 | L | Local; bounded parser/renderer, supported dialects |
-| P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Fixed dark dashboard | M2 | M | Local; persist layout without hiding safety feedback |
+| P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
 | P11 | Console history/filtering, explicit command entry; Mobileraker/OctoApp | Missing | M3 | M | Local; bounded logs, command safeguards |
 | P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Missing | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
 | P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Missing | M3 | M | Existing service; read first, validated mutations later |

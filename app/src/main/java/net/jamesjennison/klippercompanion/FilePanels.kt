@@ -35,22 +35,3 @@ import androidx.compose.ui.unit.dp
         workspace.preview?.let { LayerPreview(it) }
     }
 }
-@Composable fun LayerPreview(path:Toolpath) {
-    var layer by remember(path) {mutableIntStateOf(0)}
-    val selected=remember(path,layer) {path.segments.filter {it.layer==layer}.let {all->val step=(all.size/5000+1);all.filterIndexed {i,_->i%step==0}}}
-    val color=MaterialTheme.colorScheme.primary
-    Text("Extrusion layer ${layer+1} / ${path.heights.size} · Z ${path.heights[layer]} mm")
-    if(path.heights.size>1)Slider(layer.toFloat(),{layer=it.toInt().coerceIn(path.heights.indices)},valueRange=0f..path.heights.lastIndex.toFloat())
-    if(path.sampled)Text("Large file: path segments are sampled.",style=MaterialTheme.typography.bodySmall)
-    if(path.ignoredMotion)Text("Some commands are not represented.",style=MaterialTheme.typography.bodySmall)
-    Canvas(Modifier.fillMaxWidth().height(260.dp)) {
-        if(selected.isNotEmpty()) {
-            val minX=selected.minOf {minOf(it.x1,it.x2)};val maxX=selected.maxOf {maxOf(it.x1,it.x2)}
-            val minY=selected.minOf {minOf(it.y1,it.y2)};val maxY=selected.maxOf {maxOf(it.y1,it.y2)}
-            val scale=minOf((size.width-24)/(maxX-minX).coerceAtLeast(1f),(size.height-24)/(maxY-minY).coerceAtLeast(1f))
-            fun point(x:Float,y:Float)=Offset(12+(x-minX)*scale,size.height-12-(y-minY)*scale)
-            selected.forEach {drawLine(color,point(it.x1,it.y1),point(it.x2,it.y2),1.5f)}
-        }
-    }
-    Text("Preview only — not a motion simulation or live tool position.",style=MaterialTheme.typography.bodySmall)
-}

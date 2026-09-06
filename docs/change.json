@@ -1,0 +1,12 @@
+{
+  "change_id": "mobile-klipper-mvp-20260906",
+  "repository": "/home/jjennison/Documents/ChatGPT/Mobile Klipper Companion",
+  "summary": "Original Android Compose Moonraker local-network MVP with foreground monitoring, snapshot camera, file and macro browsing, confirmed printer commands and no automatic mutation replay.",
+  "classification": "substantive",
+  "affected_components": [
+    "Android app",
+    "Moonraker HTTP transport",
+    "UI",
+    "network lifecycle"
+  ]
+}

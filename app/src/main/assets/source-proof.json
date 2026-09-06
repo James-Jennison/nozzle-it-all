@@ -1,0 +1,16 @@
+{
+  "app/build.gradle.kts": "42a165fb913a59dbdfe20367bccc86077d805c73b8c5dca87296821125b1353a",
+  "app/src/main/AndroidManifest.xml": "bf8db44abe0df5d2586160d89a35873f203d08b29120049c10cfb826bf598c46",
+  "app/src/main/assets/camera.html": "581a5becb123aa159f0ebfb105964874b41ff58a3d25aa998fd03fd91c70972b",
+  "app/src/main/java/net/jamesjennison/klippercompanion/LiveCamera.kt": "033abe4db17cc957ef6439c1e5fae65b8fed5dd6169ce1be9d82b63ed6989ee7",
+  "app/src/main/java/net/jamesjennison/klippercompanion/MainActivity.kt": "2485c3b6833a3edb8e378a54c917afa0a874620f26119cde96a9abbaf2e6fabb",
+  "app/src/main/java/net/jamesjennison/klippercompanion/Moonraker.kt": "970202523857b1e06eb3fef18db9114681bdca0adaf7697aff51530fa0c67d54",
+  "app/src/main/java/net/jamesjennison/klippercompanion/PrinterModel.kt": "0ff1165745924612b4c4d451bdce823945702b9605ac4cead275184edabf3088",
+  "app/src/main/res/drawable/ic_launcher.xml": "82940357aac727a133e61f749981a45f181db601109103271bf8910020b1a944",
+  "app/src/main/res/xml/data_extraction_rules.xml": "082f22847f447b5497213e92393ef27728a9a46e8331b23fc5535d526a8585c5",
+  "build.gradle.kts": "3f83b594ab2f941cd37822dbb72272fac8d824aba183ad738a9533b0028864b3",
+  "gradle.properties": "fa078c27c9e4bde28a029d673875b028884505efa436b68cf60e1ac0be5b679b",
+  "gradle/wrapper/gradle-wrapper.properties": "cdab1ffb439219b1db125e3c99a86cf2424f8762b9b3faa404ed061e3635ecde",
+  "scripts/artifact-proof.py": "4789dfc35df206959e96c52991f45f8971a3afcfa158cd7e799ac736712e7446",
+  "settings.gradle.kts": "b625e014461b2b58ef5a9149427b87a947b1cecd3d35aa60ff12d4fddbcb3265"
+}

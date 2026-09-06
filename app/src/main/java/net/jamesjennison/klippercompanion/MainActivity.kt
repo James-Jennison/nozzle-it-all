@@ -20,6 +20,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
@@ -44,8 +48,8 @@ class MainActivity : ComponentActivity() {
                 val model: PrinterModel = viewModel(factory = viewModelFactory {
                     initializer {
                         val prefs = getSharedPreferences("printer", 0)
-                        PrinterModel(PrinterPreferences.address(prefs), { address, printers -> PrinterPreferences.save(prefs, address, printers) },
-                            initialPrinters = PrinterPreferences.printers(prefs))
+                        PrinterModel(PrinterPreferences.address(prefs), initialPrinters = PrinterPreferences.printers(prefs), initialProfiles=PrinterPreferences.profiles(prefs),
+                            saveProfiles={ address, profiles -> PrinterPreferences.saveProfiles(prefs,address,profiles) })
                     }
                 })
                 val state by model.state.collectAsStateWithLifecycle()
@@ -59,18 +63,27 @@ class MainActivity : ComponentActivity() {
                     model.foreground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
-                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter)
+                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory)
             }
         }
     }
 }
 
 @Composable
-fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}) {
+fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
+    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}) {
     val listState = rememberLazyListState()
+    val uiScope = rememberCoroutineScope()
+    val hostView=LocalView.current
+    var cameraVisible by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(tab, state.generation) { listState.scrollToItem(0) }
     var address by rememberSaveable(state.address) { mutableStateOf(state.address) }
+    var editingProfile by remember(state.generation) { mutableStateOf<PrinterProfile?>(null) }
+    var fileQuery by rememberSaveable(state.address) { mutableStateOf("") }
+    var folder by rememberSaveable(state.address) { mutableStateOf("") }
+    var newestFirst by rememberSaveable { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Pair<PrinterCommand,Int>?>(null) }
     var expandedCamera by remember(state.generation, state.connected) { mutableStateOf(false) }
     BackHandler(expandedCamera) { expandedCamera = false }
@@ -108,7 +121,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(state.address.ifBlank { "Add your first printer" }, style = MaterialTheme.typography.titleMedium)
+                    Text(state.profiles.firstOrNull { it.address==state.address }?.label ?: state.address.ifBlank { "Add your first printer" }, style = MaterialTheme.typography.titleMedium)
                     Text(if(state.connected) "CONNECTED" else "OFFLINE", style = MaterialTheme.typography.labelMedium, color = if(state.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                     if(!state.connected || state.snapshot?.ready != true || tab == 3) Text(state.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -121,7 +134,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     items(state.savedPrinters, key = { "saved:$it" }) { saved ->
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
                             Column(Modifier.padding(16.dp)) {
-                                Text(saved, style = MaterialTheme.typography.bodyLarge)
+                                val profile=state.profiles.firstOrNull { it.address==saved } ?: PrinterProfile(saved)
+                                Text(profile.label, style = MaterialTheme.typography.titleMedium)
+                                if(profile.name.isNotBlank()) Text(saved, style = MaterialTheme.typography.bodySmall)
+                                FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                    TextButton({editingProfile=profile},enabled=!state.busy,modifier=Modifier.testTag("edit-profile:$saved")){Text("Edit")}
+                                    TextButton({favoriteProfile(saved)},enabled=!state.busy){Text(if(profile.favorite) "Unfavorite" else "Favorite")}
+                                    TextButton({moveProfile(saved,-1)},enabled=!state.busy&&state.savedPrinters.indexOf(saved)>0){Text("Move up")}
+                                    TextButton({moveProfile(saved,1)},enabled=!state.busy&&state.savedPrinters.indexOf(saved)<state.savedPrinters.lastIndex){Text("Move down")}
+                                }
+                                if(profile.favorite) Text("Favorite", style = MaterialTheme.typography.bodyLarge)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     OutlinedButton({ connect(saved); tab = 0 }, enabled = !state.busy && !(state.connected && saved == state.address), modifier = Modifier.testTag("saved-connect:$saved")) { Text(if(state.connected && saved == state.address) "Connected" else "Connect") }
                                     TextButton({ forgetPrinter(saved) }, enabled = !state.busy, modifier = Modifier.testTag("saved-forget:$saved")) { Text("Forget") }
@@ -144,12 +166,18 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 0 -> {
                     item {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.padding(12.dp).onGloballyPositioned { coordinates ->
+                                val bounds=coordinates.boundsInWindow()
+                                cameraVisible=bounds.bottom>0 && bounds.top<hostView.height && bounds.right>0 && bounds.left<hostView.width
+                            }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Text("Camera", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                                    IconButton({ expandedCamera = true }, Modifier.testTag("expand-camera").semantics { contentDescription = "Open full screen camera" }, enabled = state.connected && (state.catalog.cameras.firstOrNull()?.stream?.isNotBlank() == true || state.camera != null)) { CompanionIcon(CompanionSymbol.EXPAND) }
+                                    IconButton({ expandedCamera = true }, Modifier.testTag("expand-camera").semantics { contentDescription = "Open full screen camera" }, enabled = state.connected && (state.selectedCamera()?.stream?.isNotBlank() == true || state.camera != null)) { CompanionIcon(CompanionSymbol.EXPAND) }
                                 }
-                                CameraContent(state)
+                                if(state.catalog.cameras.size>1 || (state.catalog.cameras.isNotEmpty() && state.selectedCamera()==null)) FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                    state.catalog.cameras.forEach { camera -> FilterChip(selected=state.selectedCamera()?.id==camera.id,onClick={selectCamera(camera.id)},label={Text(camera.name)},modifier=Modifier.testTag("camera:${camera.id}")) }
+                                }
+                                CameraContent(state,cameraVisible)
                             }
                         }
                     }
@@ -158,6 +186,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(state.snapshot?.state?.replaceFirstChar { it.uppercase() } ?: "Awaiting printer", style = MaterialTheme.typography.titleLarge)
                                 Text(state.snapshot?.filename?.ifBlank { "No active file" } ?: "Connect to see print status", style = MaterialTheme.typography.bodyMedium)
+                                Text("Elapsed ${formatDuration(state.snapshot?.printDuration)} · Remaining ${formatDuration(estimatedRemaining(state.snapshot,state.activeMetadata))}", style=MaterialTheme.typography.bodySmall)
+                                if(estimatedRemaining(state.snapshot,state.activeMetadata)!=null) Text("Remaining time is a slicer-based estimate.",style=MaterialTheme.typography.labelSmall)
+                                Text("Layer ${state.snapshot?.currentLayer ?: "Unknown"} / ${state.snapshot?.totalLayers ?: state.activeMetadata?.layers ?: "Unknown"}",style=MaterialTheme.typography.bodySmall)
                                 LinearProgressIndicator(progress = { state.snapshot?.progress ?: 0f }, modifier = Modifier.fillMaxWidth())
                                 Text(state.snapshot?.let { "${(it.progress*100).toInt()}%" } ?: "—", style = MaterialTheme.typography.headlineLarge, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -197,20 +228,59 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 2 -> {
-                    item { Text("G-code files stored on your printer."); TextButton(refresh) { Text("Refresh lists") } }
-                    if(state.catalog.files.isEmpty()) item { Text("No G-code files available. Upload a file through your slicer or web interface.") }
-                    items(state.catalog.files, key = { it }) { file ->
-                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(file, style = MaterialTheme.typography.titleSmall)
-                            OutlinedButton({ pending = Moonraker.start(file) to state.generation }, enabled = enabled && state.snapshot?.state in setOf("standby", "complete", "cancelled", "error")) { Text("Start print") }
-                        } }
+                    item {
+                        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            FilterChip(!showHistory,{showHistory=false},label={Text("Files")})
+                            FilterChip(showHistory,{showHistory=true;loadHistory(0)},label={Text("History")},modifier=Modifier.testTag("show-history"))
+                        }
+                    }
+                    if(showHistory) {
+                        item { HistoryHeader(state,loadHistory) }
+                        items(state.history, key={"job:${it.id}"}) { job ->
+                            Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
+                                Text(job.filename,style=MaterialTheme.typography.titleSmall)
+                                Text("${job.status} · ${formatDuration(job.duration)} · ${formatMaterial(job.filamentMm)}")
+                                job.started?.takeIf { it < 253402300799.0 }?.let { Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date((it*1000).toLong()))) }
+                            } }
+                        }
+                    } else {
+                        item {
+                            OutlinedTextField(fileQuery,{fileQuery=it},label={Text("Search files")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                TextButton(refresh){Text("Refresh lists")}
+                                TextButton({newestFirst=!newestFirst}){Text(if(newestFirst) "Sort: newest" else "Sort: name")}
+                                if(folder.isNotBlank()) TextButton({folder=folder.substringBeforeLast('/',"")}){Text("Up a folder")}
+                            }
+                            Text(folder.ifBlank { "All files" })
+                            FileDetails(state)
+                        }
+                        val prefix=if(folder.isBlank()) "" else "$folder/"
+                        val candidates=state.catalog.files.filter { it.startsWith(prefix) && it.contains(fileQuery,true) }
+                        val folders=if(fileQuery.isBlank()) candidates.map { it.removePrefix(prefix) }.filter { '/' in it }.map { it.substringBefore('/') }.distinct().sorted() else emptyList()
+                        items(folders,key={"folder:$it"}) { name -> OutlinedButton({folder=prefix+name}){Text("Folder: $name")} }
+                        val files=candidates.filter { fileQuery.isNotBlank() || '/' !in it.removePrefix(prefix) }.let { list ->
+                            if(newestFirst) list.sortedByDescending { path -> state.catalog.fileInfo.firstOrNull { it.path==path }?.modified ?: -1.0 } else list.sorted()
+                        }
+                        if(files.isEmpty() && folders.isEmpty()) item { Text("No matching G-code files. Connect to read the printer's files.") }
+                        items(files, key={"file:$it"}) { file ->
+                            Card(Modifier.fillMaxWidth(), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) { Column(Modifier.padding(12.dp)) {
+                                Text(file,style=MaterialTheme.typography.titleSmall)
+                                state.catalog.fileInfo.firstOrNull { it.path==file }?.size?.let { Text("${it/1024} KiB",style=MaterialTheme.typography.bodySmall) }
+                                FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton({selectFile(file);uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected,modifier=Modifier.testTag("details:$file")){Text("Details")}
+                                    OutlinedButton({pending=Moonraker.start(file) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error")){Text("Start print")}
+                                }
+                            } }
+                        }
                     }
                 }
+
             }
             items(state.catalog.warnings) { Text(it, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall) }
             item { Text("LOCAL NETWORK  ·  ANDROID  ·  0.1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
+    editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile) }
     pending?.let { (command, epoch) ->
         AlertDialog(onDismissRequest = { pending = null }, title = { Text(command.title + "?") },
             text = { Text("This sends a command to ${state.address}. It may move or heat your printer. Confirm only when the printer is safe and ready.") },
@@ -227,17 +297,24 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     } }
 }
 
-@Composable private fun CameraContent(state: ScreenState) {
-    val camera = state.catalog.cameras.firstOrNull()
+@Composable private fun CameraContent(state: ScreenState, visible: Boolean = true) {
+    if(!visible) { Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f));return }
+    val camera = state.selectedCamera()
     if(state.connected && camera != null && camera.stream.isNotBlank()) {
-        key(state.generation, state.address, camera) { LiveCamera(state.address, camera) }
-    } else if(state.connected && state.camera != null) {
+        key(state.generation, state.cameraGeneration, state.address, camera) {
+            when(camera.service) {
+                "webrtc-camerastreamer" -> LiveCamera(state.address,camera)
+                "mjpegstreamer", "mjpegstreamer-adaptive" -> MjpegCamera(state.address,camera)
+                else -> Text("Unsupported live camera format: ${camera.service.ifBlank { "unknown" }}")
+            }
+        }
+    } else if(state.connected && camera != null && state.camera != null) {
         Image(state.camera.asImageBitmap(), "Current printer camera snapshot", Modifier.fillMaxWidth().aspectRatio(16f/9f))
         Text(state.cameraNote.ifBlank { "Refreshed snapshots" }, style = MaterialTheme.typography.bodySmall)
     } else {
         Column(Modifier.fillMaxWidth().aspectRatio(16f/9f).background(MaterialTheme.colorScheme.background, RoundedCornerShape(12.dp)), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             CompanionIcon(CompanionSymbol.CAMERA)
-            Text(if(!state.connected) "Connect to view camera" else "No camera available", Modifier.padding(8.dp), style = MaterialTheme.typography.bodyMedium)
+            Text(if(!state.connected) "Connect to view camera" else if(state.profiles.firstOrNull { it.address==state.address }?.cameraId?.isNotBlank()==true) "Selected camera unavailable. Choose an available camera." else "No camera available", Modifier.padding(8.dp), style = MaterialTheme.typography.bodyMedium)
         }
         if(state.cameraNote.isNotBlank()) Text(state.cameraNote, style = MaterialTheme.typography.bodySmall)
     }

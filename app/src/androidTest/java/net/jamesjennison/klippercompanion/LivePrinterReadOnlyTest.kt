@@ -21,6 +21,11 @@ class LivePrinterReadOnlyTest {
         compose.waitUntil(30000) { compose.onAllNodesWithText("Run").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("nav-2").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("Start print").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("Details")[0].performScrollTo().performClick()
+        compose.waitUntil(30000) { compose.onAllNodesWithText("Slicer estimate:",substring=true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("show-history"))
+        compose.onNodeWithTag("show-history").performClick()
+        compose.waitUntil(30000) { compose.onAllNodesWithText("Records ",substring=true).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Camera"))
         compose.waitUntil(30000) { compose.onAllNodesWithText("fps", substring=true).fetchSemanticsNodes().isNotEmpty() }

@@ -12,9 +12,9 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ApiFailure(message: String) : IOException(message)
-data class PrinterSnapshot(val ready: Boolean, val state: String, val filename: String = "", val progress: Float = 0f, val nozzle: Double? = null, val nozzleTarget: Double? = null, val bed: Double? = null, val bedTarget: Double? = null)
-data class Camera(val name: String, val snapshot: String, val stream: String = "", val service: String = "")
-data class Catalog(val files: List<String>, val macros: List<String>, val cameras: List<Camera>, val warnings: List<String>)
+data class PrinterSnapshot(val ready: Boolean, val state: String, val filename: String = "", val progress: Float = 0f, val nozzle: Double? = null, val nozzleTarget: Double? = null, val bed: Double? = null, val bedTarget: Double? = null, val printDuration: Double? = null, val currentLayer: Int? = null, val totalLayers: Int? = null)
+data class Camera(val name: String, val snapshot: String, val stream: String = "", val service: String = "", val id: String = name)
+data class Catalog(val files: List<String>, val macros: List<String>, val cameras: List<Camera>, val warnings: List<String>, val fileInfo: List<FileInfo> = emptyList())
 data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet())
 
 interface PrinterService {
@@ -22,6 +22,9 @@ interface PrinterService {
     fun snapshot(): PrinterSnapshot
     fun catalog(): Catalog
     fun image(camera: Camera): ByteArray
+    fun metadata(filename: String): FileMetadata = throw ApiFailure("Metadata unavailable.")
+    fun history(start: Int): HistoryPage = throw ApiFailure("History unavailable.")
+    fun thumbnail(path: String): ByteArray = throw ApiFailure("Thumbnail unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
@@ -58,7 +61,9 @@ class Moonraker(address: String) : PrinterService {
             val state = if (ready) stats?.optString("state", "unknown") ?: "unknown" else "not ready"
             return PrinterSnapshot(ready, state, stats?.optString("filename", "") ?: "",
                 (number("virtual_sdcard", "progress") ?: 0.0).coerceIn(0.0, 1.0).toFloat(),
-                number("extruder", "temperature"), number("extruder", "target"), number("heater_bed", "temperature"), number("heater_bed", "target"))
+                number("extruder", "temperature"), number("extruder", "target"), number("heater_bed", "temperature"), number("heater_bed", "target"), stats?.finiteNonnegative("print_duration"),
+                stats?.optJSONObject("info")?.optInt("current_layer")?.takeIf { it > 0 },
+                stats?.optJSONObject("info")?.optInt("total_layer")?.takeIf { it > 0 })
         }
         fun start(file: String) = PrinterCommand("Start $file", "printer/print/start", mapOf("filename" to file), setOf("standby", "complete", "cancelled", "error"))
         fun macro(name: String): PrinterCommand {
@@ -91,14 +96,16 @@ class Moonraker(address: String) : PrinterService {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")
         if (!info.optBoolean("klippy_connected") || info.optString("klippy_state") != "ready") return PrinterSnapshot(false, info.optString("klippy_state", "not ready"))
         try {
-            return parseSnapshot(request("printer/objects/query", mapOf("webhooks" to "state", "print_stats" to "state,filename", "virtual_sdcard" to "progress", "extruder" to "temperature,target", "heater_bed" to "temperature,target")) as JSONObject)
+            return parseSnapshot(request("printer/objects/query", mapOf("webhooks" to "state", "print_stats" to "state,filename,print_duration,info", "virtual_sdcard" to "progress", "extruder" to "temperature,target", "heater_bed" to "temperature,target")) as JSONObject)
         } catch(e: org.json.JSONException) { throw ApiFailure("Printer state is incomplete.") }
     }
     override fun catalog(): Catalog {
         val warnings = mutableListOf<String>()
+        var details = emptyList<FileInfo>()
         val files = try {
             val list = request("server/files/list", mapOf("root" to "gcodes")) as JSONArray
-            (0 until list.length()).map { list.getJSONObject(it).getString("path") }.filter { it.endsWith(".gcode", true) || it.endsWith(".gco", true) }.sorted()
+            details = (0 until list.length()).map { list.getJSONObject(it) }.map { FileInfo(it.getString("path"), it.finiteNonnegative("size")?.toLong(), it.finiteNonnegative("modified")) }
+            details.map { it.path }.filter { it.endsWith(".gcode", true) || it.endsWith(".gco", true) }.distinct().sorted()
         } catch(e: Exception) { warnings.add("File list unavailable."); emptyList() }
         val macros = try {
             val list = (request("printer/objects/list") as JSONObject).getJSONArray("objects")
@@ -108,9 +115,38 @@ class Moonraker(address: String) : PrinterService {
         val cameras = try {
             val list = (request("server/webcams/list") as JSONObject).getJSONArray("webcams")
             (0 until list.length()).map { list.getJSONObject(it) }.filter { it.optBoolean("enabled", true) && (it.optString("snapshot_url").isNotBlank() || it.optString("stream_url").isNotBlank()) }
-                .map { Camera(it.optString("name", "Camera"), it.optString("snapshot_url"), it.optString("stream_url"), it.optString("service")) }
+                .map { Camera(it.optString("name", "Camera"), it.optString("snapshot_url"), it.optString("stream_url"), it.optString("service"), it.optString("uid").ifBlank { it.optString("name", "Camera") }) }
         } catch(e: Exception) { warnings.add("Camera configuration unavailable."); emptyList() }
-        return Catalog(files, macros, cameras, warnings)
+        return Catalog(files, macros, cameras, warnings, details)
+    }
+    override fun metadata(filename: String): FileMetadata {
+        val result = request("server/files/metadata", mapOf("filename" to filename)) as? JSONObject ?: throw ApiFailure("Metadata unavailable.")
+        val thumbnails = result.optJSONArray("thumbnails")
+        val thumb = thumbnails?.let { list -> (0 until list.length()).mapNotNull { list.optJSONObject(it) }
+            .filter { it.optInt("width") in 1..1024 && it.optInt("height") in 1..1024 }
+            .maxByOrNull { it.optInt("width") }?.optString("relative_path")?.takeIf { it.isNotBlank() } }
+        val parent = filename.substringBeforeLast('/', "")
+        return FileMetadata(filename, result.finiteNonnegative("estimated_time"), result.optInt("layer_count").takeIf { it > 0 },
+            result.finiteNonnegative("filament_total"), result.finiteNonnegative("filament_weight_total"), result.optString("slicer"),
+            thumb?.let { if(parent.isBlank()) it else "$parent/$it" })
+    }
+    override fun history(start: Int): HistoryPage {
+        val result = request("server/history/list", mapOf("start" to start.coerceAtLeast(0).toString(), "limit" to "50", "order" to "desc")) as? JSONObject ?: throw ApiFailure("History unavailable.")
+        val jobs = result.getJSONArray("jobs")
+        return HistoryPage((0 until minOf(jobs.length(), 50)).map { jobs.getJSONObject(it) }.map {
+            PrintJob(it.getString("job_id"), it.optString("filename", "Unknown file"), it.optString("status", "unknown"),
+                it.finiteNonnegative("start_time"), it.finiteNonnegative("print_duration"), it.finiteNonnegative("filament_used"))
+        }.distinctBy { it.id }, minOf(jobs.length(),50))
+    }
+    override fun thumbnail(path: String): ByteArray {
+        if(path.startsWith('/') || path.split('/').any { it == ".." || it == "." } || path.contains('\\')) throw ApiFailure("Invalid thumbnail path.")
+        val target = base.newBuilder().addPathSegments("server/files/gcodes").apply { path.split('/').forEach { addPathSegment(it) } }.build()
+        client.newCall(Request.Builder().url(target).build()).execute().use { response ->
+            if(!response.isSuccessful) throw ApiFailure("Thumbnail unavailable.")
+            val source = response.body?.source() ?: throw ApiFailure("Empty thumbnail.")
+            source.request(2_000_001)
+            return source.buffer.readByteArray().also { if(it.size > 2_000_000) throw ApiFailure("Thumbnail too large.") }
+        }
     }
     override fun image(camera: Camera): ByteArray {
         val target = cameraUrl(address, camera.snapshot)

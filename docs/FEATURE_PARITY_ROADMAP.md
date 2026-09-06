@@ -24,8 +24,9 @@ status/progress/temperature readings, camera-streamer WebRTC plus a dedicated ca
 view, basic macro execution and file list/start, confirmed pause/resume/cancel,
 original dark UI and accessible wrapping controls. Snapshot fallback is labelled.
 
-Partial: printer profiles have no friendly names; only the first configured camera
-is used; files have no management or preview; macros have no parameter forms;
+M1 now adds friendly profiles, camera selection/MJPEG, metadata/thumbnails, history
+and time/layer estimates; see [M1 acceptance](M1_ACCEPTANCE.md). File mutation and G-code
+preview remain planned; macros have no parameter forms;
 temperature controls are read-only. Monitoring is foreground-only. Authentication
 required by a printer is currently unsupported. AI evaluation is experimental and
 not integrated into the app; server/infrastructure work remains deferred.
@@ -65,11 +66,11 @@ turned into a paid unlock.
 
 | ID | Capability / reference | Today | Target milestone | Effort | Cost / dependency |
 | --- | --- | --- | --- | --- | --- |
-| P01 | Named profiles, edit/reorder/favorites; Mobileraker/OctoApp | Address list only | M1 | S | Local; migrate current preferences |
-| P02 | Camera picker, remembered view, MJPEG + existing WebRTC; Mobileraker/OctoApp/Printer Tools | First camera; full-screen exists | M1 | M | Local; actual configured camera endpoints |
-| P03 | File folders, metadata, thumbnails, sort/search; Mobileraker/OctoApp/Printer Tools | Flat list/start | M1 | M | Local; Moonraker metadata |
-| P04 | Print history, outcomes, duration/material summaries; Printer Tools/SimplyPrint | Missing | M1 | M | Local; history API and available records |
-| P05 | Elapsed time, ETA and layer progress; everyday monitoring | Percentage only | M1 | M | Local; metadata/status; label estimates and missing data |
+| P01 | Named profiles, edit/reorder/favorites; Mobileraker/OctoApp | Validated: named/editable/ordered/favorites | M1 | S | Local; migrate current preferences |
+| P02 | Camera picker, remembered view, MJPEG + existing WebRTC; Mobileraker/OctoApp/Printer Tools | Validated: remembered picker, MJPEG/WebRTC | M1 | M | Local; actual configured camera endpoints |
+| P03 | File folders, metadata, thumbnails, sort/search; Mobileraker/OctoApp/Printer Tools | Validated: folders/search/sort/metadata/thumbnail | M1 | M | Local; Moonraker metadata |
+| P04 | Print history, outcomes, duration/material summaries; Printer Tools/SimplyPrint | Validated: paged records and summaries | M1 | M | Local; history API and available records |
+| P05 | Elapsed time, ETA and layer progress; everyday monitoring | Validated: elapsed/layers and labelled estimates | M1 | M | Local; metadata/status; label estimates and missing data |
 | P06 | Macro favorites/groups/validated parameter forms; Mobileraker | Basic run | M2 | M | Local; explicit parameter definitions, not guessed inputs |
 | P07 | Heating presets, fans, speed/flow, movement/extrusion; Mobileraker/OctoApp | Temperature readings | M2 | L | Local; capability discovery and owner-operated physical acceptance |
 | P08 | Upload/download/rename/delete, share-to-app; Mobileraker/OctoApp | Missing | M2 | M | Local; bounded transfers and explicit overwrite/delete handling |
@@ -92,9 +93,9 @@ turned into a paid unlock.
 
 ## Delivery milestones and exit criteria
 
-### M1 — A useful daily monitor (recommended next)
+### M1 — A useful daily monitor (validated 2026-09-06)
 
-Deliver P01–P05. This closes frequent local workflow gaps without requiring a new
+P01–P05 are validated in the installed Razr debug build; see [M1 acceptance](M1_ACCEPTANCE.md). This closes frequent local workflow gaps without requiring a new
 server. Order: named profiles → camera selection → metadata/thumbnails → history →
 time/layer estimates. File metadata precedes estimates so we do not invent ETA.
 
@@ -209,6 +210,5 @@ is a planning artifact, not a release acceptance or a new infrastructure archite
 No parity percentage is claimed: a raw checkbox count would hide major differences
 between local viewing, dependable alerts and hosted AI services.
 
-Recommended next implementation scope: **M1, beginning with P01 named printer profiles
-and P02 camera selection**. Both build directly on the installed app, incur no new
-hosted-service requirement and address everyday usability before costly backend work.
+M1 is validated in the owner’s debug installation. **M2 is next in the proposed sequence**,
+subject to the owner beginning that milestone; it has not started.

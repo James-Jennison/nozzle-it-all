@@ -13,7 +13,13 @@ data class ScreenState(
     val snapshot: PrinterSnapshot? = null, val catalog: Catalog = Catalog(emptyList(), emptyList(), emptyList(), emptyList()),
     val camera: Bitmap? = null, val cameraNote: String = "", val message: String = "Connect to your printer to begin.",
     val commandNotice: String = "", val lastUpdate: Long = 0, val generation: Int = 0,
-    val savedPrinters: List<String> = emptyList()
+    val savedPrinters: List<String> = emptyList(),
+    val profiles: List<PrinterProfile> = emptyList(), val cameraGeneration: Int = 0,
+    val activeMetadata: FileMetadata? = null, val fileMetadata: FileMetadata? = null, val thumbnail: Bitmap? = null,
+    val fileNote: String = "", val fileLoading: Boolean = false,
+    val history: List<PrintJob> = emptyList(), val historyPageSize: Int = 0, val historyOffset: Int = 0,
+    val historyLoading: Boolean = false, val historyNote: String = ""
+
 )
 class PrinterModel(
     initialAddress: String = "",
@@ -21,38 +27,121 @@ class PrinterModel(
     private val serviceFactory: (String) -> PrinterService = { Moonraker(it) },
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val io: CoroutineDispatcher = Dispatchers.IO,
-    initialPrinters: List<String> = emptyList()
+    initialPrinters: List<String> = emptyList(),
+    initialProfiles: List<PrinterProfile> = emptyList(),
+    private val saveProfiles: (String, List<PrinterProfile>) -> Unit = { _, _ -> }
+
 ) : ViewModel() {
     private val _state = MutableStateFlow(ScreenState(address = runCatching { Moonraker.parseAddress(initialAddress).toString() }.getOrDefault(""),
         savedPrinters = (initialPrinters + initialAddress).filter { it.isNotBlank() }
             .mapNotNull { runCatching { Moonraker.parseAddress(it).toString() }.getOrNull() }.distinct()))
+    init {
+        val profiles = initialProfiles.mapNotNull { p -> runCatching { p.copy(address=Moonraker.parseAddress(p.address).toString(), name=p.name.take(80)) }.getOrNull() }.distinctBy { it.address }
+        val merged = profiles + _state.value.savedPrinters.filter { a -> profiles.none { it.address == a } }.map { PrinterProfile(it) }
+        _state.value = _state.value.copy(profiles=merged, savedPrinters=merged.map { it.address })
+    }
     val state = _state.asStateFlow()
+    private var detailJob: Job? = null
+    private var historyJob: Job? = null
+    private var detailEpoch = 0
+    private fun persist(address: String = _state.value.address, profiles: List<PrinterProfile> = _state.value.profiles) {
+        saveSettings(address, profiles.map { it.address }); saveProfiles(address, profiles)
+    }
+    fun updateProfile(oldAddress: String, address: String, name: String): String? {
+        if(_state.value.busy) return "Wait for the current command to finish."
+        val normalized = try { Moonraker.parseAddress(address).toString() } catch(_: IllegalArgumentException) { _state.value=_state.value.copy(commandNotice="Enter a valid local printer address.");return "Enter a valid local printer address." }
+        val current = _state.value
+        if(normalized != oldAddress && current.profiles.any { it.address == normalized }) { _state.value=current.copy(commandNotice="That printer address is already saved.");return "That printer address is already saved." }
+        if(current.profiles.none { it.address == oldAddress }) return "This profile is no longer available."
+        if(oldAddress == current.address && oldAddress != normalized) disconnect()
+        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "") else it }
+        val selected = if(current.address == oldAddress) normalized else _state.value.address
+        _state.value = _state.value.copy(address=selected,profiles=profiles,savedPrinters=profiles.map { it.address })
+        persist()
+        return null
+    }
+    fun favoriteProfile(address: String) {
+        if(_state.value.busy) return
+        val profiles = _state.value.profiles.map { if(it.address==address) it.copy(favorite=!it.favorite) else it }
+        _state.value=_state.value.copy(profiles=profiles);persist()
+    }
+    fun moveProfile(address: String, delta: Int) {
+        if(_state.value.busy) return
+        val profiles=_state.value.profiles.toMutableList();val from=profiles.indexOfFirst { it.address==address };val to=from+delta
+        if(from !in profiles.indices || to !in profiles.indices) return
+        profiles.add(to,profiles.removeAt(from));_state.value=_state.value.copy(profiles=profiles,savedPrinters=profiles.map { it.address });persist()
+    }
+    fun selectCamera(id: String) {
+        if(_state.value.catalog.cameras.none { it.id==id }) return
+        val profiles=_state.value.profiles.map { if(it.address==_state.value.address) it.copy(cameraId=id) else it }
+        _state.value=_state.value.copy(profiles=profiles,camera=null,cameraNote="",cameraGeneration=_state.value.cameraGeneration+1);persist()
+    }
+    fun selectFile(filename: String) {
+        detailJob?.cancel();val ticket=++detailEpoch;val epoch=generation;val service=api ?: return
+        _state.value=_state.value.copy(fileMetadata=null,thumbnail=null,fileNote="",fileLoading=true)
+        detailJob=viewModelScope.launch {
+            try {
+                val metadata=withContext(io) { service.metadata(filename) };ensureActive()
+                if(epoch!=generation || ticket!=detailEpoch) return@launch
+                _state.value=_state.value.copy(fileMetadata=metadata,fileLoading=false)
+                metadata.thumbnail?.let { path ->
+                    val image=withContext(io) { decodeImage(service.thumbnail(path)) };ensureActive()
+                    if(epoch==generation && ticket==detailEpoch) _state.value=_state.value.copy(thumbnail=image)
+                }
+            } catch(e: CancellationException) { throw e } catch(_: Exception) {
+                if(epoch==generation && ticket==detailEpoch) _state.value=_state.value.copy(fileLoading=false,fileNote="Metadata or thumbnail unavailable.")
+            }
+        }
+    }
+    fun loadHistory(start: Int = 0) {
+        if(start < 0) return
+        historyJob?.cancel();val epoch=generation;val service=api ?: return
+        _state.value=_state.value.copy(history=emptyList(),historyPageSize=0,historyLoading=true,historyNote="",historyOffset=start)
+        historyJob=viewModelScope.launch {
+            try {
+                val result=withContext(io) { service.history(start) };ensureActive()
+                if(epoch==generation) _state.value=_state.value.copy(history=result.jobs,historyPageSize=result.pageSize,historyLoading=false)
+            } catch(e: CancellationException) { throw e } catch(_: Exception) {
+                if(epoch==generation) _state.value=_state.value.copy(historyLoading=false,historyNote="History unavailable. This printer may not have history enabled.")
+            }
+        }
+    }
+    private fun decodeImage(bytes: ByteArray): Bitmap {
+        val opts=BitmapFactory.Options().apply { inJustDecodeBounds=true };BitmapFactory.decodeByteArray(bytes,0,bytes.size,opts)
+        if(opts.outWidth !in 1..8192 || opts.outHeight !in 1..8192) throw ApiFailure("Unsupported image.")
+        opts.inJustDecodeBounds=false;opts.inSampleSize=maxOf(1,maxOf(opts.outWidth,opts.outHeight)/1024)
+        return BitmapFactory.decodeByteArray(bytes,0,bytes.size,opts) ?: throw ApiFailure("Unsupported image.")
+    }
+
     private var api: PrinterService? = null
     private var job: Job? = null
     private var generation = 0
     private var foreground = false
     private var wantsConnection = false
     private var lastCatalog = 0L
+    private var metadataAttempt = 0L
+    private var metadataFilename = ""
     fun foreground(active: Boolean) {
         foreground = active
-        if (!active) { job?.cancel(); api?.close(); _state.value = _state.value.copy(connected = false, snapshot = null, camera = null) }
+        if (!active) { detailJob?.cancel();historyJob?.cancel(); job?.cancel(); api?.close(); _state.value = _state.value.copy(connected = false, snapshot = null, camera = null, fileLoading=false, historyLoading=false) }
         else if (wantsConnection) beginLoop()
     }
     fun connect(address: String) {
         if (_state.value.busy) return
         val candidate = try { serviceFactory(address) } catch(e: IllegalArgumentException) { _state.value = _state.value.copy(message = e.message ?: "Invalid address."); return }
         if (_state.value.connected && candidate.address == _state.value.address) { candidate.close(); return }
-        job?.cancel(); api?.close(); generation++
-        api = candidate; wantsConnection = true; lastCatalog = 0
+        detailJob?.cancel();historyJob?.cancel();job?.cancel(); api?.close(); generation++
+        api = candidate; wantsConnection = true; lastCatalog = 0;metadataAttempt=0;metadataFilename=""
         val printers = (_state.value.savedPrinters + candidate.address).distinct()
-        saveSettings(candidate.address, printers)
-        _state.value = ScreenState(address = candidate.address, message = "Connecting…", generation = generation, savedPrinters = printers)
+        val profiles = _state.value.profiles + printers.filter { a -> _state.value.profiles.none { it.address==a } }.map { PrinterProfile(it) }
+        persist(candidate.address,profiles)
+        _state.value = ScreenState(address = candidate.address, message = "Connecting…", generation = generation, savedPrinters = printers, profiles=profiles)
         if (foreground) beginLoop()
     }
     fun disconnect() {
         if (_state.value.busy) return
-        wantsConnection = false; generation++; job?.cancel(); api?.close(); api = null
-        _state.value = ScreenState(address = _state.value.address, message = "Disconnected.", generation = generation, savedPrinters = _state.value.savedPrinters)
+        wantsConnection = false; generation++; detailJob?.cancel();historyJob?.cancel();job?.cancel(); api?.close(); api = null
+        _state.value = ScreenState(address = _state.value.address, message = "Disconnected.", generation = generation, savedPrinters = _state.value.savedPrinters, profiles=_state.value.profiles)
     }
     fun forgetPrinter(address: String) {
         if (_state.value.busy || address !in _state.value.savedPrinters) return
@@ -61,8 +150,8 @@ class PrinterModel(
             _state.value = _state.value.copy(address = "")
         }
         val printers = _state.value.savedPrinters - address
-        saveSettings(_state.value.address, printers)
-        _state.value = _state.value.copy(savedPrinters = printers)
+        val profiles=_state.value.profiles.filter { it.address!=address }
+        _state.value = _state.value.copy(savedPrinters = printers,profiles=profiles);persist()
     }
     fun refreshCatalog() { lastCatalog = 0 }
     private fun beginLoop() {
@@ -76,13 +165,23 @@ class PrinterModel(
                     ensureActive()
                     if(epoch != generation) return@launch
                     _state.value = _state.value.copy(connected = true, snapshot = snapshot, lastUpdate = clock(), message = if (_state.value.busy) _state.value.message else if(snapshot.ready) "Live • foreground monitoring" else "Klipper is ${snapshot.state}. Controls unavailable.")
+                    if(_state.value.activeMetadata?.filename != snapshot.filename) _state.value=_state.value.copy(activeMetadata=null)
+                    if(snapshot.filename.isNotBlank() && (metadataFilename!=snapshot.filename || clock()-metadataAttempt>30_000)) {
+                        metadataFilename=snapshot.filename;metadataAttempt=clock()
+                        val metadata=withContext(io) { runCatching { service.metadata(snapshot.filename) }.getOrNull() };ensureActive()
+                        if(epoch!=generation) return@launch
+                        _state.value=_state.value.copy(activeMetadata=metadata)
+                    }
                     if (clock() - lastCatalog > 30_000 || lastCatalog == 0L) {
                         val catalog = withContext(io) { service.catalog() }
                         ensureActive(); if(epoch != generation) return@launch
                         lastCatalog = clock()
-                        _state.value = _state.value.copy(catalog = catalog)
+                        val previousCamera=_state.value.selectedCamera()
+                        val updated=_state.value.copy(catalog=catalog)
+                        _state.value=if(previousCamera!=updated.selectedCamera()) updated.copy(camera=null,cameraNote="",cameraGeneration=updated.cameraGeneration+1) else updated
                     }
-                    val cam = _state.value.catalog.cameras.firstOrNull()
+                    val cameraEpoch=_state.value.cameraGeneration
+                    val cam = _state.value.selectedCamera()
                     if (cam != null && cam.stream.isBlank()) {
                         try {
                             val bitmap = withContext(io) {
@@ -94,9 +193,10 @@ class PrinterModel(
                                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) ?: throw ApiFailure("Unsupported camera image.")
                             }
                             ensureActive(); if(epoch != generation) return@launch
+                            if(cameraEpoch != _state.value.cameraGeneration) continue
                             _state.value = _state.value.copy(camera = bitmap, cameraNote = "${cam.name} • refreshed snapshots")
                         } catch(e: CancellationException) { throw e } catch(e: Exception) {
-                            _state.value = _state.value.copy(camera = null, cameraNote = "Snapshot unavailable. Check camera configuration and frontend address.")
+                            if(cameraEpoch == _state.value.cameraGeneration) _state.value = _state.value.copy(camera = null, cameraNote = "Snapshot unavailable. Check camera configuration and frontend address.")
                         }
                     } else _state.value = _state.value.copy(camera = null, cameraNote = if(cam == null) "No camera configured in Moonraker." else "Live camera")
                 } catch(e: CancellationException) { throw e } catch(e: Exception) {
@@ -130,4 +230,9 @@ class PrinterModel(
         }
     }
     override fun onCleared() { api?.close() }
+}
+
+fun ScreenState.selectedCamera(): Camera? {
+    val id=profiles.firstOrNull { it.address==address }?.cameraId
+    return if(id.isNullOrBlank()) catalog.cameras.firstOrNull() else catalog.cameras.firstOrNull { it.id==id }
 }

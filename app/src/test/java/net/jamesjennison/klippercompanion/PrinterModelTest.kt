@@ -13,11 +13,14 @@ class PrinterModelTest {
     @Before fun before() { Dispatchers.setMain(dispatcher) }
     @After fun after() { Dispatchers.resetMain() }
     private class Fake(override val address: String = "http://fixture.local/") : PrinterService {
+        var cameras = emptyList<Camera>()
+        var failHistory=false
+        override fun history(start: Int): HistoryPage { if(failHistory) throw ApiFailure("Fixture failure");return HistoryPage(emptyList(),50) }
         var reads = 0; var sent = 0
         var value = PrinterSnapshot(true, "printing")
         var beforeRead: (() -> Unit)? = null
         override fun snapshot(): PrinterSnapshot { reads++; beforeRead?.invoke(); return value }
-        override fun catalog() = Catalog(emptyList(),emptyList(),emptyList(),emptyList())
+        override fun catalog() = Catalog(emptyList(),emptyList(),cameras,emptyList())
         override fun image(camera: Camera) = byteArrayOf()
         override fun command(command: PrinterCommand) { sent++ }
         override fun close() {}
@@ -127,6 +130,49 @@ class PrinterModelTest {
         model.execute(pause,generation);runCurrent()
         assertEquals(1,first.sent);assertEquals(0,second.sent)
         first.beforeRead=null;model.disconnect()
+    }
+
+    @Test fun namedProfilesPersistOrderFavoritesAndEditsWithoutMovingACommandTarget() = runTest(dispatcher) {
+        val first="http://first.local/";val second="http://second.local/"
+        var saved=emptyList<PrinterProfile>();var selected=""
+        val model=PrinterModel(initialAddress=first,initialPrinters=listOf(first,second),saveProfiles={address,profiles->selected=address;saved=profiles})
+        model.updateProfile(first,first,"Workshop");model.favoriteProfile(first);model.moveProfile(first,1)
+        assertEquals(listOf(second,first),model.state.value.savedPrinters)
+        assertEquals("Workshop",saved.last().name);assertTrue(saved.last().favorite)
+        val restored=PrinterModel(initialAddress=selected,initialProfiles=saved)
+        assertEquals(saved,restored.state.value.profiles)
+        restored.updateProfile(first,second,"Duplicate")
+        assertEquals(saved,restored.state.value.profiles)
+        restored.updateProfile(first,"http://third.local/","New printer")
+        assertEquals("http://third.local/",restored.state.value.address);assertFalse(restored.state.value.connected)
+    }
+
+    @Test fun failedHistoryPageClearsPreviousPageSizeAndRefreshRecovers() = runTest(dispatcher) {
+        val fake=Fake();val model=PrinterModel(serviceFactory={fake},clock={100_000},io=dispatcher)
+        model.foreground(true);model.connect(fake.address);runCurrent()
+        model.loadHistory(0);runCurrent();assertEquals(50,model.state.value.historyPageSize)
+        fake.failHistory=true;model.loadHistory(50)
+        assertEquals(0,model.state.value.historyPageSize);runCurrent()
+        assertEquals(0,model.state.value.historyPageSize);assertFalse(model.state.value.historyLoading)
+        assertTrue(model.state.value.historyNote.isNotBlank());assertTrue(model.state.value.history.isEmpty())
+        fake.failHistory=false;model.loadHistory(0);runCurrent()
+        assertEquals(50,model.state.value.historyPageSize);assertEquals("",model.state.value.historyNote)
+        model.disconnect()
+    }
+
+    @Test fun cameraPreferencePersistsAndDoesNotBleedAcrossPrinters() = runTest(dispatcher) {
+        val first=Fake("http://first.local/").apply { cameras=listOf(Camera("A","","/a","webrtc-camerastreamer","a"),Camera("B","","/b","webrtc-camerastreamer","b")) }
+        val second=Fake("http://second.local/").apply { cameras=listOf(Camera("Other","","/other","webrtc-camerastreamer","other")) }
+        var saved=emptyList<PrinterProfile>()
+        val model=PrinterModel(serviceFactory={if(it==first.address) first else second},clock={100_000},io=dispatcher,saveProfiles={_,p->saved=p})
+        model.foreground(true);model.connect(first.address);runCurrent()
+        val epoch=model.state.value.cameraGeneration
+        model.selectCamera("b");assertEquals("b",model.state.value.selectedCamera()?.id);assertTrue(model.state.value.cameraGeneration>epoch)
+        assertEquals("b",saved.first().cameraId)
+        model.connect(second.address);assertNull(model.state.value.selectedCamera());runCurrent()
+        assertEquals("other",model.state.value.selectedCamera()?.id)
+        model.connect(first.address);runCurrent();assertEquals("b",model.state.value.selectedCamera()?.id)
+        model.disconnect()
     }
 
 }

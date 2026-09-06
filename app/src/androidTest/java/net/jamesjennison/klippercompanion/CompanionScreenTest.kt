@@ -87,4 +87,75 @@ class CompanionScreenTest {
         compose.onNodeWithText(message).assertIsDisplayed()
     }
 
+    @Test fun profileEditorAndCameraPickerDispatchExactSelections() {
+        val address="http://fixture.local/";var edited="";var camera=""
+        val profile=PrinterProfile(address,"Workshop")
+        val cameras=listOf(Camera("Front","/snapshot1",id="front"),Camera("Side","/snapshot2",id="side"))
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name->assertEquals(address,old);edited=name;null},selectCamera={camera=it}) } }
+        compose.onNodeWithTag("camera:side").performScrollTo().performClick();assertEquals("side",camera)
+        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("edit-profile:$address").performScrollTo().performClick()
+        compose.onNodeWithText("Printer name").performTextReplacement("Garage")
+        compose.onNodeWithText("Save").performClick();assertEquals("Garage",edited)
+    }
+    @Test fun structuredProfilesSurvivePreferenceReload() {
+        val context=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs=context.getSharedPreferences("m1-test-${java.util.UUID.randomUUID()}",0)
+        try {
+            val profiles=listOf(PrinterProfile("http://b.local/","B",true,"side"),PrinterProfile("http://a.local/","A"))
+            PrinterPreferences.saveProfiles(prefs,profiles.first().address,profiles)
+            assertEquals(profiles,PrinterPreferences.profiles(prefs))
+            assertEquals(profiles.first().address,PrinterPreferences.address(prefs))
+            assertEquals(profiles.map { it.address }.sorted(),PrinterPreferences.printers(prefs))
+        } finally {prefs.edit().clear().commit()}
+    }
+
+    @Test fun invalidProfileStaysOpenWithInlineError() {
+        val model=PrinterModel("http://fixture.local/",initialProfiles=listOf(PrinterProfile("http://fixture.local/")))
+        var closed=false
+        compose.setContent { CompanionTheme {ProfileEditor(PrinterProfile("http://fixture.local/"),{closed=true},model::updateProfile)} }
+        compose.onNodeWithText("Printer address").performTextReplacement("not a url")
+        compose.onNodeWithText("Save").performClick()
+        compose.onNodeWithText("Enter a valid local printer address.").assertIsDisplayed()
+        assertEquals(false,closed)
+        compose.onNodeWithText("Printer address").performTextReplacement("http://fixed.local/")
+        compose.onNodeWithText("Save").performClick()
+        assertEquals(true,closed)
+        assertEquals("http://fixed.local/",model.state.value.profiles.single().address)
+    }
+
+    @Test fun missingSavedCameraShowsUnavailableAndAllowsExplicitReplacement() {
+        val address="http://fixture.local/";var selected=""
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,
+            profiles=listOf(PrinterProfile(address,cameraId="removed")),
+            catalog=Catalog(emptyList(),emptyList(),listOf(Camera("Available","",id="available")),emptyList())),
+            {},{},{},{_,_->},selectCamera={selected=it}) } }
+        compose.onNodeWithText("Selected camera unavailable. Choose an available camera.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("camera:available").performScrollTo().performClick()
+        assertEquals("available",selected)
+    }
+
+    @Test fun largeHistoryPagesAndLongFilenamesStayNavigable() {
+        val jobs=(0 until 150).map { PrintJob("$it","folder/A long model filename with spaces and descriptive words number $it.gcode","completed",null,120.0,1500.0) }
+        var offset=0
+        compose.setContent { CompanionTheme {
+            var state by remember {mutableStateOf(ScreenState(address="http://fixture.local/",connected=true))}
+            CompanionScreen(state,{},{},{},{_,_->},loadHistory={start->
+                offset=start;state=state.copy(history=jobs.drop(start).take(50),historyOffset=start,historyPageSize=jobs.drop(start).take(50).size)
+            })
+        } }
+        compose.onNodeWithTag("nav-2").performClick()
+        compose.onNodeWithTag("show-history").performClick()
+        compose.onNodeWithText(jobs.first().filename).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Next").performScrollTo().performClick()
+        assertEquals(50,offset)
+        compose.onNodeWithText("Records 51–100 (this page)").assertIsDisplayed()
+        compose.onNodeWithText("Next").performClick()
+        compose.onNodeWithText("Records 101–150 (this page)").assertIsDisplayed()
+        compose.onNodeWithText("Next").performClick()
+        compose.onNodeWithText("Next").assertIsNotEnabled()
+        compose.onNodeWithText("Previous").performClick()
+        assertEquals(100,offset)
+    }
+
 }

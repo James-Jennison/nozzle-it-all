@@ -28,7 +28,7 @@ interface PrinterService {
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService {
+class Moonraker(address: String) : PrinterService, ConsoleReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
@@ -91,6 +91,10 @@ class Moonraker(address: String) : PrinterService {
                 return envelope.get("result")
             } catch (e: org.json.JSONException) { throw ApiFailure("Invalid Moonraker response.") }
         }
+    }
+    override fun console(): ConsoleBatch {
+        val result=request("server/gcode_store",mapOf("count" to ConsoleLog.MAX_ENTRIES.toString())) as? JSONObject ?: throw ApiFailure("Console unavailable.")
+        return ConsoleLog.parse(result)
     }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")

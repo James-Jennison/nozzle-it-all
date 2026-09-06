@@ -94,7 +94,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
-    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}) {
+    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}, consoleFactory:(String)->ConsoleReader={Moonraker(it)}) {
+    var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory)
     var controlPreview by rememberSaveable { mutableStateOf(false) }
     if(controlPreview) ControlPreviewPanel { controlPreview=false }
     var customize by rememberSaveable { mutableStateOf(false) }
@@ -260,6 +262,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 1 -> {
+                    item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text("Read-only console")} }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
                     item {
                         Text("Organize and prepare macros locally. Execution requires an idle printer and confirmation.")

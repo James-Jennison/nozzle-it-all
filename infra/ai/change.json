@@ -1,0 +1,12 @@
+{
+  "change_id": "klipper-ai-vm-20260906",
+  "repository": "/home/jjennison/Documents/ChatGPT/Mobile Klipper Companion",
+  "summary": "Isolated 4 vCPU 8 GiB CPU-only AI evaluation guest on existing Proxmox; preserve runner VMs; benchmark self-hosted Obico model without printer commands or public endpoints.",
+  "classification": "substantive",
+  "affected_components": [
+    "Proxmox VM 300",
+    "CPU inference service",
+    "provisioning",
+    "read-only camera inference acceptance"
+  ]
+}

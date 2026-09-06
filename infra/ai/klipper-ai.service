@@ -1,0 +1,36 @@
+[Unit]
+Description=Private CPU print-failure detector evaluation
+After=network.target
+
+[Service]
+Type=simple
+User=klipperai
+Group=klipperai
+WorkingDirectory=/opt/klipper-ai
+Environment=OMP_NUM_THREADS=2
+Environment=OPENBLAS_NUM_THREADS=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/klipper-ai/venv/bin/gunicorn --bind 127.0.0.1:3333 --workers 1 --threads 1 --timeout 30 --limit-request-line 1024 --limit-request-fields 20 service:create_app()
+Restart=on-failure
+RestartSec=5
+MemoryMax=3G
+MemorySwapMax=0
+CPUQuota=200%
+TasksMax=64
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

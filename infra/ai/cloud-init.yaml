@@ -1,0 +1,18 @@
+#cloud-config
+hostname: klipper-ai-01
+manage_etc_hosts: true
+users: []
+disable_root: true
+ssh_pwauth: false
+package_update: true
+packages:
+  - qemu-guest-agent
+  - python3-venv
+  - git
+  - curl
+  - ca-certificates
+runcmd:
+  - [systemctl, enable, --now, qemu-guest-agent]
+  - [systemctl, disable, --now, ssh.socket]
+  - [systemctl, disable, --now, ssh.service]
+final_message: "Klipper AI base guest ready. No runner registration or public listener."

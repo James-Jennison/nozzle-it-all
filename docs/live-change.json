@@ -1,0 +1,14 @@
+{
+  "change_id": "mobile-klipper-live-mvp-20260906",
+  "supersedes": "mobile-klipper-mvp-20260906",
+  "repository": "/home/jjennison/Documents/ChatGPT/Mobile Klipper Companion",
+  "summary": "Android Moonraker MVP with owner-requested continuous WebRTC camera playback, real-device monitoring, confirmed controls, and regression-tested connection lifecycle. Supersedes snapshot-only candidate.",
+  "classification": "substantive",
+  "affected_components": [
+    "Android app",
+    "WebRTC",
+    "network lifecycle",
+    "UI",
+    "Moonraker HTTP transport"
+  ]
+}

@@ -36,7 +36,7 @@ class Moonraker(address: String) : PrinterService {
             val url = address.trim().toHttpUrlOrNull() ?: throw IllegalArgumentException("Enter an http:// or https:// printer address.")
             if(url.scheme == "http") {
                 val parts = url.host.split('.').mapNotNull { it.toIntOrNull() }
-                val privateV4 = parts.size == 4 && parts.all { it in 0..255 } && (parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && parts[1] in 16..31))
+                val privateV4 = url.host.split('.').size == 4 && parts.size == 4 && parts.all { it in 0..255 } && (parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && parts[1] in 16..31))
                 require(privateV4 || url.host == "localhost" || url.host == "::1" || url.host.endsWith(".local")) { "HTTP requires a local IPv4 address, localhost or .local name. Use HTTPS for other addresses." }
             }
             require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null) { "Use a base address without credentials, query or fragment." }

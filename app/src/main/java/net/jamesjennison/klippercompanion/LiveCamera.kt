@@ -47,6 +47,7 @@ import java.util.Locale
         }
         AndroidView(modifier=Modifier.fillMaxWidth().aspectRatio(16f/9f), factory={ ctx ->
             WebView(ctx).apply {
+                layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                 setBackgroundColor(android.graphics.Color.BLACK)
                 settings.javaScriptEnabled=true
                 settings.mediaPlaybackRequiresUserGesture=false

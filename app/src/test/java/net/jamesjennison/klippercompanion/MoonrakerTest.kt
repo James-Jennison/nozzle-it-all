@@ -9,7 +9,7 @@ import org.junit.Test
 
 class MoonrakerTest {
     @Test fun rejectsPublicCleartextEndpoints() {
-        listOf("http://example.com", "http://8.8.8.8").forEach { try { Moonraker.parseAddress(it); fail() } catch(_: IllegalArgumentException) {} }
+        listOf("http://example.com", "http://8.8.8.8", "http://10.0.0.1.attacker.com", "http://192.168.1.1.example.com", "http://172.16.0.1.evil.net").forEach { try { Moonraker.parseAddress(it); fail() } catch(_: IllegalArgumentException) {} }
         assertEquals("192.168.1.2",Moonraker.parseAddress("http://192.168.1.2").host)
         assertEquals("example.com",Moonraker.parseAddress("https://example.com").host)
     }

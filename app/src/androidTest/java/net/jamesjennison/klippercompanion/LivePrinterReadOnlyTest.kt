@@ -22,9 +22,26 @@ class LivePrinterReadOnlyTest {
         compose.onNodeWithText("Files").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("Start print").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Monitor").performClick()
-        compose.onNodeWithText("Camera", substring = false).performScrollTo()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Camera"))
         compose.waitUntil(30000) { compose.onAllNodesWithText("fps", substring=true).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("fps", substring=true).assertExists()
+        val latch = java.util.concurrent.CountDownLatch(1)
+        var metrics = ""
+        compose.runOnUiThread {
+            fun find(view: android.view.View): android.webkit.WebView? {
+                if(view is android.webkit.WebView) return view
+                if(view is android.view.ViewGroup) for(i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
+                return null
+            }
+            val web = find(compose.activity.window.decorView) ?: error("No live player")
+            web.evaluateJavascript("""JSON.stringify((()=>{const v=document.getElementById('video'),r=v.getBoundingClientRect(),c=document.createElement('canvas');c.width=16;c.height=16;const x=c.getContext('2d');x.drawImage(v,0,0,16,16);const d=x.getImageData(0,0,16,16).data;let sum=0;for(let i=0;i<d.length;i+=4)sum+=d[i]+d[i+1]+d[i+2];return {width:v.videoWidth,height:v.videoHeight,elementWidth:r.width,elementHeight:r.height,meanPixel:sum/768,frames:window.cameraStats.frames};})())""") { metrics=it;latch.countDown() }
+        }
+        org.junit.Assert.assertTrue(latch.await(5,java.util.concurrent.TimeUnit.SECONDS))
+        val decoded=org.json.JSONObject(org.json.JSONTokener(metrics).nextValue() as String)
+        org.junit.Assert.assertTrue("Video must occupy visible area", decoded.getDouble("elementHeight") > 50)
+        org.junit.Assert.assertTrue("Video must occupy visible area", decoded.getDouble("elementWidth") > 50)
+        val result=android.os.Bundle().apply { putString("stream", "CAMERA_METRICS " + metrics + "\n") }
+        InstrumentationRegistry.getInstrumentation().sendStatus(0,result)
         // No print controls or macro buttons are invoked by this test.
     }
 }

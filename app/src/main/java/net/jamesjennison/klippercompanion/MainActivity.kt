@@ -73,7 +73,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
         }) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 20.dp)) {
+        LazyColumn(Modifier.testTag("screen-list").fillMaxSize().padding(padding).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 20.dp)) {
             item {
                 Text("KLIPPER COMPANION", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Text(listOf("Your printer, at a glance", "Make it your workflow", "Ready for the next print", "Connect your printer")[tab], style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)

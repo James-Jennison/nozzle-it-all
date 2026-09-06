@@ -13,7 +13,7 @@ class LivePrinterReadOnlyTest {
         val endpoint = InstrumentationRegistry.getArguments().getString("printerUrl")
         assumeTrue("Explicit owner-approved printerUrl is required", !endpoint.isNullOrBlank())
         compose.onNodeWithTag("nav-3").performClick()
-        compose.onNodeWithText("Moonraker or frontend address").performTextReplacement(endpoint!!)
+        compose.onNodeWithText("Moonraker or frontend address").performScrollTo().performTextReplacement(endpoint!!)
         compose.onNodeWithTag("connect-printer").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("CONNECTED").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("CONNECTED").assertExists()

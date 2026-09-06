@@ -38,7 +38,8 @@ class MainActivity : ComponentActivity() {
                 val model: PrinterModel = viewModel(factory = viewModelFactory {
                     initializer {
                         val prefs = getSharedPreferences("printer", 0)
-                        PrinterModel(prefs.getString("address", "") ?: "", { prefs.edit().putString("address", it).apply() })
+                        PrinterModel(PrinterPreferences.address(prefs), { address, printers -> PrinterPreferences.save(prefs, address, printers) },
+                            initialPrinters = PrinterPreferences.printers(prefs))
                     }
                 })
                 val state by model.state.collectAsStateWithLifecycle()
@@ -52,14 +53,14 @@ class MainActivity : ComponentActivity() {
                     model.foreground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
-                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute)
+                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter)
             }
         }
     }
 }
 
 @Composable
-fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit) {
+fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var address by rememberSaveable(state.address) { mutableStateOf(state.address) }
     var pending by remember { mutableStateOf<Pair<PrinterCommand,Int>?>(null) }
@@ -89,6 +90,21 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             if(tab == 3 || state.address.isEmpty()) {
+                if(state.savedPrinters.isNotEmpty()) {
+                    item { Text("Saved printers", style = MaterialTheme.typography.titleMedium)
+                        Text("One printer is monitored at a time. Connecting saves its address on this phone.", style = MaterialTheme.typography.bodyMedium) }
+                    items(state.savedPrinters, key = { "saved:$it" }) { saved ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(saved, style = MaterialTheme.typography.bodyLarge)
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    OutlinedButton({ connect(saved); tab = 0 }, enabled = !state.busy && !(state.connected && saved == state.address), modifier = Modifier.testTag("saved-connect:$saved")) { Text(if(state.connected && saved == state.address) "Connected" else "Connect") }
+                                    TextButton({ forgetPrinter(saved) }, enabled = !state.busy, modifier = Modifier.testTag("saved-forget:$saved")) { Text("Forget") }
+                                }
+                            }
+                        }
+                    }
+                }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Moonraker or frontend address") }, placeholder = { Text("http://192.168.1.110") }, singleLine = true, enabled = !state.busy)
@@ -127,7 +143,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text("Camera", style = MaterialTheme.typography.titleMedium)
                                 val camera = state.catalog.cameras.firstOrNull()
-                                if(state.connected && camera != null && camera.stream.isNotBlank()) LiveCamera(state.address, camera)
+                                if(state.connected && camera != null && camera.stream.isNotBlank()) key(state.generation, state.address, camera) { LiveCamera(state.address, camera) }
                                 state.camera?.let { Image(it.asImageBitmap(), "Current printer camera snapshot", Modifier.fillMaxWidth().heightIn(max = 300.dp)) }
                                 if(camera?.stream.isNullOrBlank()) Text(state.cameraNote.ifEmpty { "Camera snapshots appear after connection." }, style = MaterialTheme.typography.bodySmall)
                             }

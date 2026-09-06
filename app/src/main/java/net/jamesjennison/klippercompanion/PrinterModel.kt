@@ -12,16 +12,20 @@ data class ScreenState(
     val address: String = "", val connected: Boolean = false, val busy: Boolean = false,
     val snapshot: PrinterSnapshot? = null, val catalog: Catalog = Catalog(emptyList(), emptyList(), emptyList(), emptyList()),
     val camera: Bitmap? = null, val cameraNote: String = "", val message: String = "Connect to your printer to begin.",
-    val commandNotice: String = "", val lastUpdate: Long = 0, val generation: Int = 0
+    val commandNotice: String = "", val lastUpdate: Long = 0, val generation: Int = 0,
+    val savedPrinters: List<String> = emptyList()
 )
 class PrinterModel(
     initialAddress: String = "",
-    private val saveAddress: (String) -> Unit = {},
+    private val saveSettings: (String, List<String>) -> Unit = { _, _ -> },
     private val serviceFactory: (String) -> PrinterService = { Moonraker(it) },
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
-    private val io: CoroutineDispatcher = Dispatchers.IO
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+    initialPrinters: List<String> = emptyList()
 ) : ViewModel() {
-    private val _state = MutableStateFlow(ScreenState(address = initialAddress))
+    private val _state = MutableStateFlow(ScreenState(address = runCatching { Moonraker.parseAddress(initialAddress).toString() }.getOrDefault(""),
+        savedPrinters = (initialPrinters + initialAddress).filter { it.isNotBlank() }
+            .mapNotNull { runCatching { Moonraker.parseAddress(it).toString() }.getOrNull() }.distinct()))
     val state = _state.asStateFlow()
     private var api: PrinterService? = null
     private var job: Job? = null
@@ -37,16 +41,28 @@ class PrinterModel(
     fun connect(address: String) {
         if (_state.value.busy) return
         val candidate = try { serviceFactory(address) } catch(e: IllegalArgumentException) { _state.value = _state.value.copy(message = e.message ?: "Invalid address."); return }
+        if (_state.value.connected && candidate.address == _state.value.address) { candidate.close(); return }
         job?.cancel(); api?.close(); generation++
         api = candidate; wantsConnection = true; lastCatalog = 0
-        saveAddress(candidate.address)
-        _state.value = ScreenState(address = candidate.address, message = "Connecting…", generation = generation)
+        val printers = (_state.value.savedPrinters + candidate.address).distinct()
+        saveSettings(candidate.address, printers)
+        _state.value = ScreenState(address = candidate.address, message = "Connecting…", generation = generation, savedPrinters = printers)
         if (foreground) beginLoop()
     }
     fun disconnect() {
         if (_state.value.busy) return
         wantsConnection = false; generation++; job?.cancel(); api?.close(); api = null
-        _state.value = ScreenState(address = _state.value.address, message = "Disconnected.", generation = generation)
+        _state.value = ScreenState(address = _state.value.address, message = "Disconnected.", generation = generation, savedPrinters = _state.value.savedPrinters)
+    }
+    fun forgetPrinter(address: String) {
+        if (_state.value.busy || address !in _state.value.savedPrinters) return
+        if (address == _state.value.address) {
+            disconnect()
+            _state.value = _state.value.copy(address = "")
+        }
+        val printers = _state.value.savedPrinters - address
+        saveSettings(_state.value.address, printers)
+        _state.value = _state.value.copy(savedPrinters = printers)
     }
     fun refreshCatalog() { lastCatalog = 0 }
     private fun beginLoop() {

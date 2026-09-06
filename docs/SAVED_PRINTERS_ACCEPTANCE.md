@@ -39,3 +39,16 @@ heating, macro, or print-control commands were sent to the real printer.
 
 The broader roadmap—history, notifications, configurable dashboards and experimental
 AI alerts—remains future work. This document accepts only the saved-profile update.
+
+## Review closure
+
+Implementation commit: `ed5d7e3`. Claude, Gemini and DeepSeek completed independent
+review and remediation review; DeepSeek also completed targeted closure of initial
+address normalization. Atomic preference persistence, duplicate connection handling,
+malformed preference types and initial selected-address normalization were corrected.
+The invalid-address warning suggestion was rejected for this scope and remains
+recorded in the ledger. No reviewer runtime configuration changed.
+
+Convergence `convergence-c60a0eb85e93`; closure `closure-3d08fd17b563`: **READY**, no
+unresolved findings or accepted evidence risks. This closure applies to saved
+profiles, not the proposed visual redesign or the deferred AI integration.

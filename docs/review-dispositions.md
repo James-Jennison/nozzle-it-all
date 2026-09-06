@@ -25,3 +25,13 @@ Decorative navigation glyph semantics cleared; visible navigation label remains 
 ## deepseek-4 — CONFIRMED
 
 Connect navigation and action use distinct test tags. Read-only integration passed on Razr 2023 after correction.
+
+## Final live camera review
+
+DeepSeek numeric-host bypass: CONFIRMED and corrected; private IPv4 requires exactly four numeric labels.
+
+DeepSeek macro restriction during printing: REJECTED as a blanket rule. Generic printer-defined macros may intentionally run during printing. Fresh Klipper readiness and mandatory per-action confirmation remain required; no owner requirement bans these macros. Claude independently concurred with this disposition.
+
+DeepSeek HTTPS camera downgrade: CONFIRMED and corrected by rejecting HTTP camera URLs for an HTTPS printer, with regression coverage.
+
+DeepSeek cancellation handling: CONFIRMED and corrected by rethrowing CancellationException and checking coroutine activity immediately before dispatch. A regression test clears the ViewModel during preflight and verifies zero command dispatches and no disposed-state update.

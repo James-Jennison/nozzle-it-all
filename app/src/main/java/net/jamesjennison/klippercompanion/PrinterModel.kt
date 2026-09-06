@@ -105,10 +105,11 @@ class PrinterModel(
                 withContext(io) {
                     val fresh = service.snapshot()
                     if (!fresh.ready || (command.allowedStates.isNotEmpty() && fresh.state !in command.allowedStates)) throw ApiFailure("Printer state changed.")
+                    currentCoroutineContext().ensureActive()
                     service.command(command)
                 }
                 "Printer acknowledged ${command.title}."
-            } catch(e: Exception) { "Command outcome unknown or rejected. Inspect the printer before trying again. No automatic retry was sent." }
+            } catch(e: CancellationException) { throw e } catch(e: Exception) { "Command outcome unknown or rejected. Inspect the printer before trying again. No automatic retry was sent." }
             if(expectedGeneration == generation) _state.value = _state.value.copy(busy = false, commandNotice = message)
         }
     }

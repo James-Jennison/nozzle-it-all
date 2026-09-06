@@ -8,11 +8,11 @@ Wireless ADB was paired through an owner-entered code in a terminal with echo di
 
 ## Objective verification
 
-- 16 JVM tests pass: 11 transport/parser cases and 5 ViewModel lifecycle/state cases.
+- 18 JVM tests pass: 12 transport/parser cases and 6 ViewModel lifecycle/state cases.
 - Lint passes with no errors. Remaining warnings concern available dependency updates, target API currency, WebView JavaScript (required for the isolated app-owned WebRTC client), and minor style suggestions.
 - Three instrumented tests pass on the Razr: explicit confirmation and cancellation of confirmation; disabled offline controls; actual connection, macro/file readback and live camera rendering.
 - Live decoded frame dimensions: 1920 × 1080. Rendered video element: approximately 339 × 191 CSS pixels. Sampled image brightness nonzero (68.30); the native device screenshot visibly confirms the printer scene. Later observed frame-rate samples: 26 and 29 fps. These are observed samples, not a guaranteed rate.
-- Final candidate APK SHA-256: `e73a3f8f1a696ab4e62d9e113b71c2642556f5eb3cc7c264846bae63f929b0bf`.
+- Final candidate APK SHA-256: `4262a9ccada7fbd7524e4a14ac0a53babb3699d569b216f7e45efb1dc36ff5fb`.
 - Installed APK SHA-256 matched the local candidate. Embedded source-proof asset matched current application source inputs.
 - The printer was already printing. Acceptance sent no physical motion, heating, macro or print-control commands. Receive-only WebRTC signaling creates a camera viewing session; no printer configuration was changed. Write behavior is covered by mock-server and UI callback tests, not a physical print-action test.
 
@@ -29,8 +29,12 @@ Single printer and first camera; camera-streamer WebRTC only for live video. No 
 - Initial snapshot implementation: `mobile-klipper-mvp-20260906`; review `review-cycle-53709e0bc2ad` completed for Claude, Gemini and DeepSeek. Findings and separate dispositions remain in the global ledger.
 - Live implementation: `mobile-klipper-live-mvp-20260906` supersedes the initial candidate.
 - Follow-up cycle `review-cycle-22846a40d77f` retains Claude's failed provider attempts and DeepSeek's host-validation finding; latest source received a new closure cycle.
-- Final closure cycle: `review-cycle-ed3789f85955` (status must be read live).
-- Final evidence cycle: `evidence-cycle-1aef555d6aa3` (status must be read live).
+- Full closure review: `review-cycle-ed3789f85955`; targeted remediation review: `review-cycle-0f952a5e8d81`: all three reviewers COMPLETE, NO FINDINGS.
+- Final evidence cycle: `evidence-cycle-2fd554b1b762`, PASS.
 - Autonomous run `autonomous-run-20260906-d222fb17` failed before implementation because installed Codex CLI 0.151.0 could not run its configured model. Work was completed in the interactive task; no supervisor/CLI configuration was changed.
 
 No publication, production release, or unattended continuation is claimed.
+
+Latest candidate also rejects HTTPS-to-HTTP camera signaling downgrade and propagates command cancellation, with a cancellation checkpoint before dispatch. Regression tests cover both. Final device run passed all three tests and measured 1920 × 1080 decoded video, a 339 × 191 rendered element, nonzero brightness (60.40), and 40 rendered frames during the sample. Installed APK hash matched the final candidate.
+
+Final broker closure `closure-17b6316ba22e`: **READY**, no unresolved findings or accepted evidence risks. Convergence `convergence-615218acd4b6`. Latest installed-app camera sample: 29 fps.

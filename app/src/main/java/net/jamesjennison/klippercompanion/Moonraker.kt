@@ -46,6 +46,7 @@ class Moonraker(address: String) : PrinterService {
             val base = parseAddress(address)
             val target = base.resolve(cameraPath) ?: throw ApiFailure("Invalid camera address.")
             if (target.host != base.host || target.username.isNotEmpty() || target.password.isNotEmpty() || target.fragment != null) throw ApiFailure("Camera must use the printer host without URL credentials.")
+            if(base.scheme == "https" && target.scheme != "https") throw ApiFailure("An HTTPS printer requires an HTTPS camera address.")
             parseAddress(target.newBuilder().query(null).build().toString())
             return target
         }

@@ -24,6 +24,15 @@ class PrinterModelTest {
         override fun close() {}
     }
     private val pause = PrinterCommand("Pause", "printer/print/pause", allowedStates=setOf("printing"))
+    @Test fun clearDuringCommandPreflightDoesNotSendOrUpdateDisposedState() = runTest(dispatcher) {
+        val fake=Fake();val model=PrinterModel(serviceFactory={fake},clock={100_000},io=dispatcher)
+        val store=androidx.lifecycle.ViewModelStore();store.put("printer",model)
+        model.foreground(true);model.connect(fake.address);runCurrent()
+        fake.beforeRead={store.clear()}
+        model.execute(pause,model.state.value.generation);runCurrent()
+        assertEquals(0,fake.sent)
+        assertEquals("Sending command…",model.state.value.commandNotice)
+    }
     @Test fun staleGenerationAndStaleTimeNeverDispatch() = runTest(dispatcher) {
         val fake=Fake();var now=100_000L
         val model=PrinterModel(serviceFactory={fake},clock={now},io=dispatcher)

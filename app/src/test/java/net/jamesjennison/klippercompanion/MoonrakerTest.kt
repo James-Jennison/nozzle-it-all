@@ -13,6 +13,10 @@ class MoonrakerTest {
         assertEquals("192.168.1.2",Moonraker.parseAddress("http://192.168.1.2").host)
         assertEquals("example.com",Moonraker.parseAddress("https://example.com").host)
     }
+    @Test fun rejectsCameraTlsDowngrade() {
+        try { Moonraker.cameraUrl("https://printer.local/", "http://printer.local:8080/webrtc"); fail() } catch(_: ApiFailure) {}
+        assertEquals("https",Moonraker.cameraUrl("https://printer.local/","/webcam/webrtc").scheme)
+    }
     @Test fun rejectsCameraHostChanges() {
         try { Moonraker.cameraUrl("http://localhost/", "http://192.0.2.1/image"); fail() } catch(_: ApiFailure) {}
         assertEquals("http://localhost:8080/stream",Moonraker.cameraUrl("http://localhost/","http://localhost:8080/stream").toString())

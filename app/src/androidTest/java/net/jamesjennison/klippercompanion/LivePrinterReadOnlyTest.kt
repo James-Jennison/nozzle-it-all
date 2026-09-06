@@ -17,11 +17,11 @@ class LivePrinterReadOnlyTest {
         compose.onNodeWithTag("connect-printer").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("CONNECTED").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("CONNECTED").assertExists()
-        compose.onNodeWithText("Macros").performClick()
+        compose.onNodeWithTag("nav-1").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("Run").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Files").performClick()
+        compose.onNodeWithTag("nav-2").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("Start print").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Monitor").performClick()
+        compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Camera"))
         compose.waitUntil(30000) { compose.onAllNodesWithText("fps", substring=true).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("fps", substring=true).assertExists()
@@ -42,6 +42,15 @@ class LivePrinterReadOnlyTest {
         org.junit.Assert.assertTrue("Video must occupy visible area", decoded.getDouble("elementWidth") > 50)
         val result=android.os.Bundle().apply { putString("stream", "CAMERA_METRICS " + metrics + "\n") }
         InstrumentationRegistry.getInstrumentation().sendStatus(0,result)
+        org.junit.Assert.assertTrue("Decoded video required", decoded.getInt("width") > 0 && decoded.getInt("height") > 0)
+        org.junit.Assert.assertTrue("Advancing decoded frames required", decoded.getInt("frames") > 0)
+        compose.onNodeWithTag("expand-camera").performScrollTo().performClick()
+        compose.onNodeWithTag("close-camera").assertIsDisplayed()
+        compose.onNodeWithTag("nav-0").assertDoesNotExist()
+        compose.waitUntil(30000) { compose.onAllNodesWithText("fps", substring=true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("close-camera").performClick()
+        compose.onNodeWithTag("nav-0").assertIsDisplayed()
+        compose.waitUntil(30000) { compose.onAllNodesWithText("fps", substring=true).fetchSemanticsNodes().isNotEmpty() }
         // No print controls or macro buttons are invoked by this test.
     }
 }

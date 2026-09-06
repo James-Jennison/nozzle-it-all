@@ -57,13 +57,19 @@ animation. Keep camera surfaces stable during live metric updates.
 
 ## Implementation boundary
 
-The companion app currently ships the saved-address profile update described in
-SAVED_PRINTERS_ACCEPTANCE.md. This document and the generated mockup establish a
-visual proposal; they do not claim the redesigned dashboard, ETA, console, friendly
-printer names or expanded navigation is implemented. The mockup uses sample data.
-AI and infrastructure work remain deferred. Visual implementation should bind to
-real capabilities and retain command confirmation, freshness checks and camera
-lifecycle isolation.
+The approved direction is now implemented in the native Android UI: Dashboard,
+Control, Files and Printers navigation; compact identity and connection status;
+camera-first monitoring with a dedicated full-screen view; original outlined icons;
+explicit charcoal/slate surfaces; teal progress; and warm/cool temperature icons.
+Buttons wrap and temperature tiles stack when text is enlarged. Command outcomes
+and guard rejections remain visible above navigation even while scrolling.
+
+The app shows actual addresses and telemetry. The mockup's sample friendly names,
+ETA and console are not implemented. The first configured camera is used; live
+video supports camera-streamer WebRTC, with refreshed snapshots for a camera that
+has no stream. Full-screen transitions recreate the player and reconnect video.
+AI and infrastructure remain deferred. Command confirmation, freshness checks and
+connection isolation remain enforced. See UI_ACCEPTANCE.md for candidate evidence.
 
 The concept image is generated with the built-in image-generation tool. Its exact
 prompt is saved alongside the selected image; no external model API key is used.

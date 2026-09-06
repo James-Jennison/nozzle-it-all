@@ -110,10 +110,10 @@ class PrinterModel(
         val current = _state.value
         val service = api ?: return
         if (expectedGeneration != generation || !current.connected || current.busy || current.snapshot?.ready != true || clock() - current.lastUpdate > 10_000) {
-            _state.value = current.copy(message = "Printer state changed. Refresh before sending a command."); return
+            _state.value = current.copy(commandNotice = "Printer state changed. Refresh before sending a command."); return
         }
         if(command.allowedStates.isNotEmpty() && current.snapshot.state !in command.allowedStates) {
-            _state.value = current.copy(message = "This action is unavailable in the current print state."); return
+            _state.value = current.copy(commandNotice = "This action is unavailable in the current print state."); return
         }
         _state.value = current.copy(busy = true, commandNotice = "Sending command…")
         viewModelScope.launch {

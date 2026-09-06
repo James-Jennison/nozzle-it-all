@@ -77,6 +77,7 @@ class PrinterModelTest {
         model.execute(pause,gen-1);runCurrent();assertEquals(0,fake.sent)
         now += 11_000
         model.execute(pause,gen);runCurrent();assertEquals(0,fake.sent)
+        assertEquals("Printer state changed. Refresh before sending a command.", model.state.value.commandNotice)
         model.disconnect()
     }
     @Test fun preflightChangedStateNeverDispatches() = runTest(dispatcher) {
@@ -113,4 +114,19 @@ class PrinterModelTest {
         assertEquals(1,first.reads);assertEquals(1,second.reads)
         model.disconnect()
     }
+    @Test fun switchingAndForgettingAreBlockedDuringCommandPreflight() = runTest(dispatcher) {
+        val first=Fake("http://first.local/");val second=Fake("http://second.local/")
+        val model=PrinterModel(serviceFactory={if(it==first.address) first else second},clock={100_000},io=dispatcher)
+        model.foreground(true);model.connect(first.address);runCurrent()
+        val generation=model.state.value.generation
+        first.beforeRead={
+            model.disconnect();model.connect(second.address);model.forgetPrinter(first.address)
+            assertEquals(generation,model.state.value.generation)
+            assertEquals(first.address,model.state.value.address)
+        }
+        model.execute(pause,generation);runCurrent()
+        assertEquals(1,first.sent);assertEquals(0,second.sent)
+        first.beforeRead=null;model.disconnect()
+    }
+
 }

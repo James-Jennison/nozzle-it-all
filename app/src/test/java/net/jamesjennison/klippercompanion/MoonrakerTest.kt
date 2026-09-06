@@ -74,4 +74,20 @@ class MoonrakerTest {
             api.close()
         }
     }
+    @Test fun clientRemainsUsableAfterBackgroundCleanup() {
+        MockWebServer().use { server ->
+            repeat(2) {
+                server.enqueue(MockResponse().setBody("""{"result":{"klippy_connected":true,"klippy_state":"ready"}}"""))
+                server.enqueue(MockResponse().setBody("""{"result":{"status":{"webhooks":{"state":"ready"},"print_stats":{"state":"printing"}}}}"""))
+            }
+            server.start()
+            val api = Moonraker(server.url("/").toString())
+            assertTrue(api.snapshot().ready)
+            api.close() // Real implementation cancels calls and evicts pooled connections; it does not terminate the dispatcher.
+            assertTrue(api.snapshot().ready)
+            assertEquals(4, server.requestCount)
+            api.close()
+        }
+    }
+
 }

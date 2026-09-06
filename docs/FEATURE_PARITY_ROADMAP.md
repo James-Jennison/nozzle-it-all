@@ -73,7 +73,7 @@ turned into a paid unlock.
 | P05 | Elapsed time, ETA and layer progress; everyday monitoring | Validated: elapsed/layers and labelled estimates | M1 | M | Local; metadata/status; label estimates and missing data |
 | P06 | Macro favorites/groups/validated parameter forms; Mobileraker | Basic run | M2 | M | Local; explicit parameter definitions, not guessed inputs |
 | P07 | Heating presets, fans, speed/flow, movement/extrusion; Mobileraker/OctoApp | Simulated control preview verified; live capability/physical acceptance pending ([scope](P07_PREVIEW_ACCEPTANCE.md)) | M2 | L | Local; capability discovery and owner-operated physical acceptance |
-| P08 | Upload/download/rename/delete, share-to-app; Mobileraker/OctoApp | Missing | M2 | M | Local; bounded transfers and explicit overwrite/delete handling |
+| P08 | Upload/download/rename/delete, share-to-app; Mobileraker/OctoApp | Download/import/export delivered; mutation simulation verified; live acceptance pending ([scope](P08_SIMULATION_ACCEPTANCE.md)) | M2 | M | Local; bounded transfers and explicit overwrite/delete handling |
 | P09 | G-code preview with layers and print position; Mobileraker/OctoApp | Missing | M2 | L | Local; bounded parser/renderer, supported dialects |
 | P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
 | P11 | Console history/filtering, explicit command entry; Mobileraker/OctoApp | Missing | M3 | M | Local; bounded logs, command safeguards |

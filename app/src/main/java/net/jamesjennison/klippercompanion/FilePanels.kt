@@ -11,6 +11,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
 
 @Composable fun FileWorkspacePanel(workspace:FileWorkspace) {
+    var fileChanges by remember {mutableStateOf(false)}
+    if(fileChanges) FileChangePanel {fileChanges=false}
     val pick=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){it?.let(workspace::import)}
     var exportSource by remember(workspace) {mutableStateOf<java.io.File?>(null)}
     var exportUri by remember(workspace) {mutableStateOf<android.net.Uri?>(null)}
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.dp
     exportUri?.let {uri->AlertDialog(onDismissRequest={exportUri=null},title={Text("Write the selected document?")},text={Text("Save ${workspace.name} to the document you selected. Its provider may replace existing content. An interrupted export may leave a partial document.")},confirmButton={TextButton({exportUri=null;workspace.export(uri,exportSource)}){Text("Write copy")}},dismissButton={TextButton({exportUri=null}){Text("Cancel")}})}
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            OutlinedButton({fileChanges=true}){Text("Preview file management")}
             OutlinedButton({pick.launch(arrayOf("application/octet-stream","text/*","application/x-gcode"))},enabled=!workspace.loading){Text("Import G-code")}
             if(workspace.localFile!=null) {
                 OutlinedButton(workspace::render,enabled=!workspace.loading){Text("Preview layers")}

@@ -89,7 +89,6 @@ turned into a paid unlock.
 | P22 | Queues, scheduling and bed-cleared workflow; SimplyPrint | Missing | M6b | XL | Durable always-on state; no unattended starts by default |
 | P23 | Maintenance reminders, usage/cost trends and exports; SimplyPrint | Missing | M6b | M–L | P04/P13; user-supplied rates and incomplete-data labels |
 | P24 | Shared library, server slicing and profile management; SimplyPrint | Missing | M6c | XL discovery | Server compute/storage; slicer/profile/license compatibility |
-| P25 | Wear OS companion; OctoApp | Missing | M7 | L | P17/P18; physical watch needed for acceptance |
 
 ## Delivery milestones and exit criteria
 
@@ -172,13 +171,13 @@ recorded bed-cleared decision. Server slicing must produce validated output with
 correct machine/material/profile; team sharing needs roles and auditability before
 external access. Automated bed-clearing hardware is outside initial scope.
 
-### M7 — Wear OS and additional form factors
+## Optional future ideas outside the roadmap
 
-P25 follows a stable alert/status model. Tablet and foldable layout quality remain
-part of every Android milestone; Wear OS is additional work, not an iOS comparison.
-
-Exit: test on a real watch; show stale status clearly; measure battery impact and
-reconnect; route physical commands through explicit confirmation and current state.
+Owner decision: dedicated wearable companions are removed from the delivery roadmap.
+There is no wearable milestone or committed watch-app work. Reconsider only if an
+actual use case warrants a separate owner decision. Android notifications and
+home-screen widgets remain in M4; tablet and foldable layout quality remain part of
+every Android milestone. The active backlog is P01–P24 across M1–M6.
 
 ## Cost strategy
 

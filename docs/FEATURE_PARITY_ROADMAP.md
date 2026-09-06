@@ -106,7 +106,11 @@ with available Moonraker records; missing ETA stays unknown. Validate real WebRT
 MJPEG fixture/available camera, long filenames and large histories on the Razr.
 Multiple physical printers/cameras remain an explicit evidence gap until available.
 
-### M2 — Prepare and operate prints from the app
+### M2 — Prepare and operate prints from the app (in progress)
+
+First active-print delivery: [scope and acceptance](M2_ACTIVE_PRINT_ACCEPTANCE.md).
+Local macro organization, numeric forms, document workflows and approximate layer
+preview are implemented; full M2 is not complete.
 
 Deliver P06–P10. Keep monitor and advanced controls separate. Start with macro
 organization and file transfers; then add controls and preview. Dashboard options
@@ -210,5 +214,5 @@ is a planning artifact, not a release acceptance or a new infrastructure archite
 No parity percentage is claimed: a raw checkbox count would hide major differences
 between local viewing, dependable alerts and hosted AI services.
 
-M1 is validated in the owner’s debug installation. **M2 is next in the proposed sequence**,
-subject to the owner beginning that milestone; it has not started.
+M1 is validated in the owner’s debug installation. **M2 is in progress**, beginning
+with the owner-authorized active-print/read-only delivery described above.

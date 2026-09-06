@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <application>
+  <!-- Test APK only: exposes exactly one immutable synthetic G-code document, never user files. -->
+  <provider android:name="net.jamesjennison.klippercompanion.GcodeFixtureProvider" android:authorities="net.jamesjennison.klippercompanion.test.gcodefixture" android:exported="true" />
+ </application>
+</manifest>

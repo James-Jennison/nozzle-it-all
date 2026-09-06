@@ -1,6 +1,9 @@
 package net.jamesjennison.klippercompanion
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,8 +44,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    private var sharedFile by mutableStateOf<Uri?>(null)
+    private fun receiveShare(value: Intent?) {
+        if(value?.action==Intent.ACTION_SEND) {
+            @Suppress("DEPRECATION")
+            val uri=value.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            sharedFile=uri?.takeIf {it.scheme=="content"}
+        }
+    }
+    override fun onNewIntent(intent:Intent) {super.onNewIntent(intent);setIntent(intent);receiveShare(intent)}
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+        super.onCreate(savedInstanceState);receiveShare(intent); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
             CompanionTheme {
                 val model: PrinterModel = viewModel(factory = viewModelFactory {
@@ -63,7 +75,7 @@ class MainActivity : ComponentActivity() {
                     model.foreground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
-                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory)
+                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null})
             }
         }
     }
@@ -71,9 +83,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
-    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}) {
+    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}) {
     val listState = rememberLazyListState()
     val uiScope = rememberCoroutineScope()
+    val context=LocalContext.current
+    val workspace=remember(state.address,state.generation) {FileWorkspace(context.applicationContext,uiScope)}
+    DisposableEffect(workspace) {onDispose {workspace.close()}}
+    val macroPrefs=remember {context.getSharedPreferences("macro-options",0)}
+    val macroKey=remember(state.address) {java.security.MessageDigest.getInstance("SHA-256").digest(state.address.toByteArray()).joinToString("") {"%02x".format(it)}}
+    var macroOptions by remember(macroKey) {mutableStateOf(MacroTools.decode(runCatching {macroPrefs.getString(macroKey,"{}")} .getOrNull()?:"{}"))}
+    fun saveMacro(name:String,options:MacroOptions) {macroOptions=macroOptions+(name to options);macroPrefs.edit().putString(macroKey,MacroTools.encode(macroOptions)).apply()}
+    var editingMacro by remember(state.generation) {mutableStateOf<String?>(null)}
+    var preparingMacro by remember(state.generation) {mutableStateOf<String?>(null)}
+    var macroFilter by remember(state.address) {mutableStateOf("")}
     val hostView=LocalView.current
     var cameraVisible by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -127,7 +149,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
-            if(tab == 3 || state.address.isEmpty()) {
+            if(tab == 3 || (state.address.isEmpty() && tab != 2)) {
                 if(state.savedPrinters.isNotEmpty()) {
                     item { Text("Saved printers", style = MaterialTheme.typography.titleMedium)
                         Text("One printer is monitored at a time. Connecting saves its address on this phone.", style = MaterialTheme.typography.bodyMedium) }
@@ -218,13 +240,24 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 1 -> {
-                    item { Text("Macros run as configured on your printer. They may move axes or heat the nozzle. This version runs macros without parameters."); TextButton(refresh) { Text("Refresh lists") } }
-                    if(state.catalog.macros.isEmpty()) item { Text("No available macros. Connect to a ready printer, then refresh.") }
-                    items(state.catalog.macros, key = { it }) { macro ->
-                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) { Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(macro, Modifier.weight(1f).padding(8.dp), style = MaterialTheme.typography.bodyLarge)
-                            OutlinedButton({ pending = Moonraker.macro(macro) to state.generation }, enabled = enabled) { Text("Run") }
-                        } }
+                    item {
+                        Text("Organize and prepare macros locally. Execution requires an idle printer and confirmation.")
+                        OutlinedTextField(macroFilter,{macroFilter=it},label={Text("Search macros or groups")},modifier=Modifier.fillMaxWidth())
+                        TextButton(refresh) {Text("Refresh lists")}
+                    }
+                    if(state.catalog.macros.isEmpty()) item {Text("No available macros. Connect to a ready printer, then refresh.")}
+                    val macros=state.catalog.macros.filter {it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
+                    items(macros,key={it}) {macro ->
+                        val options=macroOptions[macro]?:MacroOptions()
+                        Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(12.dp)) {
+                            Text(macro,style=MaterialTheme.typography.titleMedium)
+                            if(options.group.isNotBlank())Text(options.group)
+                            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                TextButton({saveMacro(macro,options.copy(favorite=!options.favorite))}){Text(if(options.favorite)"Unfavorite" else "Favorite")}
+                                TextButton({editingMacro=macro}){Text("Organize")}
+                                OutlinedButton({preparingMacro=macro}){Text("Run")}
+                            }
+                        }}
                     }
                 }
                 2 -> {
@@ -252,6 +285,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 if(folder.isNotBlank()) TextButton({folder=folder.substringBeforeLast('/',"")}){Text("Up a folder")}
                             }
                             Text(folder.ifBlank { "All files" })
+                            FileWorkspacePanel(workspace)
                             FileDetails(state)
                         }
                         val prefix=if(folder.isBlank()) "" else "$folder/"
@@ -267,6 +301,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Text(file,style=MaterialTheme.typography.titleSmall)
                                 state.catalog.fileInfo.firstOrNull { it.path==file }?.size?.let { Text("${it/1024} KiB",style=MaterialTheme.typography.bodySmall) }
                                 FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton({workspace.download(state.address,file);uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected&&!workspace.loading){Text("Download / preview")}
                                     OutlinedButton({selectFile(file);uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected,modifier=Modifier.testTag("details:$file")){Text("Details")}
                                     OutlinedButton({pending=Moonraker.start(file) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error")){Text("Start print")}
                                 }
@@ -280,11 +315,14 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             item { Text("LOCAL NETWORK  ·  ANDROID  ·  0.1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
+    sharedFile?.let {uri -> AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}}) }
+    editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
+    preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){pending=it to state.generation}}
     editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile) }
     pending?.let { (command, epoch) ->
         AlertDialog(onDismissRequest = { pending = null }, title = { Text(command.title + "?") },
-            text = { Text("This sends a command to ${state.address}. It may move or heat your printer. Confirm only when the printer is safe and ready.") },
-            confirmButton = { Button({ pending = null; execute(command, epoch) }, enabled = enabled) { Text("Confirm") } },
+            text = { Column { Text("This sends a command to ${state.address}. It may move or heat your printer. Confirm only when the printer is safe and ready.");command.arguments["script"]?.let {Text("Command: $it")};if(command.allowedStates.isNotEmpty() && state.snapshot?.state !in command.allowedStates)Text("Unavailable in the current print state.") } },
+            confirmButton = { Button({ pending = null; execute(command, epoch) }, enabled = enabled && (command.allowedStates.isEmpty() || state.snapshot?.state in command.allowedStates)) { Text("Confirm") } },
             dismissButton = { TextButton({ pending = null }) { Text("Go back") } })
     }
 }

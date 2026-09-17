@@ -5,9 +5,13 @@ import org.json.JSONObject
 
 data class FanRequest(val fan:String,val percent:String,val activeTool:String)
 data class FanStatus(val fan:String,val activeTool:String,val ready:Boolean,val printState:String,val speed:Double?,val configured:Boolean,val noMacroOverride:Boolean)
+data class FanReadout(val fan:String,val speed:Double?,val rpm:Double?)
 interface FanReader:AutoCloseable {
     fun fans():List<String>
     fun fanStatus(fan:String):FanStatus
+}
+interface FanReadoutReader:AutoCloseable {
+    fun fanReadouts():List<FanReadout>
 }
 object FanControls {
     val idleStates=setOf("standby","complete","cancelled")
@@ -28,6 +32,15 @@ object FanControls {
         return FanStatus(fan,Moonraker.activeExtruder(status),status.optJSONObject("webhooks")?.optString("state")=="ready",
             status.optJSONObject("print_stats")?.optString("state","unknown")?:"unknown",
             status.optJSONObject(fan)?.optDouble("speed")?.takeIf{it.isFinite() && it in 0.0..1.0},settings?.optJSONObject(fan)!=null,unmodified)
+    }
+    fun parseReadouts(names:List<String>,result:JSONObject):List<FanReadout> {
+        val status=result.getJSONObject("status")
+        return names.map { name ->
+            require(validFan(name)){"Unsupported manual fan."}
+            val reading=status.optJSONObject(name)
+            fun finite(field:String)=reading?.optDouble(field)?.takeIf{it.isFinite()}
+            FanReadout(name,finite("speed")?.takeIf{it in 0.0..1.0},finite("rpm"))
+        }
     }
     fun prepare(request:FanRequest,status:FanStatus):PrinterCommand {
         require(validFan(request.fan) && request.fan==status.fan){"Fan identity changed."}

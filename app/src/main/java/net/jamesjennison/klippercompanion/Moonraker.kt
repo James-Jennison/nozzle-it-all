@@ -36,10 +36,11 @@ interface PrinterService {
     fun fanStatus(fan: String): FanStatus = throw ApiFailure("Fan controls unavailable.")
     fun meshStatus(): BedMeshStatus = throw ApiFailure("Bed mesh unavailable.")
     fun toolheadTemperatures(): List<ToolheadTemperature> = throw ApiFailure("Toolhead temperatures unavailable.")
+    fun fanReadouts(): List<FanReadout> = throw ApiFailure("Fan readouts unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader {
+class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
@@ -130,6 +131,13 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
         return Toolheads.parse(names, result)
     }
     override fun fans(): List<String> = FanControls.catalog(request("printer/objects/list") as? JSONObject ?: throw ApiFailure("Fan catalog unavailable."))
+    override fun fanReadouts(): List<FanReadout> {
+        val names = FanControls.catalog(request("printer/objects/list") as? JSONObject ?: throw ApiFailure("Fan catalog unavailable."))
+        if (names.isEmpty()) return emptyList()
+        val fields = names.associateWith { "speed,rpm" }
+        val result = request("printer/objects/query", fields) as? JSONObject ?: throw ApiFailure("Fan readouts unavailable.")
+        return FanControls.parseReadouts(names, result)
+    }
     override fun fanStatus(fan: String): FanStatus {
         require(FanControls.validFan(fan)) { "Unsupported manual fan." }
         val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "toolhead" to "extruder", "configfile" to "settings", fan to "speed")) as? JSONObject

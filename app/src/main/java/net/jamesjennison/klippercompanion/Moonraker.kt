@@ -37,10 +37,11 @@ interface PrinterService {
     fun meshStatus(): BedMeshStatus = throw ApiFailure("Bed mesh unavailable.")
     fun toolheadTemperatures(): List<ToolheadTemperature> = throw ApiFailure("Toolhead temperatures unavailable.")
     fun fanReadouts(): List<FanReadout> = throw ApiFailure("Fan readouts unavailable.")
+    fun configFile(): ConfigFileContent = throw ApiFailure("Config file unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader {
+class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
@@ -199,6 +200,18 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
             PrintJob(it.getString("job_id"), it.optString("filename", "Unknown file"), it.optString("status", "unknown"),
                 it.finiteNonnegative("start_time"), it.finiteNonnegative("print_duration"), it.finiteNonnegative("filament_used"))
         }.distinctBy { it.id }, minOf(jobs.length(),50))
+    }
+    override fun configFile(): ConfigFileContent {
+        val filename = "printer.cfg"
+        val target = base.newBuilder().addPathSegments("server/files/config").addPathSegment(filename).build()
+        client.newCall(Request.Builder().url(target).build()).execute().use { response ->
+            if(!response.isSuccessful) throw ApiFailure("Could not read $filename (HTTP ${response.code}). Check the configured main config filename.")
+            val source = response.body?.source() ?: throw ApiFailure("Empty config file.")
+            source.request(ConfigFile.MAX_BYTES.toLong() + 1)
+            val raw = source.buffer.readByteArray()
+            if(raw.size > ConfigFile.MAX_BYTES) throw ApiFailure("Config file exceeds the supported size.")
+            return ConfigFile.split(filename, String(raw, Charsets.UTF_8))
+        }
     }
     override fun thumbnail(path: String): ByteArray {
         if(path.startsWith('/') || path.split('/').any { it == ".." || it == "." } || path.contains('\\')) throw ApiFailure("Invalid thumbnail path.")

@@ -99,7 +99,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
-    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}, consoleFactory:(String)->ConsoleReader={Moonraker(it)}, meshFactory:(String)->MeshReader={Moonraker(it)}, toolheadsFactory:(String)->ToolheadReader={Moonraker(it)}, fanStatusFactory:(String)->FanReadoutReader={Moonraker(it)}, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
+    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}, consoleFactory:(String)->ConsoleReader={Moonraker(it)}, meshFactory:(String)->MeshReader={Moonraker(it)}, toolheadsFactory:(String)->ToolheadReader={Moonraker(it)}, fanStatusFactory:(String)->FanReadoutReader={Moonraker(it)}, configFactory:(String)->ConfigFileReader={Moonraker(it)}, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory)
     var meshOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -108,6 +108,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(toolheadsOpen) ToolheadsPanel(state.address,state.connected,{toolheadsOpen=false},toolheadsFactory)
     var fanStatusOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(fanStatusOpen) FanStatusPanel(state.address,state.connected,{fanStatusOpen=false},fanStatusFactory)
+    var configOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(configOpen) ConfigFilePanel(state.address,state.connected,{configOpen=false},configFactory)
     var heaterOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(heaterOpen) HeaterPanel(state,execute,{heaterOpen=false})
     var fanOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -309,6 +311,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }
                     item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }
                     item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
+                    item { OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")} }
                     item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text("Read-only console")} }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
                     item {

@@ -64,8 +64,24 @@ same treatment to new control work, it doesn't lift it:
    value to re-verify for arbitrary text. Not restricted to idle print states,
    matching the existing read-only console's always-available behavior.
    Physical acceptance still deferred per the Phase 1 condition above
-10. P14 remainder — enable save/backup/explicit-restart once the diff view above
-    is validated
+10. ~~P14 remainder — enable save/backup/explicit-restart once the diff view above
+    is validated~~ **Built 2026-09-17**: owner decision to build+gate this like the
+    other Phase 1 controls, not the stricter localhost-only/fixture-only precedent
+    set by FileMutationFixture for gcode file uploads. Every save is preceded by a
+    mandatory server-side backup copy (`server/files/copy`); editing is confined to
+    the section above the SAVE_CONFIG marker, which is re-fetched fresh immediately
+    before saving to catch drift; restart uses Moonraker's "Host Restart"
+    (`printer/restart`), not `firmware_restart`, and is a fully separate,
+    separately-confirmed action from save. Spec-verified against Moonraker's file-
+    management and printer-administration docs before writing anything. This
+    closes out Phase 1 in full - physical acceptance still deferred per the Phase 1
+    condition above
+
+**Phase 1 complete (2026-09-17).** All ten items above are built, gated behind
+`LIVE_HEATER_FAN_CONTROLS_ENABLED`, and validated by JVM tests plus device tests on
+both an emulator and the owner's Razr 2023 (fixture readers/writers only - no real
+printer was ever sent a live command or file write during this work). Physical
+acceptance for all of it remains a separate, later owner decision.
 
 **Phase 2 — M4, sequenced after M3 is substantially done:**
 11. M4a — authentication + remote access (Tailscale primary; Cloudflare Tunnel,

@@ -102,7 +102,7 @@ turned into a paid unlock.
 | P18 | Notification actions and Android home-screen widgets; OctoApp/Android convenience | Missing | M4b | M | P17 freshness model; command actions open confirmation |
 | P19 | Timelapse browsing/export, optional capture/encode; monitoring workflow | Missing | M4c | M viewer; L capture | Existing service or always-on storage/encoding |
 | P20 | Self-hosted failure detection, evidence clips, sensitivity and alerts; Obico/SimplyPrint | Isolated experiment only | M5 | XL | P17 + camera sampling + licensed detector + server capacity |
-| P21 | Multi-printer live overview and bounded multi-camera grid; Printer Tools/SimplyPrint | One active printer | M6a | L | P01/P02/P16; per-printer isolation and measured device/network budgets |
+| P21 | Multi-printer live overview and bounded multi-camera grid; Printer Tools/SimplyPrint | Validated: auto-connect/independent monitoring per saved printer, tile grid with per-tile live camera, installed and phone-verified on the Razr ([auto-connect](AUTO_CONNECT_ACCEPTANCE.md), [tiles](PRINTER_TILES_ACCEPTANCE.md)) | M6a | L | P01/P02/P16; per-printer isolation and measured device/network budgets |
 | P22 | Queues, scheduling and bed-cleared workflow; SimplyPrint | Missing | M6b | XL | Durable always-on state; no unattended starts by default |
 | P23 | Maintenance reminders, usage/cost trends and exports; SimplyPrint | Missing | M6b | M–L | P04/P13; user-supplied rates and incomplete-data labels |
 | P24 | Shared library, server slicing and profile management; SimplyPrint | Missing | M6c | XL discovery | Server compute/storage; slicer/profile/license compatibility |

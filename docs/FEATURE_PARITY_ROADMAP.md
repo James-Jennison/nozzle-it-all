@@ -40,8 +40,9 @@ Elegoo CC — is not authorized yet** and stays a separate, later owner decision
 from the running app) until that physical acceptance happens, same as the existing
 gated-but-built heater/fan panels from before the pause — this phase extends that
 same treatment to new control work, it doesn't lift it:
-6. P07 remainder — speed/flow factor controls (M220/M221), already spec-verified
-   against Klipper's official G-Codes reference
+6. ~~P07 remainder — speed/flow factor controls (M220/M221)~~ **Built 2026-09-17**,
+   gated off behind `LIVE_HEATER_FAN_CONTROLS_ENABLED`; physical acceptance still
+   deferred per the Phase 1 condition above
 7. P06 remainder — remaining macro parameter form work
 8. P15 remainder — actual fan-speed/light-dimming control (not just visibility)
 9. P11 remainder — console command entry (currently read-only only)

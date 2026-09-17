@@ -261,6 +261,10 @@ class PrinterModel(
                         val checked=FanControls.prepare(request,service.fanStatus(request.fan))
                         if(checked!=command) throw ApiFailure("Fan command changed. Review it again.")
                     }
+                    command.speedFlowRequest?.let { request ->
+                        val checked=SpeedFlowControls.prepare(request,service.speedFlowStatus())
+                        if(checked!=command) throw ApiFailure("Speed/flow command changed. Review it again.")
+                    }
                     currentCoroutineContext().ensureActive()
                     service.command(command)
                 }

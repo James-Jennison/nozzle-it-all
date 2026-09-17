@@ -24,8 +24,8 @@ and reference material.
 1. ~~P12 — Bed mesh viewer (read-only)~~ **Done 2026-09-16**, verified live on both printers
 2. ~~P15 — Multi-toolhead temperature visibility for the Snapmaker U1~~ **Done
    2026-09-16**, verified live: all 4 real toolheads shown independently
-3. P15 — Elegoo CC/COSMOS-specific read-only checks (exhaust fan RPM display, saved
-   bed-mesh profile visibility)
+3. ~~P15 — Elegoo CC/COSMOS-specific read-only checks~~ **Done 2026-09-16**,
+   fan RPM verified live on COSMOS; mesh profile visibility already covered by P12
 4. P13 — Spoolman read-only inventory view — **conditional: confirm the owner
    actually runs Spoolman before starting this one**
 5. P14 — Config editing, starting with the read-only diff view only (no save/restart

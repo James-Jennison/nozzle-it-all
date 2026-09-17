@@ -11,7 +11,26 @@ data class MacroParameter(val name: String, val minimum: BigDecimal, val maximum
         require(minimum<=default && default<=maximum) { "Default must be between minimum and maximum." }
     }
 }
+data class MacroRequest(val name: String, val definitions: List<MacroParameter>, val values: Map<String,String>)
+data class MacroStatus(val ready: Boolean, val printState: String, val available: Boolean)
+interface MacroReader : AutoCloseable {
+    fun macroStatus(name: String): MacroStatus
+}
 object MacroTools {
+    val allowedStates = setOf("standby","complete","cancelled","error")
+    fun parseStatus(name: String, queryResult: JSONObject, listResult: JSONObject): MacroStatus {
+        val status = queryResult.getJSONObject("status")
+        val ready = status.optJSONObject("webhooks")?.optString("state") == "ready"
+        val printState = status.optJSONObject("print_stats")?.optString("state", "unknown") ?: "unknown"
+        val objects = listResult.getJSONArray("objects")
+        val available = (0 until objects.length()).any { objects.getString(it).equals("gcode_macro $name", true) }
+        return MacroStatus(ready, printState, available)
+    }
+    fun prepare(request: MacroRequest, status: MacroStatus): PrinterCommand {
+        require(status.ready && status.printState in allowedStates) { "Macros require an idle, ready printer." }
+        require(status.available) { "This macro is no longer available on the printer." }
+        return command(request.name, request.definitions, request.values)
+    }
     internal fun validateDecimal(value: BigDecimal) {
         // Bound expansion before rendering exponent-form definitions as plain input.
         require(value.scale() in -6..30 && value.precision()<=32 && value.abs()<=BigDecimal("1000000")) { "Use representable numbers within ±1000000." }
@@ -39,7 +58,7 @@ object MacroTools {
             val n=BigDecimal(raw);require(n>=p.minimum && n<=p.maximum) { "${p.name}: use ${p.minimum.toPlainString()} to ${p.maximum.toPlainString()}." }
             "${p.name}=${n.stripTrailingZeros().toPlainString()}"
         }
-        return base.copy(arguments=mapOf("script" to (listOf(name)+arguments).joinToString(" ")),allowedStates=setOf("standby","complete","cancelled","error"))
+        return base.copy(arguments=mapOf("script" to (listOf(name)+arguments).joinToString(" ")),allowedStates=allowedStates,macroRequest=MacroRequest(name,definitions,values))
     }
     fun decode(raw: String): Map<String,MacroOptions> = runCatching {
         val obj=JSONObject(raw);obj.keys().asSequence().take(500).associateWith { key -> val p=obj.getJSONObject(key);MacroOptions(p.optBoolean("favorite"),p.optString("group").take(40),p.optString("parameters").take(4000)) }

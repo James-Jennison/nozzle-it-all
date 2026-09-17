@@ -131,6 +131,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     fun saveMacro(name:String,options:MacroOptions) {macroOptions=macroOptions+(name to options);macroPrefs.edit().putString(macroKey,MacroTools.encode(macroOptions)).apply()}
     var editingMacro by remember(state.generation) {mutableStateOf<String?>(null)}
     var preparingMacro by remember(state.generation) {mutableStateOf<String?>(null)}
+    var runningMacro by remember(state.generation) {mutableStateOf<PrinterCommand?>(null)}
     var macroFilter by remember(state.address) {mutableStateOf("")}
     val hostView=LocalView.current
     var cameraVisible by remember { mutableStateOf(false) }
@@ -332,7 +333,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                 TextButton({saveMacro(macro,options.copy(favorite=!options.favorite))}){Text(if(options.favorite)"Unfavorite" else "Favorite")}
                                 TextButton({editingMacro=macro}){Text("Organize")}
-                                OutlinedButton({preparingMacro=macro}){Text("Run")}
+                                if(LIVE_HEATER_FAN_CONTROLS_ENABLED) OutlinedButton({preparingMacro=macro}){Text("Run")}
                             }
                         }}
                     }
@@ -394,7 +395,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     }
     sharedFile?.let {uri -> AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}}) }
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
-    preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){pending=it to state.generation}}
+    preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
+    runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}
     editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile) }
     pending?.let { (command, epoch) ->
         AlertDialog(onDismissRequest = { pending = null }, title = { Text(command.title + "?") },

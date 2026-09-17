@@ -265,6 +265,10 @@ class PrinterModel(
                         val checked=SpeedFlowControls.prepare(request,service.speedFlowStatus())
                         if(checked!=command) throw ApiFailure("Speed/flow command changed. Review it again.")
                     }
+                    command.macroRequest?.let { request ->
+                        val checked=MacroTools.prepare(request,service.macroStatus(request.name))
+                        if(checked!=command) throw ApiFailure("Macro command changed. Review it again.")
+                    }
                     currentCoroutineContext().ensureActive()
                     service.command(command)
                 }

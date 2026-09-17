@@ -21,7 +21,7 @@ data class PrinterSnapshot(val ready: Boolean, val state: String, val filename: 
 }
 data class Camera(val name: String, val snapshot: String, val stream: String = "", val service: String = "", val id: String = name)
 data class Catalog(val files: List<String>, val macros: List<String>, val cameras: List<Camera>, val warnings: List<String>, val fileInfo: List<FileInfo> = emptyList())
-data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null)
+data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null)
 
 interface PrinterService {
     val address: String
@@ -39,10 +39,11 @@ interface PrinterService {
     fun fanReadouts(): List<FanReadout> = throw ApiFailure("Fan readouts unavailable.")
     fun configFile(): ConfigFileContent = throw ApiFailure("Config file unavailable.")
     fun speedFlowStatus(): SpeedFlowStatus = throw ApiFailure("Speed/flow status unavailable.")
+    fun macroStatus(name: String): MacroStatus = throw ApiFailure("Macro status unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, SpeedFlowReader {
+class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, SpeedFlowReader, MacroReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
@@ -123,6 +124,13 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
         val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "configfile" to "settings", "gcode_move" to "speed_factor,extrude_factor")) as? JSONObject
             ?: throw ApiFailure("Speed/flow status unavailable.")
         return SpeedFlowControls.parse(result)
+    }
+    override fun macroStatus(name: String): MacroStatus {
+        require(Regex("[A-Za-z_][A-Za-z0-9_]*").matches(name)) { "Unsupported macro name" }
+        val query=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state")) as? JSONObject
+            ?: throw ApiFailure("Macro status unavailable.")
+        val listed=request("printer/objects/list") as? JSONObject ?: throw ApiFailure("Macro catalog unavailable.")
+        return MacroTools.parseStatus(name,query,listed)
     }
     override fun meshStatus(): BedMeshStatus {
         val result=request("printer/objects/query",mapOf("bed_mesh" to "profile_name,mesh_min,mesh_max,probed_matrix")) as? JSONObject

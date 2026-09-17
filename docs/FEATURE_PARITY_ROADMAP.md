@@ -147,7 +147,7 @@ turned into a paid unlock.
 | P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Missing | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
 | P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Missing | M3 | M | Existing service; read first, validated mutations later |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
-| P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness | Limited standard heaters | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work |
+| P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Limited standard heaters; single active-extruder display only | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
 | P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | Unauthenticated local only | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
 | P17 | Background completion/error/offline/filament alerts; Mobileraker/OctoApp/Obico | Missing | M4b | L | Opt-in Android monitoring; reliable unattended coverage needs always-on event source |
 | P18 | Notification actions and Android home-screen widgets; OctoApp/Android convenience | Missing | M4b | M | P17 freshness model; command actions open confirmation |
@@ -159,6 +159,27 @@ turned into a paid unlock.
 | P24 | Shared library, server slicing and profile management; SimplyPrint | Missing | M6c | XL discovery | Server compute/storage; slicer/profile/license compatibility |
 | P25 | Bambu Lab printer support (local/cloud MQTT protocol); Bambu Handy | Missing | M7 | XL discovery | Existing service (Bambu Cloud) or LAN mode; owner does not own this hardware, see M7 acceptance note |
 | P26 | Prusa (PrusaLink/Prusa Connect) printer support; Prusa Connect app | Missing | M7 | L discovery | Existing service (Prusa Connect) or local PrusaLink API; owner does not own this hardware, see M7 acceptance note |
+
+**P15 sourcing note (2026-09-16):** the Snapmaker U1 runs a genuine Klipper/Moonraker
+fork ([Snapmaker/u1-moonraker](https://github.com/Snapmaker/u1-moonraker), GPL-3.0;
+~20% of Klipper and ~15% of Moonraker modified specifically for its parallel
+multi-toolhead system) — this is why our app can monitor it at all. A community
+Home Assistant integration, [ha-snapmaker-u1](https://github.com/kbaker827/ha-snapmaker-u1)
+(no explicit license — read for protocol facts only, not a code-reuse source),
+confirms the firmware exposes T0–T3 per-extruder temperature/target sensors
+independently. Our own `PrinterSnapshot` only tracks one active nozzle today.
+
+**Elegoo CC firmware note (2026-09-16):** the owner's Elegoo CC runs
+[COSMOS](https://github.com/OpenCentauri/cosmos) (GPL-3.0), a community Klipper/Kalico
+replacement firmware for the Elegoo Centauri Carbon — not stock Elegoo firmware. This
+matters for P12 and P15 specifically: COSMOS adds webUI bed-mesh viewing and storing
+multiple saved meshes (directly relevant to P12's bed mesh viewer), reports exhaust
+fan RPM and exposes direct exhaust-fan-speed control, and supports toolhead/main-light
+dimming (both P15). It also supports an aftermarket AMS via a documented ancubic ACE
+integration — relevant only if that hardware is ever added, not assumed present.
+COSMOS's own README warns it is beta/not stable and the mainboard is resource-limited
+with little overhead for extra plugins — treat any COSMOS-specific capability as
+needing a live capability check against this printer, not assumed from Klipper alone.
 
 ## Delivery milestones and exit criteria
 

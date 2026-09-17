@@ -31,7 +31,15 @@ and reference material.
 5. P14 — Config editing, starting with the read-only diff view only (no save/restart
    yet); matches M3's "read-only views before mutation flows" rule
 
-**Phase 1 — unlocked once the monitoring-only pause ends:**
+**Phase 1 — owner decision 2026-09-16: unpaused for implementation, with a
+condition.** Building and validating this work by code/unit tests and device-fixture
+tests (fake readers/callbacks, no real printer) is authorized now. **Physical
+acceptance — installing on the Razr and sending real commands to the Snapmaker U1 or
+Elegoo CC — is not authorized yet** and stays a separate, later owner decision. The
+`LIVE_HEATER_FAN_CONTROLS_ENABLED` UI gate stays off (heater/fan panels stay hidden
+from the running app) until that physical acceptance happens, same as the existing
+gated-but-built heater/fan panels from before the pause — this phase extends that
+same treatment to new control work, it doesn't lift it:
 6. P07 remainder — speed/flow factor controls (M220/M221), already spec-verified
    against Klipper's official G-Codes reference
 7. P06 remainder — remaining macro parameter form work
@@ -248,7 +256,7 @@ with available Moonraker records; missing ETA stays unknown. Validate real WebRT
 MJPEG fixture/available camera, long filenames and large histories on the Razr.
 Multiple physical printers/cameras remain an explicit evidence gap until available.
 
-### M2 — Prepare and operate prints from the app (paused on monitoring-first scope)
+### M2 — Prepare and operate prints from the app (implementation resumed, physical acceptance still deferred)
 
 First active-print delivery: [scope and acceptance](M2_ACTIVE_PRINT_ACCEPTANCE.md).
 Local macro organization, numeric forms, document workflows and approximate layer
@@ -258,15 +266,15 @@ Deliver P06–P10. Keep monitor and advanced controls separate. Start with macro
 organization and file transfers; then add controls and preview. Dashboard options
 must preserve safety messages and connection freshness.
 
-**Owner scope decision (2026-09-16):** narrow active development to monitoring —
-status/progress/temperature/history readouts, live camera, and confirmed
-pause/resume/cancel — for the duration of the owner's Toys for Tots season.
-Already-implemented heater/fan controls and file transfer/live-preview work
-(P07 partial, P08, P09) stay installed as-is; no further control expansion (the
-planned P07 speed/flow factor slice, remaining P06 macro parameter forms, or any
-new P07 capability) starts until the owner revisits scope after the season ends
-(approximately December 2026). This is a pause, not a removal: P06/P07/P10 rows
-keep their current status until then.
+**Owner scope decision (2026-09-06):** narrowed active development to monitoring
+for the duration of the owner's Toys for Tots season. **Revised 2026-09-16:**
+control-work implementation is unpaused — the remaining P07 speed/flow slice,
+P06 macro forms, P11 console entry and P15 control additions can be built and
+validated now via unit/device-fixture tests. Physical acceptance (installing on
+the Razr and sending real commands to the Snapmaker U1 or Elegoo CC) remains a
+separate, later owner decision — not authorized by this revision. The
+`LIVE_HEATER_FAN_CONTROLS_ENABLED` gate stays off in the running app until that
+happens, exactly as it already did for the pre-pause heater/fan panels.
 
 Exit: invalid macro parameters cannot inject unintended commands; cold extrusion,
 unhomed movement and unsupported controls are guarded; interrupted uploads cannot

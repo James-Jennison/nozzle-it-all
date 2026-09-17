@@ -48,7 +48,15 @@ same treatment to new control work, it doesn't lift it:
    missing, and gated macro Run behind `LIVE_HEATER_FAN_CONTROLS_ENABLED` (it was
    previously ungated, inconsistent with heater/fan/speed-flow); physical
    acceptance still deferred per the Phase 1 condition above
-8. P15 remainder — actual fan-speed/light-dimming control (not just visibility)
+8. ~~P15 remainder — actual fan-speed/light-dimming control (not just visibility)~~
+   **Built 2026-09-17**: fan-speed control was already covered by the existing
+   FanControls/FanPanel (the Elegoo CC/COSMOS exposes its fans as `fan` and
+   `fan_generic X`, both already handled); added light dimming, which had no
+   code at all - see the P15 sourcing note below for the confirmed `[led case]`/
+   `[led hotend]` config and `SET_LED` command. Deliberately not restricted to
+   idle print states, unlike heater/fan/macro/speed-flow - dimming a light
+   doesn't disrupt an active print, and Fluidd/Mainsail allow it while printing.
+   Physical acceptance still deferred per the Phase 1 condition above
 9. P11 remainder — console command entry (currently read-only only)
 10. P14 remainder — enable save/backup/explicit-restart once the diff view above
     is validated
@@ -252,6 +260,18 @@ integration — relevant only if that hardware is ever added, not assumed presen
 COSMOS's own README warns it is beta/not stable and the mainboard is resource-limited
 with little overhead for extra plugins — treat any COSMOS-specific capability as
 needing a live capability check against this printer, not assumed from Klipper alone.
+
+**Light dimming sourcing note (2026-09-17):** confirmed directly against COSMOS's
+own source, not just its README. `machine.cfg`
+(meta-opencentauri/recipes-apps/klipper/files/machine.cfg in
+[OpenCentauri/cosmos](https://github.com/OpenCentauri/cosmos)) defines `[led case]`
+(the main light, on by default) and `[led hotend]` (an aftermarket toolhead LED),
+each with only a `white_pin` configured. Both are standard Klipper `[led]` objects,
+not a COSMOS-specific mechanism — Klipper's own `led.py` confirms `SET_LED
+LED=<name> WHITE=<0.0-1.0> SYNC=0` is the correct command for a white-only LED.
+Our app discovers `led <name>` objects generically from the printer's own catalog
+(same pattern as fan discovery), so this isn't hardcoded to these two names and
+should work on any printer exposing `[led ...]` objects, not just the Elegoo CC.
 
 ## Delivery milestones and exit criteria
 

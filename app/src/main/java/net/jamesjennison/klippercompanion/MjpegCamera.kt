@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -43,7 +44,7 @@ fun nextJpeg(input: InputStream, maximum: Int = 2_000_000): ByteArray {
     }
     throw ApiFailure("Camera frame exceeds supported limit.")
 }
-@Composable fun MjpegCamera(address: String, camera: Camera) {
+@Composable fun MjpegCamera(address: String, camera: Camera, modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f/9f), showLabel: Boolean = true) {
     val endpoint=remember(address,camera.stream) { runCatching { Moonraker.cameraUrl(address,camera.stream) }.getOrNull() }
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     var active by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
@@ -84,7 +85,7 @@ fun nextJpeg(input: InputStream, maximum: Int = 2_000_000): ByteArray {
             }
         }
     }
-    bitmap?.let { Image(it.asImageBitmap(),"Live printer camera",Modifier.fillMaxWidth().aspectRatio(16f/9f)) }
-        ?: Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
-    Text(label, style = MaterialTheme.typography.bodySmall)
+    bitmap?.let { Image(it.asImageBitmap(),"Live printer camera",modifier,contentScale=ContentScale.Crop) }
+        ?: Spacer(modifier)
+    if(showLabel) Text(label, style = MaterialTheme.typography.bodySmall)
 }

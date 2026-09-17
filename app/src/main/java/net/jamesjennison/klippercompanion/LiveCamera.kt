@@ -23,11 +23,11 @@ import java.io.ByteArrayInputStream
 import java.util.Locale
 
 @SuppressLint("SetJavaScriptEnabled")
-@Composable fun LiveCamera(address: String, camera: Camera) {
+@Composable fun LiveCamera(address: String, camera: Camera, modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f/9f), showLabel: Boolean = true) {
     val endpoint = remember(address, camera.stream) { runCatching { Moonraker.cameraUrl(address, camera.stream) }.getOrNull() }
     if(endpoint == null || camera.service != "webrtc-camerastreamer") {
-        Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
-        Text("Live video format unavailable. This version supports camera-streamer WebRTC.", style=MaterialTheme.typography.bodySmall)
+        Spacer(modifier)
+        if(showLabel) Text("Live video format unavailable. This version supports camera-streamer WebRTC.", style=MaterialTheme.typography.bodySmall)
         return
     }
     val context = LocalContext.current
@@ -46,7 +46,7 @@ import java.util.Locale
             context.assets.open("camera.html").bufferedReader().use { it.readText() }
                 .replace("__ORIGIN__",origin).replace("__ENDPOINT__",JSONObject.quote(url))
         }
-        AndroidView(modifier=Modifier.fillMaxWidth().aspectRatio(16f/9f), factory={ ctx ->
+        AndroidView(modifier=modifier, factory={ ctx ->
             WebView(ctx).apply {
                 layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
                 setBackgroundColor(android.graphics.Color.BLACK)
@@ -88,5 +88,5 @@ import java.util.Locale
             }
         }
     }
-    Text(label,style=MaterialTheme.typography.bodySmall)
+    if(showLabel) Text(label,style=MaterialTheme.typography.bodySmall)
 }

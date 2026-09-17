@@ -9,13 +9,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 
 @Composable
-fun SnapshotCamera(address: String, camera: Camera) {
+fun SnapshotCamera(address: String, camera: Camera, modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f/9f), showLabel: Boolean = true) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var active by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(lifecycle) {
@@ -49,7 +50,7 @@ fun SnapshotCamera(address: String, camera: Camera) {
             delay(2_000)
         }
     }
-    bitmap?.let { Image(it.asImageBitmap(), "Current printer camera", Modifier.fillMaxWidth().aspectRatio(16f/9f)) }
-        ?: Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
-    Text(label, style = MaterialTheme.typography.bodySmall)
+    bitmap?.let { Image(it.asImageBitmap(), "Current printer camera", modifier, contentScale = ContentScale.Crop) }
+        ?: Spacer(modifier)
+    if(showLabel) Text(label, style = MaterialTheme.typography.bodySmall)
 }

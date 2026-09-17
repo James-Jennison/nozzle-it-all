@@ -1,16 +1,15 @@
 package net.jamesjennison.klippercompanion
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,47 +28,56 @@ fun ScreenState.connectedPrinterTiles(): List<PrinterTile> =
             profile?.label ?: saved, connection.state, connection.snapshot, camera)
     }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> Unit, cameraContent: @Composable (PrinterTile) -> Unit = { PrinterTileCamera(it) }) {
-    val density = LocalDensity.current
-    val fontScale = density.fontScale
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = if (fontScale > 1.3f || maxWidth < 300.dp) 1 else if (maxWidth >= 660.dp) 3 else 2
-        val width = (maxWidth - 12.dp * (columns - 1)) / columns
-        // Measure unexpanded content so rows can shrink as well as grow.
-        val naturalHeights = remember(width, density.density, fontScale, tiles.map { it.address }) { mutableStateMapOf<String, Int>() }
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            tiles.chunked(columns).forEach { row ->
-                val rowHeight = row.maxOf { naturalHeights[it.address] ?: 0 }
-                // Weights share integer pixels without accidentally wrapping a peer.
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { tile -> key(tile.address) {
-                Card(onClick = { open(tile.address) }, enabled = enabled,
-                    modifier = Modifier.weight(1f).heightIn(min = with(density) { rowHeight.toDp() }).testTag("printer-tile:${tile.address}")) {
-                    Column(Modifier.wrapContentHeight(Alignment.Top).onSizeChanged { naturalHeights[tile.address] = it.height }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(tile.label, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text((tile.snapshot?.displayState ?: tile.status).replaceFirstChar { it.titlecase() }, style = MaterialTheme.typography.labelLarge)
-                        Box {
-                            cameraContent(tile)
-                            Box(Modifier.matchParentSize().clickable(enabled = enabled) { open(tile.address) })
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        tiles.forEach { tile -> key(tile.address) {
+            val snapshot = tile.snapshot
+            val displayState = snapshot?.displayState ?: tile.status
+            val activeFilename = snapshot?.activeFilename?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+            fun temperature(value: Double?) = value?.takeIf { it.isFinite() }?.let { String.format(Locale.ROOT, "%.0f°C", it) } ?: "—"
+            Card(onClick = { open(tile.address) }, enabled = enabled, modifier = Modifier.fillMaxWidth().testTag("printer-tile:${tile.address}")) {
+                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))) { cameraContent(tile) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(tile.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            StatusPill(displayState)
                         }
-                        val snapshot = tile.snapshot
-                        Text(snapshot?.activeFilename?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "No active file",
-                            style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        val progress = snapshot?.activeProgress?.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
-                        LinearProgressIndicator(progress = { progress ?: 0f }, modifier = Modifier.fillMaxWidth())
-                        Text(progress?.let { "${(it * 100).toInt()}%" } ?: "Progress unavailable", style = MaterialTheme.typography.labelLarge)
-                        fun temperature(value: Double?) = value?.takeIf { it.isFinite() }?.let { String.format(Locale.ROOT, "%.0f°C", it) } ?: "—"
-                        Text("Nozzle ${temperature(snapshot?.nozzle)} · Bed ${temperature(snapshot?.bed)}", style = MaterialTheme.typography.bodySmall)
-                        Text("Open dashboard", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        if (activeFilename != null) {
+                            Text(activeFilename, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                LinearProgressIndicator(progress = { snapshot?.activeProgress ?: 0f }, modifier = Modifier.weight(1f))
+                                Text("${((snapshot?.activeProgress ?: 0f) * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                            }
+                        } else {
+                            Text("No active file", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                CompanionIcon(CompanionSymbol.NOZZLE, Modifier.size(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(temperature(snapshot?.nozzle), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                CompanionIcon(CompanionSymbol.BED, Modifier.size(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(temperature(snapshot?.bed), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
                     }
                 }
-                } }
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                }
             }
-        }
+        } }
+    }
+}
+
+@Composable
+private fun StatusPill(state: String, modifier: Modifier = Modifier) {
+    val active = state in setOf("printing", "paused")
+    val error = state in setOf("error", "not ready")
+    val background = when { error -> MaterialTheme.colorScheme.errorContainer; active -> MaterialTheme.colorScheme.primaryContainer; else -> MaterialTheme.colorScheme.surfaceVariant }
+    val foreground = when { error -> MaterialTheme.colorScheme.onErrorContainer; active -> MaterialTheme.colorScheme.onPrimaryContainer; else -> MaterialTheme.colorScheme.onSurfaceVariant }
+    Surface(modifier = modifier, color = background, contentColor = foreground, shape = MaterialTheme.shapes.extraLarge) {
+        Text(state.replaceFirstChar { it.titlecase() }, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
     }
 }
 
@@ -77,7 +85,7 @@ fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> U
 internal fun PrinterTileCamera(tile: PrinterTile) {
     val host = LocalView.current
     var visible by remember(tile.address) { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().onGloballyPositioned { coordinates ->
+    Box(Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
         val bounds = coordinates.boundsInWindow(clipBounds = false)
         val origin = IntArray(2)
         host.getLocationInWindow(origin)
@@ -86,17 +94,18 @@ internal fun PrinterTileCamera(tile: PrinterTile) {
             bounds.right > origin[0] && bounds.left < origin[0] + host.width
     }) {
         val camera = tile.camera
-        if(!visible) Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
+        val fallbackTextStyle = MaterialTheme.typography.labelSmall
+        if(!visible) Spacer(Modifier.fillMaxSize())
         else if(camera == null) {
-            Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
-            Text("Camera unavailable", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.fillMaxSize())
+            Text("Camera unavailable", style = fallbackTextStyle, modifier = Modifier.align(Alignment.BottomCenter))
         } else when {
-            camera.stream.isBlank() -> SnapshotCamera(tile.address, camera)
-            camera.service == "webrtc-camerastreamer" -> LiveCamera(tile.address, camera)
-            camera.service in setOf("mjpegstreamer", "mjpegstreamer-adaptive") -> MjpegCamera(tile.address, camera)
+            camera.stream.isBlank() -> SnapshotCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
+            camera.service == "webrtc-camerastreamer" -> LiveCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
+            camera.service in setOf("mjpegstreamer", "mjpegstreamer-adaptive") -> MjpegCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
             else -> {
-                Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
-                Text("Unsupported camera format", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.fillMaxSize())
+                Text("Unsupported camera format", style = fallbackTextStyle, modifier = Modifier.align(Alignment.BottomCenter))
             }
         }
     }

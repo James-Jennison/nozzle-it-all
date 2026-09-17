@@ -14,7 +14,7 @@ import org.junit.Test
 
 class TileSizingDeviceTest {
     @get:Rule val compose=createComposeRule()
-    @Test fun unequalContentGetsEqualRowHeightsAndLargeTextUsesSeparateRows() {
+    @Test fun rowsStayFullWidthAndStackedRegardlessOfContentWidthOrFontScale() {
         val width=mutableStateOf(360f);val fontScale=mutableStateOf(1f)
         val tiles=listOf(
             PrinterTile("first","Printer with a much longer display name","printing",PrinterSnapshot(true,"printing","long-file-name-that-wraps-across-two-lines.gcode"),null),
@@ -22,20 +22,16 @@ class TileSizingDeviceTest {
         compose.setContent {
             val density=LocalDensity.current
             CompositionLocalProvider(LocalDensity provides Density(density.density,fontScale.value)) {
-                CompanionTheme { Box(Modifier.width(width.value.dp)) { PrinterTiles(tiles,true,{},cameraContent={Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))}) } }
+                CompanionTheme { Box(Modifier.width(width.value.dp)) { PrinterTiles(tiles,true,{},cameraContent={Spacer(Modifier.fillMaxSize())}) } }
             }
         }
-        for(w in listOf(320f,360f))for(scale in listOf(1f,1.2f)) {
+        for(w in listOf(320f,360f))for(scale in listOf(1f,1.2f,1.5f)) {
             compose.runOnIdle{width.value=w;fontScale.value=scale}
             val a=compose.onNodeWithTag("printer-tile:first").fetchSemanticsNode().boundsInRoot
             val b=compose.onNodeWithTag("printer-tile:second").fetchSemanticsNode().boundsInRoot
-            assertEquals(a.height,b.height,1f);assertEquals(a.width,b.width,1f);assertEquals(a.top,b.top,1f)
-            assertTrue(a.right<b.left)
+            assertEquals(a.width,b.width,1f);assertEquals(a.left,b.left,1f)
+            assertTrue("second tile must stack below first, never beside it",a.bottom<=b.top)
         }
-        compose.runOnIdle{fontScale.value=1.5f}
-        val a=compose.onNodeWithTag("printer-tile:first").fetchSemanticsNode().boundsInRoot
-        val b=compose.onNodeWithTag("printer-tile:second").fetchSemanticsNode().boundsInRoot
-        assertEquals(a.left,b.left,1f);assertTrue(a.bottom<b.top)
     }
     @Test fun resizedRowsActivateVisibleCameraRegions() {
         val tiles=listOf(

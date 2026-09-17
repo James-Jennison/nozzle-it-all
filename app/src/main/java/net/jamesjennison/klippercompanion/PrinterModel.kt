@@ -269,6 +269,10 @@ class PrinterModel(
                         val checked=MacroTools.prepare(request,service.macroStatus(request.name))
                         if(checked!=command) throw ApiFailure("Macro command changed. Review it again.")
                     }
+                    command.ledRequest?.let { request ->
+                        val checked=LedControls.prepare(request,service.ledStatus(request.led))
+                        if(checked!=command) throw ApiFailure("Light command changed. Review it again.")
+                    }
                     currentCoroutineContext().ensureActive()
                     service.command(command)
                 }

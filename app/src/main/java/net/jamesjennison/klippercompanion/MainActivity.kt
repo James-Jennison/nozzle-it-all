@@ -114,6 +114,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(heaterOpen) HeaterPanel(state,execute,{heaterOpen=false})
     var fanOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(fanOpen) FanPanel(state,execute,{fanOpen=false})
+    var ledOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(ledOpen) LedPanel(state,execute,{ledOpen=false})
     var speedFlowOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(speedFlowOpen) SpeedFlowPanel(state,execute,{speedFlowOpen=false},speedFlowFactory)
     var controlPreview by rememberSaveable { mutableStateOf(false) }
@@ -310,6 +312,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     if(LIVE_HEATER_FAN_CONTROLS_ENABLED) {
                         item { OutlinedButton({heaterOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-heaters")){Text("Heater controls")} }
                         item { OutlinedButton({fanOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-fans")){Text("Fan controls")} }
+                        item { OutlinedButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")} }
                         item { OutlinedButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")} }
                     }
                     item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }

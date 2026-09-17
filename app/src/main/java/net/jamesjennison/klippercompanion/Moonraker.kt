@@ -3,6 +3,7 @@ package net.jamesjennison.klippercompanion
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -38,6 +39,8 @@ interface PrinterService {
     fun toolheadTemperatures(): List<ToolheadTemperature> = throw ApiFailure("Toolhead temperatures unavailable.")
     fun fanReadouts(): List<FanReadout> = throw ApiFailure("Fan readouts unavailable.")
     fun configFile(): ConfigFileContent = throw ApiFailure("Config file unavailable.")
+    fun backupConfig(filename: String): String = throw ApiFailure("Config backup unavailable.")
+    fun writeConfig(filename: String, content: String): Unit = throw ApiFailure("Config save unavailable.")
     fun speedFlowStatus(): SpeedFlowStatus = throw ApiFailure("Speed/flow status unavailable.")
     fun macroStatus(name: String): MacroStatus = throw ApiFailure("Macro status unavailable.")
     fun leds(): List<String> = emptyList()
@@ -45,7 +48,7 @@ interface PrinterService {
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, SpeedFlowReader, MacroReader, LedReader {
+class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
@@ -96,9 +99,10 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
         args.forEach { (k,v) -> builder.addQueryParameter(k, v) }
         return builder.build()
     }
-    private fun request(path: String, args: Map<String, String> = emptyMap(), mutate: Boolean = false): Any {
+    private fun request(path: String, args: Map<String, String> = emptyMap(), mutate: Boolean = false, jsonBody: JSONObject? = null): Any {
         val builder = Request.Builder().url(url(path,args))
-        if (mutate) builder.post("".toRequestBody("application/json".toMediaType()))
+        if (jsonBody != null) builder.post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
+        else if (mutate) builder.post("".toRequestBody("application/json".toMediaType()))
         client.newCall(builder.build()).execute().use { response ->
             if (response.code == 401 || response.code == 403) throw ApiFailure("Moonraker requires authentication. Credential entry is not supported in this MVP.")
             if (!response.isSuccessful) throw ApiFailure("Printer request failed (HTTP ${response.code}).")
@@ -234,6 +238,31 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
             val raw = source.buffer.readByteArray()
             if(raw.size > ConfigFile.MAX_BYTES) throw ApiFailure("Config file exceeds the supported size.")
             return ConfigFile.split(filename, String(raw, Charsets.UTF_8))
+        }
+    }
+    override fun backupConfig(filename: String): String {
+        require(filename == "printer.cfg") { "Only printer.cfg backups are supported." }
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(java.util.Date())
+        val dest = "$filename.bak-$stamp"
+        val body = JSONObject().put("source", "config/$filename").put("dest", "config/$dest")
+        val result = request("server/files/copy", jsonBody = body) as? JSONObject ?: throw ApiFailure("Backup failed.")
+        val path = result.optJSONObject("item")?.optString("path")
+        require(path == dest) { "Unexpected backup acknowledgement; inspect files before saving." }
+        return dest
+    }
+    override fun writeConfig(filename: String, content: String) {
+        require(filename == "printer.cfg") { "Only printer.cfg writes are supported." }
+        require(content.length <= ConfigFile.MAX_BYTES) { "Configuration exceeds the supported size." }
+        val body = MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("root", "config")
+            .addFormDataPart("file", filename, content.toByteArray(Charsets.UTF_8).toRequestBody("text/plain".toMediaType()))
+            .build()
+        client.newCall(Request.Builder().url(base.resolve("server/files/upload")!!).post(body).build()).execute().use { response ->
+            if (!response.isSuccessful) throw ApiFailure("Configuration save failed (HTTP ${response.code}). The backup is unaffected.")
+            val raw = response.body?.source()?.let { it.request(1_000_001); it.buffer.readByteArray() } ?: throw ApiFailure("Empty save acknowledgement.")
+            require(raw.size <= 1_000_000) { "Save acknowledgement exceeds the supported size." }
+            val result = JSONObject(String(raw, Charsets.UTF_8)).optJSONObject("result") ?: throw ApiFailure("Unexpected save acknowledgement.")
+            val path = result.optJSONObject("item")?.optString("path")
+            require(path == filename) { "Unexpected save acknowledgement; inspect the file before restarting." }
         }
     }
     override fun thumbnail(path: String): ByteArray {

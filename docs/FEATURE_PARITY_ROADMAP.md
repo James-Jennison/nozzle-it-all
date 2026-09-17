@@ -22,8 +22,8 @@ and reference material.
 
 **Phase 0 — in progress now (monitoring-safe, no pause conflict):**
 1. ~~P12 — Bed mesh viewer (read-only)~~ **Done 2026-09-16**, verified live on both printers
-2. P15 — Multi-toolhead temperature visibility for the Snapmaker U1 (all T0–T3 at
-   once, not just the active nozzle — requires extending `PrinterSnapshot`)
+2. ~~P15 — Multi-toolhead temperature visibility for the Snapmaker U1~~ **Done
+   2026-09-16**, verified live: all 4 real toolheads shown independently
 3. P15 — Elegoo CC/COSMOS-specific read-only checks (exhaust fan RPM display, saved
    bed-mesh profile visibility)
 4. P13 — Spoolman read-only inventory view — **conditional: confirm the owner
@@ -68,6 +68,13 @@ same treatment to new control work, it doesn't lift it:
 - Wear OS — reopened, no scope or target milestone yet
 - The four untracked ideas from the reference research: community model import,
   mid-print object exclusion, solo phone-initiated slicing, input-shaper calibration
+
+**Queued, after Phase 0/1 land:** a single visual-polish pass across every
+Control-tab panel (console, bed mesh, toolhead temperatures, and later heater/fan)
+so they share one consistent look — owner feedback 2026-09-16 that the new
+read-only panels are plain default dialogs, inconsistent with the polish the
+dashboard tiles got. Deliberately not restyling panels one at a time as they
+land; batching avoids styling the same thing twice while the look is still settling.
 
 M6a (multi-printer overview) and M1 are already done — see their rows below for
 evidence. This working order supersedes any looser "Now/Later" framing discussed
@@ -207,7 +214,7 @@ turned into a paid unlock.
 | P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Validated: read-only profile/Z-range/heatmap, verified live on both real printers (Elegoo CC no-mesh state, Snapmaker U1 real 11×11 profile) | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
 | P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Missing | M3 | M | Existing service; read first, validated mutations later |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
-| P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Limited standard heaters; single active-extruder display only | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
+| P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Validated: multi-toolhead visibility verified live on the U1 (all 4 extruders). Still missing: lights/power devices, COSMOS-specific checks (exhaust fan RPM, saved mesh profiles), and any actual fan/light control | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
 | P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | Unauthenticated local only | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
 | P17 | Background completion/error/offline/filament alerts; Mobileraker/OctoApp/Obico | Missing | M4b | L | Opt-in Android monitoring; reliable unattended coverage needs always-on event source |
 | P18 | Notification actions and Android home-screen widgets; OctoApp/Android convenience | Missing | M4b | M | P17 freshness model; command actions open confirmation |

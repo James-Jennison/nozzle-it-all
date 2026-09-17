@@ -13,6 +13,58 @@ install Obico, change reviewer services or send physical printer commands. The o
 retains architecture, milestone and release decisions. All unshipped work below is
 PLANNED; listing a feature here does not start its implementation.
 
+## Working order (set 2026-09-16)
+
+This is the precise, ordered sequence we are actually working from right now — not
+every idea in this document, just what's next and in what order. Re-check this
+section first before starting new work; everything else below is supporting detail
+and reference material.
+
+**Phase 0 — in progress now (monitoring-safe, no pause conflict):**
+1. P12 — Bed mesh viewer (read-only)
+2. P15 — Multi-toolhead temperature visibility for the Snapmaker U1 (all T0–T3 at
+   once, not just the active nozzle — requires extending `PrinterSnapshot`)
+3. P15 — Elegoo CC/COSMOS-specific read-only checks (exhaust fan RPM display, saved
+   bed-mesh profile visibility)
+4. P13 — Spoolman read-only inventory view — **conditional: confirm the owner
+   actually runs Spoolman before starting this one**
+5. P14 — Config editing, starting with the read-only diff view only (no save/restart
+   yet); matches M3's "read-only views before mutation flows" rule
+
+**Phase 1 — unlocked once the monitoring-only pause ends:**
+6. P07 remainder — speed/flow factor controls (M220/M221), already spec-verified
+   against Klipper's official G-Codes reference
+7. P06 remainder — remaining macro parameter form work
+8. P15 remainder — actual fan-speed/light-dimming control (not just visibility)
+9. P11 remainder — console command entry (currently read-only only)
+10. P14 remainder — enable save/backup/explicit-restart once the diff view above
+    is validated
+
+**Phase 2 — M4, sequenced after M3 is substantially done:**
+11. M4a — authentication + remote access (Tailscale primary; Cloudflare Tunnel,
+    port forwarding, OctoEverywhere documented as alternatives)
+12. M4b — background alerts, notification actions, home-screen widgets
+13. M4c — timelapse browsing, then optional capture
+
+**Phase 3 — further out, no fixed start date:**
+14. M5 — optional AI monitoring (architecture decision needed first: rented-server
+    vs. PrintNanny-style on-device inference)
+15. M6b/M6c — queues/bed-cleared workflow, maintenance/cost trends, then
+    shared-library/server-slicing feasibility discovery
+
+**Phase 4 — M7, a parallel track with its own different evidence tier:**
+16. P25 — Bambu Lab support
+17. P26 — Prusa support
+
+**Parked, not sequenced until scoped:**
+- Wear OS — reopened, no scope or target milestone yet
+- The four untracked ideas from the reference research: community model import,
+  mid-print object exclusion, solo phone-initiated slicing, input-shaper calibration
+
+M6a (multi-printer overview) and M1 are already done — see their rows below for
+evidence. This working order supersedes any looser "Now/Later" framing discussed
+earlier; treat this list as the actual queue.
+
 ## Current baseline
 
 Implementation commit `5353efc`; [native UI acceptance](UI_ACCEPTANCE.md) records

@@ -21,7 +21,7 @@ section first before starting new work; everything else below is supporting deta
 and reference material.
 
 **Phase 0 — in progress now (monitoring-safe, no pause conflict):**
-1. P12 — Bed mesh viewer (read-only)
+1. ~~P12 — Bed mesh viewer (read-only)~~ **Done 2026-09-16**, verified live on both printers
 2. P15 — Multi-toolhead temperature visibility for the Snapmaker U1 (all T0–T3 at
    once, not just the active nozzle — requires extending `PrinterSnapshot`)
 3. P15 — Elegoo CC/COSMOS-specific read-only checks (exhaust fan RPM display, saved
@@ -204,7 +204,7 @@ turned into a paid unlock.
 | P09 | G-code preview with layers and print position; Mobileraker/OctoApp | Local navigation and read-only buffered file-progress tracking verified ([scope](P09_LIVE_TRACKING_ACCEPTANCE.md)) | M2 | L | Local; bounded parser/renderer, supported dialects |
 | P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
 | P11 | Console history/filtering, explicit command entry; Mobileraker/OctoApp | Read-only cache, search/error filter, pause and copy validated; command entry pending ([scope](P11_CONSOLE_ACCEPTANCE.md)) | M3 | M | Local; bounded logs, command safeguards |
-| P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Missing | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
+| P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Validated: read-only profile/Z-range/heatmap, verified live on both real printers (Elegoo CC no-mesh state, Snapmaker U1 real 11×11 profile) | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
 | P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Missing | M3 | M | Existing service; read first, validated mutations later |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
 | P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Limited standard heaters; single active-extruder display only | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |

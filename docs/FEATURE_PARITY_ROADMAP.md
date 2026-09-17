@@ -28,8 +28,8 @@ and reference material.
    fan RPM verified live on COSMOS; mesh profile visibility already covered by P12
 4. ~~P13 — Spoolman read-only inventory view~~ **Skipped 2026-09-16** — owner
    confirmed they don't run Spoolman; not worth building against nothing
-5. P14 — Config editing, starting with the read-only diff view only (no save/restart
-   yet); matches M3's "read-only views before mutation flows" rule
+5. ~~P14 — Config editing, read-only diff view~~ **Done 2026-09-16**, verified
+   live on the Elegoo CC (real COSMOS config split correctly). Phase 0 complete.
 
 **Phase 1 — owner decision 2026-09-16: unpaused for implementation, with a
 condition.** Building and validating this work by code/unit tests and device-fixture

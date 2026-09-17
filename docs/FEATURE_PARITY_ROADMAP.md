@@ -55,15 +55,17 @@ plugins, Bambu AMS, Apple-only surfaces, enterprise support contracts and educat
 administration are outside the initial target. Generic multicolor Klipper support
 requires identifying the actual installed integration first.
 
-Considered and excluded from the reference set: **Bambu Handy** and **Prusa Connect**
-are both strong mobile apps, but both are proprietary-firmware/cloud stacks (Bambu's
-own protocol, Prusa's PrusaLink/Connect), not Klipper/Moonraker, and this app targets
-Klipper/Moonraker printers only. Community reports also describe
-Bambu Handy's multi-printer support as weak, so it would not even be a strong UX
-model for P21. Prusa Connect's team/role-based access and phone-initiated slicing
-("EasyPrint") are noted as ideas worth remembering for far-future team workflows
-(already anticipated by P24's "team sharing needs roles" exit criterion) but are not
-added as new backlog rows.
+**Bambu Handy** and **Prusa Connect** are both strong mobile apps, but both are
+proprietary-firmware/cloud stacks (Bambu's own protocol, Prusa's PrusaLink/Connect),
+not Klipper/Moonraker. Owner decision (2026-09-16): rather than excluding them, they
+are now the reference apps for M7 (P25 Bambu, P26 Prusa) — see M7's acceptance note
+for why that milestone uses a different, documentation/API-tier evidence standard
+than the hardware-backed rows above, since the owner does not own this hardware.
+Community reports describe Bambu Handy's own multi-printer support as weak, so it is
+a feature reference for P25, not a UX model to copy for multi-printer overview (P21).
+Prusa Connect's team/role-based access and phone-initiated slicing ("EasyPrint") stay
+cross-referenced to P24's existing "team sharing needs roles" exit criterion rather
+than duplicated as their own rows.
 
 ## Prioritized feature backlog
 
@@ -104,6 +106,8 @@ turned into a paid unlock.
 | P22 | Queues, scheduling and bed-cleared workflow; SimplyPrint | Missing | M6b | XL | Durable always-on state; no unattended starts by default |
 | P23 | Maintenance reminders, usage/cost trends and exports; SimplyPrint | Missing | M6b | M–L | P04/P13; user-supplied rates and incomplete-data labels |
 | P24 | Shared library, server slicing and profile management; SimplyPrint | Missing | M6c | XL discovery | Server compute/storage; slicer/profile/license compatibility |
+| P25 | Bambu Lab printer support (local/cloud MQTT protocol); Bambu Handy | Missing | M7 | XL discovery | Existing service (Bambu Cloud) or LAN mode; owner does not own this hardware, see M7 acceptance note |
+| P26 | Prusa (PrusaLink/Prusa Connect) printer support; Prusa Connect app | Missing | M7 | L discovery | Existing service (Prusa Connect) or local PrusaLink API; owner does not own this hardware, see M7 acceptance note |
 
 ## Delivery milestones and exit criteria
 
@@ -225,13 +229,43 @@ recorded bed-cleared decision. Server slicing must produce validated output with
 correct machine/material/profile; team sharing needs roles and auditability before
 external access. Automated bed-clearing hardware is outside initial scope.
 
+### M7 — Multi-ecosystem support (non-Klipper printers)
+
+Owner decision (2026-09-16): the app can expand beyond Klipper/Moonraker to other
+printer ecosystems — starting with Bambu Lab (P25) and Prusa (P26) — using published
+cloud APIs, local protocol documentation and community reference implementations
+rather than owner-operated hardware, since the owner does not own non-Klipper
+printers. This follows every other milestone; it is not a prerequisite for a strong
+Klipper companion, and it does not change the app's Klipper/Moonraker core.
+
+**Acceptance is a different, explicitly lower-confidence tier than P01–P24.** The
+existing acceptance model (owner's own Razr/printer runs, device screenshots, hash-
+verified installs) requires hardware this milestone cannot assume. Until real
+hardware becomes available, validation instead relies on: published API/protocol
+documentation, contract tests against publicly documented request/response shapes,
+community reference clients (e.g. Bambu's local MQTT protocol as reverse-engineered
+by community projects, Prusa's published PrusaLink/Connect API), and volunteer
+owner-supplied evidence if a beta tester with real hardware participates. Every
+status for P25/P26 must say explicitly which tier of evidence backs it — "API-
+contract verified" is not "device verified" — and no row here may be marked with the
+same "Validated"/"Shipped" language used for hardware-backed Klipper rows without
+that distinction spelled out.
+
+Exit: each ecosystem's integration is isolated behind its own transport
+implementation (parallel to `Moonraker.kt`, not a modification of it), so a Bambu/
+Prusa protocol change or account/API revocation cannot break Klipper connectivity.
+Unverified-by-hardware status is visible in the app itself for that ecosystem (for
+example, a visible "not verified on real hardware yet" state), not just in docs.
+Real hardware acceptance replaces the documentation-tier evidence before any such
+integration is called complete, whenever that hardware becomes available.
+
 ## Optional future ideas outside the roadmap
 
 Owner decision: dedicated wearable companions are removed from the delivery roadmap.
 There is no wearable milestone or committed watch-app work. Reconsider only if an
 actual use case warrants a separate owner decision. Android notifications and
 home-screen widgets remain in M4; tablet and foldable layout quality remain part of
-every Android milestone. The active backlog is P01–P24 across M1–M6.
+every Android milestone. The active backlog is P01–P26 across M1–M7.
 
 ## Cost strategy
 
@@ -267,7 +301,10 @@ entitlement bypasses or access to their paid servers.
 ## Definition of parity and release tracking
 
 A feature is Done only when it is implemented, accurately reflects supported printer
-capabilities, passes relevant tests/review, and has device/runtime acceptance. Track
+capabilities, passes relevant tests/review, and has device/runtime acceptance — except
+M7's P25/P26, which follow the separate documentation/API-tier evidence standard
+defined in M7 until real hardware acceptance is possible; they may never be marked
+Done in the ordinary sense while that gap remains, and must say so. Track
 individual rows as Planned → In progress → Validated → Shipped, with implementation
 commit, APK identity, test evidence, supported combinations and remaining limitations.
 Unsupported integrations and unknown vendor entitlements stay explicit.

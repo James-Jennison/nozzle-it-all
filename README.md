@@ -1,6 +1,6 @@
-# Klipper Companion for Android
+# Nozzle It All
 
-Original Kotlin / Jetpack Compose local-network MVP. No memberships, advertising, cloud account, or analytics.
+A Klipper printer companion. Original Kotlin / Jetpack Compose local-network MVP. No memberships, advertising, cloud account, or analytics.
 
 Owner-requested expansion: [free feature requirements and feasibility](docs/FREE_FEATURE_SCOPE.md). This roadmap includes paid-feature equivalents where feasible; planned features are not yet part of the MVP.
 

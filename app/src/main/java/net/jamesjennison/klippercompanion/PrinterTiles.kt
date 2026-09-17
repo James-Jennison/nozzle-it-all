@@ -15,7 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
-data class PrinterTile(val address: String, val label: String, val status: String, val snapshot: PrinterSnapshot?, val camera: Camera?)
+data class PrinterTile(val address: String, val label: String, val status: String, val snapshot: PrinterSnapshot?, val camera: Camera?, val apiKey: String = "")
 
 fun ScreenState.connectedPrinterTiles(): List<PrinterTile> =
     (savedPrinters + profiles.map { it.address } + address).filter { it.isNotBlank() }.distinct().mapNotNull { saved ->
@@ -25,7 +25,7 @@ fun ScreenState.connectedPrinterTiles(): List<PrinterTile> =
         val camera = if(profile?.cameraId.isNullOrBlank()) connection?.cameras?.firstOrNull()
             else connection?.cameras?.firstOrNull { it.id == profile?.cameraId }
         if (connection?.connected != true) null else PrinterTile(saved,
-            profile?.label ?: saved, connection.state, connection.snapshot, camera)
+            profile?.label ?: saved, connection.state, connection.snapshot, camera, profile?.apiKey.orEmpty())
     }
 
 @Composable
@@ -100,7 +100,7 @@ internal fun PrinterTileCamera(tile: PrinterTile) {
             Spacer(Modifier.fillMaxSize())
             Text("Camera unavailable", style = fallbackTextStyle, modifier = Modifier.align(Alignment.BottomCenter))
         } else when {
-            camera.stream.isBlank() -> SnapshotCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
+            camera.stream.isBlank() -> SnapshotCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false, apiKey = tile.apiKey)
             camera.service == "webrtc-camerastreamer" -> LiveCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
             camera.service in setOf("mjpegstreamer", "mjpegstreamer-adaptive") -> MjpegCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
             else -> {

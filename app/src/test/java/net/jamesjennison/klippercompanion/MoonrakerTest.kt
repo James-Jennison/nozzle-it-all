@@ -66,13 +66,44 @@ class MoonrakerTest {
     @Test fun invalidMacroCannotInjectGcode() {
         try { Moonraker.macro("HOME\nG28"); fail() } catch(_: IllegalArgumentException) { }
     }
-    @Test fun authenticationErrorIsExplicit() {
+    @Test fun authenticationErrorIsExplicitWhenNoKeyConfigured() {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(401)); server.start()
             val api=Moonraker(server.url("/").toString())
-            try { api.snapshot(); fail() } catch(e: ApiFailure) { assertTrue(e.message!!.contains("authentication")) }
+            try { api.snapshot(); fail() } catch(e: ApiFailure) { assertTrue(e.message!!.contains("API key")) }
             api.close()
         }
+    }
+    @Test fun rejectedApiKeyErrorDiffersFromMissingKey() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(401)); server.start()
+            val api=Moonraker(server.url("/").toString(), "wrong-key")
+            try { api.snapshot(); fail() } catch(e: ApiFailure) { assertTrue(e.message!!.contains("rejected")) }
+            api.close()
+        }
+    }
+    @Test fun apiKeyIsSentAsHeaderOnEveryRequest() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":"ok"}""")); server.start()
+            val api = Moonraker(server.url("/").toString(), "  secret-key  ")
+            api.command(Moonraker.start("x.gcode"))
+            assertEquals("secret-key", server.takeRequest().getHeader("X-Api-Key"))
+            api.close()
+        }
+    }
+    @Test fun blankApiKeyAddsNoHeader() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":"ok"}""")); server.start()
+            val api = Moonraker(server.url("/").toString(), "   ")
+            api.command(Moonraker.start("x.gcode"))
+            assertNull(server.takeRequest().getHeader("X-Api-Key"))
+            api.close()
+        }
+    }
+    @Test fun acceptsTailscaleAddressesOverHttp() {
+        assertEquals("100.100.1.2", Moonraker.parseAddress("http://100.100.1.2").host)
+        assertEquals("printer.tailnet-name.ts.net", Moonraker.parseAddress("http://printer.tailnet-name.ts.net").host)
+        try { Moonraker.parseAddress("http://100.200.1.2"); fail("100.200.x.x is outside the Tailscale CGNAT range") } catch(_: IllegalArgumentException) {}
     }
     @Test fun clientRemainsUsableAfterBackgroundCleanup() {
         MockWebServer().use { server ->

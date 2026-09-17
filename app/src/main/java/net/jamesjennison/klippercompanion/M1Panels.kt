@@ -7,18 +7,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String)->String?) {
+@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String)->String?) {
     var name by remember(profile) { mutableStateOf(profile.name) }
     var address by remember(profile) { mutableStateOf(profile.address) }
+    var apiKey by remember(profile) { mutableStateOf(profile.apiKey) }
+    var showKey by remember(profile) { mutableStateOf(false) }
     var error by remember(profile) { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest=close,title={Text("Edit printer")},text={ Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(name,{name=it.take(80)},label={Text("Printer name")},singleLine=true)
         OutlinedTextField(address,{address=it},label={Text("Printer address")},singleLine=true)
+        Text("A Tailscale address (100.x.x.x or *.ts.net), Cloudflare Tunnel or other https:// address also works away from home.",style=MaterialTheme.typography.bodySmall)
+        OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("API key (optional)")},singleLine=true,
+            visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+        Text("Only needed if Moonraker requires authentication; copy it from Fluidd's or Mainsail's settings.",style=MaterialTheme.typography.bodySmall)
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         Text("Changing the address disconnects the active printer.")
-    } },confirmButton={TextButton({error=save(profile.address,address,name);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
+    } },confirmButton={TextButton({error=save(profile.address,address,name,apiKey);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
 }
 @Composable fun FileDetails(state: ScreenState) {
     if(state.fileLoading) LinearProgressIndicator(Modifier.fillMaxWidth())

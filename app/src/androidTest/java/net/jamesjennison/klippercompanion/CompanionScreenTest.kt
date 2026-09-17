@@ -96,7 +96,7 @@ class CompanionScreenTest {
         val address="http://fixture.local/";var edited="";var camera=""
         val profile=PrinterProfile(address,"Workshop")
         val cameras=listOf(Camera("Front","/snapshot1",id="front"),Camera("Side","/snapshot2",id="side"))
-        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name->assertEquals(address,old);edited=name;null},selectCamera={camera=it},tileCamera={}) } }
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name,_->assertEquals(address,old);edited=name;null},selectCamera={camera=it},tileCamera={}) } }
         compose.openFixtureDashboard()
         compose.onNodeWithTag("camera:side").performScrollTo().performClick();assertEquals("side",camera)
         compose.onNodeWithTag("nav-3").performClick()
@@ -104,16 +104,27 @@ class CompanionScreenTest {
         compose.onNodeWithText("Printer name").performTextReplacement("Garage")
         compose.onNodeWithText("Save").performClick();assertEquals("Garage",edited)
     }
+    @Test fun profileEditorSendsApiKeyToSave() {
+        val address="http://fixture.local/";var savedKey=""
+        val profile=PrinterProfile(address,"Workshop",apiKey="old-key")
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile)),{},{},{},{_,_->},updateProfile={_,_,_,key->savedKey=key;null},tileCamera={}) } }
+        compose.openFixtureDashboard()
+        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("edit-profile:$address").performScrollTo().performClick()
+        compose.onNodeWithText("API key (optional)").performTextReplacement("new-key")
+        compose.onNodeWithText("Save").performClick();assertEquals("new-key",savedKey)
+    }
     @Test fun structuredProfilesSurvivePreferenceReload() {
         val context=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         val prefs=context.getSharedPreferences("m1-test-${java.util.UUID.randomUUID()}",0)
+        val secrets=context.getSharedPreferences("m1-secrets-test-${java.util.UUID.randomUUID()}",0)
         try {
-            val profiles=listOf(PrinterProfile("http://b.local/","B",true,"side"),PrinterProfile("http://a.local/","A"))
-            PrinterPreferences.saveProfiles(prefs,profiles.first().address,profiles)
-            assertEquals(profiles,PrinterPreferences.profiles(prefs))
+            val profiles=listOf(PrinterProfile("http://b.local/","B",true,"side","key-b"),PrinterProfile("http://a.local/","A"))
+            PrinterPreferences.saveProfiles(prefs,secrets,profiles.first().address,profiles)
+            assertEquals(profiles,PrinterPreferences.profiles(prefs,secrets))
             assertEquals(profiles.first().address,PrinterPreferences.address(prefs))
             assertEquals(profiles.map { it.address }.sorted(),PrinterPreferences.printers(prefs))
-        } finally {prefs.edit().clear().commit()}
+        } finally {prefs.edit().clear().commit();secrets.edit().clear().commit()}
     }
 
     @Test fun invalidProfileStaysOpenWithInlineError() {

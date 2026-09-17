@@ -16,7 +16,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 
 @Composable
-fun SnapshotCamera(address: String, camera: Camera, modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f/9f), showLabel: Boolean = true) {
+fun SnapshotCamera(address: String, camera: Camera, modifier: Modifier = Modifier.fillMaxWidth().aspectRatio(16f/9f), showLabel: Boolean = true, apiKey: String = "") {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var active by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(lifecycle) {
@@ -27,7 +27,7 @@ fun SnapshotCamera(address: String, camera: Camera, modifier: Modifier = Modifie
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
     }
-    val api = remember(address) { Moonraker(address) }
+    val api = remember(address, apiKey) { Moonraker(address, apiKey) }
     var bitmap by remember(address, camera, active) { mutableStateOf<Bitmap?>(null) }
     var label by remember(address, camera, active) { mutableStateOf("Loading camera…") }
     DisposableEffect(api, camera, active) { onDispose { api.close() } }

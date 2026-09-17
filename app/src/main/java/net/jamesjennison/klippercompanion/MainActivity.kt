@@ -76,8 +76,9 @@ class MainActivity : ComponentActivity() {
                 val model: PrinterModel = viewModel(factory = viewModelFactory {
                     initializer {
                         val prefs = getSharedPreferences("printer", 0)
-                        PrinterModel(PrinterPreferences.address(prefs), initialPrinters = PrinterPreferences.printers(prefs), initialProfiles=PrinterPreferences.profiles(prefs),
-                            saveProfiles={ address, profiles -> PrinterPreferences.saveProfiles(prefs,address,profiles) })
+                        val secrets = CredentialStore.open(applicationContext)
+                        PrinterModel(PrinterPreferences.address(prefs), initialPrinters = PrinterPreferences.printers(prefs), initialProfiles=PrinterPreferences.profiles(prefs,secrets),
+                            saveProfiles={ address, profiles -> PrinterPreferences.saveProfiles(prefs,secrets,address,profiles) })
                     }
                 })
                 val state by model.state.collectAsStateWithLifecycle()
@@ -98,8 +99,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
-    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}, consoleFactory:(String)->ConsoleReader={Moonraker(it)}, meshFactory:(String)->MeshReader={Moonraker(it)}, toolheadsFactory:(String)->ToolheadReader={Moonraker(it)}, fanStatusFactory:(String)->FanReadoutReader={Moonraker(it)}, configFactory:(String)->ConfigFileReader={Moonraker(it)}, configWriterFactory:(String)->ConfigWriter={Moonraker(it)}, speedFlowFactory:(String)->SpeedFlowReader={Moonraker(it)}, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
+fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String)->String? = {_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
+    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
+    consoleFactory:(String)->ConsoleReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, meshFactory:(String)->MeshReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
+    toolheadsFactory:(String)->ToolheadReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, fanStatusFactory:(String)->FanReadoutReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
+    configFactory:(String)->ConfigFileReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, configWriterFactory:(String)->ConfigWriter={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
+    speedFlowFactory:(String)->SpeedFlowReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
         ready=state.snapshot?.ready==true,execute=if(LIVE_HEATER_FAN_CONTROLS_ENABLED) execute else null,generation=state.generation)

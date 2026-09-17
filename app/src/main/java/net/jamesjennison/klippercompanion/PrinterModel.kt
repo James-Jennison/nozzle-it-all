@@ -25,7 +25,7 @@ data class ScreenState(
 class PrinterModel(
     initialAddress: String = "",
     private val saveSettings: (String, List<String>) -> Unit = { _, _ -> },
-    private val serviceFactory: (String) -> PrinterService = { Moonraker(it) },
+    serviceFactory: ((String) -> PrinterService)? = null,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
     private val io: CoroutineDispatcher = Dispatchers.IO,
     initialPrinters: List<String> = emptyList(),
@@ -36,6 +36,10 @@ class PrinterModel(
     private val _state = MutableStateFlow(ScreenState(address = runCatching { Moonraker.parseAddress(initialAddress).toString() }.getOrDefault(""),
         savedPrinters = (initialPrinters + initialAddress).filter { it.isNotBlank() }
             .mapNotNull { runCatching { Moonraker.parseAddress(it).toString() }.getOrNull() }.distinct()))
+    // Default factory looks up the profile's API key lazily so tests can still override with a plain fake.
+    // Named `resolved...` (not `serviceFactory`) because the constructor parameter of that name stays in
+    // scope for every property initializer in this class, and would otherwise shadow a same-named property.
+    private val resolvedServiceFactory: (String) -> PrinterService = serviceFactory ?: { address -> Moonraker(address, _state.value.profiles.find { it.address == address }?.apiKey.orEmpty()) }
     init {
         val profiles = initialProfiles.mapNotNull { p -> runCatching { p.copy(address=Moonraker.parseAddress(p.address).toString(), name=p.name.take(80)) }.getOrNull() }.distinctBy { it.address }
         val merged = profiles + _state.value.savedPrinters.filter { a -> profiles.none { it.address == a } }.map { PrinterProfile(it) }
@@ -48,14 +52,14 @@ class PrinterModel(
     private fun persist(address: String = _state.value.address, profiles: List<PrinterProfile> = _state.value.profiles) {
         saveSettings(address, profiles.map { it.address }); saveProfiles(address, profiles)
     }
-    fun updateProfile(oldAddress: String, address: String, name: String): String? {
+    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String = ""): String? {
         if(_state.value.busy) return "Wait for the current command to finish."
         val normalized = try { Moonraker.parseAddress(address).toString() } catch(_: IllegalArgumentException) { _state.value=_state.value.copy(commandNotice="Enter a valid local printer address.");return "Enter a valid local printer address." }
         val current = _state.value
         if(normalized != oldAddress && current.profiles.any { it.address == normalized }) { _state.value=current.copy(commandNotice="That printer address is already saved.");return "That printer address is already saved." }
         if(current.profiles.none { it.address == oldAddress }) return "This profile is no longer available."
         if(oldAddress == current.address && oldAddress != normalized) disconnect()
-        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "") else it }
+        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=apiKey.trim().take(200)) else it }
         val selected = if(current.address == oldAddress) normalized else _state.value.address
         _state.value = _state.value.copy(address=selected,profiles=profiles,savedPrinters=profiles.map { it.address })
         persist()
@@ -123,7 +127,7 @@ class PrinterModel(
     private var wantsConnection = false
     private var startupPending = true
     private val disconnectedPrinters = mutableSetOf<String>()
-    private val savedMonitor = SavedPrinterMonitor(viewModelScope, io, serviceFactory) {
+    private val savedMonitor = SavedPrinterMonitor(viewModelScope, io, resolvedServiceFactory) {
         _state.value = _state.value.copy(printerConnections = it)
     }
     private fun monitorSavedPrinters() {
@@ -152,7 +156,7 @@ class PrinterModel(
     }
     fun connect(address: String) {
         if (_state.value.busy) return
-        val candidate = try { serviceFactory(address) } catch(e: IllegalArgumentException) { _state.value = _state.value.copy(message = e.message ?: "Invalid address."); return }
+        val candidate = try { resolvedServiceFactory(address) } catch(e: IllegalArgumentException) { _state.value = _state.value.copy(message = e.message ?: "Invalid address."); return }
         if (_state.value.connected && candidate.address == _state.value.address) { candidate.close(); return }
         detailJob?.cancel();historyJob?.cancel();job?.cancel(); api?.close(); generation++
         startupPending = false

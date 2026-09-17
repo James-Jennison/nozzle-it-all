@@ -85,7 +85,27 @@ acceptance for all of it remains a separate, later owner decision.
 
 **Phase 2 — M4, sequenced after M3 is substantially done:**
 11. M4a — authentication + remote access (Tailscale primary; Cloudflare Tunnel,
-    port forwarding, OctoEverywhere documented as alternatives)
+    port forwarding, OctoEverywhere documented as alternatives). **API-key
+    authentication built 2026-09-17**: `Moonraker` sends `X-Api-Key` on every
+    request via an OkHttp interceptor (not just the JSON-RPC path — config/thumbnail/
+    camera requests that bypass `request()` inherit it too, since it's applied at the
+    client level); the key is entered per-profile in `ProfileEditor` and stored in a
+    dedicated `CredentialStore` (`EncryptedSharedPreferences`, Keystore-backed),
+    kept out of the plaintext `profilesV1` profile JSON entirely. Distinct 401/403
+    messages tell the owner whether no key is configured vs. the configured key was
+    rejected. `parseAddress` now also accepts Tailscale's CGNAT range
+    (100.64.0.0/10) and `*.ts.net` MagicDNS names over plain HTTP, so a tailnet
+    address doesn't need to be forced through HTTPS. Verified: 4 new/updated
+    MoonrakerTest cases (header sent, blank key sends no header, distinct missing-
+    vs-rejected-key messages, Tailscale address acceptance/CGNAT boundary), an
+    androidTest round-trip through `CredentialStore`-equivalent storage, and a live
+    on-device pass on the Razr 2023 (installed via `assembleDebug` + `adb install -r`,
+    no data wipe) adding a profile, entering an API key, confirming it persisted
+    across reopening the editor via Show/Hide, then removing the test profile.
+    Cloudflare Tunnel/port forwarding/OctoEverywhere remain documentation-only, as
+    already noted below; they need no client code since they present as an ordinary
+    HTTPS (or Tailscale) address. Still open for M4a: a UI-visible remote-access
+    setup guide, and OctoEverywhere-specific wiring if that path is chosen instead.
 12. M4b — background alerts, notification actions, home-screen widgets
 13. M4c — timelapse browsing, then optional capture
 
@@ -250,7 +270,7 @@ turned into a paid unlock.
 | P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Skipped — owner does not run Spoolman (confirmed 2026-09-16); revisit only if that changes | M3 | M | Existing service; read first, validated mutations later |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
 | P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Validated: multi-toolhead visibility verified live on the U1 (all 4 extruders). Still missing: lights/power devices, COSMOS-specific checks (exhaust fan RPM, saved mesh profiles), and any actual fan/light control | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
-| P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | Unauthenticated local only | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
+| P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | API-key auth built and device-verified (X-Api-Key, encrypted per-profile storage); Tailscale/*.ts.net addresses accepted; Cloudflare Tunnel/port forwarding documentation-only | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
 | P17 | Background completion/error/offline/filament alerts; Mobileraker/OctoApp/Obico | Missing | M4b | L | Opt-in Android monitoring; reliable unattended coverage needs always-on event source |
 | P18 | Notification actions and Android home-screen widgets; OctoApp/Android convenience | Missing | M4b | M | P17 freshness model; command actions open confirmation |
 | P19 | Timelapse browsing/export, optional capture/encode; monitoring workflow | Missing | M4c | M viewer; L capture | Existing service or always-on storage/encoding |

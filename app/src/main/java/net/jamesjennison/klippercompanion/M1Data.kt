@@ -3,7 +3,7 @@ package net.jamesjennison.klippercompanion
 import org.json.JSONObject
 import java.util.Locale
 
-data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "") {
+data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "") {
     val label: String get() = name.ifBlank { address }
 }
 data class FileInfo(val path: String, val size: Long? = null, val modified: Double? = null)

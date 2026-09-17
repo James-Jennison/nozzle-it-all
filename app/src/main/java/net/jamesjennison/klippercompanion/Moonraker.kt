@@ -48,11 +48,14 @@ interface PrinterService {
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader {
+class Moonraker(address: String, apiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
+    private val apiKey = apiKey.trim()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
-        .callTimeout(7, TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build()
+        .callTimeout(7, TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
+        .apply { if (this@Moonraker.apiKey.isNotEmpty()) addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("X-Api-Key", this@Moonraker.apiKey).build()) } }
+        .build()
 
     companion object {
         internal fun activeExtruder(status: JSONObject): String = status.optJSONObject("toolhead")?.optString("extruder", "")
@@ -61,8 +64,9 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
             val url = address.trim().toHttpUrlOrNull() ?: throw IllegalArgumentException("Enter an http:// or https:// printer address.")
             if(url.scheme == "http") {
                 val parts = url.host.split('.').mapNotNull { it.toIntOrNull() }
-                val privateV4 = url.host.split('.').size == 4 && parts.size == 4 && parts.all { it in 0..255 } && (parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && parts[1] in 16..31))
-                require(privateV4 || url.host == "localhost" || url.host == "::1" || url.host.endsWith(".local")) { "HTTP requires a local IPv4 address, localhost or .local name. Use HTTPS for other addresses." }
+                // 100.64.0.0/10 is the CGNAT range Tailscale assigns tailnet addresses from.
+                val privateV4 = url.host.split('.').size == 4 && parts.size == 4 && parts.all { it in 0..255 } && (parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && parts[1] in 16..31) || (parts[0] == 100 && parts[1] in 64..127))
+                require(privateV4 || url.host == "localhost" || url.host == "::1" || url.host.endsWith(".local") || url.host.endsWith(".ts.net")) { "HTTP requires a local IPv4 address, a Tailscale address (100.64-127.x.x or *.ts.net), localhost or .local name. Use HTTPS for other addresses." }
             }
             require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null) { "Use a base address without credentials, query or fragment." }
             return url.newBuilder().encodedPath(url.encodedPath.trimEnd('/') + "/").build()
@@ -104,7 +108,10 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
         if (jsonBody != null) builder.post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
         else if (mutate) builder.post("".toRequestBody("application/json".toMediaType()))
         client.newCall(builder.build()).execute().use { response ->
-            if (response.code == 401 || response.code == 403) throw ApiFailure("Moonraker requires authentication. Credential entry is not supported in this MVP.")
+            if (response.code == 401 || response.code == 403) throw ApiFailure(
+                if (apiKey.isEmpty()) "Moonraker requires authentication. Add its API key when editing this printer."
+                else "Moonraker rejected the configured API key. Copy a current key from Fluidd/Mainsail and update it here."
+            )
             if (!response.isSuccessful) throw ApiFailure("Printer request failed (HTTP ${response.code}).")
             val body = response.body ?: throw ApiFailure("Empty printer response.")
             val raw = body.source().let { it.request(2_000_001); it.buffer.readByteArray() }

@@ -7,18 +7,27 @@ import org.json.JSONObject
 object PrinterPreferences {
     fun address(prefs: SharedPreferences): String = try { prefs.getString("address", "") ?: "" } catch (_: ClassCastException) { "" }
     fun printers(prefs: SharedPreferences): List<String> = try { (prefs.getStringSet("savedPrinters", emptySet()) ?: emptySet()).sorted() } catch (_: ClassCastException) { emptyList() }
-    fun profiles(prefs: SharedPreferences): List<PrinterProfile> = try {
+    // API keys are kept out of profilesV1 and read back from the caller's encrypted store
+    // (see CredentialStore) so a credential granting full printer control never lands in plaintext.
+    fun profiles(prefs: SharedPreferences, secrets: SharedPreferences): List<PrinterProfile> = try {
         val list = JSONArray(prefs.getString("profilesV1", "[]"))
         (0 until list.length()).mapNotNull { i -> runCatching {
             val p = list.getJSONObject(i)
-            PrinterProfile(Moonraker.parseAddress(p.getString("address")).toString(), p.optString("name").take(80), p.optBoolean("favorite"), p.optString("cameraId"))
+            val address = Moonraker.parseAddress(p.getString("address")).toString()
+            val apiKey = try { secrets.getString(address, "") ?: "" } catch (_: ClassCastException) { "" }
+            PrinterProfile(address, p.optString("name").take(80), p.optBoolean("favorite"), p.optString("cameraId"), apiKey)
         }.getOrNull() }.distinctBy { it.address }
     } catch (_: Exception) { emptyList() }
     fun save(prefs: SharedPreferences, address: String, printers: List<String>) {
         prefs.edit().putString("address", address).putStringSet("savedPrinters", printers.toSet()).apply()
     }
-    fun saveProfiles(prefs: SharedPreferences, address: String, profiles: List<PrinterProfile>) {
+    fun saveProfiles(prefs: SharedPreferences, secrets: SharedPreferences, address: String, profiles: List<PrinterProfile>) {
         val json = JSONArray().apply { profiles.forEach { p -> put(JSONObject().put("address",p.address).put("name",p.name).put("favorite",p.favorite).put("cameraId",p.cameraId)) } }
         prefs.edit().putString("address",address).putStringSet("savedPrinters",profiles.map { it.address }.toSet()).putString("profilesV1",json.toString()).apply()
+        val keep = profiles.map { it.address }.toSet()
+        secrets.edit().apply {
+            secrets.all.keys.filter { it !in keep }.forEach { remove(it) }
+            profiles.forEach { p -> if (p.apiKey.isBlank()) remove(p.address) else putString(p.address, p.apiKey) }
+        }.apply()
     }
 }

@@ -101,7 +101,8 @@ class MainActivity : ComponentActivity() {
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}, consoleFactory:(String)->ConsoleReader={Moonraker(it)}, meshFactory:(String)->MeshReader={Moonraker(it)}, toolheadsFactory:(String)->ToolheadReader={Moonraker(it)}, fanStatusFactory:(String)->FanReadoutReader={Moonraker(it)}, configFactory:(String)->ConfigFileReader={Moonraker(it)}, speedFlowFactory:(String)->SpeedFlowReader={Moonraker(it)}, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
-    if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory)
+    if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
+        ready=state.snapshot?.ready==true,execute=if(LIVE_HEATER_FAN_CONTROLS_ENABLED) execute else null,generation=state.generation)
     var meshOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(meshOpen) BedMeshPanel(state.address,state.connected,{meshOpen=false},meshFactory)
     var toolheadsOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -319,7 +320,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }
                     item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
                     item { OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")} }
-                    item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text("Read-only console")} }
+                    item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text(if(LIVE_HEATER_FAN_CONTROLS_ENABLED) "Console" else "Read-only console")} }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
                     item {
                         Text("Organize and prepare macros locally. Execution requires an idle printer and confirmation.")

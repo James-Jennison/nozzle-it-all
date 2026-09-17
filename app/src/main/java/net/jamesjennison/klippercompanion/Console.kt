@@ -6,8 +6,23 @@ data class ConsoleEntry(val time:Double,val type:String,val message:String) {
     val error:Boolean get()=type=="response" && (message.trimStart().startsWith("!!") || message.contains("error",ignoreCase=true))
 }
 data class ConsoleBatch(val entries:List<ConsoleEntry>,val truncated:Boolean=false)
-/** Read-only capability: intentionally no script/command method. */
+/** Read-only capability: intentionally no script/command method. Command dispatch
+ * (see [ConsoleCommand]) goes through the shared [PrinterService.command], not this reader. */
 interface ConsoleReader:AutoCloseable { fun console():ConsoleBatch }
+/** Builds a validated raw-gcode command from free-typed console text. Local validation
+ * only - there is no live server state to re-check, unlike heater/fan/macro/speed-flow. */
+object ConsoleCommand {
+    const val MAX_LENGTH=256
+    fun prepare(text:String):PrinterCommand {
+        val trimmed=text.trim()
+        require(trimmed.isNotEmpty()){"Enter a command."}
+        require(trimmed.length<=MAX_LENGTH){"Use at most $MAX_LENGTH characters."}
+        // A newline would let one line of visible text silently run as several gcode
+        // commands once sent, so control characters (incl. \n/\r) are rejected outright.
+        require(trimmed.none{it.isISOControl()}){"Remove newlines and control characters; enter one command."}
+        return PrinterCommand("Send: $trimmed","printer/gcode/script",mapOf("script" to trimmed))
+    }
+}
 object ConsoleLog {
     const val MAX_ENTRIES=200
     const val MAX_MESSAGE=2048

@@ -21,13 +21,19 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.*
 
-@Composable fun ConsolePanel(address:String,connected:Boolean,close:()->Unit,factory:(String)->ConsoleReader={Moonraker(it)},copyOverride:((String)->Unit)?=null) {
+@Composable fun ConsolePanel(address:String,connected:Boolean,close:()->Unit,factory:(String)->ConsoleReader={Moonraker(it)},copyOverride:((String)->Unit)?=null,
+    ready:Boolean=connected,execute:((PrinterCommand,Int)->Unit)?=null,generation:Int=0,clock:()->Long={System.nanoTime()/1_000_000}) {
     var batch by remember(address) {mutableStateOf(ConsoleBatch(emptyList()))}
     var note by remember(address) {mutableStateOf("Reading recent messages…")}
     var paused by remember(address) {mutableStateOf(false)}
     var query by remember(address) {mutableStateOf("")}
     var errorsOnly by remember(address) {mutableStateOf(false)}
     var copied by remember(address) {mutableStateOf(false)}
+    var command by remember(address) {mutableStateOf("")}
+    var commandNotice by remember(address) {mutableStateOf("")}
+    var pendingCommand by remember(address) {mutableStateOf<PrinterCommand?>(null)}
+    var preparedAt by remember(address) {mutableLongStateOf(0)}
+    val sendEnabled=connected && ready
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     val context=LocalContext.current
     val list=rememberLazyListState()
@@ -52,7 +58,7 @@ import kotlinx.coroutines.*
     Dialog(onDismissRequest=close,properties=DialogProperties(usePlatformDefaultWidth=false)) {
         Surface(Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(12.dp),shape=MaterialTheme.shapes.large) {
             Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text("Read-only console",style=MaterialTheme.typography.titleLarge)
+                Text(if(execute!=null)"Console" else "Read-only console",style=MaterialTheme.typography.titleLarge)
                 Text("$address\nRecent Moonraker cache, up to 200 entries. Not a complete log. Newest first.",style=MaterialTheme.typography.bodySmall)
                 Text(if(paused && connected)"Paused view — updates and automatic scrolling stopped." else note,modifier=Modifier.testTag("console-status"),style=MaterialTheme.typography.bodySmall)
                 OutlinedTextField(query,{query=it.take(128)},label={Text("Search messages")},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("console-search"))
@@ -67,6 +73,24 @@ import kotlinx.coroutines.*
                     items(visible){entry->Text(ConsoleLog.line(entry),fontFamily=FontFamily.Monospace,color=if(entry.error)MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,style=MaterialTheme.typography.bodySmall)}
                 }
                 if(copied)Text("Copied matching messages (up to 65,536 characters).",style=MaterialTheme.typography.bodySmall)
+                if(execute!=null) {
+                    HorizontalDivider()
+                    Text("Send a raw command. This is not validated or bounded like the other controls - review it carefully before confirming.",style=MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(command,{command=it.take(ConsoleCommand.MAX_LENGTH);pendingCommand=null;commandNotice=""},label={Text("Command")},singleLine=true,enabled=sendEnabled,modifier=Modifier.fillMaxWidth().testTag("console-command"))
+                    Button({
+                        val result=runCatching{ConsoleCommand.prepare(command)}
+                        result.fold({pendingCommand=it;preparedAt=clock();commandNotice=""},{pendingCommand=null;commandNotice=it.message?:"Invalid command."})
+                    },enabled=sendEnabled && command.isNotBlank(),modifier=Modifier.testTag("review-console-command")){Text("Review command")}
+                    if(commandNotice.isNotEmpty())Text(commandNotice,color=MaterialTheme.colorScheme.error,modifier=Modifier.testTag("console-command-notice"))
+                    pendingCommand?.let {cmd->
+                        Text(cmd.arguments.getValue("script"),fontFamily=FontFamily.Monospace,modifier=Modifier.testTag("console-command-script"))
+                        Button({
+                            pendingCommand=null;command=""
+                            if(clock()-preparedAt !in 0..5000)commandNotice="Review the command again; this confirmation expired."
+                            else execute(cmd,generation)
+                        },enabled=sendEnabled,modifier=Modifier.testTag("confirm-console-command")){Text("Send command")}
+                    }
+                }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
                     TextButton({val text=ConsoleLog.copy(visible);if(copyOverride!=null)copyOverride(text)else(context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Printer console",text));copied=true},enabled=visible.isNotEmpty(),modifier=Modifier.testTag("console-copy")){Text("Copy matching")}
                     TextButton(close){Text("Close")}

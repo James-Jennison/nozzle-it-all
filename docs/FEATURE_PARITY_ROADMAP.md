@@ -33,10 +33,10 @@ not integrated into the app; server/infrastructure work remains deferred.
 
 ## What the references establish
 
-Sources checked 2026-09-06. These are publisher-described capabilities, not a hands-on
-certification of every Android/Klipper combination. A reference in the backlog means
-that product motivates the capability; it does not assert identical implementation
-or price entitlement. Unconfirmed does not mean absent.
+Sources checked 2026-09-06, extended 2026-09-16. These are publisher-described
+capabilities, not a hands-on certification of every Android/Klipper combination. A
+reference in the backlog means that product motivates the capability; it does not
+assert identical implementation or price entitlement. Unconfirmed does not mean absent.
 
 | Product | Verified reference scope | What we should match | Entitlement confidence |
 | --- | --- | --- | --- |
@@ -45,11 +45,25 @@ or price entitlement. Unconfirmed does not mean absent.
 | [Printer Tools Klipper compatibility](https://printertools.app/compatibility/klipper-moonraker) | Documents Moonraker status, multi-printer dashboard, history, mesh, Spoolman and MJPEG; custom macros not individually surfaced | Clear multi-printer overview and useful telemetry | Android purchase boundaries unverified. Its [Play listing](https://play.google.com/store/apps/details?id=com.fixolab.printertools) still includes Apple-specific marketing text, so Android widget claims need device verification |
 | [Obico plan comparison](https://www.obico.io/docs/user-guides/upgrade-to-pro/) | Distinguishes premium streaming, AI allowances, remote uploads/printing, sharing and SMS | Remote monitoring and optional failure alerts | Public paid-service distinctions verified; self-hosting is a separate route. Avoid exact price claims because the page gives inconsistent extra-printer prices |
 | [SimplyPrint plans](https://simplyprint.io/pricing) | Paid tiers/add-ons expand slicing, AI actions, queues, statistics, multi-stream viewing, maintenance and team workflows | History/filament first; advanced production workflow later | Public plan differences verified; these are service capabilities, not proof every workflow is native in Android |
+| [OctoEverywhere](https://octoeverywhere.com/klipper) | Free-tier remote access to Klipper/Mainsail/Fluidd/Moonraker via a cloud relay (no self-hosted tunnel), plus Gadget AI failure detection, notifications and live streaming; [Companion plugin](https://octoeverywhere.com/companion) runs on the host Pi | A concrete third M4a remote-access option beside Tailscale/Cloudflare Tunnel, and a second AI-detection reference beside Obico | Free tier confirmed with a $2.49/month optional supporter tier; it is a third-party cloud relay, not self-hosted, so it carries an ongoing trust/dependency cost distinct from VPN-based access |
+| [PrintNanny](https://printnanny.ai) | On-device (offline-capable) computer-vision failure detection, historical analytics and multi-printer queue rerouting; [Klipper/Mainsail/Moonraker addon](https://printnanny.ai/docs/addons/mainsail-moonraker-klipper/) | An offline/on-device inference architecture option for P20, distinct from Obico's cloud/self-hosted model | Pro $7/mo (3 printers), Farm $14/mo (unlimited); pricing confirmed via publisher site, feature-to-tier mapping not independently verified |
+| [Fluidd](https://docs.fluidd.xyz/features/) | The native open-source Moonraker web UI: object exclusion, thermal history charts, multi-camera streaming, print job queue, multi-printer switching, JWT/LDAP auth | Validates P12 (mesh viewer), P15 (sensors), P22 (queue) and P16 (auth) as real, already-implemented Moonraker-API capabilities, not just competitor marketing claims | Free/open-source; no entitlement question. It is a desktop/tablet web UI, not a native Android app, so UX still needs its own mobile design |
+| [Mainsail](https://docs.mainsail.xyz/) | The other native open-source Moonraker web UI: timelapse, power-device control (relays/TP-Link), macro management, configurable dashboard, object exclusion, multi-printer | Same validation role as Fluidd, additionally confirming P15 (power devices) and P19 (timelapse) against the actual Moonraker API | Free/open-source; no entitlement question. Same web-UI caveat as Fluidd |
 
 We target useful Android + Klipper parity, not every vendor ecosystem. OctoPrint
 plugins, Bambu AMS, Apple-only surfaces, enterprise support contracts and education
 administration are outside the initial target. Generic multicolor Klipper support
 requires identifying the actual installed integration first.
+
+Considered and excluded from the reference set: **Bambu Handy** and **Prusa Connect**
+are both strong mobile apps, but both are proprietary-firmware/cloud stacks (Bambu's
+own protocol, Prusa's PrusaLink/Connect), not Klipper/Moonraker, and this app targets
+Klipper/Moonraker printers only. Community reports also describe
+Bambu Handy's multi-printer support as weak, so it would not even be a strong UX
+model for P21. Prusa Connect's team/role-based access and phone-initiated slicing
+("EasyPrint") are noted as ideas worth remembering for far-future team workflows
+(already anticipated by P24's "team sharing needs roles" exit criterion) but are not
+added as new backlog rows.
 
 ## Prioritized feature backlog
 
@@ -168,6 +182,12 @@ Support is provided through:
 2. **Secondary Methods:** Cloudflare Tunnel (free Quick Tunnel option) and traditional 
    port forwarding with DDNS for users who prefer other solutions
 
+3. **Third-party relay option:** [OctoEverywhere](https://octoeverywhere.com/klipper)'s
+   free tier is a concrete, Klipper-native alternative to self-hosted VPN/tunnel setup
+   for owners who would rather not run Tailscale/Cloudflare themselves. It trades
+   self-hosting effort for dependency on a third-party cloud relay, so it stays a
+   documented alternative, not the primary recommendation.
+
 Exit criteria: Users can successfully establish remote access to their printer using 
 any of the supported methods with proper security and connection reliability.
 
@@ -178,6 +198,10 @@ existing rented EPYC/Proxmox server is the first candidate, subject to capacity 
 isolation checks against GitHub runner VMs. This roadmap assumes neither a GPU
 purchase nor an Obico deployment. Keep the detector behind a replaceable integration
 boundary; choose the implementation after license, accuracy and resource evaluation.
+[PrintNanny](https://printnanny.ai)'s on-device, offline-capable inference is a second
+architecture reference beside Obico's cloud/self-hosted model — evaluate it alongside
+the rented-server approach rather than assuming a server integration is the only shape
+this can take.
 
 Exit: assemble an owner-approved labelled set of successful/failed prints under
 representative lighting and camera angles; report precision, recall, false alerts

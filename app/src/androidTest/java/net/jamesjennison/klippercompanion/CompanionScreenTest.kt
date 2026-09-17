@@ -34,6 +34,7 @@ class CompanionScreenTest {
     @Test fun pauseRequiresExplicitConfirmationAndGoBackDoesNotDispatch() {
         var sent = 0
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address="http://fixture.local/", connected=true, snapshot=PrinterSnapshot(true,"printing")), {}, {}, {}, { _,_->sent++ }) } }
+        compose.openFixtureDashboard()
         compose.onNodeWithText("Pause").performScrollTo().performClick()
         assertEquals(0,sent)
         compose.onNodeWithText("Go back").performClick()
@@ -44,6 +45,7 @@ class CompanionScreenTest {
     }
     @Test fun offlineDisablesPrintControls() {
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address="http://fixture.local/", connected=false, snapshot=PrinterSnapshot(true,"printing")), {}, {}, {}, { _,_->error("Must not dispatch") }) } }
+        compose.openFixtureDashboard(connected=false)
         compose.onNodeWithText("Pause").performScrollTo().assertIsNotEnabled()
     }
     @Test fun savedProfileConnectAndForgetUseTheirExactAddresses() {
@@ -67,11 +69,13 @@ class CompanionScreenTest {
                 } }
             }
         }
+        compose.openFixtureDashboard()
         compose.onNodeWithText("Pause").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Go back").assertIsDisplayed().performClick()
         assertEquals(0, sent)
         compose.onNodeWithTag("nav-3").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("connect-printer").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("connect-printer"))
+        compose.onNodeWithTag("connect-printer").assertIsDisplayed()
     }
 
     @Test fun rejectedConfirmationFeedbackStaysVisibleWhileConnected() {
@@ -80,6 +84,7 @@ class CompanionScreenTest {
             var state by remember { mutableStateOf(ScreenState(address="http://fixture.local/", connected=true, snapshot=PrinterSnapshot(true,"printing"))) }
             CompanionScreen(state, {}, {}, {}, { _,_-> state = state.copy(commandNotice=message) })
         } }
+        compose.openFixtureDashboard()
         compose.onNodeWithText("Pause").performScrollTo().performClick()
         compose.onNodeWithText("Confirm").performClick()
         compose.onNodeWithText(message).assertIsDisplayed()
@@ -91,7 +96,8 @@ class CompanionScreenTest {
         val address="http://fixture.local/";var edited="";var camera=""
         val profile=PrinterProfile(address,"Workshop")
         val cameras=listOf(Camera("Front","/snapshot1",id="front"),Camera("Side","/snapshot2",id="side"))
-        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name->assertEquals(address,old);edited=name;null},selectCamera={camera=it}) } }
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name->assertEquals(address,old);edited=name;null},selectCamera={camera=it},tileCamera={}) } }
+        compose.openFixtureDashboard()
         compose.onNodeWithTag("camera:side").performScrollTo().performClick();assertEquals("side",camera)
         compose.onNodeWithTag("nav-3").performClick()
         compose.onNodeWithTag("edit-profile:$address").performScrollTo().performClick()
@@ -129,7 +135,8 @@ class CompanionScreenTest {
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,
             profiles=listOf(PrinterProfile(address,cameraId="removed")),
             catalog=Catalog(emptyList(),emptyList(),listOf(Camera("Available","",id="available")),emptyList())),
-            {},{},{},{_,_->},selectCamera={selected=it}) } }
+            {},{},{},{_,_->},selectCamera={selected=it},tileCamera={}) } }
+        compose.openFixtureDashboard()
         compose.onNodeWithText("Selected camera unavailable. Choose an available camera.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("camera:available").performScrollTo().performClick()
         assertEquals("available",selected)

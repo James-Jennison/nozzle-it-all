@@ -26,7 +26,7 @@ class LivePrinterReadOnlyTest {
         compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("show-history"))
         compose.onNodeWithTag("show-history").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("Records ",substring=true).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("nav-0").performClick()
+        compose.openFixtureDashboard(endpoint!!)
         compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Camera"))
         compose.waitUntil(30000) { compose.onAllNodesWithText("fps", substring=true).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("fps", substring=true).assertExists()

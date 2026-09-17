@@ -26,7 +26,8 @@ import java.util.Locale
 @Composable fun LiveCamera(address: String, camera: Camera) {
     val endpoint = remember(address, camera.stream) { runCatching { Moonraker.cameraUrl(address, camera.stream) }.getOrNull() }
     if(endpoint == null || camera.service != "webrtc-camerastreamer") {
-        Text("Live video format unavailable. This version supports camera-streamer WebRTC.")
+        Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
+        Text("Live video format unavailable. This version supports camera-streamer WebRTC.", style=MaterialTheme.typography.bodySmall)
         return
     }
     val context = LocalContext.current

@@ -3,6 +3,7 @@ package net.jamesjennison.klippercompanion
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -60,7 +61,7 @@ fun nextJpeg(input: InputStream, maximum: Int = 2_000_000): ByteArray {
         withContext(Dispatchers.IO) {
             while(isActive) {
                 try {
-                    client.newCall(Request.Builder().url(endpoint).build()).execute().use { response ->
+                    cameraResponse(client, address, camera.stream).use { response ->
                         if(!response.isSuccessful || response.header("Content-Type")?.startsWith("multipart/x-mixed-replace",true)!=true) throw ApiFailure("Camera is not an MJPEG stream.")
                         val input=response.body?.byteStream()?.buffered() ?: throw ApiFailure("No camera stream.")
                         var frames=0;var since=System.nanoTime();val frameGate=CameraFrameGate()
@@ -85,5 +86,5 @@ fun nextJpeg(input: InputStream, maximum: Int = 2_000_000): ByteArray {
     }
     bitmap?.let { Image(it.asImageBitmap(),"Live printer camera",Modifier.fillMaxWidth().aspectRatio(16f/9f)) }
         ?: Spacer(Modifier.fillMaxWidth().aspectRatio(16f/9f))
-    Text(label)
+    Text(label, style = MaterialTheme.typography.bodySmall)
 }

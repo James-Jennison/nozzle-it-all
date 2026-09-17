@@ -46,3 +46,9 @@ Claude, Gemini and DeepSeek completed final targeted review with no findings
 explicitly superseded by the corrected completed cycle. Final closure: READY,
 closure-e8d981103f31. Independent final evidence: evidence-cycle-848576e9b0e0.
 Evidence is in artifacts/p09. Full P09 live tracking and full M2 remain pending.
+
+## Subsequent live tracking acceptance
+
+The historical pending live-tracking gap above is now covered by
+[P09 live file tracking](P09_LIVE_TRACKING_ACCEPTANCE.md), verified on the printing
+Elegoo and installed Razr2023. Earlier evidence remains scoped to its original build.

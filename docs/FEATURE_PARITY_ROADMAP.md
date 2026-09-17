@@ -73,8 +73,8 @@ turned into a paid unlock.
 | P05 | Elapsed time, ETA and layer progress; everyday monitoring | Validated: elapsed/layers and labelled estimates | M1 | M | Local; metadata/status; label estimates and missing data |
 | P06 | Macro favorites/groups/validated parameter forms; Mobileraker | Basic run | M2 | M | Local; explicit parameter definitions, not guessed inputs |
 | P07 | Heating presets, fans, speed/flow, movement/extrusion; Mobileraker/OctoApp | Simulated control preview verified; live capability/physical acceptance pending ([scope](P07_PREVIEW_ACCEPTANCE.md)) | M2 | L | Local; capability discovery and owner-operated physical acceptance |
-| P08 | Upload/download/rename/delete, share-to-app; Mobileraker/OctoApp | Download/import/export delivered; mutation simulation verified; live acceptance pending ([scope](P08_SIMULATION_ACCEPTANCE.md)) | M2 | M | Local; bounded transfers and explicit overwrite/delete handling |
-| P09 | G-code preview with layers and print position; Mobileraker/OctoApp | Layer navigation, zoom/pan, travel overlay and manual path selection validated; live tracking pending ([scope](P09_VIEWER_ACCEPTANCE.md)) | M2 | L | Local; bounded parser/renderer, supported dialects |
+| P08 | Upload/download/rename/delete, share-to-app; Mobileraker/OctoApp | Download/import/export, unique-name live upload/rename and confirmed live deletion verified ([scope](P08_DELETE_ACCEPTANCE.md)) | M2 | M | Local; bounded transfers and explicit overwrite/delete handling |
+| P09 | G-code preview with layers and print position; Mobileraker/OctoApp | Local navigation and read-only buffered file-progress tracking verified ([scope](P09_LIVE_TRACKING_ACCEPTANCE.md)) | M2 | L | Local; bounded parser/renderer, supported dialects |
 | P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
 | P11 | Console history/filtering, explicit command entry; Mobileraker/OctoApp | Read-only cache, search/error filter, pause and copy validated; command entry pending ([scope](P11_CONSOLE_ACCEPTANCE.md)) | M3 | M | Local; bounded logs, command safeguards |
 | P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Missing | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
@@ -106,7 +106,7 @@ with available Moonraker records; missing ETA stays unknown. Validate real WebRT
 MJPEG fixture/available camera, long filenames and large histories on the Razr.
 Multiple physical printers/cameras remain an explicit evidence gap until available.
 
-### M2 — Prepare and operate prints from the app (in progress)
+### M2 — Prepare and operate prints from the app (paused on monitoring-first scope)
 
 First active-print delivery: [scope and acceptance](M2_ACTIVE_PRINT_ACCEPTANCE.md).
 Local macro organization, numeric forms, document workflows and approximate layer
@@ -115,6 +115,16 @@ preview are implemented; full M2 is not complete.
 Deliver P06–P10. Keep monitor and advanced controls separate. Start with macro
 organization and file transfers; then add controls and preview. Dashboard options
 must preserve safety messages and connection freshness.
+
+**Owner scope decision (2026-09-16):** narrow active development to monitoring —
+status/progress/temperature/history readouts, live camera, and confirmed
+pause/resume/cancel — for the duration of the owner's Toys for Tots season.
+Already-implemented heater/fan controls and file transfer/live-preview work
+(P07 partial, P08, P09) stay installed as-is; no further control expansion (the
+planned P07 speed/flow factor slice, remaining P06 macro parameter forms, or any
+new P07 capability) starts until the owner revisits scope after the season ends
+(approximately December 2026). This is a pause, not a removal: P06/P07/P10 rows
+keep their current status until then.
 
 Exit: invalid macro parameters cannot inject unintended commands; cold extrusion,
 unhomed movement and unsupported controls are guarded; interrupted uploads cannot
@@ -137,7 +147,7 @@ Multicolor/MMU work is scoped against the installed system, not generic AMS clai
 
 M4a: authentication and owner-configured VPN access first. M4b: notification delivery
 and widgets. M4c: timelapse consumption, then optional capture. A hosted relay is an
-optional later service, not a prerequisite for local use.
+optional later service, not a prerequisite for local use. Remote access support includes Tailscale as the primary method with Cloudflare Tunnel and traditional port forwarding as alternatives.
 
 Exit: verify locked-screen/background behavior, notification denial, process death,
 reboot, Doze, network changes and duplicate/stale events. Show delivery coverage and
@@ -145,6 +155,21 @@ last contact. Prove off-LAN access from a genuinely separate network. Never labe
 phone-only monitoring as guaranteed when Android has stopped it. Notification actions
 must not send a stale or wrong-printer command. Timelapses enforce retention and
 storage limits before enabling capture.
+
+### M4a - Enhanced Remote Access Support (Revised)
+
+This milestone builds upon the existing authentication capabilities by introducing robust 
+remote access options that allow users to monitor and control their printers from anywhere.
+Support is provided through:
+
+1. **Primary Method: Tailscale** - Automatic NAT traversal with zero configuration, 
+   secure WireGuard encryption, and cross-platform compatibility
+   
+2. **Secondary Methods:** Cloudflare Tunnel (free Quick Tunnel option) and traditional 
+   port forwarding with DDNS for users who prefer other solutions
+
+Exit criteria: Users can successfully establish remote access to their printer using 
+any of the supported methods with proper security and connection reliability.
 
 ### M5 — Optional AI monitoring
 
@@ -194,6 +219,20 @@ every Android milestone. The active backlog is P01–P24 across M1–M6.
 | AI | Reuse existing rented capacity if measured headroom permits | CPU/GPU time, frame transfer, storage and false-alert tuning; already rented is not unlimited spare capacity |
 | Timelapse / slicing / fleet | Optional services with visible resource budgets | Disk, encoding/slicing compute, backups and ongoing maintenance |
 | SMS, commercial relay, managed offsite storage | Optional provider adapters | Provider charges; never promise universal free service |
+
+## Remote Access Strategy
+
+The Mobile Klipper Companion supports multiple secure remote access methods with Tailscale as the primary recommendation:
+
+**Primary Method: Tailscale**
+- Zero-configuration NAT traversal
+- Secure WireGuard encryption 
+- Cross-platform compatibility
+- No router setup required
+
+**Secondary Methods:** 
+- Cloudflare Tunnel (free Quick Tunnel option)
+- Traditional port forwarding with DDNS
 
 No recurring app subscription is planned. No firm incremental hosting figure is
 claimed until workload, bandwidth and available capacity are measured. License

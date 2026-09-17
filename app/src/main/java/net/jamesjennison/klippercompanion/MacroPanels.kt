@@ -21,10 +21,10 @@ import androidx.compose.ui.unit.dp
 @Composable fun MacroForm(name:String,options:MacroOptions,close:()->Unit,prepare:(PrinterCommand)->Unit) {
     val parsed=remember(name,options.parameters) {runCatching {MacroTools.definitions(options.parameters)}}
     val definitions=parsed.getOrDefault(emptyList())
-    var values by remember(name,options.parameters) {mutableStateOf(definitions.associate {it.name to it.default.toString()})}
+    var values by remember(name,options.parameters) {mutableStateOf(definitions.associate {it.name to it.default.stripTrailingZeros().toPlainString()})}
     var error by remember {mutableStateOf(parsed.exceptionOrNull()?.message?:"")}
     AlertDialog(onDismissRequest=close,title={Text("Prepare $name")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        definitions.forEach { p -> OutlinedTextField(values[p.name]?:"",{values=values+(p.name to it.take(32))},label={Text(p.name)},supportingText={Text("${p.minimum} to ${p.maximum}")},singleLine=true) }
+        definitions.forEach { p -> OutlinedTextField(values[p.name]?:"",{values=values+(p.name to it.take(32))},label={Text(p.name)},supportingText={Text("${p.minimum.toPlainString()} to ${p.maximum.toPlainString()}")},singleLine=true) }
         if(definitions.isEmpty())Text("No parameters defined. The next step shows the command confirmation.")
         if(error.isNotBlank())Text(error,color=MaterialTheme.colorScheme.error)
     }},confirmButton={TextButton({runCatching {MacroTools.command(name,definitions,values)}.fold({prepare(it);close()},{error=it.message?:"Invalid values"})},enabled=parsed.isSuccess){Text("Review command")}},dismissButton={TextButton(close){Text("Cancel")}})

@@ -43,6 +43,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 
+/** Paused while active development is monitoring-only; heater/fan panels are built and tested
+ * but not physically re-accepted (see docs/M2_BED_RETEST_PROCEDURE.md). Flip back on when that
+ * work resumes. */
+const val LIVE_HEATER_FAN_CONTROLS_ENABLED = false
+
 class MainActivity : ComponentActivity() {
     private var sharedFile by mutableStateOf<Uri?>(null)
     private fun receiveShare(value: Intent?) {
@@ -94,9 +99,13 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String)->String? = {_,_,_->null}, favoriteProfile: (String)->Unit = {},
-    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}, consoleFactory:(String)->ConsoleReader={Moonraker(it)}) {
+    moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={}, consoleFactory:(String)->ConsoleReader={Moonraker(it)}, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory)
+    var heaterOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(heaterOpen) HeaterPanel(state,execute,{heaterOpen=false})
+    var fanOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(fanOpen) FanPanel(state,execute,{fanOpen=false})
     var controlPreview by rememberSaveable { mutableStateOf(false) }
     if(controlPreview) ControlPreviewPanel { controlPreview=false }
     var customize by rememberSaveable { mutableStateOf(false) }
@@ -116,7 +125,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     val hostView=LocalView.current
     var cameraVisible by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(tab, state.generation) { listState.scrollToItem(0) }
+    var detailAddress by rememberSaveable { mutableStateOf<String?>(null) }
+    val overview = tab == 0 && detailAddress == null
+    BackHandler(tab == 0 && detailAddress != null) { detailAddress = null }
+    fun openPrinter(selected: String) {
+        if(state.busy) return
+        detailAddress = selected
+        connect(selected)
+        tab = 0
+    }
+    LaunchedEffect(tab, detailAddress, state.generation) { listState.scrollToItem(0) }
     var address by rememberSaveable(state.address) { mutableStateOf(state.address) }
     var editingProfile by remember(state.generation) { mutableStateOf<PrinterProfile?>(null) }
     var fileQuery by rememberSaveable(state.address) { mutableStateOf("") }
@@ -135,7 +153,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         bottomBar = {
             if (!expandedCamera) NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
                 listOf("Dashboard", "Control", "Files", "Printers").forEachIndexed { index, title ->
-                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index }, icon = { CompanionIcon(CompanionSymbol.entries[index], color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
+                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(CompanionSymbol.entries[index], color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
                 }
             }
         }) { padding ->
@@ -155,10 +173,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("Klipper Companion", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(listOf("Dashboard", "Control · Macros", "Files", "Printers")[tab], style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton({ tab = 3 }) { Text("Switch") }
+                    if(tab == 0 && detailAddress != null) TextButton({ detailAddress = null }, Modifier.testTag("all-printers")) { Text("All printers") }
+                    else TextButton({ tab = 3 }) { Text("Manage printers") }
                 }
             }
-            item {
+            if(!overview) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(state.profiles.firstOrNull { it.address==state.address }?.label ?: state.address.ifBlank { "Add your first printer" }, style = MaterialTheme.typography.titleMedium)
                     Text(if(state.connected) "CONNECTED" else "OFFLINE", style = MaterialTheme.typography.labelMedium, color = if(state.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -166,11 +185,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
-            if(tab == 0 || tab == 3) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
-            if(tab == 3 || (state.address.isEmpty() && tab != 2)) {
+            if((tab == 0 && !overview) || tab == 3) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
+            if(tab == 3 || (state.address.isEmpty() && tab != 2 && !overview)) {
                 if(state.savedPrinters.isNotEmpty()) {
                     item { Text("Saved printers", style = MaterialTheme.typography.titleMedium)
-                        Text("One printer is monitored at a time. Connecting saves its address on this phone.", style = MaterialTheme.typography.bodyMedium) }
+                        Text("Saved printers connect automatically while the app is open. Select a printer to view its dashboard and controls.", style = MaterialTheme.typography.bodyMedium) }
                     items(state.savedPrinters, key = { "saved:$it" }) { saved ->
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
                             Column(Modifier.padding(16.dp)) {
@@ -183,9 +202,15 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                     TextButton({moveProfile(saved,-1)},enabled=!state.busy&&state.savedPrinters.indexOf(saved)>0){Text("Move up")}
                                     TextButton({moveProfile(saved,1)},enabled=!state.busy&&state.savedPrinters.indexOf(saved)<state.savedPrinters.lastIndex){Text("Move down")}
                                 }
+                                val connection = state.printerConnections[saved] ?: if (saved == state.address) PrinterConnection(state.connected,
+                                    if(state.connected) state.snapshot?.state.orEmpty() else state.message)
+                                    else null
+                                Text(connection?.let { "${if(it.connected) "Connected" else "Offline"} • ${it.state}" }
+                                    ?: "Monitoring paused", style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.testTag("saved-status:$saved"))
                                 if(profile.favorite) Text("Favorite", style = MaterialTheme.typography.bodyLarge)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    OutlinedButton({ connect(saved); tab = 0 }, enabled = !state.busy && !(state.connected && saved == state.address), modifier = Modifier.testTag("saved-connect:$saved")) { Text(if(state.connected && saved == state.address) "Connected" else "Connect") }
+                                    OutlinedButton({ openPrinter(saved) }, enabled = !state.busy && !(state.connected && saved == state.address), modifier = Modifier.testTag("saved-connect:$saved")) { Text(if(state.connected && saved == state.address) "Selected" else "Select / connect") }
                                     TextButton({ forgetPrinter(saved) }, enabled = !state.busy, modifier = Modifier.testTag("saved-forget:$saved")) { Text("Forget") }
                                 }
                             }
@@ -197,14 +222,23 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Moonraker or frontend address") }, placeholder = { Text("http://192.168.1.110") }, singleLine = true, enabled = !state.busy)
                         Text("Use your local Mainsail / Fluidd address, or Moonraker with port 7125. No account required.", style = MaterialTheme.typography.bodyMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button({ connect(address); tab = 0 }, modifier = Modifier.testTag("connect-printer"), enabled = !state.busy && address.isNotBlank()) { Text("Connect") }
+                            Button({ openPrinter(address) }, modifier = Modifier.testTag("connect-printer"), enabled = !state.busy && address.isNotBlank()) { Text("Connect") }
                             OutlinedButton(disconnect, enabled = !state.busy && state.address.isNotBlank()) { Text("Disconnect") }
                         }
                     }
                 }
             } else when(tab) {
                 0 -> {
-                    items(appearance.order.filterNot { it in appearance.hidden }, key={"dashboard:$it"}) { card ->
+                    if(overview) {
+                        val tiles = state.connectedPrinterTiles()
+                        item { Text("Connected printers", style = MaterialTheme.typography.titleLarge) }
+                        if(tiles.isEmpty()) item {
+                            Text("No printers connected. Saved printers reconnect while the app is open.")
+                            OutlinedButton({ tab = 3 }) { Text("View saved printers") }
+                        } else item { PrinterTiles(tiles, !state.busy, ::openPrinter, tileCamera) }
+                    } else if(detailAddress != state.address) {
+                        item { Text("Waiting for the selected printer. Return to All printers to choose another.") }
+                    } else items(appearance.order.filterNot { it in appearance.hidden }, key={"dashboard:$it"}) { card ->
                         when(card) {
                             "Camera" -> {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
@@ -226,13 +260,13 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             "Print" -> {
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(state.snapshot?.state?.replaceFirstChar { it.uppercase() } ?: "Awaiting printer", style = MaterialTheme.typography.titleLarge)
-                                Text(state.snapshot?.filename?.ifBlank { "No active file" } ?: "Connect to see print status", style = MaterialTheme.typography.bodyMedium)
+                                Text(state.snapshot?.displayState?.replaceFirstChar { it.uppercase() } ?: "Awaiting printer", style = MaterialTheme.typography.titleLarge)
+                                Text(state.snapshot?.activeFilename?.ifBlank { "No active file" } ?: "Connect to see print status", style = MaterialTheme.typography.bodyMedium)
                                 Text("Elapsed ${formatDuration(state.snapshot?.printDuration)} · Remaining ${formatDuration(estimatedRemaining(state.snapshot,state.activeMetadata))}", style=MaterialTheme.typography.bodySmall)
                                 if(estimatedRemaining(state.snapshot,state.activeMetadata)!=null) Text("Remaining time is a slicer-based estimate.",style=MaterialTheme.typography.labelSmall)
                                 Text("Layer ${state.snapshot?.currentLayer ?: "Unknown"} / ${state.snapshot?.totalLayers ?: state.activeMetadata?.layers ?: "Unknown"}",style=MaterialTheme.typography.bodySmall)
-                                LinearProgressIndicator(progress = { state.snapshot?.progress ?: 0f }, modifier = Modifier.fillMaxWidth())
-                                Text(state.snapshot?.let { "${(it.progress*100).toInt()}%" } ?: "—", style = MaterialTheme.typography.headlineLarge, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
+                                LinearProgressIndicator(progress = { state.snapshot?.activeProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
+                                Text(state.snapshot?.let { "${(it.activeProgress*100).toInt()}%" } ?: "—", style = MaterialTheme.typography.headlineLarge, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton({ pending = PrinterCommand("Pause print", "printer/print/pause", allowedStates = setOf("printing")) to state.generation }, enabled = enabled && state.snapshot?.state == "printing") { Text("Pause") }
                                     OutlinedButton({ pending = PrinterCommand("Resume print", "printer/print/resume", allowedStates = setOf("paused")) to state.generation }, enabled = enabled && state.snapshot?.state == "paused") { Text("Resume") }
@@ -243,10 +277,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                             "Temperatures" -> {
                         if (LocalDensity.current.fontScale > 1.3f) Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Temperature("NOZZLE", state.snapshot?.nozzle, state.snapshot?.nozzleTarget, Modifier.fillMaxWidth())
+                            Temperature(state.snapshot?.nozzleLabel ?: "NOZZLE · unknown tool", state.snapshot?.nozzle, state.snapshot?.nozzleTarget, Modifier.fillMaxWidth(), isNozzle=true)
                             Temperature("BED", state.snapshot?.bed, state.snapshot?.bedTarget, Modifier.fillMaxWidth())
                         } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Temperature("NOZZLE", state.snapshot?.nozzle, state.snapshot?.nozzleTarget, Modifier.weight(1f))
+                            Temperature(state.snapshot?.nozzleLabel ?: "NOZZLE · unknown tool", state.snapshot?.nozzle, state.snapshot?.nozzleTarget, Modifier.weight(1f), isNozzle=true)
                             Temperature("BED", state.snapshot?.bed, state.snapshot?.bedTarget, Modifier.weight(1f))
                         }
                     }
@@ -262,6 +296,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 1 -> {
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED) {
+                        item { OutlinedButton({heaterOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-heaters")){Text("Heater controls")} }
+                        item { OutlinedButton({fanOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-fans")){Text("Fan controls")} }
+                    }
                     item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text("Read-only console")} }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
                     item {
@@ -309,7 +347,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 if(folder.isNotBlank()) TextButton({folder=folder.substringBeforeLast('/',"")}){Text("Up a folder")}
                             }
                             Text(folder.ifBlank { "All files" })
-                            FileWorkspacePanel(workspace)
+                            FileWorkspacePanel(workspace,state,refresh)
                             FileDetails(state)
                         }
                         val prefix=if(folder.isBlank()) "" else "$folder/"
@@ -350,9 +388,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             dismissButton = { TextButton({ pending = null }) { Text("Go back") } })
     }
 }
-@Composable private fun Temperature(label: String, actual: Double?, target: Double?, modifier: Modifier) {
+@Composable private fun Temperature(label: String, actual: Double?, target: Double?, modifier: Modifier, isNozzle:Boolean=false) {
     Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        CompanionIcon(if(label == "NOZZLE") CompanionSymbol.NOZZLE else CompanionSymbol.BED, color = if(label == "NOZZLE") Color(0xFFF3BC81) else Color(0xFF93C8ED))
+        CompanionIcon(if(isNozzle) CompanionSymbol.NOZZLE else CompanionSymbol.BED, color = if(isNozzle) Color(0xFFF3BC81) else Color(0xFF93C8ED))
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(actual?.let { String.format(Locale.US, "%.1f°", it) } ?: "—", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
         Text(target?.let { "Target ${it.toInt()}°C" } ?: "No reading", style = MaterialTheme.typography.bodySmall)

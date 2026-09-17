@@ -14,6 +14,7 @@ data class ScreenState(
     val camera: Bitmap? = null, val cameraNote: String = "", val message: String = "Connect to your printer to begin.",
     val commandNotice: String = "", val lastUpdate: Long = 0, val generation: Int = 0,
     val savedPrinters: List<String> = emptyList(),
+    val printerConnections: Map<String, PrinterConnection> = emptyMap(),
     val profiles: List<PrinterProfile> = emptyList(), val cameraGeneration: Int = 0,
     val activeMetadata: FileMetadata? = null, val fileMetadata: FileMetadata? = null, val thumbnail: Bitmap? = null,
     val fileNote: String = "", val fileLoading: Boolean = false,
@@ -58,6 +59,7 @@ class PrinterModel(
         val selected = if(current.address == oldAddress) normalized else _state.value.address
         _state.value = _state.value.copy(address=selected,profiles=profiles,savedPrinters=profiles.map { it.address })
         persist()
+        monitorSavedPrinters()
         return null
     }
     fun favoriteProfile(address: String) {
@@ -115,33 +117,62 @@ class PrinterModel(
 
     private var api: PrinterService? = null
     private var job: Job? = null
+    private var commandJob: Job? = null
     private var generation = 0
     private var foreground = false
     private var wantsConnection = false
+    private var startupPending = true
+    private val disconnectedPrinters = mutableSetOf<String>()
+    private val savedMonitor = SavedPrinterMonitor(viewModelScope, io, serviceFactory) {
+        _state.value = _state.value.copy(printerConnections = it)
+    }
+    private fun monitorSavedPrinters() {
+        savedMonitor.reconcile(if (foreground) _state.value.savedPrinters.toSet() -
+            disconnectedPrinters - (if (wantsConnection) setOf(_state.value.address) else emptySet()) else emptySet())
+    }
     private var lastCatalog = 0L
     private var metadataAttempt = 0L
     private var metadataFilename = ""
     fun foreground(active: Boolean) {
+        if (foreground == active) return
         foreground = active
-        if (!active) { detailJob?.cancel();historyJob?.cancel(); job?.cancel(); api?.close(); _state.value = _state.value.copy(connected = false, snapshot = null, camera = null, fileLoading=false, historyLoading=false) }
-        else if (wantsConnection) beginLoop()
+        if (!active) {
+            val interrupted = _state.value.busy
+            commandJob?.cancel()
+            detailJob?.cancel();historyJob?.cancel(); job?.cancel(); api?.close()
+            _state.value = _state.value.copy(connected = false, snapshot = null, camera = null, fileLoading=false, historyLoading=false,
+                commandNotice = if (interrupted) "Command interrupted. Outcome unknown; inspect the printer before trying again. No automatic retry was sent." else _state.value.commandNotice)
+        }
+        else if (startupPending) {
+            startupPending = false
+            val selected = _state.value.address.ifBlank { _state.value.savedPrinters.firstOrNull().orEmpty() }
+            if (selected.isNotBlank()) connect(selected)
+        } else if (wantsConnection) beginLoop()
+        monitorSavedPrinters()
     }
     fun connect(address: String) {
         if (_state.value.busy) return
         val candidate = try { serviceFactory(address) } catch(e: IllegalArgumentException) { _state.value = _state.value.copy(message = e.message ?: "Invalid address."); return }
         if (_state.value.connected && candidate.address == _state.value.address) { candidate.close(); return }
         detailJob?.cancel();historyJob?.cancel();job?.cancel(); api?.close(); generation++
+        startupPending = false
+        disconnectedPrinters.remove(candidate.address)
+        savedMonitor.remove(candidate.address)
         api = candidate; wantsConnection = true; lastCatalog = 0;metadataAttempt=0;metadataFilename=""
         val printers = (_state.value.savedPrinters + candidate.address).distinct()
         val profiles = _state.value.profiles + printers.filter { a -> _state.value.profiles.none { it.address==a } }.map { PrinterProfile(it) }
         persist(candidate.address,profiles)
-        _state.value = ScreenState(address = candidate.address, message = "Connecting…", generation = generation, savedPrinters = printers, profiles=profiles)
+        _state.value = ScreenState(address = candidate.address, message = "Connecting…", generation = generation, savedPrinters = printers, profiles=profiles, printerConnections=_state.value.printerConnections)
         if (foreground) beginLoop()
+        monitorSavedPrinters()
     }
     fun disconnect() {
         if (_state.value.busy) return
+        startupPending = false
+        disconnectedPrinters.add(_state.value.address)
         wantsConnection = false; generation++; detailJob?.cancel();historyJob?.cancel();job?.cancel(); api?.close(); api = null
-        _state.value = ScreenState(address = _state.value.address, message = "Disconnected.", generation = generation, savedPrinters = _state.value.savedPrinters, profiles=_state.value.profiles)
+        _state.value = ScreenState(address = _state.value.address, message = "Disconnected.", generation = generation, savedPrinters = _state.value.savedPrinters, profiles=_state.value.profiles, printerConnections=_state.value.printerConnections)
+        monitorSavedPrinters()
     }
     fun forgetPrinter(address: String) {
         if (_state.value.busy || address !in _state.value.savedPrinters) return
@@ -152,6 +183,7 @@ class PrinterModel(
         val printers = _state.value.savedPrinters - address
         val profiles=_state.value.profiles.filter { it.address!=address }
         _state.value = _state.value.copy(savedPrinters = printers,profiles=profiles);persist()
+        monitorSavedPrinters()
     }
     fun refreshCatalog() { lastCatalog = 0 }
     private fun beginLoop() {
@@ -209,27 +241,39 @@ class PrinterModel(
     fun execute(command: PrinterCommand, expectedGeneration: Int) {
         val current = _state.value
         val service = api ?: return
-        if (expectedGeneration != generation || !current.connected || current.busy || current.snapshot?.ready != true || clock() - current.lastUpdate > 10_000) {
+        if (!foreground || expectedGeneration != generation || !current.connected || current.busy || current.snapshot?.ready != true || clock() - current.lastUpdate > 10_000) {
             _state.value = current.copy(commandNotice = "Printer state changed. Refresh before sending a command."); return
         }
         if(command.allowedStates.isNotEmpty() && current.snapshot.state !in command.allowedStates) {
             _state.value = current.copy(commandNotice = "This action is unavailable in the current print state."); return
         }
         _state.value = current.copy(busy = true, commandNotice = "Sending command…")
-        viewModelScope.launch {
+        commandJob = viewModelScope.launch {
             val message = try {
                 withContext(io) {
                     val fresh = service.snapshot()
                     if (!fresh.ready || (command.allowedStates.isNotEmpty() && fresh.state !in command.allowedStates)) throw ApiFailure("Printer state changed.")
+                    command.heaterRequest?.let { request ->
+                        val checked=HeaterControls.prepare(request,service.heaterStatus(request.heater))
+                        if(checked!=command) throw ApiFailure("Heater command changed. Review it again.")
+                    }
+                    command.fanRequest?.let { request ->
+                        val checked=FanControls.prepare(request,service.fanStatus(request.fan))
+                        if(checked!=command) throw ApiFailure("Fan command changed. Review it again.")
+                    }
                     currentCoroutineContext().ensureActive()
                     service.command(command)
                 }
                 "Printer acknowledged ${command.title}."
             } catch(e: CancellationException) { throw e } catch(e: Exception) { "Command outcome unknown or rejected. Inspect the printer before trying again. No automatic retry was sent." }
             if(expectedGeneration == generation) _state.value = _state.value.copy(busy = false, commandNotice = message)
+        }.also { pending ->
+            pending.invokeOnCompletion {
+                if(expectedGeneration == generation) _state.value = _state.value.copy(busy = false)
+            }
         }
     }
-    override fun onCleared() { api?.close() }
+    override fun onCleared() { savedMonitor.stop(); api?.close() }
 }
 
 fun ScreenState.selectedCamera(): Camera? {

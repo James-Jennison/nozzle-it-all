@@ -4,8 +4,8 @@ import java.io.InputStream
 import java.io.InterruptedIOException
 import kotlin.math.*
 
-data class ToolpathSegment(val x1:Float,val y1:Float,val x2:Float,val y2:Float,val layer:Int)
-data class Toolpath(val segments:List<ToolpathSegment>,val heights:List<Float>,val sampled:Boolean,val ignoredMotion:Boolean,val travels:List<ToolpathSegment> = emptyList())
+data class ToolpathSegment(val x1:Float,val y1:Float,val x2:Float,val y2:Float,val layer:Int,val byteEnd:Long=0)
+data class Toolpath(val segments:List<ToolpathSegment>,val heights:List<Float>,val sampled:Boolean,val ignoredMotion:Boolean,val travels:List<ToolpathSegment> = emptyList(),val byteSize:Long=0)
 /** Approximate XY extrusion geometry, never a G-code executor. IJ arcs use relative centers. */
 object GcodePreview {
     const val MAX_BYTES=256L*1024*1024
@@ -18,12 +18,12 @@ object GcodePreview {
         var stride=1L;var moves=0L;var ignored=false
         val travels=ArrayList<ToolpathSegment>();var travelStride=1L;var travelMoves=0L
         fun travel(ax:Double,ay:Double,bx:Double,by:Double) {
-            if(travelMoves++%travelStride==0L) travels.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer.coerceAtLeast(0)))
+            if(travelMoves++%travelStride==0L) travels.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer.coerceAtLeast(0),bytes))
             if(travels.size>=60_000){val retained=travels.filterIndexed{i,_->i%2==0};travels.clear();travels.addAll(retained);travelStride*=2}
         }
         fun segment(ax:Double,ay:Double,bx:Double,by:Double,height:Double) {
             if(layer<0||abs(height-extrusionZ)>0.001) {require(heights.size<10_000){"Too many extrusion heights for preview."};heights.add(height.toFloat());layer++;extrusionZ=height}
-            if(moves++%stride==0L)segments.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer))
+            if(moves++%stride==0L)segments.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer,bytes))
             if(segments.size>=MAX_SEGMENTS){val retained=segments.filterIndexed{i,_->i%2==0};segments.clear();segments.addAll(retained);stride*=2}
         }
         val line=StringBuilder()
@@ -67,10 +67,10 @@ object GcodePreview {
             }
         }
         val buffer=ByteArray(32768)
-        while(true){if(cancelled())throw InterruptedIOException("Preview cancelled");val count=input.read(buffer);if(count<0)break;bytes+=count;require(bytes<=MAX_BYTES){"Preview supports files up to 256 MiB."}
-            for(i in 0 until count){val c=buffer[i].toInt() and 255;require(c!=0){"Binary G-code is unsupported."};if(c==10){if(cancelled())throw InterruptedIOException("Preview cancelled");consume()}else{require(line.length<16_384){"G-code line too long."};line.append(c.toChar())}}
+        while(true){if(cancelled())throw InterruptedIOException("Preview cancelled");val count=input.read(buffer);if(count<0)break;require(bytes+count<=MAX_BYTES){"Preview supports files up to 256 MiB."}
+            for(i in 0 until count){bytes++;val c=buffer[i].toInt() and 255;require(c!=0){"Binary G-code is unsupported."};if(c==10){if(cancelled())throw InterruptedIOException("Preview cancelled");consume()}else{require(line.length<16_384){"G-code line too long."};line.append(c.toChar())}}
         }
         if(line.isNotEmpty())consume();require(segments.isNotEmpty()){"No supported extrusion paths found."}
-        return Toolpath(segments,heights,stride>1||travelStride>1,ignored,travels)
+        return Toolpath(segments,heights,stride>1||travelStride>1,ignored,travels,bytes)
     }
 }

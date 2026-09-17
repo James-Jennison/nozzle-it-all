@@ -12,29 +12,40 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ApiFailure(message: String) : IOException(message)
-data class PrinterSnapshot(val ready: Boolean, val state: String, val filename: String = "", val progress: Float = 0f, val nozzle: Double? = null, val nozzleTarget: Double? = null, val bed: Double? = null, val bedTarget: Double? = null, val printDuration: Double? = null, val currentLayer: Int? = null, val totalLayers: Int? = null)
+data class PrinterSnapshot(val ready: Boolean, val state: String, val filename: String = "", val progress: Float = 0f, val nozzle: Double? = null, val nozzleTarget: Double? = null, val bed: Double? = null, val bedTarget: Double? = null, val printDuration: Double? = null, val currentLayer: Int? = null, val totalLayers: Int? = null, val activeExtruder: String = "") {
+    // Moonraker retains the loaded filename after completion; preserve raw telemetry.
+    val activeFilename: String get() = if(ready && state in setOf("printing", "paused")) filename else ""
+    val activeProgress: Float get() = if(activeFilename.isNotBlank()) progress.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f else 0f
+    val displayState: String get() = if(ready && state in setOf("complete", "cancelled")) "standby" else state
+    val nozzleLabel: String get() = if(activeExtruder.isBlank()) "NOZZLE · unknown tool" else "NOZZLE · $activeExtruder"
+}
 data class Camera(val name: String, val snapshot: String, val stream: String = "", val service: String = "", val id: String = name)
 data class Catalog(val files: List<String>, val macros: List<String>, val cameras: List<Camera>, val warnings: List<String>, val fileInfo: List<FileInfo> = emptyList())
-data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet())
+data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null)
 
 interface PrinterService {
     val address: String
     fun snapshot(): PrinterSnapshot
     fun catalog(): Catalog
+    fun cameras(): List<Camera> = emptyList()
     fun image(camera: Camera): ByteArray
     fun metadata(filename: String): FileMetadata = throw ApiFailure("Metadata unavailable.")
     fun history(start: Int): HistoryPage = throw ApiFailure("History unavailable.")
     fun thumbnail(path: String): ByteArray = throw ApiFailure("Thumbnail unavailable.")
+    fun heaterStatus(heater: String): HeaterStatus = throw ApiFailure("Heater controls unavailable.")
+    fun fanStatus(fan: String): FanStatus = throw ApiFailure("Fan controls unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService, ConsoleReader {
+class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
         .callTimeout(7, TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build()
 
     companion object {
+        internal fun activeExtruder(status: JSONObject): String = status.optJSONObject("toolhead")?.optString("extruder", "")
+            ?.takeIf { it.length <= 32 && Regex("extruder[0-9]*").matches(it) } ?: ""
         fun parseAddress(address: String): HttpUrl {
             val url = address.trim().toHttpUrlOrNull() ?: throw IllegalArgumentException("Enter an http:// or https:// printer address.")
             if(url.scheme == "http") {
@@ -59,11 +70,12 @@ class Moonraker(address: String) : PrinterService, ConsoleReader {
             val ready = status.getJSONObject("webhooks").getString("state") == "ready"
             fun number(obj: String, field: String): Double? = status.optJSONObject(obj)?.optDouble(field)?.takeIf { it.isFinite() }
             val state = if (ready) stats?.optString("state", "unknown") ?: "unknown" else "not ready"
+            val active = activeExtruder(status)
             return PrinterSnapshot(ready, state, stats?.optString("filename", "") ?: "",
                 (number("virtual_sdcard", "progress") ?: 0.0).coerceIn(0.0, 1.0).toFloat(),
-                number("extruder", "temperature"), number("extruder", "target"), number("heater_bed", "temperature"), number("heater_bed", "target"), stats?.finiteNonnegative("print_duration"),
+                active.takeIf { it.isNotEmpty() }?.let { number(it, "temperature") }, active.takeIf { it.isNotEmpty() }?.let { number(it, "target") }, number("heater_bed", "temperature"), number("heater_bed", "target"), stats?.finiteNonnegative("print_duration"),
                 stats?.optJSONObject("info")?.optInt("current_layer")?.takeIf { it > 0 },
-                stats?.optJSONObject("info")?.optInt("total_layer")?.takeIf { it > 0 })
+                stats?.optJSONObject("info")?.optInt("total_layer")?.takeIf { it > 0 }, active)
         }
         fun start(file: String) = PrinterCommand("Start $file", "printer/print/start", mapOf("filename" to file), setOf("standby", "complete", "cancelled", "error"))
         fun macro(name: String): PrinterCommand {
@@ -96,11 +108,31 @@ class Moonraker(address: String) : PrinterService, ConsoleReader {
         val result=request("server/gcode_store",mapOf("count" to ConsoleLog.MAX_ENTRIES.toString())) as? JSONObject ?: throw ApiFailure("Console unavailable.")
         return ConsoleLog.parse(result)
     }
+    override fun heaterStatus(heater: String): HeaterStatus {
+        require(HeaterControls.validHeater(heater)) { "Unsupported heater." }
+        val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "toolhead" to "extruder", "configfile" to "settings", heater to "temperature,target")) as? JSONObject
+            ?: throw ApiFailure("Heater state unavailable.")
+        return HeaterControls.parse(heater,result)
+    }
+    override fun fans(): List<String> = FanControls.catalog(request("printer/objects/list") as? JSONObject ?: throw ApiFailure("Fan catalog unavailable."))
+    override fun fanStatus(fan: String): FanStatus {
+        require(FanControls.validFan(fan)) { "Unsupported manual fan." }
+        val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "toolhead" to "extruder", "configfile" to "settings", fan to "speed")) as? JSONObject
+            ?: throw ApiFailure("Fan state unavailable.")
+        return FanControls.parse(fan,result)
+    }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")
         if (!info.optBoolean("klippy_connected") || info.optString("klippy_state") != "ready") return PrinterSnapshot(false, info.optString("klippy_state", "not ready"))
         try {
-            return parseSnapshot(request("printer/objects/query", mapOf("webhooks" to "state", "print_stats" to "state,filename,print_duration,info", "virtual_sdcard" to "progress", "extruder" to "temperature,target", "heater_bed" to "temperature,target")) as JSONObject)
+            val fields = mapOf("webhooks" to "state", "toolhead" to "extruder", "print_stats" to "state,filename,print_duration,info", "virtual_sdcard" to "progress", "extruder" to "temperature,target", "heater_bed" to "temperature,target")
+            val initial = request("printer/objects/query", fields) as JSONObject
+            val active = activeExtruder(initial.getJSONObject("status"))
+            // Read the selected tool and toolhead together. If it switches again, parsing
+            // yields unknown temperatures rather than attributing the previous tool's heat.
+            val coherent = if(active.isNotEmpty() && active != "extruder")
+                request("printer/objects/query", fields + (active to "temperature,target")) as JSONObject else initial
+            return parseSnapshot(coherent)
         } catch(e: org.json.JSONException) { throw ApiFailure("Printer state is incomplete.") }
     }
     override fun catalog(): Catalog {
@@ -117,11 +149,14 @@ class Moonraker(address: String) : PrinterService, ConsoleReader {
                 .filter { Regex("[A-Za-z][A-Za-z0-9_]*").matches(it) }.sorted()
         } catch(e: Exception) { warnings.add("Macro list unavailable."); emptyList() }
         val cameras = try {
-            val list = (request("server/webcams/list") as JSONObject).getJSONArray("webcams")
-            (0 until list.length()).map { list.getJSONObject(it) }.filter { it.optBoolean("enabled", true) && (it.optString("snapshot_url").isNotBlank() || it.optString("stream_url").isNotBlank()) }
-                .map { Camera(it.optString("name", "Camera"), it.optString("snapshot_url"), it.optString("stream_url"), it.optString("service"), it.optString("uid").ifBlank { it.optString("name", "Camera") }) }
+            cameras()
         } catch(e: Exception) { warnings.add("Camera configuration unavailable."); emptyList() }
         return Catalog(files, macros, cameras, warnings, details)
+    }
+    override fun cameras(): List<Camera> {
+        val list = (request("server/webcams/list") as JSONObject).getJSONArray("webcams")
+        return (0 until list.length()).map { list.getJSONObject(it) }.filter { it.optBoolean("enabled", true) && (it.optString("snapshot_url").isNotBlank() || it.optString("stream_url").isNotBlank()) }
+                .map { Camera(it.optString("name", "Camera"), it.optString("snapshot_url"), it.optString("stream_url"), it.optString("service"), it.optString("uid").ifBlank { it.optString("name", "Camera") }) }
     }
     override fun metadata(filename: String): FileMetadata {
         val result = request("server/files/metadata", mapOf("filename" to filename)) as? JSONObject ?: throw ApiFailure("Metadata unavailable.")
@@ -153,9 +188,7 @@ class Moonraker(address: String) : PrinterService, ConsoleReader {
         }
     }
     override fun image(camera: Camera): ByteArray {
-        val target = cameraUrl(address, camera.snapshot)
-        if (target.username.isNotEmpty() || target.password.isNotEmpty()) throw ApiFailure("Camera credentials in URLs are not supported.")
-        client.newCall(Request.Builder().url(target).header("Cache-Control", "no-cache").build()).execute().use { response ->
+        cameraResponse(client, address, camera.snapshot).use { response ->
             if (!response.isSuccessful) throw ApiFailure("Camera unavailable (HTTP ${response.code}).")
             val data = response.body?.source()?.let { it.request(4_000_001); it.buffer.readByteArray() } ?: throw ApiFailure("Camera returned no image.")
             if (data.size > 4_000_000) throw ApiFailure("Camera image is too large.")

@@ -34,10 +34,11 @@ interface PrinterService {
     fun thumbnail(path: String): ByteArray = throw ApiFailure("Thumbnail unavailable.")
     fun heaterStatus(heater: String): HeaterStatus = throw ApiFailure("Heater controls unavailable.")
     fun fanStatus(fan: String): FanStatus = throw ApiFailure("Fan controls unavailable.")
+    fun meshStatus(): BedMeshStatus = throw ApiFailure("Bed mesh unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader {
+class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
@@ -113,6 +114,11 @@ class Moonraker(address: String) : PrinterService, ConsoleReader, HeaterReader, 
         val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "toolhead" to "extruder", "configfile" to "settings", heater to "temperature,target")) as? JSONObject
             ?: throw ApiFailure("Heater state unavailable.")
         return HeaterControls.parse(heater,result)
+    }
+    override fun meshStatus(): BedMeshStatus {
+        val result=request("printer/objects/query",mapOf("bed_mesh" to "profile_name,mesh_min,mesh_max,probed_matrix")) as? JSONObject
+            ?: throw ApiFailure("Bed mesh unavailable.")
+        return BedMesh.parse(result)
     }
     override fun fans(): List<String> = FanControls.catalog(request("printer/objects/list") as? JSONObject ?: throw ApiFailure("Fan catalog unavailable."))
     override fun fanStatus(fan: String): FanStatus {

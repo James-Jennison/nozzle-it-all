@@ -78,7 +78,8 @@ something not yet tracked anywhere in the backlog.
   notifications (P17), personalization (P10)
 - **OctoApp** — prep/print workspaces (P07), file browser (P11), terminal (P11),
   tuning controls (P07), camera (P02), notifications (P17), G-code viewer (P09),
-  multi-printer (P21), Wear OS (reopened above, unscoped)
+  multi-printer (P21), Wear OS — the one confirmed real reference for the reopened
+  Wear OS idea below, not just a listing claim
 - **Printer Tools** — Moonraker status/multi-printer dashboard (P21), history (P04),
   mesh viewer (P12), Spoolman (P13), MJPEG (P02)
 - **Obico** — premium live streaming (P02), cloud/self-hosted AI failure
@@ -312,10 +313,19 @@ integration is called complete, whenever that hardware becomes available.
 ## Optional future ideas outside the roadmap
 
 Owner decision (2026-09-06): dedicated wearable companions removed from the delivery
-roadmap. Owner decision (2026-09-16): reopened as a live option to revisit — not yet
-scoped, no target milestone, no committed watch-app work, and no confirmed test
-hardware. Treat "Wear OS" as a real future candidate worth remembering, not as
-excluded, but do not start design or implementation until the owner defines scope
+roadmap. Owner decision (2026-09-16): reopened as a live option to revisit, scoped to
+**Wear OS only** — Apple Watch/watchOS is not relevant since this is an Android-only
+app. Reference check across all eleven apps above, Wear OS specifically: OctoApp is
+the only one with real, confirmed Wear OS support (notifications, widgets, a
+published "Getting started on Wear OS" walkthrough). Bambu Handy explicitly does not
+have it — there's an open, unresolved community feature request for one. One source
+claimed Obico has a Wear OS companion, but neither Obico's own site nor its Play
+listing corroborates that, so treat it as unverified, not a real reference.
+Mobileraker, Printer Tools (Apple-only watch support), SimplyPrint, OctoEverywhere
+(reaches Wear OS only indirectly through OctoApp/Printoid, ships nothing of its own),
+PrintNanny and Prusa Connect have no Wear OS support found. Still not yet scoped, no
+target milestone, no committed watch-app work, and no confirmed test hardware on our
+side — do not start design or implementation until the owner defines scope
 (glance-only vs. actions-from-the-watch) and confirms test hardware, the way M7 had
 to before Bambu/Prusa work could be scoped. Android notifications and home-screen
 widgets remain in M4; tablet and foldable layout quality remain part of every Android

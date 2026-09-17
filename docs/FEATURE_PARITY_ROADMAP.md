@@ -57,7 +57,13 @@ same treatment to new control work, it doesn't lift it:
    idle print states, unlike heater/fan/macro/speed-flow - dimming a light
    doesn't disrupt an active print, and Fluidd/Mainsail allow it while printing.
    Physical acceptance still deferred per the Phase 1 condition above
-9. P11 remainder — console command entry (currently read-only only)
+9. ~~P11 remainder — console command entry (currently read-only only)~~ **Built
+   2026-09-17**: added as a separate capability alongside the read-only reader
+   (which stays read-only by design), with local-only validation (256 char
+   bound, control-character/injection rejection) since there's no live server
+   value to re-verify for arbitrary text. Not restricted to idle print states,
+   matching the existing read-only console's always-available behavior.
+   Physical acceptance still deferred per the Phase 1 condition above
 10. P14 remainder — enable save/backup/explicit-restart once the diff view above
     is validated
 

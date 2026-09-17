@@ -26,8 +26,8 @@ and reference material.
    2026-09-16**, verified live: all 4 real toolheads shown independently
 3. ~~P15 — Elegoo CC/COSMOS-specific read-only checks~~ **Done 2026-09-16**,
    fan RPM verified live on COSMOS; mesh profile visibility already covered by P12
-4. P13 — Spoolman read-only inventory view — **conditional: confirm the owner
-   actually runs Spoolman before starting this one**
+4. ~~P13 — Spoolman read-only inventory view~~ **Skipped 2026-09-16** — owner
+   confirmed they don't run Spoolman; not worth building against nothing
 5. P14 — Config editing, starting with the read-only diff view only (no save/restart
    yet); matches M3's "read-only views before mutation flows" rule
 
@@ -212,7 +212,7 @@ turned into a paid unlock.
 | P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
 | P11 | Console history/filtering, explicit command entry; Mobileraker/OctoApp | Read-only cache, search/error filter, pause and copy validated; command entry pending ([scope](P11_CONSOLE_ACCEPTANCE.md)) | M3 | M | Local; bounded logs, command safeguards |
 | P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Validated: read-only profile/Z-range/heatmap, verified live on both real printers (Elegoo CC no-mesh state, Snapmaker U1 real 11×11 profile) | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
-| P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Missing | M3 | M | Existing service; read first, validated mutations later |
+| P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Skipped — owner does not run Spoolman (confirmed 2026-09-16); revisit only if that changes | M3 | M | Existing service; read first, validated mutations later |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
 | P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Validated: multi-toolhead visibility verified live on the U1 (all 4 extruders). Still missing: lights/power devices, COSMOS-specific checks (exhaust fan RPM, saved mesh profiles), and any actual fan/light control | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
 | P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | Unauthenticated local only | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |

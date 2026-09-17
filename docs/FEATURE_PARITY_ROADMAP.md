@@ -43,7 +43,11 @@ same treatment to new control work, it doesn't lift it:
 6. ~~P07 remainder — speed/flow factor controls (M220/M221)~~ **Built 2026-09-17**,
    gated off behind `LIVE_HEATER_FAN_CONTROLS_ENABLED`; physical acceptance still
    deferred per the Phase 1 condition above
-7. P06 remainder — remaining macro parameter form work
+7. ~~P06 remainder — remaining macro parameter form work~~ **Built 2026-09-17**:
+   added the live re-check/expiring-review dispatch layer the parameter forms were
+   missing, and gated macro Run behind `LIVE_HEATER_FAN_CONTROLS_ENABLED` (it was
+   previously ungated, inconsistent with heater/fan/speed-flow); physical
+   acceptance still deferred per the Phase 1 condition above
 8. P15 remainder — actual fan-speed/light-dimming control (not just visibility)
 9. P11 remainder — console command entry (currently read-only only)
 10. P14 remainder — enable save/backup/explicit-restart once the diff view above

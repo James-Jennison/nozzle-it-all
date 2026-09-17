@@ -261,11 +261,15 @@ integration is called complete, whenever that hardware becomes available.
 
 ## Optional future ideas outside the roadmap
 
-Owner decision: dedicated wearable companions are removed from the delivery roadmap.
-There is no wearable milestone or committed watch-app work. Reconsider only if an
-actual use case warrants a separate owner decision. Android notifications and
-home-screen widgets remain in M4; tablet and foldable layout quality remain part of
-every Android milestone. The active backlog is P01–P26 across M1–M7.
+Owner decision (2026-09-06): dedicated wearable companions removed from the delivery
+roadmap. Owner decision (2026-09-16): reopened as a live option to revisit — not yet
+scoped, no target milestone, no committed watch-app work, and no confirmed test
+hardware. Treat "Wear OS" as a real future candidate worth remembering, not as
+excluded, but do not start design or implementation until the owner defines scope
+(glance-only vs. actions-from-the-watch) and confirms test hardware, the way M7 had
+to before Bambu/Prusa work could be scoped. Android notifications and home-screen
+widgets remain in M4; tablet and foldable layout quality remain part of every Android
+milestone. The active backlog is P01–P26 across M1–M7.
 
 ## Cost strategy
 

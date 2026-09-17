@@ -67,6 +67,56 @@ Prusa Connect's team/role-based access and phone-initiated slicing ("EasyPrint")
 cross-referenced to P24's existing "team sharing needs roles" exit criterion rather
 than duplicated as their own rows.
 
+## Feature ideas by reference app (2026-09-16 pass)
+
+Per-app feature lists behind the backlog above, so the "why" for each row traces back
+to what actually motivated it. IDs point at the existing row; "New idea" flags
+something not yet tracked anywhere in the backlog.
+
+- **Mobileraker** — file operations (P03), macros (P06), bed mesh viewer (P12),
+  Spoolman (P13), multi-camera/multi-printer (P02, P21), console (P11),
+  notifications (P17), personalization (P10)
+- **OctoApp** — prep/print workspaces (P07), file browser (P11), terminal (P11),
+  tuning controls (P07), camera (P02), notifications (P17), G-code viewer (P09),
+  multi-printer (P21), Wear OS (reopened above, unscoped)
+- **Printer Tools** — Moonraker status/multi-printer dashboard (P21), history (P04),
+  mesh viewer (P12), Spoolman (P13), MJPEG (P02)
+- **Obico** — premium live streaming (P02), cloud/self-hosted AI failure
+  detection (P20), remote print uploads (P08), sharing, SMS alerts (only a generic
+  "optional provider adapter" in the cost strategy table today, not its own row)
+- **SimplyPrint** — slicing (new idea, see below), AI actions (P20), job queues (P22),
+  statistics (P04/P23), multi-stream viewing (P02), maintenance reminders (P23), team
+  workflows (P24)
+- **OctoEverywhere** — zero-config cloud relay remote access (P16/M4a), Gadget AI
+  failure detection (P20), push notifications (P17), live streaming (P02)
+- **PrintNanny** — on-device offline AI failure detection (P20), historical
+  analytics (P23), multi-printer failed-job rerouting (P22)
+- **Fluidd** — object exclusion (new idea, see below), thermal history charts (new
+  idea, see below), multi-stream camera (P02), print job queue (P22), multi-printer
+  switching (P21), JWT/LDAP auth (P16 — LDAP specifically is enterprise-flavored and
+  probably not worth it for a personal app)
+- **Mainsail** — timelapse (P19), power-device control/relays (P15), macro
+  management (P06), configurable dashboard (P10), object exclusion (new idea, see
+  below), multi-printer (P21)
+- **Bambu Handy** — community model browsing/saving via MakerWorld (new idea, see
+  below), AMS slot auto-assignment for multi-color (not applicable — no AMS-equivalent
+  on our target printers), remote live view control (P02/P07)
+- **Prusa Connect** — team roles/access rights (P24), phone-initiated slicing (new
+  idea, see below), granular push notifications for finish/color-change
+  points (P17/P18), NFC printer pairing (new idea, see below), belt/resonance
+  tuner (new idea, see below), Printables integration (new idea, see below)
+
+**New ideas surfaced by this pass, not yet in the backlog as their own row:**
+1. Community model browsing/import (e.g. Printables) straight into a print
+2. Object exclusion mid-print — cancel one failed object without killing the job
+3. Solo phone-initiated slicing — lighter than P24's server/team slicing, a
+   single-user "slice on a paired machine, send from phone" flow
+4. Input-shaper/resonance calibration — the genuinely Klipper-native analog to
+   Prusa's belt tuner (ADXL345-based), arguably the most on-brand of the four
+
+These four are listed for visibility only; none has a backlog ID, target milestone,
+or effort estimate yet, pending an owner decision on whether/where to add them.
+
 ## Prioritized feature backlog
 
 Effort is a planning estimate for implementation plus normal validation/review, not

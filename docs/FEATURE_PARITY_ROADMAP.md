@@ -111,6 +111,21 @@ acceptance for all of it remains a separate, later owner decision.
     printer reachable outside the LAN. Verified with a new androidTest and a live
     on-device pass on the Razr 2023. Still open for M4a: OctoEverywhere-specific
     wiring if that path is chosen instead of self-hosted VPN/tunnel.
+    **Self-review fix pass, 2026-09-18** (device-independent: no printer or panel
+    UI touched, JVM-tested only): an 8-angle review of the whole M4a slice found
+    and fixed 7 issues, the two most notable being real correctness gaps —
+    editing a printer's API key didn't force a reconnect for either the
+    currently-connected printer or a background-monitored saved one, so a
+    corrected key silently kept failing until the app restarted; and
+    `parseAddress`'s Tailscale allowance missed Tailscale's own IPv6 range and
+    bare MagicDNS short hostnames, rejecting both over plain HTTP despite that
+    being exactly what the feature was for. Also closed a latent landmine
+    (`updateProfile`'s apiKey parameter defaulted to `""`, so an omitted 4th
+    argument would have silently erased a saved key) and a real data-loss edge
+    case in `PrinterPreferences` (a non-`ClassCastException` secrets-read
+    failure dropped an entire profile, not just its key, and the next save
+    permanently deleted the orphaned secret). 4 new regression tests plus 1
+    extended address test; all 212 JVM tests pass.
 12. M4b — background alerts, notification actions, home-screen widgets.
     **Alert-detection logic built 2026-09-18**: a pure `PrintAlerts.detect()`
     diffs one printer's previous vs. current `PrinterConnection` observation and

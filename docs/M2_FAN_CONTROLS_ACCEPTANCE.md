@@ -85,3 +85,33 @@ Owner confirmed Toolhead 1 mounted and remained beside the U1. Current active to
 The five-second observation plus UI off-review time produced approximately 22.3 seconds between first positive and first zero output samples. This was not a five-second total cutoff test. Two earlier preparation attempts failed before any confirmation because the dialog initially fitted on screen and had no scrollable node; their evidence is preserved. The helper now handles that layout and rejects unsuccessful UI dumps. No production app source changed.
 
 Evidence: artifacts/m2-fans/physical-toolhead1-final-live.jsonl, toolhead1-result.json, toolhead1-post-test-ui.txt. Final state was standby, heater targets0, standard fan0/RPM0, and homed_axes empty; do not reuse the preceding xyz homing state for motion tests.
+
+## Live acceptance — fan and cavity_fan, plus purifier-managed fan finding (2026-09-19)
+
+Owner-driven physical session against the Snapmaker U1, same session as the M2
+heater controls pass above. Owner sent `fan` (standard part-cooling) and
+`fan_generic cavity_fan` directly from the app's Fan controls panel; both
+confirmed responsive. Cross-checked against Moonraker: `fan` read `speed: 1.0`
+(part-cooling running at the requested 100%), `cavity_fan` read `speed: 0.0`
+after being tested and turned back off.
+
+Investigating whether the remaining `fan_generic` entries (`circulation_fan`,
+`e1_fan`, `e2_fan`, `e3_fan`, `exhaust_fan`) are meaningful manual controls
+found that two of them are not simple manual fans at all. Reading
+`purifier.py` on the printer directly: it wraps both `exhaust_fan` and
+`circulation_fan` (its `exhaust_fan_name`/`inner_fan_name`) in a
+`PurifierFanRouter` that replaces the fan object's own speed-setting method,
+redirecting any `SET_FAN_SPEED` call into the Purifier module's own automation
+(delay-off timers, work-time monitoring, periodic status checks, presence
+gating) instead of driving the PWM pin directly. A requested speed from the
+Fan controls panel therefore has no guarantee of holding for these two — the
+panel can't actually promise what it appears to promise.
+
+Added a persisted per-fan Hide/Unhide feature (mirroring the one already built
+for macros) and hid `exhaust_fan` and `circulation_fan` on this printer as a
+result. `cavity_fan` is a real standalone fan (though also auto-linked as
+`[fan]`'s `aux_cool_fan`) and stays visible. `e1_fan`/`e2_fan`/`e3_fan` are
+genuine per-extruder manual fans (paired with already-excluded automatic
+`heater_fan` siblings) and stay visible, but were not physically exercised
+this session — only `fan` and `cavity_fan` are confirmed today. Full M2 fan
+controls acceptance (all manual fans, all tools) remains open.

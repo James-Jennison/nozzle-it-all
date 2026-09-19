@@ -20,6 +20,11 @@ class M2Test {
         assertThrows(IllegalArgumentException::class.java) {MacroTools.definitions("A=0,2,1\nA=0,3,1")}
         assertThrows(IllegalArgumentException::class.java) {MacroTools.definitions("A=2,0,1")}
     }
+    @Test fun macroHiddenFlagRoundTripsAndDefaultsFalse() {
+        val hidden=MacroOptions(hidden=true)
+        assertEquals(mapOf("SENSORLESS_HOME_X" to hidden),MacroTools.decode(MacroTools.encode(mapOf("SENSORLESS_HOME_X" to hidden))))
+        assertEquals(false,MacroOptions().hidden)
+    }
     @Test fun previewTracksModesResetsUnitsAndLayers() {
         val text="G28\nG21\nG90\nM82\nG0 X0 Y0 Z0.2\nG1 X10 E1\nG92 E0\nM83\nG91\nG1 Y10 E1\nG90\nG92 X0\nG1 X5 E1\nG0 Z0.4\nG1 X10 E1\n"
         val p=GcodePreview.parse(ByteArrayInputStream(text.toByteArray()))

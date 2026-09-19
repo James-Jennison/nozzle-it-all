@@ -3,7 +3,7 @@ package net.jamesjennison.klippercompanion
 import org.json.JSONObject
 import java.math.BigDecimal
 
-data class MacroOptions(val favorite: Boolean=false, val group: String="", val parameters: String="")
+data class MacroOptions(val favorite: Boolean=false, val group: String="", val parameters: String="", val hidden: Boolean=false)
 data class MacroParameter(val name: String, val minimum: BigDecimal, val maximum: BigDecimal, val default: BigDecimal) {
     init {
         require(Regex("[A-Z][A-Z0-9_]{0,31}").matches(name)) { "Invalid parameter name." }
@@ -61,7 +61,7 @@ object MacroTools {
         return base.copy(arguments=mapOf("script" to (listOf(name)+arguments).joinToString(" ")),allowedStates=allowedStates,macroRequest=MacroRequest(name,definitions,values))
     }
     fun decode(raw: String): Map<String,MacroOptions> = runCatching {
-        val obj=JSONObject(raw);obj.keys().asSequence().take(500).associateWith { key -> val p=obj.getJSONObject(key);MacroOptions(p.optBoolean("favorite"),p.optString("group").take(40),p.optString("parameters").take(4000)) }
+        val obj=JSONObject(raw);obj.keys().asSequence().take(500).associateWith { key -> val p=obj.getJSONObject(key);MacroOptions(p.optBoolean("favorite"),p.optString("group").take(40),p.optString("parameters").take(4000),p.optBoolean("hidden")) }
     }.getOrDefault(emptyMap())
-    fun encode(values: Map<String,MacroOptions>)=JSONObject().apply { values.forEach { (k,v)->put(k,JSONObject().put("favorite",v.favorite).put("group",v.group).put("parameters",v.parameters)) } }.toString()
+    fun encode(values: Map<String,MacroOptions>)=JSONObject().apply { values.forEach { (k,v)->put(k,JSONObject().put("favorite",v.favorite).put("group",v.group).put("parameters",v.parameters).put("hidden",v.hidden)) } }.toString()
 }

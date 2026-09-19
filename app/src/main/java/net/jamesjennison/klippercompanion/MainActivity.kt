@@ -47,10 +47,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.util.Locale
 
-/** Paused while active development is monitoring-only; heater/fan panels are built and tested
- * but not physically re-accepted (see docs/M2_BED_RETEST_PROCEDURE.md). Flip back on when that
- * work resumes. */
-const val LIVE_HEATER_FAN_CONTROLS_ENABLED = false
+/** Physical acceptance in progress (owner decision, 2026-09-19): live category-by-category
+ * testing against the Snapmaker U1, owner watching throughout. See
+ * docs/FEATURE_PARITY_ROADMAP.md's Phase 1 section for what this gates. */
+const val LIVE_HEATER_FAN_CONTROLS_ENABLED = true
 
 class MainActivity : ComponentActivity() {
     private var sharedFile by mutableStateOf<Uri?>(null)
@@ -166,6 +166,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var preparingMacro by remember(state.generation) {mutableStateOf<String?>(null)}
     var runningMacro by remember(state.generation) {mutableStateOf<PrinterCommand?>(null)}
     var macroFilter by remember(state.address) {mutableStateOf("")}
+    var showHiddenMacros by remember(state.address) {mutableStateOf(false)}
     val hostView=LocalView.current
     var cameraVisible by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -360,19 +361,24 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     item {
                         Text("Organize and prepare macros locally. Execution requires an idle printer and confirmation.")
                         OutlinedTextField(macroFilter,{macroFilter=it},label={Text("Search macros or groups")},modifier=Modifier.fillMaxWidth())
-                        TextButton(refresh) {Text("Refresh lists")}
+                        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            FilterChip(showHiddenMacros,{showHiddenMacros=!showHiddenMacros},label={Text("Show hidden")},modifier=Modifier.testTag("show-hidden-macros"))
+                            TextButton(refresh) {Text("Refresh lists")}
+                        }
                     }
                     if(state.catalog.macros.isEmpty()) item {Text("No available macros. Connect to a ready printer, then refresh.")}
-                    val macros=state.catalog.macros.filter {it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
+                    val macros=state.catalog.macros.filter {(it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true))&&(showHiddenMacros||macroOptions[it]?.hidden!=true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
                     items(macros,key={it}) {macro ->
                         val options=macroOptions[macro]?:MacroOptions()
                         Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(12.dp)) {
                             Text(macro,style=MaterialTheme.typography.titleMedium)
                             if(options.group.isNotBlank())Text(options.group)
+                            if(options.hidden)Text("Hidden from the default list",style=MaterialTheme.typography.bodySmall)
                             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                 TextButton({saveMacro(macro,options.copy(favorite=!options.favorite))}){Text(if(options.favorite)"Unfavorite" else "Favorite")}
                                 TextButton({editingMacro=macro}){Text("Organize")}
-                                if(LIVE_HEATER_FAN_CONTROLS_ENABLED) OutlinedButton({preparingMacro=macro}){Text("Run")}
+                                TextButton({saveMacro(macro,options.copy(hidden=!options.hidden))},modifier=Modifier.testTag("hide-macro-$macro")){Text(if(options.hidden)"Unhide" else "Hide")}
+                                if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !options.hidden) OutlinedButton({preparingMacro=macro}){Text("Run")}
                             }
                         }}
                     }

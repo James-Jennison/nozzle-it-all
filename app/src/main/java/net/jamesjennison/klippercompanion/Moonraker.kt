@@ -45,10 +45,11 @@ interface PrinterService {
     fun macroStatus(name: String): MacroStatus = throw ApiFailure("Macro status unavailable.")
     fun leds(): List<String> = emptyList()
     fun ledStatus(led: String): LedStatus = throw ApiFailure("Light status unavailable.")
+    fun timelapses(): List<FileInfo> = throw ApiFailure("Timelapse unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String, apiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader {
+class Moonraker(address: String, apiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val apiKey = apiKey.trim()
@@ -144,6 +145,10 @@ class Moonraker(address: String, apiKey: String = "") : PrinterService, ConsoleR
         val result = request("printer/objects/query", mapOf("webhooks" to "state", "led $led" to "color_data")) as? JSONObject
             ?: throw ApiFailure("Light status unavailable.")
         return LedControls.parse(led, result)
+    }
+    override fun timelapses(): List<FileInfo> {
+        val list = request("server/files/list", mapOf("root" to "timelapse")) as? JSONArray ?: throw ApiFailure("Timelapse unavailable.")
+        return Timelapses.parse(list)
     }
     override fun macroStatus(name: String): MacroStatus {
         require(Regex("[A-Za-z_][A-Za-z0-9_]*").matches(name)) { "Unsupported macro name" }

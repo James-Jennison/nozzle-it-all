@@ -132,7 +132,24 @@ acceptance for all of it remains a separate, later owner decision.
     and the locked-screen/background/Doze/reboot/duplicate-event verification
     from this document's M4 exit criteria — all of which need a real device,
     not JVM tests.
-13. M4c — timelapse browsing, then optional capture
+13. M4c — timelapse browsing, then optional capture. **Read-only browsing built
+    2026-09-18**: spec-verified against the actual `moonraker-timelapse`
+    component source (the Mainsail/Fluidd-compatible one referenced elsewhere in
+    this doc) before writing anything — it registers finished videos under a
+    Moonraker file root literally named `"timelapse"`, so listing them reuses
+    the exact same `server/files/list` endpoint already used for gcodes, not a
+    new/guessed API shape. `TimelapseReader.timelapses()` filters to known video
+    extensions (mp4/mov/webm/mkv), dedupes, and sorts newest-first; a
+    `TimelapsePanel` (matching the read-only style of `BedMeshPanel`) shows
+    filename/size/date and reads "no timelapse videos found... requires the
+    moonraker-timelapse component" when the root doesn't exist rather than a raw
+    error. Covered by JVM tests (parsing/sorting/dedup, request shape, missing-
+    component handling) and a new `TimelapsePanelDeviceTest`; the panel itself
+    is compiled and logic-tested but **not yet visually verified on a real
+    device** — done without device access, unlike everything else in this
+    document's evidence trail. Capture/export (the "then optional capture" half)
+    is still fully unbuilt: no render trigger, no video download/playback, no
+    storage/retention budget decided yet.
 
 **Phase 3 — further out, no fixed start date:**
 14. M5 — optional AI monitoring (architecture decision needed first: rented-server

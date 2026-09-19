@@ -104,7 +104,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     consoleFactory:(String)->ConsoleReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, meshFactory:(String)->MeshReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
     toolheadsFactory:(String)->ToolheadReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, fanStatusFactory:(String)->FanReadoutReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
     configFactory:(String)->ConfigFileReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, configWriterFactory:(String)->ConfigWriter={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
-    speedFlowFactory:(String)->SpeedFlowReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
+    speedFlowFactory:(String)->SpeedFlowReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
+    timelapseFactory:(String)->TimelapseReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
         ready=state.snapshot?.ready==true,execute=if(LIVE_HEATER_FAN_CONTROLS_ENABLED) execute else null,generation=state.generation)
@@ -127,6 +128,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(ledOpen) LedPanel(state,execute,{ledOpen=false})
     var speedFlowOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(speedFlowOpen) SpeedFlowPanel(state,execute,{speedFlowOpen=false},speedFlowFactory)
+    var timelapseOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(timelapseOpen) TimelapsePanel(state.address,state.connected,{timelapseOpen=false},timelapseFactory)
     var controlPreview by rememberSaveable { mutableStateOf(false) }
     if(controlPreview) ControlPreviewPanel { controlPreview=false }
     var customize by rememberSaveable { mutableStateOf(false) }
@@ -328,6 +331,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }
                     item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
                     item { OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")} }
+                    item { OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")} }
                     item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text(if(LIVE_HEATER_FAN_CONTROLS_ENABLED) "Console" else "Read-only console")} }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
                     item {

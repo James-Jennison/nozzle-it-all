@@ -49,13 +49,13 @@ interface PrinterService {
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String, apiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader {
+class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
-    private val apiKey = apiKey.trim()
+    private val apiKey = rawApiKey.trim()
     private val client = OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS)
         .callTimeout(7, TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
-        .apply { if (this@Moonraker.apiKey.isNotEmpty()) addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("X-Api-Key", this@Moonraker.apiKey).build()) } }
+        .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().apply { if (apiKey.isNotEmpty()) header("X-Api-Key", apiKey) }.build()) }
         .build()
 
     companion object {
@@ -65,9 +65,15 @@ class Moonraker(address: String, apiKey: String = "") : PrinterService, ConsoleR
             val url = address.trim().toHttpUrlOrNull() ?: throw IllegalArgumentException("Enter an http:// or https:// printer address.")
             if(url.scheme == "http") {
                 val parts = url.host.split('.').mapNotNull { it.toIntOrNull() }
-                // 100.64.0.0/10 is the CGNAT range Tailscale assigns tailnet addresses from.
+                // 100.64.0.0/10 is the CGNAT range Tailscale assigns tailnet IPv4 addresses from.
                 val privateV4 = url.host.split('.').size == 4 && parts.size == 4 && parts.all { it in 0..255 } && (parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && parts[1] in 16..31) || (parts[0] == 100 && parts[1] in 64..127))
-                require(privateV4 || url.host == "localhost" || url.host == "::1" || url.host.endsWith(".local") || url.host.endsWith(".ts.net")) { "HTTP requires a local IPv4 address, a Tailscale address (100.64-127.x.x or *.ts.net), localhost or .local name. Use HTTPS for other addresses." }
+                // fd7a:115c:a1e0::/48 is Tailscale's own IPv6 ULA range for tailnet addresses.
+                val tailscaleV6 = url.host.startsWith("fd7a:115c:a1e0:", ignoreCase = true)
+                // A bare single-label host (no dot, not an IPv6 literal) can't be a publicly routable
+                // DNS name at all - it only resolves via a local search domain, mDNS or a VPN's own
+                // private DNS (e.g. Tailscale MagicDNS short names), so it's as trustworthy as .local.
+                val bareHostname = url.host.isNotEmpty() && '.' !in url.host && ':' !in url.host
+                require(privateV4 || tailscaleV6 || bareHostname || url.host == "localhost" || url.host == "::1" || url.host.endsWith(".local") || url.host.endsWith(".ts.net")) { "HTTP requires a local IPv4/IPv6 address, a Tailscale address (100.64-127.x.x, fd7a:115c:a1e0::/48 or *.ts.net), a bare local hostname, localhost or .local name. Use HTTPS for other addresses." }
             }
             require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null) { "Use a base address without credentials, query or fragment." }
             return url.newBuilder().encodedPath(url.encodedPath.trimEnd('/') + "/").build()

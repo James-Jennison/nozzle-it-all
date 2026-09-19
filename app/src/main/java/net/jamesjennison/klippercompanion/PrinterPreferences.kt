@@ -14,7 +14,10 @@ object PrinterPreferences {
         (0 until list.length()).mapNotNull { i -> runCatching {
             val p = list.getJSONObject(i)
             val address = Moonraker.parseAddress(p.getString("address")).toString()
-            val apiKey = try { secrets.getString(address, "") ?: "" } catch (_: ClassCastException) { "" }
+            // Broad catch is deliberate: a Keystore-key-invalidation failure (biometric/lock-screen
+            // change, restore to a new device) must degrade to "no key" here, not propagate out to
+            // the outer runCatching and silently drop this whole profile (address/name/favorite too).
+            val apiKey = try { secrets.getString(address, "") ?: "" } catch (_: Exception) { "" }
             PrinterProfile(address, p.optString("name").take(80), p.optBoolean("favorite"), p.optString("cameraId"), apiKey)
         }.getOrNull() }.distinctBy { it.address }
     } catch (_: Exception) { emptyList() }

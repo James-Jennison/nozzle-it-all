@@ -11,6 +11,7 @@ class AutoConnectTest {
     private val dispatcher = StandardTestDispatcher()
     private val store = ViewModelStore()
     private val reads = mutableMapOf<String, Int>()
+    private val constructions = mutableMapOf<String, Int>()
     private val unavailable = mutableSetOf<String>()
     private var sends = 0
     private val first = "http://first.local/"
@@ -20,7 +21,7 @@ class AutoConnectTest {
     @After fun cleanup() { store.clear(); Dispatchers.resetMain() }
     private fun model(selected: String = first, known: List<String> = listOf(first, second)): PrinterModel {
         val model = PrinterModel(initialAddress=selected, initialPrinters=known, io=dispatcher,
-            clock={100_000}, serviceFactory={ address -> object : PrinterService {
+            clock={100_000}, serviceFactory={ address -> constructions[address] = (constructions[address] ?: 0) + 1; object : PrinterService {
                 override val address = address
                 override fun snapshot(): PrinterSnapshot {
                     reads[address] = (reads[address] ?: 0) + 1
@@ -118,7 +119,7 @@ class AutoConnectTest {
         assertFalse(model.state.value.printerConnections.getValue(second).connected)
         unavailable.clear(); advanceTimeBy(2_000); runCurrent()
         assertTrue(model.state.value.printerConnections.getValue(second).connected)
-        model.updateProfile(second, third, "Replacement")
+        model.updateProfile(second, third, "Replacement", "")
         val oldReads = reads[second]
         advanceTimeBy(4_000); runCurrent()
         assertEquals(oldReads, reads[second])
@@ -128,12 +129,26 @@ class AutoConnectTest {
         store.clear()
     }
 
+    @Test fun unselectedPrinterApiKeyEditRebuildsItsBackgroundSession() = runTest(dispatcher) {
+        val model = model()
+        model.foreground(true); runCurrent()
+        assertTrue(model.state.value.connected)
+        val before = constructions[second] ?: 0
+        model.updateProfile(second, second, "", "new-key")
+        runCurrent()
+        // Same address, so nothing in reconcile()'s own diff would rebuild the cached session on
+        // its own - updateProfile has to explicitly evict it so the corrected key takes effect.
+        assertTrue((constructions[second] ?: 0) > before)
+        assertEquals(first, model.state.value.address)
+        assertTrue(model.state.value.connected)
+        store.clear()
+    }
     @Test fun selectedAddressEditKeepsNewTargetMonitoredButInvalidatesOldControlSession() = runTest(dispatcher) {
         val model = model()
         model.foreground(true); runCurrent()
         val generation = model.state.value.generation
         assertTrue(model.state.value.connected)
-        model.updateProfile(first, third, "New endpoint")
+        model.updateProfile(first, third, "New endpoint", "")
         val previousReads = reads[first]
         runCurrent()
         assertEquals(third, model.state.value.address)

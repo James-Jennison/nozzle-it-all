@@ -101,11 +101,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String)->String? = {_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
-    consoleFactory:(String)->ConsoleReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, meshFactory:(String)->MeshReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
-    toolheadsFactory:(String)->ToolheadReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, fanStatusFactory:(String)->FanReadoutReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
-    configFactory:(String)->ConfigFileReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, configWriterFactory:(String)->ConfigWriter={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
-    speedFlowFactory:(String)->SpeedFlowReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) },
-    timelapseFactory:(String)->TimelapseReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
+    consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
+    toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
+    configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
+    speedFlowFactory:(String)->SpeedFlowReader={ a -> state.moonrakerFor(a) },
+    timelapseFactory:(String)->TimelapseReader={ a -> state.moonrakerFor(a) }, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
         ready=state.snapshot?.ready==true,execute=if(LIVE_HEATER_FAN_CONTROLS_ENABLED) execute else null,generation=state.generation)

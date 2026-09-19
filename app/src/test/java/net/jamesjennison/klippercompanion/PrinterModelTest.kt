@@ -24,7 +24,8 @@ class PrinterModelTest {
         override fun catalog() = Catalog(emptyList(),emptyList(),cameras,emptyList())
         override fun image(camera: Camera) = byteArrayOf()
         override fun command(command: PrinterCommand) { sent++; afterSend?.invoke() }
-        override fun close() {}
+        var closed = false
+        override fun close() { closed = true }
     }
     private val pause = PrinterCommand("Pause", "printer/print/pause", allowedStates=setOf("printing"))
     @Test fun savedProfilesMigrateNormalizeAndRejectInvalidAddresses() {
@@ -173,15 +174,25 @@ class PrinterModelTest {
         val first="http://first.local/";val second="http://second.local/"
         var saved=emptyList<PrinterProfile>();var selected=""
         val model=PrinterModel(initialAddress=first,initialPrinters=listOf(first,second),saveProfiles={address,profiles->selected=address;saved=profiles})
-        model.updateProfile(first,first,"Workshop");model.favoriteProfile(first);model.moveProfile(first,1)
+        model.updateProfile(first,first,"Workshop","");model.favoriteProfile(first);model.moveProfile(first,1)
         assertEquals(listOf(second,first),model.state.value.savedPrinters)
         assertEquals("Workshop",saved.last().name);assertTrue(saved.last().favorite)
         val restored=PrinterModel(initialAddress=selected,initialProfiles=saved)
         assertEquals(saved,restored.state.value.profiles)
-        restored.updateProfile(first,second,"Duplicate")
+        restored.updateProfile(first,second,"Duplicate","")
         assertEquals(saved,restored.state.value.profiles)
-        restored.updateProfile(first,"http://third.local/","New printer")
+        restored.updateProfile(first,"http://third.local/","New printer","")
         assertEquals("http://third.local/",restored.state.value.address);assertFalse(restored.state.value.connected)
+    }
+    @Test fun editingConnectedPrinterApiKeyDisconnectsInsteadOfKeepingTheStaleSession() = runTest(dispatcher) {
+        val fake=Fake();val model=PrinterModel(initialProfiles=listOf(PrinterProfile(fake.address)),serviceFactory={fake},clock={100_000},io=dispatcher)
+        model.foreground(true);model.connect(fake.address);runCurrent()
+        assertTrue(model.state.value.connected)
+        model.updateProfile(fake.address,fake.address,"","new-key")
+        assertFalse(model.state.value.connected)
+        assertTrue(fake.closed)
+        assertEquals("new-key",model.state.value.profiles.single().apiKey)
+        model.foreground(false)
     }
 
     @Test fun failedHistoryPageClearsPreviousPageSizeAndRefreshRecovers() = runTest(dispatcher) {

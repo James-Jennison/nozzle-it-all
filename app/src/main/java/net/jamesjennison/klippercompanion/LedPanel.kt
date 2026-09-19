@@ -14,7 +14,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 
 @Composable fun LedPanel(state: ScreenState, execute: (PrinterCommand, Int) -> Unit, close: () -> Unit,
-    factory: (String) -> LedReader = { a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }, clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
+    factory: (String) -> LedReader = { a -> state.moonrakerFor(a) }, clock: () -> Long = { System.nanoTime() / 1_000_000 }) {
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val reader = remember(state.address, state.generation) { factory(state.address) }

@@ -105,6 +105,11 @@ class MoonrakerTest {
         assertEquals("printer.tailnet-name.ts.net", Moonraker.parseAddress("http://printer.tailnet-name.ts.net").host)
         try { Moonraker.parseAddress("http://100.200.1.2"); fail("100.200.x.x is outside the Tailscale CGNAT range") } catch(_: IllegalArgumentException) {}
     }
+    @Test fun acceptsTailscaleIpv6AndBareHostnamesOverHttp() {
+        assertEquals("fd7a:115c:a1e0::1", Moonraker.parseAddress("http://[fd7a:115c:a1e0::1]/").host)
+        assertEquals("my-printer", Moonraker.parseAddress("http://my-printer/").host)
+        try { Moonraker.parseAddress("http://[2001:4860:4860::8888]/"); fail("A public IPv6 address must still require HTTPS") } catch(_: IllegalArgumentException) {}
+    }
     @Test fun clientRemainsUsableAfterBackgroundCleanup() {
         MockWebServer().use { server ->
             repeat(2) {

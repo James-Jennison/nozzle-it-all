@@ -22,6 +22,10 @@ data class ScreenState(
     val historyLoading: Boolean = false, val historyNote: String = ""
 
 )
+// Every read-only panel/tile builds its own short-lived Moonraker client rather than sharing the
+// main connection's; this is the one place that decides which API key it gets, so a newly added
+// call site can't compile while silently constructing an unauthenticated client.
+fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, profiles.find { it.address == address }?.apiKey.orEmpty())
 class PrinterModel(
     initialAddress: String = "",
     private val saveSettings: (String, List<String>) -> Unit = { _, _ -> },
@@ -52,14 +56,20 @@ class PrinterModel(
     private fun persist(address: String = _state.value.address, profiles: List<PrinterProfile> = _state.value.profiles) {
         saveSettings(address, profiles.map { it.address }); saveProfiles(address, profiles)
     }
-    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String = ""): String? {
+    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String): String? {
         if(_state.value.busy) return "Wait for the current command to finish."
         val normalized = try { Moonraker.parseAddress(address).toString() } catch(_: IllegalArgumentException) { _state.value=_state.value.copy(commandNotice="Enter a valid local printer address.");return "Enter a valid local printer address." }
         val current = _state.value
         if(normalized != oldAddress && current.profiles.any { it.address == normalized }) { _state.value=current.copy(commandNotice="That printer address is already saved.");return "That printer address is already saved." }
-        if(current.profiles.none { it.address == oldAddress }) return "This profile is no longer available."
-        if(oldAddress == current.address && oldAddress != normalized) disconnect()
-        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=apiKey.trim().take(200)) else it }
+        val existing = current.profiles.find { it.address == oldAddress } ?: return "This profile is no longer available."
+        val normalizedKey = apiKey.trim().take(200)
+        val keyChanged = existing.apiKey != normalizedKey
+        // An address change already makes reconcile() tear down and recreate the saved-printer
+        // session under its new key; only a same-address key edit needs an explicit nudge here —
+        // for the connected printer via disconnect(), for a background one via savedMonitor.remove().
+        if(oldAddress == current.address) { if(oldAddress != normalized || keyChanged) disconnect() }
+        else if(normalized == oldAddress && keyChanged) savedMonitor.remove(oldAddress)
+        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey) else it }
         val selected = if(current.address == oldAddress) normalized else _state.value.address
         _state.value = _state.value.copy(address=selected,profiles=profiles,savedPrinters=profiles.map { it.address })
         persist()

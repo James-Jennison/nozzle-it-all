@@ -14,7 +14,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 
 @Composable fun HeaterPanel(state:ScreenState,execute:(PrinterCommand,Int)->Unit,close:()->Unit,
-    factory:(String)->HeaterReader={ a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }) {
+    factory:(String)->HeaterReader={ a -> state.moonrakerFor(a) }) {
     val scope=rememberCoroutineScope()
     val lifecycle=LocalLifecycleOwner.current.lifecycle
     val reader=remember(state.address,state.generation){factory(state.address)}

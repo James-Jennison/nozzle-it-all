@@ -14,7 +14,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 
 @Composable fun MacroReviewPanel(command: PrinterCommand, state: ScreenState, execute: (PrinterCommand, Int) -> Unit, close: () -> Unit,
-    factory: (String) -> MacroReader = { a -> Moonraker(a, state.profiles.find{it.address==a}?.apiKey.orEmpty()) }) {
+    factory: (String) -> MacroReader = { a -> state.moonrakerFor(a) }) {
     val request = command.macroRequest ?: return
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle

@@ -39,10 +39,10 @@ class FileWorkspace(private val context: Context,private val scope: CoroutineSco
             finally {if(localFile!=target)WorkspaceCache.release(target);if(ticket==serial)loading=false}
         }
     }
-    fun download(address:String,path:String) {
+    fun download(address:String,path:String,apiKey:String="") {
         runCatching {FileTransfer.validate(path)}.onFailure {note=it.message?:"Invalid path";return}
         load(path) { target ->
-            val current=currentCoroutineContext();val api=FileTransfer(address);transfer=api
+            val current=currentCoroutineContext();val api=FileTransfer(address,apiKey);transfer=api
             try {api.download(path,target){!current.isActive}} finally {api.close();if(transfer===api)transfer=null}
         }
     }

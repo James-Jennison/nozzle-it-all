@@ -11,10 +11,13 @@ import java.io.InterruptedIOException
 import java.util.concurrent.TimeUnit
 
 /** Read-only production file transport. Mutation prototypes live only in the JVM test source set. */
-class FileTransfer(address: String): AutoCloseable {
+class FileTransfer(address: String, rawApiKey: String = ""): AutoCloseable {
     private val base=Moonraker.parseAddress(address)
+    private val apiKey=rawApiKey.trim()
     private val client=OkHttpClient.Builder().connectTimeout(5,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS).callTimeout(120,TimeUnit.SECONDS)
-        .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build()
+        .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
+        .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().apply { if (apiKey.isNotEmpty()) header("X-Api-Key", apiKey) }.build()) }
+        .build()
     companion object {
         fun validate(path: String): String {
             require(path.length in 1..1024 && !path.startsWith('/') && !path.contains('\\') && path.none { it.code<32 || it.code==127 }) { "Invalid file path." }

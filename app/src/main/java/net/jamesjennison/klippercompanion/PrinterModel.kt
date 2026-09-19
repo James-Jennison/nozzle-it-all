@@ -22,10 +22,11 @@ data class ScreenState(
     val historyLoading: Boolean = false, val historyNote: String = ""
 
 )
-// Every read-only panel/tile builds its own short-lived Moonraker client rather than sharing the
-// main connection's; this is the one place that decides which API key it gets, so a newly added
-// call site can't compile while silently constructing an unauthenticated client.
-fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, profiles.find { it.address == address }?.apiKey.orEmpty())
+// Every read-only panel/tile builds its own short-lived Moonraker client (or file-transfer
+// helper) rather than sharing the main connection's; this is the one place that decides which
+// API key it gets, so a newly added call site can't compile while silently going unauthenticated.
+fun ScreenState.apiKeyFor(address: String): String = profiles.find { it.address == address }?.apiKey.orEmpty()
+fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
 class PrinterModel(
     initialAddress: String = "",
     private val saveSettings: (String, List<String>) -> Unit = { _, _ -> },

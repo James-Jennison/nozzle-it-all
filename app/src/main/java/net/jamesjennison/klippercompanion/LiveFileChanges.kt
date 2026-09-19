@@ -20,13 +20,16 @@ interface LiveFileBackend:AutoCloseable {
 
 /** Single-use, unique-destination operations. No server-side no-replace guarantee is implied. */
 class LiveFileChanges(address:String, private val cache:File,
-    private val now:()->Long={System.nanoTime()/1_000_000}):LiveFileBackend {
+    private val now:()->Long={System.nanoTime()/1_000_000}, rawApiKey:String=""):LiveFileBackend {
     enum class Operation { UPLOAD, RENAME, DELETE }
     data class Draft(val id:String,val operation:Operation,val source:String,val destination:String,val bytes:Long,val sha256:String)
     private data class Pending(val draft:Draft,val local:File?,val prepared:Long,val epoch:Long)
     private val base=Moonraker.parseAddress(address)
+    private val apiKey=rawApiKey.trim()
     private val client=OkHttpClient.Builder().retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
-        .connectTimeout(5,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS).callTimeout(120,TimeUnit.SECONDS).build()
+        .connectTimeout(5,TimeUnit.SECONDS).readTimeout(15,TimeUnit.SECONDS).callTimeout(120,TimeUnit.SECONDS)
+        .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().apply { if (apiKey.isNotEmpty()) header("X-Api-Key", apiKey) }.build()) }
+        .build()
     private var pending:Pending?=null
     private var epoch=0L
     private var closed=false

@@ -395,7 +395,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Text(file,style=MaterialTheme.typography.titleSmall)
                                 state.catalog.fileInfo.firstOrNull { it.path==file }?.size?.let { Text("${it/1024} KiB",style=MaterialTheme.typography.bodySmall) }
                                 FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton({workspace.download(state.address,file);uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected&&!workspace.loading){Text("Download / preview")}
+                                    OutlinedButton({workspace.download(state.address,file,state.apiKeyFor(state.address));uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected&&!workspace.loading){Text("Download / preview")}
                                     OutlinedButton({selectFile(file);uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected,modifier=Modifier.testTag("details:$file")){Text("Details")}
                                     OutlinedButton({pending=Moonraker.start(file) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error")){Text("Start print")}
                                 }

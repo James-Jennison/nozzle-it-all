@@ -15,7 +15,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.*
 import java.io.File
 
-@Composable fun LiveFilePanel(state:ScreenState,workspace:FileWorkspace,refresh:()->Unit,close:()->Unit,factory:(String,File)->LiveFileBackend={a,f->LiveFileChanges(a,f)}) {
+@Composable fun LiveFilePanel(state:ScreenState,workspace:FileWorkspace,refresh:()->Unit,close:()->Unit,factory:(String,File)->LiveFileBackend={a,f->LiveFileChanges(a,f,rawApiKey=state.apiKeyFor(a))}) {
     val context=LocalContext.current
     val api=remember(state.address,state.generation){factory(state.address,File(context.cacheDir,"live-file-changes"))}
     val scope=rememberCoroutineScope();val lifecycle=LocalLifecycleOwner.current.lifecycle

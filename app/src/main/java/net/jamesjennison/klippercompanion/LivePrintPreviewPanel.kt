@@ -23,7 +23,7 @@ import kotlinx.coroutines.*
     var note by remember{mutableStateOf("Reading active file…")}
     var retry by remember{mutableIntStateOf(0)}
     var observed by remember{mutableLongStateOf(0)}
-    val api=remember(state.address,foreground,state.connected){LivePrintPreview(state.address)}
+    val api=remember(state.address,foreground,state.connected){LivePrintPreview(state.address,state.apiKeyFor(state.address))}
     DisposableEffect(api,lifecycle){
         val observer=LifecycleEventObserver{_,_->
             foreground=lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)

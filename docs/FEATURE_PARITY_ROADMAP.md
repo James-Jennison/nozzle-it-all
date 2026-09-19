@@ -126,6 +126,16 @@ acceptance for all of it remains a separate, later owner decision.
     failure dropped an entire profile, not just its key, and the next save
     permanently deleted the orphaned secret). 4 new regression tests plus 1
     extended address test; all 212 JVM tests pass.
+    **Auth propagated to file transfer, 2026-09-18**: while checking the
+    self-review fixes, found that `FileTransfer` (P08 download/import),
+    `LiveFileChanges` (P08 live upload/rename/delete) and `LivePrintPreview`
+    (P09 live tracking) each build their own `OkHttpClient` independently of
+    `Moonraker.kt` and none of them ever sent `X-Api-Key` — meaning the
+    already-shipped, "Validated" P08/P09 features would have silently stopped
+    working the moment an owner set an API key on a profile. All three now
+    take an `apiKey` and add the same interceptor pattern as `Moonraker`;
+    `ScreenState.apiKeyFor()`/`moonrakerFor()` (added during the review fixes)
+    cover the call sites. 3 new header-sent tests; all 215 JVM tests pass.
 12. M4b — background alerts, notification actions, home-screen widgets.
     **Alert-detection logic built 2026-09-18**: a pure `PrintAlerts.detect()`
     diffs one printer's previous vs. current `PrinterConnection` observation and

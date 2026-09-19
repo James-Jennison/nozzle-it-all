@@ -66,4 +66,18 @@ class LivePrintPreviewTest {
             assertTrue(methods.all{it=="GET"})
         }}finally{server.shutdown();dir.deleteRecursively()}
     }
+    @Test fun sendsApiKeyHeaderOnStatusReads(){
+        val server=MockWebServer();val size=code.toByteArray().size.toLong()
+        server.dispatcher=object:Dispatcher(){override fun dispatch(r:RecordedRequest):MockResponse{
+            val result=when(r.requestUrl!!.encodedPath){
+                "/printer/objects/query"->JSONObject().put("status",status(size=size,position=0))
+                "/server/files/metadata"->meta(size=size)
+                else->return MockResponse().setResponseCode(404)
+            }
+            return MockResponse().setBody(JSONObject().put("result",result).toString())
+        }};server.start()
+        try{LivePrintPreview(server.url("/").toString(),"secret-key").use{api->
+            api.progress();assertEquals("secret-key",server.takeRequest().getHeader("X-Api-Key"))
+        }}finally{server.shutdown()}
+    }
 }

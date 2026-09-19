@@ -47,7 +47,7 @@ class LiveFileChangesTest {
             }}
             server.start()
         }
-        fun api(clock:()->Long={System.nanoTime()/1_000_000})=LiveFileChanges(server.url("/").toString(),dir,clock)
+        fun api(apiKey:String="",clock:()->Long={System.nanoTime()/1_000_000})=LiveFileChanges(server.url("/").toString(),dir,clock,apiKey)
         override fun close(){server.shutdown();dir.deleteRecursively()}
     }
     private fun rejected(block:()->Unit){try{block();fail("Expected rejection")}catch(_:IllegalArgumentException){}catch(_:IllegalStateException){}}
@@ -145,6 +145,9 @@ class LiveFileChangesTest {
     @Test fun emptyGcodeCanBeDeletedAndUnsafePathsCannot(){Fixture().use{f->f.api().use{api->
         f.files["empty.gcode"]="";val d=api.prepare(LiveFileChanges.Operation.DELETE,"empty.gcode","",null);assertEquals(0L,d.bytes);api.confirm(d.id)
         rejected{api.prepare(LiveFileChanges.Operation.DELETE,"../config/printer.cfg","",null)};assertEquals(1,f.writes)
+    }}}
+    @Test fun sendsApiKeyHeaderWhenConfigured(){Fixture().use{f->f.api(apiKey="secret-key").use{api->
+        api.files();assertEquals("secret-key",f.server.takeRequest().getHeader("X-Api-Key"))
     }}}
 
 }

@@ -78,6 +78,15 @@ class M2Test {
             }finally{dir.deleteRecursively()}
         }}
     }
+    @Test fun downloadSendsApiKeyHeaderWhenConfigured() {
+        MockWebServer().use {server->server.start();FileTransfer(server.url("/").toString(),"secret-key").use {api->
+            val dir=Files.createTempDirectory("m2-key").toFile();val target=java.io.File(dir,"part.gcode")
+            try {
+                server.enqueue(MockResponse().setBody("G0 X0\n"));api.download("a.gcode",target)
+                assertEquals("secret-key",server.takeRequest().getHeader("X-Api-Key"))
+            }finally{dir.deleteRecursively()}
+        }}
+    }
     @Test fun cancelledCopiesRemovePartialAndPreserveExistingDestinations() {
         val dir=Files.createTempDirectory("m2copy").toFile();val dest=java.io.File(dir,"file")
         try {

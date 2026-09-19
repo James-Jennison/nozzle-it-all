@@ -19,11 +19,14 @@ fun Toolpath.segmentAt(position:Long):ToolpathSegment? {
 
 /** GET-only active-file reader. Filename, size and modification time are a metadata identity,
  * not a server content hash. A same-size replacement preserving mtime cannot be detected. */
-class LivePrintPreview(address:String):AutoCloseable {
+class LivePrintPreview(address:String, rawApiKey:String=""):AutoCloseable {
     private val base=Moonraker.parseAddress(address)
-    private val transfer=FileTransfer(address)
+    private val apiKey=rawApiKey.trim()
+    private val transfer=FileTransfer(address,apiKey)
     private val client=OkHttpClient.Builder().connectTimeout(5,TimeUnit.SECONDS).readTimeout(7,TimeUnit.SECONDS)
-        .callTimeout(10,TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build()
+        .callTimeout(10,TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
+        .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().apply { if (apiKey.isNotEmpty()) header("X-Api-Key", apiKey) }.build()) }
+        .build()
     private fun get(path:String,query:Map<String,String> = emptyMap()):JSONObject {
         val url=base.newBuilder().addPathSegments(path).apply{query.forEach{(k,v)->addQueryParameter(k,v)}}.build()
         return client.newCall(Request.Builder().url(url).get().build()).execute().use{r->

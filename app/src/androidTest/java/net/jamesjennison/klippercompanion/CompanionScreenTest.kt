@@ -114,6 +114,15 @@ class CompanionScreenTest {
         compose.onNodeWithText("API key (optional)").performTextReplacement("new-key")
         compose.onNodeWithText("Save").performClick();assertEquals("new-key",savedKey)
     }
+    @Test fun backgroundAlertsToggleDispatchesRequestedState() {
+        var requested: Boolean? = null
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(),{},{},{},{_,_->},
+            backgroundAlertsEnabled=false, setBackgroundAlertsEnabled={requested=it},tileCamera={}) } }
+        compose.openFixtureDashboard()
+        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("background-alerts-toggle").performScrollTo().performClick()
+        assertEquals(true, requested)
+    }
     @Test fun structuredProfilesSurvivePreferenceReload() {
         val context=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
         val prefs=context.getSharedPreferences("m1-test-${java.util.UUID.randomUUID()}",0)

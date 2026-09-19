@@ -157,6 +157,41 @@ acceptance for all of it remains a separate, later owner decision.
     and the locked-screen/background/Doze/reboot/duplicate-event verification
     from this document's M4 exit criteria — all of which need a real device,
     not JVM tests.
+    **Delivery built 2026-09-19, owner decision: alerts must be near-instant**,
+    which rules out `WorkManager` (~15 min floor). `PrintMonitorService` is an
+    opt-in foreground service (off by default; toggled from a new "Background
+    print alerts" control in the Printers tab, gated behind the
+    `POST_NOTIFICATIONS` runtime permission request on Android 13+) that polls
+    every saved printer every 20s and turns `PrintAlerts.detect()` output into
+    notifications on a dedicated `print_alerts` channel, plus a persistent
+    `IMPORTANCE_MIN` "Monitoring your printers" status notification (required
+    by Android for any foreground service) on its own `print_monitor_status`
+    channel so it never makes noise. Declared `foregroundServiceType="specialUse"`
+    rather than `dataSync`, specifically because `dataSync`/`mediaProcessing`
+    foreground services are capped at 6 hours of execution in a rolling 24h
+    window on this project's targetSdk (36/Android 15+) — a real problem since
+    prints commonly run longer than that; `connectedDevice` has no such cap but
+    wants Bluetooth/NFC/USB-flavored permissions that don't reflect what this
+    app does, and `specialUse`'s Play-Console justification-review requirement
+    doesn't apply since this is a sideloaded, non-Play-Store app.
+    **Live-verified on the Razr 2026** (owner note: use the USB-connected 2026,
+    not the Tailscale-connected 2023, to avoid device-control contention):
+    confirmed via `dumpsys activity services`/`dumpsys notification` across a
+    clean install — permission-granted path starts the service with the
+    correct foreground notification and channel; permission-denied path does
+    nothing (no crash, no false "enabled" state persisted); toggling off stops
+    the service and removes the notification. Two real bugs found and fixed
+    during that pass: the service originally called `stopSelf()` on an empty
+    saved-printer list, meaning "enable alerts, then add your first printer"
+    would silently never start monitoring until the toggle was manually cycled
+    — it now idles and picks up newly-added printers on its next poll instead;
+    and `onDestroy()` relied on the framework's implicit notification cleanup,
+    which left a stale notification behind after a `force-stop` on this device
+    — now calls `stopForeground(STOP_FOREGROUND_REMOVE)` explicitly. Still
+    open: notification actions (P18) and home-screen widgets aren't built;
+    filament-runout alerts still aren't covered (no sensor read to diff
+    against); locked-screen/Doze/reboot behavior over many hours needs a real
+    print to fully exercise, not just a short manual toggle test.
 13. M4c — timelapse browsing, then optional capture. **Read-only browsing built
     2026-09-18**: spec-verified against the actual `moonraker-timelapse`
     component source (the Mainsail/Fluidd-compatible one referenced elsewhere in

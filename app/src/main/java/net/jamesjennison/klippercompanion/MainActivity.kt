@@ -1,8 +1,12 @@
 package net.jamesjennison.klippercompanion
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -63,6 +67,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appearancePrefs = remember { getSharedPreferences("appearance", 0) }
             var appearance by remember { mutableStateOf(DashboardOptions.decode(runCatching { appearancePrefs.getString("options", null) }.getOrNull())) }
+            val alertsPrefs = remember { getSharedPreferences("alerts", 0) }
+            var backgroundAlertsEnabled by remember { mutableStateOf(alertsPrefs.getBoolean("enabled", false)) }
+            val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                if (granted) { backgroundAlertsEnabled = true; alertsPrefs.edit().putBoolean("enabled", true).apply(); PrintMonitorService.start(this) }
+            }
+            fun setBackgroundAlertsEnabled(enabled: Boolean) {
+                if (!enabled) { backgroundAlertsEnabled = false; alertsPrefs.edit().putBoolean("enabled", false).apply(); PrintMonitorService.stop(this); return }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                else { backgroundAlertsEnabled = true; alertsPrefs.edit().putBoolean("enabled", true).apply(); PrintMonitorService.start(this) }
+            }
+            // A previously-enabled service survives process death on its own (START_STICKY), but
+            // this keeps it running after e.g. an app update replaces the process outright.
+            LaunchedEffect(Unit) { if (backgroundAlertsEnabled) PrintMonitorService.start(this@MainActivity) }
             val dark = appearance.mode == "Dark" || (appearance.mode == "System" && androidx.compose.foundation.isSystemInDarkTheme())
             SideEffect {
                 val style = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT) else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
@@ -92,7 +109,8 @@ class MainActivity : ComponentActivity() {
                     model.foreground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
-                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() })
+                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
+                    backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled)
             }
         }
     }
@@ -101,6 +119,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String)->String? = {_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
+    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
     configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
@@ -211,6 +230,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             if((tab == 0 && !overview) || tab == 3) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
+            if(tab == 3) item { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                FilterChip(backgroundAlertsEnabled, {setBackgroundAlertsEnabled(!backgroundAlertsEnabled)}, label={Text("Background print alerts")}, modifier=Modifier.testTag("background-alerts-toggle"))
+                Text("Notifies you when a saved printer finishes, errors or goes offline while the app isn't open. Shows a persistent low-priority notification while active.", style = MaterialTheme.typography.bodySmall)
+            } }
             if(tab == 3 || (state.address.isEmpty() && tab != 2 && !overview)) {
                 if(state.savedPrinters.isNotEmpty()) {
                     item { Text("Saved printers", style = MaterialTheme.typography.titleMedium)

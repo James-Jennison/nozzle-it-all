@@ -22,7 +22,7 @@ data class PrinterSnapshot(val ready: Boolean, val state: String, val filename: 
 }
 data class Camera(val name: String, val snapshot: String, val stream: String = "", val service: String = "", val id: String = name)
 data class Catalog(val files: List<String>, val macros: List<String>, val cameras: List<Camera>, val warnings: List<String>, val fileInfo: List<FileInfo> = emptyList())
-data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null)
+data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null)
 
 interface PrinterService {
     val address: String
@@ -46,10 +46,11 @@ interface PrinterService {
     fun leds(): List<String> = emptyList()
     fun ledStatus(led: String): LedStatus = throw ApiFailure("Light status unavailable.")
     fun timelapses(): List<FileInfo> = throw ApiFailure("Timelapse unavailable.")
+    fun toolStatus(): ToolStatus = throw ApiFailure("Tool controls unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader {
+class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val apiKey = rawApiKey.trim()
@@ -57,6 +58,12 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         .callTimeout(7, TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
         .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().apply { if (apiKey.isNotEmpty()) header("X-Api-Key", apiKey) }.build()) }
         .build()
+    // printer/gcode/script blocks until the gcode finishes: physical actions (a toolchanger's
+    // kinematic-coupling swap, homing, calibration) routinely run well past the 7s read-only
+    // timeout above without the request actually failing - Moonraker itself keeps a request
+    // alive up to 60s (see its "Request 'gcode/script' pending" log) before giving up. Commands
+    // get their own longer-lived client so a slow-but-successful action isn't reported as failed.
+    private val commandClient = client.newBuilder().readTimeout(65, TimeUnit.SECONDS).callTimeout(70, TimeUnit.SECONDS).build()
 
     companion object {
         internal fun activeExtruder(status: JSONObject): String = status.optJSONObject("toolhead")?.optString("extruder", "")
@@ -110,11 +117,11 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         args.forEach { (k,v) -> builder.addQueryParameter(k, v) }
         return builder.build()
     }
-    private fun request(path: String, args: Map<String, String> = emptyMap(), mutate: Boolean = false, jsonBody: JSONObject? = null): Any {
+    private fun request(path: String, args: Map<String, String> = emptyMap(), mutate: Boolean = false, jsonBody: JSONObject? = null, httpClient: OkHttpClient = client): Any {
         val builder = Request.Builder().url(url(path,args))
         if (jsonBody != null) builder.post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
         else if (mutate) builder.post("".toRequestBody("application/json".toMediaType()))
-        client.newCall(builder.build()).execute().use { response ->
+        httpClient.newCall(builder.build()).execute().use { response ->
             if (response.code == 401 || response.code == 403) throw ApiFailure(
                 if (apiKey.isEmpty()) "Moonraker requires authentication. Add its API key when editing this printer."
                 else "Moonraker rejected the configured API key. Copy a current key from Fluidd/Mainsail and update it here."
@@ -189,6 +196,11 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "toolhead" to "extruder", "configfile" to "settings", fan to "speed")) as? JSONObject
             ?: throw ApiFailure("Fan state unavailable.")
         return FanControls.parse(fan,result)
+    }
+    override fun toolStatus(): ToolStatus {
+        val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "toolhead" to "extruder", "configfile" to "settings")) as? JSONObject
+            ?: throw ApiFailure("Tool state unavailable.")
+        return ToolControls.parse(result)
     }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")
@@ -303,8 +315,8 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
     }
     override fun command(command: PrinterCommand) {
         // No retries or redirects: lost acknowledgement leaves the result unknown.
-        val result = request(command.path, command.arguments, mutate = true)
+        val result = request(command.path, command.arguments, mutate = true, httpClient = commandClient)
         if (result != "ok") throw ApiFailure("Unrecognized command acknowledgement; inspect printer state.")
     }
-    override fun close() { client.dispatcher.cancelAll(); client.connectionPool.evictAll() }
+    override fun close() { client.dispatcher.cancelAll(); client.connectionPool.evictAll(); commandClient.dispatcher.cancelAll(); commandClient.connectionPool.evictAll() }
 }

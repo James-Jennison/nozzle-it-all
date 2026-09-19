@@ -288,6 +288,10 @@ class PrinterModel(
                         val checked=LedControls.prepare(request,service.ledStatus(request.led))
                         if(checked!=command) throw ApiFailure("Light command changed. Review it again.")
                     }
+                    command.toolRequest?.let { request ->
+                        val checked=ToolControls.prepare(request,service.toolStatus())
+                        if(checked!=command) throw ApiFailure("Tool command changed. Review it again.")
+                    }
                     currentCoroutineContext().ensureActive()
                     service.command(command)
                 }

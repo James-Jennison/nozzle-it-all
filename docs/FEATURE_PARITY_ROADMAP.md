@@ -104,8 +104,13 @@ acceptance for all of it remains a separate, later owner decision.
     across reopening the editor via Show/Hide, then removing the test profile.
     Cloudflare Tunnel/port forwarding/OctoEverywhere remain documentation-only, as
     already noted below; they need no client code since they present as an ordinary
-    HTTPS (or Tailscale) address. Still open for M4a: a UI-visible remote-access
-    setup guide, and OctoEverywhere-specific wiring if that path is chosen instead.
+    HTTPS (or Tailscale) address. **In-app remote-access help built 2026-09-18**:
+    a `RemoteAccessHelpPanel` reachable from a "How do I connect away from home?"
+    button in `ProfileEditor`, covering Tailscale/Cloudflare Tunnel/port forwarding/
+    OctoEverywhere and reiterating that an API key is what actually secures a
+    printer reachable outside the LAN. Verified with a new androidTest and a live
+    on-device pass on the Razr 2023. Still open for M4a: OctoEverywhere-specific
+    wiring if that path is chosen instead of self-hosted VPN/tunnel.
 12. M4b — background alerts, notification actions, home-screen widgets
 13. M4c — timelapse browsing, then optional capture
 

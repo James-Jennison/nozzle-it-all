@@ -1,5 +1,9 @@
 # M2 heater controls — supervised acceptance preparation
 
+**M2 heater controls: PASS (2026-09-19).** Bed and nozzle heat/shutoff are both
+physically verified against the Snapmaker U1 — see "Live acceptance — bed and
+nozzle, Snapmaker U1" below. Full M2 is complete.
+
 Local implementation and device/read-only acceptance are validated. The approved physical bed test verified warming and shutdown, but failed its
 intended timing criterion; full M2 is not complete.
 
@@ -104,3 +108,29 @@ Bed-only30second acceptance: PASS. Earlier55second failure is preserved. Nozzle,
 other P07 controls and full M2 are not accepted by this result. Final supplemental
 evidence is bed-retest-v2-final-acceptance.json. No further heating test is needed
 for this bed-only check, and none has been dispatched.
+
+## Live acceptance — bed and nozzle, Snapmaker U1 (2026-09-19)
+
+Owner-driven physical acceptance session against the Snapmaker U1 (`192.168.1.x`),
+installed on the USB Razr 2026, as part of resuming Phase 1 physical acceptance.
+Both bed and nozzle were tested through the app's own review/confirm flow, with
+every result cross-checked directly against Moonraker's live `printer/objects/query`
+(not just the app's own notice text), so this isn't self-certified by the app alone.
+
+- **Bed**: target set to 40°C via Heater controls (Bed → 40 → Review → Confirm).
+  Review text matched exactly: `SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=40`.
+  First confirm attempt hit the 5-second review-expiry guard (working as intended —
+  too much time passed between review and confirm while getting explicit go-ahead);
+  redone back-to-back and the app returned "Printer acknowledged Set heater_bed to
+  40°C." Moonraker confirmed `temperature: 40.0, target: 40.0` shortly after. Owner
+  then sent shutoff directly from the app; Moonraker confirmed `target: 0.0` while
+  still cooling from 40.0°C.
+- **Nozzle**: owner heated the active extruder to 200°C directly from the app.
+  Moonraker confirmed `temperature: 201.0, target: 200.0` (normal PID overshoot).
+  Owner then sent shutoff directly from the app; Moonraker confirmed `target: 0.0`
+  while cooling from ~200°C.
+
+No timing deadline was imposed on this pass (unlike the earlier 30-second-window
+retests above) — the goal was confirming the full command path (review → confirm →
+real heat → reached target → shutoff) works correctly for both heaters, which it
+did for both. M2 heater controls acceptance is complete.

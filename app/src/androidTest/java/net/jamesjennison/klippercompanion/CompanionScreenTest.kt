@@ -127,6 +127,16 @@ class CompanionScreenTest {
         } finally {prefs.edit().clear().commit();secrets.edit().clear().commit()}
     }
 
+    @Test fun remoteAccessHelpOpensAndClosesWithoutDiscardingEdits() {
+        val model=PrinterModel("http://fixture.local/",initialProfiles=listOf(PrinterProfile("http://fixture.local/")))
+        compose.setContent { CompanionTheme {ProfileEditor(PrinterProfile("http://fixture.local/"),{},model::updateProfile)} }
+        compose.onNodeWithText("Printer name").performTextReplacement("Garage")
+        compose.onNodeWithTag("open-remote-access-help").performClick()
+        compose.onNodeWithText("Connecting away from home").assertIsDisplayed()
+        compose.onNodeWithText("Tailscale (recommended)").assertIsDisplayed()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithText("Printer name").assertTextContains("Garage")
+    }
     @Test fun invalidProfileStaysOpenWithInlineError() {
         val model=PrinterModel("http://fixture.local/",initialProfiles=listOf(PrinterProfile("http://fixture.local/")))
         var closed=false

@@ -16,11 +16,14 @@ import androidx.compose.ui.unit.dp
     var address by remember(profile) { mutableStateOf(profile.address) }
     var apiKey by remember(profile) { mutableStateOf(profile.apiKey) }
     var showKey by remember(profile) { mutableStateOf(false) }
+    var showRemoteHelp by remember(profile) { mutableStateOf(false) }
     var error by remember(profile) { mutableStateOf<String?>(null) }
+    if(showRemoteHelp) RemoteAccessHelpPanel { showRemoteHelp=false }
     AlertDialog(onDismissRequest=close,title={Text("Edit printer")},text={ Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(name,{name=it.take(80)},label={Text("Printer name")},singleLine=true)
         OutlinedTextField(address,{address=it},label={Text("Printer address")},singleLine=true)
         Text("A Tailscale address (100.x.x.x or *.ts.net), Cloudflare Tunnel or other https:// address also works away from home.",style=MaterialTheme.typography.bodySmall)
+        TextButton({showRemoteHelp=true},modifier=Modifier.testTag("open-remote-access-help")){Text("How do I connect away from home?")}
         OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("API key (optional)")},singleLine=true,
             visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})

@@ -42,6 +42,12 @@ object FanControls {
             FanReadout(name,finite("speed")?.takeIf{it in 0.0..1.0},finite("rpm"))
         }
     }
+    fun likelyActiveToolFan(fan:String,activeExtruder:String):Boolean {
+        if(activeExtruder.isEmpty())return false
+        if(activeExtruder=="extruder")return fan=="fan"
+        val n=Regex("extruder([0-9]+)").matchEntire(activeExtruder)?.groupValues?.get(1) ?: return false
+        return fan=="fan_generic e${n}_fan"
+    }
     fun decodeHidden(raw:String):Set<String> = runCatching {
         val arr=org.json.JSONArray(raw);(0 until arr.length()).mapNotNull{arr.optString(it).takeIf{s->s.isNotBlank()}}.toSet()
     }.getOrDefault(emptySet())

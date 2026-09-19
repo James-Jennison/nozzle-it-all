@@ -50,7 +50,7 @@ import kotlinx.coroutines.*
     AlertDialog(onDismissRequest=close,title={Text("Fan controls")},confirmButton={TextButton(close){Text("Close")}},text={
         Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Printer: ${state.address}")
-            Text("Select the exact configured fan. Fan names are not mapped to the active nozzle. Automatic heater fans are excluded.")
+            Text("Select the exact configured fan. Automatic heater fans are excluded. \"Active tool\" marks the fan whose name matches the current nozzle - the only toolhead physically on the carriage right now. The name match itself is a convention, not a guarantee.")
             Button({
                 invalidate();fan="";fans=emptyList();busy=true;val ticket=epoch
                 job=scope.launch {
@@ -64,9 +64,11 @@ import kotlinx.coroutines.*
                 }
             },enabled=enabled,modifier=Modifier.testTag("load-fans")){Text("Load manual fans")}
             if(fans.isNotEmpty())FilterChip(showHiddenFans,{showHiddenFans=!showHiddenFans},label={Text("Show hidden")},modifier=Modifier.testTag("show-hidden-fans"))
+            val activeExtruder=state.snapshot?.activeExtruder.orEmpty()
             fans.filter{showHiddenFans || it !in hiddenFans}.forEach {name ->
                 FlowRow(verticalArrangement=Arrangement.spacedBy(4.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     FilterChip(fan==name,{fan=name;invalidate()},enabled=!busy,label={Text(name)},modifier=Modifier.testTag("fan-option-$name"))
+                    if(FanControls.likelyActiveToolFan(name,activeExtruder))Text("Active tool",style=MaterialTheme.typography.bodySmall,modifier=Modifier.testTag("fan-active-tool-$name"))
                     if(name in hiddenFans)Text("Hidden",style=MaterialTheme.typography.bodySmall)
                     TextButton({setHidden(name,name !in hiddenFans)},modifier=Modifier.testTag("hide-fan-$name")){Text(if(name in hiddenFans)"Unhide" else "Hide")}
                 }

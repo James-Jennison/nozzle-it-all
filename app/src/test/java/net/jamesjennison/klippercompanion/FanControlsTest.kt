@@ -14,6 +14,16 @@ class FanControlsTest {
         assertEquals("M106 S0",FanControls.prepare(FanRequest("fan","0","extruder1"),status("fan")).arguments["script"])
         for(raw in listOf("100.00000000000000000001","-1","NaN","1e2","20\nG28","1;G28"))assertThrows(IllegalArgumentException::class.java){FanControls.prepare(FanRequest("fan_generic e1_fan",raw,"extruder1"),status())}
     }
+    @Test fun likelyActiveToolFanMatchesNamingConventionOnly() {
+        assertTrue(FanControls.likelyActiveToolFan("fan","extruder"))
+        assertTrue(FanControls.likelyActiveToolFan("fan_generic e1_fan","extruder1"))
+        assertTrue(FanControls.likelyActiveToolFan("fan_generic e3_fan","extruder3"))
+        assertFalse(FanControls.likelyActiveToolFan("fan_generic e1_fan","extruder"))
+        assertFalse(FanControls.likelyActiveToolFan("fan","extruder1"))
+        assertFalse(FanControls.likelyActiveToolFan("fan_generic e1_fan","extruder2"))
+        assertFalse(FanControls.likelyActiveToolFan("fan_generic cavity_fan","extruder1"))
+        assertFalse(FanControls.likelyActiveToolFan("fan",""))
+    }
     @Test fun hiddenFanSetRoundTripsAndDefaultsEmpty() {
         val hidden=setOf("fan_generic exhaust_fan","fan_generic circulation_fan")
         assertEquals(hidden,FanControls.decodeHidden(FanControls.encodeHidden(hidden)))

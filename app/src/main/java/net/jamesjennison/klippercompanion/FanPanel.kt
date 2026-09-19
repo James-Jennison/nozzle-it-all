@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -17,6 +18,12 @@ import kotlinx.coroutines.*
     factory:(String)->FanReader={ a -> state.moonrakerFor(a) },clock:()->Long={System.nanoTime()/1_000_000}) {
     val scope=rememberCoroutineScope()
     val lifecycle=LocalLifecycleOwner.current.lifecycle
+    val context=LocalContext.current
+    val fanPrefs=remember {context.getSharedPreferences("fan-options",0)}
+    val fanKey=remember(state.address) {java.security.MessageDigest.getInstance("SHA-256").digest(state.address.toByteArray()).joinToString(""){"%02x".format(it)}}
+    var hiddenFans by remember(fanKey) {mutableStateOf(FanControls.decodeHidden(runCatching {fanPrefs.getString(fanKey,"[]")}.getOrNull()?:"[]"))}
+    fun setHidden(name:String,hide:Boolean) {hiddenFans=if(hide)hiddenFans+name else hiddenFans-name;fanPrefs.edit().putString(fanKey,FanControls.encodeHidden(hiddenFans)).apply()}
+    var showHiddenFans by remember {mutableStateOf(false)}
     val reader=remember(state.address,state.generation){factory(state.address)}
     var foreground by remember {mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))}
     var fans by remember {mutableStateOf<List<String>>(emptyList())}
@@ -56,7 +63,14 @@ import kotlinx.coroutines.*
                     finally{if(ticket==epoch)busy=false}
                 }
             },enabled=enabled,modifier=Modifier.testTag("load-fans")){Text("Load manual fans")}
-            fans.forEach {name -> FilterChip(fan==name,{fan=name;invalidate()},enabled=!busy,label={Text(name)},modifier=Modifier.testTag("fan-option-$name"))}
+            if(fans.isNotEmpty())FilterChip(showHiddenFans,{showHiddenFans=!showHiddenFans},label={Text("Show hidden")},modifier=Modifier.testTag("show-hidden-fans"))
+            fans.filter{showHiddenFans || it !in hiddenFans}.forEach {name ->
+                FlowRow(verticalArrangement=Arrangement.spacedBy(4.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    FilterChip(fan==name,{fan=name;invalidate()},enabled=!busy,label={Text(name)},modifier=Modifier.testTag("fan-option-$name"))
+                    if(name in hiddenFans)Text("Hidden",style=MaterialTheme.typography.bodySmall)
+                    TextButton({setHidden(name,name !in hiddenFans)},modifier=Modifier.testTag("hide-fan-$name")){Text(if(name in hiddenFans)"Unhide" else "Hide")}
+                }
+            }
             if(fan.isNotEmpty())Text("Selected: $fan")
             OutlinedTextField(value,{value=it;invalidate()},enabled=!busy,label={Text("Requested speed % (0 turns off)")},singleLine=true,modifier=Modifier.testTag("fan-value"))
             TextButton({value="0";invalidate()},enabled=!busy){Text("Off")}

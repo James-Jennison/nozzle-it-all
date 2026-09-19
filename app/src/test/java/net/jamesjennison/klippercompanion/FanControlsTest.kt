@@ -14,6 +14,12 @@ class FanControlsTest {
         assertEquals("M106 S0",FanControls.prepare(FanRequest("fan","0","extruder1"),status("fan")).arguments["script"])
         for(raw in listOf("100.00000000000000000001","-1","NaN","1e2","20\nG28","1;G28"))assertThrows(IllegalArgumentException::class.java){FanControls.prepare(FanRequest("fan_generic e1_fan",raw,"extruder1"),status())}
     }
+    @Test fun hiddenFanSetRoundTripsAndDefaultsEmpty() {
+        val hidden=setOf("fan_generic exhaust_fan","fan_generic circulation_fan")
+        assertEquals(hidden,FanControls.decodeHidden(FanControls.encodeHidden(hidden)))
+        assertEquals(emptySet<String>(),FanControls.decodeHidden("[]"))
+        assertEquals(emptySet<String>(),FanControls.decodeHidden("not json"))
+    }
     @Test fun excludesAutomaticAndMalformedFanIdentities() {
         val json=JSONObject().put("objects",org.json.JSONArray(listOf("fan","fan_generic e1_fan","heater_fan hotend","controller_fan x","temperature_fan chamber","fan_generic bad name","fan_generic a\nG28","fan_generic e1_fan")))
         assertEquals(listOf("fan","fan_generic e1_fan"),FanControls.catalog(json))

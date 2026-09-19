@@ -42,6 +42,10 @@ object FanControls {
             FanReadout(name,finite("speed")?.takeIf{it in 0.0..1.0},finite("rpm"))
         }
     }
+    fun decodeHidden(raw:String):Set<String> = runCatching {
+        val arr=org.json.JSONArray(raw);(0 until arr.length()).mapNotNull{arr.optString(it).takeIf{s->s.isNotBlank()}}.toSet()
+    }.getOrDefault(emptySet())
+    fun encodeHidden(values:Set<String>)=org.json.JSONArray(values.toList()).toString()
     fun prepare(request:FanRequest,status:FanStatus):PrinterCommand {
         require(validFan(request.fan) && request.fan==status.fan){"Fan identity changed."}
         require(status.ready && status.printState in idleStates){"Fan controls require an idle, ready printer."}

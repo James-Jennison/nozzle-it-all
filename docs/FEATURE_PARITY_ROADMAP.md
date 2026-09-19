@@ -111,7 +111,27 @@ acceptance for all of it remains a separate, later owner decision.
     printer reachable outside the LAN. Verified with a new androidTest and a live
     on-device pass on the Razr 2023. Still open for M4a: OctoEverywhere-specific
     wiring if that path is chosen instead of self-hosted VPN/tunnel.
-12. M4b — background alerts, notification actions, home-screen widgets
+12. M4b — background alerts, notification actions, home-screen widgets.
+    **Alert-detection logic built 2026-09-18**: a pure `PrintAlerts.detect()`
+    diffs one printer's previous vs. current `PrinterConnection` observation and
+    decides whether it's alert-worthy (print completed/errored/cancelled,
+    printer went offline/came back), with 11 JVM tests covering the edge cases
+    (no alert on first observation or on a repeated identical state; a
+    reconnect into an already-"complete" state raises only "back online," not
+    "completed," since we genuinely don't know when it finished while offline).
+    This is diff/decision logic only — nothing calls it yet, and it does not
+    touch notifications, background execution, or permissions. Filament-runout
+    alerts aren't covered: there's no filament-sensor read yet to diff against.
+    **Explicitly not started, and not a small next step**: actually delivering
+    an alert needs an architecture decision this doc doesn't make for the owner
+    — a foreground service (reliable, visible, draws battery/a persistent
+    notification) vs. `WorkManager` periodic work (invisible, battery-friendlier,
+    but capped at ~15 min minimum interval, too slow for "print just finished").
+    Whichever is chosen also needs `POST_NOTIFICATIONS` runtime permission
+    (Android 13+), a foreground-service type declaration if that path is picked,
+    and the locked-screen/background/Doze/reboot/duplicate-event verification
+    from this document's M4 exit criteria — all of which need a real device,
+    not JVM tests.
 13. M4c — timelapse browsing, then optional capture
 
 **Phase 3 — further out, no fixed start date:**

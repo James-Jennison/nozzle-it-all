@@ -129,6 +129,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     timelapseFactory:(String)->TimelapseReader={ a -> state.moonrakerFor(a) },
     pandaBreathFactory:(String)->PandaBreathReader={ a -> state.moonrakerFor(a) },
     spoolmanFactory:(String)->SpoolmanReader={ a -> state.moonrakerFor(a) },
+    aceFactory:(String)->AceReader={ a -> state.moonrakerFor(a) },
     tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
@@ -150,6 +151,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(fanOpen) FanPanel(state,execute,{fanOpen=false})
     var bespok3dOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(bespok3dOpen) Bespok3dPanel(state,{bespok3dOpen=false})
+    var aceOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(aceOpen) AcePanel(state,execute,{aceOpen=false},aceFactory)
     var ledOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(ledOpen) LedPanel(state,execute,{ledOpen=false})
     var toolOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -393,6 +396,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         // rather than being hidden, matching Helix's own honest-empty-state panel.
                         item { OutlinedButton({pandaBreathOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-panda")){Text("Panda Breath (chamber/dryer)")} }
                         if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")} }
+                        // PAXX-specific hardware (unlike Panda Breath/Spoolman above, which are
+                        // generic-Klipper feature-detected) - gated to printer kind, not owned by
+                        // the owner, built at their request for other PAXX owners.
+                        if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({aceOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-ace")){Text("multiACE")} }
                         // Last in this section, not first: destructive, so it should never sit
                         // where a thumb reaching for an ordinary control could hit it by accident
                         // (same reasoning Helix's own EstopBar comment gives).

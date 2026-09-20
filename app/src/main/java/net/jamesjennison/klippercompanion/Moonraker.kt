@@ -28,7 +28,7 @@ data class Catalog(val files: List<String>, val macros: List<String>, val camera
 // path/arguments are HTTP-shaped and only mean anything to Moonraker. bambuPrintRequest is the
 // one command kind that isn't an HTTP call at all (MQTT + FTPS, see BambuPrinterService); it
 // leaves them empty.
-data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null, val bambuPrintRequest: BambuPrintRequest? = null, val pandaBreathRequest: PandaBreathRequest? = null)
+data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null, val bambuPrintRequest: BambuPrintRequest? = null, val pandaBreathRequest: PandaBreathRequest? = null, val aceRequest: AceRequest? = null)
 
 interface PrinterService {
     val address: String
@@ -56,6 +56,7 @@ interface PrinterService {
     fun timelapses(): List<TimelapseClip> = throw ApiFailure("Timelapse unavailable.")
     fun toolStatus(): ToolStatus = throw ApiFailure("Tool controls unavailable.")
     fun pandaBreathStatus(): PandaBreathStatus = throw ApiFailure("Panda Breath unavailable.")
+    fun aceStatus(): AceStatus = throw ApiFailure("multiACE unavailable.")
     // Snapmaker U1/PAXX only (PrinterKind.SNAPMAKER_U1_PAXX); see Bespok3d.kt.
     fun bespok3dProbe(): Bespok3dProbe = throw ApiFailure("Bespok3d bridge unavailable.")
     fun bespok3dStatus(connection: Bespok3dConnection): Bespok3dStatus? = throw ApiFailure("Bespok3d bridge unavailable.")
@@ -83,7 +84,7 @@ internal fun isLocalHost(host: String): Boolean {
     return privateV4 || tailscaleV6 || bareHostname || host == "localhost" || host == "::1" || host.endsWith(".local") || host.endsWith(".ts.net")
 }
 fun Camera.isBespok3dScreen(): Boolean = name.equals("gui", ignoreCase = true) || Regex("/screen(?:/|$)", RegexOption.IGNORE_CASE).containsMatchIn(stream)
-class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader, PandaBreathReader, SpoolmanReader {
+class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader, PandaBreathReader, SpoolmanReader, AceReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val apiKey = rawApiKey.trim()
@@ -269,6 +270,14 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         if (proxyResult.has("error") && !proxyResult.isNull("error")) throw ApiFailure("Spoolman rejected the request.")
         SpoolmanInventory(true, activeId, Spoolman.parseSpools(proxyResult.opt("response")))
     } catch (e: ApiFailure) { SpoolmanInventory(false, null, emptyList()) }
+    override fun aceStatus(): AceStatus {
+        // "" (all fields) rather than a named field list: the ace object's shape varies by
+        // multiACE firmware version (v0.99+'s aces[] vs older single-device fields) and AceControls
+        // itself decides what to read, same reasoning as Bespok3dReader's own full-object reads.
+        val result = request("printer/objects/query", mapOf("webhooks" to "state", "print_stats" to "state", "ace" to "")) as? JSONObject
+            ?: throw ApiFailure("multiACE status unavailable.")
+        return AceControls.parse(result)
+    }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")
         if (!info.optBoolean("klippy_connected") || info.optString("klippy_state") != "ready") return PrinterSnapshot(false, info.optString("klippy_state", "not ready"))

@@ -323,6 +323,18 @@ class PrinterModel(
                         }
                         if(checked!=command) throw ApiFailure("Panda Breath command changed. Review it again.")
                     }
+                    command.aceRequest?.let { request ->
+                        val observed=service.aceStatus()
+                        val checked=when(request) {
+                            is AceRequest.Load -> AceControls.prepareLoad(request,observed)
+                            is AceRequest.Unload -> AceControls.prepareUnload(request,observed)
+                            is AceRequest.UnloadAll -> AceControls.prepareUnloadAll(observed)
+                            is AceRequest.DryStart -> AceControls.prepareDryStart(request,observed)
+                            is AceRequest.DryStop -> AceControls.prepareDryStop(request,observed)
+                            is AceRequest.Switch -> AceControls.prepareSwitch(request,observed)
+                        }
+                        if(checked!=command) throw ApiFailure("multiACE command changed. Review it again.")
+                    }
                     currentCoroutineContext().ensureActive()
                     service.command(command)
                 }

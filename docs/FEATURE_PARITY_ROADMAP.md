@@ -263,6 +263,14 @@ below.**
     not new scope invented by the comparison. Built and unit-tested; physical
     acceptance still outstanding, folded into the already-authorized Phase 1
     testing sessions rather than a separate gate.
+25. M8h (**P31** Panda Breath, **P13** Spoolman, **P30** multiACE) — owner
+    direction to build real capability for hardware the owner doesn't personally
+    own, same principle M7 already applies to Bambu/Prusa. All three **done
+    2026-09-20**, commits `afde29d` (P31), `7fa93f1` (P13), and the multiACE
+    commit that follows it. None physically verified — no matching owner
+    hardware exists for any of the three. See M8's own section below for the
+    full writeup and the one thing this principle deliberately excludes
+    (on-device slicing, a provenance risk rather than an ownership gap).
 
 **Parked, not sequenced until scoped:**
 - Wear OS — reopened, no scope or target milestone yet
@@ -270,9 +278,9 @@ below.**
   mid-print object exclusion, solo phone-initiated slicing, input-shaper calibration
 - M8's own remaining scope: on-device slicing (highest risk — needs an owner
   sign-off before vendoring a ~23MB prebuilt slicer binary of unverified
-  provenance) and a MakerWorld browser; see M8 below.
-- **P30**, PAXX `multiACE` support — real capability, only relevant to owners with
-  the hardware attached; no target milestone yet
+  provenance) and a MakerWorld browser; see M8 below. Unlike P30/P31/P13 below,
+  this stays parked — vendoring an unverified prebuilt binary is a supply-chain
+  risk, a different kind of gap than "the owner doesn't own this hardware."
 - **P16** LAN/Tailscale automatic URL failover — real resilience gap next to the
   already-shipped Tailscale support; not yet given its own effort estimate
 
@@ -429,7 +437,7 @@ turned into a paid unlock.
 | P27 | Bespok3d plugin bridge + remote touchscreen mirror for the Snapmaker U1/PAXX; Helix | **Done 2026-09-20:** `Bespok3dClient`/SSH preflight-enrollment, ported from Helix (AGPL) with attribution, gated to `PrinterKind.SNAPMAKER_U1_PAXX`. The signed daemon/jinni bundle that enrollment needs is independently re-verified and vendored (not Helix's own copy — downloaded fresh from Bespok3d's GitHub releases and OpenPGP-checked against their own publisher key before being committed, see `scripts/build_bespok3d_bootstrap.py`). Remote screen re-serves `helixd`'s JPEG-polling touchscreen mirror, not an MJPEG stream as first assumed — corrected after reading Helix's actual behavior rather than guessing. Unit-tested; **enrollment/remote-screen not yet device-verified against a real U1** (needs the owner's own SSH access code) | M8b | L | Local; Snapmaker U1/PAXX running Bespok3d, owner-entered SSH credentials never persisted |
 | P28 | Visual redesign ("Kiln" theme): new palette/typography, 5-tab nav, Quickview list + per-printer detail hero | **Substantially done 2026-09-20:** duotone dark theme (ember heat / teal accent) and Space Grotesk/IBM Plex Sans/Mono (OFL, bundled as variable fonts) replace the old flat scheme; bottom nav grows from 4 to 5 tabs (Home/Control/Files/Prepare/Settings — deliberately reordered/relabeled from an early draft that matched Helix's own nav almost exactly); Home's printer list and the per-printer dashboard hero/temperature cards get the gradient/status-dot treatment from the design concept. Every change physically verified live on the owner's Razr 2023, including two real bugs a live check caught that code review hadn't (a compressed/clipped hero card, an invisible layer-line texture). Remaining: Bespok3d/Bambu panels, the bed-mesh 3D view and the timelapse gallery still use pre-redesign `AlertDialog` chrome (they inherit the new colors/fonts via the theme change, but not the card/gradient treatment) | M8f | L | Local; OFL font licenses bundled, see `THIRD_PARTY_NOTICES.md` |
 | P29 | Emergency stop control | **Built 2026-09-20, commit `f080790`.** `PrinterModel.emergencyStop()` POSTs `printer/emergency_stop` to Moonraker; deliberately bypasses `execute()`'s foreground/busy/ready/state gates, since those are exactly backwards for a control whose purpose is working when something's already wrong (referenced against Helix's own `emergencyStop` action, which does the same). UI: full-width red button, last in the Control tab, behind a confirmation dialog, gated behind `LIVE_HEATER_FAN_CONTROLS_ENABLED` and hidden for Bambu Lab. Only fires one REST call (this app has no WebSocket channel and no second saved URL per printer yet, unlike Helix's "every configured transport" — see the P16 addendum). Unit-tested (bypasses gates even while backgrounded/busy/not-ready; no-ops without a connected printer); **not yet physically sent to a real printer** — folds into the already-authorized Phase 1 testing sessions (see M2 above), not a new gate | M2 (M8g) | S | Local; sends `printer/emergency_stop` via Moonraker, same transport as existing gated controls |
-| P30 | PAXX `multiACE` filament system (RFID lane status, dryer, load/unload, cross-ACE switching) | **Missing, unscoped before 2026-09-20** — a real PAXX-specific hardware capability surfaced by reading Helix's feature list, not present anywhere in this document until now. Only relevant to owners with multiACE hardware attached; needs an honest empty state when none is present, the same pattern Helix itself uses | Unscheduled | M | Existing printer capabilities; PAXX-specific `ACE_LOAD_HEAD`/`A_DRY`/`ACE_SWITCH` macros — verify against the owner's actual PAXX firmware before building, don't assume Helix's macro names transfer unchanged |
+| P30 | PAXX `multiACE` filament system (RFID lane status, dryer, load/unload, cross-ACE switching) | **Built 2026-09-20.** `AceControls`/`AcePanel`, gated to `PrinterKind.SNAPMAKER_U1_PAXX` (unlike P31/P13, which are generic-Klipper feature-detected — multiACE is genuinely PAXX-specific hardware). Owner doesn't have this hardware, built anyway at their request (same reasoning as P31/P13). References Helix's exact logic from `hooks/useACE.ts`, whose own header cites its source: "multiACE commands verified against decay71/multiACE v0.99.2b ace.py" — `ACE_LOAD_HEAD`/`ACE_UNLOAD_HEAD`/`ACE_UNLOAD_ALL_HEADS`/`ACE_DRY`/`ACE_STOP_DRYING`/`ACE_SWITCH` (this row's earlier placeholder guess of "`A_DRY`" was wrong — corrected against Helix's actual source rather than left standing). One simplification versus Helix: its `isGenericBlack` heuristic for suppressing an all-black RGB reading on an unbranded empty slot isn't reproduced; color is passed through as reported. Unit-tested (gcode construction, lane/ACE-index bounds, multi-device parsing, MockWebServer request shape); **not physically verified**, no owner PAXX+multiACE hardware to test against | M8 | M | Existing printer capabilities; owner-verified firmware match still needed before physical acceptance, same caveat this row always had |
 | P31 | Panda Breath chamber-heater/filament-dryer control | **Built 2026-09-20.** `PandaBreathControls`/`PandaBreathPanel`, referencing Helix's exact gcode and feature-detection logic (`hooks/useDashboardModel.ts`'s `findPandaBreathHeater`/`pandaModeLabel`/panda actions) rather than any ported code (Helix's own logic is TypeScript). Feature-detected (`heater_generic` name match, `printer/gcode/help` probed for `PANDA_BREATH_AUTO`/`PANDA_BREATH_DRY_START`/`PANDA_BREATH_DRY_RUN`), not gated to a printer kind or owner-owned hardware — built at the owner's explicit request despite not having this accessory, since the app serves more than one printer/owner. Unit-tested (parse/prepare logic, request-shape MockWebServer test); **not physically verified**, no owner hardware to test against | M3 | M | Local; `M141`/`PANDA_BREATH_*` gcode via Moonraker, same transport as existing gated controls |
 
 **P15 sourcing note (2026-09-16):** the Snapmaker U1 runs a genuine Klipper/Moonraker
@@ -792,10 +800,19 @@ matching Helix's own honest-empty-state pattern. **Not physically verified**
 (no owner hardware to test against); unit-tested against Helix's exact gcode
 and feature-detection logic instead.
 
-**Also surfaced by the same comparison, not part of M8 itself:** `multiACE` support
-(**P30**, a real PAXX hardware capability with no prior row in this document) and
-LAN/Tailscale automatic URL failover (**P16** addendum). Both are parked, unscoped —
-see the parked list in the working order above.
+**Also surfaced by the same comparison:** PAXX `multiACE` support (**P30**, built
+2026-09-20 — see its own backlog row), Panda Breath (**P31**, built 2026-09-20),
+Spoolman (**P13**, reopened and built 2026-09-20) and LAN/Tailscale automatic URL
+failover (**P16** addendum, still parked and unscoped). The owner's direction
+after the first three — "that doesn't mean others won't [have the hardware]" and
+"use that logic for previous stuff like Spoolman as well" and "for any additional
+features that other users may want for other printers I don't have" — turned
+what started as a single emergency-stop fix into a standing principle for this
+whole audit: build real capability the owner doesn't personally own hardware for,
+same as M7 already does for Bambu/Prusa, rather than skip it. On-device slicing
+stays the one exception — that gap is a supply-chain provenance risk (vendoring
+an unverified prebuilt binary), not an ownership gap, so it keeps its own
+separate sign-off requirement below.
 
 **Still open, no target date:** on-device slicing (M8's highest-risk remaining
 scope — needs vendoring a ~23MB prebuilt `libprusaslicer-jni.so` of unverified

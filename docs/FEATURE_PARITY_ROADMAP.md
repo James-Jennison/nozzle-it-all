@@ -266,11 +266,11 @@ below.**
 25. M8h (**P31** Panda Breath, **P13** Spoolman, **P30** multiACE) — owner
     direction to build real capability for hardware the owner doesn't personally
     own, same principle M7 already applies to Bambu/Prusa. All three **done
-    2026-09-20**, commits `afde29d` (P31), `7fa93f1` (P13), and the multiACE
-    commit that follows it. None physically verified — no matching owner
-    hardware exists for any of the three. See M8's own section below for the
-    full writeup and the one thing this principle deliberately excludes
-    (on-device slicing, a provenance risk rather than an ownership gap).
+    2026-09-20**, commits `afde29d` (P31), `7fa93f1` (P13), `70a8a7b` (P30).
+    None physically verified — no matching owner hardware exists for any of the
+    three. See M8's own section below for the full writeup and the one thing
+    this principle deliberately excludes (on-device slicing, a provenance risk
+    rather than an ownership gap).
 
 **Parked, not sequenced until scoped:**
 - Wear OS — reopened, no scope or target milestone yet
@@ -813,6 +813,25 @@ same as M7 already does for Bambu/Prusa, rather than skip it. On-device slicing
 stays the one exception — that gap is a supply-chain provenance risk (vendoring
 an unverified prebuilt binary), not an ownership gap, so it keeps its own
 separate sign-off requirement below.
+
+**M8h — build for hardware the owner doesn't own, P31/P13/P30.** All three done
+2026-09-20. **Panda Breath (P31)**, commit `afde29d`: chamber-heater/dryer
+control, feature-detected via a `heater_generic` name match plus
+`printer/gcode/help` probing for the Auto/Dry gcodes, referencing
+`hooks/useDashboardModel.ts`'s `findPandaBreathHeater`/`pandaModeLabel`/panda
+actions. **Spoolman (P13)**, commit `7fa93f1`: read-only inventory, reopened
+from its 2026-09-16 skip, referencing `services/moonraker.ts`'s
+`spoolmanGetSpoolId`/`spoolmanProxy` endpoints — deliberately not the
+create/edit/scan features Helix's own `spoolman.tsx` also has, staying at this
+row's original read-only scope. **multiACE (P30)**, commit `70a8a7b`: PAXX
+lane/dryer status plus load/unload/dry/switch controls, gated to
+`PrinterKind.SNAPMAKER_U1_PAXX` (the only one of the three tied to a specific
+printer kind rather than feature-detected), referencing `hooks/useACE.ts`;
+corrected a wrong placeholder gcode name ("`A_DRY`") this row had carried since
+being added from a guess, now that the real commands are known. All three:
+unit-tested against Helix's exact logic, all 318 JVM tests passing, zero lint
+errors, both APKs assembling — and all three **not physically verified**, since
+none of this hardware exists on any printer the owner has.
 
 **Still open, no target date:** on-device slicing (M8's highest-risk remaining
 scope — needs vendoring a ~23MB prebuilt `libprusaslicer-jni.so` of unverified

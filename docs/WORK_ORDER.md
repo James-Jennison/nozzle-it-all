@@ -1,8 +1,13 @@
 # Work order
 
 Derived from [`FEATURE_PARITY_ROADMAP.md`](FEATURE_PARITY_ROADMAP.md), last
-re-derived 2026-09-20 after a Helix feature-set comparison surfaced a missing
-emergency-stop control (now built, P29, commit `f080790`) and two smaller gaps.
+re-derived 2026-09-20. That day: a Helix feature-set comparison surfaced a
+missing emergency-stop control (built, P29, commit `f080790`); a stale
+physical-acceptance status got corrected (see below); and the owner extended
+"build it even though I don't own the hardware" into a standing principle,
+under which Panda Breath (P31, commit `afde29d`), Spoolman (P13, commit
+`7fa93f1`) and PAXX multiACE (P30, commit `70a8a7b`) all got built. None of
+those three are physically verified — see the "Later" tier below.
 **Correction, same day:** this document previously said Phase 1/M2 physical
 acceptance "needs an explicit, separate... owner go-ahead — this isn't a
 default-yes," which had gone stale — that go-ahead was already given on
@@ -71,10 +76,17 @@ because it looks more interesting.
    hardware. Not actionable until then.
 8. **WO-8 — Prusa support (P26 / M7).** Same hardware-availability blocker as
    WO-7, but unlike Bambu, no code exists yet at all.
-9. **WO-9 — M5 optional AI monitoring.** Needs an architecture decision (rented-
-   server vs. on-device inference) before any implementation starts, plus a
-   labelled evaluation set with acceptance thresholds set in advance.
-10. **WO-10 — M6 fleet/production workflows.** Queues/bed-cleared workflow,
+9. **WO-9 — Physical acceptance for Panda Breath (P31), Spoolman (P13) and
+   multiACE (P30).** All three built 2026-09-20, unit-tested against Helix's
+   exact logic, none physically verified — no owner hardware exists for any of
+   them (a chamber-heater/dryer accessory, a Spoolman install, or PAXX
+   multiACE). Same hardware-availability blocker as WO-7/WO-8; needs either the
+   owner acquiring the hardware or a volunteer/beta tester who has it, per M7's
+   own precedent for evidence from hardware the owner doesn't personally own.
+10. **WO-10 — M5 optional AI monitoring.** Needs an architecture decision (rented-
+    server vs. on-device inference) before any implementation starts, plus a
+    labelled evaluation set with acceptance thresholds set in advance.
+11. **WO-11 — M6 fleet/production workflows.** Queues/bed-cleared workflow,
     maintenance/cost trends, shared-library/server-slicing feasibility. No fixed
     start date; the roadmap sequences it after M5.
 
@@ -84,12 +96,11 @@ because it looks more interesting.
   sign-off before vendoring a ~23MB prebuilt `libprusaslicer-jni.so` of unverified
   build provenance. Helix itself ships this feature on the same engine, which is
   useful context but not a substitute for doing that verification ourselves.
+  Deliberately NOT covered by the "build it even without the hardware" principle
+  behind WO-9 above — this is a supply-chain provenance risk, a different kind
+  of gap than not owning a piece of hardware.
 - **MakerWorld model browser** — folded into the same later phase as slicing,
   since it's a model-import source feeding it rather than standalone.
-- **`multiACE` support (P30)** — real PAXX hardware capability (RFID lane status,
-  dryer, load/unload, cross-ACE switching), surfaced 2026-09-20 by the same Helix
-  comparison that found the emergency-stop gap. Only relevant to owners with the
-  hardware attached; no target milestone yet.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

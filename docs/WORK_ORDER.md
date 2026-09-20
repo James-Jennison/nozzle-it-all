@@ -37,15 +37,15 @@ because it looks more interesting.
 
 ## Now — unblocked, no owner action needed to start
 
-1. **WO-2 — Kiln-restyle the remaining pre-redesign panels.** Bespok3d panel, Bambu
-   print panel, bed-mesh 3D view chrome and the timelapse gallery dialog still
-   render as plain `AlertDialog` (theme colors/fonts apply, the card/gradient
-   treatment doesn't). Pure UI consistency debt flagged in the P28 backlog row;
-   no new capability.
-2. **WO-3 — Notification actions + home-screen widgets (P18).** Natural next slice
+1. **WO-3 — Notification actions + home-screen widgets (P18).** Natural next slice
    on top of M4b's already-built and live-verified `PrintMonitorService`/alert
    delivery: a Pause/Resume/Cancel action on the alert notification, and a widget
    for at-a-glance status.
+
+*(WO-2 — Kiln-restyle the remaining pre-redesign panels — is done, commit
+`08cde99`. Planned in Plan Mode first per the owner's request, then implemented:
+a new `KilnFrame` composable, applied to Bespok3d, Bambu print confirmation,
+bed-mesh 3D view and the timelapse gallery.)*
 
 ## Next — one specific owner action unblocks each of these
 

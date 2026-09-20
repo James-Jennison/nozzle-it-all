@@ -11,10 +11,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String)->String?) {
+@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind)->String?) {
     var name by remember(profile) { mutableStateOf(profile.name) }
     var address by remember(profile) { mutableStateOf(profile.address) }
     var apiKey by remember(profile) { mutableStateOf(profile.apiKey) }
+    var kind by remember(profile) { mutableStateOf(profile.kind) }
     var showKey by remember(profile) { mutableStateOf(false) }
     var showRemoteHelp by remember(profile) { mutableStateOf(false) }
     var error by remember(profile) { mutableStateOf<String?>(null) }
@@ -28,9 +29,16 @@ import androidx.compose.ui.unit.dp
             visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
         Text("Only needed if Moonraker requires authentication; copy it from Fluidd's or Mainsail's settings.",style=MaterialTheme.typography.bodySmall)
+        Text("Printer type",style=MaterialTheme.typography.labelLarge)
+        Text("Only changes which extra, vendor-specific controls this app shows for this printer — every printer still talks to Moonraker the same way.",style=MaterialTheme.typography.bodySmall)
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            FilterChip(kind==PrinterKind.GENERIC_KLIPPER,{kind=PrinterKind.GENERIC_KLIPPER},label={Text("Generic Klipper")})
+            FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX,{kind=PrinterKind.SNAPMAKER_U1_PAXX},label={Text("Snapmaker U1 (PAXX)")})
+            FilterChip(kind==PrinterKind.BAMBU_LAB,{kind=PrinterKind.BAMBU_LAB},label={Text("Bambu Lab")})
+        }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         Text("Changing the address disconnects the active printer.")
-    } },confirmButton={TextButton({error=save(profile.address,address,name,apiKey);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
+    } },confirmButton={TextButton({error=save(profile.address,address,name,apiKey,kind);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
 }
 @Composable fun FileDetails(state: ScreenState) {
     if(state.fileLoading) LinearProgressIndicator(Modifier.fillMaxWidth())

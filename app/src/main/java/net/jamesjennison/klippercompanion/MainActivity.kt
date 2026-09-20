@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String)->String? = {_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
+fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind)->String? = {_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
     backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },

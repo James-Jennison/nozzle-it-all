@@ -57,7 +57,7 @@ class PrinterModel(
     private fun persist(address: String = _state.value.address, profiles: List<PrinterProfile> = _state.value.profiles) {
         saveSettings(address, profiles.map { it.address }); saveProfiles(address, profiles)
     }
-    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String): String? {
+    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String, kind: PrinterKind? = null): String? {
         if(_state.value.busy) return "Wait for the current command to finish."
         val normalized = try { Moonraker.parseAddress(address).toString() } catch(_: IllegalArgumentException) { _state.value=_state.value.copy(commandNotice="Enter a valid local printer address.");return "Enter a valid local printer address." }
         val current = _state.value
@@ -70,7 +70,7 @@ class PrinterModel(
         // for the connected printer via disconnect(), for a background one via savedMonitor.remove().
         if(oldAddress == current.address) { if(oldAddress != normalized || keyChanged) disconnect() }
         else if(normalized == oldAddress && keyChanged) savedMonitor.remove(oldAddress)
-        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey) else it }
+        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey,kind=kind ?: it.kind) else it }
         val selected = if(current.address == oldAddress) normalized else _state.value.address
         _state.value = _state.value.copy(address=selected,profiles=profiles,savedPrinters=profiles.map { it.address })
         persist()

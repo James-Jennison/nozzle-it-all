@@ -6,32 +6,47 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
+private class FakeTimelapseReader(private val clips: List<TimelapseClip>) : TimelapseReader {
+    override fun timelapses() = clips
+    override fun timelapseThumbnail(path: String): ByteArray = throw ApiFailure("No poster in this fixture.")
+    override fun timelapseVideoUrl(path: String) = TimelapseVideoUrl("http://fixture.local/server/files/timelapse/$path")
+    override fun close() {}
+}
+
 class TimelapsePanelDeviceTest {
     @get:Rule val compose = createComposeRule()
     @Test fun loadsAndListsVideosNewestFirst() {
-        val reader = object : TimelapseReader {
-            override fun timelapses() = listOf(FileInfo("first.mp4", 1_048_576, 100.0), FileInfo("second.mp4", 2_097_152, 200.0))
-            override fun close() {}
-        }
+        val reader = FakeTimelapseReader(listOf(
+            TimelapseClip("first.mp4", 1_048_576, 100.0, null),
+            TimelapseClip("second.mp4", 2_097_152, 200.0, null),
+        ))
         compose.setContent { CompanionTheme { TimelapsePanel("http://fixture.local/", true, {}, { reader }) } }
         compose.waitUntil(5000) { compose.onAllNodesWithText("first.mp4").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("second.mp4").assertExists()
-        // Size only, not the modified-date text: that's formatted in the device's local
-        // timezone, so its exact string isn't stable across devices/CI.
+        // Size only, not the time text: that's formatted in the device's local timezone, so its
+        // exact string isn't stable across devices/CI.
         compose.onNode(hasText("1.0 MB", substring = true)).assertExists()
     }
+    @Test fun tappingAClipOpensThePlayer() {
+        val reader = FakeTimelapseReader(listOf(TimelapseClip("dragon.mp4", 1_048_576, 100.0, null)))
+        compose.setContent { CompanionTheme { TimelapsePanel("http://fixture.local/", true, {}, { reader }) } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("timelapse-clip:dragon.mp4").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("timelapse-clip:dragon.mp4").performClick()
+        // Both this panel's own dialog and the player's stack on top of it, so two "Close"
+        // buttons exist once the player opens.
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Close").fetchSemanticsNodes().size >= 2 }
+    }
     @Test fun missingComponentShowsExplicitEmptyState() {
-        val reader = object : TimelapseReader {
-            override fun timelapses() = emptyList<FileInfo>()
-            override fun close() {}
-        }
+        val reader = FakeTimelapseReader(emptyList())
         compose.setContent { CompanionTheme { TimelapsePanel("http://fixture.local/", true, {}, { reader }) } }
         compose.waitUntil(5000) { compose.onAllNodesWithText("No timelapse videos found. Requires the moonraker-timelapse component to be installed and enabled.").fetchSemanticsNodes().isNotEmpty() }
     }
     @Test fun disconnectedShowsExplicitMessageWithoutQuerying() {
         var queried = false
         val reader = object : TimelapseReader {
-            override fun timelapses(): List<FileInfo> { queried = true; throw ApiFailure("Should not be called") }
+            override fun timelapses(): List<TimelapseClip> { queried = true; throw ApiFailure("Should not be called") }
+            override fun timelapseThumbnail(path: String): ByteArray { queried = true; throw ApiFailure("Should not be called") }
+            override fun timelapseVideoUrl(path: String): TimelapseVideoUrl { queried = true; throw ApiFailure("Should not be called") }
             override fun close() {}
         }
         compose.setContent { CompanionTheme { TimelapsePanel("http://fixture.local/", false, {}, { reader }) } }

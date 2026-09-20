@@ -24,6 +24,19 @@ class TimelapseTest {
     @Test fun parseOfEmptyListingIsEmpty() {
         assertTrue(Timelapses.parse(JSONArray()).isEmpty())
     }
+    @Test fun parsePairsAVideoWithItsSameStemPoster() {
+        val list = JSONArray().put(entry("dragon.mp4", 1.0)).put(entry("dragon.jpg", 1.0)).put(entry("unrelated.jpeg", 1.0))
+        val result = Timelapses.parse(list)
+        assertEquals("dragon.jpg", result.single().posterPath)
+    }
+    @Test fun parseLeavesPosterNullWhenNoneWritten() {
+        val result = Timelapses.parse(JSONArray().put(entry("solo.mkv", 1.0)))
+        assertNull(result.single().posterPath)
+    }
+    @Test fun parseMatchesJpegExtensionCaseInsensitively() {
+        val list = JSONArray().put(entry("clip.webm", 1.0)).put(entry("clip.JPEG", 1.0))
+        assertEquals("clip.JPEG", Timelapses.parse(list).single().posterPath)
+    }
     @Test fun requestsTimelapseRootAndParsesResponse() {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"result":[{"path":"print1.mp4","size":2048,"modified":100.0}]}"""))
@@ -44,5 +57,39 @@ class TimelapseTest {
             try { api.timelapses(); fail() } catch (_: ApiFailure) { }
             api.close()
         }
+    }
+    @Test fun timelapseThumbnailRejectsTraversalAndFetchesFromTheTimelapseRoot() {
+        MockWebServer().use { server ->
+            server.start(); val api = Moonraker(server.url("/proxy/").toString())
+            for (path in listOf("../config/printer.cfg", "/etc/passwd", "a/../b", "a\\b")) {
+                try { api.timelapseThumbnail(path); fail("Traversal accepted") } catch (_: ApiFailure) { }
+            }
+            assertEquals(0, server.requestCount)
+            server.enqueue(MockResponse().setBody("image")); api.timelapseThumbnail("dragon.jpg")
+            val req = server.takeRequest()
+            assertEquals("/proxy/server/files/timelapse/dragon.jpg", req.requestUrl!!.encodedPath)
+            api.close()
+        }
+    }
+    @Test fun timelapseVideoUrlPointsAtTheTimelapseRootAndCarriesTheApiKeyAsAHeader() {
+        val api = Moonraker("http://192.168.1.5/", "secret-key")
+        val target = api.timelapseVideoUrl("2026-09-20/dragon.mp4")
+        assertEquals("http://192.168.1.5/server/files/timelapse/2026-09-20/dragon.mp4", target.url)
+        assertEquals("secret-key", target.headers["X-Api-Key"])
+        assertFalse(target.url.contains("secret-key"))
+        try { api.timelapseVideoUrl("../escape.mp4"); fail() } catch (_: ApiFailure) { }
+    }
+    @Test fun formatFileSizeScalesUnits() {
+        assertEquals("512 B", formatFileSize(512))
+        assertEquals("2 KB", formatFileSize(2048))
+        assertEquals("1.5 MB", formatFileSize((1.5 * 1_048_576).toLong()))
+        assertEquals("2.0 GB", formatFileSize(2L * 1_073_741_824))
+        assertEquals("Unknown size", formatFileSize(null))
+    }
+    @Test fun dayLabelNamesTodayAndYesterdayThenFallsBackToADate() {
+        val now = java.util.Date()
+        assertEquals("Today", dayLabel(now.time / 1000.0, now))
+        assertEquals("Yesterday", dayLabel(now.time / 1000.0 - 86_400, now))
+        assertTrue(dayLabel(now.time / 1000.0 - 10 * 86_400, now) !in setOf("Today", "Yesterday"))
     }
 }

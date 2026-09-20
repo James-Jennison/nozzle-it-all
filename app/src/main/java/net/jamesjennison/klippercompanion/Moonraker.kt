@@ -39,6 +39,8 @@ interface PrinterService {
     fun metadata(filename: String): FileMetadata = throw ApiFailure("Metadata unavailable.")
     fun history(start: Int): HistoryPage = throw ApiFailure("History unavailable.")
     fun thumbnail(path: String): ByteArray = throw ApiFailure("Thumbnail unavailable.")
+    fun timelapseThumbnail(path: String): ByteArray = throw ApiFailure("Timelapse thumbnail unavailable.")
+    fun timelapseVideoUrl(path: String): TimelapseVideoUrl = throw ApiFailure("Timelapse video unavailable.")
     fun heaterStatus(heater: String): HeaterStatus = throw ApiFailure("Heater controls unavailable.")
     fun fanStatus(fan: String): FanStatus = throw ApiFailure("Fan controls unavailable.")
     fun meshStatus(): BedMeshStatus = throw ApiFailure("Bed mesh unavailable.")
@@ -51,7 +53,7 @@ interface PrinterService {
     fun macroStatus(name: String): MacroStatus = throw ApiFailure("Macro status unavailable.")
     fun leds(): List<String> = emptyList()
     fun ledStatus(led: String): LedStatus = throw ApiFailure("Light status unavailable.")
-    fun timelapses(): List<FileInfo> = throw ApiFailure("Timelapse unavailable.")
+    fun timelapses(): List<TimelapseClip> = throw ApiFailure("Timelapse unavailable.")
     fun toolStatus(): ToolStatus = throw ApiFailure("Tool controls unavailable.")
     // Snapmaker U1/PAXX only (PrinterKind.SNAPMAKER_U1_PAXX); see Bespok3d.kt.
     fun bespok3dProbe(): Bespok3dProbe = throw ApiFailure("Bespok3d bridge unavailable.")
@@ -187,9 +189,17 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
             ?: throw ApiFailure("Light status unavailable.")
         return LedControls.parse(led, result)
     }
-    override fun timelapses(): List<FileInfo> {
+    override fun timelapses(): List<TimelapseClip> {
         val list = request("server/files/list", mapOf("root" to "timelapse")) as? JSONArray ?: throw ApiFailure("Timelapse unavailable.")
         return Timelapses.parse(list)
+    }
+    override fun timelapseThumbnail(path: String): ByteArray = fileBytes("timelapse", path, 2_000_000, "timelapse thumbnail")
+    override fun timelapseVideoUrl(path: String): TimelapseVideoUrl {
+        validateFilePath(path, "Invalid timelapse path.")
+        val target = base.newBuilder().addPathSegments("server/files/timelapse").apply { path.split('/').forEach { addPathSegment(it) } }.build()
+        // Moonraker's static file handler honours Range requests, so VideoView can seek without
+        // downloading the whole clip; the API key travels as a header, never in the URL itself.
+        return TimelapseVideoUrl(target.toString(), if(apiKey.isNotEmpty()) mapOf("X-Api-Key" to apiKey) else emptyMap())
     }
     override fun macroStatus(name: String): MacroStatus {
         require(Regex("[A-Za-z_][A-Za-z0-9_]*").matches(name)) { "Unsupported macro name" }
@@ -323,14 +333,20 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
             require(path == filename) { "Unexpected save acknowledgement; inspect the file before restarting." }
         }
     }
-    override fun thumbnail(path: String): ByteArray {
-        if(path.startsWith('/') || path.split('/').any { it == ".." || it == "." } || path.contains('\\')) throw ApiFailure("Invalid thumbnail path.")
-        val target = base.newBuilder().addPathSegments("server/files/gcodes").apply { path.split('/').forEach { addPathSegment(it) } }.build()
+    override fun thumbnail(path: String): ByteArray = fileBytes("gcodes", path, 2_000_000, "thumbnail")
+    private fun validateFilePath(path: String, message: String) {
+        if(path.startsWith('/') || path.split('/').any { it == ".." || it == "." } || path.contains('\\')) throw ApiFailure(message)
+    }
+    // Shared by thumbnail() (root=gcodes) and timelapseThumbnail() (root=timelapse): both are a
+    // small image fully read into memory, unlike a timelapse video which streams via its own URL.
+    private fun fileBytes(root: String, path: String, maxBytes: Int, label: String): ByteArray {
+        validateFilePath(path, "Invalid $label path.")
+        val target = base.newBuilder().addPathSegments("server/files/$root").apply { path.split('/').forEach { addPathSegment(it) } }.build()
         client.newCall(Request.Builder().url(target).build()).execute().use { response ->
-            if(!response.isSuccessful) throw ApiFailure("Thumbnail unavailable.")
-            val source = response.body?.source() ?: throw ApiFailure("Empty thumbnail.")
-            source.request(2_000_001)
-            return source.buffer.readByteArray().also { if(it.size > 2_000_000) throw ApiFailure("Thumbnail too large.") }
+            if(!response.isSuccessful) throw ApiFailure("${label.replaceFirstChar { it.uppercase() }} unavailable.")
+            val source = response.body?.source() ?: throw ApiFailure("Empty $label.")
+            source.request((maxBytes + 1).toLong())
+            return source.buffer.readByteArray().also { if(it.size > maxBytes) throw ApiFailure("${label.replaceFirstChar { it.uppercase() }} too large.") }
         }
     }
     override fun image(camera: Camera): ByteArray {

@@ -26,6 +26,7 @@ data class ScreenState(
 // helper) rather than sharing the main connection's; this is the one place that decides which
 // API key it gets, so a newly added call site can't compile while silently going unauthenticated.
 fun ScreenState.apiKeyFor(address: String): String = profiles.find { it.address == address }?.apiKey.orEmpty()
+fun ScreenState.kindFor(address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
 fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
 class PrinterModel(
     initialAddress: String = "",

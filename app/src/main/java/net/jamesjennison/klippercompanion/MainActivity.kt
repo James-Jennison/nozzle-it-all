@@ -143,6 +143,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(heaterOpen) HeaterPanel(state,execute,{heaterOpen=false})
     var fanOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(fanOpen) FanPanel(state,execute,{fanOpen=false})
+    var bespok3dOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(bespok3dOpen) Bespok3dPanel(state,{bespok3dOpen=false})
     var ledOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(ledOpen) LedPanel(state,execute,{ledOpen=false})
     var toolOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -353,6 +355,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         item { OutlinedButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")} }
                         item { OutlinedButton({toolOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-tools")){Text("Tool controls")} }
                         item { OutlinedButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")} }
+                        if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")} }
                     }
                     item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }
                     item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }

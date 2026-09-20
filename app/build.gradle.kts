@@ -16,6 +16,14 @@ dependencies {
  implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
  implementation("com.squareup.okhttp3:okhttp:4.12.0")
  implementation("androidx.security:security-crypto:1.1.0")
+ // Bespok3d bridge (Snapmaker U1/PAXX): SSH probe/enrollment + OpenPGP-signed plugin catalog
+ // verification, ported from Helix. com.github.mwiede:jsch is the actively maintained fork of
+ // the abandoned com.jcraft:jsch (same package name, drop-in API) — Helix itself pins this same
+ // fork/version. bcpg/bcprov provide the OpenPGP signature verification Bespok3dBootstrapPackages
+ // needs; bctls (TLS) is not used since Bespok3dClient pins certificates via javax.net.ssl directly.
+ implementation("com.github.mwiede:jsch:2.28.6")
+ implementation("org.bouncycastle:bcprov-jdk18on:1.83")
+ implementation("org.bouncycastle:bcpg-jdk18on:1.83")
  testImplementation("junit:junit:4.13.2")
  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
  testImplementation("org.json:json:20240303")

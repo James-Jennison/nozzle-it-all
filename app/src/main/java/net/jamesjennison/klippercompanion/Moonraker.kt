@@ -47,10 +47,18 @@ interface PrinterService {
     fun ledStatus(led: String): LedStatus = throw ApiFailure("Light status unavailable.")
     fun timelapses(): List<FileInfo> = throw ApiFailure("Timelapse unavailable.")
     fun toolStatus(): ToolStatus = throw ApiFailure("Tool controls unavailable.")
+    // Snapmaker U1/PAXX only (PrinterKind.SNAPMAKER_U1_PAXX); see Bespok3d.kt.
+    fun bespok3dProbe(): Bespok3dProbe = throw ApiFailure("Bespok3d bridge unavailable.")
+    fun bespok3dStatus(connection: Bespok3dConnection): Bespok3dStatus? = throw ApiFailure("Bespok3d bridge unavailable.")
+    fun bespok3dPlugins(connection: Bespok3dConnection): Bespok3dPluginCatalog = throw ApiFailure("Bespok3d bridge unavailable.")
+    fun bespok3dInstallPlugins(connection: Bespok3dConnection, pluginIds: List<String>, vars: Map<String, Map<String, String>>): Bespok3dPluginInstallResult = throw ApiFailure("Bespok3d bridge unavailable.")
     fun command(command: PrinterCommand)
     fun close()
 }
-class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader {
+// The printer's own touchscreen, exposed by the Bespok3d/HelixScreen plugin as an ordinary webcam
+// catalog entry. Its stream must not be treated as a regular camera - mirrors Helix's isGuiWebcam.
+fun Camera.isBespok3dScreen(): Boolean = name.equals("gui", ignoreCase = true) || Regex("/screen(?:/|$)", RegexOption.IGNORE_CASE).containsMatchIn(stream)
+class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val apiKey = rawApiKey.trim()
@@ -137,6 +145,15 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
             } catch (e: org.json.JSONException) { throw ApiFailure("Invalid Moonraker response.") }
         }
     }
+    private val bespok3dClient by lazy { Bespok3dClient() }
+    override fun bespok3dProbe(): Bespok3dProbe = bespok3dClient.probe(base.host)
+    override fun bespok3dStatus(connection: Bespok3dConnection): Bespok3dStatus? = try {
+        bespok3dClient.status(base.host, connection.token, connection.certificatePem)
+    } catch (e: Bespok3dHttpException) { if (e.statusCode == 401) null else throw e }
+    override fun bespok3dPlugins(connection: Bespok3dConnection): Bespok3dPluginCatalog =
+        bespok3dClient.plugins(base.host, connection.token, connection.certificatePem)
+    override fun bespok3dInstallPlugins(connection: Bespok3dConnection, pluginIds: List<String>, vars: Map<String, Map<String, String>>): Bespok3dPluginInstallResult =
+        bespok3dClient.installPlugins(base.host, connection.token, connection.certificatePem, pluginIds, vars)
     override fun console(): ConsoleBatch {
         val result=request("server/gcode_store",mapOf("count" to ConsoleLog.MAX_ENTRIES.toString())) as? JSONObject ?: throw ApiFailure("Console unavailable.")
         return ConsoleLog.parse(result)

@@ -14,10 +14,15 @@ fork of it. Ported files carry a header comment noting their origin.
 
 Incorporated so far:
 
-- `Bespok3dClient.kt`, `Bespok3dU1Preflight.kt`, `Bespok3dU1Enrollment.kt` —
+- `Bespok3dClient.kt`, `Bespok3dU1Preflight.kt`, `Bespok3dU1Enrollment.kt`,
+  `Bespok3dSsh.kt`, `Bespok3dSshExitStatus.kt`, `Bespok3dBootstrapPackages.kt` —
   adapted from Helix's `android/app/src/main/java/org/crabcore/u1control/bespok3d/`
-  (HTTPS client and SSH-based probe/enrollment flow for the Bespok3d daemon
-  running on a Snapmaker U1).
+  (HTTPS client, SSH transport and SSH-based probe/enrollment flow for the
+  Bespok3d daemon running on a Snapmaker U1, and OpenPGP verification of its
+  signed plugin/bootstrap packages). `Bespok3dBootstrapPackages.kt`'s bundled
+  release archive (`assets/bespok3d/bootstrap-v0.7.3.zip` in Helix, ~9MB) is
+  not vendored into this app; its `load(Context)` entry point is ported for
+  completeness but is unused until/unless that asset is added separately.
 
 ## Bespok3d
 

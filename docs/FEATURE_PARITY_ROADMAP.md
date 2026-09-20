@@ -257,11 +257,12 @@ below.**
     commits `24ba1a7`…`ed0ed17`. Supersedes the "Queued... visual-polish pass"
     item this section used to list here (that request predates and is now
     folded into this broader redesign, not a separate later pass).
-24. M8g (**P29**, new row) — Emergency-stop control. **Not started**, surfaced
-    2026-09-20 by re-evaluating M2 against Helix's feature set (see the M2
-    "Helix comparison" note below); a genuine pre-existing gap, not new scope
-    invented by the comparison. Safety-relevant, sequenced ahead of the rest
-    of Phase 1's physical-acceptance backlog rather than folded in behind it.
+24. M8g (**P29**, new row) — Emergency-stop control. **Done 2026-09-20**, commit
+    `f080790`, surfaced the same day by re-evaluating M2 against Helix's feature
+    set (see the M2 "Helix comparison" note below); a genuine pre-existing gap,
+    not new scope invented by the comparison. Built and unit-tested; physical
+    acceptance still outstanding, folded into the already-authorized Phase 1
+    testing sessions rather than a separate gate.
 
 **Parked, not sequenced until scoped:**
 - Wear OS — reopened, no scope or target milestone yet
@@ -427,7 +428,7 @@ turned into a paid unlock.
 | P26 | Prusa (PrusaLink/Prusa Connect) printer support; Prusa Connect app | Missing | M7 | L discovery | Existing service (Prusa Connect) or local PrusaLink API; owner does not own this hardware, see M7 acceptance note |
 | P27 | Bespok3d plugin bridge + remote touchscreen mirror for the Snapmaker U1/PAXX; Helix | **Done 2026-09-20:** `Bespok3dClient`/SSH preflight-enrollment, ported from Helix (AGPL) with attribution, gated to `PrinterKind.SNAPMAKER_U1_PAXX`. The signed daemon/jinni bundle that enrollment needs is independently re-verified and vendored (not Helix's own copy — downloaded fresh from Bespok3d's GitHub releases and OpenPGP-checked against their own publisher key before being committed, see `scripts/build_bespok3d_bootstrap.py`). Remote screen re-serves `helixd`'s JPEG-polling touchscreen mirror, not an MJPEG stream as first assumed — corrected after reading Helix's actual behavior rather than guessing. Unit-tested; **enrollment/remote-screen not yet device-verified against a real U1** (needs the owner's own SSH access code) | M8b | L | Local; Snapmaker U1/PAXX running Bespok3d, owner-entered SSH credentials never persisted |
 | P28 | Visual redesign ("Kiln" theme): new palette/typography, 5-tab nav, Quickview list + per-printer detail hero | **Substantially done 2026-09-20:** duotone dark theme (ember heat / teal accent) and Space Grotesk/IBM Plex Sans/Mono (OFL, bundled as variable fonts) replace the old flat scheme; bottom nav grows from 4 to 5 tabs (Home/Control/Files/Prepare/Settings — deliberately reordered/relabeled from an early draft that matched Helix's own nav almost exactly); Home's printer list and the per-printer dashboard hero/temperature cards get the gradient/status-dot treatment from the design concept. Every change physically verified live on the owner's Razr 2023, including two real bugs a live check caught that code review hadn't (a compressed/clipped hero card, an invisible layer-line texture). Remaining: Bespok3d/Bambu panels, the bed-mesh 3D view and the timelapse gallery still use pre-redesign `AlertDialog` chrome (they inherit the new colors/fonts via the theme change, but not the card/gradient treatment) | M8f | L | Local; OFL font licenses bundled, see `THIRD_PARTY_NOTICES.md` |
-| P29 | Emergency stop control | **Missing (identified 2026-09-20)** — found by comparing against Helix, not previously scoped anywhere in this document. Helix fires an M112-equivalent over both WebSocket and REST to every configured URL for reliability under a degraded connection; our app has no emergency-stop control path at all, gated or otherwise. Safety-relevant, not cosmetic — should not wait behind the rest of the physical-acceptance backlog | M2 | S | Local; sends `printer.emergency_stop` (or gcode `M112`) via Moonraker, same transport as existing gated controls; needs the owner's own physical-acceptance sign-off before the gate opens, same as the rest of Phase 1's controls |
+| P29 | Emergency stop control | **Built 2026-09-20, commit `f080790`.** `PrinterModel.emergencyStop()` POSTs `printer/emergency_stop` to Moonraker; deliberately bypasses `execute()`'s foreground/busy/ready/state gates, since those are exactly backwards for a control whose purpose is working when something's already wrong (referenced against Helix's own `emergencyStop` action, which does the same). UI: full-width red button, last in the Control tab, behind a confirmation dialog, gated behind `LIVE_HEATER_FAN_CONTROLS_ENABLED` and hidden for Bambu Lab. Only fires one REST call (this app has no WebSocket channel and no second saved URL per printer yet, unlike Helix's "every configured transport" — see the P16 addendum). Unit-tested (bypasses gates even while backgrounded/busy/not-ready; no-ops without a connected printer); **not yet physically sent to a real printer** — folds into the already-authorized Phase 1 testing sessions (see M2 above), not a new gate | M2 (M8g) | S | Local; sends `printer/emergency_stop` via Moonraker, same transport as existing gated controls |
 | P30 | PAXX `multiACE` filament system (RFID lane status, dryer, load/unload, cross-ACE switching) | **Missing, unscoped before 2026-09-20** — a real PAXX-specific hardware capability surfaced by reading Helix's feature list, not present anywhere in this document until now. Only relevant to owners with multiACE hardware attached; needs an honest empty state when none is present, the same pattern Helix itself uses | Unscheduled | M | Existing printer capabilities; PAXX-specific `ACE_LOAD_HEAD`/`A_DRY`/`ACE_SWITCH` macros — verify against the owner's actual PAXX firmware before building, don't assume Helix's macro names transfer unchanged |
 
 **P15 sourcing note (2026-09-16):** the Snapmaker U1 runs a genuine Klipper/Moonraker
@@ -749,13 +750,17 @@ opacity). Remaining, explicitly not yet done: Bespok3d/Bambu panels, the bed-mes
 chrome (new colors/fonts apply via the theme change; the card/gradient treatment
 does not, yet).
 
-**M8g — emergency-stop control, P29.** Not started. Surfaced 2026-09-20 by
-re-evaluating the project against Helix's feature set at the owner's request (full
-writeup under M2's "Helix comparison" note above). A pre-existing gap this document
-had simply missed, not new scope invented by the comparison — every other gated
-Phase 1 control (heat/fan/macro/speed-flow/console) has a row somewhere in this
-document; emergency stop never did. Sequenced ahead of the rest of the physical-
-acceptance backlog given its safety role, once picked up.
+**M8g — emergency-stop control, P29.** Built 2026-09-20, commit `f080790`, same
+day it was surfaced by re-evaluating the project against Helix's feature set at
+the owner's request (full writeup under M2's "Helix comparison" note above). A
+pre-existing gap this document had simply missed, not new scope invented by the
+comparison — every other gated Phase 1 control (heat/fan/macro/speed-flow/
+console) has a row somewhere in this document; emergency stop never did. Two new
+unit tests added (gate-bypass behavior, no-op without a connected printer); all
+297 JVM tests pass, `assembleDebug`/`assembleDebugAndroidTest`/lint all clean.
+Physical acceptance is the one thing left, and it isn't a new gate: it folds
+into the Phase 1 testing sessions already authorized and underway (see M2's
+"physical acceptance authorized and underway" note above).
 
 **Also surfaced by the same comparison, not part of M8 itself:** `multiACE` support
 (**P30**, a real PAXX hardware capability with no prior row in this document) and

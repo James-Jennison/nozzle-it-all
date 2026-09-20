@@ -257,6 +257,11 @@ below.**
     commits `24ba1a7`…`ed0ed17`. Supersedes the "Queued... visual-polish pass"
     item this section used to list here (that request predates and is now
     folded into this broader redesign, not a separate later pass).
+24. M8g (**P29**, new row) — Emergency-stop control. **Not started**, surfaced
+    2026-09-20 by re-evaluating M2 against Helix's feature set (see the M2
+    "Helix comparison" note below); a genuine pre-existing gap, not new scope
+    invented by the comparison. Safety-relevant, sequenced ahead of the rest
+    of Phase 1's physical-acceptance backlog rather than folded in behind it.
 
 **Parked, not sequenced until scoped:**
 - Wear OS — reopened, no scope or target milestone yet
@@ -265,6 +270,10 @@ below.**
 - M8's own remaining scope: on-device slicing (highest risk — needs an owner
   sign-off before vendoring a ~23MB prebuilt slicer binary of unverified
   provenance) and a MakerWorld browser; see M8 below.
+- **P30**, PAXX `multiACE` support — real capability, only relevant to owners with
+  the hardware attached; no target milestone yet
+- **P16** LAN/Tailscale automatic URL failover — real resilience gap next to the
+  already-shipped Tailscale support; not yet given its own effort estimate
 
 M6a (multi-printer overview) and M1 are already done — see their rows below for
 evidence. This working order supersedes any looser "Now/Later" framing discussed
@@ -405,7 +414,7 @@ turned into a paid unlock.
 | P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Skipped — owner does not run Spoolman (confirmed 2026-09-16); revisit only if that changes | M3 | M | Existing service; read first, validated mutations later |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
 | P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Validated: multi-toolhead visibility verified live on the U1 (all 4 extruders). Still missing: lights/power devices, COSMOS-specific checks (exhaust fan RPM, saved mesh profiles), and any actual fan/light control | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
-| P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | API-key auth built and device-verified (X-Api-Key, encrypted per-profile storage); Tailscale/*.ts.net addresses accepted; Cloudflare Tunnel/port forwarding documentation-only | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
+| P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | API-key auth built and device-verified (X-Api-Key, encrypted per-profile storage); Tailscale/*.ts.net addresses accepted; Cloudflare Tunnel/port forwarding documentation-only. **Gap noted 2026-09-20:** each profile is still a single fixed address — no automatic LAN/Tailscale failover. Helix keeps both a LAN and a Tailscale URL per printer and alternates on a 6s connect timeout, which is a real resilience pattern worth adopting, not yet scoped as its own effort estimate | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
 | P17 | Background completion/error/offline/filament alerts; Mobileraker/OctoApp/Obico | Missing | M4b | L | Opt-in Android monitoring; reliable unattended coverage needs always-on event source |
 | P18 | Notification actions and Android home-screen widgets; OctoApp/Android convenience | Missing | M4b | M | P17 freshness model; command actions open confirmation |
 | P19 | Timelapse browsing/export, optional capture/encode; monitoring workflow | Read-only browsing built 2026-09-18 (see M4c above). **2026-09-20 (M8d):** upgraded to a day-grouped gallery — moonraker-timelapse poster-frame thumbnails, in-app playback via `VideoView` streamed directly from Moonraker (Range-request seeking, no full download to watch), and a "Save" action to a user-chosen document via SAF. Unlike M8e, **not yet visually verified on a real device** — JVM/androidTest only, same evidence gap the original M4c browsing shipped with. Capture/render triggering is still fully unbuilt | M4c (+M8d) | M viewer; L capture | Existing service or always-on storage/encoding |
@@ -418,6 +427,8 @@ turned into a paid unlock.
 | P26 | Prusa (PrusaLink/Prusa Connect) printer support; Prusa Connect app | Missing | M7 | L discovery | Existing service (Prusa Connect) or local PrusaLink API; owner does not own this hardware, see M7 acceptance note |
 | P27 | Bespok3d plugin bridge + remote touchscreen mirror for the Snapmaker U1/PAXX; Helix | **Done 2026-09-20:** `Bespok3dClient`/SSH preflight-enrollment, ported from Helix (AGPL) with attribution, gated to `PrinterKind.SNAPMAKER_U1_PAXX`. The signed daemon/jinni bundle that enrollment needs is independently re-verified and vendored (not Helix's own copy — downloaded fresh from Bespok3d's GitHub releases and OpenPGP-checked against their own publisher key before being committed, see `scripts/build_bespok3d_bootstrap.py`). Remote screen re-serves `helixd`'s JPEG-polling touchscreen mirror, not an MJPEG stream as first assumed — corrected after reading Helix's actual behavior rather than guessing. Unit-tested; **enrollment/remote-screen not yet device-verified against a real U1** (needs the owner's own SSH access code) | M8b | L | Local; Snapmaker U1/PAXX running Bespok3d, owner-entered SSH credentials never persisted |
 | P28 | Visual redesign ("Kiln" theme): new palette/typography, 5-tab nav, Quickview list + per-printer detail hero | **Substantially done 2026-09-20:** duotone dark theme (ember heat / teal accent) and Space Grotesk/IBM Plex Sans/Mono (OFL, bundled as variable fonts) replace the old flat scheme; bottom nav grows from 4 to 5 tabs (Home/Control/Files/Prepare/Settings — deliberately reordered/relabeled from an early draft that matched Helix's own nav almost exactly); Home's printer list and the per-printer dashboard hero/temperature cards get the gradient/status-dot treatment from the design concept. Every change physically verified live on the owner's Razr 2023, including two real bugs a live check caught that code review hadn't (a compressed/clipped hero card, an invisible layer-line texture). Remaining: Bespok3d/Bambu panels, the bed-mesh 3D view and the timelapse gallery still use pre-redesign `AlertDialog` chrome (they inherit the new colors/fonts via the theme change, but not the card/gradient treatment) | M8f | L | Local; OFL font licenses bundled, see `THIRD_PARTY_NOTICES.md` |
+| P29 | Emergency stop control | **Missing (identified 2026-09-20)** — found by comparing against Helix, not previously scoped anywhere in this document. Helix fires an M112-equivalent over both WebSocket and REST to every configured URL for reliability under a degraded connection; our app has no emergency-stop control path at all, gated or otherwise. Safety-relevant, not cosmetic — should not wait behind the rest of the physical-acceptance backlog | M2 | S | Local; sends `printer.emergency_stop` (or gcode `M112`) via Moonraker, same transport as existing gated controls; needs the owner's own physical-acceptance sign-off before the gate opens, same as the rest of Phase 1's controls |
+| P30 | PAXX `multiACE` filament system (RFID lane status, dryer, load/unload, cross-ACE switching) | **Missing, unscoped before 2026-09-20** — a real PAXX-specific hardware capability surfaced by reading Helix's feature list, not present anywhere in this document until now. Only relevant to owners with multiACE hardware attached; needs an honest empty state when none is present, the same pattern Helix itself uses | Unscheduled | M | Existing printer capabilities; PAXX-specific `ACE_LOAD_HEAD`/`A_DRY`/`ACE_SWITCH` macros — verify against the owner's actual PAXX firmware before building, don't assume Helix's macro names transfer unchanged |
 
 **P15 sourcing note (2026-09-16):** the Snapmaker U1 runs a genuine Klipper/Moonraker
 fork ([Snapmaker/u1-moonraker](https://github.com/Snapmaker/u1-moonraker), GPL-3.0;
@@ -492,6 +503,26 @@ unhomed movement and unsupported controls are guarded; interrupted uploads canno
 silently replace valid files; cancelled/oversized previews release resources.
 Physical movement/heating/extrusion tests occur only in an owner-approved idle-printer
 window. Mock success alone does not establish physical acceptance.
+
+**Helix comparison, 2026-09-20:** re-evaluated this milestone after merging in the
+Helix-derived M8 work, on the owner's suggestion that Helix might already have these
+controls "wired up." It doesn't, in a portable sense — Helix's heater/fan/macro/
+speed-flow/console/emergency-stop controls are TypeScript/React Native
+(`hooks/useMoonraker.tsx`, a WebSocket JSON-RPC client), not Kotlin; the only Kotlin
+in Helix is for what React Native can't do natively (SSH, raw MQTT sockets, slicer
+FFI), which is exactly what M8b/M8c already ported. There is no unported code sitting
+in Helix for this milestone to absorb. What the comparison *is* worth: Helix is a
+shipped app that sends these same live commands, over the same Moonraker API, to
+real Snapmaker U1/PAXX hardware in day-to-day use — informal but real evidence the
+underlying commands are safe on this printer's firmware fork. That doesn't substitute
+for the owner's own physical-acceptance sign-off (different codebase, our own
+implementation could still have its own bugs), but it's real context for that
+decision, not just a hunch. The same comparison also surfaced a genuine gap this
+milestone had missed entirely: no emergency-stop control existed anywhere in this
+app before 2026-09-20 (see new row **P29**) — added here rather than treated as a
+redesign detail, since it's safety-relevant. `multiACE` support (**P30**) and LAN/
+Tailscale URL failover (**P16** addendum) also came out of the same comparison but
+sit outside M2's own scope.
 
 ### M3 — Klipper tools and filament
 
@@ -691,12 +722,29 @@ opacity). Remaining, explicitly not yet done: Bespok3d/Bambu panels, the bed-mes
 chrome (new colors/fonts apply via the theme change; the card/gradient treatment
 does not, yet).
 
+**M8g — emergency-stop control, P29.** Not started. Surfaced 2026-09-20 by
+re-evaluating the project against Helix's feature set at the owner's request (full
+writeup under M2's "Helix comparison" note above). A pre-existing gap this document
+had simply missed, not new scope invented by the comparison — every other gated
+Phase 1 control (heat/fan/macro/speed-flow/console) has a row somewhere in this
+document; emergency stop never did. Sequenced ahead of the rest of the physical-
+acceptance backlog given its safety role, once picked up.
+
+**Also surfaced by the same comparison, not part of M8 itself:** `multiACE` support
+(**P30**, a real PAXX hardware capability with no prior row in this document) and
+LAN/Tailscale automatic URL failover (**P16** addendum). Both are parked, unscoped —
+see the parked list in the working order above.
+
 **Still open, no target date:** on-device slicing (M8's highest-risk remaining
 scope — needs vendoring a ~23MB prebuilt `libprusaslicer-jni.so` of unverified
 build provenance from the separate "u1-slicer-for-android" project; requires
 explicit owner sign-off before that binary lands, not implied by the M8 decision
 above) and a MakerWorld model browser (folded into the same later phase as
 slicing, since it's a model-import source feeding it rather than standalone).
+Notably, Helix itself has shipped on-device slicing built on the same
+u1-slicer-for-android engine and Orca profiles — real production use of that
+engine exists elsewhere, which is useful context for the provenance conversation
+but doesn't substitute for doing that verification ourselves before vendoring it.
 
 ## Optional future ideas outside the roadmap
 

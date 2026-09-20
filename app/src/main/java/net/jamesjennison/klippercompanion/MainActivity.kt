@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity() {
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
                 CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
-                    backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled)
+                    backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop)
             }
         }
     }
@@ -121,7 +121,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String)->String? = {_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
-    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={},
+    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
     configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
@@ -193,6 +193,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var newestFirst by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Pair<PrinterCommand,Int>?>(null) }
+    var estopConfirm by rememberSaveable { mutableStateOf(false) }
     var expandedCamera by remember(state.generation, state.connected) { mutableStateOf(false) }
     BackHandler(expandedCamera) { expandedCamera = false }
     val enabled = state.connected && state.snapshot?.ready == true && !state.busy
@@ -382,6 +383,13 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         item { OutlinedButton({toolOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-tools")){Text("Tool controls")} }
                         item { OutlinedButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")} }
                         if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")} }
+                        // Last in this section, not first: destructive, so it should never sit
+                        // where a thumb reaching for an ordinary control could hit it by accident
+                        // (same reasoning Helix's own EstopBar comment gives).
+                        item {
+                            Button({estopConfirm=true}, enabled=state.connected, modifier=Modifier.fillMaxWidth().testTag("emergency-stop"),
+                                colors=ButtonDefaults.buttonColors(containerColor=MaterialTheme.colorScheme.error, contentColor=MaterialTheme.colorScheme.onError)) { Text("EMERGENCY STOP") }
+                        }
                     }
                     if(!bambu) {
                         item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }
@@ -506,6 +514,13 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             confirmButton = { Button({ pending = null; execute(command, epoch) }, enabled = enabled && (command.allowedStates.isEmpty() || state.snapshot?.state in command.allowedStates)) { Text("Confirm") } },
             dismissButton = { TextButton({ pending = null }) { Text("Go back") } })
     }
+    // Separate from the pending?.let dialog above: that one disables Confirm once the printer's
+    // state drifts from what was reviewed, which is exactly backwards for an emergency stop.
+    if(estopConfirm) AlertDialog(onDismissRequest = { estopConfirm = false }, title = { Text("Emergency stop?") },
+        text = { Text("Halts the printer immediately and cancels any running print. The firmware needs a restart afterwards.") },
+        confirmButton = { Button({ estopConfirm = false; emergencyStop() }, modifier=Modifier.testTag("confirm-emergency-stop"),
+            colors=ButtonDefaults.buttonColors(containerColor=MaterialTheme.colorScheme.error, contentColor=MaterialTheme.colorScheme.onError)) { Text("Stop the printer") } },
+        dismissButton = { TextButton({ estopConfirm = false }) { Text("Cancel") } })
 }
 @Composable private fun Temperature(label: String, actual: Double?, target: Double?, modifier: Modifier, isNozzle:Boolean=false) {
     // Ember for the nozzle, teal for the bed - the same duotone the redesign concept uses

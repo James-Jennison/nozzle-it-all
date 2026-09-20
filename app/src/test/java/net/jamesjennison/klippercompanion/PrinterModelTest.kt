@@ -23,7 +23,8 @@ class PrinterModelTest {
         override fun snapshot(): PrinterSnapshot { reads++; beforeRead?.invoke(); return value }
         override fun catalog() = Catalog(emptyList(),emptyList(),cameras,emptyList())
         override fun image(camera: Camera) = byteArrayOf()
-        override fun command(command: PrinterCommand) { sent++; afterSend?.invoke() }
+        var lastCommand: PrinterCommand? = null
+        override fun command(command: PrinterCommand) { sent++; lastCommand = command; afterSend?.invoke() }
         var closed = false
         override fun close() { closed = true }
     }
@@ -221,6 +222,26 @@ class PrinterModelTest {
         assertEquals("other",model.state.value.selectedCamera()?.id)
         model.connect(first.address);runCurrent();assertEquals("b",model.state.value.selectedCamera()?.id)
         model.disconnect(); model.foreground(false)
+    }
+
+    @Test fun emergencyStopBypassesEveryGateExecuteApplies() = runTest(dispatcher) {
+        val fake = Fake().apply { value = PrinterSnapshot(false, "error") } // not ready, not an allowed print state
+        val model = PrinterModel(serviceFactory = { fake }, clock = { 100_000 }, io = dispatcher)
+        model.foreground(false) // backgrounded - execute() would refuse to send at all
+        model.connect(fake.address); runCurrent()
+        fake.afterSend = { model.foreground(false) } // still backgrounded/busy while the call is in flight
+        model.emergencyStop(); runCurrent()
+        assertEquals(1, fake.sent)
+        assertEquals("printer/emergency_stop", fake.lastCommand?.path)
+        assertTrue(fake.lastCommand?.allowedStates.isNullOrEmpty())
+        assertTrue(model.state.value.commandNotice.contains("Emergency stop"))
+        model.disconnect(); model.foreground(false)
+    }
+    @Test fun emergencyStopDoesNothingWithoutAConnectedPrinter() = runTest(dispatcher) {
+        val fake = Fake()
+        val model = PrinterModel(serviceFactory = { fake }, clock = { 100_000 }, io = dispatcher)
+        model.emergencyStop(); runCurrent()
+        assertEquals(0, fake.sent)
     }
 
 }

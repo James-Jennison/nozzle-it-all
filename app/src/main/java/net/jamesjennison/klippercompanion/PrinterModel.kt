@@ -325,6 +325,26 @@ class PrinterModel(
             }
         }
     }
+    /**
+     * Deliberately bypasses every gate execute() applies (foreground, generation, connected,
+     * busy, ready, allowedStates). An emergency stop exists precisely for the moment those
+     * conditions are wrong - printer busy mid-command, Klippy not ready, a stuck request - so
+     * gating it the same way as an ordinary command could block it exactly when it's needed.
+     * Referenced against Helix's own emergencyStop action (hooks/useDashboardModel.ts), which
+     * fires immediately with no state precondition; this differs only in transport (this app has
+     * no WebSocket channel to also fire over, and no second saved URL yet to spray it at - see
+     * FEATURE_PARITY_ROADMAP.md's P16 addendum).
+     */
+    fun emergencyStop() {
+        val service = api ?: return
+        _state.value = _state.value.copy(commandNotice = "Sending emergency stop…")
+        viewModelScope.launch {
+            val message = try {
+                withContext(io) { service.command(PrinterCommand("Emergency stop", "printer/emergency_stop")); "Printer acknowledged Emergency stop." }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { "Emergency stop outcome unknown or rejected. Inspect the printer before trying again. No automatic retry was sent." }
+            _state.value = _state.value.copy(commandNotice = message)
+        }
+    }
     override fun onCleared() { savedMonitor.stop(); api?.close() }
 }
 

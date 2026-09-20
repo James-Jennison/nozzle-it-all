@@ -405,7 +405,7 @@ turned into a paid unlock.
 | P04 | Print history, outcomes, duration/material summaries; Printer Tools/SimplyPrint | Validated: paged records and summaries | M1 | M | Local; history API and available records |
 | P05 | Elapsed time, ETA and layer progress; everyday monitoring | Validated: elapsed/layers and labelled estimates | M1 | M | Local; metadata/status; label estimates and missing data |
 | P06 | Macro favorites/groups/validated parameter forms; Mobileraker | Basic run | M2 | M | Local; explicit parameter definitions, not guessed inputs |
-| P07 | Heating presets, fans, speed/flow, movement/extrusion; Mobileraker/OctoApp | Simulated control preview verified; live capability/physical acceptance pending ([scope](P07_PREVIEW_ACCEPTANCE.md)) | M2 | L | Local; capability discovery and owner-operated physical acceptance |
+| P07 | Heating presets, fans, speed/flow, movement/extrusion; Mobileraker/OctoApp | **2026-09-19:** heating presets physically verified complete (bed + nozzle, PASS); fans partially verified (`fan`, `cavity_fan` confirmed live; `exhaust_fan`/`circulation_fan` found to be purifier-managed and hidden; `e1_fan`–`e3_fan` untested). Speed/flow, movement and extrusion controls remain unbuilt-for-live/unverified. See M2's "physical acceptance authorized and underway" note below | M2 | L | Local; capability discovery and owner-operated physical acceptance |
 | P08 | Upload/download/rename/delete, share-to-app; Mobileraker/OctoApp | Download/import/export, unique-name live upload/rename and confirmed live deletion verified ([scope](P08_DELETE_ACCEPTANCE.md)) | M2 | M | Local; bounded transfers and explicit overwrite/delete handling |
 | P09 | G-code preview with layers and print position; Mobileraker/OctoApp | Local navigation and read-only buffered file-progress tracking verified ([scope](P09_LIVE_TRACKING_ACCEPTANCE.md)) | M2 | L | Local; bounded parser/renderer, supported dialects |
 | P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
@@ -478,7 +478,7 @@ with available Moonraker records; missing ETA stays unknown. Validate real WebRT
 MJPEG fixture/available camera, long filenames and large histories on the Razr.
 Multiple physical printers/cameras remain an explicit evidence gap until available.
 
-### M2 — Prepare and operate prints from the app (implementation resumed, physical acceptance still deferred)
+### M2 — Prepare and operate prints from the app (physical acceptance in progress)
 
 First active-print delivery: [scope and acceptance](M2_ACTIVE_PRINT_ACCEPTANCE.md).
 Local macro organization, numeric forms, document workflows and approximate layer
@@ -492,11 +492,34 @@ must preserve safety messages and connection freshness.
 for the duration of the owner's Toys for Tots season. **Revised 2026-09-16:**
 control-work implementation is unpaused — the remaining P07 speed/flow slice,
 P06 macro forms, P11 console entry and P15 control additions can be built and
-validated now via unit/device-fixture tests. Physical acceptance (installing on
-the Razr and sending real commands to the Snapmaker U1 or Elegoo CC) remains a
-separate, later owner decision — not authorized by this revision. The
-`LIVE_HEATER_FAN_CONTROLS_ENABLED` gate stays off in the running app until that
-happens, exactly as it already did for the pre-pause heater/fan panels.
+validated now via unit/device-fixture tests.
+
+**Physical acceptance authorized and underway, 2026-09-19** (this document had
+gone stale on this point until re-checked 2026-09-20 while investigating the
+Helix comparison below — see the correction note under "Helix comparison").
+`LIVE_HEATER_FAN_CONTROLS_ENABLED` is `true` in the running app; the owner is
+doing supervised, category-by-category live testing against the real Snapmaker
+U1, one control surface at a time, watching throughout. Status per surface:
+- **Heater controls: PASS, complete.** Bed and active-nozzle heat/shutoff both
+  physically verified end-to-end (review → confirm → real heat → target reached
+  → shutoff), cross-checked directly against Moonraker's own status, not just
+  the app's own acknowledgement text. Full detail: `M2_HEATER_CONTROLS_ACCEPTANCE.md`.
+- **Fan controls: partial.** `fan` (standard part-cooling, including the
+  mounted Toolhead 1 fan) and `fan_generic cavity_fan` are physically verified
+  responsive. A real finding came out of this pass: `exhaust_fan` and
+  `circulation_fan` turned out not to be plain manual fans at all — the
+  printer's own `purifier.py` wraps both in a `PurifierFanRouter` that
+  redirects `SET_FAN_SPEED` into the Purifier module's own automation instead
+  of driving the pin directly, so a requested speed from the Fan controls
+  panel couldn't actually promise what it appeared to. Both were hidden from
+  the panel (new per-fan Hide/Unhide feature, mirroring the existing macro
+  one) rather than left showing a control that doesn't do what it says.
+  `e1_fan`/`e2_fan`/`e3_fan` are genuine manual per-extruder fans and stay
+  visible but are not yet physically exercised. Full detail:
+  `M2_FAN_CONTROLS_ACCEPTANCE.md`.
+- **Still outstanding:** P07's remaining speed/flow/movement/extrusion
+  controls, P08 live file mutations, P09 live tracking, and remaining hardware
+  macro acceptance — none of these have a physical pass recorded yet.
 
 Exit: invalid macro parameters cannot inject unintended commands; cold extrusion,
 unhomed movement and unsupported controls are guarded; interrupted uploads cannot
@@ -514,10 +537,14 @@ FFI), which is exactly what M8b/M8c already ported. There is no unported code si
 in Helix for this milestone to absorb. What the comparison *is* worth: Helix is a
 shipped app that sends these same live commands, over the same Moonraker API, to
 real Snapmaker U1/PAXX hardware in day-to-day use — informal but real evidence the
-underlying commands are safe on this printer's firmware fork. That doesn't substitute
-for the owner's own physical-acceptance sign-off (different codebase, our own
-implementation could still have its own bugs), but it's real context for that
-decision, not just a hunch. The same comparison also surfaced a genuine gap this
+underlying commands are safe on this printer's firmware fork. **Correction, same
+day:** re-checking this milestone's own status while writing that paragraph found
+this document had gone stale on a more basic point — physical acceptance is not
+hypothetical here, the owner already authorized and began it on 2026-09-19, and
+heater controls are already a complete PASS with fans partially verified (see the
+"Physical acceptance authorized and underway" note above). Helix's evidence is
+real context on top of that, not a stand-in for owner sign-off that in fact
+already happened. The same comparison also surfaced a genuine gap this
 milestone had missed entirely: no emergency-stop control existed anywhere in this
 app before 2026-09-20 (see new row **P29**) — added here rather than treated as a
 redesign detail, since it's safety-relevant. `multiACE` support (**P30**) and LAN/

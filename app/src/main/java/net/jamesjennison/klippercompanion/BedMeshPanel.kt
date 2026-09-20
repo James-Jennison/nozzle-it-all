@@ -52,22 +52,31 @@ import java.util.Locale
                 val low = values.min(); val high = values.max()
                 Text(if (mesh.profileName.isNotBlank()) "Profile: ${mesh.profileName}" else "Profile: (unnamed)")
                 Text("Z range ${"%.3f".format(Locale.ROOT, low)} to ${"%.3f".format(Locale.ROOT, high)} mm across ${mesh.probedMatrix.size}×${mesh.probedMatrix.firstOrNull()?.size ?: 0} probed points")
-                Canvas(Modifier.fillMaxWidth().height(220.dp).testTag("mesh-canvas")
-                    .semantics { contentDescription = "Bed mesh heatmap, ${mesh.probedMatrix.size} by ${mesh.probedMatrix.firstOrNull()?.size ?: 0} points" }) {
-                    val rows = mesh.probedMatrix.size; val cols = mesh.probedMatrix.firstOrNull()?.size ?: 0
-                    if (rows > 0 && cols > 0) {
-                        val cellWidth = size.width / cols; val cellHeight = size.height / rows
-                        val span = (high - low).takeIf { it > 0.0 } ?: 1.0
-                        mesh.probedMatrix.forEachIndexed { r, row ->
-                            row.forEachIndexed { c, z ->
-                                val t = ((z - low) / span).coerceIn(0.0, 1.0).toFloat()
-                                val color = lerp(Color(0xFF3B6FE0), Color(0xFFE0473B), t)
-                                drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(c * cellWidth, (rows - 1 - r) * cellHeight), size = androidx.compose.ui.geometry.Size(cellWidth, cellHeight))
+                var view3d by remember(address) { mutableStateOf(true) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(view3d, { view3d = true }, label = { Text("3D surface") }, modifier = Modifier.testTag("mesh-view-3d"))
+                    FilterChip(!view3d, { view3d = false }, label = { Text("Heatmap") }, modifier = Modifier.testTag("mesh-view-heatmap"))
+                }
+                if (view3d) {
+                    BedMesh3DView(mesh)
+                } else {
+                    Canvas(Modifier.fillMaxWidth().height(220.dp).testTag("mesh-canvas")
+                        .semantics { contentDescription = "Bed mesh heatmap, ${mesh.probedMatrix.size} by ${mesh.probedMatrix.firstOrNull()?.size ?: 0} points" }) {
+                        val rows = mesh.probedMatrix.size; val cols = mesh.probedMatrix.firstOrNull()?.size ?: 0
+                        if (rows > 0 && cols > 0) {
+                            val cellWidth = size.width / cols; val cellHeight = size.height / rows
+                            val span = (high - low).takeIf { it > 0.0 } ?: 1.0
+                            mesh.probedMatrix.forEachIndexed { r, row ->
+                                row.forEachIndexed { c, z ->
+                                    val t = ((z - low) / span).coerceIn(0.0, 1.0).toFloat()
+                                    val color = lerp(Color(0xFF3B6FE0), Color(0xFFE0473B), t)
+                                    drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(c * cellWidth, (rows - 1 - r) * cellHeight), size = androidx.compose.ui.geometry.Size(cellWidth, cellHeight))
+                                }
                             }
                         }
                     }
+                    Text("Blue = lower probed Z, red = higher, scaled to this mesh's own range only.", style = MaterialTheme.typography.bodySmall)
                 }
-                Text("Blue = lower probed Z, red = higher, scaled to this mesh's own range only.", style = MaterialTheme.typography.bodySmall)
             }
             TextButton({ load() }, enabled = connected, modifier = Modifier.testTag("refresh-mesh")) { Text("Refresh") }
         }

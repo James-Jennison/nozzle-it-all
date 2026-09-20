@@ -210,6 +210,13 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // A Bambu printer speaks MQTT/FTPS, not Moonraker: every Klipper-only control below is hidden
     // rather than shown failing, because BambuPrinterService implements none of them.
     val bambu = state.kindFor(state.address) == PrinterKind.BAMBU_LAB
+    // A Prusa Link printer speaks PrusaLink's own REST API, same non-Klipper situation as Bambu -
+    // PrusaLinkPrinterService implements none of the Klipper-only readers either. Pause/Resume/
+    // Cancel and Start print DO work for it (see PrusaLinkPrinterService's command()), so this is
+    // deliberately separate from `bambu` rather than folded into one "nonKlipper" flag - only the
+    // Klipper-only controls below need the wider gate.
+    val prusa = state.kindFor(state.address) == PrinterKind.PRUSA_LINK
+    val nonKlipper = bambu || prusa
     LaunchedEffect(state.generation, state.connected) { if(!state.connected || pending?.second != state.generation) pending = null }
     Scaffold(containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = {
@@ -386,7 +393,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 1 -> {
-                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !bambu) {
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !nonKlipper) {
                         item { OutlinedButton({heaterOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-heaters")){Text("Heater controls")} }
                         item { OutlinedButton({fanOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-fans")){Text("Fan controls")} }
                         item { OutlinedButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")} }
@@ -408,7 +415,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 colors=ButtonDefaults.buttonColors(containerColor=MaterialTheme.colorScheme.error, contentColor=MaterialTheme.colorScheme.onError)) { Text("EMERGENCY STOP") }
                         }
                     }
-                    if(!bambu) {
+                    if(!nonKlipper) {
                         item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }
                         item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }
                         item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
@@ -421,6 +428,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
                     if(bambu) item { Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.") }
+                    else if(prusa) item { Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.") }
                     else item {
                         Text("Organize and prepare macros locally. Execution requires an idle printer and confirmation.")
                         OutlinedTextField(macroFilter,{macroFilter=it},label={Text("Search macros or groups")},modifier=Modifier.fillMaxWidth())
@@ -429,8 +437,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             TextButton(refresh) {Text("Refresh lists")}
                         }
                     }
-                    if(state.catalog.macros.isEmpty() && !bambu) item {Text("No available macros. Connect to a ready printer, then refresh.")}
-                    val macros=if(bambu) emptyList() else state.catalog.macros.filter {(it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true))&&(showHiddenMacros||macroOptions[it]?.hidden!=true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
+                    if(state.catalog.macros.isEmpty() && !nonKlipper) item {Text("No available macros. Connect to a ready printer, then refresh.")}
+                    val macros=if(nonKlipper) emptyList() else state.catalog.macros.filter {(it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true))&&(showHiddenMacros||macroOptions[it]?.hidden!=true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
                     items(macros,key={it}) {macro ->
                         val options=macroOptions[macro]?:MacroOptions()
                         Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(12.dp)) {
@@ -447,15 +455,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 2 -> {
-                    // Bambu keeps its print history on its own screen and in Bambu Studio; this app
-                    // can only ask Moonraker for one, so the tab is hidden rather than left empty.
-                    if(!bambu) item {
+                    // Bambu keeps its print history on its own screen and in Bambu Studio, and
+                    // Prusa Link's API has no history endpoint at all; this app can only ask
+                    // Moonraker for one, so the toggle is hidden rather than left empty for either.
+                    if(!nonKlipper) item {
                         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                             FilterChip(!showHistory,{showHistory=false},label={Text("Files")})
                             FilterChip(showHistory,{showHistory=true;loadHistory(0)},label={Text("History")},modifier=Modifier.testTag("show-history"))
                         }
                     }
-                    if(showHistory && !bambu) {
+                    if(showHistory && !nonKlipper) {
                         item { HistoryHeader(state,loadHistory) }
                         items(state.history, key={"job:${it.id}"}) { job ->
                             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {

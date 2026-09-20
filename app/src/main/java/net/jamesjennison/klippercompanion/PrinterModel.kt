@@ -34,16 +34,22 @@ fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, ap
 // is validated by bambuHostAddress rather than Moonraker.parseAddress. Both throw
 // IllegalArgumentException, so every call site keeps its existing failure handling.
 internal fun normalizedAddress(address: String, kind: PrinterKind): String =
+    // PRUSA_LINK is plain HTTP on the local network too, same shape as a Moonraker address (just a
+    // different API path) - Moonraker.parseAddress's local-network validation applies unchanged.
     if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address) else Moonraker.parseAddress(address).toString()
 // The one place that decides which transport a saved printer actually gets. A BAMBU_LAB profile
-// speaks nothing Moonraker understands (MQTT/FTPS/port-6000 camera), so it gets its own service;
-// every other kind keeps the Moonraker client. Throws IllegalArgumentException on a bad address,
-// exactly as Moonraker's own constructor does, so connect() reports it the same way.
-internal fun printerServiceFor(profile: PrinterProfile?, address: String): PrinterService =
-    // profile.apiKey is reused as the Bambu access code for BAMBU_LAB profiles - same class of
-    // secret (a control-granting credential), so it gets the same encrypted storage slot.
-    if(profile?.kind == PrinterKind.BAMBU_LAB) BambuPrinterService(bambuHostAddress(address), profile.serial, profile.apiKey)
-    else Moonraker(address, profile?.apiKey.orEmpty())
+// speaks nothing Moonraker understands (MQTT/FTPS/port-6000 camera); a PRUSA_LINK profile speaks
+// PrusaLink's own digest-authenticated REST API, not Moonraker's JSON-RPC-over-HTTP - both get
+// their own service. Every other kind keeps the Moonraker client. Throws IllegalArgumentException
+// on a bad address, exactly as Moonraker's own constructor does, so connect() reports it the same way.
+internal fun printerServiceFor(profile: PrinterProfile?, address: String): PrinterService = when (profile?.kind) {
+    // profile.apiKey is reused as the Bambu access code for BAMBU_LAB and the Prusa Link password
+    // for PRUSA_LINK - same class of secret (a control-granting credential) either way, so both
+    // get the same encrypted storage slot rather than a new field.
+    PrinterKind.BAMBU_LAB -> BambuPrinterService(bambuHostAddress(address), profile.serial, profile.apiKey)
+    PrinterKind.PRUSA_LINK -> PrusaLinkPrinterService(address, profile.apiKey)
+    else -> Moonraker(address, profile?.apiKey.orEmpty())
+}
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
 class PrinterModel(
     initialAddress: String = "",

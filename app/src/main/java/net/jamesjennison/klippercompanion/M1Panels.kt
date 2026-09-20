@@ -33,6 +33,14 @@ import androidx.compose.ui.unit.dp
                 visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
             Text("Serial number and access code both come from the printer's own network settings. LAN mode must be on.",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.PRUSA_LINK) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            Text("The address shown on the printer's own screen under Settings > Network, with no http:// prefix.",style=MaterialTheme.typography.bodySmall)
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("Prusa Link password")},singleLine=true,modifier=Modifier.testTag("prusa-password"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+            Text("Shown on the printer's own screen under Settings > Network > Prusa Link, or its web UI. Not physically verified against real hardware yet - see FEATURE_PARITY_ROADMAP.md.",style=MaterialTheme.typography.bodySmall)
         } else {
             OutlinedTextField(address,{address=it},label={Text("Printer address")},singleLine=true)
             Text("A Tailscale address (100.x.x.x or *.ts.net), Cloudflare Tunnel or other https:// address also works away from home.",style=MaterialTheme.typography.bodySmall)
@@ -43,11 +51,12 @@ import androidx.compose.ui.unit.dp
             Text("Only needed if Moonraker requires authentication; copy it from Fluidd's or Mainsail's settings.",style=MaterialTheme.typography.bodySmall)
         }
         Text("Printer type",style=MaterialTheme.typography.labelLarge)
-        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear. Bambu Lab is a different protocol entirely, with its own fields above.",style=MaterialTheme.typography.bodySmall)
+        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear. Bambu Lab and Prusa Link are different protocols entirely, with their own fields above.",style=MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             FilterChip(kind==PrinterKind.GENERIC_KLIPPER,{kind=PrinterKind.GENERIC_KLIPPER},label={Text("Generic Klipper")})
             FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX,{kind=PrinterKind.SNAPMAKER_U1_PAXX},label={Text("Snapmaker U1 (PAXX)")})
             FilterChip(kind==PrinterKind.BAMBU_LAB,{kind=PrinterKind.BAMBU_LAB},label={Text("Bambu Lab")})
+            FilterChip(kind==PrinterKind.PRUSA_LINK,{kind=PrinterKind.PRUSA_LINK},label={Text("Prusa Link")},modifier=Modifier.testTag("kind-prusa-link"))
         }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         Text("Changing the address disconnects the active printer.")

@@ -1,11 +1,12 @@
 {
   "app/build.gradle.kts": "16e4758b1975ca2c8ff10bf4f903f2e1467801e32093c9a84f21d31803a79fa7",
   "app/src/main/AndroidManifest.xml": "dd18e723fe1665cdc3eca31821dc51c76b8e65027db434bcf8dfb1a1b57ef7ae",
+  "app/src/main/assets/bespok3d/bootstrap.zip": "57bfdcb24f56f2f483d3692a2636fb4747759850b22e63bd92c6abcc9991fcb2",
   "app/src/main/assets/camera.html": "32bbed55eb7b2bfbc2bbd1e8b987eab329d2c0845717ba4551fcfddb36f498ba",
   "app/src/main/java/net/jamesjennison/klippercompanion/BedMesh.kt": "b034d3a848106e42028cdd02b2eee622e19a6762713253896120f4d45e077d3b",
   "app/src/main/java/net/jamesjennison/klippercompanion/BedMeshPanel.kt": "80957b3f6e20aa5fd44efbce5091e5c66e600dcda987103ee6c6f0cf9ed0f391",
   "app/src/main/java/net/jamesjennison/klippercompanion/Bespok3d.kt": "595d2952d09d3a8287c44e593d1b4739d0cfd4c6e7b7c85a84598cdbd95c8b93",
-  "app/src/main/java/net/jamesjennison/klippercompanion/Bespok3dBootstrapPackages.kt": "6711bfdfc897a31155bbbc1fe779fdcf16f157d8a9b6bdf1911b95580974d45d",
+  "app/src/main/java/net/jamesjennison/klippercompanion/Bespok3dBootstrapPackages.kt": "cda6e43350f3b45e269775ebd250c8ee892b5ed947bb55b6870a37beac990532",
   "app/src/main/java/net/jamesjennison/klippercompanion/Bespok3dClient.kt": "86f736eb6deb6efb43f12f049d0efdb47911533a6a6f0dec755c0b7006b79372",
   "app/src/main/java/net/jamesjennison/klippercompanion/Bespok3dPanel.kt": "a5c66521af5a9a2c766a2c33cc90b55f0e6bd6832c48e3f055e1f6433bcd3ab0",
   "app/src/main/java/net/jamesjennison/klippercompanion/Bespok3dSsh.kt": "b9947807e66f2761fd3e87517d5a1b633e6cf61b9887bcb7d33eb94cc90dd318",

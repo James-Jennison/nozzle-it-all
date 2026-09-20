@@ -1,13 +1,17 @@
 // Adapted from Helix (github.com/FatBoy721/Helix), AGPL-3.0-or-later.
 // Original: android/app/src/main/java/org/crabcore/u1control/bespok3d/Bespok3dBootstrapPackages.kt
 //
-// NOTE: Helix bundles the signed daemon/jinni release artifacts this file verifies as a ~9MB
-// `assets/bespok3d/bootstrap-v0.7.3.zip` asset. That binary bundle is not vendored into this
-// app (matching the "no prebuilt binaries" rule this port otherwise follows for the slicer
-// .so libraries) — `load(Context)` below will fail with a missing-asset error until/unless a
-// future change adds that asset. The verification logic itself, and `verifyOfficialInstallPackage`/
-// `verifyOfficialSignature` (used by `Bespok3dClient`'s plugin catalog/install calls, which fetch
-// their own bytes over HTTPS rather than from bundled assets), are fully functional.
+// Diverges from Helix's original here: Helix's bundle format wraps the daemon+jinni .b3 archives
+// in an outer index.json/index.json.sig pinning their exact filenames and a combined signature
+// over that pairing. Only Bespok3d's own release tooling can produce that combined signed index,
+// and no public artifact of it exists beyond the specific pairing Helix happened to ship — so it
+// can't be reproduced here for a newer daemon/jinni pairing. Each .b3 archive is independently
+// signed on its own (manifest.json + manifest.json.sig, verified below against the same pinned
+// publisher key), which is the actual proof of Bespok3d authorship; the outer index signature was
+// redundant on top of that. This bundle format therefore drops the outer index requirement and
+// verifies each archive purely on its own signed manifest — see scripts/build_bespok3d_bootstrap.py
+// for how the bundled asset (assets/bespok3d/bootstrap.zip) is produced and independently verified
+// before being committed.
 package net.jamesjennison.klippercompanion
 
 import android.content.Context
@@ -48,33 +52,19 @@ data class Bespok3dBootstrapSet(
  * signatures and every signed payload hash are checked before bytes are exposed.
  */
 object Bespok3dBootstrapPackages {
-  const val ASSET_PATH = "bespok3d/bootstrap-v0.7.3.zip"
+  const val ASSET_PATH = "bespok3d/bootstrap.zip"
 
   fun load(context: Context): Bespok3dBootstrapSet =
     context.assets.open(ASSET_PATH).use(::load)
 
   fun load(input: InputStream): Bespok3dBootstrapSet {
     val bundled = readZip(input, MAX_BUNDLE_BYTES, MAX_PACKAGE_BYTES)
-    require(bundled.keys == EXPECTED_BUNDLE_MEMBERS.keys) {
-      "Bespok3d bootstrap bundle contains unexpected files"
-    }
-    EXPECTED_BUNDLE_MEMBERS.forEach { (name, sha256) ->
-      require(sha256(bundled.getValue(name)) == sha256) {
-        "Bespok3d bootstrap artifact $name failed its release checksum"
-      }
-    }
-
-    val indexBytes = bundled.getValue(INDEX_NAME)
-    verifySignature(indexBytes, bundled.getValue(INDEX_SIGNATURE_NAME))
-    val releases = parseIndex(indexBytes)
-    val daemon = verifyPackage(
-      bundled.getValue(DAEMON_ARCHIVE),
-      releases.getValue(DAEMON_NAME),
-    )
-    val jinni = verifyPackage(
-      bundled.getValue(JINNI_ARCHIVE),
-      releases.getValue(JINNI_NAME),
-    )
+    require(bundled.size == 2) { "Bespok3d bootstrap bundle must contain exactly two packages" }
+    val packages = bundled.values.map { verifyPackage(it, listed = null) }
+    val daemon = packages.singleOrNull { it.name == DAEMON_NAME }
+      ?: throw IllegalArgumentException("Bespok3d bootstrap bundle is missing the daemon package")
+    val jinni = packages.singleOrNull { it.name == JINNI_NAME }
+      ?: throw IllegalArgumentException("Bespok3d bootstrap bundle is missing the jinni package")
     return Bespok3dBootstrapSet(daemon, jinni)
   }
 
@@ -86,7 +76,7 @@ object Bespok3dBootstrapPackages {
     require(bytes.size <= MAX_STORE_PACKAGE_BYTES) { "Bespok3d package exceeds its size limit" }
     require(PLUGIN_NAME.matches(name)) { "Bespok3d package name is invalid" }
     require(VERSION.matches(version)) { "Bespok3d package version is invalid" }
-    verifyPackage(bytes, ListedRelease(name, version, ""), MAX_STORE_UNPACKED_BYTES)
+    verifyPackage(bytes, ListedRelease(name, version), MAX_STORE_UNPACKED_BYTES)
   }
 
   /** Verifies exact catalog bytes against this app's pinned Bespok3d publisher key. */
@@ -103,33 +93,20 @@ object Bespok3dBootstrapPackages {
     return path
   }
 
-  private data class ListedRelease(val name: String, val version: String, val archive: String)
+  private data class ListedRelease(val name: String, val version: String)
 
-  private fun parseIndex(bytes: ByteArray): Map<String, ListedRelease> {
-    val index = JSONObject(bytes.toString(Charsets.UTF_8))
-    require(index.optInt("schema_version") == 1) { "Unsupported Bespok3d bootstrap index" }
-    require(index.optString("publisher").uppercase(Locale.US) == OFFICIAL_FINGERPRINT) {
-      "Bespok3d bootstrap index has the wrong publisher"
-    }
-    val plugins = index.getJSONArray("plugins")
-    val releases = buildMap {
-      for (position in 0 until plugins.length()) {
-        val plugin = plugins.getJSONObject(position)
-        val name = plugin.getString("name")
-        put(name, ListedRelease(name, plugin.getString("version"), plugin.getString("download_url")))
-      }
-    }
-    require(releases.keys == setOf(DAEMON_NAME, JINNI_NAME)) {
-      "Bespok3d bootstrap index contains unexpected packages"
-    }
-    require(releases.getValue(DAEMON_NAME).archive == DAEMON_ARCHIVE)
-    require(releases.getValue(JINNI_NAME).archive == JINNI_ARCHIVE)
-    return releases
-  }
-
+  /**
+   * Verifies a single .b3 archive's own signed manifest — the sole cryptographic trust anchor for
+   * both call sites here (see the file header for why bootstrap packages no longer also require a
+   * combined outer index signature). When [listed] is given (the store-install path, where the
+   * caller already has an already-signature-verified catalog entry to check identity against) the
+   * manifest's declared name/version must match it exactly; when null (the bootstrap path, which
+   * has no such catalog entry) the manifest's own name must simply be one of the two known
+   * bootstrap packages, and its version is trusted as declared in the signed manifest itself.
+   */
   private fun verifyPackage(
     bytes: ByteArray,
-    listed: ListedRelease,
+    listed: ListedRelease?,
     maxUnpackedBytes: Int = MAX_PACKAGE_UNPACKED_BYTES,
   ): Bespok3dBootstrapPackage {
     val archive = readZip(ByteArrayInputStream(bytes), maxUnpackedBytes, MAX_STORE_ENTRY_BYTES)
@@ -140,8 +117,17 @@ object Bespok3dBootstrapPackages {
     verifySignature(manifestBytes, signatureBytes)
 
     val manifest = JSONObject(manifestBytes.toString(Charsets.UTF_8))
-    require(manifest.getString("name") == listed.name) { "Bespok3d package identity mismatch" }
-    require(manifest.getString("version") == listed.version) { "Bespok3d package version mismatch" }
+    val name = manifest.getString("name")
+    val version = manifest.getString("version")
+    if (listed != null) {
+      require(name == listed.name) { "Bespok3d package identity mismatch" }
+      require(version == listed.version) { "Bespok3d package version mismatch" }
+    } else {
+      require(name == DAEMON_NAME || name == JINNI_NAME) {
+        "Bespok3d bootstrap bundle contains an unexpected package"
+      }
+      require(VERSION.matches(version)) { "Bespok3d package version is invalid" }
+    }
     require(manifest.getString("publisher").uppercase(Locale.US) == OFFICIAL_FINGERPRINT) {
       "Bespok3d package has the wrong publisher"
     }
@@ -175,7 +161,7 @@ object Bespok3dBootstrapPackages {
     require(actualSignedPaths == declaredArchivePaths) {
       "Bespok3d package contains an undeclared file"
     }
-    return Bespok3dBootstrapPackage(listed.name, listed.version, payload)
+    return Bespok3dBootstrapPackage(name, version, payload)
   }
 
   private fun verifySignature(content: ByteArray, armoredSignature: ByteArray) {
@@ -234,15 +220,11 @@ object Bespok3dBootstrapPackages {
   private fun sha256(bytes: ByteArray): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-  private const val INDEX_NAME = "index.json"
-  private const val INDEX_SIGNATURE_NAME = "index.json.sig"
   private const val MANIFEST_NAME = "manifest.json"
   private const val MANIFEST_SIGNATURE_NAME = "manifest.json.sig"
   private const val PAYLOAD_PREFIX = "files/"
   private const val DAEMON_NAME = "bespok3d-daemon"
   private const val JINNI_NAME = "bespok3d-jinni-snapmaker-u1"
-  private const val DAEMON_ARCHIVE = "bespok3d-daemon-0.12.24.b3"
-  private const val JINNI_ARCHIVE = "bespok3d-jinni-snapmaker-u1-0.1.10.b3"
   private const val OFFICIAL_FINGERPRINT = "679939555819FB5F6423DC68C4388E76BFA9B4E0"
   private const val MAX_ENTRIES = 512
   private const val MAX_BUNDLE_BYTES = 12 * 1024 * 1024
@@ -253,13 +235,6 @@ object Bespok3dBootstrapPackages {
   private const val MAX_STORE_ENTRY_BYTES = 64 * 1024 * 1024
   private val PLUGIN_NAME = Regex("^[a-z0-9][a-z0-9-]{0,63}$")
   private val VERSION = Regex("^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
-
-  private val EXPECTED_BUNDLE_MEMBERS = mapOf(
-    DAEMON_ARCHIVE to "f2721e686efffa352aacb6174a2a280afae446817f0c0c0643c3ac62d46c5980",
-    JINNI_ARCHIVE to "7b1d6d4eda4e5035853c21db3d1d4cdd4930bc5af7719c8883ecc3f643e4a765",
-    INDEX_NAME to "69282901be04796e9e8c2c39073d0948cd3ddd2affdde1237da46587672ffa8f",
-    INDEX_SIGNATURE_NAME to "c89c1ff9d4a3efb36d74578389795229385047d3f81fa201cc427c1dfd1ac530",
-  )
 
   private const val OFFICIAL_PUBLIC_KEY = """-----BEGIN PGP PUBLIC KEY BLOCK-----
 

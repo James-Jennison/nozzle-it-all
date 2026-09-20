@@ -19,10 +19,28 @@ Incorporated so far:
   adapted from Helix's `android/app/src/main/java/org/crabcore/u1control/bespok3d/`
   (HTTPS client, SSH transport and SSH-based probe/enrollment flow for the
   Bespok3d daemon running on a Snapmaker U1, and OpenPGP verification of its
-  signed plugin/bootstrap packages). `Bespok3dBootstrapPackages.kt`'s bundled
-  release archive (`assets/bespok3d/bootstrap-v0.7.3.zip` in Helix, ~9MB) is
-  not vendored into this app; its `load(Context)` entry point is ported for
-  completeness but is unused until/unless that asset is added separately.
+  signed plugin/bootstrap packages). `Bespok3dBootstrapPackages.kt`'s bundle
+  format was changed from Helix's own (see that file's header) so it can be
+  rebuilt against current Bespok3d releases rather than staying pinned to
+  whichever pairing Helix happened to ship.
+
+## Bespok3d daemon and Snapmaker U1 jinni (bundled binaries)
+
+`app/src/main/assets/bespok3d/bootstrap.zip` bundles the **official, signed
+release artifacts** of the Bespok3d daemon and its Snapmaker U1 adapter
+("jinni"), both AGPL-3.0-or-later, both published by the Bespok3d project
+itself (not authored, modified, or built by this project):
+
+- [`bespok3d-daemon` v0.14.0](https://github.com/Bespok3d/daemon/releases/tag/bespok3d-daemon-v0.14.0)
+- [`bespok3d-jinni-snapmaker-u1` v0.1.11](https://github.com/Bespok3d/adapters/releases/tag/bespok3d-jinni-snapmaker-u1-v0.1.11)
+
+These are downloaded directly from Bespok3d's own GitHub releases and
+independently re-verified (OpenPGP signature over each package's manifest,
+plus every declared file's own sha256) against Bespok3d's published signing
+key before being committed — see `scripts/build_bespok3d_bootstrap.py`, which
+performs that verification and is how this bundle is rebuilt for future
+versions. `Bespok3dBootstrapPackages.kt` repeats the same verification again
+at runtime, on-device, before either package's contents are used.
 
 ## Bespok3d
 

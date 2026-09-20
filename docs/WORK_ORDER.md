@@ -12,11 +12,14 @@ turned out to have no Helix logic to reference at all (Helix has zero Prusa
 support), so Prusa (P26, commit `8a90a0b`) got built fresh from Prusa's own
 published PrusaLink OpenAPI spec instead, including a from-scratch RFC 2617
 HTTP Digest auth implementation. None of these four are physically verified —
-see the "Later" tier below. Separately, **WO-1 is now done**: `PrinterTile`
-carries the profile's `PrinterKind`, and both the Home Quickview tile and a
-printer's detail header show "Not verified on real hardware yet" for any
-`BAMBU_LAB` or `PRUSA_LINK` profile, closing the M7 exit-criteria gap this
-document had been carrying open. It's dropped from the numbered list below.
+see the "Later" tier below. Separately, **WO-1, WO-2 and WO-3 are now all
+done**: WO-1's `PrinterTile` unverified-hardware indicator, WO-2's `KilnFrame`
+panel restyle (planned in Plan Mode first), and WO-3's notification actions +
+`NozzlePrinterWidget` (also planned in Plan Mode first, per the owner's
+request) — see the roadmap's P18/P28/M7 sections for each one's commit hash
+and what's still not physically verified. All three are dropped from the
+numbered list below; WO-3's own device-verification need becomes its own
+new item, WO-12, in the "Next" tier.
 **Correction, same day:** this document previously said Phase 1/M2 physical
 acceptance "needs an explicit, separate... owner go-ahead — this isn't a
 default-yes," which had gone stale — that go-ahead was already given on
@@ -37,25 +40,23 @@ because it looks more interesting.
 
 ## Now — unblocked, no owner action needed to start
 
-1. **WO-3 — Notification actions + home-screen widgets (P18).** Natural next slice
-   on top of M4b's already-built and live-verified `PrintMonitorService`/alert
-   delivery: a Pause/Resume/Cancel action on the alert notification, and a widget
-   for at-a-glance status.
+Empty as of 2026-09-20. Every unbuilt-code item in this document is now either
+waiting on the owner being physically present with a printer (Next, below) or on
+hardware/decisions the owner doesn't have yet (Later, below). Re-derive this
+section from the roadmap the next time either changes.
 
-*(WO-2 — Kiln-restyle the remaining pre-redesign panels — is done, commit
-`08cde99`. Planned in Plan Mode first per the owner's request, then implemented:
-a new `KilnFrame` composable, applied to Bespok3d, Bambu print confirmation,
-bed-mesh 3D view and the timelapse gallery.)*
+*(WO-1, WO-2 and WO-3 are all done — see the intro above and the roadmap's P18/
+P28/M7 sections for what each one built and its commit hash.)*
 
 ## Next — one specific owner action unblocks each of these
 
-3. **WO-4 — Device-verify Bespok3d enrollment + remote screen (M8b).** Code and
+1. **WO-4 — Device-verify Bespok3d enrollment + remote screen (M8b).** Code and
    unit tests are done. Blocked only on the owner's own Snapmaker U1/PAXX SSH
    access code — once supplied, this is a verification pass, not new development.
-4. **WO-5 — Device-verify the timelapse gallery (M8d).** Code and tests are done.
+2. **WO-5 — Device-verify the timelapse gallery (M8d).** Code and tests are done.
    Needs a live pass on the Razr against a printer that actually has
    moonraker-timelapse clips recorded.
-5. **WO-6 — Continue the already-authorized physical acceptance pass.** Owner
+3. **WO-6 — Continue the already-authorized physical acceptance pass.** Owner
    authorized live testing on 2026-09-19; `LIVE_HEATER_FAN_CONTROLS_ENABLED` is
    `true` and supervised, category-by-category sessions against the real
    Snapmaker U1 are ongoing (owner watching throughout, cross-checked against
@@ -72,31 +73,38 @@ bed-mesh 3D view and the timelapse gallery.)*
    happened. Helix's own shipped, real-world use of these same Moonraker calls
    (found while building emergency stop) is useful supporting context, not what
    actually unblocked this — the owner's own sign-off did, a day earlier.
+4. **WO-12 — Device-verify notification actions + the home-screen widget (P18).**
+   Code, tests and Plan-Mode design review are done (commit `1341acd`). Needs a
+   live pass on the Razr: trigger a paused-state transition (or a fixture) and
+   confirm the notification shows Resume/Cancel and opens the right printer with
+   the confirm dialog pre-staged; add `NozzlePrinterWidget` to the home screen
+   and confirm it shows real data and both tap targets work. Doesn't need any
+   specific printer kind, just the owner present with any saved printer.
 
 ## Later — blocked on hardware the owner doesn't have, or needs a decision first
 
-6. **WO-7 — Bambu Lab hardware acceptance (M8c / P25).** Code exists and is
+5. **WO-7 — Bambu Lab hardware acceptance (M8c / P25).** Code exists and is
    unit-tested; blocked on the owner owning or gaining access to real Bambu
    hardware. Not actionable until then.
-7. **WO-8 — Prusa hardware acceptance (P26 / M7).** Code built 2026-09-20
+6. **WO-8 — Prusa hardware acceptance (P26 / M7).** Code built 2026-09-20
    (`PrusaLinkPrinterService`, RFC 2617 digest auth, unit-tested against
    Prusa's own published PrusaLink OpenAPI spec — no Helix reference existed
    for this one, Helix has no Prusa support at all). Same hardware-availability
    blocker as WO-7; not actionable until the owner owns or gets access to real
    Prusa hardware.
-8. **WO-9 — Physical acceptance for Panda Breath (P31), Spoolman (P13) and
+7. **WO-9 — Physical acceptance for Panda Breath (P31), Spoolman (P13) and
    multiACE (P30).** All three built 2026-09-20, unit-tested against Helix's
    exact logic, none physically verified — no owner hardware exists for any of
    them (a chamber-heater/dryer accessory, a Spoolman install, or PAXX
    multiACE). Same hardware-availability blocker as WO-7/WO-8; needs either the
    owner acquiring the hardware or a volunteer/beta tester who has it, per M7's
    own precedent for evidence from hardware the owner doesn't personally own.
-9. **WO-10 — M5 optional AI monitoring.** Needs an architecture decision (rented-
+8. **WO-10 — M5 optional AI monitoring.** Needs an architecture decision (rented-
    server vs. on-device inference) before any implementation starts, plus a
    labelled evaluation set with acceptance thresholds set in advance.
-10. **WO-11 — M6 fleet/production workflows.** Queues/bed-cleared workflow,
-    maintenance/cost trends, shared-library/server-slicing feasibility. No fixed
-    start date; the roadmap sequences it after M5.
+9. **WO-11 — M6 fleet/production workflows.** Queues/bed-cleared workflow,
+   maintenance/cost trends, shared-library/server-slicing feasibility. No fixed
+   start date; the roadmap sequences it after M5.
 
 ## Parked — no scope, no target milestone
 

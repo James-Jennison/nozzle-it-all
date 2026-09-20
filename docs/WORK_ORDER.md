@@ -12,7 +12,11 @@ turned out to have no Helix logic to reference at all (Helix has zero Prusa
 support), so Prusa (P26, commit `8a90a0b`) got built fresh from Prusa's own
 published PrusaLink OpenAPI spec instead, including a from-scratch RFC 2617
 HTTP Digest auth implementation. None of these four are physically verified —
-see the "Later" tier below.
+see the "Later" tier below. Separately, **WO-1 is now done**: `PrinterTile`
+carries the profile's `PrinterKind`, and both the Home Quickview tile and a
+printer's detail header show "Not verified on real hardware yet" for any
+`BAMBU_LAB` or `PRUSA_LINK` profile, closing the M7 exit-criteria gap this
+document had been carrying open. It's dropped from the numbered list below.
 **Correction, same day:** this document previously said Phase 1/M2 physical
 acceptance "needs an explicit, separate... owner go-ahead — this isn't a
 default-yes," which had gone stale — that go-ahead was already given on
@@ -33,31 +37,25 @@ because it looks more interesting.
 
 ## Now — unblocked, no owner action needed to start
 
-1. **WO-1 — Close the M7 exit-criteria gap for Bambu Lab and Prusa Link.** Add an
-   in-app "not verified on real hardware yet" indicator on any `BAMBU_LAB` or
-   `PRUSA_LINK` profile (dashboard card and/or detail view). M7's own exit
-   criteria require this to be visible in the app, not just in docs — currently
-   only the roadmap says it, for both. Doesn't need either printer's hardware to
-   build.
-2. **WO-2 — Kiln-restyle the remaining pre-redesign panels.** Bespok3d panel, Bambu
+1. **WO-2 — Kiln-restyle the remaining pre-redesign panels.** Bespok3d panel, Bambu
    print panel, bed-mesh 3D view chrome and the timelapse gallery dialog still
    render as plain `AlertDialog` (theme colors/fonts apply, the card/gradient
    treatment doesn't). Pure UI consistency debt flagged in the P28 backlog row;
    no new capability.
-3. **WO-3 — Notification actions + home-screen widgets (P18).** Natural next slice
+2. **WO-3 — Notification actions + home-screen widgets (P18).** Natural next slice
    on top of M4b's already-built and live-verified `PrintMonitorService`/alert
    delivery: a Pause/Resume/Cancel action on the alert notification, and a widget
    for at-a-glance status.
 
 ## Next — one specific owner action unblocks each of these
 
-4. **WO-4 — Device-verify Bespok3d enrollment + remote screen (M8b).** Code and
+3. **WO-4 — Device-verify Bespok3d enrollment + remote screen (M8b).** Code and
    unit tests are done. Blocked only on the owner's own Snapmaker U1/PAXX SSH
    access code — once supplied, this is a verification pass, not new development.
-5. **WO-5 — Device-verify the timelapse gallery (M8d).** Code and tests are done.
+4. **WO-5 — Device-verify the timelapse gallery (M8d).** Code and tests are done.
    Needs a live pass on the Razr against a printer that actually has
    moonraker-timelapse clips recorded.
-6. **WO-6 — Continue the already-authorized physical acceptance pass.** Owner
+5. **WO-6 — Continue the already-authorized physical acceptance pass.** Owner
    authorized live testing on 2026-09-19; `LIVE_HEATER_FAN_CONTROLS_ENABLED` is
    `true` and supervised, category-by-category sessions against the real
    Snapmaker U1 are ongoing (owner watching throughout, cross-checked against
@@ -77,26 +75,26 @@ because it looks more interesting.
 
 ## Later — blocked on hardware the owner doesn't have, or needs a decision first
 
-7. **WO-7 — Bambu Lab hardware acceptance (M8c / P25).** Code exists and is
+6. **WO-7 — Bambu Lab hardware acceptance (M8c / P25).** Code exists and is
    unit-tested; blocked on the owner owning or gaining access to real Bambu
    hardware. Not actionable until then.
-8. **WO-8 — Prusa hardware acceptance (P26 / M7).** Code built 2026-09-20
+7. **WO-8 — Prusa hardware acceptance (P26 / M7).** Code built 2026-09-20
    (`PrusaLinkPrinterService`, RFC 2617 digest auth, unit-tested against
    Prusa's own published PrusaLink OpenAPI spec — no Helix reference existed
    for this one, Helix has no Prusa support at all). Same hardware-availability
    blocker as WO-7; not actionable until the owner owns or gets access to real
    Prusa hardware.
-9. **WO-9 — Physical acceptance for Panda Breath (P31), Spoolman (P13) and
+8. **WO-9 — Physical acceptance for Panda Breath (P31), Spoolman (P13) and
    multiACE (P30).** All three built 2026-09-20, unit-tested against Helix's
    exact logic, none physically verified — no owner hardware exists for any of
    them (a chamber-heater/dryer accessory, a Spoolman install, or PAXX
    multiACE). Same hardware-availability blocker as WO-7/WO-8; needs either the
    owner acquiring the hardware or a volunteer/beta tester who has it, per M7's
    own precedent for evidence from hardware the owner doesn't personally own.
-10. **WO-10 — M5 optional AI monitoring.** Needs an architecture decision (rented-
-    server vs. on-device inference) before any implementation starts, plus a
-    labelled evaluation set with acceptance thresholds set in advance.
-11. **WO-11 — M6 fleet/production workflows.** Queues/bed-cleared workflow,
+9. **WO-10 — M5 optional AI monitoring.** Needs an architecture decision (rented-
+   server vs. on-device inference) before any implementation starts, plus a
+   labelled evaluation set with acceptance thresholds set in advance.
+10. **WO-11 — M6 fleet/production workflows.** Queues/bed-cleared workflow,
     maintenance/cost trends, shared-library/server-slicing feasibility. No fixed
     start date; the roadmap sequences it after M5.
 

@@ -20,7 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
-data class PrinterTile(val address: String, val label: String, val status: String, val snapshot: PrinterSnapshot?, val camera: Camera?, val apiKey: String = "")
+data class PrinterTile(val address: String, val label: String, val status: String, val snapshot: PrinterSnapshot?, val camera: Camera?, val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER)
 
 fun ScreenState.connectedPrinterTiles(): List<PrinterTile> =
     (savedPrinters + profiles.map { it.address } + address).filter { it.isNotBlank() }.distinct().mapNotNull { saved ->
@@ -30,8 +30,12 @@ fun ScreenState.connectedPrinterTiles(): List<PrinterTile> =
         val camera = if(profile?.cameraId.isNullOrBlank()) connection?.cameras?.firstOrNull()
             else connection?.cameras?.firstOrNull { it.id == profile?.cameraId }
         if (connection?.connected != true) null else PrinterTile(saved,
-            profile?.label ?: saved, connection.state, connection.snapshot, camera, profile?.apiKey.orEmpty())
+            profile?.label ?: saved, connection.state, connection.snapshot, camera, profile?.apiKey.orEmpty(), profile?.kind ?: PrinterKind.GENERIC_KLIPPER)
     }
+// M7's own exit criteria require unverified-by-hardware status to be visible in the app itself,
+// not just in docs - both BAMBU_LAB (M8c) and PRUSA_LINK (P26) are real, wired code the owner has
+// no matching hardware to physically verify against. See FEATURE_PARITY_ROADMAP.md's M7 section.
+val PrinterKind.unverifiedOnRealHardware: Boolean get() = this == PrinterKind.BAMBU_LAB || this == PrinterKind.PRUSA_LINK
 
 @Composable
 fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> Unit, cameraContent: @Composable (PrinterTile) -> Unit = { PrinterTileCamera(it) }) {
@@ -62,6 +66,9 @@ fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> U
                             Box(Modifier.size(7.dp).background(dotColor, CircleShape))
                             Text(displayState.replaceFirstChar { it.titlecase() }, style = MaterialTheme.typography.labelMedium, color = dotColor)
                         }
+                        if (tile.kind.unverifiedOnRealHardware) Text("Not verified on real hardware yet",
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.testTag("unverified-hardware:${tile.address}"))
                         if (activeFilename != null) {
                             Text(activeFilename, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

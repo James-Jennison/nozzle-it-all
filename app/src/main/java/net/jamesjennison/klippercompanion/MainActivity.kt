@@ -255,6 +255,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(state.profiles.firstOrNull { it.address==state.address }?.label ?: state.address.ifBlank { "Add your first printer" }, style = MaterialTheme.typography.titleMedium)
                     Text(if(state.connected) "CONNECTED" else "OFFLINE", style = MaterialTheme.typography.labelMedium, color = if(state.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    if(state.kindFor(state.address).unverifiedOnRealHardware) Text("Not verified on real hardware yet - built against the vendor's own published protocol/reference engineering, but the owner has no matching printer to physically test against.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("unverified-hardware-detail"))
                     if(!state.connected || state.snapshot?.ready != true || tab == 4) Text(state.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }

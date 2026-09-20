@@ -26,4 +26,15 @@ class PrinterTilesTest {
         val tiles=state.connectedPrinterTiles()
         assertEquals(listOf(second),tiles.map {it.address});assertNull(tiles.single().camera)
     }
+    @Test fun tileCarriesPrinterKindForTheUnverifiedHardwareIndicator() {
+        val state=ScreenState(address=first,connected=true,snapshot=PrinterSnapshot(true,"printing"),
+            savedPrinters=listOf(first),profiles=listOf(PrinterProfile(first,kind=PrinterKind.BAMBU_LAB)))
+        assertEquals(PrinterKind.BAMBU_LAB,state.connectedPrinterTiles().single().kind)
+    }
+    @Test fun onlyBambuAndPrusaAreFlaggedUnverifiedOnRealHardware() {
+        assertTrue(PrinterKind.BAMBU_LAB.unverifiedOnRealHardware)
+        assertTrue(PrinterKind.PRUSA_LINK.unverifiedOnRealHardware)
+        assertFalse(PrinterKind.GENERIC_KLIPPER.unverifiedOnRealHardware)
+        assertFalse(PrinterKind.SNAPMAKER_U1_PAXX.unverifiedOnRealHardware)
+    }
 }

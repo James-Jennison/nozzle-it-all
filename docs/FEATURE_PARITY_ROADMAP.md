@@ -13,6 +13,14 @@ install Obico, change reviewer services or send physical printer commands. The o
 retains architecture, milestone and release decisions. All unshipped work below is
 PLANNED; listing a feature here does not start its implementation.
 
+**License note (2026-09-20):** the app incorporates AGPL-3.0-or-later code ported
+from [Helix](https://github.com/FatBoy721/Helix) (see M8 below), which makes the
+whole app AGPL-3.0-or-later from that point forward — `LICENSE` at the repo root
+and `THIRD_PARTY_NOTICES.md` cover this; every ported file also carries its own
+attribution header. This is an owner-accepted obligation, not an accidental
+license change; it doesn't affect the "no ads/membership/mandatory cloud account"
+goal above, which is about product behavior, not source licensing.
+
 ## Working order (set 2026-09-16)
 
 This is the precise, ordered sequence we are actually working from right now — not
@@ -221,17 +229,42 @@ acceptance for all of it remains a separate, later owner decision.
 16. P25 — Bambu Lab support
 17. P26 — Prusa support
 
+**Phase 5 — M8, a second parallel track: porting Helix's own engineering in
+alongside continuing Klipper-core work, rather than maintaining two apps. Owner
+decision 2026-09-20: stay Kotlin/Compose (no React Native migration), port
+Helix's native Kotlin modules with attribution under the AGPL obligation this
+creates (see the license note above), gate vendor-specific ports behind a new
+`PrinterKind` field so generic-Klipper owners see no new UI. Full detail: M8
+below.**
+18. M8a — License/attribution foundation (`LICENSE`, `THIRD_PARTY_NOTICES.md`)
+    and `PrinterKind` (`GENERIC_KLIPPER`/`SNAPMAKER_U1_PAXX`/`BAMBU_LAB`) on
+    `PrinterProfile`. **Done 2026-09-20**, commit `064cfa7`.
+19. M8b (**P27**, new row) — Bespok3d plugin bridge + Snapmaker U1/PAXX remote
+    screen. **Done 2026-09-20**, commits `e1045a3`/`a7271d3`.
+20. M8c — Bambu Lab live support, upgrading **P25** from the M7 "Missing,
+    owner does not own this hardware" state to real ported code (still
+    hardware-unverified — M7's own documentation-tier standard, see below).
+    **Done 2026-09-20**, commit `bba9b8e`.
+21. M8d — Timelapse gallery upgrade, extending **P19**'s already-shipped
+    read-only browsing (M4c above) into a gallery with poster thumbnails,
+    in-app playback and download. **Done 2026-09-20**, commit `f2271c1`.
+22. M8e — Bed-mesh 3D view, adding a gesture-orbited surface on top of **P12**'s
+    already-shipped 2D heatmap. **Done 2026-09-20**, commit `d68decc`, and the
+    only M8 item with real device physical acceptance so far — see M8 below.
+23. M8f (**P28**, new row) — Visual redesign ("Kiln"): new theme/typography,
+    5-tab nav (Home/Control/Files/Prepare/Settings), Quickview list and
+    per-printer detail hero restyle. **Substantially done 2026-09-20**,
+    commits `24ba1a7`…`ed0ed17`. Supersedes the "Queued... visual-polish pass"
+    item this section used to list here (that request predates and is now
+    folded into this broader redesign, not a separate later pass).
+
 **Parked, not sequenced until scoped:**
 - Wear OS — reopened, no scope or target milestone yet
 - The four untracked ideas from the reference research: community model import,
   mid-print object exclusion, solo phone-initiated slicing, input-shaper calibration
-
-**Queued, after Phase 0/1 land:** a single visual-polish pass across every
-Control-tab panel (console, bed mesh, toolhead temperatures, and later heater/fan)
-so they share one consistent look — owner feedback 2026-09-16 that the new
-read-only panels are plain default dialogs, inconsistent with the polish the
-dashboard tiles got. Deliberately not restyling panels one at a time as they
-land; batching avoids styling the same thing twice while the look is still settling.
+- M8's own remaining scope: on-device slicing (highest risk — needs an owner
+  sign-off before vendoring a ~23MB prebuilt slicer binary of unverified
+  provenance) and a MakerWorld browser; see M8 below.
 
 M6a (multi-printer overview) and M1 are already done — see their rows below for
 evidence. This working order supersedes any looser "Now/Later" framing discussed
@@ -368,21 +401,23 @@ turned into a paid unlock.
 | P09 | G-code preview with layers and print position; Mobileraker/OctoApp | Local navigation and read-only buffered file-progress tracking verified ([scope](P09_LIVE_TRACKING_ACCEPTANCE.md)) | M2 | L | Local; bounded parser/renderer, supported dialects |
 | P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
 | P11 | Console history/filtering, explicit command entry; Mobileraker/OctoApp | Read-only cache, search/error filter, pause and copy validated; command entry pending ([scope](P11_CONSOLE_ACCEPTANCE.md)) | M3 | M | Local; bounded logs, command safeguards |
-| P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Validated: read-only profile/Z-range/heatmap, verified live on both real printers (Elegoo CC no-mesh state, Snapmaker U1 real 11×11 profile) | M3 | M viewer; L calibration | Local; configured mesh and supported routines |
+| P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Validated: read-only profile/Z-range/heatmap, verified live on both real printers (Elegoo CC no-mesh state, Snapmaker U1 real 11×11 profile). **2026-09-20 (M8e):** added a gesture-orbited 3D surface (Catmull-Rom-smoothed, drag-to-orbit/pinch-to-zoom) alongside the existing heatmap, clean-room (not ported from Helix, whose own bed-mesh view is JS/Skia); verified live against the Snapmaker U1's real 13×13 mesh after running `BED_MESH_CALIBRATE` through the app's own macro runner | M3 (+M8e) | M viewer; L calibration | Local; configured mesh and supported routines |
 | P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Skipped — owner does not run Spoolman (confirmed 2026-09-16); revisit only if that changes | M3 | M | Existing service; read first, validated mutations later |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
 | P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Validated: multi-toolhead visibility verified live on the U1 (all 4 extruders). Still missing: lights/power devices, COSMOS-specific checks (exhaust fan RPM, saved mesh profiles), and any actual fan/light control | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
 | P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | API-key auth built and device-verified (X-Api-Key, encrypted per-profile storage); Tailscale/*.ts.net addresses accepted; Cloudflare Tunnel/port forwarding documentation-only | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
 | P17 | Background completion/error/offline/filament alerts; Mobileraker/OctoApp/Obico | Missing | M4b | L | Opt-in Android monitoring; reliable unattended coverage needs always-on event source |
 | P18 | Notification actions and Android home-screen widgets; OctoApp/Android convenience | Missing | M4b | M | P17 freshness model; command actions open confirmation |
-| P19 | Timelapse browsing/export, optional capture/encode; monitoring workflow | Missing | M4c | M viewer; L capture | Existing service or always-on storage/encoding |
+| P19 | Timelapse browsing/export, optional capture/encode; monitoring workflow | Read-only browsing built 2026-09-18 (see M4c above). **2026-09-20 (M8d):** upgraded to a day-grouped gallery — moonraker-timelapse poster-frame thumbnails, in-app playback via `VideoView` streamed directly from Moonraker (Range-request seeking, no full download to watch), and a "Save" action to a user-chosen document via SAF. Unlike M8e, **not yet visually verified on a real device** — JVM/androidTest only, same evidence gap the original M4c browsing shipped with. Capture/render triggering is still fully unbuilt | M4c (+M8d) | M viewer; L capture | Existing service or always-on storage/encoding |
 | P20 | Self-hosted failure detection, evidence clips, sensitivity and alerts; Obico/SimplyPrint | Isolated experiment only | M5 | XL | P17 + camera sampling + licensed detector + server capacity |
 | P21 | Multi-printer live overview and bounded multi-camera grid; Printer Tools/SimplyPrint | Validated: auto-connect/independent monitoring per saved printer, tile grid with per-tile live camera, installed and phone-verified on the Razr ([auto-connect](AUTO_CONNECT_ACCEPTANCE.md), [tiles](PRINTER_TILES_ACCEPTANCE.md)) | M6a | L | P01/P02/P16; per-printer isolation and measured device/network budgets |
 | P22 | Queues, scheduling and bed-cleared workflow; SimplyPrint | Missing | M6b | XL | Durable always-on state; no unattended starts by default |
 | P23 | Maintenance reminders, usage/cost trends and exports; SimplyPrint | Missing | M6b | M–L | P04/P13; user-supplied rates and incomplete-data labels |
 | P24 | Shared library, server slicing and profile management; SimplyPrint | Missing | M6c | XL discovery | Server compute/storage; slicer/profile/license compatibility |
-| P25 | Bambu Lab printer support (local/cloud MQTT protocol); Bambu Handy | Missing | M7 | XL discovery | Existing service (Bambu Cloud) or LAN mode; owner does not own this hardware, see M7 acceptance note |
+| P25 | Bambu Lab printer support (local/cloud MQTT protocol); Bambu Handy | **2026-09-20 (M8c):** real LAN-mode support built — `BambuPrinterService` (MQTT status/control, FTPS upload, chamber camera re-served as loopback MJPEG), ported from Helix (AGPL) with attribution. Print-start is scoped to an already-sliced `.gcode.3mf` shared into the app (no on-device slicing exists to build one). Still owner-does-not-own-this-hardware per M7's evidence tier below: unit-tested (`BambuPrintProtocolTest` etc.) but **not device-verified against real Bambu hardware** — do not upgrade this row's language past that until real hardware acceptance happens | M7 (+M8c) | XL discovery | Existing service (Bambu Cloud) or LAN mode; owner does not own this hardware, see M7 acceptance note |
 | P26 | Prusa (PrusaLink/Prusa Connect) printer support; Prusa Connect app | Missing | M7 | L discovery | Existing service (Prusa Connect) or local PrusaLink API; owner does not own this hardware, see M7 acceptance note |
+| P27 | Bespok3d plugin bridge + remote touchscreen mirror for the Snapmaker U1/PAXX; Helix | **Done 2026-09-20:** `Bespok3dClient`/SSH preflight-enrollment, ported from Helix (AGPL) with attribution, gated to `PrinterKind.SNAPMAKER_U1_PAXX`. The signed daemon/jinni bundle that enrollment needs is independently re-verified and vendored (not Helix's own copy — downloaded fresh from Bespok3d's GitHub releases and OpenPGP-checked against their own publisher key before being committed, see `scripts/build_bespok3d_bootstrap.py`). Remote screen re-serves `helixd`'s JPEG-polling touchscreen mirror, not an MJPEG stream as first assumed — corrected after reading Helix's actual behavior rather than guessing. Unit-tested; **enrollment/remote-screen not yet device-verified against a real U1** (needs the owner's own SSH access code) | M8b | L | Local; Snapmaker U1/PAXX running Bespok3d, owner-entered SSH credentials never persisted |
+| P28 | Visual redesign ("Kiln" theme): new palette/typography, 5-tab nav, Quickview list + per-printer detail hero | **Substantially done 2026-09-20:** duotone dark theme (ember heat / teal accent) and Space Grotesk/IBM Plex Sans/Mono (OFL, bundled as variable fonts) replace the old flat scheme; bottom nav grows from 4 to 5 tabs (Home/Control/Files/Prepare/Settings — deliberately reordered/relabeled from an early draft that matched Helix's own nav almost exactly); Home's printer list and the per-printer dashboard hero/temperature cards get the gradient/status-dot treatment from the design concept. Every change physically verified live on the owner's Razr 2023, including two real bugs a live check caught that code review hadn't (a compressed/clipped hero card, an invisible layer-line texture). Remaining: Bespok3d/Bambu panels, the bed-mesh 3D view and the timelapse gallery still use pre-redesign `AlertDialog` chrome (they inherit the new colors/fonts via the theme change, but not the card/gradient treatment) | M8f | L | Local; OFL font licenses bundled, see `THIRD_PARTY_NOTICES.md` |
 
 **P15 sourcing note (2026-09-16):** the Snapmaker U1 runs a genuine Klipper/Moonraker
 fork ([Snapmaker/u1-moonraker](https://github.com/Snapmaker/u1-moonraker), GPL-3.0;
@@ -566,6 +601,102 @@ Unverified-by-hardware status is visible in the app itself for that ecosystem (f
 example, a visible "not verified on real hardware yet" state), not just in docs.
 Real hardware acceptance replaces the documentation-tier evidence before any such
 integration is called complete, whenever that hardware becomes available.
+
+**M7 exit-criteria gap opened by M8c (2026-09-20):** the "visible in the app
+itself" requirement above is not yet met for Bambu Lab — `BambuPrinterService`
+is real, wired code (not documentation-tier contract tests; it's built against
+Helix's own hardware-verified engineering), but the app shows no in-app
+"not verified on real hardware yet" indicator for a `BAMBU_LAB` profile the way
+this exit criterion calls for. Flagged here rather than silently left; close it
+before calling P25 anything past its current "built, hardware-unverified" status.
+
+### M8 — Helix-derived feature port and visual redesign
+
+Owner decision (2026-09-20): compared this app against
+[Helix](https://github.com/FatBoy721/Helix) (React Native/Expo, AGPL-3.0-or-later,
+Snapmaker U1/PAXX-specific) and chose to port its feature set in with attribution
+rather than maintain two apps — see the license note near the top of this document
+for the AGPL consequence that decision accepts. Stays Kotlin/Compose throughout (no
+React Native migration); Helix's native, RN-free Kotlin modules are ported with
+attribution headers rather than clean-room reimplemented where that's honest;
+vendor-specific ports gate behind the new `PrinterKind` field so a generic-Klipper
+owner sees no new UI. Bambu Lab support (M8c) was originally a separate, later,
+owned-hardware-gated milestone (M7/P25) but was pulled forward into M8 since
+Helix's own Bambu code turned out to be portable pure-JVM, not because the
+owned-hardware evidence gate changed — M7's own tier distinction above still
+applies to it.
+
+**M8a — license/attribution foundation + `PrinterKind`.** Done 2026-09-20, commit
+`064cfa7`. Blocking prerequisite for everything else in M8; 227 unit tests green
+at landing.
+
+**M8b — Bespok3d plugin bridge + Snapmaker U1/PAXX remote screen (P27).** Done
+2026-09-20, commits `e1045a3`/`a7271d3`. Ported `Bespok3dClient`/SSH preflight/
+enrollment with attribution headers; the signed daemon/jinni bootstrap bundle
+enrollment depends on is independently downloaded from Bespok3d's own GitHub
+releases and OpenPGP-verified against their publisher key before being vendored,
+not lifted from Helix's own copy (`scripts/build_bespok3d_bootstrap.py`; this
+also meant dropping Helix's own combined-index signature scheme, which only
+Bespok3d's release tooling can produce, in favor of trusting each archive's own
+independently signed manifest). Remote screen turned out to be a JPEG-polling
+mirror off `helixd`, not an MJPEG stream as first assumed from the plan alone —
+corrected after reading Helix's actual runtime behavior. Unit-tested; enrollment
+and the remote screen are **not yet device-verified against a real U1** (needs
+the owner's own SSH access code, a deliberately separate, later step).
+
+**M8c — Bambu Lab live support, upgrading P25.** Done 2026-09-20, commit
+`bba9b8e`. `BambuPrinterService` (MQTT status/control, FTPS upload, chamber
+camera re-served as loopback MJPEG), ported from Helix with attribution.
+Print-start deliberately scoped to an already-sliced `.gcode.3mf` shared into
+the app — Helix's own on-device `.gcode.3mf` builder needs bundled per-model
+project-settings assets and requires input already carrying Bambu slicer
+markers, which this app has no way to honestly produce without a slicer of its
+own (that's M8's still-unbuilt on-device-slicing scope below, not this one).
+Unit-tested (`BambuPrintProtocolTest` etc.); **not device-verified against real
+Bambu hardware** — see the M7 exit-criteria gap noted above.
+
+**M8d — timelapse gallery upgrade, extending P19.** Done 2026-09-20, commit
+`f2271c1`. Pure Compose/Kotlin, no ported code: pairs each clip with
+moonraker-timelapse's own same-stem poster-frame convention, adds in-app
+playback (`VideoView` streamed straight from Moonraker, which honours Range
+requests) and a "Save" action to a user-chosen document via SAF. Unit- and
+androidTest-covered; **not yet visually verified on a real device**, the same
+gap the original M4c browsing shipped with.
+
+**M8e — bed-mesh 3D view, extending P12.** Done 2026-09-20, commit `d68decc`.
+Clean-room, not ported (Helix's own bed-mesh view is JS/Skia): separable 2D
+Catmull-Rom smoothing of the probed grid plus a simple orbit-camera projection,
+drag-to-orbit/pinch-to-zoom via the same `detectTransformGestures` primitive
+`LayerPreview.kt` already used. The one M8 item with full physical acceptance so
+far: ran `BED_MESH_CALIBRATE` through the app's own macro runner against the
+owner's real Snapmaker U1, confirmed the resulting 13×13 mesh renders correctly
+and both gestures respond live on-device.
+
+**M8f — visual redesign ("Kiln"), P28.** Substantially done 2026-09-20, commits
+`24ba1a7` through `ed0ed17`. A deliberately distinct-from-Helix duotone dark
+theme (ember for heat, teal for the app's own accent) and bundled OFL variable
+fonts (Space Grotesk/IBM Plex Sans/Mono) replace the old flat scheme and system
+default face; the bottom nav grows from 4 to 5 tabs (Home/Control/Files/Prepare/
+Settings) — an early draft happened to match Helix's own nav almost exactly and
+was reordered/relabeled after owner feedback; Home's printer list and the
+per-printer dashboard hero/temperature cards pick up the gradient/status-dot
+treatment from the design concept, and redundant title-block/footer chrome was
+stripped from every tab in favor of a proper Settings-only Diagnostics section
+reporting real `Build.VERSION`/`Build.MODEL` instead of a static string.
+Physically verified live on the owner's Razr 2023 throughout, including two real
+bugs a live check caught that code review alone had missed (a clipped hero card
+from a missing `flex-shrink`-equivalent, an invisible texture from compounded
+opacity). Remaining, explicitly not yet done: Bespok3d/Bambu panels, the bed-mesh
+3D view and the timelapse gallery still render as pre-redesign `AlertDialog`
+chrome (new colors/fonts apply via the theme change; the card/gradient treatment
+does not, yet).
+
+**Still open, no target date:** on-device slicing (M8's highest-risk remaining
+scope — needs vendoring a ~23MB prebuilt `libprusaslicer-jni.so` of unverified
+build provenance from the separate "u1-slicer-for-android" project; requires
+explicit owner sign-off before that binary lands, not implied by the M8 decision
+above) and a MakerWorld model browser (folded into the same later phase as
+slicing, since it's a model-import source feeding it rather than standalone).
 
 ## Optional future ideas outside the roadmap
 

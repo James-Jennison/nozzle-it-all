@@ -5,7 +5,9 @@ import java.util.Locale
 
 // Ordinal-independent persistence: PrinterPreferences stores/reads this by name(), not ordinal.
 enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB }
-data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER) {
+// serial identifies a BAMBU_LAB printer to its own MQTT/FTPS/camera transports and is unused by
+// every other kind. It is not a credential (apiKey is), so it persists alongside name/cameraId.
+data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER, val serial: String = "") {
     val label: String get() = name.ifBlank { address }
 }
 data class FileInfo(val path: String, val size: Long? = null, val modified: Double? = null)

@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind)->String? = {_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
+fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String)->String? = {_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
     backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
@@ -194,6 +194,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var expandedCamera by remember(state.generation, state.connected) { mutableStateOf(false) }
     BackHandler(expandedCamera) { expandedCamera = false }
     val enabled = state.connected && state.snapshot?.ready == true && !state.busy
+    // A Bambu printer speaks MQTT/FTPS, not Moonraker: every Klipper-only control below is hidden
+    // rather than shown failing, because BambuPrinterService implements none of them.
+    val bambu = state.kindFor(state.address) == PrinterKind.BAMBU_LAB
     LaunchedEffect(state.generation, state.connected) { if(!state.connected || pending?.second != state.generation) pending = null }
     Scaffold(containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = {
@@ -320,7 +323,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Text("Layer ${state.snapshot?.currentLayer ?: "Unknown"} / ${state.snapshot?.totalLayers ?: state.activeMetadata?.layers ?: "Unknown"}",style=MaterialTheme.typography.bodySmall)
                                 LinearProgressIndicator(progress = { state.snapshot?.activeProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
                                 Text(state.snapshot?.let { "${(it.activeProgress*100).toInt()}%" } ?: "—", style = MaterialTheme.typography.headlineLarge, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
-                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // Pause/resume/cancel are Moonraker HTTP calls; BambuPrinterService
+                                // only carries print requests, so they are hidden rather than broken.
+                                if(!bambu) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton({ pending = PrinterCommand("Pause print", "printer/print/pause", allowedStates = setOf("printing")) to state.generation }, enabled = enabled && state.snapshot?.state == "printing") { Text("Pause") }
                                     OutlinedButton({ pending = PrinterCommand("Resume print", "printer/print/resume", allowedStates = setOf("paused")) to state.generation }, enabled = enabled && state.snapshot?.state == "paused") { Text("Resume") }
                                 TextButton({ pending = PrinterCommand("Cancel print", "printer/print/cancel", allowedStates = setOf("printing", "paused")) to state.generation }, enabled = enabled && state.snapshot?.state in setOf("printing", "paused")) { Text("Cancel print", color = if(enabled && state.snapshot?.state in setOf("printing", "paused")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)) }
@@ -349,7 +354,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 1 -> {
-                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED) {
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !bambu) {
                         item { OutlinedButton({heaterOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-heaters")){Text("Heater controls")} }
                         item { OutlinedButton({fanOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-fans")){Text("Fan controls")} }
                         item { OutlinedButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")} }
@@ -357,14 +362,17 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         item { OutlinedButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")} }
                         if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")} }
                     }
-                    item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }
-                    item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }
-                    item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
-                    item { OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")} }
-                    item { OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")} }
-                    item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text(if(LIVE_HEATER_FAN_CONTROLS_ENABLED) "Console" else "Read-only console")} }
+                    if(!bambu) {
+                        item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }
+                        item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }
+                        item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
+                        item { OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")} }
+                        item { OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")} }
+                        item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text(if(LIVE_HEATER_FAN_CONTROLS_ENABLED) "Console" else "Read-only console")} }
+                    }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
-                    item {
+                    if(bambu) item { Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.") }
+                    else item {
                         Text("Organize and prepare macros locally. Execution requires an idle printer and confirmation.")
                         OutlinedTextField(macroFilter,{macroFilter=it},label={Text("Search macros or groups")},modifier=Modifier.fillMaxWidth())
                         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -372,8 +380,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             TextButton(refresh) {Text("Refresh lists")}
                         }
                     }
-                    if(state.catalog.macros.isEmpty()) item {Text("No available macros. Connect to a ready printer, then refresh.")}
-                    val macros=state.catalog.macros.filter {(it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true))&&(showHiddenMacros||macroOptions[it]?.hidden!=true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
+                    if(state.catalog.macros.isEmpty() && !bambu) item {Text("No available macros. Connect to a ready printer, then refresh.")}
+                    val macros=if(bambu) emptyList() else state.catalog.macros.filter {(it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true))&&(showHiddenMacros||macroOptions[it]?.hidden!=true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
                     items(macros,key={it}) {macro ->
                         val options=macroOptions[macro]?:MacroOptions()
                         Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(12.dp)) {
@@ -390,13 +398,15 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 2 -> {
-                    item {
+                    // Bambu keeps its print history on its own screen and in Bambu Studio; this app
+                    // can only ask Moonraker for one, so the tab is hidden rather than left empty.
+                    if(!bambu) item {
                         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                             FilterChip(!showHistory,{showHistory=false},label={Text("Files")})
                             FilterChip(showHistory,{showHistory=true;loadHistory(0)},label={Text("History")},modifier=Modifier.testTag("show-history"))
                         }
                     }
-                    if(showHistory) {
+                    if(showHistory && !bambu) {
                         item { HistoryHeader(state,loadHistory) }
                         items(state.history, key={"job:${it.id}"}) { job ->
                             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
@@ -444,7 +454,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             item { Text("LOCAL NETWORK  ·  ANDROID  ·  0.1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
-    sharedFile?.let {uri -> AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}}) }
+    // A Bambu printer has no local workspace worth importing into and no Moonraker to upload to;
+    // a share aimed at one is a print request instead. Every other kind keeps the import dialog.
+    sharedFile?.let {uri -> if(bambu) BambuPrintPanel(uri,state,execute,consumeShare)
+        else AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}}) }
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
     runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}
@@ -470,9 +483,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     val camera = state.selectedCamera()
     if(state.connected && camera != null && camera.stream.isNotBlank()) {
         key(state.generation, state.cameraGeneration, state.address, camera) {
+            // A Bambu chamber camera is re-served on loopback by this app, so it renders against its
+            // own origin rather than the printer's host; Moonraker cameras leave address blank.
+            val origin = camera.address.ifBlank { state.address }
             when(camera.service) {
-                "webrtc-camerastreamer" -> LiveCamera(state.address,camera)
-                "mjpegstreamer", "mjpegstreamer-adaptive" -> MjpegCamera(state.address,camera)
+                "webrtc-camerastreamer" -> LiveCamera(origin,camera)
+                "mjpegstreamer", "mjpegstreamer-adaptive", "bambu-chamber" -> MjpegCamera(origin,camera)
                 else -> Text("Unsupported live camera format: ${camera.service.ifBlank { "unknown" }}")
             }
         }

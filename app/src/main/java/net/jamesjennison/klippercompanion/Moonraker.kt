@@ -20,9 +20,15 @@ data class PrinterSnapshot(val ready: Boolean, val state: String, val filename: 
     val displayState: String get() = if(ready && state in setOf("complete", "cancelled")) "standby" else state
     val nozzleLabel: String get() = if(activeExtruder.isBlank()) "NOZZLE · unknown tool" else "NOZZLE · $activeExtruder"
 }
-data class Camera(val name: String, val snapshot: String, val stream: String = "", val service: String = "", val id: String = name)
+// address overrides the printer address a camera is rendered against. Moonraker cameras leave it
+// blank (their URLs live on the printer's own host); a Bambu chamber camera is re-served on
+// loopback by this app, so its origin is a different host from the printer's by design.
+data class Camera(val name: String, val snapshot: String, val stream: String = "", val service: String = "", val id: String = name, val address: String = "")
 data class Catalog(val files: List<String>, val macros: List<String>, val cameras: List<Camera>, val warnings: List<String>, val fileInfo: List<FileInfo> = emptyList())
-data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null)
+// path/arguments are HTTP-shaped and only mean anything to Moonraker. bambuPrintRequest is the
+// one command kind that isn't an HTTP call at all (MQTT + FTPS, see BambuPrinterService); it
+// leaves them empty.
+data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null, val bambuPrintRequest: BambuPrintRequest? = null)
 
 interface PrinterService {
     val address: String
@@ -57,6 +63,22 @@ interface PrinterService {
 }
 // The printer's own touchscreen, exposed by the Bespok3d/HelixScreen plugin as an ordinary webcam
 // catalog entry. Its stream must not be treated as a regular camera - mirrors Helix's isGuiWebcam.
+// The one bar this app applies to an unencrypted host, shared by Moonraker.parseAddress (which
+// applies it to an http:// URL's host) and bambuHostAddress (a bare host with no scheme at all,
+// since a Bambu printer has no HTTP endpoint to point a URL at). Both must stay in step: this app
+// is local-network-only by design.
+internal fun isLocalHost(host: String): Boolean {
+    val parts = host.split('.').mapNotNull { it.toIntOrNull() }
+    // 100.64.0.0/10 is the CGNAT range Tailscale assigns tailnet IPv4 addresses from.
+    val privateV4 = host.split('.').size == 4 && parts.size == 4 && parts.all { it in 0..255 } && (parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && parts[1] in 16..31) || (parts[0] == 100 && parts[1] in 64..127))
+    // fd7a:115c:a1e0::/48 is Tailscale's own IPv6 ULA range for tailnet addresses.
+    val tailscaleV6 = host.startsWith("fd7a:115c:a1e0:", ignoreCase = true)
+    // A bare single-label host (no dot, not an IPv6 literal) can't be a publicly routable
+    // DNS name at all - it only resolves via a local search domain, mDNS or a VPN's own
+    // private DNS (e.g. Tailscale MagicDNS short names), so it's as trustworthy as .local.
+    val bareHostname = host.isNotEmpty() && '.' !in host && ':' !in host
+    return privateV4 || tailscaleV6 || bareHostname || host == "localhost" || host == "::1" || host.endsWith(".local") || host.endsWith(".ts.net")
+}
 fun Camera.isBespok3dScreen(): Boolean = name.equals("gui", ignoreCase = true) || Regex("/screen(?:/|$)", RegexOption.IGNORE_CASE).containsMatchIn(stream)
 class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader {
     val base: HttpUrl = parseAddress(address)
@@ -78,18 +100,7 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
             ?.takeIf { it.length <= 32 && Regex("extruder[0-9]*").matches(it) } ?: ""
         fun parseAddress(address: String): HttpUrl {
             val url = address.trim().toHttpUrlOrNull() ?: throw IllegalArgumentException("Enter an http:// or https:// printer address.")
-            if(url.scheme == "http") {
-                val parts = url.host.split('.').mapNotNull { it.toIntOrNull() }
-                // 100.64.0.0/10 is the CGNAT range Tailscale assigns tailnet IPv4 addresses from.
-                val privateV4 = url.host.split('.').size == 4 && parts.size == 4 && parts.all { it in 0..255 } && (parts[0] == 10 || parts[0] == 127 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && parts[1] in 16..31) || (parts[0] == 100 && parts[1] in 64..127))
-                // fd7a:115c:a1e0::/48 is Tailscale's own IPv6 ULA range for tailnet addresses.
-                val tailscaleV6 = url.host.startsWith("fd7a:115c:a1e0:", ignoreCase = true)
-                // A bare single-label host (no dot, not an IPv6 literal) can't be a publicly routable
-                // DNS name at all - it only resolves via a local search domain, mDNS or a VPN's own
-                // private DNS (e.g. Tailscale MagicDNS short names), so it's as trustworthy as .local.
-                val bareHostname = url.host.isNotEmpty() && '.' !in url.host && ':' !in url.host
-                require(privateV4 || tailscaleV6 || bareHostname || url.host == "localhost" || url.host == "::1" || url.host.endsWith(".local") || url.host.endsWith(".ts.net")) { "HTTP requires a local IPv4/IPv6 address, a Tailscale address (100.64-127.x.x, fd7a:115c:a1e0::/48 or *.ts.net), a bare local hostname, localhost or .local name. Use HTTPS for other addresses." }
-            }
+            if(url.scheme == "http") require(isLocalHost(url.host)) { "HTTP requires a local IPv4/IPv6 address, a Tailscale address (100.64-127.x.x, fd7a:115c:a1e0::/48 or *.ts.net), a bare local hostname, localhost or .local name. Use HTTPS for other addresses." }
             require(url.username.isEmpty() && url.password.isEmpty() && url.query == null && url.fragment == null) { "Use a base address without credentials, query or fragment." }
             return url.newBuilder().encodedPath(url.encodedPath.trimEnd('/') + "/").build()
         }

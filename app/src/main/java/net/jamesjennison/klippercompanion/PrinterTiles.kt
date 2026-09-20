@@ -100,9 +100,11 @@ internal fun PrinterTileCamera(tile: PrinterTile) {
             Spacer(Modifier.fillMaxSize())
             Text("Camera unavailable", style = fallbackTextStyle, modifier = Modifier.align(Alignment.BottomCenter))
         } else when {
-            camera.stream.isBlank() -> SnapshotCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false, apiKey = tile.apiKey)
-            camera.service == "webrtc-camerastreamer" -> LiveCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
-            camera.service in setOf("mjpegstreamer", "mjpegstreamer-adaptive") -> MjpegCamera(tile.address, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
+            // A Bambu chamber camera carries the loopback origin this app re-serves it on; a
+            // Moonraker camera leaves that blank and renders against the printer's own address.
+            camera.stream.isBlank() -> SnapshotCamera(camera.address.ifBlank { tile.address }, camera, modifier = Modifier.fillMaxSize(), showLabel = false, apiKey = tile.apiKey)
+            camera.service == "webrtc-camerastreamer" -> LiveCamera(camera.address.ifBlank { tile.address }, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
+            camera.service in setOf("mjpegstreamer", "mjpegstreamer-adaptive", "bambu-chamber") -> MjpegCamera(camera.address.ifBlank { tile.address }, camera, modifier = Modifier.fillMaxSize(), showLabel = false)
             else -> {
                 Spacer(Modifier.fillMaxSize())
                 Text("Unsupported camera format", style = fallbackTextStyle, modifier = Modifier.align(Alignment.BottomCenter))

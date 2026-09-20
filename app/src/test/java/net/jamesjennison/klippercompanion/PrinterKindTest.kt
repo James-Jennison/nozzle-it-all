@@ -43,6 +43,21 @@ class PrinterKindTest {
         val loaded = PrinterPreferences.profiles(prefs, secrets)
         assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, loaded.single().kind)
     }
+    @Test fun bambuProfileRoundTripsItsBareHostSerialAndAccessCode() {
+        val prefs = InMemoryPrefs()
+        val secrets = InMemoryPrefs()
+        val profile = PrinterProfile("192.168.1.50", "P1S", kind = PrinterKind.BAMBU_LAB, serial = "01P00A000000000", apiKey = "12345678")
+        PrinterPreferences.saveProfiles(prefs, secrets, profile.address, listOf(profile))
+        val loaded = PrinterPreferences.profiles(prefs, secrets).single()
+        assertEquals(profile, loaded)
+    }
+    @Test fun serviceFactoryRoutesByKind() {
+        val bambu = PrinterProfile("192.168.1.50", kind = PrinterKind.BAMBU_LAB, serial = "01P00A000000000", apiKey = "12345678")
+        assertTrue(printerServiceFor(bambu, bambu.address) is BambuPrinterService)
+        assertEquals(bambu.address, printerServiceFor(bambu, bambu.address).address)
+        assertTrue(printerServiceFor(PrinterProfile("http://u1.local/"), "http://u1.local/") is Moonraker)
+        assertTrue(printerServiceFor(null, "http://u1.local/") is Moonraker)
+    }
     @Test fun missingOrUnrecognizedKindDefaultsToGenericKlipper() {
         val prefs = InMemoryPrefs(mutableMapOf("profilesV1" to
             """[{"address":"http://a.local/","name":"A","favorite":false,"cameraId":""},

@@ -96,7 +96,7 @@ class CompanionScreenTest {
         val address="http://fixture.local/";var edited="";var camera=""
         val profile=PrinterProfile(address,"Workshop")
         val cameras=listOf(Camera("Front","/snapshot1",id="front"),Camera("Side","/snapshot2",id="side"))
-        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name,_,_->assertEquals(address,old);edited=name;null},selectCamera={camera=it},tileCamera={}) } }
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name,_,_,_->assertEquals(address,old);edited=name;null},selectCamera={camera=it},tileCamera={}) } }
         compose.openFixtureDashboard()
         compose.onNodeWithTag("camera:side").performScrollTo().performClick();assertEquals("side",camera)
         compose.onNodeWithTag("nav-3").performClick()
@@ -107,7 +107,7 @@ class CompanionScreenTest {
     @Test fun profileEditorSendsApiKeyToSave() {
         val address="http://fixture.local/";var savedKey=""
         val profile=PrinterProfile(address,"Workshop",apiKey="old-key")
-        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile)),{},{},{},{_,_->},updateProfile={_,_,_,key,_->savedKey=key;null},tileCamera={}) } }
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile)),{},{},{},{_,_->},updateProfile={_,_,_,key,_,_->savedKey=key;null},tileCamera={}) } }
         compose.openFixtureDashboard()
         compose.onNodeWithTag("nav-3").performClick()
         compose.onNodeWithTag("edit-profile:$address").performScrollTo().performClick()

@@ -75,7 +75,9 @@ class PrintMonitorService : Service() {
         }
     }
     private fun poll(profile: PrinterProfile): PrinterConnection = try {
-        val service = services.getOrPut(profile.address) { Moonraker(profile.address, profile.apiKey) }
+        // Routed by kind, like the foreground loop: a Bambu profile's bare host is not an address
+        // Moonraker's own constructor accepts, and would otherwise poll as permanently offline.
+        val service = services.getOrPut(profile.address) { printerServiceFor(profile, profile.address) }
         val snapshot = service.snapshot()
         PrinterConnection(true, if (snapshot.ready) snapshot.state else "not ready", snapshot)
     } catch (e: CancellationException) { throw e } catch (_: Exception) {

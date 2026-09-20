@@ -27,7 +27,24 @@ data class ScreenState(
 // API key it gets, so a newly added call site can't compile while silently going unauthenticated.
 fun ScreenState.apiKeyFor(address: String): String = profiles.find { it.address == address }?.apiKey.orEmpty()
 fun ScreenState.kindFor(address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
+// Klipper-only panels build these; a BAMBU_LAB printer never reaches them because MainActivity
+// hides every control that needs one (BambuPrinterService implements none of the reader interfaces).
 fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
+// A Bambu profile's address is a bare host - it has no HTTP endpoint for a URL to point at - so it
+// is validated by bambuHostAddress rather than Moonraker.parseAddress. Both throw
+// IllegalArgumentException, so every call site keeps its existing failure handling.
+internal fun normalizedAddress(address: String, kind: PrinterKind): String =
+    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address) else Moonraker.parseAddress(address).toString()
+// The one place that decides which transport a saved printer actually gets. A BAMBU_LAB profile
+// speaks nothing Moonraker understands (MQTT/FTPS/port-6000 camera), so it gets its own service;
+// every other kind keeps the Moonraker client. Throws IllegalArgumentException on a bad address,
+// exactly as Moonraker's own constructor does, so connect() reports it the same way.
+internal fun printerServiceFor(profile: PrinterProfile?, address: String): PrinterService =
+    // profile.apiKey is reused as the Bambu access code for BAMBU_LAB profiles - same class of
+    // secret (a control-granting credential), so it gets the same encrypted storage slot.
+    if(profile?.kind == PrinterKind.BAMBU_LAB) BambuPrinterService(bambuHostAddress(address), profile.serial, profile.apiKey)
+    else Moonraker(address, profile?.apiKey.orEmpty())
+private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
 class PrinterModel(
     initialAddress: String = "",
     private val saveSettings: (String, List<String>) -> Unit = { _, _ -> },
@@ -39,15 +56,15 @@ class PrinterModel(
     private val saveProfiles: (String, List<PrinterProfile>) -> Unit = { _, _ -> }
 
 ) : ViewModel() {
-    private val _state = MutableStateFlow(ScreenState(address = runCatching { Moonraker.parseAddress(initialAddress).toString() }.getOrDefault(""),
+    private val _state = MutableStateFlow(ScreenState(address = runCatching { normalizedAddress(initialAddress, kindOf(initialProfiles, initialAddress)) }.getOrDefault(""),
         savedPrinters = (initialPrinters + initialAddress).filter { it.isNotBlank() }
-            .mapNotNull { runCatching { Moonraker.parseAddress(it).toString() }.getOrNull() }.distinct()))
+            .mapNotNull { runCatching { normalizedAddress(it, kindOf(initialProfiles, it)) }.getOrNull() }.distinct()))
     // Default factory looks up the profile's API key lazily so tests can still override with a plain fake.
     // Named `resolved...` (not `serviceFactory`) because the constructor parameter of that name stays in
     // scope for every property initializer in this class, and would otherwise shadow a same-named property.
-    private val resolvedServiceFactory: (String) -> PrinterService = serviceFactory ?: { address -> Moonraker(address, _state.value.profiles.find { it.address == address }?.apiKey.orEmpty()) }
+    private val resolvedServiceFactory: (String) -> PrinterService = serviceFactory ?: { address -> printerServiceFor(_state.value.profiles.find { it.address == address }, address) }
     init {
-        val profiles = initialProfiles.mapNotNull { p -> runCatching { p.copy(address=Moonraker.parseAddress(p.address).toString(), name=p.name.take(80)) }.getOrNull() }.distinctBy { it.address }
+        val profiles = initialProfiles.mapNotNull { p -> runCatching { p.copy(address=normalizedAddress(p.address, p.kind), name=p.name.take(80)) }.getOrNull() }.distinctBy { it.address }
         val merged = profiles + _state.value.savedPrinters.filter { a -> profiles.none { it.address == a } }.map { PrinterProfile(it) }
         _state.value = _state.value.copy(profiles=merged, savedPrinters=merged.map { it.address })
     }
@@ -58,12 +75,15 @@ class PrinterModel(
     private fun persist(address: String = _state.value.address, profiles: List<PrinterProfile> = _state.value.profiles) {
         saveSettings(address, profiles.map { it.address }); saveProfiles(address, profiles)
     }
-    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String, kind: PrinterKind? = null): String? {
+    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String, kind: PrinterKind? = null, serial: String? = null): String? {
         if(_state.value.busy) return "Wait for the current command to finish."
-        val normalized = try { Moonraker.parseAddress(address).toString() } catch(_: IllegalArgumentException) { _state.value=_state.value.copy(commandNotice="Enter a valid local printer address.");return "Enter a valid local printer address." }
         val current = _state.value
-        if(normalized != oldAddress && current.profiles.any { it.address == normalized }) { _state.value=current.copy(commandNotice="That printer address is already saved.");return "That printer address is already saved." }
+        // The profile is resolved before the address is: which validator applies depends on the kind
+        // being saved, and a Bambu profile's bare host is not an address parseAddress can read.
         val existing = current.profiles.find { it.address == oldAddress } ?: return "This profile is no longer available."
+        val normalizedKind = kind ?: existing.kind
+        val normalized = try { normalizedAddress(address, normalizedKind) } catch(_: IllegalArgumentException) { _state.value=current.copy(commandNotice="Enter a valid local printer address.");return "Enter a valid local printer address." }
+        if(normalized != oldAddress && current.profiles.any { it.address == normalized }) { _state.value=current.copy(commandNotice="That printer address is already saved.");return "That printer address is already saved." }
         val normalizedKey = apiKey.trim().take(200)
         val keyChanged = existing.apiKey != normalizedKey
         // An address change already makes reconcile() tear down and recreate the saved-printer
@@ -71,7 +91,7 @@ class PrinterModel(
         // for the connected printer via disconnect(), for a background one via savedMonitor.remove().
         if(oldAddress == current.address) { if(oldAddress != normalized || keyChanged) disconnect() }
         else if(normalized == oldAddress && keyChanged) savedMonitor.remove(oldAddress)
-        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey,kind=kind ?: it.kind) else it }
+        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey,kind=normalizedKind,serial=(serial ?: it.serial).trim().take(40)) else it }
         val selected = if(current.address == oldAddress) normalized else _state.value.address
         _state.value = _state.value.copy(address=selected,profiles=profiles,savedPrinters=profiles.map { it.address })
         persist()

@@ -7,7 +7,7 @@ incorporated.
 
 ## Helix
 
-Portions of this app's Snapmaker U1/PAXX-specific code are adapted from
+Portions of this app's Snapmaker U1/PAXX- and Bambu Lab-specific code are adapted from
 **[Helix](https://github.com/FatBoy721/Helix)** by FatBoy721, licensed under
 AGPL-3.0-or-later. Helix is a separate app and codebase; this project is not a
 fork of it. Ported files carry a header comment noting their origin.
@@ -23,6 +23,18 @@ Incorporated so far:
   format was changed from Helix's own (see that file's header) so it can be
   rebuilt against current Bespok3d releases rather than staying pinned to
   whichever pairing Helix happened to ship.
+
+- `BambuTrust.kt`, `BambuMqttConnection.kt`, `BambuStatusProbe.kt`,
+  `BambuFtpsClient.kt`, `BambuPrintProtocol.kt`, `BambuChamberCamera.kt` —
+  adapted from Helix's `android/app/src/main/java/org/crabcore/u1control/bambu/`
+  (serial-pinned TLS trust, the MQTT LAN transport and bounded status probe,
+  the implicit-TLS FTPS upload client, `project_file` command construction and
+  acknowledgement parsing, and the port-6000 chamber-camera stream re-served as
+  loopback MJPEG). `BambuPrintProtocol.kt` drops Helix's AMS/multi-material lane
+  mapping (see that file's header): this app prints single-material from the
+  external spool only. Helix's React Native bridge shims and its `.gcode.3mf`
+  artifact builder were not ported — this app has no slicer and uploads an
+  already-sliced archive as-is.
 
 ## Bespok3d daemon and Snapmaker U1 jinni (bundled binaries)
 
@@ -60,7 +72,7 @@ Bespok3d.
 
 Later phases of this port are expected to add further Helix-derived
 components (on-device slicing via the u1-slicer-for-android/OrcaSlicer/
-PrusaSlicer lineage, Bambu Lab chamber-camera and MQTT support, and a
-MakerWorld model browser). Entries for those will be added here, alongside
+PrusaSlicer lineage, and a MakerWorld model browser). Entries for those will be
+added here, alongside
 their own upstream licenses, as each is actually incorporated — not in
 advance of the code landing.

@@ -8,9 +8,9 @@ import java.io.*;
 /** Test APK only: one immutable synthetic document. No user-file access. */
 public class GcodeFixtureProvider extends ContentProvider {
  public boolean onCreate(){return true;}
- private void validate(Uri uri){if(!"/sample".equals(uri.getPath()) && !"/wrong".equals(uri.getPath()))throw new IllegalArgumentException("Unknown fixture");}
+ private void validate(Uri uri){if(!"/sample".equals(uri.getPath()) && !"/wrong".equals(uri.getPath()) && !"/bambu".equals(uri.getPath()))throw new IllegalArgumentException("Unknown fixture");}
  public String getType(Uri uri){validate(uri);return "application/octet-stream";}
- public Cursor query(Uri uri,String[] projection,String selection,String[] args,String order){validate(uri);MatrixCursor c=new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME});c.addRow(new Object[]{"/wrong".equals(uri.getPath())?"wrong.pdf":"fixture.gcode"});return c;}
+ public Cursor query(Uri uri,String[] projection,String selection,String[] args,String order){validate(uri);MatrixCursor c=new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME});c.addRow(new Object[]{"/wrong".equals(uri.getPath())?"wrong.pdf":"/bambu".equals(uri.getPath())?"fixture.gcode.3mf":"fixture.gcode"});return c;}
  public ParcelFileDescriptor openFile(Uri uri,String mode)throws FileNotFoundException{
   validate(uri);if(!"r".equals(mode)||"/wrong".equals(uri.getPath()))throw new FileNotFoundException("Synthetic document is read-only; wrong type must not open");
   File file=new File(getContext().getCacheDir(),"synthetic-document.gcode");

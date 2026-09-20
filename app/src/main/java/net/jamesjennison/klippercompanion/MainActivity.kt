@@ -204,13 +204,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         },
         bottomBar = {
             if (!expandedCamera) NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
-                // Home/Control/Files/Prepare/Printers - reordered and relabeled from an earlier
-                // draft that happened to match Helix's own "Home, Files, Slice, Tools, Settings"
-                // nav word-for-word; Control/Printers are this app's own pre-existing tab names
-                // (Tools/Settings only fold in the same content under Helix's naming), and Prepare
-                // (a placeholder for the not-yet-built slicing phase) reads broader than "Slice".
+                // Home/Control/Files/Prepare/Settings - reordered from an earlier draft that
+                // happened to match Helix's own "Home, Files, Slice, Tools, Settings" nav
+                // word-for-word; Control keeps this app's own pre-existing tab name (Tools folds
+                // in the same content under Helix's naming), Prepare (a placeholder for the
+                // not-yet-built slicing phase) reads broader than "Slice", and this last tab is
+                // labeled Settings - its content is still printer management, "Printers" as a
+                // label read as confusing next to a tab bar that's otherwise about what you do,
+                // not what you're looking at.
                 listOf("Home" to CompanionSymbol.DASHBOARD, "Control" to CompanionSymbol.CONTROL, "Files" to CompanionSymbol.FILES,
-                    "Prepare" to CompanionSymbol.SLICE, "Printers" to CompanionSymbol.SETTINGS).forEachIndexed { index, (title, symbol) ->
+                    "Prepare" to CompanionSymbol.SLICE, "Settings" to CompanionSymbol.SETTINGS).forEachIndexed { index, (title, symbol) ->
                     NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
                 }
             }
@@ -229,7 +232,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     CompanionIcon(CompanionSymbol.PRINTER, color = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
                         Text("Nozzle It All", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(listOf("Home", "Control · Macros", "Files", "Prepare", "Printers")[tab], style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(listOf("Home", "Control · Macros", "Files", "Prepare", "Settings")[tab], style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if(tab == 0 && detailAddress != null) TextButton({ detailAddress = null }, Modifier.testTag("all-printers")) { Text("All printers") }
                     else TextButton({ tab = 4 }) { Text("Manage printers") }

@@ -126,7 +126,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
     configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
     speedFlowFactory:(String)->SpeedFlowReader={ a -> state.moonrakerFor(a) },
-    timelapseFactory:(String)->TimelapseReader={ a -> state.moonrakerFor(a) }, tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
+    timelapseFactory:(String)->TimelapseReader={ a -> state.moonrakerFor(a) },
+    pandaBreathFactory:(String)->PandaBreathReader={ a -> state.moonrakerFor(a) },
+    tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
         ready=state.snapshot?.ready==true,execute=if(LIVE_HEATER_FAN_CONTROLS_ENABLED) execute else null,generation=state.generation)
@@ -153,6 +155,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(toolOpen) ToolPanel(state,execute,{toolOpen=false})
     var speedFlowOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(speedFlowOpen) SpeedFlowPanel(state,execute,{speedFlowOpen=false},speedFlowFactory)
+    var pandaBreathOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(pandaBreathOpen) PandaBreathPanel(state,execute,{pandaBreathOpen=false},pandaBreathFactory)
     var timelapseOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(timelapseOpen) TimelapsePanel(state.address,state.connected,{timelapseOpen=false},timelapseFactory)
     var controlPreview by rememberSaveable { mutableStateOf(false) }
@@ -382,6 +386,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         item { OutlinedButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")} }
                         item { OutlinedButton({toolOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-tools")){Text("Tool controls")} }
                         item { OutlinedButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")} }
+                        // Feature-detected, not gated to a printer kind: shows "not detected"
+                        // rather than being hidden, matching Helix's own honest-empty-state panel.
+                        item { OutlinedButton({pandaBreathOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-panda")){Text("Panda Breath (chamber/dryer)")} }
                         if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")} }
                         // Last in this section, not first: destructive, so it should never sit
                         // where a thumb reaching for an ordinary control could hit it by accident

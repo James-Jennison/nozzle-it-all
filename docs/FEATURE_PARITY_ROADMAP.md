@@ -412,7 +412,7 @@ turned into a paid unlock.
 | P10 | Dashboard layout, light/dark/accent choices and presets; Mobileraker/Printer Tools | Delivered and verified on Razr ([evidence](P10_ACCEPTANCE.md)) | M2 | M | Local; persist layout without hiding safety feedback |
 | P11 | Console history/filtering, explicit command entry; Mobileraker/OctoApp | Read-only cache, search/error filter, pause and copy validated; command entry pending ([scope](P11_CONSOLE_ACCEPTANCE.md)) | M3 | M | Local; bounded logs, command safeguards |
 | P12 | Bed mesh viewer; calibration workflows later; Mobileraker/Printer Tools | Validated: read-only profile/Z-range/heatmap, verified live on both real printers (Elegoo CC no-mesh state, Snapmaker U1 real 11×11 profile). **2026-09-20 (M8e):** added a gesture-orbited 3D surface (Catmull-Rom-smoothed, drag-to-orbit/pinch-to-zoom) alongside the existing heatmap, clean-room (not ported from Helix, whose own bed-mesh view is JS/Skia); verified live against the Snapmaker U1's real 13×13 mesh after running `BED_MESH_CALIBRATE` through the app's own macro runner | M3 (+M8e) | M viewer; L calibration | Local; configured mesh and supported routines |
-| P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | Skipped — owner does not run Spoolman (confirmed 2026-09-16); revisit only if that changes | M3 | M | Existing service; read first, validated mutations later |
+| P13 | Spoolman selection/inventory/usage; Mobileraker/Printer Tools | **Reopened 2026-09-20** — originally skipped 2026-09-16 because the owner doesn't run Spoolman; owner then asked it be built anyway, on the same "the app isn't only for my own setup" reasoning that un-skipped Panda Breath (P31). Not yet built — next up, referencing Helix's own `app/(tabs)/spoolman.tsx` for its Moonraker Spoolman API calls | M3 | M | Existing service; read first, validated mutations later; feature-detected the way P31 is, not gated to the owner running Spoolman |
 | P14 | Config editing with diff, backup and explicit restart; Mobileraker | Missing | M3 | L | Local; file access and safe recovery path |
 | P15 | Lights/power devices, multiple tools, sensors; Klipper tool completeness. Includes multi-toolhead temperature visibility (all T0–T3 toolheads at once, not just the active one) — a real gap confirmed against the Snapmaker U1's own firmware, not just a generic idea | Validated: multi-toolhead visibility verified live on the U1 (all 4 extruders). Still missing: lights/power devices, COSMOS-specific checks (exhaust fan RPM, saved mesh profiles), and any actual fan/light control | M3 | L | Existing printer capabilities; do not assume OctoPrint plugins work. Read-only for the multi-toolhead display slice — no new control surface |
 | P16 | Authentication and LAN/VPN endpoint profiles; OctoApp/Printer Tools | API-key auth built and device-verified (X-Api-Key, encrypted per-profile storage); Tailscale/*.ts.net addresses accepted; Cloudflare Tunnel/port forwarding documentation-only. **Gap noted 2026-09-20:** each profile is still a single fixed address — no automatic LAN/Tailscale failover. Helix keeps both a LAN and a Tailscale URL per printer and alternates on a 6s connect timeout, which is a real resilience pattern worth adopting, not yet scoped as its own effort estimate | M4a | L | Local/VPN; supported authentication design and owner-entered credentials |
@@ -430,6 +430,7 @@ turned into a paid unlock.
 | P28 | Visual redesign ("Kiln" theme): new palette/typography, 5-tab nav, Quickview list + per-printer detail hero | **Substantially done 2026-09-20:** duotone dark theme (ember heat / teal accent) and Space Grotesk/IBM Plex Sans/Mono (OFL, bundled as variable fonts) replace the old flat scheme; bottom nav grows from 4 to 5 tabs (Home/Control/Files/Prepare/Settings — deliberately reordered/relabeled from an early draft that matched Helix's own nav almost exactly); Home's printer list and the per-printer dashboard hero/temperature cards get the gradient/status-dot treatment from the design concept. Every change physically verified live on the owner's Razr 2023, including two real bugs a live check caught that code review hadn't (a compressed/clipped hero card, an invisible layer-line texture). Remaining: Bespok3d/Bambu panels, the bed-mesh 3D view and the timelapse gallery still use pre-redesign `AlertDialog` chrome (they inherit the new colors/fonts via the theme change, but not the card/gradient treatment) | M8f | L | Local; OFL font licenses bundled, see `THIRD_PARTY_NOTICES.md` |
 | P29 | Emergency stop control | **Built 2026-09-20, commit `f080790`.** `PrinterModel.emergencyStop()` POSTs `printer/emergency_stop` to Moonraker; deliberately bypasses `execute()`'s foreground/busy/ready/state gates, since those are exactly backwards for a control whose purpose is working when something's already wrong (referenced against Helix's own `emergencyStop` action, which does the same). UI: full-width red button, last in the Control tab, behind a confirmation dialog, gated behind `LIVE_HEATER_FAN_CONTROLS_ENABLED` and hidden for Bambu Lab. Only fires one REST call (this app has no WebSocket channel and no second saved URL per printer yet, unlike Helix's "every configured transport" — see the P16 addendum). Unit-tested (bypasses gates even while backgrounded/busy/not-ready; no-ops without a connected printer); **not yet physically sent to a real printer** — folds into the already-authorized Phase 1 testing sessions (see M2 above), not a new gate | M2 (M8g) | S | Local; sends `printer/emergency_stop` via Moonraker, same transport as existing gated controls |
 | P30 | PAXX `multiACE` filament system (RFID lane status, dryer, load/unload, cross-ACE switching) | **Missing, unscoped before 2026-09-20** — a real PAXX-specific hardware capability surfaced by reading Helix's feature list, not present anywhere in this document until now. Only relevant to owners with multiACE hardware attached; needs an honest empty state when none is present, the same pattern Helix itself uses | Unscheduled | M | Existing printer capabilities; PAXX-specific `ACE_LOAD_HEAD`/`A_DRY`/`ACE_SWITCH` macros — verify against the owner's actual PAXX firmware before building, don't assume Helix's macro names transfer unchanged |
+| P31 | Panda Breath chamber-heater/filament-dryer control | **Built 2026-09-20.** `PandaBreathControls`/`PandaBreathPanel`, referencing Helix's exact gcode and feature-detection logic (`hooks/useDashboardModel.ts`'s `findPandaBreathHeater`/`pandaModeLabel`/panda actions) rather than any ported code (Helix's own logic is TypeScript). Feature-detected (`heater_generic` name match, `printer/gcode/help` probed for `PANDA_BREATH_AUTO`/`PANDA_BREATH_DRY_START`/`PANDA_BREATH_DRY_RUN`), not gated to a printer kind or owner-owned hardware — built at the owner's explicit request despite not having this accessory, since the app serves more than one printer/owner. Unit-tested (parse/prepare logic, request-shape MockWebServer test); **not physically verified**, no owner hardware to test against | M3 | M | Local; `M141`/`PANDA_BREATH_*` gcode via Moonraker, same transport as existing gated controls |
 
 **P15 sourcing note (2026-09-16):** the Snapmaker U1 runs a genuine Klipper/Moonraker
 fork ([Snapmaker/u1-moonraker](https://github.com/Snapmaker/u1-moonraker), GPL-3.0;
@@ -761,6 +762,35 @@ unit tests added (gate-bypass behavior, no-op without a connected printer); all
 Physical acceptance is the one thing left, and it isn't a new gate: it folds
 into the Phase 1 testing sessions already authorized and underway (see M2's
 "physical acceptance authorized and underway" note above).
+
+**Full-controls audit, 2026-09-20 (owner request: check every control, not just
+e-stop).** Went through Helix's entire control surface — `app/(tabs)/tools.tsx`
+(its Tools tab: Calibration, Bed Mesh, multiACE, Spoolman, Bespok3d, Console)
+and every dashboard component — looking for logic to reference the way
+emergency stop's was. Result: for a generic Klipper/U1 printer, Helix's own
+control surface is thinner than ours already is. It has no jog/movement UI, no
+extrude/retract UI, and no manual fan-speed or speed/flow-override UI for
+Klipper at all — the fan and speed controls that exist in Helix's dashboard
+(`TempRow`'s fan chips, `JobCard`'s speed presets) are gated `data.bambu`-only.
+Klipper users are expected to reach for console or macros instead. Our own
+`HeaterControls`/`FanControls`/`SpeedFlowControls`/`LedControls`/`ToolControls`
+panels (built earlier in Phase 1, heater already a hardware PASS) have no Helix
+equivalent to check against — there's nothing to port or correct, because
+Helix doesn't build first-class controls for this hardware class either.
+
+The one real gap found: Helix has a dedicated **Panda Breath** panel
+(`PandaBreathRow`) for a chamber-heater/filament-dryer accessory (real gcode:
+`PANDA_BREATH_DRY_START`/`PANDA_BREATH_DRY_RUN`, target temp, Auto mode) that
+this app had nothing for. The owner doesn't have this hardware personally, but
+explicitly asked for it to be built anyway — the app isn't only for the owner's
+own printer, and Spoolman (P13) had been skipped on the same "owner doesn't
+have/run it" reasoning, which the owner then also asked be revisited on the
+same basis. **Built 2026-09-20** (new row **P31** below), feature-detected
+rather than gated to a printer kind or the owner's own hardware — a printer
+without the accessory shows "not detected" instead of the panel being hidden,
+matching Helix's own honest-empty-state pattern. **Not physically verified**
+(no owner hardware to test against); unit-tested against Helix's exact gcode
+and feature-detection logic instead.
 
 **Also surfaced by the same comparison, not part of M8 itself:** `multiACE` support
 (**P30**, a real PAXX hardware capability with no prior row in this document) and

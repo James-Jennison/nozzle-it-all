@@ -313,6 +313,16 @@ class PrinterModel(
                         val checked=ToolControls.prepare(request,service.toolStatus())
                         if(checked!=command) throw ApiFailure("Tool command changed. Review it again.")
                     }
+                    command.pandaBreathRequest?.let { request ->
+                        val observed=service.pandaBreathStatus()
+                        val checked=when(request) {
+                            is PandaBreathRequest.SetTarget -> PandaBreathControls.prepareSetTarget(request,observed)
+                            is PandaBreathRequest.SetAuto -> PandaBreathControls.prepareAuto(request,observed)
+                            is PandaBreathRequest.Dry -> PandaBreathControls.prepareDry(request,observed)
+                            is PandaBreathRequest.Stop -> PandaBreathControls.prepareStop(observed)
+                        }
+                        if(checked!=command) throw ApiFailure("Panda Breath command changed. Review it again.")
+                    }
                     currentCoroutineContext().ensureActive()
                     service.command(command)
                 }

@@ -28,7 +28,7 @@ data class Catalog(val files: List<String>, val macros: List<String>, val camera
 // path/arguments are HTTP-shaped and only mean anything to Moonraker. bambuPrintRequest is the
 // one command kind that isn't an HTTP call at all (MQTT + FTPS, see BambuPrinterService); it
 // leaves them empty.
-data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null, val bambuPrintRequest: BambuPrintRequest? = null)
+data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null, val bambuPrintRequest: BambuPrintRequest? = null, val pandaBreathRequest: PandaBreathRequest? = null)
 
 interface PrinterService {
     val address: String
@@ -55,6 +55,7 @@ interface PrinterService {
     fun ledStatus(led: String): LedStatus = throw ApiFailure("Light status unavailable.")
     fun timelapses(): List<TimelapseClip> = throw ApiFailure("Timelapse unavailable.")
     fun toolStatus(): ToolStatus = throw ApiFailure("Tool controls unavailable.")
+    fun pandaBreathStatus(): PandaBreathStatus = throw ApiFailure("Panda Breath unavailable.")
     // Snapmaker U1/PAXX only (PrinterKind.SNAPMAKER_U1_PAXX); see Bespok3d.kt.
     fun bespok3dProbe(): Bespok3dProbe = throw ApiFailure("Bespok3d bridge unavailable.")
     fun bespok3dStatus(connection: Bespok3dConnection): Bespok3dStatus? = throw ApiFailure("Bespok3d bridge unavailable.")
@@ -82,7 +83,7 @@ internal fun isLocalHost(host: String): Boolean {
     return privateV4 || tailscaleV6 || bareHostname || host == "localhost" || host == "::1" || host.endsWith(".local") || host.endsWith(".ts.net")
 }
 fun Camera.isBespok3dScreen(): Boolean = name.equals("gui", ignoreCase = true) || Regex("/screen(?:/|$)", RegexOption.IGNORE_CASE).containsMatchIn(stream)
-class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader {
+class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader, PandaBreathReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val apiKey = rawApiKey.trim()
@@ -239,6 +240,22 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val result=request("printer/objects/query",mapOf("webhooks" to "state", "print_stats" to "state", "toolhead" to "extruder", "configfile" to "settings")) as? JSONObject
             ?: throw ApiFailure("Tool state unavailable.")
         return ToolControls.parse(result)
+    }
+    override fun pandaBreathStatus(): PandaBreathStatus {
+        // Which heater_generic object (if any) is Panda Breath isn't known ahead of time, so the
+        // catalog is read first - same two-step shape FanControls.catalog()+parse() already uses.
+        val objects = (request("printer/objects/list") as? JSONObject)?.getJSONArray("objects") ?: throw ApiFailure("Object catalog unavailable.")
+        require(objects.length()<=10000) {"Object catalog is too large."}
+        val genericHeaters = (0 until objects.length()).mapNotNull { objects.opt(it) as? String }.filter { it.startsWith("heater_generic ") }
+        require(genericHeaters.size<=64) {"Too many generic heaters."}
+        val fields = mutableMapOf("webhooks" to "state", "print_stats" to "state", "panda_breath" to "")
+        genericHeaters.forEach { fields[it] = "temperature,target" }
+        val result = request("printer/objects/query", fields) as? JSONObject ?: throw ApiFailure("Panda Breath status unavailable.")
+        // The Auto/Dry gcodes are extras-registered, so probing gcode/help keeps the offered
+        // controls honest about what this firmware actually speaks - matches Helix's own
+        // hasGcode(gcodeHelp, ...) feature-detection rather than assuming every Klipper install has them.
+        val help = request("printer/gcode/help") as? JSONObject ?: JSONObject()
+        return PandaBreathControls.parse(result, help)
     }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")

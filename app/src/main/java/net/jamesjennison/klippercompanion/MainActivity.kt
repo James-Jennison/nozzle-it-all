@@ -480,9 +480,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             items(state.catalog.warnings) { Text(it, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall) }
-            // Build/platform footer: informational chrome, not something Home's printer list
-            // needs repeated every time you open the app; kept on the other tabs.
-            if(tab != 0) item { Text("LOCAL NETWORK  ·  ANDROID  ·  0.1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            // The old "LOCAL NETWORK · ANDROID · 0.1.0" footer repeated on every tab; moved here,
+            // Settings-only, and expanded into real diagnostics instead of one static line.
+            if(tab == 4) item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Diagnostics", style = MaterialTheme.typography.titleMedium)
+                    Text("Nozzle It All 0.1.0", style = MaterialTheme.typography.bodyMedium)
+                    Text("Android ${Build.VERSION.RELEASE} · ${Build.MODEL}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Local network only — no cloud account, no telemetry.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
     }
     // A Bambu printer has no local workspace worth importing into and no Moonraker to upload to;

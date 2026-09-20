@@ -6,8 +6,13 @@ missing emergency-stop control (built, P29, commit `f080790`); a stale
 physical-acceptance status got corrected (see below); and the owner extended
 "build it even though I don't own the hardware" into a standing principle,
 under which Panda Breath (P31, commit `afde29d`), Spoolman (P13, commit
-`7fa93f1`) and PAXX multiACE (P30, commit `70a8a7b`) all got built. None of
-those three are physically verified — see the "Later" tier below.
+`7fa93f1`) and PAXX multiACE (P30, commit `70a8a7b`) all got built. A related
+but distinct ask followed — "use the same type of logic for Prusa" — which
+turned out to have no Helix logic to reference at all (Helix has zero Prusa
+support), so Prusa (P26, commit `8a90a0b`) got built fresh from Prusa's own
+published PrusaLink OpenAPI spec instead, including a from-scratch RFC 2617
+HTTP Digest auth implementation. None of these four are physically verified —
+see the "Later" tier below.
 **Correction, same day:** this document previously said Phase 1/M2 physical
 acceptance "needs an explicit, separate... owner go-ahead — this isn't a
 default-yes," which had gone stale — that go-ahead was already given on
@@ -28,11 +33,12 @@ because it looks more interesting.
 
 ## Now — unblocked, no owner action needed to start
 
-1. **WO-1 — Close the M7 exit-criteria gap for Bambu Lab.** Add an in-app "not
-   verified on real hardware yet" indicator on any `BAMBU_LAB` profile (dashboard
-   card and/or detail view). M7's own exit criteria require this to be visible in
-   the app, not just in docs — currently only the roadmap says it. Doesn't need
-   Bambu hardware to build.
+1. **WO-1 — Close the M7 exit-criteria gap for Bambu Lab and Prusa Link.** Add an
+   in-app "not verified on real hardware yet" indicator on any `BAMBU_LAB` or
+   `PRUSA_LINK` profile (dashboard card and/or detail view). M7's own exit
+   criteria require this to be visible in the app, not just in docs — currently
+   only the roadmap says it, for both. Doesn't need either printer's hardware to
+   build.
 2. **WO-2 — Kiln-restyle the remaining pre-redesign panels.** Bespok3d panel, Bambu
    print panel, bed-mesh 3D view chrome and the timelapse gallery dialog still
    render as plain `AlertDialog` (theme colors/fonts apply, the card/gradient
@@ -74,8 +80,12 @@ because it looks more interesting.
 7. **WO-7 — Bambu Lab hardware acceptance (M8c / P25).** Code exists and is
    unit-tested; blocked on the owner owning or gaining access to real Bambu
    hardware. Not actionable until then.
-8. **WO-8 — Prusa support (P26 / M7).** Same hardware-availability blocker as
-   WO-7, but unlike Bambu, no code exists yet at all.
+8. **WO-8 — Prusa hardware acceptance (P26 / M7).** Code built 2026-09-20
+   (`PrusaLinkPrinterService`, RFC 2617 digest auth, unit-tested against
+   Prusa's own published PrusaLink OpenAPI spec — no Helix reference existed
+   for this one, Helix has no Prusa support at all). Same hardware-availability
+   blocker as WO-7; not actionable until the owner owns or gets access to real
+   Prusa hardware.
 9. **WO-9 — Physical acceptance for Panda Breath (P31), Spoolman (P13) and
    multiACE (P30).** All three built 2026-09-20, unit-tested against Helix's
    exact logic, none physically verified — no owner hardware exists for any of

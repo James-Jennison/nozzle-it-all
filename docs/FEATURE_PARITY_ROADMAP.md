@@ -670,13 +670,15 @@ example, a visible "not verified on real hardware yet" state), not just in docs.
 Real hardware acceptance replaces the documentation-tier evidence before any such
 integration is called complete, whenever that hardware becomes available.
 
-**M7 exit-criteria gap opened by M8c (2026-09-20):** the "visible in the app
-itself" requirement above is not yet met for Bambu Lab — `BambuPrinterService`
-is real, wired code (not documentation-tier contract tests; it's built against
-Helix's own hardware-verified engineering), but the app shows no in-app
-"not verified on real hardware yet" indicator for a `BAMBU_LAB` profile the way
-this exit criterion calls for. Flagged here rather than silently left; close it
-before calling P25 anything past its current "built, hardware-unverified" status.
+**M7 exit-criteria gap opened by M8c and P26 (2026-09-20):** the "visible in the
+app itself" requirement above is not yet met for either Bambu Lab or Prusa —
+`BambuPrinterService` and `PrusaLinkPrinterService` are both real, wired code
+(not documentation-tier contract tests alone), but the app shows no in-app
+"not verified on real hardware yet" indicator for a `BAMBU_LAB` or `PRUSA_LINK`
+profile the way this exit criterion calls for. Flagged here rather than
+silently left; close it before calling P25 or P26 anything past their current
+"built, hardware-unverified" status. See `WORK_ORDER.md`'s WO-1, which already
+covered Bambu and now covers Prusa too.
 
 ### M8 — Helix-derived feature port and visual redesign
 

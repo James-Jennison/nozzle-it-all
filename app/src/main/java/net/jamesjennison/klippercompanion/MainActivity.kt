@@ -16,11 +16,16 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -35,8 +40,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -325,15 +328,30 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         }
                     }
                             "Print" -> {
-                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(state.snapshot?.displayState?.replaceFirstChar { it.uppercase() } ?: "Awaiting printer", style = MaterialTheme.typography.titleLarge)
-                                Text(state.snapshot?.activeFilename?.ifBlank { "No active file" } ?: "Connect to see print status", style = MaterialTheme.typography.bodyMedium)
-                                Text("Elapsed ${formatDuration(state.snapshot?.printDuration)} · Remaining ${formatDuration(estimatedRemaining(state.snapshot,state.activeMetadata))}", style=MaterialTheme.typography.bodySmall)
-                                if(estimatedRemaining(state.snapshot,state.activeMetadata)!=null) Text("Remaining time is a slicer-based estimate.",style=MaterialTheme.typography.labelSmall)
-                                Text("Layer ${state.snapshot?.currentLayer ?: "Unknown"} / ${state.snapshot?.totalLayers ?: state.activeMetadata?.layers ?: "Unknown"}",style=MaterialTheme.typography.bodySmall)
-                                LinearProgressIndicator(progress = { state.snapshot?.activeProgress ?: 0f }, modifier = Modifier.fillMaxWidth())
-                                Text(state.snapshot?.let { "${(it.activeProgress*100).toInt()}%" } ?: "—", style = MaterialTheme.typography.headlineLarge, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
+                        // The hero card from the redesign concept: a tinted gradient while
+                        // printing (the same treatment PrinterTiles gives a printing tile in the
+                        // Home list), flat otherwise, so "something is happening" reads at a glance.
+                        val printing = state.snapshot?.state in setOf("printing", "paused")
+                        val heroShape = RoundedCornerShape(24.dp)
+                        val heroDot = when { state.snapshot?.state in setOf("error", "not ready") -> MaterialTheme.colorScheme.error; printing -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurfaceVariant }
+                        Box(Modifier.fillMaxWidth().clip(heroShape)
+                            .background(if(printing) Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), MaterialTheme.colorScheme.surface)) else Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surface)))
+                            .then(if(printing) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), heroShape) else Modifier)) {
+                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Box(Modifier.size(8.dp).background(heroDot, CircleShape))
+                                        Text((state.snapshot?.displayState ?: "awaiting printer").uppercase(), style = MaterialTheme.typography.labelMedium, color = heroDot)
+                                    }
+                                    if(estimatedRemaining(state.snapshot,state.activeMetadata)!=null) Text("${formatDuration(estimatedRemaining(state.snapshot,state.activeMetadata))} left", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = PlexMono)
+                                }
+                                Text(state.snapshot?.activeFilename?.ifBlank { "No active file" } ?: "Connect to see print status", style = MaterialTheme.typography.titleMedium)
+                                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(state.snapshot?.let { "${(it.activeProgress*100).toInt()}%" } ?: "—", style = MaterialTheme.typography.displaySmall, fontFamily = PlexMono, color = MaterialTheme.colorScheme.primary)
+                                    Text("layer ${state.snapshot?.currentLayer ?: "?"} / ${state.snapshot?.totalLayers ?: state.activeMetadata?.layers ?: "?"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+                                }
+                                LinearProgressIndicator(progress = { state.snapshot?.activeProgress ?: 0f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
+                                Text("Elapsed ${formatDuration(state.snapshot?.printDuration)}" + (estimatedRemaining(state.snapshot,state.activeMetadata)?.let { " · Remaining time is a slicer-based estimate." } ?: ""), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 // Pause/resume/cancel are Moonraker HTTP calls; BambuPrinterService
                                 // only carries print requests, so they are hidden rather than broken.
                                 if(!bambu) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -489,11 +507,18 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     }
 }
 @Composable private fun Temperature(label: String, actual: Double?, target: Double?, modifier: Modifier, isNozzle:Boolean=false) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        CompanionIcon(if(isNozzle) CompanionSymbol.NOZZLE else CompanionSymbol.BED, color = if(isNozzle) Color(0xFFF3BC81) else Color(0xFF93C8ED))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(actual?.let { String.format(Locale.US, "%.1f°", it) } ?: "—", style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
-        Text(target?.let { "Target ${it.toInt()}°C" } ?: "No reading", style = MaterialTheme.typography.bodySmall)
+    // Ember for the nozzle, teal for the bed - the same duotone the redesign concept uses
+    // everywhere else heat is shown, replacing the old hardcoded one-off hex colors.
+    val accent = if(isNozzle) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+    val fraction = if(target != null && target > 0 && actual != null) (actual / target).toFloat().coerceIn(0f, 1f) else 0f
+    Card(modifier, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            CompanionIcon(if(isNozzle) CompanionSymbol.NOZZLE else CompanionSymbol.BED, Modifier.size(16.dp), color = accent)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(actual?.let { String.format(Locale.US, "%.1f°", it) } ?: "—", style = MaterialTheme.typography.headlineSmall, fontFamily = PlexMono, color = accent)
+        Text(target?.let { "Target ${it.toInt()}°C" } ?: "No reading", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = accent, trackColor = accent.copy(alpha = 0.15f))
     } }
 }
 

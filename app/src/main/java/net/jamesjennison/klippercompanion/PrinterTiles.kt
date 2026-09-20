@@ -1,11 +1,16 @@
 package net.jamesjennison.klippercompanion
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.platform.LocalView
@@ -30,24 +35,37 @@ fun ScreenState.connectedPrinterTiles(): List<PrinterTile> =
 
 @Composable
 fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> Unit, cameraContent: @Composable (PrinterTile) -> Unit = { PrinterTileCamera(it) }) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         tiles.forEach { tile -> key(tile.address) {
             val snapshot = tile.snapshot
             val displayState = snapshot?.displayState ?: tile.status
             val activeFilename = snapshot?.activeFilename?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+            val printing = displayState in setOf("printing", "paused")
+            val error = displayState in setOf("error", "not ready")
+            val dotColor = when { error -> MaterialTheme.colorScheme.error; printing -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurfaceVariant }
             fun temperature(value: Double?) = value?.takeIf { it.isFinite() }?.let { String.format(Locale.ROOT, "%.0f°C", it) } ?: "—"
-            Card(onClick = { open(tile.address) }, enabled = enabled, modifier = Modifier.fillMaxWidth().testTag("printer-tile:${tile.address}")) {
-                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-                    Box(Modifier.size(56.dp).clip(RoundedCornerShape(8.dp))) { cameraContent(tile) }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(tile.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            StatusPill(displayState)
+            val shape = RoundedCornerShape(20.dp)
+            // A printing tile gets the same tinted-gradient treatment as the printer detail
+            // hero card, so "something is actively happening here" reads at a glance across a
+            // list of several printers, not just once you open one.
+            val background = if (printing) Modifier.background(
+                Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), MaterialTheme.colorScheme.surface)), shape
+            ) else Modifier.background(MaterialTheme.colorScheme.surface, shape)
+            val border = if (printing) Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), shape) else Modifier
+            Box(Modifier.fillMaxWidth().clip(shape).then(background).then(border)
+                .clickable(enabled = enabled) { open(tile.address) }.testTag("printer-tile:${tile.address}")) {
+                Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(14.dp))) { cameraContent(tile) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(tile.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(Modifier.size(7.dp).background(dotColor, CircleShape))
+                            Text(displayState.replaceFirstChar { it.titlecase() }, style = MaterialTheme.typography.labelMedium, color = dotColor)
                         }
                         if (activeFilename != null) {
-                            Text(activeFilename, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(activeFilename, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                LinearProgressIndicator(progress = { snapshot?.activeProgress ?: 0f }, modifier = Modifier.weight(1f))
+                                LinearProgressIndicator(progress = { snapshot?.activeProgress ?: 0f }, modifier = Modifier.weight(1f).clip(CircleShape))
                                 Text("${((snapshot?.activeProgress ?: 0f) * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                             }
                         } else {
@@ -55,11 +73,11 @@ fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> U
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                CompanionIcon(CompanionSymbol.NOZZLE, Modifier.size(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                CompanionIcon(CompanionSymbol.NOZZLE, Modifier.size(16.dp), color = MaterialTheme.colorScheme.tertiary)
                                 Text(temperature(snapshot?.nozzle), style = MaterialTheme.typography.bodySmall)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                CompanionIcon(CompanionSymbol.BED, Modifier.size(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                CompanionIcon(CompanionSymbol.BED, Modifier.size(16.dp), color = MaterialTheme.colorScheme.primary)
                                 Text(temperature(snapshot?.bed), style = MaterialTheme.typography.bodySmall)
                             }
                         }
@@ -67,17 +85,6 @@ fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> U
                 }
             }
         } }
-    }
-}
-
-@Composable
-private fun StatusPill(state: String, modifier: Modifier = Modifier) {
-    val active = state in setOf("printing", "paused")
-    val error = state in setOf("error", "not ready")
-    val background = when { error -> MaterialTheme.colorScheme.errorContainer; active -> MaterialTheme.colorScheme.primaryContainer; else -> MaterialTheme.colorScheme.surfaceVariant }
-    val foreground = when { error -> MaterialTheme.colorScheme.onErrorContainer; active -> MaterialTheme.colorScheme.onPrimaryContainer; else -> MaterialTheme.colorScheme.onSurfaceVariant }
-    Surface(modifier = modifier, color = background, contentColor = foreground, shape = MaterialTheme.shapes.extraLarge) {
-        Text(state.replaceFirstChar { it.titlecase() }, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
     }
 }
 

@@ -2,6 +2,10 @@
 package net.jamesjennison.klippercompanion
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -12,10 +16,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.Font
@@ -80,6 +87,22 @@ val PlexMono = FontFamily(
         shapes = Shapes(medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(20.dp)),
         content = content,
     )
+}
+
+/**
+ * The gradient/bordered-card treatment MainActivity's dashboard hero card and PrinterTiles'
+ * printer tile each already use for "something live/active is here" - extracted here so panels
+ * with their own visual content (a camera/screen mirror, a 3D view, a video player, an imminent
+ * print confirmation) get the same look instead of floating bare inside a plain AlertDialog.
+ * [accent] is the hero card's own `printing` flag generalized: on for content that represents an
+ * active/imminent state, off for a plain framed surface.
+ */
+@Composable
+fun KilnFrame(accent: Boolean = false, shape: Shape = RoundedCornerShape(20.dp), content: @Composable BoxScope.() -> Unit) {
+    val background = if (accent) Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f), MaterialTheme.colorScheme.surface))
+        else Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surface))
+    val border = if (accent) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+    Box(Modifier.clip(shape).background(background).border(1.dp, border, shape), content = content)
 }
 
 private fun kilnTypography(): Typography {

@@ -127,16 +127,16 @@ import java.util.concurrent.TimeUnit
                 }
             } else {
                 val paired = connection!!
-                Text("Paired with this printer's Bespok3d daemon.")
+                Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) { Text("Paired with this printer's Bespok3d daemon.") } }
                 Button({ run({ result: Bespok3dStatus? -> status = result; notice = if (result == null) "Pairing is still pending approval on the printer." else "Bespok3d ${result.version} · printer ${result.printerUuid}." }) { reader.bespok3dStatus(paired) } }, enabled = enabled, modifier = Modifier.testTag("bespok3d-status")) { Text(if (busy) "Checking…" else "Check status") }
                 Button({ run({ result: Bespok3dPluginCatalog -> catalog = result; notice = "${result.plugins.size} plugins available, ${result.installed.size} installed." }) { reader.bespok3dPlugins(paired) } }, enabled = enabled, modifier = Modifier.testTag("bespok3d-load-plugins")) { Text(if (busy) "Loading…" else "Load plugin catalog") }
                 catalog?.plugins?.forEach { plugin ->
                     val installedVersion = catalog?.installed?.get(plugin.id)
-                    FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Card(Modifier.fillMaxWidth()) { FlowRow(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(plugin.id in selectedPlugins, { selectedPlugins = if (plugin.id in selectedPlugins) selectedPlugins - plugin.id else selectedPlugins + plugin.id; invalidate() },
                             enabled = !busy && installedVersion == null, label = { Text(plugin.title) }, modifier = Modifier.testTag("bespok3d-plugin-${plugin.id}"))
                         Text(if (installedVersion != null) "Installed $installedVersion" else plugin.version, style = MaterialTheme.typography.bodySmall)
-                    }
+                    } }
                 }
                 if (selectedPlugins.isNotEmpty()) {
                     Button({ installPending = true; preparedAt = System.nanoTime() / 1_000_000 }, enabled = enabled, modifier = Modifier.testTag("bespok3d-review-install")) { Text("Review plugin install") }
@@ -158,7 +158,7 @@ import java.util.concurrent.TimeUnit
             if (screenAvailable) {
                 Text("Remote screen", style = MaterialTheme.typography.labelLarge)
                 Text("Mirrors the printer's own touchscreen. Taps are forwarded; this is disabled while printing.", style = MaterialTheme.typography.bodySmall)
-                Bespok3dScreenMirror(state.address)
+                KilnFrame { Bespok3dScreenMirror(state.address) }
             }
             if (notice.isNotEmpty()) Text(notice, modifier = Modifier.testTag("bespok3d-notice"))
         }

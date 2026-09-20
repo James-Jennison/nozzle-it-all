@@ -110,14 +110,18 @@ import java.util.concurrent.TimeUnit
 }
 
 @Composable private fun TimelapseRow(address: String, clip: TimelapseClip, factory: (String) -> TimelapseReader, onPlay: () -> Unit, onDownload: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onPlay).testTag("timelapse-clip:${clip.path}"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        TimelapsePoster(address, clip, factory)
-        Column(Modifier.weight(1f)) {
-            Text(clip.path.substringAfterLast('/'), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-            val time = clip.modified?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date((it * 1000).toLong())) } ?: "Unknown time"
-            Text("${formatFileSize(clip.size)} · $time", style = MaterialTheme.typography.bodySmall)
+    // Matches the Card(Modifier.fillMaxWidth()) treatment Files/macro/saved-printer rows already
+    // get elsewhere - this row previously had no card background at all.
+    Card(Modifier.fillMaxWidth().testTag("timelapse-clip:${clip.path}")) {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TimelapsePoster(address, clip, factory)
+            Column(Modifier.weight(1f)) {
+                Text(clip.path.substringAfterLast('/'), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                val time = clip.modified?.let { SimpleDateFormat("HH:mm", Locale.US).format(Date((it * 1000).toLong())) } ?: "Unknown time"
+                Text("${formatFileSize(clip.size)} · $time", style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onDownload, Modifier.testTag("download-timelapse:${clip.path}")) { Text("Save") }
         }
-        TextButton(onDownload, Modifier.testTag("download-timelapse:${clip.path}")) { Text("Save") }
     }
 }
 
@@ -157,14 +161,16 @@ import java.util.concurrent.TimeUnit
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (note.isNotBlank()) Text(note)
             target?.let { url ->
-                AndroidView(modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f), factory = { ctx ->
-                    VideoView(ctx).apply {
-                        setVideoURI(Uri.parse(url.url), url.headers)
-                        setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
-                        setOnPreparedListener { it.isLooping = false; start() }
-                        setOnErrorListener { _, _, _ -> note = "Playback failed. The video may still be finalizing on the printer."; true }
-                    }
-                }, onRelease = { it.stopPlayback() })
+                KilnFrame {
+                    AndroidView(modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f), factory = { ctx ->
+                        VideoView(ctx).apply {
+                            setVideoURI(Uri.parse(url.url), url.headers)
+                            setMediaController(MediaController(ctx).also { it.setAnchorView(this) })
+                            setOnPreparedListener { it.isLooping = false; start() }
+                            setOnErrorListener { _, _, _ -> note = "Playback failed. The video may still be finalizing on the printer."; true }
+                        }
+                    }, onRelease = { it.stopPlayback() })
+                }
             }
         }
     })

@@ -4,6 +4,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -58,9 +59,13 @@ internal fun bambuPrintName(raw: String?): String {
     }
     AlertDialog(onDismissRequest={ if(!sending) close() },title={Text("Print on this printer?")},
         text={ Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text(name,style=MaterialTheme.typography.titleSmall)
-            Text("This uploads the file to ${state.address} and starts printing it. Confirm only when the plate is clear and the printer is ready.")
-            Text("Single material from the external spool, with the printer's default bed type, levelling and flow calibration.",style=MaterialTheme.typography.bodySmall)
+            // The about-to-print moment: same accented treatment the dashboard hero card gives an
+            // active print, since this confirmation is the imminent-print equivalent for Bambu.
+            KilnFrame(accent=true) { Column(Modifier.padding(14.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text(name,style=MaterialTheme.typography.titleSmall)
+                Text("This uploads the file to ${state.address} and starts printing it. Confirm only when the plate is clear and the printer is ready.")
+                Text("Single material from the external spool, with the printer's default bed type, levelling and flow calibration.",style=MaterialTheme.typography.bodySmall)
+            } }
             if(note.isNotBlank()) Text(note,color=MaterialTheme.colorScheme.error)
         } },
         confirmButton={ TextButton({

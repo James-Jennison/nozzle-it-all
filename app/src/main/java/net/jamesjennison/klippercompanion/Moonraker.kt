@@ -83,7 +83,7 @@ internal fun isLocalHost(host: String): Boolean {
     return privateV4 || tailscaleV6 || bareHostname || host == "localhost" || host == "::1" || host.endsWith(".local") || host.endsWith(".ts.net")
 }
 fun Camera.isBespok3dScreen(): Boolean = name.equals("gui", ignoreCase = true) || Regex("/screen(?:/|$)", RegexOption.IGNORE_CASE).containsMatchIn(stream)
-class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader, PandaBreathReader {
+class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader, PandaBreathReader, SpoolmanReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val apiKey = rawApiKey.trim()
@@ -257,6 +257,18 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val help = request("printer/gcode/help") as? JSONObject ?: JSONObject()
         return PandaBreathControls.parse(result, help)
     }
+    // moonraker-spoolman may not be configured at all (404) or configured but pointed at an
+    // unreachable Spoolman server - both are ordinary "not available" states here, honest-empty
+    // rather than surfaced as an error, matching TimelapseReader's precedent for an optional,
+    // separately-installed Moonraker component.
+    override fun spoolmanInventory(): SpoolmanInventory = try {
+        val idResult = request("server/spoolman/spool_id") as? JSONObject
+        val activeId = (idResult?.opt("spool_id") as? Number)?.toInt()
+        val proxyBody = JSONObject().put("request_method", "GET").put("path", "/v1/spool").put("query", "allow_archived=true")
+        val proxyResult = request("server/spoolman/proxy", jsonBody = proxyBody) as? JSONObject ?: throw ApiFailure("Spoolman unavailable.")
+        if (proxyResult.has("error") && !proxyResult.isNull("error")) throw ApiFailure("Spoolman rejected the request.")
+        SpoolmanInventory(true, activeId, Spoolman.parseSpools(proxyResult.opt("response")))
+    } catch (e: ApiFailure) { SpoolmanInventory(false, null, emptyList()) }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")
         if (!info.optBoolean("klippy_connected") || info.optString("klippy_state") != "ready") return PrinterSnapshot(false, info.optString("klippy_state", "not ready"))

@@ -128,6 +128,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     speedFlowFactory:(String)->SpeedFlowReader={ a -> state.moonrakerFor(a) },
     timelapseFactory:(String)->TimelapseReader={ a -> state.moonrakerFor(a) },
     pandaBreathFactory:(String)->PandaBreathReader={ a -> state.moonrakerFor(a) },
+    spoolmanFactory:(String)->SpoolmanReader={ a -> state.moonrakerFor(a) },
     tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
@@ -159,6 +160,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(pandaBreathOpen) PandaBreathPanel(state,execute,{pandaBreathOpen=false},pandaBreathFactory)
     var timelapseOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(timelapseOpen) TimelapsePanel(state.address,state.connected,{timelapseOpen=false},timelapseFactory)
+    var spoolmanOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(spoolmanOpen) SpoolmanPanel(state.address,state.connected,{spoolmanOpen=false},spoolmanFactory)
     var controlPreview by rememberSaveable { mutableStateOf(false) }
     if(controlPreview) ControlPreviewPanel { controlPreview=false }
     var customize by rememberSaveable { mutableStateOf(false) }
@@ -404,6 +407,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
                         item { OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")} }
                         item { OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")} }
+                        // Feature-detected (honest "not found" rather than hidden) like Panda
+                        // Breath above - not gated to the owner actually running Spoolman.
+                        item { OutlinedButton({spoolmanOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-spoolman")){Text("Spoolman")} }
                         item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text(if(LIVE_HEATER_FAN_CONTROLS_ENABLED) "Console" else "Read-only console")} }
                     }
                     item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }

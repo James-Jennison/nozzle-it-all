@@ -55,13 +55,25 @@ import java.util.Locale
 const val LIVE_HEATER_FAN_CONTROLS_ENABLED = true
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_STAGE_ADDRESS = "stage_address"
+        const val EXTRA_STAGE_ACTION = "stage_action"
+    }
     private var sharedFile by mutableStateOf<Uri?>(null)
+    // A notification action (see PrintMonitorService.stageActionIntent) or the widget's own open
+    // action (see NozzlePrinterWidget) opens the app with these set. Neither ever sends a command
+    // itself - CompanionScreen's own LaunchedEffect below stages it into the existing
+    // review/confirm flow, same rule every other mutating command in this app already follows.
+    private var stagedAddress by mutableStateOf<String?>(null)
+    private var stagedAction by mutableStateOf<String?>(null)
     private fun receiveShare(value: Intent?) {
         if(value?.action==Intent.ACTION_SEND) {
             @Suppress("DEPRECATION")
             val uri=value.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
             sharedFile=uri?.takeIf {it.scheme=="content"}
         }
+        val address = value?.getStringExtra(EXTRA_STAGE_ADDRESS)
+        if(address != null) { stagedAddress = address; stagedAction = value.getStringExtra(EXTRA_STAGE_ACTION) }
     }
     override fun onNewIntent(intent:Intent) {super.onNewIntent(intent);setIntent(intent);receiveShare(intent)}
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,7 +124,8 @@ class MainActivity : ComponentActivity() {
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
                 CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
-                    backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop)
+                    backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop,
+                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null})
             }
         }
     }
@@ -122,6 +135,7 @@ class MainActivity : ComponentActivity() {
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String)->String? = {_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
     backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={},
+    stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
     configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
@@ -203,6 +217,22 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var newestFirst by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Pair<PrinterCommand,Int>?>(null) }
+    // A notification action or the widget's open action (see MainActivity.stagedAddress/
+    // stagedAction) lands here. Navigates to the printer as soon as the address arrives; once
+    // it's actually connected, stages the command into the same pending?.let confirm dialog every
+    // other mutating command already uses - never dispatched directly. Matches openPrinter's own
+    // busy-guard implicitly: execute() itself re-checks freshness before sending regardless.
+    LaunchedEffect(stagedAddress) { stagedAddress?.let { openPrinter(it) } }
+    LaunchedEffect(stagedAddress, stagedAction, state.address, state.connected) {
+        val target = stagedAddress ?: return@LaunchedEffect
+        if(state.address == target && state.connected) {
+            when(stagedAction) {
+                "resume" -> pending = PrinterCommand("Resume print", "printer/print/resume", allowedStates = setOf("paused")) to state.generation
+                "cancel" -> pending = PrinterCommand("Cancel print", "printer/print/cancel", allowedStates = setOf("printing", "paused")) to state.generation
+            }
+            consumeStagedAction()
+        }
+    }
     var estopConfirm by rememberSaveable { mutableStateOf(false) }
     var expandedCamera by remember(state.generation, state.connected) { mutableStateOf(false) }
     BackHandler(expandedCamera) { expandedCamera = false }

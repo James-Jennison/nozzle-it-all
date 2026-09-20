@@ -1,6 +1,6 @@
 package net.jamesjennison.klippercompanion
 
-enum class AlertKind { COMPLETED, ERROR, CANCELLED, OFFLINE, BACK_ONLINE }
+enum class AlertKind { COMPLETED, ERROR, CANCELLED, OFFLINE, BACK_ONLINE, PAUSED }
 data class PrintAlert(val address: String, val kind: AlertKind, val filename: String = "", val message: String)
 
 /**
@@ -38,6 +38,13 @@ object PrintAlerts {
                 "complete" -> alerts += PrintAlert(address, AlertKind.COMPLETED, current.snapshot?.filename.orEmpty(), "$label finished $filename.")
                 "error" -> alerts += PrintAlert(address, AlertKind.ERROR, current.snapshot?.filename.orEmpty(), "$label reported an error on $filename.")
                 "cancelled" -> alerts += PrintAlert(address, AlertKind.CANCELLED, current.snapshot?.filename.orEmpty(), "$label cancelled $filename.")
+                // Only reachable from "printing" (paused is itself in ACTIVE_STATES, so
+                // paused->paused never enters this block, and paused->printing has no branch
+                // here at all - a resume was never alert-worthy and still isn't). The one new
+                // kind this app didn't detect at all before: filament runout, a manual pause, an
+                // M600 all used to be silent, and it's the one transition where a live Resume/
+                // Cancel notification action (see PrintMonitorService) is actually meaningful.
+                "paused" -> alerts += PrintAlert(address, AlertKind.PAUSED, current.snapshot?.filename.orEmpty(), "$label paused $filename.")
             }
         }
         return alerts

@@ -36,6 +36,27 @@ class PrintAlertsTest {
         val current = connection(true, "cancelled", "vase.gcode")
         assertEquals(AlertKind.CANCELLED, PrintAlerts.detect("a", "Garage", previous, current).single().kind)
     }
+    @Test fun printingToPausedRaisesPausedWithFilename() {
+        val previous = connection(true, "printing", "vase.gcode")
+        val current = connection(true, "paused", "vase.gcode")
+        val alerts = PrintAlerts.detect("a", "Garage", previous, current)
+        assertEquals(1, alerts.size)
+        assertEquals(AlertKind.PAUSED, alerts[0].kind)
+        assertEquals("vase.gcode", alerts[0].filename)
+        assertTrue(alerts[0].message.contains("paused"))
+    }
+    @Test fun stayingPausedDoesNotReAlert() {
+        val previous = connection(true, "paused", "vase.gcode")
+        val current = connection(true, "paused", "vase.gcode")
+        assertTrue(PrintAlerts.detect("a", "Garage", previous, current).isEmpty())
+    }
+    @Test fun resumingFromPausedDoesNotAlert() {
+        // A resume was never alert-worthy before this change and still isn't - only entering
+        // paused is new.
+        val previous = connection(true, "paused", "vase.gcode")
+        val current = connection(true, "printing", "vase.gcode")
+        assertTrue(PrintAlerts.detect("a", "Garage", previous, current).isEmpty())
+    }
     @Test fun standbyToPrintingDoesNotAlert() {
         val previous = connection(true, "standby")
         val current = connection(true, "printing", "vase.gcode")

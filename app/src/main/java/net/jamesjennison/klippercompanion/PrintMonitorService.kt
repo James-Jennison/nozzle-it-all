@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.*
 
 /** Opt-in background monitoring (P17). Polls every saved printer on a fixed interval and turns
@@ -71,6 +72,11 @@ class PrintMonitorService : Service() {
                 previous[profile.address] = current
             }
             updateStatusNotification(profiles, previous)
+            // Piggybacks on work this loop is already doing rather than adding a second poller
+            // or a WorkManager dependency - only relevant while this service happens to be
+            // running; otherwise the widget falls back to its own OS-throttled updatePeriodMillis
+            // and manual tap-to-refresh (see nozzle_widget_info.xml).
+            runCatching { NozzlePrinterWidget().updateAll(applicationContext) }
             delay(POLL_INTERVAL_MS)
         }
     }
@@ -86,11 +92,37 @@ class PrintMonitorService : Service() {
     }
     private fun notifyAlert(alert: PrintAlert) {
         val manager = getSystemService(NotificationManager::class.java) ?: return
-        val notification = NotificationCompat.Builder(this, CHANNEL_ALERTS)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("Nozzle It All").setContentText(alert.message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(alert.message))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true).build()
-        manager.notify(nextNotificationId++, notification)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true)
+            .setContentIntent(openAppIntent())
+        // Contextual, not universal: only kinds where the printer is actually in a state a
+        // command could apply to get an action at all. COMPLETED/CANCELLED/OFFLINE/BACK_ONLINE
+        // have nothing live to act on - tapping the notification itself already opens the app.
+        // Tapping an action only stages the command; it is never sent from here (see
+        // MainActivity's stagedAddress/stagedAction handling) - matches this app's own rule that
+        // every mutating command goes through an explicit review/confirm step, never fires from
+        // a background receiver.
+        when (alert.kind) {
+            AlertKind.PAUSED -> { builder.addAction(0, "Resume", stageActionIntent(alert.address, "resume")); builder.addAction(0, "Cancel", stageActionIntent(alert.address, "cancel")) }
+            AlertKind.ERROR -> builder.addAction(0, "Cancel", stageActionIntent(alert.address, "cancel"))
+            else -> {}
+        }
+        manager.notify(nextNotificationId++, builder.build())
+    }
+    private fun stageActionIntent(address: String, action: String): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(MainActivity.EXTRA_STAGE_ADDRESS, address)
+            putExtra(MainActivity.EXTRA_STAGE_ACTION, action)
+        }
+        // Distinct per (address, action): FLAG_UPDATE_CURRENT reuses a cached PendingIntent's
+        // extras by request code alone, so two different printers'/actions' notifications must
+        // not share one or a later tap could stage the wrong command.
+        val requestCode = (address + action).hashCode()
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        return PendingIntent.getActivity(this, requestCode, intent, flags)
     }
     private fun createChannels() {
         val manager = getSystemService(NotificationManager::class.java) ?: return

@@ -38,6 +38,9 @@ dependencies {
  implementation("com.hivemq:hivemq-mqtt-client:1.3.17")
  implementation("commons-net:commons-net:3.13.0")
  implementation("org.bouncycastle:bctls-jdk18on:1.83")
+ // Home-screen widget (P18): Glance renders it in Compose, matching this app's own style,
+ // instead of hand-written RemoteViews/XML layouts. 1.2.0 is the current stable release.
+ implementation("androidx.glance:glance-appwidget:1.2.0")
  testImplementation("junit:junit:4.13.2")
  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
  testImplementation("org.json:json:20240303")

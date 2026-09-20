@@ -27,7 +27,9 @@ class PrinterTilesDeviceTest {
         compose.onNodeWithText("second.gcode").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Resume").performScrollTo().assertIsEnabled()
         assertEquals(0,sends)
-        compose.onNodeWithTag("all-printers").performScrollTo().performClick()
+        // The header's "All printers" button was removed from Home (redundant with the bottom
+        // nav's own Home label); tapping Home again is how this app now clears detailAddress.
+        compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("printer-tile:$first").assertExists()
         compose.onNodeWithTag("printer-tile:$second").assertExists()
         assertEquals(0,sends)

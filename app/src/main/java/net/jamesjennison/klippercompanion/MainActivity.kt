@@ -230,15 +230,19 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 CameraContent(state)
             }
         } else LazyColumn(state = listState, modifier = Modifier.testTag("screen-list").fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-            item {
+            // The title block (app icon/name + tab subtitle) and its trailing All-printers/
+            // Manage-printers button are redundant on Home: the bottom nav already labels this
+            // tab "Home", and a printer's detail view already has two ways back (system back,
+            // via BackHandler above, and tapping Home again). Kept on the other tabs, where the
+            // subtitle and the Settings shortcut still pull their weight.
+            if(tab != 0) item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CompanionIcon(CompanionSymbol.PRINTER, color = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
                         Text("Nozzle It All", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(listOf("Home", "Control · Macros", "Files", "Prepare", "Settings")[tab], style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if(tab == 0 && detailAddress != null) TextButton({ detailAddress = null }, Modifier.testTag("all-printers")) { Text("All printers") }
-                    else TextButton({ tab = 4 }) { Text("Manage printers") }
+                    TextButton({ tab = 4 }) { Text("Manage printers") }
                 }
             }
             if(!overview) item {

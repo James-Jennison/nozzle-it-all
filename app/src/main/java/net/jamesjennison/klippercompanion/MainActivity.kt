@@ -41,7 +41,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -230,21 +229,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 CameraContent(state)
             }
         } else LazyColumn(state = listState, modifier = Modifier.testTag("screen-list").fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
-            // The title block (app icon/name + tab subtitle) and its trailing All-printers/
-            // Manage-printers button are redundant on Home: the bottom nav already labels this
-            // tab "Home", and a printer's detail view already has two ways back (system back,
-            // via BackHandler above, and tapping Home again). Kept on the other tabs, where the
-            // subtitle and the Settings shortcut still pull their weight.
-            if(tab != 0) item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CompanionIcon(CompanionSymbol.PRINTER, color = MaterialTheme.colorScheme.primary)
-                    Column(Modifier.weight(1f)) {
-                        Text("Nozzle It All", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(listOf("Home", "Control · Macros", "Files", "Prepare", "Settings")[tab], style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    TextButton({ tab = 4 }) { Text("Manage printers") }
-                }
-            }
+            // The title block (app icon/name + tab subtitle) and its trailing Manage-printers
+            // button were redundant everywhere: the bottom nav already labels every tab
+            // (including a direct one-tap Settings entry), and a printer's detail view already
+            // has two ways back (system back, via BackHandler above, and tapping Home again).
             if(!overview) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(state.profiles.firstOrNull { it.address==state.address }?.label ?: state.address.ifBlank { "Add your first printer" }, style = MaterialTheme.typography.titleMedium)

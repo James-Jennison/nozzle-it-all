@@ -52,7 +52,7 @@ class CompanionScreenTest {
         val first = "http://first.local/"; val second = "http://second.local/"
         var connected = ""; var forgotten = ""
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=first, savedPrinters=listOf(first,second)), { connected = it }, {}, {}, { _,_->error("Must not dispatch") }, { forgotten = it }) } }
-        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("saved-forget:$first").performScrollTo().performClick()
         assertEquals(first, forgotten)
         compose.onNodeWithTag("saved-connect:$second").performScrollTo().performClick()
@@ -73,7 +73,7 @@ class CompanionScreenTest {
         compose.onNodeWithText("Pause").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Go back").assertIsDisplayed().performClick()
         assertEquals(0, sent)
-        compose.onNodeWithTag("nav-3").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("nav-4").assertIsDisplayed().performClick()
         compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("connect-printer"))
         compose.onNodeWithTag("connect-printer").assertIsDisplayed()
     }
@@ -99,7 +99,7 @@ class CompanionScreenTest {
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile),catalog=Catalog(emptyList(),emptyList(),cameras,emptyList())),{},{},{},{_,_->},updateProfile={old,_,name,_,_,_->assertEquals(address,old);edited=name;null},selectCamera={camera=it},tileCamera={}) } }
         compose.openFixtureDashboard()
         compose.onNodeWithTag("camera:side").performScrollTo().performClick();assertEquals("side",camera)
-        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("edit-profile:$address").performScrollTo().performClick()
         compose.onNodeWithText("Printer name").performTextReplacement("Garage")
         compose.onNodeWithText("Save").performClick();assertEquals("Garage",edited)
@@ -109,7 +109,7 @@ class CompanionScreenTest {
         val profile=PrinterProfile(address,"Workshop",apiKey="old-key")
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address,connected=true,savedPrinters=listOf(address),profiles=listOf(profile)),{},{},{},{_,_->},updateProfile={_,_,_,key,_,_->savedKey=key;null},tileCamera={}) } }
         compose.openFixtureDashboard()
-        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("edit-profile:$address").performScrollTo().performClick()
         compose.onNodeWithText("API key (optional)").performTextReplacement("new-key")
         compose.onNodeWithText("Save").performClick();assertEquals("new-key",savedKey)
@@ -119,7 +119,7 @@ class CompanionScreenTest {
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(),{},{},{},{_,_->},
             backgroundAlertsEnabled=false, setBackgroundAlertsEnabled={requested=it},tileCamera={}) } }
         compose.openFixtureDashboard()
-        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("background-alerts-toggle").performScrollTo().performClick()
         assertEquals(true, requested)
     }

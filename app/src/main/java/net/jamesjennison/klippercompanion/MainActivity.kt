@@ -204,8 +204,14 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         },
         bottomBar = {
             if (!expandedCamera) NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
-                listOf("Dashboard", "Control", "Files", "Printers").forEachIndexed { index, title ->
-                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(CompanionSymbol.entries[index], color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
+                // Home/Control/Files/Prepare/Printers - reordered and relabeled from an earlier
+                // draft that happened to match Helix's own "Home, Files, Slice, Tools, Settings"
+                // nav word-for-word; Control/Printers are this app's own pre-existing tab names
+                // (Tools/Settings only fold in the same content under Helix's naming), and Prepare
+                // (a placeholder for the not-yet-built slicing phase) reads broader than "Slice".
+                listOf("Home" to CompanionSymbol.DASHBOARD, "Control" to CompanionSymbol.CONTROL, "Files" to CompanionSymbol.FILES,
+                    "Prepare" to CompanionSymbol.SLICE, "Printers" to CompanionSymbol.SETTINGS).forEachIndexed { index, (title, symbol) ->
+                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
                 }
             }
         }) { padding ->
@@ -223,26 +229,28 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     CompanionIcon(CompanionSymbol.PRINTER, color = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) {
                         Text("Nozzle It All", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(listOf("Dashboard", "Control · Macros", "Files", "Printers")[tab], style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(listOf("Home", "Control · Macros", "Files", "Prepare", "Printers")[tab], style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if(tab == 0 && detailAddress != null) TextButton({ detailAddress = null }, Modifier.testTag("all-printers")) { Text("All printers") }
-                    else TextButton({ tab = 3 }) { Text("Manage printers") }
+                    else TextButton({ tab = 4 }) { Text("Manage printers") }
                 }
             }
             if(!overview) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(state.profiles.firstOrNull { it.address==state.address }?.label ?: state.address.ifBlank { "Add your first printer" }, style = MaterialTheme.typography.titleMedium)
                     Text(if(state.connected) "CONNECTED" else "OFFLINE", style = MaterialTheme.typography.labelMedium, color = if(state.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    if(!state.connected || state.snapshot?.ready != true || tab == 3) Text(state.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if(!state.connected || state.snapshot?.ready != true || tab == 4) Text(state.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if(state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
-            if((tab == 0 && !overview) || tab == 3) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
-            if(tab == 3) item { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if((tab == 0 && !overview) || tab == 4) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
+            if(tab == 4) item { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilterChip(backgroundAlertsEnabled, {setBackgroundAlertsEnabled(!backgroundAlertsEnabled)}, label={Text("Background print alerts")}, modifier=Modifier.testTag("background-alerts-toggle"))
                 Text("Notifies you when a saved printer finishes, errors or goes offline while the app isn't open. Shows a persistent low-priority notification while active.", style = MaterialTheme.typography.bodySmall)
             } }
-            if(tab == 3 || (state.address.isEmpty() && tab != 2 && !overview)) {
+            // tab 3 (Prepare) always falls through to its own placeholder below, never this
+            // printer-connect prompt, even before any printer is selected.
+            if(tab == 4 || (state.address.isEmpty() && tab != 2 && tab != 3 && !overview)) {
                 if(state.savedPrinters.isNotEmpty()) {
                     item { Text("Saved printers", style = MaterialTheme.typography.titleMedium)
                         Text("Saved printers connect automatically while the app is open. Select a printer to view its dashboard and controls.", style = MaterialTheme.typography.bodyMedium) }
@@ -290,7 +298,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         item { Text("Connected printers", style = MaterialTheme.typography.titleLarge) }
                         if(tiles.isEmpty()) item {
                             Text("No printers connected. Saved printers reconnect while the app is open.")
-                            OutlinedButton({ tab = 3 }) { Text("View saved printers") }
+                            OutlinedButton({ tab = 4 }) { Text("View saved printers") }
                         } else item { PrinterTiles(tiles, !state.busy, ::openPrinter, tileCamera) }
                     } else if(detailAddress != state.address) {
                         item { Text("Waiting for the selected printer. Return to All printers to choose another.") }
@@ -347,7 +355,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton({ tab = 1 }) { Text("Macros") }
                             OutlinedButton({ tab = 2 }) { Text("Browse files") }
-                            OutlinedButton({ tab = 3 }) { Text("Printers") }
+                            OutlinedButton({ tab = 4 }) { Text("Printers") }
                         }
                     }
                         }
@@ -448,7 +456,15 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         }
                     }
                 }
-
+                3 -> {
+                    // No slicer in this app yet (a later, higher-risk phase - see the roadmap);
+                    // a clearly-labeled placeholder here, not a half-built feature, matches how
+                    // this app already handles other not-yet-live surfaces (e.g. ControlPreviewPanel).
+                    item {
+                        Text("Prepare", style = MaterialTheme.typography.titleLarge)
+                        Text("On-device slicing and a MakerWorld model browser are planned but not built yet. This tab is a placeholder for that work.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("prepare-placeholder"))
+                    }
+                }
             }
             items(state.catalog.warnings) { Text(it, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall) }
             item { Text("LOCAL NETWORK  ·  ANDROID  ·  0.1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }

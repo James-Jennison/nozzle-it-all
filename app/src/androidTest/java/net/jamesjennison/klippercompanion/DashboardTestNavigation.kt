@@ -10,7 +10,7 @@ fun ComposeContentTestRule.openFixtureDashboard(address: String = "http://fixtur
         onNodeWithTag("screen-list").performScrollToNode(hasTestTag(tag))
         onNodeWithTag(tag).performClick()
     } else {
-        onNodeWithTag("nav-3").performClick()
+        onNodeWithTag("nav-4").performClick()
         onNodeWithTag("screen-list").performScrollToNode(hasTestTag("connect-printer"))
         onNodeWithTag("connect-printer").performClick()
     }

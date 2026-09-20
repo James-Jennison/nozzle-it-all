@@ -68,6 +68,21 @@ of the Bespok3d Organisation, which is not a legal entity; copyright is held by
 its individual authors. This app is not affiliated with or endorsed by
 Bespok3d.
 
+## Fonts
+
+The app's typography (`res/font/`) bundles three typefaces from Google Fonts'
+own mirror of their upstream sources, all SIL Open Font License 1.1:
+
+- [Space Grotesk](https://github.com/google/fonts/tree/main/ofl/spacegrotesk) —
+  Copyright 2019 The Space Grotesk Project Authors.
+- [IBM Plex Sans](https://github.com/google/fonts/tree/main/ofl/ibmplexsans) and
+  [IBM Plex Mono](https://github.com/google/fonts/tree/main/ofl/ibmplexmono) —
+  Copyright 2017-2019 IBM Corp., with Reserved Font Name "Plex".
+
+Full OFL 1.1 license text for all three is combined at `third_party_licenses/OFL.txt`
+(kept out of `res/font/`, which Android's resource compiler restricts to font
+files only).
+
 ## Planned future incorporation
 
 Later phases of this port are expected to add further Helix-derived

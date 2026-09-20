@@ -19,7 +19,7 @@ class AutoConnectDeviceTest {
                 printerConnections=mapOf(second to PrinterConnection(false,"Unavailable • retrying while open"))),
                 {selected=it}, {}, {}, {_,_->error("Must not dispatch")})
         } }
-        compose.onNodeWithTag("nav-3").performClick()
+        compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("saved-status:$first").performScrollTo().assertTextEquals("Connected • standby")
         compose.onNodeWithTag("saved-status:$second").performScrollTo().assertTextContains("Unavailable", substring=true)
         assertEquals("", selected)

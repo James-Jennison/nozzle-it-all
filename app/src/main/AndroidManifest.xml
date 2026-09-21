@@ -17,10 +17,5 @@
    <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
    <meta-data android:name="android.appwidget.provider" android:resource="@xml/nozzle_widget_info"/>
   </receiver>
-  <!-- Same reasoning as the receiver above: the system launches this on the widget's behalf
-       when it's placed, so it must be reachable from outside this app. -->
-  <activity android:name=".NozzlePrinterWidgetConfigActivity" android:exported="true">
-   <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/></intent-filter>
-  </activity>
  </application>
 </manifest>

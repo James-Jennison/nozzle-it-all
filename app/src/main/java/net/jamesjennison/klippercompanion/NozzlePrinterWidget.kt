@@ -2,22 +2,29 @@ package net.jamesjennison.klippercompanion
 
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+import androidx.compose.runtime.Composable
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.itemsIndexed
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.layout.Box
+import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
-import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -26,24 +33,38 @@ import androidx.glance.unit.ColorProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
-/** Which saved printer a specific placed widget instance shows - keyed by the platform
- * appWidgetId, since multiple instances can each show a different printer (set from
- * NozzlePrinterWidgetConfigActivity when the widget is placed). Falls back to the favorited/
- * first saved printer - NozzlePrinterWidget's original v1 behavior - for a widget with no stored
- * selection: one placed before this existed, or whose selected printer was later forgotten. */
-object WidgetPrinterSelection {
-    private fun key(appWidgetId: Int) = "widget:$appWidgetId"
-    fun get(prefs: SharedPreferences, appWidgetId: Int): String? = prefs.getString(key(appWidgetId), null)
-    fun set(prefs: SharedPreferences, appWidgetId: Int, address: String) { prefs.edit().putString(key(appWidgetId), address).apply() }
-    fun remove(prefs: SharedPreferences, appWidgetId: Int) { prefs.edit().remove(key(appWidgetId)).apply() }
-}
+// Kiln palette constants (see CompanionTheme.kt for the Compose-side originals) - Glance can't
+// read MaterialTheme.colorScheme, since widget content renders outside this app's own Compose
+// hierarchy entirely (a separate RemoteViews host process), so the widget carries its own copy.
+// Teal is reserved for status/progress/interactive affordances only (per the UX council's
+// review, 2026-09-21) - it used to also color the bed reading, which both overloaded teal
+// across too many meanings and, worse, marked a 50-110C heated bed with the same color used
+// for "cool/idle" everywhere else. Bed temperature now renders in neutral WidgetText instead.
+private val WidgetBackground = Color(0xFF0E1113)
+private val WidgetCard = Color(0xFF14161A)
+private val WidgetTeal = Color(0xFF5EEAD4)
+private val WidgetEmber = Color(0xFFFB923C)
+private val WidgetError = Color(0xFFFB7185) // matches CompanionTheme's error color
+private val WidgetPaused = Color(0xFFFBBF24)
+private val WidgetText = Color(0xFFEDF2F4)
+private val WidgetDim = Color(0xFF9AA5AA)
+private val WidgetTrack = Color(0xFF23272C)
+
+internal data class WidgetPrinterStatus(
+    val profile: PrinterProfile, val ready: Boolean, val displayState: String, val activeFilename: String, val progress: Float,
+    val nozzle: Double?, val bed: Double?, val currentLayer: Int?, val totalLayers: Int?, val printDuration: Double?, val finishAt: String?,
+)
 
 /**
- * Home-screen widget (P18): at-a-glance status for a saved printer, chosen per widget instance
- * via NozzlePrinterWidgetConfigActivity when placed (falls back to the favorited/first profile if
- * never configured). Uses Jetpack Glance rather than a classic AppWidgetProvider/RemoteViews
+ * Home-screen widget (P18): every saved printer's live status in one widget. An earlier design
+ * (per-widget-instance printer selection, via a configuration Activity) was replaced with this
+ * after the owner clarified they wanted one widget covering every printer, not one printer per
+ * placed instance. Uses Jetpack Glance rather than a classic AppWidgetProvider/RemoteViews
  * layout, to match this app's own all-Compose style (owner decision, 2026-09-20).
  */
 class NozzlePrinterWidget : GlanceAppWidget() {
@@ -51,71 +72,105 @@ class NozzlePrinterWidget : GlanceAppWidget() {
         val prefs = context.getSharedPreferences("printer", 0)
         val secrets = CredentialStore.open(context)
         val profiles = try { PrinterPreferences.profiles(prefs, secrets) } catch (_: Exception) { emptyList() }
-        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-        val widgetPrefs = context.getSharedPreferences("widget_printers", 0)
-        val selected = WidgetPrinterSelection.get(widgetPrefs, appWidgetId)
-        val profile = profiles.firstOrNull { it.address == selected } ?: profiles.firstOrNull { it.favorite } ?: profiles.firstOrNull()
 
-        val status = if (profile == null) null else withContext(Dispatchers.IO) {
-            val service = printerServiceFor(profile, profile.address)
-            try {
-                val snapshot = service.snapshot()
-                // Only relevant while actively printing (estimatedRemaining itself returns null
-                // otherwise), so the extra metadata round-trip is skipped for every other state.
-                val metadata = if (snapshot.activeFilename.isNotBlank()) runCatching { service.metadata(snapshot.filename) }.getOrNull() else null
-                val finishAt = estimatedFinishClockTime(estimatedRemaining(snapshot, metadata))
-                WidgetStatus(profile, snapshot.ready, snapshot.displayState, snapshot.activeFilename, snapshot.activeProgress,
-                    snapshot.nozzle, snapshot.bed, snapshot.currentLayer, snapshot.totalLayers, snapshot.printDuration, finishAt)
-            } catch (_: Exception) { WidgetStatus(profile, false, "offline", "", 0f, null, null, null, null, null, null) }
-            finally { runCatching { service.close() } }
+        // Every printer is polled in parallel, not one after another - with several saved
+        // printers a sequential fetch would make the widget's own refresh latency scale with
+        // printer count instead of staying roughly constant.
+        val statuses = withContext(Dispatchers.IO) {
+            coroutineScope { profiles.map { profile -> async { fetchStatus(profile) } }.awaitAll() }
         }
 
         provideContent {
-            Column(GlanceModifier.fillMaxSize().background(Color(0xFF14161A)).padding(12.dp)) {
-                if (status == null) {
-                    Text("Add a printer in the app", style = TextStyle(color = ColorProvider(Color(0xFFEDF2F4))))
+            Column(GlanceModifier.fillMaxWidth().background(WidgetBackground).cornerRadius(20.dp).padding(12.dp)) {
+                if (statuses.isEmpty()) {
+                    Text("Add a printer in the app", style = TextStyle(color = ColorProvider(WidgetText)))
                 } else {
-                    val openIntent = Intent(context, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        putExtra(MainActivity.EXTRA_STAGE_ADDRESS, status.profile.address)
-                    }
-                    Column(GlanceModifier.fillMaxSize().clickable(actionStartActivity(openIntent))) {
-                        Text(status.profile.label, style = TextStyle(color = ColorProvider(Color(0xFFEDF2F4)), fontWeight = FontWeight.Bold))
-                        Text(if (status.ready) status.displayState.replaceFirstChar { it.titlecase() } else "Offline",
-                            style = TextStyle(color = ColorProvider(Color(0xFF5EEAD4))))
-                        if (status.ready && status.activeFilename.isNotBlank()) {
-                            Text(status.activeFilename, style = TextStyle(color = ColorProvider(Color(0xFF9AA5AA))))
-                            Text("${(status.progress * 100).toInt()}%" + layerSuffix(status.currentLayer, status.totalLayers),
-                                style = TextStyle(color = ColorProvider(Color(0xFFEDF2F4))))
-                            status.printDuration?.let { Text("Elapsed ${formatDuration(it)}", style = TextStyle(color = ColorProvider(Color(0xFF9AA5AA)))) }
-                            status.finishAt?.let { Text("Done at $it", style = TextStyle(color = ColorProvider(Color(0xFF9AA5AA)))) }
+                    // LazyColumn rather than a plain Column: a fixed-height stack of every saved
+                    // printer clips silently once it exceeds the launcher's grid allocation (flagged
+                    // by every reviewer in the UX council pass, 2026-09-21) - Glance's LazyColumn
+                    // scrolls within whatever height the launcher actually gives the widget instead.
+                    LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+                        itemsIndexed(statuses, itemId = { _, status -> status.profile.address.hashCode().toLong() }) { index, status ->
+                            Column(GlanceModifier.fillMaxWidth()) {
+                                PrinterRow(context, status)
+                                if (index != statuses.lastIndex) Spacer(GlanceModifier.height(8.dp))
+                            }
                         }
-                        if (status.ready) Text(temperatureLine(status.nozzle, status.bed), style = TextStyle(color = ColorProvider(Color(0xFF9AA5AA))))
                     }
-                    Row(GlanceModifier.padding(top = 8.dp)) {
-                        Text("Refresh", modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>()),
-                            style = TextStyle(color = ColorProvider(Color(0xFF5EEAD4))))
+                    // A minimum 48dp touch target for the whole row, not just the text glyphs -
+                    // the plain teal Text before this was undersized per Android's touch-target
+                    // guidance (also flagged by the council pass).
+                    Box(
+                        modifier = GlanceModifier.fillMaxWidth().height(48.dp).padding(top = 4.dp)
+                            .clickable(actionRunCallback<RefreshWidgetAction>()),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text("Refresh", style = TextStyle(color = ColorProvider(WidgetTeal), fontWeight = FontWeight.Bold))
                     }
                 }
             }
         }
     }
-    private fun layerSuffix(current: Int?, total: Int?) = if (current != null && total != null) " · layer $current/$total" else ""
-    private fun temperatureLine(nozzle: Double?, bed: Double?): String {
-        fun temp(v: Double?) = v?.let { "%.0f°C".format(it) } ?: "—"
-        return "Nozzle ${temp(nozzle)} · Bed ${temp(bed)}"
+    private suspend fun fetchStatus(profile: PrinterProfile): WidgetPrinterStatus {
+        val service = printerServiceFor(profile, profile.address)
+        return try {
+            val snapshot = service.snapshot()
+            val metadata = if (snapshot.activeFilename.isNotBlank()) runCatching { service.metadata(snapshot.filename) }.getOrNull() else null
+            val finishAt = estimatedFinishClockTime(estimatedRemaining(snapshot, metadata))
+            WidgetPrinterStatus(profile, snapshot.ready, snapshot.displayState, snapshot.activeFilename, snapshot.activeProgress,
+                snapshot.nozzle, snapshot.bed, snapshot.currentLayer, snapshot.totalLayers, snapshot.printDuration, finishAt)
+        } catch (_: Exception) { WidgetPrinterStatus(profile, false, "offline", "", 0f, null, null, null, null, null, null) }
+        finally { runCatching { service.close() } }
     }
-    private data class WidgetStatus(val profile: PrinterProfile, val ready: Boolean, val displayState: String, val activeFilename: String, val progress: Float,
-        val nozzle: Double?, val bed: Double?, val currentLayer: Int?, val totalLayers: Int?, val printDuration: Double?, val finishAt: String?)
 }
+
+@Composable
+private fun PrinterRow(context: Context, status: WidgetPrinterStatus) {
+    val printing = status.ready && status.activeFilename.isNotBlank()
+    // Paused and error had no distinct treatment before (both fell into the same teal/plain-text
+    // buckets as printing/idle) - flagged by the UX council pass, 2026-09-21, as the two states a
+    // monitoring widget most needs to make obvious at a glance.
+    val stateColor = when {
+        !status.ready -> WidgetDim
+        status.displayState == "error" -> WidgetError
+        status.displayState == "paused" -> WidgetPaused
+        printing -> WidgetTeal
+        else -> WidgetText
+    }
+    val openIntent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        putExtra(MainActivity.EXTRA_STAGE_ADDRESS, status.profile.address)
+    }
+    Column(GlanceModifier.fillMaxWidth().background(WidgetCard).cornerRadius(14.dp).padding(10.dp).clickable(actionStartActivity(openIntent))) {
+        Row(GlanceModifier.fillMaxWidth()) {
+            Text(status.profile.label, style = TextStyle(color = ColorProvider(WidgetText), fontWeight = FontWeight.Bold))
+        }
+        Text(if (status.ready) status.displayState.replaceFirstChar { it.titlecase() } else "Offline", style = TextStyle(color = ColorProvider(stateColor)))
+        if (printing) {
+            Text(status.activeFilename, style = TextStyle(color = ColorProvider(WidgetDim)))
+            Spacer(GlanceModifier.height(4.dp))
+            LinearProgressIndicator(progress = status.progress, modifier = GlanceModifier.fillMaxWidth().height(6.dp).cornerRadius(3.dp),
+                color = ColorProvider(WidgetTeal), backgroundColor = ColorProvider(WidgetTrack))
+            Spacer(GlanceModifier.height(4.dp))
+            Text("${(status.progress * 100).toInt()}%" + layerSuffix(status.currentLayer, status.totalLayers), style = TextStyle(color = ColorProvider(WidgetText)))
+            status.finishAt?.let { Text("Done at $it", style = TextStyle(color = ColorProvider(WidgetDim))) }
+        }
+        if (status.ready) Row(GlanceModifier.padding(top = 2.dp)) {
+            // Ember for nozzle stays consistent with Temperature() in MainActivity.kt. Bed no
+            // longer reuses teal here (see the palette comment at the top of this file) - it's
+            // neutral text instead, since teal already carries status/progress/refresh meaning
+            // elsewhere on this same card.
+            Text("Nozzle ${temp(status.nozzle)}", style = TextStyle(color = ColorProvider(WidgetEmber)))
+            Text("  ·  ", style = TextStyle(color = ColorProvider(WidgetDim)))
+            Text("Bed ${temp(status.bed)}", style = TextStyle(color = ColorProvider(WidgetText)))
+        }
+    }
+}
+private fun temp(v: Double?) = v?.let { "%.0f°C".format(it) } ?: "—"
+private fun layerSuffix(current: Int?, total: Int?) = if (current != null && total != null) " · layer $current/$total" else ""
 
 class NozzlePrinterWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = NozzlePrinterWidget()
-    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-        super.onDeleted(context, appWidgetIds)
-        val widgetPrefs = context.getSharedPreferences("widget_printers", 0)
-        appWidgetIds.forEach { WidgetPrinterSelection.remove(widgetPrefs, it) }
-    }
 }
 
 class RefreshWidgetAction : ActionCallback {

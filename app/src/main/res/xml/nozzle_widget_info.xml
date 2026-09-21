@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One widget instance shows every saved printer (owner decision, 2026-09-21) - no per-instance
+     configuration, so no android:configure here. Taller default than a single-printer card would
+     need, since it's a list. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="180dp"
-    android:minHeight="110dp"
+    android:minHeight="180dp"
     android:targetCellWidth="3"
-    android:targetCellHeight="2"
+    android:targetCellHeight="3"
     android:updatePeriodMillis="1800000"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:initialLayout="@layout/nozzle_widget_loading"
-    android:previewImage="@drawable/ic_launcher"
-    android:configure="net.jamesjennison.klippercompanion.NozzlePrinterWidgetConfigActivity" />
+    android:previewImage="@drawable/ic_launcher" />

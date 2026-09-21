@@ -29,6 +29,7 @@ class PrintMonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val services = mutableMapOf<String, PrinterService>()
     private val previous = mutableMapOf<String, PrinterConnection>()
+    private val consecutiveFailures = mutableMapOf<String, Int>()
     private var job: Job? = null
     private var nextNotificationId = 2
 
@@ -65,9 +66,15 @@ class PrintMonitorService : Service() {
             // starts monitoring until the toggle is manually cycled off and on again. Idling costs
             // one empty poll tick every POLL_INTERVAL_MS, not worth that footgun to avoid.
             val addresses = profiles.map { it.address }.toSet()
-            (services.keys - addresses).forEach { address -> services.remove(address)?.let { runCatching { it.close() } }; previous.remove(address) }
+            (services.keys - addresses).forEach { address -> services.remove(address)?.let { runCatching { it.close() } }; previous.remove(address); consecutiveFailures.remove(address) }
             for (profile in profiles) {
-                val current = poll(profile)
+                val raw = poll(profile)
+                val failures = if (raw.connected) 0 else (consecutiveFailures[profile.address] ?: 0) + 1
+                consecutiveFailures[profile.address] = failures
+                // A real, repeated report: a Snapmaker U1/PAXX dropping WiFi briefly and
+                // reassociating on its own within a poll cycle or two must not page the owner
+                // every single time - see ConnectionDebounce's own doc comment.
+                val current = ConnectionDebounce.debounce(raw, previous[profile.address], failures)
                 PrintAlerts.detect(profile.address, profile.label, previous[profile.address], current).forEach(::notifyAlert)
                 previous[profile.address] = current
             }

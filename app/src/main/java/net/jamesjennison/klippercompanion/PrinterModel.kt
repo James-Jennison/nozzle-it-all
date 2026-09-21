@@ -51,6 +51,10 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
+// Shared with PrintMonitorService's own consecutive-failure debounce (ConnectionDebounce.kt) -
+// same tolerance for the same reason: a single blip (mobile network handoff, VPN re-handshake)
+// should not read as a real disconnect in either the foreground dashboard or a background alert.
+const val CONSECUTIVE_FAILURE_TOLERANCE = 2
 class PrinterModel(
     initialAddress: String = "",
     private val saveSettings: (String, List<String>) -> Unit = { _, _ -> },
@@ -232,12 +236,20 @@ class PrinterModel(
         job?.cancel()
         val service = api ?: return
         val epoch = generation
+        // Tolerates a single transient poll failure (a mobile-network handoff, a VPN/Tailscale
+        // re-handshake after switching towers) without flipping the dashboard to "Cannot reach
+        // printer" - confirmed against a real device dropping every few minutes on Tailscale over
+        // 5G, solid on WiFi. Only a second consecutive failure (~2-4s later, given the 2s delay
+        // below) is treated as a real disconnect; a single blip that recovers on the very next
+        // poll never touches _state.value at all.
+        var consecutiveFailures = 0
         job = viewModelScope.launch {
             while (isActive) {
                 try {
                     val snapshot = withContext(io) { service.snapshot() }
                     ensureActive()
                     if(epoch != generation) return@launch
+                    consecutiveFailures = 0
                     _state.value = _state.value.copy(connected = true, snapshot = snapshot, lastUpdate = clock(), message = if (_state.value.busy) _state.value.message else if(snapshot.ready) "Live • foreground monitoring" else "Klipper is ${snapshot.state}. Controls unavailable.")
                     if(_state.value.activeMetadata?.filename != snapshot.filename) _state.value=_state.value.copy(activeMetadata=null)
                     if(snapshot.filename.isNotBlank() && (metadataFilename!=snapshot.filename || clock()-metadataAttempt>30_000)) {
@@ -274,7 +286,8 @@ class PrinterModel(
                         }
                     } else _state.value = _state.value.copy(camera = null, cameraNote = if(cam == null) "No camera configured in Moonraker." else "Live camera")
                 } catch(e: CancellationException) { throw e } catch(e: Exception) {
-                    if(epoch == generation) _state.value = _state.value.copy(connected = false, snapshot = null, camera = null, message = (if(e is ApiFailure) e.message else "Cannot reach printer.") + " Retrying while this app is open.")
+                    consecutiveFailures++
+                    if(epoch == generation && consecutiveFailures >= CONSECUTIVE_FAILURE_TOLERANCE) _state.value = _state.value.copy(connected = false, snapshot = null, camera = null, message = (if(e is ApiFailure) e.message else "Cannot reach printer.") + " Retrying while this app is open.")
                 }
                 delay(2_000)
             }

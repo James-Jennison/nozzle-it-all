@@ -282,14 +282,22 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")
         if (!info.optBoolean("klippy_connected") || info.optString("klippy_state") != "ready") return PrinterSnapshot(false, info.optString("klippy_state", "not ready"))
         try {
-            val fields = mapOf("webhooks" to "state", "toolhead" to "extruder", "print_stats" to "state,filename,print_duration,info", "virtual_sdcard" to "progress", "extruder" to "temperature,target", "heater_bed" to "temperature,target")
-            val initial = request("printer/objects/query", fields) as JSONObject
-            val active = activeExtruder(initial.getJSONObject("status"))
-            // Read the selected tool and toolhead together. If it switches again, parsing
-            // yields unknown temperatures rather than attributing the previous tool's heat.
-            val coherent = if(active.isNotEmpty() && active != "extruder")
-                request("printer/objects/query", fields + (active to "temperature,target")) as JSONObject else initial
-            return parseSnapshot(coherent)
+            // Every possible toolhead's temperature comes back in this one query, rather than a
+            // first request to discover which one is active followed by a second to read its
+            // temperature coherently. That two-step version was the actual mechanism behind a
+            // real report: a Snapmaker U1/PAXX (multi-toolhead, routinely active on
+            // extruder1/2/3) dropping its connection repeatedly over Tailscale on 5G - never on
+            // WiFi, and never on a single-extruder printer - because every single poll cost it a
+            // third sequential HTTP round-trip that a generic printer's poll never paid, each
+            // with its own timeout budget, on a higher and more latency-variable link. Querying
+            // every extruderN up front is still exactly one atomic call, so it is strictly more
+            // coherent than the old two-step read, not less - there is no window between "see
+            // who's active" and "read their temperature" for the tool to have changed in.
+            val fields = mapOf("webhooks" to "state", "toolhead" to "extruder", "print_stats" to "state,filename,print_duration,info", "virtual_sdcard" to "progress",
+                "extruder" to "temperature,target", "extruder1" to "temperature,target", "extruder2" to "temperature,target", "extruder3" to "temperature,target",
+                "heater_bed" to "temperature,target")
+            val result = request("printer/objects/query", fields) as JSONObject
+            return parseSnapshot(result)
         } catch(e: org.json.JSONException) { throw ApiFailure("Printer state is incomplete.") }
     }
     override fun catalog(): Catalog {

@@ -96,3 +96,33 @@ class PrintAlertsTest {
         assertTrue(PrintAlerts.detect("a", "Garage", previous, current).isEmpty())
     }
 }
+
+class ConnectionDebounceTest {
+    private val connected = PrinterConnection(true, "printing", PrinterSnapshot(true, "printing"))
+    private val raw = PrinterConnection(false, "Unavailable", null)
+    @Test fun firstFailureIsSuppressedWhilePreviouslyConnected() {
+        val result = ConnectionDebounce.debounce(raw, connected, consecutiveFailures = 1)
+        assertEquals(connected, result)
+    }
+    @Test fun reachingTheToleranceReportsTheRealDisconnect() {
+        val result = ConnectionDebounce.debounce(raw, connected, consecutiveFailures = CONSECUTIVE_FAILURE_TOLERANCE)
+        assertEquals(raw, result)
+    }
+    @Test fun neverConnectedBeforeIsNeverSuppressed() {
+        // Nothing to debounce against on a printer that was never seen connected - the very
+        // first observation must still read as a real failure, matching PrintAlerts.detect's own
+        // "no previous means no alert" rule elsewhere (a first failed poll is simply not alerted).
+        val result = ConnectionDebounce.debounce(raw, previous = null, consecutiveFailures = 1)
+        assertEquals(raw, result)
+    }
+    @Test fun aSuccessfulPollIsNeverSuppressed() {
+        val success = PrinterConnection(true, "standby", PrinterSnapshot(true, "standby"))
+        assertEquals(success, ConnectionDebounce.debounce(success, connected, consecutiveFailures = 0))
+    }
+    @Test fun debouncedValueFeedingIntoDetectProducesNoFalseAlertForABriefBlip() {
+        // End-to-end: one failed poll, debounced, fed into PrintAlerts.detect as both sides of the
+        // comparison - must not raise OFFLINE.
+        val debounced = ConnectionDebounce.debounce(raw, connected, consecutiveFailures = 1)
+        assertTrue(PrintAlerts.detect("a", "Garage", connected, debounced).isEmpty())
+    }
+}

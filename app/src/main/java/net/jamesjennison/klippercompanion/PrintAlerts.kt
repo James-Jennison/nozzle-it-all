@@ -15,6 +15,19 @@ data class PrintAlert(val address: String, val kind: AlertKind, val filename: St
  * detect a runout from, so there is nothing to diff here until that read is added (parallel to
  * how P15's fan/toolhead visibility was added before any control was built on top of it).
  */
+/**
+ * Suppresses a transient run of failed polls from being reported to [PrintAlerts] as an actual
+ * disconnect, so a brief blip (a mobile-network handoff, a VPN/Tailscale re-handshake, a printer's
+ * own WiFi radio dropping and reassociating within a poll cycle or two) doesn't fire a false
+ * OFFLINE/BACK_ONLINE notification pair. Shares [CONSECUTIVE_FAILURE_TOLERANCE] with
+ * [PrinterModel]'s own foreground-loop debounce (PrinterModel.kt) - same tolerance, same reason,
+ * applied here to what actually reaches the alert/notification path rather than to what's shown
+ * live on the dashboard.
+ */
+object ConnectionDebounce {
+    fun debounce(raw: PrinterConnection, previous: PrinterConnection?, consecutiveFailures: Int): PrinterConnection =
+        if (!raw.connected && previous?.connected == true && consecutiveFailures < CONSECUTIVE_FAILURE_TOLERANCE) previous else raw
+}
 object PrintAlerts {
     private val ACTIVE_STATES = setOf("printing", "paused")
 

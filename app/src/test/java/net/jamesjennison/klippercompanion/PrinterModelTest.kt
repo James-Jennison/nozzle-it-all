@@ -20,7 +20,12 @@ class PrinterModelTest {
         var value = PrinterSnapshot(true, "printing")
         var beforeRead: (() -> Unit)? = null
         var afterSend: (() -> Unit)? = null
-        override fun snapshot(): PrinterSnapshot { reads++; beforeRead?.invoke(); return value }
+        var failNextReads = 0
+        override fun snapshot(): PrinterSnapshot {
+            reads++; beforeRead?.invoke()
+            if (failNextReads > 0) { failNextReads--; throw ApiFailure("Fixture failure") }
+            return value
+        }
         override fun catalog() = Catalog(emptyList(),emptyList(),cameras,emptyList())
         override fun image(camera: Camera) = byteArrayOf()
         var lastCommand: PrinterCommand? = null
@@ -242,6 +247,22 @@ class PrinterModelTest {
         val model = PrinterModel(serviceFactory = { fake }, clock = { 100_000 }, io = dispatcher)
         model.emergencyStop(); runCurrent()
         assertEquals(0, fake.sent)
+    }
+    @Test fun singleTransientPollFailureIsToleratedButAConsecutiveSecondFlipsDisconnected() = runTest(dispatcher) {
+        // Confirmed against a real report: a Snapmaker U1 dropping its connection briefly
+        // (a mobile-network handoff, a VPN re-handshake, the printer's own WiFi radio
+        // reassociating) must not flash the dashboard to "Cannot reach printer" for one blip.
+        val fake = Fake()
+        val model = PrinterModel(serviceFactory = { fake }, clock = { 100_000 }, io = dispatcher)
+        model.foreground(true); model.connect(fake.address); runCurrent()
+        assertTrue(model.state.value.connected)
+        fake.failNextReads = 1
+        advanceTimeBy(2_500); runCurrent()
+        assertTrue("a single failed poll should be tolerated", model.state.value.connected)
+        fake.failNextReads = 1
+        advanceTimeBy(2_500); runCurrent()
+        assertFalse("a second consecutive failure is a real disconnect", model.state.value.connected)
+        model.disconnect(); model.foreground(false)
     }
 
 }

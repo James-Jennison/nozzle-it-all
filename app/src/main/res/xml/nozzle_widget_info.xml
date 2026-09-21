@@ -8,4 +8,5 @@
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:initialLayout="@layout/nozzle_widget_loading"
-    android:previewImage="@drawable/ic_launcher" />
+    android:previewImage="@drawable/ic_launcher"
+    android:configure="net.jamesjennison.klippercompanion.NozzlePrinterWidgetConfigActivity" />

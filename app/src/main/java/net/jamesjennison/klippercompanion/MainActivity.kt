@@ -385,7 +385,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                         Box(Modifier.size(8.dp).background(heroDot, CircleShape))
                                         Text((state.snapshot?.displayState ?: "awaiting printer").uppercase(), style = MaterialTheme.typography.labelMedium, color = heroDot)
                                     }
-                                    if(estimatedRemaining(state.snapshot,state.activeMetadata)!=null) Text("${formatDuration(estimatedRemaining(state.snapshot,state.activeMetadata))} left", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = PlexMono)
+                                    val remaining = estimatedRemaining(state.snapshot,state.activeMetadata)
+                                    if(remaining!=null) Text("${formatDuration(remaining)} left" + (estimatedFinishClockTime(remaining)?.let { " · Done at $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = PlexMono)
                                 }
                                 Text(state.snapshot?.activeFilename?.ifBlank { "No active file" } ?: "Connect to see print status", style = MaterialTheme.typography.titleMedium)
                                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

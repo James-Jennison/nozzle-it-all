@@ -29,3 +29,11 @@ fun estimatedRemaining(snapshot: PrinterSnapshot?, metadata: FileMetadata?): Dou
     // A slicer estimate is not a deadline. Once exceeded, don't claim completion is imminent.
     return (total - elapsed).takeIf { total > 0 && it > 0 }
 }
+/** "now + remaining" as a 12-hour clock time (e.g. "3:45 PM") - the app and the widget both show
+ * this alongside the remaining duration, since "2h 15m left" doesn't answer "will it be done
+ * before I go to bed" nearly as directly as a clock time does. */
+fun estimatedFinishClockTime(remainingSeconds: Double?): String? {
+    if(remainingSeconds == null || !remainingSeconds.isFinite() || remainingSeconds <= 0) return null
+    val finish = java.time.LocalTime.now().plusSeconds(remainingSeconds.toLong())
+    return finish.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.US))
+}

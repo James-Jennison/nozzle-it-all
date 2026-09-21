@@ -24,6 +24,16 @@ class M1Test {
         assertNull(estimatedRemaining(snapshot,null))
         assertEquals("Unknown",formatDuration(Double.NaN));assertEquals("1h 1m",formatDuration(3660.0))
     }
+    @Test fun finishClockTimeIsNullForNothingRemainingButRealForAPositiveEstimate() {
+        assertNull(estimatedFinishClockTime(null))
+        assertNull(estimatedFinishClockTime(Double.NaN))
+        assertNull(estimatedFinishClockTime(0.0))
+        assertNull(estimatedFinishClockTime(-5.0))
+        // Format only, not exact value (this runs in real wall-clock time) - "h:mm a" with no
+        // leading zero on the hour and an uppercase AM/PM marker.
+        val formatted = estimatedFinishClockTime(3600.0)!!
+        assertTrue("format was: $formatted", Regex("^[0-9]{1,2}:[0-9]{2} (AM|PM)$").matches(formatted))
+    }
     @Test fun layersAndDurationsAreOptionalAndNonnegative() {
         val s=Moonraker.parseSnapshot(JSONObject("""{"status":{"webhooks":{"state":"ready"},"print_stats":{"state":"printing","print_duration":-2,"info":{"current_layer":0,"total_layer":0}}}}"""))
         assertNull(s.printDuration);assertNull(s.currentLayer);assertNull(s.totalLayers)

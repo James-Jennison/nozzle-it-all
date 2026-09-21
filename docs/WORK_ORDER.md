@@ -77,12 +77,21 @@ P28/M7 sections for what each one built and its commit hash.)*
    done: found and fixed a real bug on the first device pass (`exported="false"`
    on the receiver meant it never appeared in the widget picker at all, commit
    `96b30d5`), then confirmed live with real print data on the Razr 2023 —
-   layer/elapsed/finish-time/temperatures all showing correctly, plus
-   per-instance printer selection and pre-existing-widget backward compatibility
-   (commit `bbc949e`). Still open: trigger a real paused-state transition (or a
-   fixture) and confirm the notification shows Resume/Cancel and opens the right
-   printer with the confirm dialog pre-staged. Doesn't need any specific printer
-   kind, just the owner present with any saved printer when a pause happens.
+   layer/elapsed/finish-time/temperatures all showing correctly. The widget's
+   design changed twice more after that: the owner corrected an initial
+   per-instance-picker build into showing every saved printer in one instance
+   (commit `2fb4fdf`, superseding `bbc949e`'s per-instance selection), then a
+   UX-council review (`frontend_ux` panel, 4 seats) ruled out a live camera
+   thumbnail and drove four more fixes — scrollable list instead of clipping
+   past 2 printers, distinct paused/error colors, a real 48dp Refresh touch
+   target, and bed temperature off the overloaded status teal (same commit
+   `2fb4fdf`). All device-verified live except the new paused/error colors,
+   which have no live paused/error print to confirm against yet. Still open:
+   trigger a real paused-state transition (or a fixture) and confirm both the
+   notification shows Resume/Cancel and opens the right printer with the
+   confirm dialog pre-staged, AND that the widget's paused/error card colors
+   render as designed. Doesn't need any specific printer kind, just the owner
+   present with any saved printer when a pause happens.
 
 ## Later — blocked on hardware the owner doesn't have, or needs a decision first
 

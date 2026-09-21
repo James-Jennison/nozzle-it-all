@@ -120,15 +120,41 @@ P28/M7 sections for what each one built and its commit hash.)*
 
 ## Parked — no scope, no target milestone
 
-- **On-device slicing** — M8's highest-risk remaining item; needs explicit owner
-  sign-off before vendoring a ~23MB prebuilt `libprusaslicer-jni.so` of unverified
-  build provenance. Helix itself ships this feature on the same engine, which is
-  useful context but not a substitute for doing that verification ourselves.
-  Deliberately NOT covered by the "build it even without the hardware" principle
-  behind WO-9 above — this is a supply-chain provenance risk, a different kind
-  of gap than not owning a piece of hardware.
 - **MakerWorld model browser** — folded into the same later phase as slicing,
   since it's a model-import source feeding it rather than standalone.
+
+## Greenlit, not yet planned
+
+10. **WO-13 — On-device slicing, owner-approved 2026-09-21.** Supersedes the
+    earlier Parked entry: the owner rejected vendoring the third-party Snapmaker
+    `u1-slicer-for-android` binary (unverified build provenance — no CI-built
+    artifact, prebuilt `.so` committed directly to that repo, self-described as
+    AI-"vibe"-coded) after a UX-council-adjacent investigation confirmed it also
+    only covers the Snapmaker U1 and a Bambu beta, not the full required fleet.
+    Instead greenlit: **cross-compile upstream OrcaSlicer (`OrcaSlicer/OrcaSlicer`)
+    for Android ourselves**, built and attested in our own CI, because it's the
+    only option with confirmed first-party support for the entire required fleet
+    — Snapmaker U1 (actively maintained upstream profile), Bambu and Prusa
+    (OrcaSlicer's own founding lineage), generic Klipper (explicit official
+    network integration), and Elegoo Centauri Carbon (official since OrcaSlicer
+    2.3.0). No existing Android port of this engine exists to adopt — the
+    Snapmaker project is the only prior art, and it's narrower than what's
+    needed here, so this is genuinely new native cross-compilation work (Boost/
+    TBB/CGAL and friends for arm64-v8a), not a "vendor a binary" task.
+    **Real added requirement surfaced during scoping, verified against
+    OpenCentauri's own docs (`docs.opencentauri.cc/klipper-conversion/cosmos/
+    install/`):** the Elegoo Centauri Carbon isn't one slicing target, it's
+    three, and getting it wrong is not just a bad print —
+    OpenCentauri-patched-firmware-vs-COSMOS start/end G-code are incompatible,
+    and from COSMOS 26.07.0 onward, printing with the wrong profile's G-code
+    (`M729`/`M8213`) **triggers a hard emergency stop mid-print** on real
+    hardware. So `PrinterProfile` needs a firmware-identity field (family +
+    version, at minimum for Centauri Carbon's Stock/OpenCentauri-patched/COSMOS
+    split), and print-generation must refuse to slice against a stale/mismatched
+    profile rather than silently emitting G-code that can fault the printer.
+    **Not yet scoped or planned** — this is a multi-week-scale native build
+    effort; per this project's own convention for builds this size, it needs a
+    real plan (Plan Mode) before any code lands, not an ad-hoc start.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

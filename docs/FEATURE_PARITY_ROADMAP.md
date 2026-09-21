@@ -839,16 +839,35 @@ unit-tested against Helix's exact logic, all 318 JVM tests passing, zero lint
 errors, both APKs assembling — and all three **not physically verified**, since
 none of this hardware exists on any printer the owner has.
 
-**Still open, no target date:** on-device slicing (M8's highest-risk remaining
-scope — needs vendoring a ~23MB prebuilt `libprusaslicer-jni.so` of unverified
-build provenance from the separate "u1-slicer-for-android" project; requires
-explicit owner sign-off before that binary lands, not implied by the M8 decision
-above) and a MakerWorld model browser (folded into the same later phase as
-slicing, since it's a model-import source feeding it rather than standalone).
-Notably, Helix itself has shipped on-device slicing built on the same
-u1-slicer-for-android engine and Orca profiles — real production use of that
-engine exists elsewhere, which is useful context for the provenance conversation
-but doesn't substitute for doing that verification ourselves before vendoring it.
+**On-device slicing — owner-approved 2026-09-21, WO-13.** Previously parked on a
+provenance concern with the Snapmaker `u1-slicer-for-android` project's prebuilt
+`libprusaslicer-jni.so` (no CI-built artifact, committed binary of unverified
+provenance, self-described as AI-"vibe"-coded). Investigated an alternative
+(Kiri:Moto, a pure-JS browser slicer with no binary to vendor at all) but ruled
+it out once the owner specified the actual required printer fleet — Snapmaker
+U1, Elegoo Centauri Carbon, Bambu, Prusa, and generic Klipper printers — since
+neither the Snapmaker wrapper nor Kiri:Moto has confirmed first-party support
+for that whole list. Upstream `OrcaSlicer/OrcaSlicer` does: it's the origin of
+both Bambu and Prusa slicing support, ships an actively-maintained Snapmaker U1
+profile, has official Klipper network integration, and has supported the
+Centauri Carbon since 2.3.0. **Approved approach: cross-compile upstream
+OrcaSlicer for Android ourselves, built and attested in our own CI** — no
+existing general-purpose Android port of this engine exists to adopt (the
+Snapmaker project is the only prior art and it's narrower than this scope), so
+this is real native cross-compilation work (Boost/TBB/CGAL and the rest of
+libslic3r's native dependency stack for arm64-v8a), not "vendor a binary."
+**Scope grew during investigation, verified against OpenCentauri's own docs**
+(`docs.opencentauri.cc/klipper-conversion/cosmos/install/`): the Centauri
+Carbon isn't one slicing target but three incompatible firmware states (Stock,
+OpenCentauri-patched, and COSMOS/Klipper), and from COSMOS 26.07.0 onward the
+wrong profile's start/end G-code (`M729`/`M8213`) **triggers a hard emergency
+stop mid-print** on real hardware — not a cosmetic mismatch. `PrinterProfile`
+needs a firmware-identity field and print-generation needs to refuse a stale or
+mismatched profile rather than risk emitting that G-code. **Not yet planned** —
+this is multi-week-scale native work; per this project's convention for builds
+this size, needs a real plan (Plan Mode) before any code lands. A MakerWorld
+model browser remains folded into this same later phase, since it's a
+model-import source feeding the slicer rather than standalone.
 
 ## Optional future ideas outside the roadmap
 

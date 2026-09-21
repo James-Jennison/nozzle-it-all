@@ -73,13 +73,16 @@ P28/M7 sections for what each one built and its commit hash.)*
    happened. Helix's own shipped, real-world use of these same Moonraker calls
    (found while building emergency stop) is useful supporting context, not what
    actually unblocked this — the owner's own sign-off did, a day earlier.
-4. **WO-12 — Device-verify notification actions + the home-screen widget (P18).**
-   Code, tests and Plan-Mode design review are done (commit `1341acd`). Needs a
-   live pass on the Razr: trigger a paused-state transition (or a fixture) and
-   confirm the notification shows Resume/Cancel and opens the right printer with
-   the confirm dialog pre-staged; add `NozzlePrinterWidget` to the home screen
-   and confirm it shows real data and both tap targets work. Doesn't need any
-   specific printer kind, just the owner present with any saved printer.
+4. **WO-12 — Device-verify the notification actions (P18).** The widget half is
+   done: found and fixed a real bug on the first device pass (`exported="false"`
+   on the receiver meant it never appeared in the widget picker at all, commit
+   `96b30d5`), then confirmed live with real print data on the Razr 2023 —
+   layer/elapsed/finish-time/temperatures all showing correctly, plus
+   per-instance printer selection and pre-existing-widget backward compatibility
+   (commit `bbc949e`). Still open: trigger a real paused-state transition (or a
+   fixture) and confirm the notification shows Resume/Cancel and opens the right
+   printer with the confirm dialog pre-staged. Doesn't need any specific printer
+   kind, just the owner present with any saved printer when a pause happens.
 
 ## Later — blocked on hardware the owner doesn't have, or needs a decision first
 

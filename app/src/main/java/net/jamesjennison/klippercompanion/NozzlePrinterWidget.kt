@@ -60,11 +60,15 @@ internal data class WidgetPrinterStatus(
     val nozzle: Double?, val bed: Double?, val currentLayer: Int?, val totalLayers: Int?, val printDuration: Double?, val finishAt: String?,
 )
 
+private fun isActive(status: WidgetPrinterStatus) = status.ready && status.activeFilename.isNotBlank()
+
 /**
- * Home-screen widget (P18): every saved printer's live status in one widget. An earlier design
- * (per-widget-instance printer selection, via a configuration Activity) was replaced with this
- * after the owner clarified they wanted one widget covering every printer, not one printer per
- * placed instance. Uses Jetpack Glance rather than a classic AppWidgetProvider/RemoteViews
+ * Home-screen widget (P18): every saved printer's live status in one widget, narrowed to only
+ * the actively printing/paused ones whenever at least one is active (falls back to showing every
+ * saved printer when nothing's running, so the widget isn't blank most of the time). An earlier
+ * design (per-widget-instance printer selection, via a configuration Activity) was replaced with
+ * this after the owner clarified they wanted one widget covering every printer, not one printer
+ * per placed instance. Uses Jetpack Glance rather than a classic AppWidgetProvider/RemoteViews
  * layout, to match this app's own all-Compose style (owner decision, 2026-09-20).
  */
 class NozzlePrinterWidget : GlanceAppWidget() {
@@ -79,10 +83,16 @@ class NozzlePrinterWidget : GlanceAppWidget() {
         val statuses = withContext(Dispatchers.IO) {
             coroutineScope { profiles.map { profile -> async { fetchStatus(profile) } }.awaitAll() }
         }
+        // Surface only what's actually printing/paused when something is, so a glance at the
+        // widget answers "is anything running" without scrolling past idle/offline printers.
+        // Falls back to every saved printer when nothing's active, rather than an empty widget
+        // most of the time (owner decision, 2026-09-21).
+        val activeStatuses = statuses.filter(::isActive)
+        val displayed = activeStatuses.ifEmpty { statuses }
 
         provideContent {
             Column(GlanceModifier.fillMaxWidth().background(WidgetBackground).cornerRadius(20.dp).padding(12.dp)) {
-                if (statuses.isEmpty()) {
+                if (displayed.isEmpty()) {
                     Text("Add a printer in the app", style = TextStyle(color = ColorProvider(WidgetText)))
                 } else {
                     // LazyColumn rather than a plain Column: a fixed-height stack of every saved
@@ -90,10 +100,10 @@ class NozzlePrinterWidget : GlanceAppWidget() {
                     // by every reviewer in the UX council pass, 2026-09-21) - Glance's LazyColumn
                     // scrolls within whatever height the launcher actually gives the widget instead.
                     LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
-                        itemsIndexed(statuses, itemId = { _, status -> status.profile.address.hashCode().toLong() }) { index, status ->
+                        itemsIndexed(displayed, itemId = { _, status -> status.profile.address.hashCode().toLong() }) { index, status ->
                             Column(GlanceModifier.fillMaxWidth()) {
                                 PrinterRow(context, status)
-                                if (index != statuses.lastIndex) Spacer(GlanceModifier.height(8.dp))
+                                if (index != displayed.lastIndex) Spacer(GlanceModifier.height(8.dp))
                             }
                         }
                     }
@@ -126,7 +136,7 @@ class NozzlePrinterWidget : GlanceAppWidget() {
 
 @Composable
 private fun PrinterRow(context: Context, status: WidgetPrinterStatus) {
-    val printing = status.ready && status.activeFilename.isNotBlank()
+    val printing = isActive(status)
     // Paused and error had no distinct treatment before (both fell into the same teal/plain-text
     // buckets as printing/idle) - flagged by the UX council pass, 2026-09-21, as the two states a
     // monitoring widget most needs to make obvious at a glance.

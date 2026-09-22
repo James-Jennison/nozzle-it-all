@@ -31,6 +31,21 @@ import androidx.compose.ui.unit.dp
     var detecting by remember(profile) { mutableStateOf(false) }
     var detectedVersion by remember(profile) { mutableStateOf(profile.declaredFirmwareVersion) }
     var detectNote by remember(profile) { mutableStateOf("") }
+    // Runs automatically rather than waiting for a manual tap: the owner correctly pointed out
+    // that requiring "Detect firmware now" as a separate step is an easy one to forget, and
+    // there's no reason to wait when this profile is already reachable at its current address.
+    // Still re-triggerable by hand below (the button stays) for the case this fires before the
+    // printer is actually reachable, or the owner just wants to re-confirm after a firmware update.
+    LaunchedEffect(slicingModel, address) {
+        if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null && !detecting) {
+            detecting=true;detectNote=""
+            detectFirmware(profile.address) { result ->
+                detecting=false
+                result.onSuccess { detectedVersion=it.version; detectNote="Confirmed: ${it.app.ifBlank{"unknown firmware"}} ${it.version}" }
+                result.onFailure { detectNote=it.message ?: "Could not read firmware. Is the printer connected?" }
+            }
+        }
+    }
     if(showRemoteHelp) RemoteAccessHelpPanel { showRemoteHelp=false }
     AlertDialog(onDismissRequest=close,title={Text("Edit printer")},text={ Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(name,{name=it.take(80)},label={Text("Printer name")},singleLine=true)

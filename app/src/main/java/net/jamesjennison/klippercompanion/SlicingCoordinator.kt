@@ -36,7 +36,17 @@ object SlicingCoordinator {
             val declared = profile.declaredCosmosProfileGeneration
                 ?: return SliceOutcome.FirmwareBlocked("This printer's firmware has never been confirmed. Use \"Detect firmware now\" in Edit printer before slicing for it.")
             val service = printerServiceFor(profile, profile.address)
-            val live = try { service.firmwareIdentity() } catch (e: Exception) { null } finally { runCatching { service.close() } }
+            // The real exception is captured and surfaced below, not swallowed into a generic
+            // message - a live read can fail for very different, actionable reasons (printer
+            // offline, wrong address, a transient network blip, an auth failure), and "Could not
+            // read the printer's current firmware" alone gives neither the owner nor a future
+            // debugging session anything to act on. Real incident: this blocked a real slice
+            // against a printer that curl confirmed was fully reachable a minute later - almost
+            // certainly a transient blip, but the vague message made that impossible to tell from
+            // a real problem (wrong port, wrong address, auth) without re-deriving it by hand.
+            var readFailure: String? = null
+            val live = try { service.firmwareIdentity() } catch (e: Exception) { readFailure = e.message ?: e.javaClass.simpleName; null } finally { runCatching { service.close() } }
+            if (live == null) return SliceOutcome.FirmwareBlocked("Could not read this printer's current firmware before slicing for a Centauri Carbon/COSMOS profile: ${readFailure ?: "no response"}. Check the connection and try again.")
             when (val match = checkCentauriCarbonFirmwareMatch(live, declared)) {
                 is FirmwareMatchResult.Mismatch -> return SliceOutcome.FirmwareBlocked(match.reason)
                 is FirmwareMatchResult.Unknown -> return SliceOutcome.FirmwareBlocked(match.reason)

@@ -59,9 +59,14 @@ data class CameraOrbit(val azimuthDeg: Float, val elevationDeg: Float, val dista
 // the point Transform mode's rotate/scale actually turns around, so the live preview agrees
 // exactly with what nativeSliceFile/nativeOpenPaintSession will do with the same transform (see
 // ModelTransform.kt). NOT the same as [center] (the vertex bounding-box center, used only for
-// camera framing/the reference grid) - a mesh whose local origin isn't its own centroid needs the
-// real pivot, not a convenient one.
-data class MeshGeometry(val vertexData: FloatArray, val triangleCount: Int, val center: FloatArray, val radius: Float, val origin: FloatArray)
+// camera framing) - a mesh whose local origin isn't its own centroid needs the real pivot, not a
+// convenient one.
+// minZ: the mesh's real lowest vertex - the reference grid's own real bed-contact plane (see
+// buildGrid). Deliberately NOT center[2] - radius (a bounding-*sphere* approximation): for any
+// object whose footprint (dx, dy) is wide relative to its height (dz), that approximation sits
+// well below the model's actual base, drawing the grid far under a model that's really resting
+// right on it - a real bug an owner screenshot caught live, not a hypothetical.
+data class MeshGeometry(val vertexData: FloatArray, val triangleCount: Int, val center: FloatArray, val radius: Float, val origin: FloatArray, val minZ: Float)
 
 object MeshLoader {
     // Off the GL thread entirely - NativeEngine.nativeLoadMeshPreview() and this bounding-sphere
@@ -85,7 +90,7 @@ object MeshLoader {
         val center = floatArrayOf((minX + maxX) / 2f, (minY + maxY) / 2f, (minZ + maxZ) / 2f)
         val dx = maxX - minX; val dy = maxY - minY; val dz = maxZ - minZ
         val radius = (sqrt(dx * dx + dy * dy + dz * dz) / 2f).coerceAtLeast(1f)
-        MeshGeometry(data, data.size / 18, center, radius, origin)
+        MeshGeometry(data, data.size / 18, center, radius, origin, minZ)
     }
 }
 
@@ -221,7 +226,7 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
             GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, mesh.vertexData.size * 4, buffer, GLES30.GL_STATIC_DRAW)
             vertexCount = mesh.vertexData.size / 6
 
-            val grid = buildGrid(mesh.center, mesh.radius)
+            val grid = buildGrid(mesh.center, mesh.radius, mesh.minZ)
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, gridVbo)
             val gridBuffer = directFloatBuffer(grid)
             GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, grid.size * 4, gridBuffer, GLES30.GL_STATIC_DRAW)
@@ -330,11 +335,15 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
 
     // A simple reference grid sized off the model's own footprint (no real per-printer bed size
     // is known this early in the flow - the slicing profile isn't chosen yet - an accepted v1
-    // approximation, see the plan). Flat at the model's own lowest Z (its bed contact plane).
-    private fun buildGrid(center: FloatArray, radius: Float): FloatArray {
+    // approximation, see the plan). Flat at the model's own real lowest Z (its bed contact
+    // plane) - previously approximated as center[2] - radius (a bounding-*sphere* radius), which
+    // for any object wider than it is tall sits well below the model's actual base, drawing the
+    // grid with a visible gap under a model that's really resting right on it - a real bug an
+    // owner screenshot caught live (a squat, wide test model floating well above its own grid).
+    private fun buildGrid(center: FloatArray, radius: Float, minZ: Float): FloatArray {
         val half = radius * 1.6f
         val step = (half * 2f / 10f).coerceAtLeast(0.1f)
-        val z = center[2] - radius // ensure_on_bed() in the native loader already put the model's own low point near its own local origin; this stays a visual reference, not a physical claim.
+        val z = minZ
         val lines = ArrayList<Float>()
         var x = -half
         while (x <= half + 1e-4f) {

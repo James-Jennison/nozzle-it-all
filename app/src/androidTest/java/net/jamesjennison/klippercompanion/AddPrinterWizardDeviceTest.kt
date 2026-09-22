@@ -5,7 +5,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -15,7 +17,14 @@ import org.junit.Test
 class AddPrinterWizardDeviceTest {
     @get:Rule val compose = createComposeRule()
 
+    // WO-16: this hardcoded LAN IP is unreachable from CI (a self-hosted runner off that LAN, or
+    // AWS Device Farm's cloud devices) - found via a real Device Farm run that hung on the
+    // connectivity step until timeout on every device in the pool, since this test had no skip
+    // guard unlike every other real-hardware test in this suite (LivePrinterReadOnlyTest,
+    // LiveFileHardwareTest, etc., all gated the same way). Opt in explicitly when run against the
+    // real U1 on the real LAN: -e approved_add_printer_u1 true.
     @Test fun addingTheRealU1CompletesEveryStepAndCommitsTheProfile() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("approved_add_printer_u1") == "true")
         var committed: PrinterProfile? = null
         var opened: String? = null
         compose.setContent {

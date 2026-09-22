@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -94,7 +95,13 @@ class SlicingCoordinatorDeviceTest {
         val outcome = SlicingCoordinator.slice(context, cube(context), profile)
         assertTrue("expected FirmwareBlocked (no declared firmware yet), got $outcome", outcome is SliceOutcome.FirmwareBlocked)
     }
+    // WO-16: unlike the FirmwareBlocked-path tests above/below (which never actually reach the
+    // network - the declared/live mismatch is caught before any connection attempt), this one
+    // requires a real round trip to the live CC1 to get SliceOutcome.Success - found hanging to
+    // timeout on every device in a real AWS Device Farm run, off this printer's LAN. Opt in
+    // explicitly on the real LAN: -e approved_live_cosmos_slice true.
     @Test fun centauriCarbonProfileWithTheCorrectDeclaredGenerationSlicesRealCosmosGcode() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("approved_live_cosmos_slice") == "true")
         // The real printer's live firmware (confirmed via curl earlier tonight: "OpenCentauri
         // Cosmos" / "Release - 26.08.0") resolves to CosmosProfileGeneration.CURRENT - declaring
         // that same version here must let slicing proceed for real, against the real printer.

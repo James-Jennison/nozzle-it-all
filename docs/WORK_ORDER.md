@@ -761,6 +761,59 @@ P28/M7 sections for what each one built and its commit hash.)*
       exists to eventually surface systematically. Not investigated further
       here; tracked so a future session doesn't mistake it for a regression
       from this WO's changes.
+    - **AWS Device Farm wiring completed and verified with a real run,
+      2026-09-22**: project ARN and the curated "Top Devices" pool ARN (5
+      real devices) gathered via CloudShell; a narrowly-scoped IAM user
+      (`nozzle-it-all-ci`, Device Farm run/upload/read actions only) created
+      for CI credentials. `.github/workflows/ci.yml` gained a `device-farm`
+      job that uploads both APKs, schedules a real INSTRUMENTATION run, and
+      polls to completion, failing the job on anything other than `PASSED`.
+      **Two real bugs found getting the first runs working**: (1)
+      `actions/upload-artifact` preserves each file's full relative repo
+      path when given multiple source paths rather than flattening into the
+      artifact root, so the `device-farm` job's `curl` step couldn't find
+      the downloaded APKs - fixed by staging both into a flat directory
+      before upload. (2) A transcribed AWS secret access key (read off a
+      CloudShell screenshot rather than typed from a known-exact value) was
+      wrong, so the first credentialed run failed with
+      `UnrecognizedClientException` - the owner regenerated the key and set
+      the GitHub secrets directly themselves, which is also just the more
+      correct way to handle it (the value never needs to pass through this
+      agent at all). **First real run** (`ci-13f7d06`, 5 real physical
+      devices: Google Pixel 10 Pro XL, Google Pixel 9a, Samsung Galaxy A34,
+      Samsung Galaxy S25+, Samsung Galaxy Tab A9) - 696 tests, 95% passed,
+      7 unique failures, all reproducing identically across every device:
+      - 4 are the same pre-existing device-variance flakiness already
+        logged above (`M2DeviceTest`, `BedMeshPanelDeviceTest`,
+        `ActiveFilenameDeviceTest`, `DashboardDeviceTest`) - now confirmed
+        on a *third* device category (AWS's cloud fleet), not just the two
+        physical Razrs.
+      - 2 are a **real, separate bug class found by this run**:
+        `AddPrinterWizardDeviceTest.addingTheRealU1CompletesEveryStepAndCommitsTheProfile`
+        and
+        `SlicingCoordinatorDeviceTest.centauriCarbonProfileWithTheCorrectDeclaredGenerationSlicesRealCosmosGcode`
+        both hardcode a real LAN printer IP (192.168.1.x / .114) with no
+        skip guard, unlike every other real-hardware test in this suite
+        (`LivePrinterReadOnlyTest`, `LiveFileHardwareTest`,
+        `LivePreviewHardwareTest`, etc., all gated on an explicit
+        `InstrumentationRegistry` argument via `Assume.assumeTrue`) - they
+        hung to timeout on every device in the pool since Device Farm's
+        cloud devices obviously can't reach a home LAN. **Fixed**: both
+        given the same `assumeTrue`-gated opt-in pattern
+        (`approved_add_printer_u1` / `approved_live_cosmos_slice`
+        instrumentation args), matching the established convention exactly.
+        Without this fix, the `device-farm` CI job could never pass, ever,
+        regardless of code correctness - a real, load-bearing fix for the
+        CI gate to mean anything.
+      - 1 is a **genuinely new, non-flaky finding, not yet root-caused**:
+        `ConfigSavePanelDeviceTest.backsUpBeforeWritingAndReportsTheBackupPath`
+        failed identically on all 5 Device Farm devices (`expected:<1> but
+        was:<0>` on the write-count assertion) despite passing reliably on
+        both physical Razr phones - looks like a real Compose
+        recomposition-timing difference specific to Device Farm's device
+        environment (different from the "scroll to/can't find node" shape
+        of the other flaky tests), not chased further here. Tracked as a
+        real open item, not swept in with the already-known flakiness.
     - **Still open** (Phase 0's remaining scope): stopping the native bridge
       from flattening multi-object models past the proof-of-concept stage
       (i.e. actually threading `Model::objects` through to the viewer/slicer

@@ -219,6 +219,20 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     LaunchedEffect(tab, detailAddress, state.generation) { listState.scrollToItem(0) }
     var editingProfile by remember(state.generation) { mutableStateOf<PrinterProfile?>(null) }
     var addingPrinter by remember { mutableStateOf(false) }
+    // First run (or every profile forgotten) used to land on a bare dashboard - "No printers
+    // connected" plus a "View saved printers" button that only jumped to the Settings tab, where
+    // "Add printer" still had to be found and tapped. AddPrinterWizard is the app's own real
+    // first-run setup flow; this just opens it automatically instead of requiring a scavenger
+    // hunt to find it. Gated on address also being blank, not just profiles being empty - a
+    // still-connected-but-unsaved session (state.address set without a matching saved profile)
+    // is a real, different state and shouldn't be interrupted by a first-run dialog. rememberSaveable
+    // (not remember) so it only auto-opens once per app install, not on every recomposition while
+    // the wizard's still on screen; a user who cancels out of it, or later forgets every printer
+    // again, isn't forced back in against their will.
+    var autoOpenedWizard by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.profiles.isEmpty(), state.address.isBlank()) {
+        if (state.profiles.isEmpty() && state.address.isBlank() && !autoOpenedWizard) { addingPrinter = true; autoOpenedWizard = true }
+    }
     var fileQuery by rememberSaveable(state.address) { mutableStateOf("") }
     var folder by rememberSaveable(state.address) { mutableStateOf("") }
     var newestFirst by rememberSaveable { mutableStateOf(false) }

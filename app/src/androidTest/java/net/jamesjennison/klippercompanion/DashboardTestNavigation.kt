@@ -10,8 +10,14 @@ fun ComposeContentTestRule.openFixtureDashboard(address: String = "http://fixtur
         onNodeWithTag("screen-list").performScrollToNode(hasTestTag(tag))
         onNodeWithTag(tag).performClick()
     } else {
+        // The old single-field "type an address, tap Connect" flow this used to drive
+        // ("connect-printer") was removed when AddPrinterWizard replaced it entirely (WO-13) -
+        // reaching an offline printer's own detail view now goes through the Settings tab's
+        // saved-printers list instead, same as a real user would. Requires the caller's own
+        // ScreenState to list `address` in savedPrinters.
+        val tag = "saved-connect:$address"
         onNodeWithTag("nav-4").performClick()
-        onNodeWithTag("screen-list").performScrollToNode(hasTestTag("connect-printer"))
-        onNodeWithTag("connect-printer").performClick()
+        onNodeWithTag("screen-list").performScrollToNode(hasTestTag(tag))
+        onNodeWithTag(tag).performClick()
     }
 }

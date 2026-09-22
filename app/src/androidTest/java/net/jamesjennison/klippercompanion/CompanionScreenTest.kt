@@ -43,8 +43,18 @@ class CompanionScreenTest {
         compose.onNodeWithText("Confirm").performClick()
         assertEquals(1,sent)
     }
+    @Test fun noSavedPrintersOpensTheAddPrinterWizardAutomatically() {
+        // A fresh install (or every printer forgotten) used to land on a bare dashboard - "No
+        // printers connected" plus a button that only jumped to the Settings tab, where "Add
+        // printer" still had to be found. Confirmed live on the Razr after a real data wipe
+        // during this session's own testing: the wizard's own "Step 1 of 4" content now appears
+        // with no tap at all.
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(profiles = emptyList()), {}, {}, {}, { _,_-> }) } }
+        compose.onNodeWithTag("wizard-address").assertExists()
+    }
     @Test fun offlineDisablesPrintControls() {
-        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address="http://fixture.local/", connected=false, snapshot=PrinterSnapshot(true,"printing")), {}, {}, {}, { _,_->error("Must not dispatch") }) } }
+        val address = "http://fixture.local/"
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address, connected=false, savedPrinters=listOf(address), snapshot=PrinterSnapshot(true,"printing")), {}, {}, {}, { _,_->error("Must not dispatch") }) } }
         compose.openFixtureDashboard(connected=false)
         compose.onNodeWithText("Pause").performScrollTo().assertIsNotEnabled()
     }
@@ -73,9 +83,13 @@ class CompanionScreenTest {
         compose.onNodeWithText("Pause").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Go back").assertIsDisplayed().performClick()
         assertEquals(0, sent)
+        // The old inline "connect-printer" field this used to check is gone (AddPrinterWizard
+        // replaced it entirely) - "Add printer" is its direct successor and always present on
+        // the Settings tab, so it still proves Settings-tab content stays reachable at this
+        // compact width and text scale.
         compose.onNodeWithTag("nav-4").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("connect-printer"))
-        compose.onNodeWithTag("connect-printer").assertIsDisplayed()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("open-add-printer-wizard"))
+        compose.onNodeWithTag("open-add-printer-wizard").assertIsDisplayed()
     }
 
     @Test fun rejectedConfirmationFeedbackStaysVisibleWhileConnected() {
@@ -116,9 +130,13 @@ class CompanionScreenTest {
     }
     @Test fun backgroundAlertsToggleDispatchesRequestedState() {
         var requested: Boolean? = null
-        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(),{},{},{},{_,_->},
+        // A truly-empty ScreenState() (no address, no profiles) now auto-opens AddPrinterWizard
+        // (see MainActivity's autoOpenedWizard effect) - not what this test is exercising, so it
+        // sets a fixture address like every other test here to keep that from firing. This test
+        // only needs the Settings tab, not a connected printer's own dashboard, so it skips
+        // openFixtureDashboard entirely.
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address="http://fixture.local/"),{},{},{},{_,_->},
             backgroundAlertsEnabled=false, setBackgroundAlertsEnabled={requested=it},tileCamera={}) } }
-        compose.openFixtureDashboard()
         compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("background-alerts-toggle").performScrollTo().performClick()
         assertEquals(true, requested)
@@ -152,7 +170,11 @@ class CompanionScreenTest {
         compose.setContent { CompanionTheme {ProfileEditor(PrinterProfile("http://fixture.local/"),{closed=true},model::updateProfile)} }
         compose.onNodeWithText("Printer address").performTextReplacement("not a url")
         compose.onNodeWithText("Save").performClick()
-        compose.onNodeWithText("Enter a valid local printer address.").assertIsDisplayed()
+        // ProfileEditor's content Column gained a scroll modifier for the slicing-profile/
+        // firmware section (WO-13) - the inline error can land outside the current scroll
+        // position now that the form is taller, same reason every other post-interaction
+        // assertion in this file already scrolls first.
+        compose.onNodeWithText("Enter a valid local printer address.").performScrollTo().assertIsDisplayed()
         assertEquals(false,closed)
         compose.onNodeWithText("Printer address").performTextReplacement("http://fixed.local/")
         compose.onNodeWithText("Save").performClick()

@@ -12,9 +12,25 @@ class LivePrinterReadOnlyTest {
     @Test fun connectAndReadActualPrinterWithoutSendingCommands() {
         val endpoint = InstrumentationRegistry.getArguments().getString("printerUrl")
         assumeTrue("Explicit owner-approved printerUrl is required", !endpoint.isNullOrBlank())
-        compose.onNodeWithTag("nav-4").performClick()
-        compose.onNodeWithText("Moonraker or frontend address").performScrollTo().performTextReplacement(endpoint!!)
-        compose.onNodeWithTag("connect-printer").performClick()
+        // The old single-field "type an address, tap Connect" flow this used to drive was
+        // replaced entirely by AddPrinterWizard (WO-13) - go through the real wizard instead,
+        // same as an actual owner adding this printer would. On a genuinely fresh device (no
+        // saved profiles at all) MainActivity's own autoOpenedWizard effect already opens the
+        // wizard on launch, before this test gets to interact - skip the manual nav-4/"Add
+        // printer" steps in that case rather than tapping a bottom nav the wizard's modal dialog
+        // is currently covering.
+        if (compose.onAllNodesWithTag("wizard-address").fetchSemanticsNodes().isEmpty()) {
+            compose.onNodeWithTag("nav-4").performClick()
+            compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("open-add-printer-wizard"))
+            compose.onNodeWithTag("open-add-printer-wizard").performClick()
+        }
+        compose.onNodeWithTag("wizard-address").performTextInput(endpoint!!)
+        compose.onNodeWithTag("wizard-next-1").performClick()
+        // Step 2: slicing profile - leave "None" selected (no Centauri Carbon firmware step),
+        // lands directly on the live connectivity test, which runs for real against `endpoint`.
+        compose.onNodeWithTag("wizard-next-2").performClick()
+        compose.waitUntil(30000) { try { compose.onNodeWithTag("wizard-finish").assertIsEnabled(); true } catch (e: AssertionError) { false } }
+        compose.onNodeWithTag("wizard-finish").performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("CONNECTED").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("CONNECTED").assertExists()
         compose.onNodeWithTag("nav-1").performClick()

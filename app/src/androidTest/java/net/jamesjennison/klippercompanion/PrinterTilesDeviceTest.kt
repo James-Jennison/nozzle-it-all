@@ -35,7 +35,12 @@ class PrinterTilesDeviceTest {
         assertEquals(0,sends)
     }
     @Test fun offlineOverviewHasNoPrinterControls() {
-        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(),{},{},{},{_,_->error("No commands")}) } }
+        // A blank address with no profiles now auto-opens AddPrinterWizard (a real first-run
+        // affordance, see MainActivity's autoOpenedWizard effect) - not what this test is
+        // exercising, so it sets a fixture address (still disconnected: connectedPrinterTiles()
+        // only counts an address as a tile when `connected` is also true) to keep that from
+        // firing while still exercising the true "no printers connected" overview state.
+        compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address="http://fixture.local/"),{},{},{},{_,_->error("No commands")}) } }
         compose.onNodeWithText("No printers connected. Saved printers reconnect while the app is open.").assertExists()
         compose.onNodeWithText("Pause").assertDoesNotExist()
     }

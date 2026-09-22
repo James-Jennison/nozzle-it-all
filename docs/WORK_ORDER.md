@@ -612,9 +612,47 @@ P28/M7 sections for what each one built and its commit hash.)*
       twist gestures themselves (the test device was locked/asleep — its own
       lock screen, not a crash, confirmed via `dumpsys power`/a real
       screenshot — and this is the owner's actual daily-driver phone, so it
-      wasn't unlocked to check); build-volume bounds/collision checking;
-      multi-object scenes, duplicate, and auto-arrange (still real, absent
-      gaps per the audit above, not yet scoped into a specific next part).
+      wasn't unlocked to check); multi-object scenes, duplicate, and
+      auto-arrange (still real, absent gaps per the audit above, not yet
+      scoped into a specific next part).
+    - **Real bug, owner screenshot, same day**: a wide/short model rendered
+      floating with a large visible gap above the reference grid. Root cause:
+      `buildGrid()` placed the grid at `center[2] - radius`, a bounding-
+      *sphere* radius approximation, not the mesh's real lowest point — since
+      that radius also grows with the model's XY footprint, anything wider
+      than tall ends up with the grid well below its actual base.
+      `MeshLoader.load()` was already computing the real `minZ` while
+      scanning for the bounding box; it just wasn't kept. Fixed by adding it
+      to `MeshGeometry` and using it directly as the grid's Z plane.
+    - **Build-volume bounds checking (owner-picked next increment)**: real,
+      not cosmetic. `BedShape.kt` reads the same real per-printer
+      `machine.json` every slice already applies (`printable_area`/
+      `printable_height`, `SlicingProfilePacks.kt`) — not an invented bed
+      size — and `computeOutOfBounds()` (`ModelViewer.kt`) tests the model's
+      live-transformed footprint corners against that real bed polygon (a
+      real ray-casting point-in-polygon test) plus its live-transformed
+      height against the bed's real max Z, using the identical rotate/
+      scale/translate math as the GL preview and the native engine so the
+      verdict agrees with what would actually be sliced. v1, honestly
+      bounded: tests the axis-aligned footprint's 4 corners, not the mesh's
+      real silhouette — a diagonal/irregular shape could still clip a bed
+      edge between two corners without tripping it; documented in the code,
+      not hidden. Out-of-bounds tints the model itself a warning red (not
+      just a separate note easy to miss while actively dragging it) and
+      disables the real "Slice" action until it fits — a functional gate,
+      not just a visual one. `CosmosProfileGeneration.CURRENT` is used
+      unconditionally for the bed-shape lookup (the only generation with a
+      bundled pack right now, and bed *shape* doesn't differ by firmware
+      generation for the same physical printer) — this is a placement aid,
+      not a substitute for the real live-firmware safety gate
+      `SlicingCoordinator.slice()` still enforces separately.
+      **Verified**: new `BedShapeTest.kt` (6 real unit tests) parses every
+      bundled `machine.json` this app actually ships (not a synthetic
+      fixture) and exercises the point-in-polygon test's inside/outside/
+      edge/no-real-polygon cases. Full `testDebugUnitTest`/`lintDebug`/
+      `assembleDebug` gate green. **Not yet done**: live on-screen
+      confirmation (same test-device access note as above); real mesh-
+      silhouette precision (still the v1 AABB-corner approximation).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

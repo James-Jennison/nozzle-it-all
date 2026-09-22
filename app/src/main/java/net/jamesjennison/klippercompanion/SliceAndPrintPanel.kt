@@ -91,6 +91,20 @@ import java.io.File
     // for the same reason paintState is - the slicing effect below needs to read it, and it must
     // survive ModelViewer unmounting when the flow moves past "customizing".
     val transformState = remember(uri) { ModelTransformUiState() }
+    // WO-15 part E follow-up: the real bed size/shape for whichever printer is targeted, read
+    // straight from the same machine.json every slice already applies (SlicingProfilePacks.kt) -
+    // not an invented bed size. CosmosProfileGeneration.CURRENT is used unconditionally here (not
+    // the live-firmware-confirmed value SlicingCoordinator.slice() itself requires) because only
+    // that generation has a bundled pack at all right now, and the bed *shape* doesn't differ by
+    // firmware generation for the same physical printer - this is a UI aid for fitting the model
+    // on the bed, not the real firmware safety gate, which is still enforced at slice time.
+    var bedShape by remember(uri) { mutableStateOf<BedShape?>(null) }
+    LaunchedEffect(profile?.slicingModel) {
+        val model = profile?.slicingModel ?: return@LaunchedEffect
+        bedShape = try {
+            withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+        } catch (e: Exception) { null }
+    }
     // Owned here, not by ModelViewer (which only lives during the "customizing" step and would
     // otherwise close this out from under SlicingCoordinator.slice()'s later use of it) - see
     // ModelViewer.kt's own comment on why it deliberately doesn't close this itself. Closed once,
@@ -202,7 +216,7 @@ import java.io.File
                     Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         when(tab) {
                             0 -> {
-                                ModelViewer(localModel, paintState = paintState, transformState = transformState)
+                                ModelViewer(localModel, paintState = paintState, transformState = transformState, bedShape = bedShape)
                                 copyError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                             }
                             1 -> {
@@ -227,9 +241,10 @@ import java.io.File
                         val infill = validateInfillPercent(infillText)
                         if(layerHeight == null) { customizeError = "Enter a layer height between 0.04 and 0.6mm."; tab = 1; return@Button }
                         if(infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; tab = 1; return@Button }
+                        if(transformState.outOfBounds) { tab = 0; return@Button }
                         customization = SliceCustomization(layerHeight, infill, supportsEnabled)
                         customizing = false
-                    }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-customize-next")) { Text("Slice") }
+                    }, enabled = !transformState.outOfBounds, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-customize-next")) { Text("Slice") }
                 }
                 sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {

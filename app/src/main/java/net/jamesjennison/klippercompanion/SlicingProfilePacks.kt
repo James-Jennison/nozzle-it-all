@@ -30,6 +30,13 @@ internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: Co
 // engine's ConfigBase::load() needs real paths, not an AssetManager stream. Re-copied on every
 // call rather than cached: these are tiny (a few KB each) and copying is cheap next to the slice
 // itself, so there's no reason to risk a stale on-disk copy surviving an app update.
+// WO-15 part E follow-up: the real bed size/shape for a printer, straight from the same
+// machine.json every slice already applies - not a second, invented bed definition. Returns
+// null exactly when slicingProfilePack() itself would (no bundled pack for this
+// model/firmware-generation combination yet, e.g. a Centauri Carbon on LEGACY firmware).
+internal fun bedShapeFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context): BedShape? =
+    slicingProfilePack(model, cosmosGeneration)?.readBedShape(context)
+
 internal fun SlicingProfilePack.materialize(context: Context): List<String> {
     val dir = File(context.cacheDir, "slicer-profiles-active").apply { mkdirs() }
     return listOf(machinePath, processPath, filamentPath).map { assetPath ->

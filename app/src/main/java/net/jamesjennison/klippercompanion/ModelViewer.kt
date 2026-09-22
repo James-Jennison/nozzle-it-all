@@ -66,7 +66,14 @@ data class CameraOrbit(val azimuthDeg: Float, val elevationDeg: Float, val dista
 // object whose footprint (dx, dy) is wide relative to its height (dz), that approximation sits
 // well below the model's actual base, drawing the grid far under a model that's really resting
 // right on it - a real bug an owner screenshot caught live, not a hypothetical.
-data class MeshGeometry(val vertexData: FloatArray, val triangleCount: Int, val center: FloatArray, val radius: Float, val origin: FloatArray, val minZ: Float)
+// minX/maxX/minY/maxY/maxZ: the mesh's real local-space axis-aligned bounding box - used by
+// computeOutOfBounds() to test the model's actual footprint corners (after the live transform)
+// against the real per-printer bed polygon, not a circular bounding-sphere approximation.
+data class MeshGeometry(
+    val vertexData: FloatArray, val triangleCount: Int, val center: FloatArray, val radius: Float,
+    val origin: FloatArray, val minZ: Float,
+    val minX: Float, val maxX: Float, val minY: Float, val maxY: Float, val maxZ: Float,
+)
 
 object MeshLoader {
     // Off the GL thread entirely - NativeEngine.nativeLoadMeshPreview() and this bounding-sphere
@@ -90,7 +97,7 @@ object MeshLoader {
         val center = floatArrayOf((minX + maxX) / 2f, (minY + maxY) / 2f, (minZ + maxZ) / 2f)
         val dx = maxX - minX; val dy = maxY - minY; val dz = maxZ - minZ
         val radius = (sqrt(dx * dx + dy * dy + dz * dz) / 2f).coerceAtLeast(1f)
-        MeshGeometry(data, data.size / 18, center, radius, origin, minZ)
+        MeshGeometry(data, data.size / 18, center, radius, origin, minZ, minX, maxX, minY, maxY, maxZ)
     }
 }
 
@@ -164,6 +171,10 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
     // value contract as [cameraState]) and turned into a real GL model matrix around the mesh's
     // own real pivot (currentGeometry.origin, GL-thread-only - see onDrawFrame).
     @Volatile var objectTransform: ModelTransform = ModelTransform()
+    // Real build-volume check result (computeOutOfBounds, read once per frame) - tints the mesh
+    // a warning color instead of a separate overlay, so the "this doesn't fit the bed" feedback
+    // is impossible to miss while actively dragging/scaling.
+    @Volatile var outOfBounds: Boolean = false
     // Paint overlay (WO-14 part D): the currently enforcer-painted triangles, position-only,
     // world-space (see engine::get_painted_facets's own comment - already in registration with
     // the base mesh, no extra transform needed here). Same volatile-handoff contract as
@@ -293,8 +304,15 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
         normalMatrix3x3From4x4(modelMatrix, normalMatrix)
         GLES30.glUniformMatrix3fv(GLES30.glGetUniformLocation(meshProgram, "uNormalMatrix"), 1, false, normalMatrix, 0)
         GLES30.glUniform3f(GLES30.glGetUniformLocation(meshProgram, "uLightDir"), 0.35f, 0.35f, 0.87f)
-        // This app's print-orange accent (matches thumbnail_render.cpp's base color).
-        GLES30.glUniform3f(GLES30.glGetUniformLocation(meshProgram, "uBaseColor"), 242f / 255f, 117f / 255f, 78f / 255f)
+        // This app's print-orange accent (matches thumbnail_render.cpp's base color) - swapped
+        // for a real warning red the instant the model doesn't fit the actual bed
+        // (computeOutOfBounds), so that feedback is on the model itself, not a separate note
+        // easy to miss while actively dragging/scaling it.
+        if (outOfBounds) {
+            GLES30.glUniform3f(GLES30.glGetUniformLocation(meshProgram, "uBaseColor"), 0.92f, 0.24f, 0.24f)
+        } else {
+            GLES30.glUniform3f(GLES30.glGetUniformLocation(meshProgram, "uBaseColor"), 242f / 255f, 117f / 255f, 78f / 255f)
+        }
         GLES30.glUniform1f(GLES30.glGetUniformLocation(meshProgram, "uAmbient"), 0.35f)
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
         GLES30.glEnableVertexAttribArray(0)
@@ -408,11 +426,36 @@ private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, 
     return floatArrayOf(ray[0] + ray[3] * t, ray[1] + ray[4] * t)
 }
 
+// Real (v1-bounded - see BedShape.kt's own comment on what this does and doesn't test) build-
+// volume check: the model's live-transformed XY footprint corners against the real bed polygon,
+// plus its live-transformed height against the bed's real max Z. Same transform math as the GL
+// model matrix and the native engine (rotate/scale about the real pivot, then translate) so this
+// agrees with what would actually be sliced, not a separate approximation.
+private fun computeOutOfBounds(geometry: MeshGeometry, transform: ModelTransform, bed: BedShape): Boolean {
+    val pivotX = geometry.origin[0]; val pivotY = geometry.origin[1]
+    val rad = Math.toRadians(transform.rotationZDeg.toDouble())
+    val cosR = kotlin.math.cos(rad).toFloat(); val sinR = kotlin.math.sin(rad).toFloat()
+    val corners = listOf(
+        geometry.minX to geometry.minY, geometry.maxX to geometry.minY,
+        geometry.maxX to geometry.maxY, geometry.minX to geometry.maxY,
+    )
+    val outsideXY = corners.any { (cx, cy) ->
+        val dx = (cx - pivotX) * transform.scale
+        val dy = (cy - pivotY) * transform.scale
+        val wx = pivotX + dx * cosR - dy * sinR + transform.offsetXMm
+        val wy = pivotY + dx * sinR + dy * cosR + transform.offsetYMm
+        !pointInPolygon(wx, wy, bed.points)
+    }
+    val heightMm = (geometry.maxZ - geometry.minZ) * transform.scale
+    return outsideXY || heightMm > bed.heightMm
+}
+
 @Composable fun ModelViewer(
     modelFile: File?,
     modifier: Modifier = Modifier,
     paintState: PaintUiState? = null,
     transformState: ModelTransformUiState? = null,
+    bedShape: BedShape? = null,
 ) {
     val path = modelFile?.absolutePath
     if (path == null) return
@@ -423,6 +466,7 @@ private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, 
         var maxDistance by remember { mutableFloatStateOf(1000f) }
         var loading by remember { mutableStateOf(true) }
         var loadError by remember { mutableStateOf<String?>(null) }
+        var geometry by remember { mutableStateOf<MeshGeometry?>(null) }
         var mode by remember { mutableStateOf(ViewerMode.SELECT) }
         val paintMode = mode == ViewerMode.PAINT
         // Locked, not just discouraged: a paint session freezes the transform it was opened
@@ -444,11 +488,12 @@ private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, 
         LaunchedEffect(path) {
             loading = true; loadError = null
             try {
-                val geometry = MeshLoader.load(path)
-                minDistance = geometry.radius * 1.2f
-                maxDistance = geometry.radius * 8f
-                renderer.pendingMesh = geometry
-                renderer.cameraState = CameraOrbit(45f, 25f, geometry.radius * 3f)
+                val loaded = MeshLoader.load(path)
+                geometry = loaded
+                minDistance = loaded.radius * 1.2f
+                maxDistance = loaded.radius * 8f
+                renderer.pendingMesh = loaded
+                renderer.cameraState = CameraOrbit(45f, 25f, loaded.radius * 3f)
                 renderer.objectTransform = transformState?.transform ?: ModelTransform()
                 glView?.requestRender()
             } catch (e: Exception) {
@@ -459,8 +504,17 @@ private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, 
         // Keeps the GL renderer's live model matrix in sync with the transform state, whether it
         // changed via a Transform-mode gesture or the Reset button - a single place that does the
         // "push to renderer + repaint" work rather than duplicating it at every mutation site.
-        LaunchedEffect(transformState?.transform) {
-            transformState?.let { renderer.objectTransform = it.transform }
+        // Also where the real build-volume bounds check re-runs (computeOutOfBounds) - the exact
+        // same trigger points (a new transform, or a freshly loaded geometry) that could change
+        // the answer.
+        LaunchedEffect(transformState?.transform, geometry, bedShape) {
+            val t = transformState?.transform ?: ModelTransform()
+            renderer.objectTransform = t
+            val g = geometry
+            val bed = bedShape
+            val outOfBounds = if (g != null && bed != null) computeOutOfBounds(g, t, bed) else false
+            transformState?.outOfBounds = outOfBounds
+            renderer.outOfBounds = outOfBounds
             glView?.requestRender()
         }
 
@@ -616,6 +670,13 @@ private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, 
                 }
                 if (transformLocked) {
                     Text("Placement is locked once support painting starts.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("transform-locked-notice"))
+                }
+                if (transformState?.outOfBounds == true) {
+                    Text(
+                        "This doesn't fit the printer's bed at its current size/position - move, rotate, or scale it down.",
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("transform-out-of-bounds"),
+                    )
                 }
                 if (paintMode) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

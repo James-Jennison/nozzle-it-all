@@ -2,6 +2,8 @@ package net.jamesjennison.klippercompanion
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -30,7 +32,7 @@ import androidx.compose.ui.unit.dp
     var detectedVersion by remember(profile) { mutableStateOf(profile.declaredFirmwareVersion) }
     var detectNote by remember(profile) { mutableStateOf("") }
     if(showRemoteHelp) RemoteAccessHelpPanel { showRemoteHelp=false }
-    AlertDialog(onDismissRequest=close,title={Text("Edit printer")},text={ Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+    AlertDialog(onDismissRequest=close,title={Text("Edit printer")},text={ Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(name,{name=it.take(80)},label={Text("Printer name")},singleLine=true)
         if(kind==PrinterKind.BAMBU_LAB) {
             OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)

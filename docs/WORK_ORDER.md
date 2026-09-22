@@ -937,11 +937,63 @@ P28/M7 sections for what each one built and its commit hash.)*
         on Device Farm), confirming it was real, not infrastructure noise.
         Fixed by waiting for both lists to populate before asserting on
         either.
-    - **Still open** (Phase 0's remaining scope): stopping the native bridge
-      from flattening multi-object models past the proof-of-concept stage
-      (i.e. actually threading `Model::objects` through to the viewer/slicer
-      instead of `load_mesh_preview`'s deliberate single-mesh collapse) is
-      Phase 1's job per the plan, not Phase 0's.
+    - **Phase 0 closed out, 2026-09-22.** All three scope items done: CI +
+      AWS Device Farm (live, verified, cost-controlled), Room +
+      `Project`/`ProjectObject` infrastructure (built, tested, empty/unused
+      by UI as scoped), and the native multi-object proof
+      (`count_model_objects`/`MultiObjectModelDeviceTest` - `load_and_place_model`
+      never actually flattened via `model.mesh()`; only `load_mesh_preview`
+      does, deliberately, for its own single-mesh preview - Phase 0's real
+      job was proving this with a real test, done, plus the genuine
+      `LoadStrategy` 3MF-loading bug found and fixed along the way). One
+      honest partial: no literal Room *migration* tests were written, since
+      there's no prior schema version to migrate from yet (v1) - a
+      defensible call, not silently declared done. **Actually threading
+      `Model::objects` all the way into the viewer/slicer (not just proving
+      it's possible) is real, correctly-scoped Phase 1 work, not a Phase 0
+      gap** - see Phase 1's own entry below once it starts.
+14. **WO-17 — Phase 1 of the Consumer Slicer Plan, owner-approved 2026-09-22
+    ("close out Phase 0 and begin Phase 1").** Phase 1 turns the single-object
+    viewer into a real multi-object build plate with persistence (§16). This
+    entry covers what's landed so far.
+    - **Real multi-object native slicing, the true prerequisite for
+      everything else in this phase**: `engine::slice_multi_object()` /
+      `nativeSliceMultiObject` (`slic3r_engine.cpp/hpp`, `slic3r_jni.cpp`,
+      `NativeEngine.kt`) loads N model files, each placed exactly the way
+      the existing single-object path already does (real per-object
+      bed-centering, then that object's own real `ModelTransform` on top),
+      merges them into one `Model` via `Model::add_object(const
+      ModelObject&)` (a real libslic3r API), and slices them together into
+      one G-code file - additive, not a replacement of `slice_file()`.
+      Deliberately does not attempt collision detection itself (a separate,
+      real Phase 1 UI concern) - slicing overlapping objects produces
+      overlapping geometry, same as the real upstream GUI would.
+      **Verified**: `MultiObjectSlicingDeviceTest` (2 device tests) proves
+      two real, distinct objects (by G-code object id, not a naive
+      `"; printing object"` occurrence count - that marker is written once
+      per layer per object, not once per object; a 20mm cube at typical
+      layer height produced ~100 markers per object, ~200 total for two -
+      caught by an early wrong assertion, not assumed) actually get sliced
+      together with real, correctly separated placement (a 60mm toolpath
+      X-spread check, not absolute coordinates - the stock factory
+      `printable_area` centers objects around bed X=100mm, not X=0, a real
+      bed-shape detail also caught by an early wrong assertion). Both
+      passing on a real physical device (Razr 2026). Full
+      `testDebugUnitTest`/`lintDebug`/`connectedDebugAndroidTest` gate
+      re-run clean afterward (one `ActiveFilenameDeviceTest` failure seen
+      in the full 147-test run was confirmed pre-existing device-load
+      flakiness, not a regression - passed cleanly in isolation, and this
+      WO's own changes are pure C++/JNI with no path through that test's
+      Compose UI code at all).
+    - **Still open** (Phase 1's remaining scope): object list UI
+      (add/duplicate/delete), per-object transform promoted from the
+      existing single-object `ModelTransform` UI, real auto-arrange
+      (2D bin packing with rotation), collision detection between objects,
+      `MeshGLRenderer` becoming a real `List<RenderableObject>` renderer,
+      `SliceAndPrintPanel.kt`'s state moving from `remember(uri)` to a
+      `ProjectViewModel` backed by the already-real `Project`/
+      `ProjectObject` Room entities (Phase 0), Prepare tab's Model/Arrange
+      steps rebuilt, Files tab gaining "saved projects".
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

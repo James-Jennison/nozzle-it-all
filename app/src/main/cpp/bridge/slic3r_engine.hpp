@@ -38,6 +38,15 @@ void slice_file(const std::string& input_model_path,
                  const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
                  const ModelTransform& transform = {});
 
+// Phase 1 (Consumer Slicer Plan §16): slices a real multi-object build plate - each (model path,
+// placement) pair loaded and placed exactly the way slice_file()'s single-object path already
+// does, then merged into one Model and sliced together into one G-code file. See the .cpp for why
+// this doesn't itself do collision detection (a separate, real UI concern).
+void slice_multi_object(const std::vector<std::pair<std::string, ModelTransform>>& objects,
+                         const std::string& output_gcode_path,
+                         const std::vector<std::string>& profile_paths,
+                         const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
+
 // Loads input_model_path (STL/3MF/OBJ) the same way slice_file() does - real Model::read_from_file,
 // bed-centered - but stops short of slicing. Returns 3 floats (the first object's first
 // instance's own world-space offset - the real pivot a later transform's rotate/scale will use,

@@ -160,6 +160,53 @@ void slice_file(const std::string& input_model_path,
     slice_model(model, config, output_gcode_path);
 }
 
+// Phase 1 (Consumer Slicer Plan §16): a real multi-object build plate, sliced together into one
+// G-code file - the actual capability Phase 0's count_model_objects()/MultiObjectModelDeviceTest
+// only proved was structurally possible. Each (path, transform) pair is loaded and placed exactly
+// the way slice_file()'s single-object path already does - real per-file bed-centering, then that
+// object's own real transform applied on top (see load_and_place_model()'s own comment on why
+// that order matters) - so a project's saved per-object ModelTransform (its arranged position,
+// not just move/rotate/scale) reproduces identically at slice time. The resulting ModelObjects are
+// copied (Model::add_object(const ModelObject&), a real libslic3r API, not a workaround) into one
+// combined Model and sliced once, the same shared slice_model() tail every other slice path uses -
+// so multi-object G-code gets the same real thumbnail/validation/extruder-assignment handling as
+// everything else, not a second, parallel code path.
+//
+// Does not itself detect or prevent overlapping objects - collision detection/auto-arrange is a
+// real, separate Phase 1 UI concern (Consumer Slicer Plan §16), not something the slicer engine
+// enforces; slicing genuinely overlapping objects produces genuinely overlapping (garbage)
+// geometry, same as it would in the real upstream GUI.
+void slice_multi_object(const std::vector<std::pair<std::string, ModelTransform>>& objects,
+                         const std::string& output_gcode_path,
+                         const std::vector<std::string>& profile_paths,
+                         const std::vector<std::pair<std::string, std::string>>& config_overrides) {
+    using namespace Slic3r;
+
+    if (objects.empty()) {
+        throw std::runtime_error("No objects to slice.");
+    }
+
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    for (const std::string& profile_path : profile_paths) {
+        DynamicPrintConfig profile_config;
+        profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        config.apply(profile_config);
+    }
+    for (const auto& [key, value] : config_overrides) {
+        config.set_deserialize_strict(key, value);
+    }
+
+    Model combined;
+    for (const auto& [path, transform] : objects) {
+        Model loaded = load_and_place_model(path, config, transform);
+        for (ModelObject* object : loaded.objects) {
+            combined.add_object(*object);
+        }
+    }
+
+    slice_model(combined, config, output_gcode_path);
+}
+
 std::vector<float> load_mesh_preview(const std::string& input_model_path) {
     using namespace Slic3r;
 

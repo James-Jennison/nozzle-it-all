@@ -44,6 +44,21 @@ object NativeEngine {
         offsetXMm: Double, offsetYMm: Double, rotationZDeg: Double, scale: Double,
     )
 
+    // Phase 1 (Consumer Slicer Plan §16): slices a real multi-object build plate into one G-code
+    // file. modelPaths and the four transform arrays are parallel arrays (index i is one
+    // object's own path + placement) - each object is loaded and placed exactly the way
+    // nativeSliceFile's single-object path already does (real per-object bed-centering, then
+    // that object's own transform on top), then merged and sliced together. Does not itself
+    // detect overlapping objects - collision detection is a separate, real UI concern. Throws
+    // RuntimeException on any failure (including mismatched array lengths), same convention as
+    // nativeSliceFile.
+    external fun nativeSliceMultiObject(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray,
+        outputGcodePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+    )
+
     // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - real
     // Model::read_from_file, bed-centered - but stops short of slicing. Returns 3 floats (the
     // model's own real transform pivot - see engine::load_mesh_preview) followed by a flat

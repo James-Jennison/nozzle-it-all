@@ -2,4 +2,5 @@
 .kotlin/
 local.properties
 **/build/
+**/.cxx/
 artifacts/

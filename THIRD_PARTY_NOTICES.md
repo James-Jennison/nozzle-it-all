@@ -68,6 +68,39 @@ of the Bespok3d Organisation, which is not a legal entity; copyright is held by
 its individual authors. This app is not affiliated with or endorsed by
 Bespok3d.
 
+## OrcaSlicer and oneTBB (on-device slicing, WO-13, in progress)
+
+The on-device slicing engine (not yet feature-complete — see
+`docs/WORK_ORDER.md`'s WO-13 entry for current status) is built from two
+vendored, pinned git submodules under `third_party/`, not a prebuilt binary:
+
+- [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), licensed
+  AGPL-3.0-or-later, pinned to the `v2.4.2` release tag (commit
+  `8500fcdccaa10b5099ac20d252af3a7c560046f1`). This is upstream
+  `OrcaSlicer/OrcaSlicer` directly — **not** the Snapmaker `u1-slicer-for-
+  android` fork this project investigated and rejected (see WO-13: unverified
+  build provenance, narrower printer-fleet coverage than required). The
+  Android build deliberately excludes OrcaSlicer's desktop GUI
+  (`SLIC3R_GUI=0`) and, per an explicit owner-accepted scope cut, its
+  OpenVDB-, CGAL-, GMP-, MPFR- and OCCT-dependent features (advanced
+  supports, mesh boolean operations, STEP import) — cross-compiling those for
+  Android from source is an unsolved problem nobody has published a working
+  answer to; even the only real prior art (the Snapmaker fork) disables them
+  rather than solving it. Full investigation notes are in the WO-13 plan file
+  referenced from `docs/WORK_ORDER.md`.
+- [oneTBB](https://github.com/uxlfoundation/oneTBB), licensed Apache-2.0,
+  pinned to the `v2021.13.0` release tag (commit
+  `1c4c93fc5398c4a1acb3492c02db4699f3048dea`) — the threading engine
+  `libslic3r` (OrcaSlicer's core) depends on. Its optional `tbbmalloc`
+  component (a libc malloc replacement) is excluded from the Android build;
+  it isn't needed here and doesn't link cleanly against Android's bionic libc.
+
+Both submodule commits are recorded in `scripts/artifact-proof.py`'s source
+manifest (embedded in the APK and checked by its `verify` step), the same
+provenance mechanism already covering this app's own Kotlin source — this is
+the concrete answer to the provenance concern that ruled out vendoring a
+third-party prebuilt binary in the first place.
+
 ## Fonts
 
 The app's typography (`res/font/`) bundles three typefaces from Google Fonts'
@@ -85,9 +118,11 @@ files only).
 
 ## Planned future incorporation
 
-Later phases of this port are expected to add further Helix-derived
-components (on-device slicing via the u1-slicer-for-android/OrcaSlicer/
-PrusaSlicer lineage, and a MakerWorld model browser). Entries for those will be
-added here, alongside
-their own upstream licenses, as each is actually incorporated — not in
-advance of the code landing.
+On-device slicing's real lineage turned out to be upstream OrcaSlicer (see
+above), not the Snapmaker `u1-slicer-for-android`/PrusaSlicer path this note
+originally anticipated — corrected 2026-09-21 once that investigation
+concluded. A MakerWorld model browser remains genuinely unbuilt, folded into
+the same later phase as slicing since it's a model-import source feeding it
+rather than standalone. Entries are added here, alongside their own upstream
+licenses, as each is actually incorporated — not in advance of the code
+landing.

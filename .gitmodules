@@ -1,0 +1,6 @@
+[submodule "third_party/orcaslicer"]
+	path = third_party/orcaslicer
+	url = https://github.com/OrcaSlicer/OrcaSlicer.git
+[submodule "third_party/onetbb"]
+	path = third_party/onetbb
+	url = https://github.com/uxlfoundation/oneTBB.git

@@ -2,10 +2,24 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id(
 android {
  namespace = "net.jamesjennison.klippercompanion"
  compileSdk = 36
- defaultConfig { applicationId = "net.jamesjennison.klippercompanion"; minSdk = 26; targetSdk = 36; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+ defaultConfig {
+  applicationId = "net.jamesjennison.klippercompanion"; minSdk = 26; targetSdk = 36; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  // WO-13 Phase 0: arm64-v8a only, matching every physical device this app has ever been
+  // verified on (Razr 2023, and the printers' own hosts aren't relevant here - this is the
+  // phone's ABI). NDK 26+ is load-bearing, not a preference: OrcaSlicer/libslic3r's Android
+  // portability work (see WO-13's investigation) is known toolchain-sensitive, and NDK 27
+  // (below, pinned) satisfies that floor.
+  ndk { abiFilters += "arm64-v8a" }
+  externalNativeBuild { cmake { cppFlags += ""; arguments += listOf("-DANDROID_STL=c++_shared") } }
+ }
  buildFeatures { compose = true }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
+ // Pinned rather than "latest": the exact NDK this native build has been verified against
+ // (see the oneTBB cross-compile proof in the WO-13 plan/commit history). A different NDK
+ // silently changes native codegen - do not bump this without re-verifying the native build.
+ ndkVersion = "27.1.12297006"
+ externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
  // Several of Netty's jars (pulled in transitively by hivemq-mqtt-client) each carry their own
  // copy of this JAR-signing-era index file; it's not needed at runtime, so drop it rather than
  // pick one arbitrarily.

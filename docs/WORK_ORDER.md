@@ -152,9 +152,55 @@ P28/M7 sections for what each one built and its commit hash.)*
     version, at minimum for Centauri Carbon's Stock/OpenCentauri-patched/COSMOS
     split), and print-generation must refuse to slice against a stale/mismatched
     profile rather than silently emitting G-code that can fault the printer.
-    **Not yet scoped or planned** — this is a multi-week-scale native build
-    effort; per this project's own convention for builds this size, it needs a
-    real plan (Plan Mode) before any code lands, not an ad-hoc start.
+    **Phase 0 planned 2026-09-21 (Plan Mode), then re-scoped mid-implementation
+    after a real feasibility finding:** upstream OrcaSlicer's dependency build
+    (`deps/CMakeLists.txt`) has zero Android awareness — it's ~20 `ExternalProject`
+    sub-builds (Boost 1.84 w/ Context, CGAL, GMP, MPFR, TBB, OpenVDB, OCCT, Qhull)
+    written only for Linux/macOS/Windows. Checked how the Snapmaker project (the
+    only real prior art) actually solved this: their `orcaslicer` submodule points
+    to **their own fork** (`taylormadearmy/OrcaSlicer`, not vanilla upstream) with
+    real Android source patches, and their 1,150-line native `CMakeLists.txt`
+    **disables or stubs out** the hardest dependencies entirely rather than
+    cross-compiling them (`SLIC3R_OPENVDB=0`, `extern/*_stub` headers for OpenVDB/
+    OpenCV/FreeType/OpenSSL/etc.; no CGAL/GMP/MPFR/OCCT anywhere) — meaning no
+    OpenVDB-based operations or CGAL/OCCT-based mesh booleans/STEP import exist in
+    their Android build at all. Whatever they *do* cross-compile (Boost/TBB) comes
+    from an `extern/` directory their own CMake comments describe as an
+    **"ignored" (not committed), prebuilt Android dependency bundle** — i.e. even
+    working prior art doesn't have a fully reproducible from-source build of its
+    own hard dependencies; it's an unattested blob one layer deeper than the app
+    binary that was already rejected.
+    **Owner decision (2026-09-21), presented as an explicit trade-off:** proceed
+    with a feature-reduced engine — OpenVDB/CGAL/OCCT-dependent features (advanced
+    supports, mesh booleans, STEP import) disabled, same functional cut the
+    Snapmaker team made — but build the *entire* remaining dependency chain,
+    including Boost and TBB, from source ourselves, with no unattested prebuilt
+    bundle anywhere in the pipeline. Source base is vanilla upstream
+    `OrcaSlicer/OrcaSlicer` (not the Snapmaker fork), since we're doing our own
+    Android portability patches rather than inheriting theirs. This is genuinely
+    multi-session native engineering work; status and concrete next steps are
+    tracked in the Phase 0 plan file rather than restated here on every update.
+    **First real milestone landed, same day:** `third_party/orcaslicer` (pinned
+    `v2.4.2`) and `third_party/onetbb` (pinned `v2021.13.0`) vendored as git
+    submodules, not binaries — their exact commits are now part of
+    `scripts/artifact-proof.py`'s embedded source-proof manifest, the concrete
+    mechanism answering the provenance gap. `app/src/main/cpp/CMakeLists.txt`
+    cross-compiles oneTBB for arm64-v8a via the real Gradle `externalNativeBuild`
+    pipeline (NDK 27.1.12297006, `TBBMALLOC_BUILD=OFF` — `tbbmalloc` doesn't
+    link cleanly against Android's bionic libc and isn't needed) and links a
+    minimal JNI smoke bridge (`NativeSlicer.kt`/`nozzle_slicer_jni.cpp`)
+    against it. **Device-verified 2026-09-21**: `NativeSlicerSmokeTest`
+    (a real `oneapi::tbb::info::default_concurrency()` call through JNI, not a
+    stub) passed on the Razr 2023 via `connectedDebugAndroidTest`; the APK
+    genuinely contains `libnozzle_slicer.so` and `libtbb_debug.so` as real ELF
+    aarch64 objects. Full existing gate (`testDebugUnitTest lintDebug
+    assembleDebug`) still green. **Still open, real remaining work, not yet
+    started:** Boost (the harder of the two cross-compilation targets — needs
+    Context/coroutines support, historically finicky for Android), then
+    `libslic3r` itself (the actual slicing code, gated to exclude the
+    OpenVDB/CGAL/OCCT paths), then a real `sliceToFile` JNI bridge replacing
+    this smoke test, then Phases 1-4 from the plan file (firmware identity,
+    UI, profile packs, physical acceptance) — none of that exists yet.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

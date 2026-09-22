@@ -114,7 +114,8 @@ Java_org_orcaslicer_engine_NativeEngine_nativeDiagnoseConfigDef(JNIEnv* env, jcl
 extern "C" JNIEXPORT void JNICALL
 Java_org_orcaslicer_engine_NativeEngine_nativeSliceFile(
     JNIEnv* env, jclass,
-    jstring jInputModelPath, jstring jOutputGcodePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues) {
+    jstring jInputModelPath, jstring jOutputGcodePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues,
+    jdouble offsetXMm, jdouble offsetYMm, jdouble rotationZDeg, jdouble scale) {
     try {
         const std::string input_path = jstring_to_string(env, jInputModelPath);
         const std::string output_path = jstring_to_string(env, jOutputGcodePath);
@@ -141,7 +142,13 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceFile(
             }
         }
 
-        engine::slice_file(input_path, output_path, profile_paths, config_overrides);
+        engine::ModelTransform transform;
+        transform.offset_x_mm = offsetXMm;
+        transform.offset_y_mm = offsetYMm;
+        transform.rotation_z_deg = rotationZDeg;
+        transform.scale = scale;
+
+        engine::slice_file(input_path, output_path, profile_paths, config_overrides, transform);
     } catch (const std::exception& ex) {
         throw_java_exception(env, ex.what());
     } catch (...) {
@@ -180,9 +187,16 @@ Java_org_orcaslicer_engine_NativeEngine_nativeLoadMeshPreview(
 // get_painted_facets/slice_paint_session/close_paint_session in slic3r_engine.cpp/hpp for the
 // real, upstream-GUI-traced transform reasoning - this file is only the JNI marshalling.
 extern "C" JNIEXPORT jlong JNICALL
-Java_org_orcaslicer_engine_NativeEngine_nativeOpenPaintSession(JNIEnv* env, jclass, jstring jInputModelPath) {
+Java_org_orcaslicer_engine_NativeEngine_nativeOpenPaintSession(
+    JNIEnv* env, jclass, jstring jInputModelPath,
+    jdouble offsetXMm, jdouble offsetYMm, jdouble rotationZDeg, jdouble scale) {
     try {
-        return static_cast<jlong>(engine::open_paint_session(jstring_to_string(env, jInputModelPath)));
+        engine::ModelTransform transform;
+        transform.offset_x_mm = offsetXMm;
+        transform.offset_y_mm = offsetYMm;
+        transform.rotation_z_deg = rotationZDeg;
+        transform.scale = scale;
+        return static_cast<jlong>(engine::open_paint_session(jstring_to_string(env, jInputModelPath), transform));
     } catch (const std::exception& ex) {
         throw_java_exception(env, ex.what());
         return 0;

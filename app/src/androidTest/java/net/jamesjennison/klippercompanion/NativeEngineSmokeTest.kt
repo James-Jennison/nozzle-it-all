@@ -34,7 +34,7 @@ class NativeEngineSmokeTest {
         // profile-file load (a real bug hit on the second run: loading the same override
         // through a bare profile JSON file tripped GCode.cpp's placeholder-resolution check in
         // a way the proven-working CLI tool's direct-override path never did).
-        NativeEngine.nativeSliceFile(input.absolutePath, output.absolutePath, emptyArray(), arrayOf("use_relative_e_distances"), arrayOf("0"))
+        NativeEngine.nativeSliceFile(input.absolutePath, output.absolutePath, emptyArray(), arrayOf("use_relative_e_distances"), arrayOf("0"), 0.0, 0.0, 0.0, 1.0)
 
         assertTrue("expected real g-code output, got ${output.length()} bytes", output.exists() && output.length() > 1000)
         val gcode = output.readText()

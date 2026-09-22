@@ -87,6 +87,10 @@ import java.io.File
     // so the slicing effect below can see whether painting actually happened - see
     // SlicingCoordinator.slice()'s own paintSessionHandle parameter.
     val paintState = remember(uri) { PaintUiState() }
+    // WO-15 part E: real object placement (move/rotate/scale) set on the Model tab. Owned here
+    // for the same reason paintState is - the slicing effect below needs to read it, and it must
+    // survive ModelViewer unmounting when the flow moves past "customizing".
+    val transformState = remember(uri) { ModelTransformUiState() }
     // Owned here, not by ModelViewer (which only lives during the "customizing" step and would
     // otherwise close this out from under SlicingCoordinator.slice()'s later use of it) - see
     // ModelViewer.kt's own comment on why it deliberately doesn't close this itself. Closed once,
@@ -141,7 +145,7 @@ import java.io.File
         // opening Paint mode and never dragging must produce the exact same output as if
         // painting didn't exist (paintState.painted, not just paintState.handle != null).
         val paintHandle = paintState.handle.takeIf { paintState.painted }
-        when(val outcome = SlicingCoordinator.slice(context.applicationContext, model, profile, chosen.toOverrides(), paintHandle)) {
+        when(val outcome = SlicingCoordinator.slice(context.applicationContext, model, profile, chosen.toOverrides(), paintHandle, transformState.transform)) {
             is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
             is SliceOutcome.FirmwareBlocked -> { working = false; error = outcome.reason }
             is SliceOutcome.Failed -> { working = false; error = outcome.message }
@@ -198,7 +202,7 @@ import java.io.File
                     Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         when(tab) {
                             0 -> {
-                                ModelViewer(localModel, paintState = paintState)
+                                ModelViewer(localModel, paintState = paintState, transformState = transformState)
                                 copyError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                             }
                             1 -> {

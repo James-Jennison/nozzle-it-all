@@ -23,7 +23,11 @@ class MeshPreviewDeviceTest {
         return input
     }
     @Test fun realCubeProducesAWellFormedInterleavedVertexBuffer() {
-        val data = NativeEngine.nativeLoadMeshPreview(cube().absolutePath)
+        val raw = NativeEngine.nativeLoadMeshPreview(cube().absolutePath)
+        assertTrue("expected at least the 3-float transform-pivot header", raw.size > 3)
+        // First 3 floats are the real transform pivot (WO-15 part E) - the vertex buffer proper
+        // starts after that header, see engine::load_mesh_preview.
+        val data = raw.copyOfRange(3, raw.size)
         assertTrue("expected a non-empty buffer", data.isNotEmpty())
         assertEquals("expected a whole number of (pos+normal) vertices", 0, data.size % 6)
         assertEquals("expected a whole number of triangles (3 vertices each)", 0, (data.size / 6) % 3)

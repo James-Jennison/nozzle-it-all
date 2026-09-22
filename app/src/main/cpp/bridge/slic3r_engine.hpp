@@ -14,6 +14,20 @@
 // on failure.
 namespace engine {
 
+// A real, user-applied placement on the bed (WO-15 part E: object transform), applied via the
+// actual libslic3r ModelInstance transform (set_offset/set_rotation/set_scaling_factor) inside
+// load_and_place_model() - the same call every slice already goes through - not a cosmetic
+// preview-only value. v1 scope, matching what the touch UI actually offers: XY position on the
+// bed plane, rotation about Z only (turntable - arbitrary/place-on-face rotation isn't supported
+// yet), and uniform scale. Default-constructed = identity placement (today's existing behavior,
+// unchanged for every call site that doesn't pass one).
+struct ModelTransform {
+    double offset_x_mm = 0.0;
+    double offset_y_mm = 0.0;
+    double rotation_z_deg = 0.0;
+    double scale = 1.0;
+};
+
 // config_overrides are applied (via ConfigBase::set_deserialize) after
 // profile_paths, so callers can tweak individual keys without needing a
 // full profile file -- e.g. for a bare smoke test with no real printer
@@ -21,12 +35,15 @@ namespace engine {
 void slice_file(const std::string& input_model_path,
                  const std::string& output_gcode_path,
                  const std::vector<std::string>& profile_paths,
-                 const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
+                 const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
+                 const ModelTransform& transform = {});
 
 // Loads input_model_path (STL/3MF/OBJ) the same way slice_file() does - real Model::read_from_file,
-// bed-centered - but stops short of slicing. Returns a flat interleaved vertex buffer for a
-// real-time GL preview: 6 floats per vertex (x,y,z,nx,ny,nz), 3 vertices per triangle, nx/ny/nz
-// the triangle's own flat face normal (matches thumbnail_render.cpp's flat-shading choice).
+// bed-centered - but stops short of slicing. Returns 3 floats (the first object's first
+// instance's own world-space offset - the real pivot a later transform's rotate/scale will use,
+// see the .cpp) followed by a flat interleaved vertex buffer for a real-time GL preview: 6 floats
+// per vertex (x,y,z,nx,ny,nz), 3 vertices per triangle, nx/ny/nz the triangle's own flat face
+// normal (matches thumbnail_render.cpp's flat-shading choice).
 std::vector<float> load_mesh_preview(const std::string& input_model_path);
 
 // Support painting (WO-14 part D): a stateful session over a loaded model's first object/volume
@@ -40,7 +57,12 @@ using PaintSessionHandle = int64_t;
 
 // Opens a session (loads + bed-centers the model, same as slice_file()/load_mesh_preview()) and
 // returns an opaque handle. Throws if the model has no paintable volume.
-PaintSessionHandle open_paint_session(const std::string& input_model_path);
+// `transform` is applied once, at open time, and frozen for the session's lifetime - painting
+// operates on the volume's raw local mesh via a `trafo` captured at open (see slic3r_engine.cpp's
+// own header comment on that), so a transform change after a paint session is already open isn't
+// reflected; the Kotlin caller keeps transform controls and Paint mode mutually exclusive so this
+// never happens in practice (see ModelViewer.kt).
+PaintSessionHandle open_paint_session(const std::string& input_model_path, const ModelTransform& transform = {});
 
 // origin/dir are a world-space ray (the same bed-centered coordinate space load_mesh_preview's
 // vertices are already in, so the Kotlin GL camera's own unprojection needs no extra transform).

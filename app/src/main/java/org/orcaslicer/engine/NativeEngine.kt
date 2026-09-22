@@ -34,13 +34,19 @@ object NativeEngine {
     // No default values here: Kotlin can't synthesize default-argument dispatch for an
     // `external` (JNI) function body. Callers pass emptyArray() explicitly when there are no
     // overrides.
+    // offsetXMm/offsetYMm/rotationZDeg/scale (WO-15 part E): the real object placement the user
+    // set via ModelViewer's Transform mode - applied as an actual libslic3r ModelInstance
+    // transform (engine::load_and_place_model, see slic3r_engine.cpp), on top of the existing
+    // automatic bed-centering. Pass 0.0/0.0/0.0/1.0 for today's unchanged default placement.
     external fun nativeSliceFile(
         inputModelPath: String, outputGcodePath: String, profilePaths: Array<String>,
         overrideKeys: Array<String>, overrideValues: Array<String>,
+        offsetXMm: Double, offsetYMm: Double, rotationZDeg: Double, scale: Double,
     )
 
     // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - real
-    // Model::read_from_file, bed-centered - but stops short of slicing. Returns a flat
+    // Model::read_from_file, bed-centered - but stops short of slicing. Returns 3 floats (the
+    // model's own real transform pivot - see engine::load_mesh_preview) followed by a flat
     // interleaved vertex buffer for a real-time 3D preview: 6 floats per vertex
     // (x,y,z,nx,ny,nz), 3 vertices per triangle, the triangle's own flat face normal repeated
     // for all 3 (matches thumbnail_render.cpp's flat-shading choice). Throws RuntimeException
@@ -52,7 +58,13 @@ object NativeEngine {
     // (slic3r_engine.hpp) for why this is a session rather than a single stateless call: a real
     // brush-paint algorithm (TriangleSelector, the same one the real GUI uses) needs its
     // spatial-index/selection state to persist across strokes.
-    external fun nativeOpenPaintSession(inputModelPath: String): Long
+    // offsetXMm/offsetYMm/rotationZDeg/scale: the same real placement transform nativeSliceFile
+    // takes, applied once at open time and frozen for the session (see
+    // engine::open_paint_session's own comment on why a transform change mid-paint-session isn't
+    // supported). Pass 0.0/0.0/0.0/1.0 for the identity placement.
+    external fun nativeOpenPaintSession(
+        inputModelPath: String, offsetXMm: Double, offsetYMm: Double, rotationZDeg: Double, scale: Double,
+    ): Long
 
     // origin/dir: a world-space ray in the same bed-centered coordinates nativeLoadMeshPreview's
     // vertices are already in - built from the GL camera's own view/projection matrices, no

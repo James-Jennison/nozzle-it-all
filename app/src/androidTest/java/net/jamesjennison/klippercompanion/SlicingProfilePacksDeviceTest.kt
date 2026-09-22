@@ -22,7 +22,7 @@ class SlicingProfilePacksDeviceTest {
         output.delete()
         val pack = slicingProfilePack(model, cosmosGeneration) ?: throw AssertionError("no profile pack for $model/$cosmosGeneration")
         val profilePaths = pack.materialize(appContext)
-        NativeEngine.nativeSliceFile(input.absolutePath, output.absolutePath, profilePaths.toTypedArray(), emptyArray(), emptyArray())
+        NativeEngine.nativeSliceFile(input.absolutePath, output.absolutePath, profilePaths.toTypedArray(), emptyArray(), emptyArray(), 0.0, 0.0, 0.0, 1.0)
         assertTrue("expected real g-code output for $model", output.exists() && output.length() > 1000)
         return output.readText()
     }

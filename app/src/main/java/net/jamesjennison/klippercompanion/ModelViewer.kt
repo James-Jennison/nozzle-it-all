@@ -15,6 +15,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,7 @@ import java.io.File
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -53,13 +55,22 @@ import kotlin.math.sqrt
 
 data class CameraOrbit(val azimuthDeg: Float, val elevationDeg: Float, val distance: Float)
 
-data class MeshGeometry(val vertexData: FloatArray, val triangleCount: Int, val center: FloatArray, val radius: Float)
+// origin: the model's own real transform pivot (engine::load_mesh_preview's 3-float header) -
+// the point Transform mode's rotate/scale actually turns around, so the live preview agrees
+// exactly with what nativeSliceFile/nativeOpenPaintSession will do with the same transform (see
+// ModelTransform.kt). NOT the same as [center] (the vertex bounding-box center, used only for
+// camera framing/the reference grid) - a mesh whose local origin isn't its own centroid needs the
+// real pivot, not a convenient one.
+data class MeshGeometry(val vertexData: FloatArray, val triangleCount: Int, val center: FloatArray, val radius: Float, val origin: FloatArray)
 
 object MeshLoader {
     // Off the GL thread entirely - NativeEngine.nativeLoadMeshPreview() and this bounding-sphere
     // pass are both plain CPU work, dispatched the same way slicing itself already is.
     suspend fun load(path: String): MeshGeometry = withContext(Dispatchers.Default) {
-        val data = NativeEngine.nativeLoadMeshPreview(path)
+        val raw = NativeEngine.nativeLoadMeshPreview(path)
+        require(raw.size > 3) { "Unexpected mesh preview data." }
+        val origin = floatArrayOf(raw[0], raw[1], raw[2])
+        val data = raw.copyOfRange(3, raw.size)
         require(data.isNotEmpty() && data.size % 18 == 0) { "Unexpected mesh preview data." }
         var minX = Float.MAX_VALUE; var minY = Float.MAX_VALUE; var minZ = Float.MAX_VALUE
         var maxX = -Float.MAX_VALUE; var maxY = -Float.MAX_VALUE; var maxZ = -Float.MAX_VALUE
@@ -74,18 +85,28 @@ object MeshLoader {
         val center = floatArrayOf((minX + maxX) / 2f, (minY + maxY) / 2f, (minZ + maxZ) / 2f)
         val dx = maxX - minX; val dy = maxY - minY; val dz = maxZ - minZ
         val radius = (sqrt(dx * dx + dy * dy + dz * dz) / 2f).coerceAtLeast(1f)
-        MeshGeometry(data, data.size / 18, center, radius)
+        MeshGeometry(data, data.size / 18, center, radius, origin)
     }
 }
 
+// uModel (WO-15 part E): the live object-transform matrix (move/rotate/scale, ModelTransform.kt),
+// applied to the raw (identity-placement) mesh vertices before the camera's view-projection - the
+// GPU-side equivalent of what engine::load_and_place_model applies via a real libslic3r
+// ModelInstance transform at slice time (same offset/rotation/scale numbers, same pivot - see
+// MeshGeometry.origin). Normals are transformed too (uNormalMatrix, the inverse-transpose of
+// uModel's 3x3 part) so lighting stays correct under a non-uniform... actually this app only ever
+// applies uniform scale, so the plain 3x3 of uModel is already its own correct normal matrix, but
+// computing the inverse-transpose costs nothing extra and stays correct if that ever changes.
 private const val VERTEX_SHADER = """#version 300 es
 uniform mat4 uMVP;
+uniform mat4 uModel;
+uniform mat3 uNormalMatrix;
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
 out vec3 vNormal;
 void main() {
-    vNormal = aNormal;
-    gl_Position = uMVP * vec4(aPosition, 1.0);
+    vNormal = normalize(uNormalMatrix * aNormal);
+    gl_Position = uMVP * uModel * vec4(aPosition, 1.0);
 }
 """
 
@@ -134,6 +155,10 @@ void main() { fragColor = vec4(uColor, 1.0); }
 class MeshGLRenderer : GLSurfaceView.Renderer {
     @Volatile var pendingMesh: MeshGeometry? = null
     @Volatile var cameraState: CameraOrbit = CameraOrbit(45f, 25f, 100f)
+    // WO-15 part E: the live object placement, read once per frame here (same volatile-immutable-
+    // value contract as [cameraState]) and turned into a real GL model matrix around the mesh's
+    // own real pivot (currentGeometry.origin, GL-thread-only - see onDrawFrame).
+    @Volatile var objectTransform: ModelTransform = ModelTransform()
     // Paint overlay (WO-14 part D): the currently enforcer-painted triangles, position-only,
     // world-space (see engine::get_painted_facets's own comment - already in registration with
     // the base mesh, no extra transform needed here). Same volatile-handoff contract as
@@ -166,6 +191,8 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
     private val viewMatrix = FloatArray(16)
     private val projMatrix = FloatArray(16)
     private val vpMatrix = FloatArray(16)
+    private val modelMatrix = FloatArray(16)
+    private val normalMatrix = FloatArray(9)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES30.glClearColor(0.06f, 0.06f, 0.07f, 1f)
@@ -242,6 +269,24 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
 
         GLES30.glUseProgram(meshProgram)
         GLES30.glUniformMatrix4fv(GLES30.glGetUniformLocation(meshProgram, "uMVP"), 1, false, vpMatrix, 0)
+        val t = objectTransform
+        val pivot = geometry.origin
+        // T(offset) * T(pivot) * Rz(rotation) * S(scale) * T(-pivot) - real rotate/scale around
+        // the mesh's own pivot, then the real extra XY offset, matching
+        // engine::load_and_place_model's own application order (see slic3r_engine.cpp).
+        Matrix.setIdentityM(modelMatrix, 0)
+        Matrix.translateM(modelMatrix, 0, t.offsetXMm, t.offsetYMm, 0f)
+        Matrix.translateM(modelMatrix, 0, pivot[0], pivot[1], pivot[2])
+        Matrix.rotateM(modelMatrix, 0, t.rotationZDeg, 0f, 0f, 1f)
+        Matrix.scaleM(modelMatrix, 0, t.scale, t.scale, t.scale)
+        Matrix.translateM(modelMatrix, 0, -pivot[0], -pivot[1], -pivot[2])
+        GLES30.glUniformMatrix4fv(GLES30.glGetUniformLocation(meshProgram, "uModel"), 1, false, modelMatrix, 0)
+        // Uniform scale only (this UI never offers non-uniform scale) - the model matrix's own
+        // 3x3 rotation+scale part is already its own correct normal matrix, no inverse-transpose
+        // needed, but computed as one anyway (see the shader's own comment) so this stays correct
+        // if non-uniform scale is ever added.
+        normalMatrix3x3From4x4(modelMatrix, normalMatrix)
+        GLES30.glUniformMatrix3fv(GLES30.glGetUniformLocation(meshProgram, "uNormalMatrix"), 1, false, normalMatrix, 0)
         GLES30.glUniform3f(GLES30.glGetUniformLocation(meshProgram, "uLightDir"), 0.35f, 0.35f, 0.87f)
         // This app's print-orange accent (matches thumbnail_render.cpp's base color).
         GLES30.glUniform3f(GLES30.glGetUniformLocation(meshProgram, "uBaseColor"), 242f / 255f, 117f / 255f, 78f / 255f)
@@ -269,6 +314,18 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
             GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, overlayVertexCount)
             GLES30.glDepthMask(true)
         }
+    }
+
+    // Column-major 4x4 -> column-major 3x3 (upper-left). A real normal matrix would be the
+    // inverse-transpose of this, but this app only ever applies a uniform, positive scale to the
+    // model matrix - normalize() in the fragment shader cancels a uniform scale factor exactly,
+    // so the plain rotation+scale 3x3 already points normals the right way with no separate
+    // inverse-transpose needed (that would only matter for non-uniform scale, which this UI never
+    // offers).
+    private fun normalMatrix3x3From4x4(m4: FloatArray, out3: FloatArray) {
+        out3[0] = m4[0]; out3[1] = m4[1]; out3[2] = m4[2]
+        out3[3] = m4[4]; out3[4] = m4[5]; out3[5] = m4[6]
+        out3[6] = m4[8]; out3[7] = m4[9]; out3[8] = m4[10]
     }
 
     // A simple reference grid sized off the model's own footprint (no real per-printer bed size
@@ -304,6 +361,11 @@ class PaintUiState {
     var painted by mutableStateOf(false)
 }
 
+// Which single touch behavior is active - mutually exclusive, matching the existing Select/Paint
+// pattern (only one gesture handler is ever attached to the viewport at a time). TRANSFORM is
+// WO-15 part E; SELECT/PAINT existed already (see this file's git history for WO-14 part D).
+private enum class ViewerMode { SELECT, TRANSFORM, PAINT }
+
 // Standard screen-to-world ray unprojection: the two NDC-space points at the near/far planes for
 // this (touchX, touchY), each carried through the inverse view-projection matrix and perspective-
 // divided, give two real world-space points on the same ray - their difference is the ray
@@ -326,7 +388,23 @@ private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int
     return floatArrayOf(nx, ny, nz, dx / len, dy / len, dz / len)
 }
 
-@Composable fun ModelViewer(modelFile: File?, modifier: Modifier = Modifier, paintState: PaintUiState? = null) {
+// Where a screen touch's ray actually crosses a horizontal (constant-Z) plane - used to turn a
+// Transform-mode drag into a real bed-plane (X,Y) world delta, not just a proportional screen-
+// pixel guess. Same math family as unprojectRay, one step further (a real ray/plane intersection).
+private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, touchX: Float, touchY: Float, planeZ: Float): FloatArray {
+    val ray = unprojectRay(vp, viewportWidth, viewportHeight, touchX, touchY)
+    val dz = ray[5]
+    if (kotlin.math.abs(dz) < 1e-6f) return floatArrayOf(ray[0], ray[1]) // a ray parallel to the plane - no real intersection, fall back to the near point rather than dividing by ~0
+    val t = (planeZ - ray[2]) / dz
+    return floatArrayOf(ray[0] + ray[3] * t, ray[1] + ray[4] * t)
+}
+
+@Composable fun ModelViewer(
+    modelFile: File?,
+    modifier: Modifier = Modifier,
+    paintState: PaintUiState? = null,
+    transformState: ModelTransformUiState? = null,
+) {
     val path = modelFile?.absolutePath
     if (path == null) return
     key(path) {
@@ -336,7 +414,13 @@ private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int
         var maxDistance by remember { mutableFloatStateOf(1000f) }
         var loading by remember { mutableStateOf(true) }
         var loadError by remember { mutableStateOf<String?>(null) }
-        var paintMode by remember { mutableStateOf(false) }
+        var mode by remember { mutableStateOf(ViewerMode.SELECT) }
+        val paintMode = mode == ViewerMode.PAINT
+        // Locked, not just discouraged: a paint session freezes the transform it was opened
+        // with (see engine::open_paint_session's own comment) - changing the transform after
+        // that point would silently desync the live overlay from what a further transform
+        // change would actually slice. Once the owner starts painting, placement is done.
+        val transformLocked = paintState?.handle != null
         var enforcerMode by remember { mutableStateOf(true) }
         var brushRadiusMm by remember { mutableFloatStateOf(4f) }
         var paintError by remember { mutableStateOf<String?>(null) }
@@ -356,23 +440,38 @@ private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int
                 maxDistance = geometry.radius * 8f
                 renderer.pendingMesh = geometry
                 renderer.cameraState = CameraOrbit(45f, 25f, geometry.radius * 3f)
+                renderer.objectTransform = transformState?.transform ?: ModelTransform()
                 glView?.requestRender()
             } catch (e: Exception) {
                 loadError = e.message ?: "Could not load the model preview."
             } finally { loading = false }
         }
 
+        // Keeps the GL renderer's live model matrix in sync with the transform state, whether it
+        // changed via a Transform-mode gesture or the Reset button - a single place that does the
+        // "push to renderer + repaint" work rather than duplicating it at every mutation site.
+        LaunchedEffect(transformState?.transform) {
+            transformState?.let { renderer.objectTransform = it.transform }
+            glView?.requestRender()
+        }
+
         // Lazily opened the first time Paint mode is switched on - not eagerly alongside the
         // mesh load above, since it re-loads the same file natively (AABBMesh/TriangleSelector
         // construction is real, non-trivial work) and most opens of this panel never paint.
-        LaunchedEffect(paintMode) {
-            if (paintMode && paintState != null && paintState.handle == null) {
+        // Opens with whatever transform is current *right now* and freezes it (see
+        // engine::open_paint_session) - the Transform chip is disabled from this point on
+        // ([transformLocked]) so that freeze can never silently go stale.
+        LaunchedEffect(mode) {
+            if (mode == ViewerMode.PAINT && paintState != null && paintState.handle == null) {
                 paintError = null
                 try {
-                    paintState.handle = withContext(paintDispatcher) { NativeEngine.nativeOpenPaintSession(path) }
+                    val t = transformState?.transform ?: ModelTransform()
+                    paintState.handle = withContext(paintDispatcher) {
+                        NativeEngine.nativeOpenPaintSession(path, t.offsetXMm.toDouble(), t.offsetYMm.toDouble(), t.rotationZDeg.toDouble(), t.scale.toDouble())
+                    }
                 } catch (e: Exception) {
                     paintError = e.message ?: "Could not start support painting."
-                    paintMode = false
+                    mode = ViewerMode.SELECT
                 }
             }
         }
@@ -416,21 +515,44 @@ private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int
             Box {
                 AndroidView(
                     modifier = Modifier.fillMaxWidth().height(260.dp).testTag("model-viewer")
-                        .pointerInput(path, paintMode) {
+                        .pointerInput(path, mode) {
                             // detectDragGestures's own onDragStart/onDrag callbacks are plain,
                             // non-suspend lambdas with no CoroutineScope of their own -
                             // composeScope (rememberCoroutineScope(), tied to this composable's
                             // own lifecycle) is what actually launches paint strokes onto
                             // paintDispatcher.
-                            if (paintMode) {
-                                detectDragGestures(
+                            when (mode) {
+                                ViewerMode.PAINT -> detectDragGestures(
                                     onDragStart = { offset -> composeScope.launch(paintDispatcher) { doPaintStroke(offset) } },
                                 ) { change, _ ->
                                     change.consume()
                                     composeScope.launch(paintDispatcher) { doPaintStroke(change.position) }
                                 }
-                            } else {
-                                detectTransformGestures { _, pan, zoom, _ ->
+                                ViewerMode.TRANSFORM -> detectTransformGestures { centroid, pan, zoom, rotation ->
+                                    if (transformState == null) return@detectTransformGestures
+                                    val current = transformState.transform
+                                    var offsetX = current.offsetXMm
+                                    var offsetY = current.offsetYMm
+                                    val vp = renderer.lastVpMatrix
+                                    val w = renderer.viewportWidth; val h = renderer.viewportHeight
+                                    // A real bed-plane (world Z=0 - ensure_on_bed's own contact
+                                    // plane, see slic3r_engine.cpp) ray/plane intersection for the
+                                    // drag, not a proportional screen-pixel guess - the model
+                                    // moves exactly where the finger points on the bed.
+                                    if (vp != null && w > 1 && h > 1 && (pan.x != 0f || pan.y != 0f)) {
+                                        val from = rayPlaneXY(vp, w, h, centroid.x - pan.x, centroid.y - pan.y, 0f)
+                                        val to = rayPlaneXY(vp, w, h, centroid.x, centroid.y, 0f)
+                                        offsetX += to[0] - from[0]
+                                        offsetY += to[1] - from[1]
+                                    }
+                                    transformState.transform = ModelTransform(
+                                        offsetXMm = offsetX,
+                                        offsetYMm = offsetY,
+                                        rotationZDeg = (current.rotationZDeg + rotation) % 360f,
+                                        scale = (current.scale * zoom).coerceIn(0.1f, 10f),
+                                    )
+                                }
+                                ViewerMode.SELECT -> detectTransformGestures { _, pan, zoom, _ ->
                                     val cam = renderer.cameraState
                                     renderer.cameraState = CameraOrbit(
                                         azimuthDeg = cam.azimuthDeg - pan.x * 0.4f,
@@ -460,10 +582,31 @@ private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int
                 if (loading) Text("Loading model preview…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("model-viewer-loading"))
                 loadError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("model-viewer-error")) }
             }
-            if (paintState != null) {
+            if (paintState != null || transformState != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(!paintMode, { paintMode = false }, label = { Text("Select") }, modifier = Modifier.testTag("paint-mode-select"))
-                    FilterChip(paintMode, { paintMode = true }, label = { Text("Paint supports") }, modifier = Modifier.testTag("paint-mode-paint"))
+                    FilterChip(mode == ViewerMode.SELECT, { mode = ViewerMode.SELECT }, label = { Text("Select") }, modifier = Modifier.testTag("paint-mode-select"))
+                    if (transformState != null) {
+                        FilterChip(
+                            mode == ViewerMode.TRANSFORM, { mode = ViewerMode.TRANSFORM },
+                            label = { Text("Move / rotate / scale") }, enabled = !transformLocked,
+                            modifier = Modifier.testTag("viewer-mode-transform"),
+                        )
+                    }
+                    if (paintState != null) {
+                        FilterChip(mode == ViewerMode.PAINT, { mode = ViewerMode.PAINT }, label = { Text("Paint supports") }, modifier = Modifier.testTag("paint-mode-paint"))
+                    }
+                }
+                if (mode == ViewerMode.TRANSFORM && transformState != null) {
+                    val t = transformState.transform
+                    Text(
+                        "Offset ${t.offsetXMm.roundToInt()}, ${t.offsetYMm.roundToInt()} mm · rotate ${t.rotationZDeg.roundToInt()}° · scale ${(t.scale * 100).roundToInt()}%",
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("transform-readout"),
+                    )
+                    Text("Drag to move on the bed, twist with two fingers to rotate, pinch to resize.", style = MaterialTheme.typography.bodySmall)
+                    TextButton({ transformState.transform = ModelTransform() }, modifier = Modifier.testTag("transform-reset")) { Text("Reset placement") }
+                }
+                if (transformLocked) {
+                    Text("Placement is locked once support painting starts.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("transform-locked-notice"))
                 }
                 if (paintMode) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

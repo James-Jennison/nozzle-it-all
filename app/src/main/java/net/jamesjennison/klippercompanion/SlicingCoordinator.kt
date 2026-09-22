@@ -44,7 +44,13 @@ object SlicingCoordinator {
     // and not a serialization round-trip for the painted state. Every safety check above
     // (firmware confirmation, profile pack resolution) is unchanged either way; only the very
     // last native call differs.
-    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null): SliceOutcome = withContext(Dispatchers.IO) {
+    // transform: WO-15 part E - the real object placement (move/rotate/scale) the owner set via
+    // ModelViewer's Transform mode (ModelTransform.kt). Ignored when paintSessionHandle is
+    // non-null - a paint session already froze its own transform at open time (see
+    // engine::open_paint_session), so nativeSlicePaintSession takes none here; passing one
+    // separately at slice time for a painted model would silently disagree with what was
+    // actually painted.
+    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) {
         val model = profile.slicingModel ?: return@withContext SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first.")
         val cosmosGeneration = if (model == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) {
             // checkCentauriCarbonFirmwareMatch treats a null generation as "this call site isn't
@@ -89,7 +95,10 @@ object SlicingCoordinator {
             if (paintSessionHandle != null) {
                 NativeEngine.nativeSlicePaintSession(paintSessionHandle, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
             } else {
-                NativeEngine.nativeSliceFile(modelFile.absolutePath, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+                NativeEngine.nativeSliceFile(
+                    modelFile.absolutePath, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                    transform.offsetXMm.toDouble(), transform.offsetYMm.toDouble(), transform.rotationZDeg.toDouble(), transform.scale.toDouble(),
+                )
             }
             SliceOutcome.Success(output)
         } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }

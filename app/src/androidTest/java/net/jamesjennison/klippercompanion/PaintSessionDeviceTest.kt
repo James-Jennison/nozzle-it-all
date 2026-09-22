@@ -49,7 +49,7 @@ class PaintSessionDeviceTest {
     }
 
     @Test fun openPaintCloseSessionMarksRealTriangles() {
-        val handle = NativeEngine.nativeOpenPaintSession(cube().absolutePath)
+        val handle = NativeEngine.nativeOpenPaintSession(cube().absolutePath, 0.0, 0.0, 0.0, 1.0)
         try {
             assertEquals("nothing painted yet", 0, NativeEngine.nativeGetPaintedFacets(handle).size)
             paintTopFace(handle)
@@ -59,7 +59,7 @@ class PaintSessionDeviceTest {
         } finally { NativeEngine.nativeClosePaintSession(handle) }
     }
     @Test fun strokeMissingTheModelIsASilentNoOp() {
-        val handle = NativeEngine.nativeOpenPaintSession(cube().absolutePath)
+        val handle = NativeEngine.nativeOpenPaintSession(cube().absolutePath, 0.0, 0.0, 0.0, 1.0)
         try {
             // Aimed far away from the bed-centered cube (100,100) - a real miss, not a hit.
             NativeEngine.nativePaintStroke(handle, -5000.0, -5000.0, 1000.0, 0.0, 0.0, -1.0, 5.0, true)
@@ -92,12 +92,12 @@ class PaintSessionDeviceTest {
         val overrideKeys = arrayOf("enable_support", "use_relative_e_distances", "support_type")
         val overrideValues = arrayOf("1", "0", "normal(manual)")
 
-        NativeEngine.nativeSliceFile(overhang().absolutePath, unpaintedOutput.absolutePath, emptyArray(), overrideKeys, overrideValues)
+        NativeEngine.nativeSliceFile(overhang().absolutePath, unpaintedOutput.absolutePath, emptyArray(), overrideKeys, overrideValues, 0.0, 0.0, 0.0, 1.0)
         val unpaintedGcode = unpaintedOutput.readText()
         assertFalse("manual support mode with nothing painted must not generate any support toolpath, even though this fixture has a real overhang",
             unpaintedGcode.contains(";TYPE:Support"))
 
-        val handle = NativeEngine.nativeOpenPaintSession(overhang().absolutePath)
+        val handle = NativeEngine.nativeOpenPaintSession(overhang().absolutePath, 0.0, 0.0, 0.0, 1.0)
         try {
             paintOverhangUnderside(handle)
             assertTrue(NativeEngine.nativeGetPaintedFacets(handle).isNotEmpty())

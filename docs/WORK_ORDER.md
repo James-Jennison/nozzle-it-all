@@ -556,6 +556,65 @@ P28/M7 sections for what each one built and its commit hash.)*
       UI itself through the real touchscreen (the native+Kotlin wiring is
       device-test-verified; the on-screen paint experience has not yet been
       eyeballed live).
+    - **Scope widened, owner-requested 2026-09-22 (same day, later)**: a
+      detailed follow-up spec asked for full EasyPrint-class mobile parity —
+      multi-object scenes/arrange, real move/rotate/scale, printer/material
+      selection, multicolor, job-status surfacing, offline export, project
+      persistence, tablet layouts — "I want it all", implemented for real, no
+      mocks. A real audit (file:line evidence, not impressions) found most of
+      that genuinely absent, not just unwired: no object-transform code at
+      all (the viewer only orbited the *camera*), no multi-object/scene
+      concept, zero multicolor/material-profile code anywhere in the repo,
+      no offline/export path, no persistence of in-progress slicer state, no
+      tablet-responsive layout code. Told the owner directly this is many
+      more real sessions of work, not one pass, and asked which piece to
+      build first rather than spreading thin across all of it at once (the
+      surest way to end up with exactly the shallow/dead UI the owner
+      explicitly ruled out). Owner picked object transform first.
+    - **(E) Object transform — move/rotate/scale, real, wired into slicing.**
+      v1 scope: position on the bed plane (X/Y), rotation about Z only
+      (turntable — arbitrary/place-on-face rotation and per-object
+      duplicate/arrange are still open, real gaps, not hidden), and uniform
+      scale. Not a preview-only overlay: the exact same numbers reach a real
+      libslic3r `ModelInstance` transform (`set_offset`/`set_rotation`/
+      `set_scaling_factor`) inside `engine::load_and_place_model()` — the one
+      function every slice, mesh preview, and paint-session open already
+      goes through — so what's on screen is what actually gets sliced.
+      Real correctness detail traced against libslic3r, not assumed:
+      `ModelInstance` rotate/scale pivot around the instance's own *local
+      mesh origin*, not its bounding-box center, so `load_mesh_preview()` now
+      also returns that real origin point (a 3-float header before the
+      vertex buffer) and the live GL preview's model matrix (new `uModel`
+      uniform, `ModelViewer.kt`) rotates/scales around that identical pivot —
+      not a bounding-box approximation that would visibly disagree with the
+      sliced result for any mesh whose local origin isn't its own centroid.
+      New `ModelTransform.kt` (Kotlin) / `engine::ModelTransform` (native,
+      `slic3r_engine.hpp`) carry the same 4 numbers through both sides. A
+      new "Move / rotate / scale" mode (alongside the existing Select/Paint)
+      drives one drag/pinch/twist gesture (`detectTransformGestures`) — pan
+      unprojected through a real bed-plane ray/plane intersection (not a
+      proportional screen-pixel guess), pinch → scale, twist → rotate Z —
+      plus a live numeric readout and a Reset button. **Real interaction
+      with WO-14 part D deliberately locked, not left to silently drift**: a
+      paint session freezes whatever transform was current at
+      `open_paint_session()` time (painting operates on the model's raw
+      local mesh via a captured `trafo`), so the Transform control is
+      disabled the moment a paint session opens — changing placement after
+      painting starts would otherwise silently desync the paint overlay from
+      what a further transform change would actually slice.
+      **Verified**: `PaintSessionDeviceTest` (4), `MeshPreviewDeviceTest` (3,
+      updated for the new mesh-preview origin header),
+      `SlicingProfilePacksDeviceTest` and `NativeEngineSmokeTest` all pass on
+      the real device against the new native transform code (identity
+      transform for every pre-existing call site — unchanged default
+      behavior). Full `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate
+      green. **Not yet done**: live on-screen confirmation of the drag/pinch/
+      twist gestures themselves (the test device was locked/asleep — its own
+      lock screen, not a crash, confirmed via `dumpsys power`/a real
+      screenshot — and this is the owner's actual daily-driver phone, so it
+      wasn't unlocked to check); build-volume bounds/collision checking;
+      multi-object scenes, duplicate, and auto-arrange (still real, absent
+      gaps per the audit above, not yet scoped into a specific next part).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

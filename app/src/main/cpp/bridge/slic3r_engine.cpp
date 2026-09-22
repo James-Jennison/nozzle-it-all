@@ -32,7 +32,8 @@ namespace {
 // slicing will actually place it - real coordinates, not the mesh's own local origin. See
 // slice_file()'s own history for why centering matters (a real off-bed print abort on real
 // hardware, not a hypothetical).
-Slic3r::Model load_and_place_model(const std::string& input_model_path, Slic3r::DynamicPrintConfig& config) {
+Slic3r::Model load_and_place_model(const std::string& input_model_path, Slic3r::DynamicPrintConfig& config,
+                                    const ModelTransform& transform = {}) {
     using namespace Slic3r;
     Model model = Model::read_from_file(input_model_path, &config);
     if (model.objects.empty()) {
@@ -61,6 +62,31 @@ Slic3r::Model load_and_place_model(const std::string& input_model_path, Slic3r::
 
     for (ModelObject* object : model.objects) {
         object->ensure_on_bed();
+    }
+
+    // WO-15 part E: apply the user's real placement, on top of the default bed-centered one
+    // above - not instead of it, since the default centering is still what a bare offset of
+    // (0,0) should mean. Scale and rotation are applied before the extra XY offset (matches the
+    // live GL preview's own model-matrix order in ModelViewer.kt: scale -> rotateZ -> translate)
+    // so a rotated/scaled model's on-screen position and its sliced position agree exactly.
+    // ensure_on_bed() runs again afterward because scaling or rotating can change which point of
+    // the mesh is lowest, and only ensure_on_bed() (not this function) knows how to find that.
+    if (transform.scale != 1.0 || transform.rotation_z_deg != 0.0 ||
+        transform.offset_x_mm != 0.0 || transform.offset_y_mm != 0.0) {
+        for (ModelObject* object : model.objects) {
+            for (ModelInstance* instance : object->instances) {
+                if (transform.scale != 1.0) {
+                    instance->set_scaling_factor(instance->get_scaling_factor() * transform.scale);
+                }
+                if (transform.rotation_z_deg != 0.0) {
+                    instance->set_rotation(Z, instance->get_rotation(Z) + Geometry::deg2rad(transform.rotation_z_deg));
+                }
+                instance->set_offset(X, instance->get_offset(X) + transform.offset_x_mm);
+                instance->set_offset(Y, instance->get_offset(Y) + transform.offset_y_mm);
+            }
+            object->invalidate_bounding_box();
+            object->ensure_on_bed();
+        }
     }
     return model;
 }
@@ -99,7 +125,8 @@ void slice_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, const
 void slice_file(const std::string& input_model_path,
                  const std::string& output_gcode_path,
                  const std::vector<std::string>& profile_paths,
-                 const std::vector<std::pair<std::string, std::string>>& config_overrides) {
+                 const std::vector<std::pair<std::string, std::string>>& config_overrides,
+                 const ModelTransform& transform) {
     using namespace Slic3r;
 
     DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
@@ -114,7 +141,7 @@ void slice_file(const std::string& input_model_path,
         config.set_deserialize_strict(key, value);
     }
 
-    Model model = load_and_place_model(input_model_path, config);
+    Model model = load_and_place_model(input_model_path, config, transform);
     slice_model(model, config, output_gcode_path);
 }
 
@@ -126,8 +153,23 @@ std::vector<float> load_mesh_preview(const std::string& input_model_path) {
     TriangleMesh mesh = model.mesh();
     const indexed_triangle_set& its = mesh.its;
 
+    // WO-15 part E: the first object's first instance's own offset - the real pivot
+    // load_and_place_model()'s rotate/scale (ModelInstance::set_rotation/set_scaling_factor,
+    // both about the instance's local origin, not its bounding-box center) will actually use.
+    // Prepended so the Kotlin-side interactive preview can rotate/scale around the identical
+    // point the native engine will at slice time, rather than guessing at a bounding-box center
+    // that's wrong for any mesh whose local origin isn't its own centroid. v1 scope (matches
+    // open_paint_session's own): meaningful for the common single-object/single-instance case
+    // this whole viewer targets; a multi-object model still previews correctly, it just has no
+    // single well-defined pivot for this purpose.
+    Vec3d origin = model.objects.empty() || model.objects.front()->instances.empty()
+        ? Vec3d::Zero() : model.objects.front()->instances.front()->get_offset();
+
     std::vector<float> buffer;
-    buffer.reserve(its.indices.size() * 3 * 6);
+    buffer.reserve(3 + its.indices.size() * 3 * 6);
+    buffer.push_back(static_cast<float>(origin.x()));
+    buffer.push_back(static_cast<float>(origin.y()));
+    buffer.push_back(static_cast<float>(origin.z()));
     for (const Vec3i32& tri : its.indices) {
         const Vec3f& v0 = its.vertices[tri(0)];
         const Vec3f& v1 = its.vertices[tri(1)];
@@ -196,10 +238,10 @@ PaintSession& find_paint_session(PaintSessionHandle handle) {
 
 } // namespace
 
-PaintSessionHandle open_paint_session(const std::string& input_model_path) {
+PaintSessionHandle open_paint_session(const std::string& input_model_path, const ModelTransform& transform) {
     auto session = std::make_unique<PaintSession>();
     session->config = DynamicPrintConfig::full_print_config();
-    session->model = load_and_place_model(input_model_path, session->config);
+    session->model = load_and_place_model(input_model_path, session->config, transform);
 
     ModelObject* object = session->model.objects.front();
     if (object->instances.empty() || object->volumes.empty()) {

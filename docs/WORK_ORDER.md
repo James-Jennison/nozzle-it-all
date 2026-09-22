@@ -845,18 +845,98 @@ P28/M7 sections for what each one built and its commit hash.)*
       verification regardless of how much Device Farm coverage is added -
       not a gap Device Farm can close, tracked so it isn't mistaken for an
       oversight later.
-    - **Fixing the remaining known-flaky tests explicitly deferred, not
-      attempted blind**: an initial look at `M2DeviceTest`'s failure
-      suggested a missing-synchronization bug (interacting with "Run" text
-      immediately after a nav click, no wait) - but `ConsoleDeviceTest` uses
-      the identical immediate-click pattern and passes reliably, which
-      disproves that theory. None of the 5 remaining flaky/new-finding
-      tests (`M2DeviceTest`, `BedMeshPanelDeviceTest`,
-      `ActiveFilenameDeviceTest`, `DashboardDeviceTest`,
-      `ConfigSavePanelDeviceTest`) got a fix landed here - real root-causing
-      needs live-device iteration (physical or spending real Device Farm
-      minutes) to verify each hypothesis, not speculative patches. Left as
-      a clearly scoped, separate follow-up rather than guessed at.
+    - **All 5 remaining flaky/new-finding tests root-caused and fixed for
+      real, 2026-09-22**, once a genuinely free, fast local reproduction
+      environment became available: the existing `24Seven_API_35` AVD
+      (Pixel 7 profile, Android 15 - already present on this dev box for
+      an unrelated project, not created for this) reproduced all 5
+      failures identically to the real AWS Device Farm devices, at zero
+      AWS cost and with full logcat/semantics-tree access for real
+      diagnosis instead of guessing. Every fix below was verified on the
+      emulator, then the full suite (153 instrumented tests, unit tests,
+      lint) re-run clean, then the specific fixes re-verified on a real
+      physical Razr 2023 too - none were blind patches:
+      - **`DashboardDeviceTest.hiddenCardsKeepConnectionAndCommandFeedback`**:
+        never set `savedPrinters` in its `ScreenState` - `CompanionScreen`
+        only renders a `saved-connect:$address` tile per entry in
+        `state.savedPrinters` (`MainActivity.kt`'s
+        `items(state.savedPrinters, ...)`), with no fallback for a bare
+        address. Deterministic on every device, always; happened to look
+        like flakiness only because it was tangled up with the other
+        failures. Fixed by adding the missing field.
+      - **`BedMeshPanelDeviceTest.loadsAndDisplaysMeshHeatmap`**: waited
+        for the `mesh-canvas` tag without ever switching off
+        `BedMeshPanel`'s own default view (`view3d=true`, 3D surface) -
+        the tag only exists in the Heatmap branch. Fixed by clicking the
+        "Heatmap" chip before waiting on the canvas.
+      - **`ActiveFilenameDeviceTest.retainedFilenameClearsOnCompletionInTileAndDetailAndReturnsForNextJob`**:
+        three independent bugs in one test, found via a real semantics-tree
+        dump (Compose's `printToLog`). (1) The first `"0%"` assertion
+        expected a percentage to exist on the dashboard tile when there's
+        no active file - `PrinterTiles.kt` intentionally shows only "No
+        active file" with no percentage node at all in that case; fixed to
+        `assertDoesNotExist`. (2) The second `"0%"` assertion (after
+        `openFixtureDashboard()`, a different screen - the detail hero
+        card) was already correct as `assertExists`, left unchanged.
+        (3) A `"Standby"` assertion after `openFixtureDashboard()` expected
+        the tile view's titlecased text ("Standby" -
+        `PrinterTiles.kt`'s `.replaceFirstChar { it.titlecase() }`), but
+        the detail view uppercases it instead (`"STANDBY"` -
+        `MainActivity.kt`'s hero card); fixed to expect the correct casing
+        for that screen.
+      - **`M2DeviceTest.printingAllowsMacroPreparationButDisablesDispatch`**:
+        three independent bugs. (1) Only ever "passed" on the physical
+        Razr phones from leftover `SharedPreferences` state (a `"TEST"`
+        macro favorited by hand during earlier manual testing) -
+        `macroOptions` lives in `SharedPreferences` ("macro-options",
+        keyed by a SHA-256 hash of the printer address), not `ScreenState`,
+        so a fresh test/device could never satisfy the Control tab's
+        real, owner-requested "favorites only" filter
+        (`macroOptions[name]?.favorite==true`). Fixed by seeding that
+        exact preference entry in `@Before`/clearing it in `@After` so the
+        test is self-contained and leaves no state for sibling tests
+        reusing the same fixture address. (2) Even with (1) fixed,
+        `onNodeWithText("Run").performScrollTo()` still failed - a real
+        semantics dump showed the Control tab's `LazyColumn` hadn't
+        composed that far down yet (`performScrollTo()` needs the target
+        node to already exist; a virtualized item that's never been
+        scrolled into view doesn't). Fixed via
+        `performScrollToNode(hasText("Run"))` on the container, the same
+        pattern this suite's own `DashboardTestNavigation.kt` already used
+        correctly elsewhere. (3) The final assertions
+        (`"Command: TEST"` displayed, `"Confirm"` disabled) were
+        unreachable for a third, deeper reason: `MacroReviewPanel` (opened
+        after "Review command") has no way to receive a fake `MacroReader`
+        through `CompanionScreen`, which hardcodes the real factory
+        (`state.moonrakerFor(a)`) - its live check against the fake
+        `http://fixture.local/` host simply never resolves in any
+        automated environment. Separately, even a *successful* check would
+        never produce a disabled "Confirm" button:
+        `MacroTools.prepare()` throws when `printState` isn't in
+        `allowedStates` (which `"printing"` isn't), so the real confirm
+        button never renders at all rather than rendering disabled - the
+        test's whole mental model of "disabled dispatch" didn't match
+        current code. Fixed by splitting into two tests: the original now
+        only verifies the real "Run" → "Review command" flow correctly
+        opens `MacroReviewPanel` (still through `CompanionScreen`, still
+        real), and a new `macroReviewPanelBlocksDispatchWhilePrinting`
+        tests `MacroReviewPanel` directly with an injected fake
+        `MacroReader` (the same pattern this suite already uses for other
+        reader-dependent panels, e.g. `BedMeshPanelDeviceTest`'s fake
+        `MeshReader`) - verifying the exact real
+        `MacroTools.prepare()`/`allowedStates` logic deterministically,
+        with no live-network dependency.
+      - **`ConfigSavePanelDeviceTest.backsUpBeforeWritingAndReportsTheBackupPath`**:
+        a real race condition, not device-speed luck -
+        `ConfigFilePanel.kt`'s save flow runs `backupConfig()` and
+        `writeConfig()` as two separate, sequential
+        `withContext(Dispatchers.IO)` calls, not one atomic step. The test
+        waited only for `backups.isNotEmpty()` and then immediately
+        asserted on `writes` with zero wait in between, racing the second
+        dispatcher hand-off. Reproduced locally on the emulator (not just
+        on Device Farm), confirming it was real, not infrastructure noise.
+        Fixed by waiting for both lists to populate before asserting on
+        either.
     - **Still open** (Phase 0's remaining scope): stopping the native bridge
       from flattening multi-object models past the proof-of-concept stage
       (i.e. actually threading `Model::objects` through to the viewer/slicer

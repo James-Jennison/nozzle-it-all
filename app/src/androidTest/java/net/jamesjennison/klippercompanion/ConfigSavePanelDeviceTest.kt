@@ -39,7 +39,13 @@ class ConfigSavePanelDeviceTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("confirm-config-save").fetchSemanticsNodes().isNotEmpty() }
         assertEquals(0, backups.size)
         compose.onNodeWithTag("confirm-config-save").performClick()
-        compose.waitUntil(5000) { backups.isNotEmpty() }
+        // WO-16: backupConfig() and writeConfig() are two separate, sequential
+        // withContext(Dispatchers.IO) calls in ConfigFilePanel.kt, not one atomic step - waiting
+        // only for backups to populate and then immediately asserting on writes (zero wait
+        // between the two) raced the second dispatcher hand-off. Real, reproducible on a local
+        // emulator (not device-speed luck): failed identically to the original AWS Device Farm
+        // finding. Fixed by waiting for both to complete before asserting on either.
+        compose.waitUntil(5000) { backups.isNotEmpty() && writes.isNotEmpty() }
         assertEquals(listOf("printer.cfg"), backups)
         assertEquals(1, writes.size); assertEquals("printer.cfg", writes.single().first)
         assertTrue(writes.single().second.contains("max_velocity: 400"))

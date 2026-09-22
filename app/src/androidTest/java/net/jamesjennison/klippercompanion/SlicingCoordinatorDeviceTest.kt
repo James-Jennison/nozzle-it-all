@@ -35,6 +35,55 @@ class SlicingCoordinatorDeviceTest {
         val gcode = (outcome as SliceOutcome.Success).gcode
         assertTrue(gcode.exists() && gcode.length() > 1000)
     }
+    @Test fun slicedGcodeEmbedsRealThumbnails() = runBlocking {
+        // Real bug hit live: a print on the CC1 was uploaded and started with no thumbnail at
+        // all (confirmed via Moonraker's own job history - no "thumbnails" field, unlike every
+        // desktop-sliced file already on that printer), because slic3r_engine.cpp passed a null
+        // thumbnail_cb to Print::export_gcode() even though the default "thumbnails" config
+        // value already requests 48x48 and 300x300 PNGs. Fixed with thumbnail_render.cpp (a
+        // headless software rasterizer of the model's own mesh). This confirms the fix actually
+        // reaches the real engine, not just that it compiles.
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val profile = PrinterProfile("http://192.168.1.110/", "U1", slicingModel = SlicingPrinterModel.SNAPMAKER_U1)
+        val outcome = SlicingCoordinator.slice(context, cube(context), profile)
+        assertTrue("expected Success, got $outcome", outcome is SliceOutcome.Success)
+        val gcode = (outcome as SliceOutcome.Success).gcode.readText()
+        assertTrue("expected an embedded thumbnail block", gcode.contains("; thumbnail begin 48x48"))
+        assertTrue("expected an embedded thumbnail block", gcode.contains("; thumbnail begin 300x300"))
+        assertTrue(gcode.contains("; thumbnail end"))
+    }
+    @Test fun slicedGcodeStaysWithinTheConfiguredBedBounds() = runBlocking {
+        // Real bug hit live: this same cube fixture, sliced against the CC1's real COSMOS
+        // profile, aborted mid-print with Klipper's own "Move out of range" error - roughly half
+        // the object's toolpath fell into negative Y because slic3r_engine.cpp never centered
+        // the model on the bed (Model::read_from_file() places instances at the mesh's own local
+        // origin, not the bed's actual coordinates). Fixed with
+        // model.center_instances_around_point(bed center) in slice_file(). This parses the real
+        // output's own "; bed_shape" comment and every G1 X/Y move to confirm none of them fall
+        // outside it - the same class of check Klipper itself does at print time, run here
+        // against the real engine instead of only being caught live on real hardware.
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val profile = PrinterProfile("http://192.168.1.110/", "U1", slicingModel = SlicingPrinterModel.SNAPMAKER_U1)
+        val outcome = SlicingCoordinator.slice(context, cube(context), profile)
+        assertTrue("expected Success, got $outcome", outcome is SliceOutcome.Success)
+        val gcode = (outcome as SliceOutcome.Success).gcode.readText()
+        val bedShapeLine = gcode.lineSequence().first { it.trim().startsWith("; bed_shape") }
+        val points = Regex("(-?[\\d.]+)x(-?[\\d.]+)").findAll(bedShapeLine).map { it.groupValues[1].toDouble() to it.groupValues[2].toDouble() }.toList()
+        assertTrue("could not parse bed_shape from: $bedShapeLine", points.size >= 3)
+        val minX = points.minOf { it.first }; val maxX = points.maxOf { it.first }
+        val minY = points.minOf { it.second }; val maxY = points.maxOf { it.second }
+        var checked = 0
+        for (line in gcode.lineSequence()) {
+            if (!line.startsWith("G1")) continue
+            val x = Regex("X(-?[\\d.]+)").find(line)?.groupValues?.get(1)?.toDoubleOrNull()
+            val y = Regex("Y(-?[\\d.]+)").find(line)?.groupValues?.get(1)?.toDoubleOrNull()
+            if (x == null || y == null) continue
+            checked++
+            assertTrue("X=$x outside bed [$minX,$maxX] in line: $line", x in minX..maxX)
+            assertTrue("Y=$y outside bed [$minY,$maxY] in line: $line", y in minY..maxY)
+        }
+        assertTrue("expected to check at least some real toolpath moves", checked > 10)
+    }
     @Test fun centauriCarbonProfileWithNoDeclaredFirmwareIsBlockedEvenAgainstTheRealPrinter() = runBlocking {
         // 192.168.1.114: the real Centauri Carbon/COSMOS printer. Live firmware IS readable here
         // (confirmed earlier tonight), but this profile has no declaredFirmwareVersion at all -

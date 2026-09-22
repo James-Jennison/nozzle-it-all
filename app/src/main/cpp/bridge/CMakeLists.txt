@@ -13,6 +13,7 @@ find_library(ANDROID_LOG_LIB log)
 
 add_library(slic3r_engine STATIC
     slic3r_engine.cpp
+    thumbnail_render.cpp
     nanosvg_impl.cpp
 )
 target_link_libraries(slic3r_engine PUBLIC

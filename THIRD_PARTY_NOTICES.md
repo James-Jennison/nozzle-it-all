@@ -115,6 +115,23 @@ JNI-specific. The verified-working CLI tool was built with
 `-DCMAKE_BUILD_TYPE=Release` for the native build regardless of the Gradle
 Debug/Release variant, matching the CLI tool's proven configuration exactly.
 
+### Bundled slicer profiles (`app/src/main/assets/slicer_profiles/`)
+
+Five per-printer profile packs (Snapmaker U1, Bambu, Prusa, generic Klipper, Elegoo
+Centauri Carbon/COSMOS), each a `machine.json`/`process.json`/`filament.json` set
+**flattened** from upstream OrcaSlicer's own bundled profiles (AGPL-3.0-or-later,
+`orcaslicer-android-engine`'s `resources/profiles/`) by resolving each profile's
+`"inherits"` chain offline - see `app/src/main/assets/slicer_profiles/PROVENANCE.md`
+for the exact source profile name behind every pack.
+
+The Centauri Carbon/COSMOS machine profile additionally incorporates the
+**OpenCentauri COSMOS OrcaSlicer profile** ("Elegoo Centauri Carbon 0.4 nozzle -
+Cosmos", OrcaSlicer Cloud bundle `https://cloud.orcaslicer.com/b/3fad3c38f25f`,
+author `mudkip`, linked as the required profile from OpenCentauri's own install
+docs and from their own `github.com/OpenCentauri/cosmos`) - the actual fix for the
+real hard-emergency-stop risk this whole firmware-identity feature exists to guard
+against. See `PROVENANCE.md` for the full transcription and attribution detail.
+
 ## Fonts
 
 The app's typography (`res/font/`) bundles three typefaces from Google Fonts'

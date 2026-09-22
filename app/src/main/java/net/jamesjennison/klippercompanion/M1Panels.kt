@@ -11,7 +11,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String)->String?) {
+@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String?, detectFirmware: ((String, (Result<FirmwareIdentity>)->Unit)->Unit)? = null) {
     var name by remember(profile) { mutableStateOf(profile.name) }
     var address by remember(profile) { mutableStateOf(profile.address) }
     // For a BAMBU_LAB profile this same field holds the access code from the printer's own screen -
@@ -19,9 +19,16 @@ import androidx.compose.ui.unit.dp
     var apiKey by remember(profile) { mutableStateOf(profile.apiKey) }
     var serial by remember(profile) { mutableStateOf(profile.serial) }
     var kind by remember(profile) { mutableStateOf(profile.kind) }
+    var slicingModel by remember(profile) { mutableStateOf(profile.slicingModel) }
     var showKey by remember(profile) { mutableStateOf(false) }
     var showRemoteHelp by remember(profile) { mutableStateOf(false) }
     var error by remember(profile) { mutableStateOf<String?>(null) }
+    // WO-13: local-only until Save is pressed, same as every other field here - detecting new
+    // firmware doesn't persist anything by itself (PrinterModel.detectFirmware does that, only
+    // once this dialog's own Save is confirmed via the slicingModel captured below).
+    var detecting by remember(profile) { mutableStateOf(false) }
+    var detectedVersion by remember(profile) { mutableStateOf(profile.declaredFirmwareVersion) }
+    var detectNote by remember(profile) { mutableStateOf("") }
     if(showRemoteHelp) RemoteAccessHelpPanel { showRemoteHelp=false }
     AlertDialog(onDismissRequest=close,title={Text("Edit printer")},text={ Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(name,{name=it.take(80)},label={Text("Printer name")},singleLine=true)
@@ -58,9 +65,36 @@ import androidx.compose.ui.unit.dp
             FilterChip(kind==PrinterKind.BAMBU_LAB,{kind=PrinterKind.BAMBU_LAB},label={Text("Bambu Lab")})
             FilterChip(kind==PrinterKind.PRUSA_LINK,{kind=PrinterKind.PRUSA_LINK},label={Text("Prusa Link")},modifier=Modifier.testTag("kind-prusa-link"))
         }
+        // WO-13: which bundled slicer profile family this printer needs, if any. Deliberately
+        // separate from "printer type" above - the U1 and a Centauri Carbon both speak
+        // Moonraker-shaped Klipper (same kind), but need different slicer profiles.
+        Text("Slicing profile",style=MaterialTheme.typography.labelLarge)
+        Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.",style=MaterialTheme.typography.bodySmall)
+        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            FilterChip(slicingModel==null,{slicingModel=null},label={Text("None")})
+            FilterChip(slicingModel==SlicingPrinterModel.SNAPMAKER_U1,{slicingModel=SlicingPrinterModel.SNAPMAKER_U1},label={Text("Snapmaker U1")})
+            FilterChip(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON,{slicingModel=SlicingPrinterModel.ELEGOO_CENTAURI_CARBON},label={Text("Elegoo Centauri Carbon")},modifier=Modifier.testTag("slicing-model-centauri-carbon"))
+            FilterChip(slicingModel==SlicingPrinterModel.BAMBU_GENERIC,{slicingModel=SlicingPrinterModel.BAMBU_GENERIC},label={Text("Bambu Lab")})
+            FilterChip(slicingModel==SlicingPrinterModel.PRUSA_GENERIC,{slicingModel=SlicingPrinterModel.PRUSA_GENERIC},label={Text("Prusa")})
+            FilterChip(slicingModel==SlicingPrinterModel.GENERIC_KLIPPER,{slicingModel=SlicingPrinterModel.GENERIC_KLIPPER},label={Text("Generic Klipper")})
+        }
+        // COSMOS's real hard-e-stop risk (FirmwareIdentity.kt) is why this is a live read, not a
+        // typed field: only ever set by detectFirmware actually reaching the printer, never guessed.
+        if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null) {
+            Text(if(detectedVersion.isBlank()) "Firmware not yet confirmed - detect it before slicing for this printer." else "Last confirmed firmware: $detectedVersion",style=MaterialTheme.typography.bodySmall)
+            TextButton({
+                detecting=true;detectNote=""
+                detectFirmware(profile.address) { result ->
+                    detecting=false
+                    result.onSuccess { detectedVersion=it.version; detectNote="Confirmed: ${it.app.ifBlank{"unknown firmware"}} ${it.version}" }
+                    result.onFailure { detectNote=it.message ?: "Could not read firmware. Is the printer connected?" }
+                }
+            },enabled=!detecting,modifier=Modifier.testTag("detect-firmware")){Text(if(detecting)"Detecting…" else "Detect firmware now")}
+            if(detectNote.isNotBlank()) Text(detectNote,style=MaterialTheme.typography.bodySmall)
+        }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         Text("Changing the address disconnects the active printer.")
-    } },confirmButton={TextButton({error=save(profile.address,address,name,apiKey,kind,serial);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
+    } },confirmButton={TextButton({error=save(profile.address,address,name,apiKey,kind,serial,slicingModel);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
 }
 @Composable fun FileDetails(state: ScreenState) {
     if(state.fileLoading) LinearProgressIndicator(Modifier.fillMaxWidth())

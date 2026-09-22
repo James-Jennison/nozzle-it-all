@@ -125,16 +125,16 @@ class MainActivity : ComponentActivity() {
                 }
                 CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
                     backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop,
-                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null})
+                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware)
             }
         }
     }
 }
 
 @Composable
-fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String)->String? = {_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
+fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String? = {_,_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
-    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={},
+    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null,
     stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
@@ -563,13 +563,25 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         }
     }
     // A Bambu printer has no local workspace worth importing into and no Moonraker to upload to;
-    // a share aimed at one is a print request instead. Every other kind keeps the import dialog.
-    sharedFile?.let {uri -> if(bambu) BambuPrintPanel(uri,state,execute,consumeShare)
-        else AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}}) }
+    // a share aimed at one is a print request instead. A model file (STL/3MF/OBJ, WO-13) is a
+    // slice-and-print request regardless of printer kind (Bambu included, though that path
+    // currently ends in an honest "not supported yet" - see SliceAndPrintPanel.kt). Every other
+    // shared file keeps the plain import dialog.
+    sharedFile?.let {uri ->
+        val sharedName = remember(uri) { runCatching {
+            context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { if(it.moveToFirst()) it.getString(0) else null }
+        }.getOrNull() }
+        when {
+            sliceableModelName(sharedName).isNotEmpty() -> SliceAndPrintPanel(uri,state,execute,consumeShare)
+            bambu -> BambuPrintPanel(uri,state,execute,consumeShare)
+            else -> AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}})
+        }
+    }
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
     runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}
-    editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile) }
+    editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile,detectFirmware) }
     pending?.let { (command, epoch) ->
         AlertDialog(onDismissRequest = { pending = null }, title = { Text(command.title + "?") },
             text = { Column { Text("This sends a command to ${state.address}. It may move or heat your printer. Confirm only when the printer is safe and ready.");command.arguments["script"]?.let {Text("Command: $it")};if(command.allowedStates.isNotEmpty() && state.snapshot?.state !in command.allowedStates)Text("Unavailable in the current print state.") } },

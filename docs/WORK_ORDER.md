@@ -221,13 +221,70 @@ P28/M7 sections for what each one built and its commit hash.)*
     asserts real G-code content, passing cleanly on the Razr 2023 (confirmed
     via the JUnit XML report, no `<failure>` element). Full existing gate
     still green.
-    **Still genuinely open:** this build depends on a machine-local absolute
-    path to the sister project (no portable/public alternative yet); the
-    firmware-identity data model (Phase 1), slicing UI and print-start
-    pipeline integration (Phase 2), real per-printer profile packs (Phase 3),
-    and physical print acceptance (Phase 4) are all still exactly as
-    unbuilt as before — this milestone is the engine working, not the
-    feature.
+    **Overnight session, 2026-09-21 into 2026-09-22, owner-authorized unattended
+    work (explicit scope: firmware-identity model, slicing UI, print-start
+    pipeline wiring, real profile packs — not physical print-to-completion,
+    which stayed gated behind human confirmation throughout, same as every
+    other mutating command in this app):**
+    - **Phase 1 (firmware identity), commit `afdb3ee`.** `FirmwareIdentity.kt`
+      (pure logic: classifies a live `printer/info` reading as COSMOS or not,
+      parses COSMOS version strings, decides profile-generation match —
+      unparseable/unreadable never resolves to "safe"). `Moonraker.firmwareIdentity()`
+      reads `printer/info` live. `PrinterProfile` gains `slicingModel` and
+      `declaredFirmwareVersion` (set only by a live read, never guessed).
+      Verified against the real CC1 at 192.168.1.x: confirmed live and
+      running `"OpenCentauri Cosmos"` / `"Release - 26.08.0"` — genuinely past
+      the 26.07.0 e-stop threshold, not a hypothetical.
+    - **Phase 4 (real profile packs), commit `bd5e6fe`.** Five bundled
+      machine/process/filament profile packs, each flattened offline from
+      upstream OrcaSlicer's own bundled profiles by resolving their real
+      `inherits` chains. The Centauri Carbon/COSMOS pack incorporates the
+      actual OpenCentauri-endorsed COSMOS overlay (`cloud.orcaslicer.com/b/3fad3c38f25f`,
+      linked from OpenCentauri's own docs and GitHub org) — the real fix for
+      the e-stop risk, not a guess. Device-verified: all 5 packs produce real
+      G-code through the real engine; the Centauri Carbon one specifically
+      confirmed to contain COSMOS's `PRINT_START`/`PRINT_END` macros and *not*
+      contain the dangerous old `M729`/`M8213` sequence.
+    - **Phases 2/3 (slicing UI + print-start pipeline wiring), commit pending.**
+      `SlicingCoordinator.slice()` ties Phase 1's live firmware check to Phase
+      4's profile packs to the real engine call. `SliceAndPrintPanel` extends
+      the existing share-intent flow (STL/3MF/OBJ now route here instead of
+      the plain-import dialog) through slicing and upload, staging the actual
+      print-start into the same `pending`/confirm-dialog machinery every other
+      mutating command already uses — nothing was auto-printed, tonight or
+      ever, from this flow. `ProfileEditor` gained a slicing-profile picker and
+      a live "Detect firmware now" action wired to `PrinterModel.detectFirmware`.
+      **A real, safety-relevant bug was found and fixed before it ever reached
+      device testing**: `checkCentauriCarbonFirmwareMatch`'s `null`-generation
+      shortcut (meant for "this call site isn't about a Centauri Carbon profile
+      at all") would have silently treated "never confirmed" the same as
+      "nothing to check" if reused naively inside `SlicingCoordinator` — fixed
+      by an explicit guard before that function is ever called from here. **All
+      5 tests in `SlicingCoordinatorDeviceTest` passed against the real U1 and
+      real CC1**: a profile with no slicing model rejected before touching the
+      network; the U1 slicing real G-code with no firmware check applying;
+      a Centauri Carbon profile with *no* declared firmware correctly blocked
+      even though the real printer was reachable (the bug above, caught before
+      shipping); the correct declared generation (matching the live printer's
+      actual `26.08.0`) slicing real, verified-safe COSMOS G-code against the
+      real device; the wrong declared generation correctly blocked.
+    - **Real, honest gap found during this work, not glossed over: Bambu Lab
+      slicing is not wired up.** `Print::export_gcode()` produces plain
+      `.gcode`; `BambuPrintRequest`/`bambuPrintName()` require a `.gcode.3mf`
+      zip bundle (OrcaSlicer's separate `bbl_3mf` export path, not built).
+      `SliceAndPrintPanel` says so plainly rather than attempting something
+      that would fail `bambuPrintName`'s own validation.
+    - **Still genuinely open:** no printer-picker UI (slicing always targets
+      whichever printer is currently selected, matching `BambuPrintPanel`'s
+      own existing convention, not a new picker); Bambu wiring (above); the
+      `CosmosProfileGeneration.LEGACY` profile pack still doesn't exist;
+      `SliceAndPrintPanel` itself has no Compose UI test yet, only its
+      underlying `SlicingCoordinator` is device-tested; and no physical
+      print has actually been carried through to completion on real hardware
+      — every device test tonight stopped at "real G-code produced/blocked,"
+      deliberately never at "confirmed and sent." That confirmation step
+      needs the owner physically present, same as every other hardware
+      acceptance pass in this project.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

@@ -3,14 +3,40 @@ android {
  namespace = "net.jamesjennison.klippercompanion"
  compileSdk = 36
  defaultConfig {
-  applicationId = "net.jamesjennison.klippercompanion"; minSdk = 26; targetSdk = 36; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-  // WO-13 Phase 0: arm64-v8a only, matching every physical device this app has ever been
-  // verified on (Razr 2023, and the printers' own hosts aren't relevant here - this is the
-  // phone's ABI). NDK 26+ is load-bearing, not a preference: OrcaSlicer/libslic3r's Android
-  // portability work (see WO-13's investigation) is known toolchain-sensitive, and NDK 27
-  // (below, pinned) satisfies that floor.
+  // minSdk raised 26 -> 28 for WO-13's slicing engine: Boost.Locale (a libslic3r dependency)
+  // needs iconv(), only __INTRODUCED_IN(28) in Bionic, and every other engine dependency is
+  // fine as low as 21 - so 28 is Boost.Locale's floor, not an arbitrary choice, and it narrows
+  // this app's supported devices to Android 9+ (2018). See docs/WORK_ORDER.md's WO-13 entry.
+  applicationId = "net.jamesjennison.klippercompanion"; minSdk = 28; targetSdk = 36; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  // arm64-v8a only, matching every physical device this app has ever been verified on (Razr
+  // 2023) and the only ABI the vendored slicing engine's dependencies were built for. NDK
+  // 27.1.12297006 (pinned below) matches what that engine was built and verified with.
   ndk { abiFilters += "arm64-v8a" }
-  externalNativeBuild { cmake { cppFlags += ""; arguments += listOf("-DANDROID_STL=c++_shared") } }
+  externalNativeBuild {
+   cmake {
+    // CMAKE_BUILD_TYPE=Release regardless of the Gradle Debug/Release variant - matches
+    // orcaslicer-android-engine's own build_libslic3r.sh exactly (its env.sh hardcodes
+    // Release). This is load-bearing, not cosmetic: GCode.hpp forces its own
+    // ORCA_CHECK_GCODE_PLACEHOLDERS strictness check on whenever NDEBUG is undefined (Debug
+    // builds), and that check validates custom-gcode placeholder keys against a static
+    // allow-list (PrintConfig.cpp) that's demonstrably stale against what real gcode
+    // processing passes at runtime for filament_start_gcode/layer_change_gcode - a genuine
+    // upstream data inconsistency, not anything Android-specific. It threw
+    // "Some EditGcodeDialog defs were not specified properly" the first time this engine ran
+    // through Nozzle It All's own (Debug-mode) native build, despite identical config to the
+    // already-verified CLI tool - found via __android_log_print diagnostics added
+    // temporarily to the vendored GCode.cpp, then reverted once root-caused. See
+    // docs/WORK_ORDER.md's WO-13 entry.
+    arguments += listOf("-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release")
+    // Without this, AGP discovers and builds every CMake target in the whole configured
+    // project tree - including OrcaSlicer's desktop GUI executable (needs wxWidgets, which
+    // isn't cross-compiled here) and its i18n tooling. slic3rengine is the only target this
+    // app actually needs; libslic3r comes along transitively as its dependency. Matches what
+    // orcaslicer-android-engine's own build_libslic3r.sh does explicitly (`ninja libslic3r
+    // slic3rengine slic3r_cli_test`), just scoped through Gradle instead of a raw ninja call.
+    targets += "slic3rengine"
+   }
+  }
  }
  buildFeatures { compose = true }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

@@ -68,38 +68,52 @@ of the Bespok3d Organisation, which is not a legal entity; copyright is held by
 its individual authors. This app is not affiliated with or endorsed by
 Bespok3d.
 
-## OrcaSlicer and oneTBB (on-device slicing, WO-13, in progress)
+## OrcaSlicer (on-device slicing, WO-13, in progress)
 
 The on-device slicing engine (not yet feature-complete — see
-`docs/WORK_ORDER.md`'s WO-13 entry for current status) is built from two
-vendored, pinned git submodules under `third_party/`, not a prebuilt binary:
+`docs/WORK_ORDER.md`'s WO-13 entry for current status) is the owner's own
+separate **orcaslicer-android-engine** project (local to this machine, no git
+remote), which cross-compiles upstream `OrcaSlicer/OrcaSlicer` (AGPL-3.0-or-
+later) for Android arm64-v8a — the *full* engine, including Boost, CGAL, GMP,
+MPFR, OpenVDB, and OCCT (OpenCASCADE), built entirely from source. An earlier
+approach in this project vendored a feature-reduced OrcaSlicer+oneTBB build as
+pinned git submodules directly under `third_party/`, accepting a scope cut
+(no OpenVDB/CGAL/OCCT) because cross-compiling those from source looked like
+an unsolved problem — that approach is superseded now that the owner's
+already-working, full-featured engine was found. `app/src/main/cpp/
+CMakeLists.txt` builds directly against that project's patched OrcaSlicer
+checkout and prebuilt dependency prefix (`ORCASLICER_ENGINE_ROOT`, an
+absolute local path); `app/src/main/cpp/bridge/` (`slic3r_engine.cpp/hpp`,
+`slic3r_jni.cpp`, `nanosvg_impl.cpp`, `cli_test.cpp`) is copied from that
+project's own JNI bridge, with one local addition (`nativeSliceFile` forwards
+direct config overrides, not just profile-file paths — see `slic3r_jni.cpp`'s
+own header comment).
 
-- [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer), licensed
-  AGPL-3.0-or-later, pinned to the `v2.4.2` release tag (commit
-  `8500fcdccaa10b5099ac20d252af3a7c560046f1`). This is upstream
-  `OrcaSlicer/OrcaSlicer` directly — **not** the Snapmaker `u1-slicer-for-
-  android` fork this project investigated and rejected (see WO-13: unverified
-  build provenance, narrower printer-fleet coverage than required). The
-  Android build deliberately excludes OrcaSlicer's desktop GUI
-  (`SLIC3R_GUI=0`) and, per an explicit owner-accepted scope cut, its
-  OpenVDB-, CGAL-, GMP-, MPFR- and OCCT-dependent features (advanced
-  supports, mesh boolean operations, STEP import) — cross-compiling those for
-  Android from source is an unsolved problem nobody has published a working
-  answer to; even the only real prior art (the Snapmaker fork) disables them
-  rather than solving it. Full investigation notes are in the WO-13 plan file
-  referenced from `docs/WORK_ORDER.md`.
-- [oneTBB](https://github.com/uxlfoundation/oneTBB), licensed Apache-2.0,
-  pinned to the `v2021.13.0` release tag (commit
-  `1c4c93fc5398c4a1acb3492c02db4699f3048dea`) — the threading engine
-  `libslic3r` (OrcaSlicer's core) depends on. Its optional `tbbmalloc`
-  component (a libc malloc replacement) is excluded from the Android build;
-  it isn't needed here and doesn't link cleanly against Android's bionic libc.
+This build depends on a machine-local path and will not work on a checkout
+that doesn't have `orcaslicer-android-engine` at that same location — there
+is no public/portable alternative yet. Because that project has no git
+remote, its own commit history (not a public URL) is the only provenance
+record for the exact source state a given build used; `scripts/
+artifact-proof.py`'s manifest still covers everything under this app's own
+`app/src/main/` (including the copied bridge files and this `CMakeLists.txt`),
+the same mechanism that ruled out vendoring the Snapmaker `u1-slicer-for-
+android` project's unattested prebuilt binary in the first place.
 
-Both submodule commits are recorded in `scripts/artifact-proof.py`'s source
-manifest (embedded in the APK and checked by its `verify` step), the same
-provenance mechanism already covering this app's own Kotlin source — this is
-the concrete answer to the provenance concern that ruled out vendoring a
-third-party prebuilt binary in the first place.
+**Real bug found and fixed during integration (2026-09-21):** `nativeSliceFile`
+threw `"Some EditGcodeDialog defs were not specified properly"` only when
+built via this app's own (Gradle-default Debug) native build, despite an
+identical config to the engine project's own already-verified standalone CLI
+tool. Root cause, found via temporary `__android_log_print` diagnostics added
+to the vendored `GCode.cpp` (reverted once identified): `GCode.hpp` forces a
+placeholder-validation check on whenever `NDEBUG` is undefined (Debug builds),
+and that check validates custom-gcode keys against a static allow-list
+(`PrintConfig.cpp`) that's stale against what real gcode processing passes at
+runtime — a genuine upstream data inconsistency, not anything Android- or
+JNI-specific. The verified-working CLI tool was built with
+`CMAKE_BUILD_TYPE=Release` (which defines `NDEBUG`), sidestepping it. Fix:
+`app/build.gradle.kts`'s `externalNativeBuild.cmake.arguments` now forces
+`-DCMAKE_BUILD_TYPE=Release` for the native build regardless of the Gradle
+Debug/Release variant, matching the CLI tool's proven configuration exactly.
 
 ## Fonts
 

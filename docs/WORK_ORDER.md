@@ -194,13 +194,40 @@ P28/M7 sections for what each one built and its commit hash.)*
     stub) passed on the Razr 2023 via `connectedDebugAndroidTest`; the APK
     genuinely contains `libnozzle_slicer.so` and `libtbb_debug.so` as real ELF
     aarch64 objects. Full existing gate (`testDebugUnitTest lintDebug
-    assembleDebug`) still green. **Still open, real remaining work, not yet
-    started:** Boost (the harder of the two cross-compilation targets — needs
-    Context/coroutines support, historically finicky for Android), then
-    `libslic3r` itself (the actual slicing code, gated to exclude the
-    OpenVDB/CGAL/OCCT paths), then a real `sliceToFile` JNI bridge replacing
-    this smoke test, then Phases 1-4 from the plan file (firmware identity,
-    UI, profile packs, physical acceptance) — none of that exists yet.
+    assembleDebug`) still green.
+    **Superseded same day: the owner had already independently built and
+    verified a full-featured OrcaSlicer Android engine in a separate project
+    (`orcaslicer-android-engine`, local to this machine).** Verified
+    independently before relying on it: found leftover test artifacts on the
+    same Razr 2023 device, pulled and inspected the real 13,370-line G-code
+    output, then re-ran the standalone CLI tool live myself with a byte-
+    identical result. That engine cross-compiles the *entire* dependency
+    chain from source — Boost, CGAL, GMP, MPFR, OpenVDB, OCCT — no feature
+    cut, superseding this project's own from-scratch reduced-scope attempt
+    above. Integrated into Nozzle It All: `app/src/main/cpp/CMakeLists.txt`
+    now builds directly against that project's patched OrcaSlicer checkout
+    and prebuilt dependency prefix (reusing already-built work rather than
+    repeating a ~2.5 hour dependency build); `app/src/main/cpp/bridge/` is
+    the copied, working JNI bridge (`slic3r_engine.cpp/hpp`, `slic3r_jni.cpp`,
+    with one local addition — direct config-override forwarding, needed to
+    match the CLI tool's proven call pattern). `minSdk` raised 26→28
+    (Boost.Locale needs `iconv()`, `__INTRODUCED_IN(28)`). See
+    `THIRD_PARTY_NOTICES.md`'s OrcaSlicer entry for full detail including a
+    real bug hit and fixed during integration (a Debug-vs-Release native
+    build-type difference tripping a stale upstream placeholder-validation
+    table — not an Android-specific issue). **Device-verified 2026-09-21**:
+    `NativeEngineSmokeTest.realEngineSlicesRealGeometry` — the *real* engine,
+    not the TBB-only smoke test above — slices a real bundled STL fixture and
+    asserts real G-code content, passing cleanly on the Razr 2023 (confirmed
+    via the JUnit XML report, no `<failure>` element). Full existing gate
+    still green.
+    **Still genuinely open:** this build depends on a machine-local absolute
+    path to the sister project (no portable/public alternative yet); the
+    firmware-identity data model (Phase 1), slicing UI and print-start
+    pipeline integration (Phase 2), real per-printer profile packs (Phase 3),
+    and physical print acceptance (Phase 4) are all still exactly as
+    unbuilt as before — this milestone is the engine working, not the
+    feature.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

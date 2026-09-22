@@ -163,6 +163,12 @@ namespace {
 using namespace Slic3r;
 
 struct PaintSession {
+    // Guards every field below against concurrent JNI calls on the same handle. The Kotlin side
+    // is expected to serialize its own paint-stroke dispatch (a drag gesture fires many touch
+    // samples quickly), but TriangleSelector/AABBMesh have no thread-safety of their own, and a
+    // wrong-triangle race here is a real correctness risk, not just a performance one - this is
+    // defense in depth, not a substitute for that Kotlin-side serialization.
+    std::mutex mutex;
     Model model;
     DynamicPrintConfig config;
     ModelVolume* volume = nullptr;
@@ -176,7 +182,10 @@ std::mutex g_paint_sessions_mutex;
 std::unordered_map<PaintSessionHandle, std::unique_ptr<PaintSession>> g_paint_sessions;
 std::atomic<PaintSessionHandle> g_next_paint_handle{1};
 
-PaintSession& paint_session(PaintSessionHandle handle) {
+// Only looks the session up (briefly holding the map lock); does NOT lock the session's own
+// mutex - every caller below does that itself, immediately, so the map lock is never held while
+// doing real work on a session.
+PaintSession& find_paint_session(PaintSessionHandle handle) {
     std::lock_guard<std::mutex> lock(g_paint_sessions_mutex);
     auto it = g_paint_sessions.find(handle);
     if (it == g_paint_sessions.end()) {
@@ -216,7 +225,8 @@ PaintSessionHandle open_paint_session(const std::string& input_model_path) {
 
 void paint_stroke(PaintSessionHandle handle, double originX, double originY, double originZ,
                    double dirX, double dirY, double dirZ, double radiusMm, bool enforcer) {
-    PaintSession& s = paint_session(handle);
+    PaintSession& s = find_paint_session(handle);
+    std::lock_guard<std::mutex> lock(s.mutex);
 
     Transform3d inv = s.trafo.inverse();
     Vec3d local_origin = inv * Vec3d(originX, originY, originZ);
@@ -240,7 +250,8 @@ void paint_stroke(PaintSessionHandle handle, double originX, double originY, dou
 }
 
 std::vector<float> get_painted_facets(PaintSessionHandle handle) {
-    PaintSession& s = paint_session(handle);
+    PaintSession& s = find_paint_session(handle);
+    std::lock_guard<std::mutex> lock(s.mutex);
     indexed_triangle_set enforced = s.volume->supported_facets.get_facets(*s.volume, EnforcerBlockerType::ENFORCER);
     // Position-only (no normals) - this is an unlit highlight overlay, not a second lit mesh, and
     // transformed into the same world-space coordinates load_mesh_preview's vertices already use
@@ -263,7 +274,8 @@ std::vector<float> get_painted_facets(PaintSessionHandle handle) {
 void slice_paint_session(PaintSessionHandle handle, const std::string& output_gcode_path,
                           const std::vector<std::string>& profile_paths,
                           const std::vector<std::pair<std::string, std::string>>& config_overrides) {
-    PaintSession& s = paint_session(handle);
+    PaintSession& s = find_paint_session(handle);
+    std::lock_guard<std::mutex> lock(s.mutex);
     for (const std::string& profile_path : profile_paths) {
         DynamicPrintConfig profile_config;
         profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
@@ -276,8 +288,17 @@ void slice_paint_session(PaintSessionHandle handle, const std::string& output_gc
 }
 
 void close_paint_session(PaintSessionHandle handle) {
-    std::lock_guard<std::mutex> lock(g_paint_sessions_mutex);
-    g_paint_sessions.erase(handle);
+    std::unique_ptr<PaintSession> session;
+    {
+        std::lock_guard<std::mutex> lock(g_paint_sessions_mutex);
+        auto it = g_paint_sessions.find(handle);
+        if (it == g_paint_sessions.end()) return; // already closed, or never opened - a safe no-op
+        session = std::move(it->second);
+        g_paint_sessions.erase(it);
+    }
+    // Removed from the map above (so no new operation can find it) - now wait for any operation
+    // already in flight on it to finish before letting `session` go out of scope and destroy it.
+    std::lock_guard<std::mutex> session_lock(session->mutex);
 }
 
 } // namespace engine

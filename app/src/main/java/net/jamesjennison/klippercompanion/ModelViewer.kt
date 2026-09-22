@@ -3,13 +3,20 @@ package net.jamesjennison.klippercompanion
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -19,6 +26,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.orcaslicer.engine.NativeEngine
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -126,18 +134,33 @@ void main() { fragColor = vec4(uColor, 1.0); }
 class MeshGLRenderer : GLSurfaceView.Renderer {
     @Volatile var pendingMesh: MeshGeometry? = null
     @Volatile var cameraState: CameraOrbit = CameraOrbit(45f, 25f, 100f)
+    // Paint overlay (WO-14 part D): the currently enforcer-painted triangles, position-only,
+    // world-space (see engine::get_painted_facets's own comment - already in registration with
+    // the base mesh, no extra transform needed here). Same volatile-handoff contract as
+    // [pendingMesh].
+    @Volatile var pendingOverlay: FloatArray? = null
+    // A read-only snapshot of the view-projection matrix and viewport size, refreshed at the end
+    // of every onDrawFrame, so the UI thread's paint-stroke touch handler can unproject a touch
+    // point into a world-space ray without racing the GL thread for the live matrices above
+    // (those are GL-thread-only; this copy is the volatile, safe-to-read-anywhere snapshot).
+    @Volatile var lastVpMatrix: FloatArray? = null
+    @Volatile var viewportWidth = 1
+    @Volatile var viewportHeight = 1
 
     private var meshProgram = 0
     private var gridProgram = 0
     private var vbo = 0
     private var gridVbo = 0
+    private var overlayVbo = 0
     private var vertexCount = 0
     private var gridVertexCount = 0
+    private var overlayVertexCount = 0
     // GL-thread-only (never touched from the volatile handoff path): kept so onSurfaceCreated
     // can re-upload after a context recreation (e.g. after onPause()/onResume() across a
     // backgrounding), since the old VBO handle is invalid once the EGL context is torn down but
     // the raw vertex data is still cheap to re-upload from here.
     private var currentGeometry: MeshGeometry? = null
+    private var currentOverlay: FloatArray? = null
     private var width = 1
     private var height = 1
     private val viewMatrix = FloatArray(16)
@@ -150,15 +173,17 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
         GLES30.glEnable(GLES30.GL_CULL_FACE)
         meshProgram = buildGLProgram(VERTEX_SHADER, FRAGMENT_SHADER)
         gridProgram = buildGLProgram(GRID_VERTEX_SHADER, GRID_FRAGMENT_SHADER)
-        val buffers = IntArray(2)
-        GLES30.glGenBuffers(2, buffers, 0)
-        vbo = buffers[0]; gridVbo = buffers[1]
-        vertexCount = 0; gridVertexCount = 0
+        val buffers = IntArray(3)
+        GLES30.glGenBuffers(3, buffers, 0)
+        vbo = buffers[0]; gridVbo = buffers[1]; overlayVbo = buffers[2]
+        vertexCount = 0; gridVertexCount = 0; overlayVertexCount = 0
         currentGeometry?.let { pendingMesh = it } // force re-upload into the fresh context
+        currentOverlay?.let { pendingOverlay = it }
     }
 
     override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) {
         width = w; height = h
+        viewportWidth = w; viewportHeight = h
         GLES30.glViewport(0, 0, w, h)
     }
 
@@ -178,6 +203,16 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
             currentGeometry = mesh
             pendingMesh = null
         }
+        pendingOverlay?.let { overlay ->
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, overlayVbo)
+            if (overlay.isNotEmpty()) {
+                val buffer = directFloatBuffer(overlay)
+                GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, overlay.size * 4, buffer, GLES30.GL_STATIC_DRAW)
+            }
+            overlayVertexCount = overlay.size / 3
+            currentOverlay = overlay
+            pendingOverlay = null
+        }
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
         if (vertexCount == 0) return
 
@@ -195,6 +230,7 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
         val aspect = width.toFloat() / height.toFloat()
         Matrix.perspectiveM(projMatrix, 0, 45f, aspect, (cam.distance * 0.02f).coerceAtLeast(0.1f), cam.distance * 10f)
         Matrix.multiplyMM(vpMatrix, 0, projMatrix, 0, viewMatrix, 0)
+        lastVpMatrix = vpMatrix.copyOf() // published after computing, for the UI thread's unprojection
 
         GLES30.glUseProgram(gridProgram)
         GLES30.glUniformMatrix4fv(GLES30.glGetUniformLocation(gridProgram, "uMVP"), 1, false, vpMatrix, 0)
@@ -216,6 +252,23 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
         GLES30.glEnableVertexAttribArray(1)
         GLES30.glVertexAttribPointer(1, 3, GLES30.GL_FLOAT, false, 24, 12)
         GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, vertexCount)
+
+        if (overlayVertexCount > 0) {
+            // Reuses the grid's plain position+color shader (no lighting needed for a flat
+            // highlight). glDepthMask(false): tested against the depth buffer so occluded paint
+            // doesn't show through the model, but never written, so it can't corrupt the depth
+            // buffer for whatever draws next (or next frame).
+            GLES30.glDepthMask(false)
+            GLES30.glUseProgram(gridProgram)
+            GLES30.glUniformMatrix4fv(GLES30.glGetUniformLocation(gridProgram, "uMVP"), 1, false, vpMatrix, 0)
+            // A bright, unmistakably "selection" cyan - nothing else in this view uses it.
+            GLES30.glUniform3f(GLES30.glGetUniformLocation(gridProgram, "uColor"), 0.25f, 0.95f, 0.85f)
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, overlayVbo)
+            GLES30.glEnableVertexAttribArray(0)
+            GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 12, 0)
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, overlayVertexCount)
+            GLES30.glDepthMask(true)
+        }
     }
 
     // A simple reference grid sized off the model's own footprint (no real per-printer bed size
@@ -240,7 +293,40 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
     }
 }
 
-@Composable fun ModelViewer(modelFile: File?, modifier: Modifier = Modifier) {
+// Owned by SliceAndPrintPanel (remember(uri) { PaintUiState() }), read after slicing starts to
+// decide whether to slice through the paint session (NativeEngine.nativeSlicePaintSession) or
+// the plain file path (nativeSliceFile) - see SlicingCoordinator.kt. [painted] is a real signal
+// ("at least one stroke produced a non-empty enforcer set"), not just "the user opened Paint
+// mode" - opening the session but never actually painting anything must fall back to the plain
+// path, same output as if painting didn't exist.
+class PaintUiState {
+    var handle by mutableStateOf<Long?>(null)
+    var painted by mutableStateOf(false)
+}
+
+// Standard screen-to-world ray unprojection: the two NDC-space points at the near/far planes for
+// this (touchX, touchY), each carried through the inverse view-projection matrix and perspective-
+// divided, give two real world-space points on the same ray - their difference is the ray
+// direction. No third-party math library needed; android.opengl.Matrix already has everything.
+private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, touchX: Float, touchY: Float): FloatArray {
+    val invVp = FloatArray(16)
+    Matrix.invertM(invVp, 0, vp, 0)
+    val ndcX = (touchX / viewportWidth) * 2f - 1f
+    val ndcY = 1f - (touchY / viewportHeight) * 2f
+    val nearClip = floatArrayOf(ndcX, ndcY, -1f, 1f)
+    val farClip = floatArrayOf(ndcX, ndcY, 1f, 1f)
+    val nearWorld = FloatArray(4)
+    val farWorld = FloatArray(4)
+    Matrix.multiplyMV(nearWorld, 0, invVp, 0, nearClip, 0)
+    Matrix.multiplyMV(farWorld, 0, invVp, 0, farClip, 0)
+    val nx = nearWorld[0] / nearWorld[3]; val ny = nearWorld[1] / nearWorld[3]; val nz = nearWorld[2] / nearWorld[3]
+    val fx = farWorld[0] / farWorld[3]; val fy = farWorld[1] / farWorld[3]; val fz = farWorld[2] / farWorld[3]
+    val dx = fx - nx; val dy = fy - ny; val dz = fz - nz
+    val len = sqrt(dx * dx + dy * dy + dz * dz).coerceAtLeast(1e-6f)
+    return floatArrayOf(nx, ny, nz, dx / len, dy / len, dz / len)
+}
+
+@Composable fun ModelViewer(modelFile: File?, modifier: Modifier = Modifier, paintState: PaintUiState? = null) {
     val path = modelFile?.absolutePath
     if (path == null) return
     key(path) {
@@ -250,7 +336,17 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
         var maxDistance by remember { mutableFloatStateOf(1000f) }
         var loading by remember { mutableStateOf(true) }
         var loadError by remember { mutableStateOf<String?>(null) }
+        var paintMode by remember { mutableStateOf(false) }
+        var enforcerMode by remember { mutableStateOf(true) }
+        var brushRadiusMm by remember { mutableFloatStateOf(4f) }
+        var paintError by remember { mutableStateOf<String?>(null) }
         val lifecycle = LocalLifecycleOwner.current.lifecycle
+        // A dedicated single-thread dispatcher: TriangleSelector/AABBMesh have no thread-safety
+        // of their own (the native side also holds a per-session mutex as defense in depth - see
+        // slic3r_engine.cpp - but strokes should be applied in the order they were drawn, not
+        // whatever order a multi-threaded dispatcher happens to schedule them in).
+        val paintDispatcher = remember { Dispatchers.Default.limitedParallelism(1) }
+        val composeScope = rememberCoroutineScope()
 
         LaunchedEffect(path) {
             loading = true; loadError = null
@@ -266,6 +362,37 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
             } finally { loading = false }
         }
 
+        // Lazily opened the first time Paint mode is switched on - not eagerly alongside the
+        // mesh load above, since it re-loads the same file natively (AABBMesh/TriangleSelector
+        // construction is real, non-trivial work) and most opens of this panel never paint.
+        LaunchedEffect(paintMode) {
+            if (paintMode && paintState != null && paintState.handle == null) {
+                paintError = null
+                try {
+                    paintState.handle = withContext(paintDispatcher) { NativeEngine.nativeOpenPaintSession(path) }
+                } catch (e: Exception) {
+                    paintError = e.message ?: "Could not start support painting."
+                    paintMode = false
+                }
+            }
+        }
+
+        suspend fun doPaintStroke(position: androidx.compose.ui.geometry.Offset) {
+            val handle = paintState?.handle ?: return
+            val vp = renderer.lastVpMatrix ?: return
+            val w = renderer.viewportWidth; val h = renderer.viewportHeight
+            if (w <= 1 || h <= 1) return
+            val ray = unprojectRay(vp, w, h, position.x, position.y)
+            try {
+                NativeEngine.nativePaintStroke(handle, ray[0].toDouble(), ray[1].toDouble(), ray[2].toDouble(),
+                    ray[3].toDouble(), ray[4].toDouble(), ray[5].toDouble(), brushRadiusMm.toDouble(), enforcerMode)
+                val overlay = NativeEngine.nativeGetPaintedFacets(handle)
+                renderer.pendingOverlay = overlay
+                if (overlay.isNotEmpty()) paintState?.painted = true
+                glView?.requestRender()
+            } catch (e: Exception) { paintError = e.message ?: "Paint stroke failed." }
+        }
+
         DisposableEffect(lifecycle) {
             val observer = LifecycleEventObserver { _, event ->
                 when (event) {
@@ -277,39 +404,78 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
             lifecycle.addObserver(observer)
             onDispose { lifecycle.removeObserver(observer) }
         }
+        // Deliberately NOT closed when this ModelViewer instance is torn down: the caller
+        // (SliceAndPrintPanel) moves from its "customizing" step - where this composable actually
+        // lives - to a "slicing" step that unmounts it, but still needs paintState.handle to
+        // remain valid so SlicingCoordinator.slice() can pass it to
+        // NativeEngine.nativeSlicePaintSession. The session's real lifetime is owned by whoever
+        // holds the PaintUiState (the caller), not by however long the 3D view itself stays
+        // mounted - see that caller's own DisposableEffect(uri) for where it's actually closed.
 
-        Box(modifier) {
-            AndroidView(
-                modifier = Modifier.fillMaxWidth().height(260.dp).testTag("model-viewer")
-                    .pointerInput(path) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            val cam = renderer.cameraState
-                            renderer.cameraState = CameraOrbit(
-                                azimuthDeg = cam.azimuthDeg - pan.x * 0.4f,
-                                elevationDeg = (cam.elevationDeg + pan.y * 0.4f).coerceIn(-89f, 89f),
-                                distance = (cam.distance / zoom).coerceIn(minDistance, maxDistance),
-                            )
-                            glView?.requestRender()
+        Column(modifier) {
+            Box {
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth().height(260.dp).testTag("model-viewer")
+                        .pointerInput(path, paintMode) {
+                            // detectDragGestures's own onDragStart/onDrag callbacks are plain,
+                            // non-suspend lambdas with no CoroutineScope of their own -
+                            // composeScope (rememberCoroutineScope(), tied to this composable's
+                            // own lifecycle) is what actually launches paint strokes onto
+                            // paintDispatcher.
+                            if (paintMode) {
+                                detectDragGestures(
+                                    onDragStart = { offset -> composeScope.launch(paintDispatcher) { doPaintStroke(offset) } },
+                                ) { change, _ ->
+                                    change.consume()
+                                    composeScope.launch(paintDispatcher) { doPaintStroke(change.position) }
+                                }
+                            } else {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    val cam = renderer.cameraState
+                                    renderer.cameraState = CameraOrbit(
+                                        azimuthDeg = cam.azimuthDeg - pan.x * 0.4f,
+                                        elevationDeg = (cam.elevationDeg + pan.y * 0.4f).coerceIn(-89f, 89f),
+                                        distance = (cam.distance / zoom).coerceIn(minDistance, maxDistance),
+                                    )
+                                    glView?.requestRender()
+                                }
+                            }
+                        },
+                    factory = { ctx ->
+                        GLSurfaceView(ctx).apply {
+                            setEGLContextClientVersion(3)
+                            setEGLConfigChooser(8, 8, 8, 8, 16, 0)
+                            setRenderer(renderer)
+                            renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
+                            glView = this
                         }
                     },
-                factory = { ctx ->
-                    GLSurfaceView(ctx).apply {
-                        setEGLContextClientVersion(3)
-                        setEGLConfigChooser(8, 8, 8, 8, 16, 0)
-                        setRenderer(renderer)
-                        renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
-                        glView = this
+                    // Dialog dismissed: GLSurfaceView has no destroy() - onPause() is what actually
+                    // stops its render thread and releases the EGL context/surface. Skipping this
+                    // leaks the render thread (and transitively the Activity Context used to
+                    // construct it), since the thread isn't tied to the Activity lifecycle on its
+                    // own - see the plan's architecture review.
+                    onRelease = { it.onPause() },
+                )
+                if (loading) Text("Loading model preview…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("model-viewer-loading"))
+                loadError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("model-viewer-error")) }
+            }
+            if (paintState != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(!paintMode, { paintMode = false }, label = { Text("Select") }, modifier = Modifier.testTag("paint-mode-select"))
+                    FilterChip(paintMode, { paintMode = true }, label = { Text("Paint supports") }, modifier = Modifier.testTag("paint-mode-paint"))
+                }
+                if (paintMode) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(enforcerMode, { enforcerMode = true }, label = { Text("Add support") }, modifier = Modifier.testTag("paint-enforcer"))
+                        FilterChip(!enforcerMode, { enforcerMode = false }, label = { Text("Remove support") }, modifier = Modifier.testTag("paint-blocker"))
                     }
-                },
-                // Dialog dismissed: GLSurfaceView has no destroy() - onPause() is what actually
-                // stops its render thread and releases the EGL context/surface. Skipping this
-                // leaks the render thread (and transitively the Activity Context used to
-                // construct it), since the thread isn't tied to the Activity lifecycle on its
-                // own - see the plan's architecture review.
-                onRelease = { it.onPause() },
-            )
-            if (loading) Text("Loading model preview…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("model-viewer-loading"))
-            loadError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("model-viewer-error")) }
+                    Text("Brush size: ${brushRadiusMm.toInt()}mm", style = MaterialTheme.typography.bodySmall)
+                    Slider(brushRadiusMm, { brushRadiusMm = it }, valueRange = 1f..15f, modifier = Modifier.testTag("paint-brush-size"))
+                    Text("Drag on the model to mark where it needs support - drop it into Select to keep rotating.", style = MaterialTheme.typography.bodySmall)
+                }
+                paintError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("paint-error")) }
+            }
         }
     }
 }

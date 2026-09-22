@@ -37,7 +37,14 @@ object SlicingCoordinator {
     // Not a general escape hatch for arbitrary config keys from outside this codebase; the JNI
     // bridge itself will happily accept any key libslic3r recognizes, but nothing here validates
     // one from an untrusted source.
-    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap()): SliceOutcome = withContext(Dispatchers.IO) {
+    // paintSessionHandle: WO-14 part D - when non-null (the owner actually painted at least one
+    // support stroke via ModelViewer's Paint mode, see PaintUiState), slices through
+    // NativeEngine.nativeSlicePaintSession instead of nativeSliceFile, reusing that session's
+    // own already-loaded, already-painted in-memory model - not a second load from modelFile,
+    // and not a serialization round-trip for the painted state. Every safety check above
+    // (firmware confirmation, profile pack resolution) is unchanged either way; only the very
+    // last native call differs.
+    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null): SliceOutcome = withContext(Dispatchers.IO) {
         val model = profile.slicingModel ?: return@withContext SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first.")
         val cosmosGeneration = if (model == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) {
             // checkCentauriCarbonFirmwareMatch treats a null generation as "this call site isn't
@@ -79,7 +86,11 @@ object SlicingCoordinator {
             val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }
             outputDir.listFiles()?.forEach { it.delete() }
             val output = File(outputDir, modelFile.nameWithoutExtension.take(80) + ".gcode")
-            NativeEngine.nativeSliceFile(modelFile.absolutePath, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+            if (paintSessionHandle != null) {
+                NativeEngine.nativeSlicePaintSession(paintSessionHandle, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+            } else {
+                NativeEngine.nativeSliceFile(modelFile.absolutePath, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+            }
             SliceOutcome.Success(output)
         } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
     }

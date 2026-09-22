@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.orcaslicer.engine.NativeEngine
 import java.io.File
 
 /**
@@ -82,6 +83,19 @@ import java.io.File
     var reviewedLayers by remember(uri) { mutableStateOf(false) }
     var slicedToolpath by remember(uri) { mutableStateOf<Toolpath?>(null) }
     var toolpathError by remember(uri) { mutableStateOf<String?>(null) }
+    // WO-14 part D: real support painting on the Model tab. Owned here (not inside ModelViewer)
+    // so the slicing effect below can see whether painting actually happened - see
+    // SlicingCoordinator.slice()'s own paintSessionHandle parameter.
+    val paintState = remember(uri) { PaintUiState() }
+    // Owned here, not by ModelViewer (which only lives during the "customizing" step and would
+    // otherwise close this out from under SlicingCoordinator.slice()'s later use of it) - see
+    // ModelViewer.kt's own comment on why it deliberately doesn't close this itself. Closed once,
+    // when this whole panel closes (a new uri, or the panel is dismissed) - not on every
+    // recomposition, so re-entering the customize step (e.g. after Cancel) doesn't need to
+    // reopen a session that's already open.
+    DisposableEffect(uri) {
+        onDispose { paintState.handle?.let { runCatching { NativeEngine.nativeClosePaintSession(it) } } }
+    }
     var gcodeStats by remember(uri) { mutableStateOf<GcodeStats?>(null) }
     // A last, lightweight human-attention gate before the real "Start print" confirm below -
     // matches the EasyPrint reference's own "is the bed ready?" step. Purely a UI gate; nothing
@@ -123,7 +137,11 @@ import java.io.File
         val chosen = customization ?: return@LaunchedEffect
         val model = localModel ?: return@LaunchedEffect
         working = true; stage = "Slicing…"; error = null
-        when(val outcome = SlicingCoordinator.slice(context.applicationContext, model, profile, chosen.toOverrides())) {
+        // Only actually route through the paint session if something was really painted -
+        // opening Paint mode and never dragging must produce the exact same output as if
+        // painting didn't exist (paintState.painted, not just paintState.handle != null).
+        val paintHandle = paintState.handle.takeIf { paintState.painted }
+        when(val outcome = SlicingCoordinator.slice(context.applicationContext, model, profile, chosen.toOverrides(), paintHandle)) {
             is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
             is SliceOutcome.FirmwareBlocked -> { working = false; error = outcome.reason }
             is SliceOutcome.Failed -> { working = false; error = outcome.message }
@@ -180,7 +198,7 @@ import java.io.File
                     Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         when(tab) {
                             0 -> {
-                                ModelViewer(localModel)
+                                ModelViewer(localModel, paintState = paintState)
                                 copyError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                             }
                             1 -> {

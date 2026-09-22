@@ -464,6 +464,98 @@ P28/M7 sections for what each one built and its commit hash.)*
       `ControlPreviewDeviceTest`, `ConsoleDeviceTest`, `PrinterTilesDeviceTest`,
       `MacroReviewPanelDeviceTest` and `MacroBoundsDeviceTest` all pass; full
       `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate green.
+12. **WO-15 — Full visual, on-device, in-app slicer, owner-requested 2026-09-22.**
+    WO-13 shipped headless on-device slicing (numeric fields, no preview). Owner:
+    "When I said on-device slicer, I meant I want a visual, on-device, in-app
+    slicer" — then, after a description pass and confirmation, supplied real
+    Prusa EasyPrint screenshots and, asked whether to scope this into a smaller
+    increment, said directly: "No I want it all now." Scope: (A) tabbed slicer
+    chrome, (B) a real 3D pre-slice model view, (C) a real post-slice 3D
+    toolpath preview with real G-code stats and a print-ready confirmation, and
+    (D) manual support-region painting on the model, matching EasyPrint's
+    Select/Paint toolbar. Planned in Plan Mode against the real vendored
+    libslic3r source (not guessed), approved, and built in that order because
+    (D)'s touch-to-ray math depends on (B)'s camera/projection code existing
+    first.
+    **Shipped:**
+    - **(A) Tabbed chrome** — `SliceAndPrintPanel.kt` rebuilt from a single
+      scrolling `AlertDialog` into a full-screen Model/Settings/Printer tabbed
+      flow (a paint brush needs real screen space and precise touch handling
+      an `AlertDialog`'s bounds fight against). Every existing `testTag`
+      (`slice-layer-height`, `slice-infill`, `slice-supports`,
+      `slice-customize-next`) kept exactly as-is.
+    - **(B) Pre-slice 3D model view** — `ModelViewer.kt`: raw GLES30
+      (`GLSurfaceView`, not Filament/Sceneform — see the file's own header
+      comment), a new native `engine::load_mesh_preview()` (shared
+      `load_and_place_model()` helper factored out of `slice_file()`), real
+      orbit/zoom camera, flat Lambertian shading matching the engine's own
+      thumbnail renderer for visual consistency. Device-verified live against
+      a real model on the real CC1 before the scope grew to (C)/(D).
+    - **(C) Post-slice 3D toolpath preview** — new `SlicedPreview.kt`
+      (`ToolpathGLRenderer`, sharing GL helpers factored into `GLSupport.kt`
+      rather than duplicated), a layer slider over `GcodePreview`'s existing
+      parsed `Toolpath`, and real stats — not invented — parsed by new
+      `GcodeStats.kt` from the engine's actual G-code footer comments
+      (verified against real sliced output before writing the regexes, e.g.
+      `; estimated printing time (normal mode) = 14m 35s`). A lightweight
+      "is the bed clear?" confirmation `AlertDialog` was inserted before the
+      existing, unchanged final print-start confirm. Live bug found by the
+      owner via screenshot ("The slice button is blocked by the navigation
+      keys") and fixed (`.statusBarsPadding().navigationBarsPadding()`).
+    - **(D) Support painting** — the highest-risk piece, since a wrong
+      implementation risks bad real prints, so it was built against real,
+      already-existing libslic3r machinery the real upstream GUI itself uses
+      (`AABBMesh` for ray-mesh hit testing, `TriangleSelector::select_patch`
+      for the actual brush algorithm, `ModelVolume::supported_facets` for
+      persistence that `print.apply()` already consumes with zero new
+      slicing-side wiring) — traced against the real vendored GUI source
+      (`GLGizmoPainterBase.cpp`), not guessed, including the local-vs-world
+      transform handling it depends on for correctness. New stateful native
+      paint-session surface (`open_paint_session`/`paint_stroke`/
+      `get_painted_facets`/`slice_paint_session`/`close_paint_session`) in
+      `slic3r_engine.cpp`/`slic3r_jni.cpp`, each session behind its own
+      `std::mutex` (added proactively — Kotlin-side call ordering is only
+      defense in depth against a real race, not the actual guarantee) plus a
+      global map mutex; `close_paint_session` extracts-then-locks-then-destroys
+      so an in-flight stroke can never use-after-free. Kotlin side
+      (`ModelViewer.kt`): touch-to-world-ray unprojection through the same
+      view/projection matrices the camera already builds each frame, a
+      dedicated single-threaded dispatcher to serialize stroke dispatch in
+      gesture order, a translucent overlay pass re-rendering the currently
+      painted facets each stroke for real-time feedback, and a Select/Paint
+      mode toggle plus Enforcer/Blocker toggle matching the reference
+      screenshots. `SlicingCoordinator.slice()`/`SliceAndPrintPanel.kt` route
+      through the new `nativeSlicePaintSession` (reusing the session's already-
+      painted in-memory model) instead of `nativeSliceFile` only when a real
+      stroke was painted — opening Paint mode without painting anything must
+      not itself change what gets sliced.
+      **Real bug caught before any device test, by re-reading the wiring**:
+      the paint session's native handle was being closed in a
+      `DisposableEffect` scoped to `ModelViewer` itself, which unmounts once
+      the flow moves from "customizing" to "slicing" — closing the session
+      before `SlicingCoordinator.slice()`'s own, later-running effect could
+      use it. Fixed by moving that `DisposableEffect` up to
+      `SliceAndPrintPanel`, keyed on the shared document `uri` so it lives for
+      the whole panel, not just the Model tab.
+    - **Verified for real**: a purpose-built `overhang.stl` fixture (a genuine
+      downward-facing overhang — libslic3r's `project_and_append_custom_facets`
+      only ever projects *downward*-facing painted areas, so painting a flat
+      top face is a structural no-op; found by reading `PrintObject.cpp`, not
+      assumed) plus `support_type=normal(manual)` (disables auto overhang
+      detection, isolating painting as the only variable) proves in
+      `PaintSessionDeviceTest.paintedSupportsActuallyReachTheSlicedGcode` that
+      a painted stroke changes the actual sliced G-code, not just that the JNI
+      call didn't throw. All of `PaintSessionDeviceTest` (4 tests),
+      `MeshPreviewDeviceTest` (3 tests) and the full existing
+      `CompanionScreenTest`/`PrinterTilesDeviceTest`/`LivePrinterReadOnlyTest`/
+      `SlicingCoordinatorMainThreadDeviceTest` regression set (20 tests, 1
+      expected live-only skip) pass on the real CC1/real test device after the
+      per-session-mutex hardening and the lifecycle fix above; full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate green. **Not yet
+      done**: live, on-device visual confirmation of the paint overlay/brush
+      UI itself through the real touchscreen (the native+Kotlin wiring is
+      device-test-verified; the on-screen paint experience has not yet been
+      eyeballed live).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

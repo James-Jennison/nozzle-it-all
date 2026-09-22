@@ -26,6 +26,9 @@ interface ProjectDao {
     @Delete
     suspend fun deleteProject(project: Project)
 
+    @Delete
+    suspend fun deleteObject(projectObject: ProjectObject)
+
     @Query("SELECT * FROM projects ORDER BY modifiedAt DESC")
     fun observeProjects(): Flow<List<Project>>
 

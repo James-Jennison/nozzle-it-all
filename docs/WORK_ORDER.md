@@ -985,15 +985,56 @@ P28/M7 sections for what each one built and its commit hash.)*
       flakiness, not a regression - passed cleanly in isolation, and this
       WO's own changes are pure C++/JNI with no path through that test's
       Compose UI code at all).
+    - **Real Room-backed project persistence**: `ProjectViewModel`
+      (`project/ProjectViewModel.kt`) is the real state owner for a
+      multi-object build plate - add/duplicate/remove objects, per-object
+      transform updates, rename/delete project, all backed by the existing
+      Phase 0 `ProjectDao` (gained `deleteObject`) and a new
+      `ProjectFileStore` that copies imported model files into this
+      project's own persisted `filesDir` storage (not `cacheDir`, unlike
+      `SliceAndPrintPanel`'s existing single-share-intent flow - a saved
+      project's files must survive process death). **Verified**:
+      `ProjectViewModelDeviceTest` (3 device tests) round-trips add/
+      duplicate/transform/remove through a real file-backed Room database,
+      closed and reopened as a genuinely separate `AppDatabase`/
+      `ProjectViewModel` instance between writes and reads (the closest an
+      instrumented test gets to "survives process death" without an actual
+      process restart) - proves persisted object files are real, separate
+      copies per object (not shared references), survive the reopen for
+      objects that weren't removed, and are actually deleted (both the Room
+      row and the file) for objects/projects that were. Also proves
+      unsupported file types are rejected before any file is copied. All 3
+      passing on a real physical device (Razr 2026).
+    - **The real `List<RenderableObject>` multi-object renderer**
+      (`ProjectWorkspace.kt`): built as a genuinely separate renderer class
+      (`ProjectGLRenderer`) from `ModelViewer.kt`'s existing single-object
+      `MeshGLRenderer`, matching this codebase's own precedent
+      (`SlicedPreview.kt`'s `ToolpathGLRenderer` is already a separate
+      renderer sharing `GLSupport.kt`, not a retrofit of `MeshGLRenderer`) -
+      keeps the existing, already-tested single-object share-intent flow
+      completely unchanged rather than risking it. Renders every object on
+      the plate at once, each with its own real transform (same
+      `T(offset)*T(pivot)*Rz*S*T(-pivot)` model-matrix order the native
+      engine and `MeshGLRenderer` already use, so what's shown is what
+      would actually slice), diffs per-object GL state by object id (no
+      full re-upload on a transform-only change), tap-to-select (a real
+      ray/bounding-sphere test, `pickObject`), and drag/pinch/rotate the
+      currently-selected object via the same real ray/plane bed-intersection
+      math as `ModelViewer`'s own Transform mode (`unprojectRay`/
+      `rayPlaneXY`/`computeOutOfBounds`, made `internal` in `ModelViewer.kt`
+      for this exact reuse, rather than risking two copies quietly
+      diverging). Per-object out-of-bounds tinting reuses the same real
+      per-printer bed-polygon check. Compiles clean and the full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate passes; **not yet
+      wired into `SliceAndPrintPanel.kt`/a Files-tab entry point, and has no
+      device test of its own yet** - both still open below.
     - **Still open** (Phase 1's remaining scope): object list UI
-      (add/duplicate/delete), per-object transform promoted from the
-      existing single-object `ModelTransform` UI, real auto-arrange
+      (add/duplicate/delete) wired to `ProjectViewModel`, a real device test
+      for `ProjectWorkspace`'s selection/drag gestures, real auto-arrange
       (2D bin packing with rotation), collision detection between objects,
-      `MeshGLRenderer` becoming a real `List<RenderableObject>` renderer,
-      `SliceAndPrintPanel.kt`'s state moving from `remember(uri)` to a
-      `ProjectViewModel` backed by the already-real `Project`/
-      `ProjectObject` Room entities (Phase 0), Prepare tab's Model/Arrange
-      steps rebuilt, Files tab gaining "saved projects".
+      `SliceAndPrintPanel.kt`'s state moving from `remember(uri)` to
+      `ProjectViewModel`, Prepare tab's Model/Arrange steps rebuilt around
+      `ProjectWorkspace`, Files tab gaining "saved projects".
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

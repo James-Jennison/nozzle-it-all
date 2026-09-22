@@ -397,7 +397,7 @@ private enum class ViewerMode { SELECT, TRANSFORM, PAINT }
 // this (touchX, touchY), each carried through the inverse view-projection matrix and perspective-
 // divided, give two real world-space points on the same ray - their difference is the ray
 // direction. No third-party math library needed; android.opengl.Matrix already has everything.
-private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, touchX: Float, touchY: Float): FloatArray {
+internal fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, touchX: Float, touchY: Float): FloatArray {
     val invVp = FloatArray(16)
     Matrix.invertM(invVp, 0, vp, 0)
     val ndcX = (touchX / viewportWidth) * 2f - 1f
@@ -418,7 +418,7 @@ private fun unprojectRay(vp: FloatArray, viewportWidth: Int, viewportHeight: Int
 // Where a screen touch's ray actually crosses a horizontal (constant-Z) plane - used to turn a
 // Transform-mode drag into a real bed-plane (X,Y) world delta, not just a proportional screen-
 // pixel guess. Same math family as unprojectRay, one step further (a real ray/plane intersection).
-private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, touchX: Float, touchY: Float, planeZ: Float): FloatArray {
+internal fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, touchX: Float, touchY: Float, planeZ: Float): FloatArray {
     val ray = unprojectRay(vp, viewportWidth, viewportHeight, touchX, touchY)
     val dz = ray[5]
     if (kotlin.math.abs(dz) < 1e-6f) return floatArrayOf(ray[0], ray[1]) // a ray parallel to the plane - no real intersection, fall back to the near point rather than dividing by ~0
@@ -431,7 +431,7 @@ private fun rayPlaneXY(vp: FloatArray, viewportWidth: Int, viewportHeight: Int, 
 // plus its live-transformed height against the bed's real max Z. Same transform math as the GL
 // model matrix and the native engine (rotate/scale about the real pivot, then translate) so this
 // agrees with what would actually be sliced, not a separate approximation.
-private fun computeOutOfBounds(geometry: MeshGeometry, transform: ModelTransform, bed: BedShape): Boolean {
+internal fun computeOutOfBounds(geometry: MeshGeometry, transform: ModelTransform, bed: BedShape): Boolean {
     val pivotX = geometry.origin[0]; val pivotY = geometry.origin[1]
     val rad = Math.toRadians(transform.rotationZDeg.toDouble())
     val cosR = kotlin.math.cos(rad).toFloat(); val sinR = kotlin.math.sin(rad).toFloat()

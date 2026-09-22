@@ -212,6 +212,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     val context=LocalContext.current
     val workspace=remember(state.address,state.generation) {FileWorkspace(context.applicationContext,uiScope)}
     DisposableEffect(workspace) {onDispose {workspace.close()}}
+    // WO-17 (Phase 1): the Files tab's "Projects" section reads this - always collected (cheap,
+    // matches `state` itself always being collected above) rather than only while that section
+    // is visible, since a LazyListScope's own body isn't a @Composable context and can't call
+    // remember/collectAsStateWithLifecycle itself.
+    val projectDb = remember { net.jamesjennison.klippercompanion.project.AppDatabase.get(context.applicationContext) }
+    val projects by projectDb.projectDao().observeProjects().collectAsStateWithLifecycle(initialValue = emptyList())
     val macroPrefs=remember {context.getSharedPreferences("macro-options",0)}
     val macroKey=remember(state.address) {java.security.MessageDigest.getInstance("SHA-256").digest(state.address.toByteArray()).joinToString("") {"%02x".format(it)}}
     var macroOptions by remember(macroKey) {mutableStateOf(MacroTools.decode(runCatching {macroPrefs.getString(macroKey,"{}")} .getOrNull()?:"{}"))}
@@ -231,6 +237,14 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // SliceAndPrintPanel exactly as the share-intent path does; only how the Uri arrives differs.
     var pickedModel by remember { mutableStateOf<Uri?>(null) }
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri != null) pickedModel = uri }
+    // WO-17 (Phase 1): the Files tab's "Projects" section - a saved multi-object build plate,
+    // separate from the single-object share-intent/Prepare-tab flow above. editingProjectId
+    // opens an existing project; editingNewProjectName creates one on open (see
+    // ProjectEditorScreen's own remember(projectId, newProjectName) key). Exactly one of the two
+    // is ever non-null at a time.
+    var editingProjectId by remember { mutableStateOf<String?>(null) }
+    var editingNewProjectName by remember { mutableStateOf<String?>(null) }
+    var newProjectNameDraft by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(tab == 0 && detailAddress != null) { detailAddress = null }
     fun openPrinter(selected: String) {
         if(state.busy) return
@@ -259,6 +273,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var folder by rememberSaveable(state.address) { mutableStateOf("") }
     var newestFirst by rememberSaveable { mutableStateOf(false) }
     var showHistory by rememberSaveable { mutableStateOf(false) }
+    var showProjects by rememberSaveable { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Pair<PrinterCommand,Int>?>(null) }
     // A notification action or the widget's open action (see MainActivity.stagedAddress/
     // stagedAction) lands here. Navigates to the printer as soon as the address arrives; once
@@ -585,13 +600,30 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     // Bambu keeps its print history on its own screen and in Bambu Studio, and
                     // Prusa Link's API has no history endpoint at all; this app can only ask
                     // Moonraker for one, so the toggle is hidden rather than left empty for either.
-                    if(!nonKlipper) item {
+                    item {
                         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            FilterChip(!showHistory,{showHistory=false},label={Text("Files")})
-                            FilterChip(showHistory,{showHistory=true;loadHistory(0)},label={Text("History")},modifier=Modifier.testTag("show-history"))
+                            FilterChip(!showHistory && !showProjects,{showHistory=false;showProjects=false},label={Text("Files")})
+                            if(!nonKlipper) FilterChip(showHistory,{showHistory=true;showProjects=false;loadHistory(0)},label={Text("History")},modifier=Modifier.testTag("show-history"))
+                            // WO-17 (Phase 1): saved multi-object build plates, independent of
+                            // any printer connection - unlike Files/History above, this never
+                            // needs `state.connected` since it's purely local storage.
+                            FilterChip(showProjects,{showHistory=false;showProjects=true},label={Text("Projects")},modifier=Modifier.testTag("show-projects"))
                         }
                     }
-                    if(showHistory && !nonKlipper) {
+                    if(showProjects) {
+                        item {
+                            Button({ newProjectNameDraft = "" }, modifier = Modifier.testTag("new-project")) { Text("New project") }
+                        }
+                        if(projects.isEmpty()) item { Text("No saved projects yet.", style = MaterialTheme.typography.bodySmall) }
+                        items(projects, key = { "project:${it.id}" }) { p ->
+                            Card(Modifier.fillMaxWidth().testTag("project:${p.id}"), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(p.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                                    TextButton({ editingProjectId = p.id }) { Text("Open") }
+                                }
+                            }
+                        }
+                    } else if(showHistory && !nonKlipper) {
                         item { HistoryHeader(state,loadHistory) }
                         items(state.history, key={"job:${it.id}"}) { job ->
                             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
@@ -678,6 +710,19 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // Prepare tab's own picker (WO-13) - same SliceAndPrintPanel the share-intent path above
     // opens, just reached by picking a file directly instead of sharing one in.
     pickedModel?.let { uri -> SliceAndPrintPanel(uri,state,execute,{pickedModel=null}) }
+    // WO-17 (Phase 1): the Files tab's "Projects" section above stages a name here before the
+    // real ProjectViewModel.newProject() call happens inside ProjectEditorScreen itself (kept
+    // there, not here, so the create-and-persist step and the editor that immediately follows it
+    // share one real code path rather than two).
+    newProjectNameDraft?.let { draft ->
+        AlertDialog(onDismissRequest = { newProjectNameDraft = null }, title = { Text("New project") },
+            text = { OutlinedTextField(draft, { newProjectNameDraft = it }, label = { Text("Project name") }, singleLine = true, modifier = Modifier.testTag("new-project-name")) },
+            confirmButton = { TextButton({ if(draft.isNotBlank()) { editingNewProjectName = draft; newProjectNameDraft = null } }, enabled = draft.isNotBlank(), modifier = Modifier.testTag("new-project-confirm")) { Text("Create") } },
+            dismissButton = { TextButton({ newProjectNameDraft = null }) { Text("Cancel") } })
+    }
+    if(editingProjectId != null || editingNewProjectName != null) {
+        ProjectEditorScreen(editingProjectId, editingNewProjectName) { editingProjectId = null; editingNewProjectName = null }
+    }
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
     runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}

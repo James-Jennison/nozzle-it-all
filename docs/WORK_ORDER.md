@@ -1025,16 +1025,35 @@ P28/M7 sections for what each one built and its commit hash.)*
       for this exact reuse, rather than risking two copies quietly
       diverging). Per-object out-of-bounds tinting reuses the same real
       per-printer bed-polygon check. Compiles clean and the full
-      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate passes; **not yet
-      wired into `SliceAndPrintPanel.kt`/a Files-tab entry point, and has no
-      device test of its own yet** - both still open below.
-    - **Still open** (Phase 1's remaining scope): object list UI
-      (add/duplicate/delete) wired to `ProjectViewModel`, a real device test
-      for `ProjectWorkspace`'s selection/drag gestures, real auto-arrange
-      (2D bin packing with rotation), collision detection between objects,
-      `SliceAndPrintPanel.kt`'s state moving from `remember(uri)` to
-      `ProjectViewModel`, Prepare tab's Model/Arrange steps rebuilt around
-      `ProjectWorkspace`, Files tab gaining "saved projects".
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate passes.
+    - **The Files tab's "Projects" section and `ProjectEditorScreen`**
+      (owner-confirmed entry point, 2026-09-22 - "New Projects tab/section",
+      kept separate from the existing single-object share-intent/Prepare-tab
+      flow rather than retrofitting it): `MainActivity.kt`'s Files tab gains
+      a third Files/History/Projects chip, backed directly by
+      `AppDatabase.get(context).projectDao().observeProjects()` (a real Room
+      Flow, not a stub list) - "New project" prompts for a name, creates it
+      via `ProjectViewModel.newProject()`, and opens `ProjectEditorScreen`
+      (add model via the real document picker, duplicate/remove the
+      selected object, `ProjectWorkspace` for the live 3D plate). **Verified
+      manually on real hardware (Razr 2026)**: created a project, added a
+      real `cube.stl` through the system file picker (persisted, rendered
+      correctly), duplicated it (two real objects rendered side-by-side at
+      their real distinct offsets, not overlapping), tapped the second cube
+      to re-select it (the real ray/bounding-sphere pick, `pickObject`,
+      correctly retargeted the highlight to the tapped object) - screenshots
+      taken at each step, no crashes in logcat. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate passes.
+    - **Still open** (Phase 1's remaining scope): a real device test for
+      `ProjectEditorScreen`/`ProjectWorkspace`'s add/duplicate/remove/select/
+      drag flow (covered manually this entry, not yet by an automated
+      `connectedDebugAndroidTest`), real auto-arrange (2D bin packing with
+      rotation), collision detection between objects, slicing a project
+      (wiring `engine::slice_multi_object` into this new screen - today it
+      only edits placement, it doesn't slice/print yet), renaming/deleting a
+      project from its list row, and whether the existing single-object
+      `SliceAndPrintPanel.kt`/Prepare-tab flow stays as a separate
+      quick-slice path long-term or eventually folds into this one.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

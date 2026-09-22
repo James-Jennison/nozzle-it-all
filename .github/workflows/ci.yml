@@ -1,0 +1,66 @@
+name: CI
+
+# Phase 0 (Consumer Slicer Plan §16): the app's own JVM/Kotlin gate (lint, unit tests, an
+# assembled debug build) plus the real native slicing-engine build (WO-13's
+# ORCASLICER_ENGINE_ROOT dependency, which has no public/portable source - see
+# app/src/main/cpp/CMakeLists.txt's own header comment). Runs on a self-hosted runner
+# (gthost-build01) with that dependency pre-provisioned, per the owner's decision (§22 open
+# question 5) - a hosted GitHub runner cannot build this target at all.
+#
+# The AWS Device Farm instrumented-test stage (owner-confirmed access, real device/OS
+# fragmentation coverage this app has never had) is intentionally not wired up yet: it needs a
+# project/device-pool ARN and AWS credentials as repo secrets that don't exist yet. See
+# docs/WORK_ORDER.md's Phase 0 entry - this is a real, tracked gap, not an oversight.
+
+on:
+  push:
+    branches: [codex/android-mvp, main]
+  pull_request:
+    branches: [codex/android-mvp, main]
+
+jobs:
+  build-and-test:
+    runs-on: [self-hosted, linux, x64, android-native]
+    timeout-minutes: 60
+    env:
+      ORCASLICER_ENGINE_ROOT: /home/jjennison/orcaslicer-android-engine
+      ANDROID_HOME: /opt/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify native engine dependency is present
+        run: |
+          test -f "$ORCASLICER_ENGINE_ROOT/orcaslicer/CMakeLists.txt" || \
+            { echo "::error::ORCASLICER_ENGINE_ROOT is missing the patched OrcaSlicer checkout - see app/src/main/cpp/CMakeLists.txt's header comment."; exit 1; }
+          test -d "$ORCASLICER_ENGINE_ROOT/deps/install/arm64-v8a" || \
+            { echo "::error::ORCASLICER_ENGINE_ROOT is missing prebuilt deps/install/arm64-v8a."; exit 1; }
+
+      - name: Unit tests + lint
+        run: ./gradlew testDebugUnitTest lintDebug --no-daemon
+
+      - name: Assemble debug (native build, arm64-v8a)
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload lint/test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/tests/
+            app/build/reports/lint-results-debug.html
+          retention-days: 14
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+  # TODO (Phase 0, tracked in docs/WORK_ORDER.md): a device-farm job that assembles
+  # app-debug + app-debug-androidTest, uploads both to AWS Device Farm, and runs the
+  # instrumented suite across a real Android device pool - blocked on AWS credentials
+  # (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY as repo secrets) and a real project/device-pool
+  # ARN, neither of which exist in this repo yet.

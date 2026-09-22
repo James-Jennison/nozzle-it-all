@@ -1,4 +1,4 @@
-plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose") }
+plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
 android {
  namespace = "net.jamesjennison.klippercompanion"
  compileSdk = 36
@@ -28,6 +28,13 @@ android {
     // temporarily to the vendored GCode.cpp, then reverted once root-caused. See
     // docs/WORK_ORDER.md's WO-13 entry.
     arguments += listOf("-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release")
+    // Phase 0 (Consumer Slicer Plan §16): CI (.github/workflows/ci.yml) runs on a self-hosted
+    // runner (gthost-build01) where orcaslicer-android-engine lives at a different absolute path
+    // than this dev box's /mnt/faststorage/orcaslicer-android-engine - CMakeLists.txt's own
+    // ORCASLICER_ENGINE_ROOT cache default. Passing the override here, only when the CI
+    // environment variable is actually set, keeps local dev builds (no env var) completely
+    // unaffected - this is additive, not a behavior change for anyone not running CI.
+    System.getenv("ORCASLICER_ENGINE_ROOT")?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }
     // Without this, AGP discovers and builds every CMake target in the whole configured
     // project tree - including OrcaSlicer's desktop GUI executable (needs wxWidgets, which
     // isn't cross-compiled here) and its i18n tooling. slic3rengine is the only target this
@@ -81,6 +88,12 @@ dependencies {
  // Home-screen widget (P18): Glance renders it in Compose, matching this app's own style,
  // instead of hand-written RemoteViews/XML layouts. 1.2.0 is the current stable release.
  implementation("androidx.glance:glance-appwidget:1.2.0")
+ // Phase 0 (Consumer Slicer Plan §16): Project/ProjectObject persistence infrastructure - added
+ // now, empty/unused this phase, because every later phase (1 through 13) depends on it and
+ // retrofitting it after the fact would be far more expensive. 2.8.5 is current stable.
+ implementation("androidx.room:room-runtime:2.8.5")
+ implementation("androidx.room:room-ktx:2.8.5")
+ ksp("androidx.room:room-compiler:2.8.5")
  testImplementation("junit:junit:4.13.2")
  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
  testImplementation("org.json:json:20240303")
@@ -89,5 +102,6 @@ dependencies {
  androidTestImplementation("androidx.compose.ui:ui-test-junit4")
  androidTestImplementation("androidx.test:runner:1.6.2")
  androidTestImplementation("androidx.test.ext:junit:1.2.1")
+ androidTestImplementation("androidx.room:room-testing:2.8.5")
  debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

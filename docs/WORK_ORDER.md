@@ -663,6 +663,89 @@ P28/M7 sections for what each one built and its commit hash.)*
       Reset placement brought it back to a valid, enabled state. Still open:
       real mesh-silhouette precision (still the v1 AABB-corner
       approximation).
+13. **WO-16 — Phase 0 of the Consumer Slicer Plan, owner-approved 2026-09-22
+    ("Let us begin Phase 0").** See `docs/CONSUMER_SLICER_PLAN.md` §16 for full
+    scope/acceptance criteria. In progress; this entry covers what's landed so far.
+    - **Native bridge, multi-object proof**: `engine::count_model_objects()`
+      (`slic3r_engine.cpp/hpp`) / `nativeCountModelObjects`
+      (`slic3r_jni.cpp`/`NativeEngine.kt`) loads a model the same real way
+      `slice_file()`/`load_mesh_preview()` do and returns how many separate
+      `ModelObject`s it actually contains — the specific proof Phase 0's
+      acceptance criteria calls for, ahead of any UI using it yet.
+    - **Real bug found and fixed while building the above**: every `.3mf` file
+      tried — a real OrcaSlicer-native multi-object calibration fixture, a
+      real single-object fixture, and a hand-crafted minimal spec-valid one —
+      loaded with **zero objects** (`model.objects.empty()`), while `.stl`
+      loading worked fine. Root cause: `load_and_place_model()` called
+      `Model::read_from_file()` with its default `LoadStrategy`
+      (`AddDefaultInstances` only), which does not include the separate
+      `LoadModel` bit that `_BBS_3MF_Importer::_handle_start_item` gates all
+      real object/instance creation behind — every `<build><item>` was
+      silently accepted (no error) but never materialized. `.stl` loading
+      never consults this flag at all, which is exactly why it always worked.
+      Root-caused via temporary `__android_log_print` diagnostics added to the
+      vendored `Model.cpp`/`Format/bbs_3mf.cpp` (reverted once identified,
+      same discipline as WO-13's own `GCode.cpp` investigation): first proved
+      the XML parse itself (every `<object>`/`<mesh>`/`<vertex>`/
+      `<triangle>`/`<build>`/`<item>` element) was already 100% correct,
+      before tracing the actual break to this one missing flag. Fix:
+      `slic3r_engine.cpp` now explicitly passes
+      `LoadStrategy::AddDefaultInstances | LoadStrategy::LoadModel`. This was
+      a real gap in this app's own bridge code, not upstream OrcaSlicer — the
+      desktop GUI's own file-open path always passed this flag. See
+      `THIRD_PARTY_NOTICES.md`'s "Test fixtures" section for the full trace
+      and the three fixtures (`multi_object.3mf`, `single_real.3mf`,
+      `plain_two_objects.3mf`) that proved it was universal, not
+      fixture-specific. **Verified**: `MultiObjectModelDeviceTest` (5 tests)
+      green on 2 real devices after the fix, all previously red.
+    - **Room persistence infrastructure**: `Project`/`ProjectObject` entities,
+      `ProjectDao`, `AppDatabase` (`project/` package) — real, tested
+      (`ProjectPersistenceDeviceTest`, 3 device tests: round-trip, cascade
+      delete, Flow observation), deliberately empty/unused by any UI yet, per
+      Phase 0's explicit scope. `ProjectObject` wraps the existing
+      `ModelTransform` rather than a parallel representation.
+    - **CI + self-hosted runner**: created the project's first GitHub-hosted
+      repo (`James-Jennison/nozzle-it-all`, private — no GitHub remote existed
+      before this) and pushed `codex/android-mvp`. Provisioned `gthost-build01`
+      as a self-hosted GitHub Actions runner (owner-directed, an existing
+      AMD EPYC box already used for other projects) — installed as a systemd
+      service, with the exact pinned NDK (27.1.12297006) and CMake (3.22.1)
+      matching `app/build.gradle.kts`'s own pins, plus ninja. Owner decision,
+      §22 open question 5: self-hosted runner (not vendoring a prebuilt
+      artifact) is how CI solves the `ORCASLICER_ENGINE_ROOT` native-build
+      dependency. `orcaslicer-android-engine`'s patched source + prebuilt
+      `deps/install/arm64-v8a` (~3.3 GB) rsynced to the runner.
+      `app/build.gradle.kts` gained an additive, CI-only
+      `ORCASLICER_ENGINE_ROOT` environment-variable override (local dev, no
+      env var set, is completely unaffected) since the runner's path differs
+      from this dev box's. `.github/workflows/ci.yml` runs unit tests, lint,
+      and the full native build on the runner. **Not yet wired up**: AWS
+      Device Farm instrumented-test coverage — needs AWS credentials and a
+      real project/device-pool ARN as repo secrets, neither of which exist
+      yet; tracked as a real, explicit gap in the workflow file itself, not
+      silently skipped.
+    - **Pre-existing device-variance flakiness noted, not fixed here**: a full
+      `connectedDebugAndroidTest` run surfaced ~4-5 UI-test failures (e.g.
+      `M2DeviceTest`, `DashboardDeviceTest`, `BedMeshPanelDeviceTest`,
+      `ActiveFilenameDeviceTest`, `ConfigSavePanelDeviceTest` — the last only
+      appeared in one of two isolated reruns, consistent with flakiness, not a
+      stable failure) — all "scroll to/find node" assertions, all against
+      screens this WO's actual changes (native bridge + Room, both scoped
+      entirely away from these UI panels) never touch. Confirmed via isolated
+      single-device reruns on both physical devices (`ANDROID_SERIAL`-scoped)
+      that these reproduce independent of running both devices at once.
+      `docs/HANDOFF_M4A_2026-09-17.md` already documents the Razr 2023, not
+      the Razr 2026 (a foldable with a different screen), as "the established
+      evidence device" — real prior art that this is a known device-coverage
+      gap, exactly the class of problem this WO's own AWS Device Farm piece
+      exists to eventually surface systematically. Not investigated further
+      here; tracked so a future session doesn't mistake it for a regression
+      from this WO's changes.
+    - **Still open** (Phase 0's remaining scope): stopping the native bridge
+      from flattening multi-object models past the proof-of-concept stage
+      (i.e. actually threading `Model::objects` through to the viewer/slicer
+      instead of `load_mesh_preview`'s deliberate single-mesh collapse) is
+      Phase 1's job per the plan, not Phase 0's.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

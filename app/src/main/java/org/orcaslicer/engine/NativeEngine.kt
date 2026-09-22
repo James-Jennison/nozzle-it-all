@@ -53,6 +53,11 @@ object NativeEngine {
     // on any failure, same convention as nativeSliceFile.
     external fun nativeLoadMeshPreview(inputModelPath: String): FloatArray
 
+    // Phase 0 (WO-16): loads inputModelPath the same real way as the functions above and returns
+    // how many separate objects it actually contains - see engine::count_model_objects's own
+    // comment (slic3r_engine.hpp) for why this exists ahead of any UI using it.
+    external fun nativeCountModelObjects(inputModelPath: String): Int
+
     // Support painting (WO-14 part D). A stateful session (open once per model, paint any
     // number of strokes, slice, close) - see engine::open_paint_session's own comment
     // (slic3r_engine.hpp) for why this is a session rather than a single stateless call: a real

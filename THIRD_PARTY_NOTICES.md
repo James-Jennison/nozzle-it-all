@@ -124,6 +124,45 @@ Centauri Carbon/COSMOS), each a `machine.json`/`process.json`/`filament.json` se
 `"inherits"` chain offline - see `app/src/main/assets/slicer_profiles/PROVENANCE.md`
 for the exact source profile name behind every pack.
 
+### Test fixtures (`app/src/androidTest/assets/`)
+
+Three 3MF fixtures back `MultiObjectModelDeviceTest` (Phase 0, WO-16), deliberately kept as
+three rather than reduced to one — together they proved a real, universal bug in this
+engine's `.3mf` loading (every `.3mf` file loaded with zero objects, regardless of format or
+object count, while `.stl` worked fine) and now guard against a regression the same way:
+
+- `multi_object.3mf` — a real, unmodified 9-object 3MF copied from
+  `orcaslicer-android-engine`'s own vendored OrcaSlicer resources
+  (`resources/calib/filament_flow/flowrate-test-pass1.3mf`, part of OrcaSlicer's built-in
+  flow-rate calibration tooling).
+- `single_real.3mf` — a real, unmodified single-object 3MF copied from
+  `orcaslicer-android-engine`'s own vendored OrcaSlicer test data
+  (`orcaslicer/tests/data/test_3mf/Geräte/Büchse.3mf`).
+- `plain_two_objects.3mf` — a hand-crafted, minimal, spec-valid 2-object 3MF with no
+  Bambu/Orca-specific metadata (this project's own, not third-party).
+
+**Real bug found and fixed (Phase 0, 2026-09-22):** `slic3r_engine.cpp`'s `load_and_place_model()`
+called `Slic3r::Model::read_from_file(path, &config)` with its default `LoadStrategy`
+(`AddDefaultInstances` only). That default does **not** include the separate `LoadModel` bit
+(`Format/bbs_3mf.hpp`'s `LoadStrategy` enum), and `_BBS_3MF_Importer::_handle_start_item`
+short-circuits via `!m_load_model || _create_object_instance(...)` — without `LoadModel`, every
+`<build><item>` was silently accepted (no error, no thrown exception) but never materialized into
+a real `ModelObject`. `.stl` loading (`Format/STL.cpp`) never consults this flag at all, which is
+exactly why it always worked while every `.3mf` failed identically. Root-caused via temporary
+`__android_log_print` diagnostics added to the vendored `Model.cpp`/`Format/bbs_3mf.cpp` (reverted
+once identified, same discipline as WO-13's own `GCode.cpp` investigation) that first proved the
+XML parse itself (every `<object>`/`<mesh>`/`<vertex>`/`<triangle>`/`<build>`/`<item>` element) was
+already 100% correct before tracing the actual break to this one missing flag. Fix: `slic3r_engine.cpp`
+now explicitly passes `LoadStrategy::AddDefaultInstances | LoadStrategy::LoadModel`. Desktop
+OrcaSlicer's own GUI file-open path always passed this flag explicitly; this headless engine's
+bridge simply never did — a real gap in this app's own integration code, not upstream OrcaSlicer.
+
+An earlier fixture candidate, `auto_pa_line_dual.3mf`, was tried first and set aside because its
+8 objects are stored as external per-object part files (`3D/Objects/object_N.model`) referenced
+via `<components>` — a more complex structure than needed to prove the `LoadModel` bug. Whether
+that split-file form has its own, separate gap is genuinely unknown; it was never retested after
+the `LoadModel` fix. Tracked as an open question, not a known limitation.
+
 The Centauri Carbon/COSMOS machine profile additionally incorporates the
 **OpenCentauri COSMOS OrcaSlicer profile** ("Elegoo Centauri Carbon 0.4 nozzle -
 Cosmos", OrcaSlicer Cloud bundle `https://cloud.orcaslicer.com/b/3fad3c38f25f`,

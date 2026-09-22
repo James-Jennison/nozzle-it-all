@@ -183,6 +183,21 @@ Java_org_orcaslicer_engine_NativeEngine_nativeLoadMeshPreview(
     }
 }
 
+// Phase 0 (WO-16): see engine::count_model_objects for why this exists ahead of any UI using it.
+extern "C" JNIEXPORT jint JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeCountModelObjects(
+    JNIEnv* env, jclass, jstring jInputModelPath) {
+    try {
+        return static_cast<jint>(engine::count_model_objects(jstring_to_string(env, jInputModelPath)));
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+        return 0;
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error while counting model objects");
+        return 0;
+    }
+}
+
 // Support painting (WO-14 part D). See engine::open_paint_session/paint_stroke/
 // get_painted_facets/slice_paint_session/close_paint_session in slic3r_engine.cpp/hpp for the
 // real, upstream-GUI-traced transform reasoning - this file is only the JNI marshalling.

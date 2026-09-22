@@ -46,6 +46,15 @@ void slice_file(const std::string& input_model_path,
 // normal (matches thumbnail_render.cpp's flat-shading choice).
 std::vector<float> load_mesh_preview(const std::string& input_model_path);
 
+// Phase 0 (WO-16): loads input_model_path the same real way slice_file()/load_mesh_preview() do
+// and returns how many separate ModelObjects it actually contains - proof, not assumption, that
+// the native bridge's model load already preserves a real multi-object Model::objects list rather
+// than collapsing everything into one mesh (load_mesh_preview does that collapse deliberately, for
+// its own single-mesh preview use case - this function doesn't, and exists specifically so a
+// multi-object model's true object count is observable from the Kotlin side ahead of any UI
+// actually using it, per the Consumer Slicer Plan's Phase 0 acceptance criteria).
+int count_model_objects(const std::string& input_model_path);
+
 // Support painting (WO-14 part D): a stateful session over a loaded model's first object/volume
 // (v1 scope - the common single-part case every real model used so far actually is), reusing the
 // same real, headless-usable libslic3r machinery the upstream GUI relies on for the identical

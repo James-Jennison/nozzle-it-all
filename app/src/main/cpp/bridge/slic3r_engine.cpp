@@ -35,7 +35,22 @@ namespace {
 Slic3r::Model load_and_place_model(const std::string& input_model_path, Slic3r::DynamicPrintConfig& config,
                                     const ModelTransform& transform = {}) {
     using namespace Slic3r;
-    Model model = Model::read_from_file(input_model_path, &config);
+    // Phase 0 (WO-16) real bug fix: the default LoadStrategy (AddDefaultInstances only) does NOT
+    // include LoadModel, a *separate* bit (Format/bbs_3mf.hpp's LoadStrategy enum). STL loading
+    // (Format/STL.cpp) never consults this flag at all, so it always worked; every .3mf file -
+    // a real OrcaSlicer-native multi-object calibration file, a genuine single-object fixture,
+    // and a hand-crafted minimal spec-valid one - failed identically ("supplied file couldn't be
+    // read because it's empty") because _BBS_3MF_Importer::_handle_start_item short-circuits via
+    // `!m_load_model || _create_object_instance(...)`: without LoadModel, m_load_model is false,
+    // so every <build><item> is silently accepted (no error) but never actually materialized into
+    // a real ModelObject - confirmed via temporary __android_log_print diagnostics added to the
+    // vendored bbs_3mf.cpp (reverted once root-caused, same discipline as WO-13's own
+    // GCode.cpp investigation) that traced this exact code path, both by itself and by first
+    // proving the XML parse itself (every <object>/<mesh>/<vertex>/<triangle>/<build>/<item>
+    // element) was already 100% correct. Desktop OrcaSlicer's own GUI file-open path passes this
+    // flag explicitly; this headless engine's bridge simply never did.
+    Model model = Model::read_from_file(input_model_path, &config,
+        nullptr, LoadStrategy::AddDefaultInstances | LoadStrategy::LoadModel);
     if (model.objects.empty()) {
         throw std::runtime_error("No printable objects found in " + input_model_path);
     }
@@ -183,6 +198,13 @@ std::vector<float> load_mesh_preview(const std::string& input_model_path) {
         }
     }
     return buffer;
+}
+
+int count_model_objects(const std::string& input_model_path) {
+    using namespace Slic3r;
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    Model model = load_and_place_model(input_model_path, config);
+    return static_cast<int>(model.objects.size());
 }
 
 // --- Support painting (WO-14 part D) ---------------------------------------------------------

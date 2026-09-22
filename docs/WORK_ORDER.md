@@ -724,6 +724,26 @@ P28/M7 sections for what each one built and its commit hash.)*
       real project/device-pool ARN as repo secrets, neither of which exist
       yet; tracked as a real, explicit gap in the workflow file itself, not
       silently skipped.
+      **Real bug found and fixed getting the first CI run green**: the
+      native build failed on the runner (`ninja: error: '.../deps/install/
+      arm64-v8a/lib/libz.so' ... missing and no known rule to make it`) even
+      though the file was really there — many of the rsynced prebuilt
+      dependency's own CMake package-config files (`lib/cmake/boost_*/*.cmake`
+      and others), `.pc` pkg-config files, and `.la` libtool archives have
+      this dev box's absolute build path (`/mnt/faststorage/
+      orcaslicer-android-engine/...`) baked in from when they were originally
+      built here — a normal consequence of how CMake/autotools installs work,
+      not something rsync could avoid. Patching every such file was rejected
+      as fragile (breaks again on the next re-sync). Fix: symlinked
+      `/mnt/faststorage/orcaslicer-android-engine` on the runner to the real
+      rsynced location (`/home/jjennison/orcaslicer-android-engine`) — every
+      baked-in absolute path resolves correctly through it, and it's this
+      project's own `CMakeLists.txt`-default path besides, so the CI-only
+      `ORCASLICER_ENGINE_ROOT` env var override stays correct as a second,
+      redundant layer. **Verified: first fully green CI run, 2026-09-22**
+      (`build-and-test`, run 35774884218) — real native engine build
+      producing a real `app-debug.apk`, on the actual self-hosted runner, not
+      just locally.
     - **Pre-existing device-variance flakiness noted, not fixed here**: a full
       `connectedDebugAndroidTest` run surfaced ~4-5 UI-test failures (e.g.
       `M2DeviceTest`, `DashboardDeviceTest`, `BedMeshPanelDeviceTest`,

@@ -408,6 +408,62 @@ P28/M7 sections for what each one built and its commit hash.)*
       `CompanionScreenTest`/`PrinterTilesDeviceTest`/`M2ShareIntentTest`/
       `AddPrinterWizardDeviceTest` cases and the 7 `SlicingCoordinatorDeviceTest`
       cases pass; full gate green.
+11. **WO-14 — Control tab UX redesign, owner-requested 2026-09-22.** The tab had
+    grown to 13+ visually identical full-width `OutlinedButton` pills stacked in
+    one `LazyColumn`, plus a flat, ungrouped macro list — the owner's own words:
+    "one long page of pills and macros." Consulted a locally-installed multi-
+    reviewer tool (`council`, an executable at `~/.local/bin/council`, not a
+    Claude skill — confirmed only after guessing wrong first) with a sanitized
+    task package (redacted screenshots, the real Control tab source, explicit
+    requirements to preserve every `testTag` and the Emergency Stop's safety
+    placement): 4 real reviewer seats (`council-ux-product`, `council-frontend`,
+    `council-delivery`, `council-design`; ~$0.105 total real cost) unanimously
+    flagged the ungrouped pill stack and the ungrouped macro list; 3 of 4
+    endorsed keeping Emergency Stop isolated-by-position, one (`council-design`)
+    argued color alone wasn't enough shape differentiation.
+    **Shipped, commits `3bac316`/`3ad1b80`:**
+    - Buttons regrouped into "Hardware controls" (`FilledTonalButton`, tiered
+      above secondary controls) and "Diagnostics & status" (`OutlinedButton`),
+      both in `FlowRow`s instead of one-per-row — every existing `testTag`
+      unchanged, every conditional-visibility gate (`LIVE_HEATER_FAN_CONTROLS_ENABLED`,
+      `nonKlipper`, `SNAPMAKER_U1_PAXX`) unchanged.
+    - Emergency Stop resolved the one reviewer disagreement with the owner's
+      own idea: a real stop-sign octagon (`StopOctagonShape`, a `GenericShape`
+      with the corner-cut fraction that makes all eight edges equal), moved
+      first in the tab per the owner's explicit "easily accessible, but can't
+      be accidentally tapped" - accidental-tap protection now comes from shape
+      + isolating padding + the pre-existing confirm dialog, not from being
+      buried after a scroll.
+    - Owner follow-up, same session: "only the absolutely necessary macros
+      should be included." This app has no reliable way to guess which macros
+      are essential — arbitrary per-printer Klipper config — so it doesn't try.
+      New `MacrosBrowserPanel.kt` ("Advanced macros") holds the full inventory
+      (search, hidden, group, organize, run — moved verbatim, nothing deleted
+      or altered), with an inline notice (not another popup) explaining the
+      split. The Control tab itself now shows only a "Favorite macros" section,
+      omitted entirely (not an empty placeholder) until something is favorited
+      in the browser. Command review/confirmation (`MacroForm` → `MacroReviewPanel`)
+      unchanged.
+    - **Real, separate bug found and root-caused during this work**: the owner
+      reported repeatedly finding the app missing from the real test device
+      after device-test runs, and a prior "it's installed" claim in this
+      session turned out to be wrong when actually checked. Root-caused via
+      logcat, not guessed: AGP's `connectedDebugAndroidTest` uninstalls both
+      APKs once a run finishes unless told not to (`deletePackageX` for both
+      packages right after "finished inst"). Fixed in `gradle.properties`
+      (`android.injected.androidTest.leaveApksInstalledAfterRun` — the real
+      property name, found by grepping the actual AGP 8.13.2 jar after a first
+      guess at the name silently did nothing). Verified twice with
+      `dumpsys package` after a real test run.
+    - **Verified for real against the CC1**: favorited a macro in the new
+      browser, confirmed it then shows in its own Control-tab section and
+      nowhere else; the stop-sign octagon and grouped sections render
+      correctly live; the confirm dialog still gates the actual estop command.
+      New `CompanionScreenTest` cases (auto-wizard, macro scoping) plus the
+      existing 29+ device tests across `CompanionScreenTest`,
+      `ControlPreviewDeviceTest`, `ConsoleDeviceTest`, `PrinterTilesDeviceTest`,
+      `MacroReviewPanelDeviceTest` and `MacroBoundsDeviceTest` all pass; full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate green.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

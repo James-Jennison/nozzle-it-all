@@ -608,13 +608,19 @@ P28/M7 sections for what each one built and its commit hash.)*
       the real device against the new native transform code (identity
       transform for every pre-existing call site — unchanged default
       behavior). Full `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate
-      green. **Not yet done**: live on-screen confirmation of the drag/pinch/
-      twist gestures themselves (the test device was locked/asleep — its own
-      lock screen, not a crash, confirmed via `dumpsys power`/a real
-      screenshot — and this is the owner's actual daily-driver phone, so it
-      wasn't unlocked to check); multi-object scenes, duplicate, and
-      auto-arrange (still real, absent gaps per the audit above, not yet
-      scoped into a specific next part).
+      green. **Live on-screen confirmation done, 2026-09-22 (owner home,
+      device unlocked on wifi)**: drove the real Model tab against
+      `overhang.stl` via adb — the drag-to-move gesture updated the live
+      readout and visibly moved the model along the real bed-plane
+      ray/plane-intersected path; camera orbit in Select mode still works;
+      switching to Paint mode visibly disabled the Transform chip and showed
+      the "Placement is locked" notice; a paint stroke rendered real cyan
+      overlay marks at the touch point. Not yet exercised live: the
+      two-finger pinch/twist gestures specifically (`adb shell input` has no
+      clean multi-touch primitive) — same gesture-detector code path as the
+      confirmed pan, so lower risk, but still genuinely unverified live.
+      Still open, not yet scoped: multi-object scenes, duplicate, and
+      auto-arrange (real, absent gaps per the audit above).
     - **Real bug, owner screenshot, same day**: a wide/short model rendered
       floating with a large visible gap above the reference grid. Root cause:
       `buildGrid()` placed the grid at `center[2] - radius`, a bounding-
@@ -650,9 +656,13 @@ P28/M7 sections for what each one built and its commit hash.)*
       bundled `machine.json` this app actually ships (not a synthetic
       fixture) and exercises the point-in-polygon test's inside/outside/
       edge/no-real-polygon cases. Full `testDebugUnitTest`/`lintDebug`/
-      `assembleDebug` gate green. **Not yet done**: live on-screen
-      confirmation (same test-device access note as above); real mesh-
-      silhouette precision (still the v1 AABB-corner approximation).
+      `assembleDebug` gate green. **Live on-screen confirmation done,
+      2026-09-22**: dragged `overhang.stl` (against the real U1 profile's
+      bundled bed) well past its edge — the model tinted red, the exact
+      warning text appeared, and the real "Slice" button visibly disabled;
+      Reset placement brought it back to a valid, enabled state. Still open:
+      real mesh-silhouette precision (still the v1 AABB-corner
+      approximation).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

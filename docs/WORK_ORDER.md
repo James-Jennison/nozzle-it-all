@@ -381,6 +381,33 @@ P28/M7 sections for what each one built and its commit hash.)*
       completion since these fixes — that confirmation needs the owner
       physically present, same as every other hardware acceptance pass in
       this project.
+    - **Follow-up, same day: automatic first-run setup, commit `3bac316`.**
+      Repeated data wipes during this session's own device testing kept
+      landing the app back on a bare "No printers connected" dashboard with
+      no obvious path back to `AddPrinterWizard`, prompting the owner to ask
+      for a real first-run setup flow. `MainActivity` now opens the wizard
+      automatically the moment there's no saved profile and no active
+      address (gated on both, and only once per install via
+      `rememberSaveable`, so it never traps a user who cancels or later
+      forgets every printer on purpose). While wiring this up, found real
+      pre-existing breakage in `AddPrinterWizardDeviceTest`'s sibling tests
+      from the original `AddPrinterWizard` migration itself: `openFixtureDashboard`'s
+      offline path and two `CompanionScreenTest` assertions still referenced
+      a `"connect-printer"` testTag the old single-field flow left behind,
+      which no longer exists anywhere in the app — confirmed via `git stash`
+      to already be broken on HEAD, unrelated to this change. Fixed properly:
+      the offline path now goes through the real `saved-connect:$address`
+      button; the compact/large-text reachability check now targets
+      `open-add-printer-wizard`; `LivePrinterReadOnlyTest`'s live opt-in flow
+      now drives the actual wizard. **Verified for real, not just in a test
+      harness**: manually drove the wizard via `adb` on the real test device
+      (a fresh install with zero saved printers) and added the actual CC1
+      end to end — live firmware auto-detected as `Release - 26.08.0`, live
+      connectivity test passed, landed on its real connected dashboard with
+      live camera and temperatures. All 19
+      `CompanionScreenTest`/`PrinterTilesDeviceTest`/`M2ShareIntentTest`/
+      `AddPrinterWizardDeviceTest` cases and the 7 `SlicingCoordinatorDeviceTest`
+      cases pass; full gate green.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

@@ -4,6 +4,8 @@
 **Prepared:** 2026-09-22, against branch `codex/android-mvp`, HEAD `9cd5fb4`. Revised same day as the plan evolved through owner discussion: Phase 10 (Discover) and Phase 11 (Account/Sync) approved with concrete targets, and the target platform scope expanded from Android-only to Android + iOS + multi-OS Desktop, then **narrowed again the same day: iOS (Phase 12) deferred entirely, macOS deferred from the Desktop port (Phase 13 is now Windows/Linux only)** (§6a) — the repository audit below (§2) describes the app's *current, real* state, which remains Android-only today; §6a is where the multi-platform target and its real implications are addressed.
 **Method:** Every architectural claim below was verified — against the real repository (four parallel research passes with file:line citations; one initial pass that ran in an isolated worktree returned stale/wrong results and was discarded and re-run directly against the working tree, noted here for transparency, not hidden) and, where the plan makes claims about external services or technology maturity (MyMiniFactory/MakerWorld/Printables API status, Compose Multiplatform/KMP readiness, iOS slicing-engine prior art), against live external research, not prior knowledge alone.
 
+**Currency note:** this is a point-in-time plan/audit (`HEAD 9cd5fb4`) and isn't continuously rewritten as phases land — some gaps it describes as missing (e.g. multi-object scenes, project persistence) are now partial, per Phase 1/WO-17. **`docs/WORK_ORDER.md` is the current, authoritative status for anything it and this document disagree on**; this plan remains the source for the longer-term roadmap/phase structure itself.
+
 ---
 
 ## 1. Executive Summary
@@ -32,7 +34,7 @@ Verified branch `codex/android-mvp`, HEAD `9cd5fb4`, clean working tree.
 No Navigation-Compose. `var tab by rememberSaveable { mutableIntStateOf(0) }` (`MainActivity.kt:226`) drives a flat `NavigationBar` over 5 tabs (`MainActivity.kt:313-314`): **Home, Control, Files, Prepare, Settings**. A second piece of state (`detailAddress`) plus one `BackHandler` is the entire "back stack." No deep-linking.
 
 ### 2.3 State management — **Complete (ViewModel core), Partial (session persistence)**
-Real `ViewModel` + `StateFlow`: `PrinterModel.kt:69,81`, `ScreenState` (`PrinterModel.kt:11-24`, ~24 fields: connection, snapshot, catalog, camera, file metadata, history, saved printers/profiles). `SliceAndPrintPanel.kt` — the slicing-session UI I wrote this session — uses `remember(uri){...}` throughout (paintState, transformState, bedShape, customization, sliced output, etc.), **never** `rememberSaveable`. None of it survives process death. This is a real, load-bearing gap for Phase 1.
+Real `ViewModel` + `StateFlow`: `PrinterModel.kt:69,81`, `ScreenState` (`PrinterModel.kt:11-24`, ~24 fields: connection, snapshot, catalog, camera, file metadata, history, saved printers/profiles). `SliceAndPrintPanel.kt` — the slicing-session UI I wrote this session — uses `remember(uri){...}` throughout (paintState, transformState, bedShape, customization, sliced output, etc.), **never** `rememberSaveable`. None of it survives process death. This is still true for that single-object share-intent/Prepare-tab flow specifically, which Phase 1 deliberately left unchanged. **Phase 1 (WO-17, see `docs/WORK_ORDER.md`) closed the equivalent gap for the separate Projects flow**: `ProjectViewModel`/`ProjectFileStore` persist a multi-object build plate through Room + `filesDir`, verified to survive a simulated process death.
 
 ### 2.4 Testing — **Strong on protocol/native, zero CI**
 369 unit `@Test` methods (60 files), 136 instrumented `@Test` methods (42 files). A meaningful cluster already covers the native slicing path (`MeshPreviewDeviceTest`, `PaintSessionDeviceTest`, `SlicingCoordinatorTest`/`...DeviceTest`, `SlicingProfilePacksTest`/`...DeviceTest`, `NativeEngineSmokeTest`, `BedShapeTest`, `BedMeshTest`/`...DeviceTest`, `SliceCustomizationTest`). **No CI config exists** (`.github/workflows` absent) — every gate today runs manually on a developer's machine against a physical device. This is a real risk for a growing codebase (see §20 Risks).
@@ -66,10 +68,10 @@ Live status: 2s foreground polling per saved printer (`SavedPrinterMonitor.kt`) 
 - Real build-volume bounds checking against the actual per-printer `machine.json` bed shape (`BedShape.kt`), gating the real Slice action.
 - Slicing settings: 3 fields only (layer height, infill %, supports on/off — `SliceCustomization.kt`), no simple/advanced tiering.
 - Real post-slice 3D toolpath preview with a layer slider and real G-code-footer-parsed stats (time/filament) — `SlicedPreview.kt`, `GcodeStats.kt`.
-- **Single object, single material, single plate only.** No multi-object scene, no duplicate, no auto-arrange, no per-object anything.
+- **Single object, single material, single plate only** for the share-intent/Prepare-tab flow described above — that flow itself is unchanged. **A separate multi-object flow now exists (Phase 1, WO-17, Files → Projects)**: real add/duplicate/remove of objects on a shared plate, each with its own move/rotate/scale, rendered by a genuinely separate `ProjectGLRenderer` (not a retrofit of `ModelViewer`'s `MeshGLRenderer`). Still no auto-arrange, no collision detection, and nothing on that screen calls the slicer yet (`engine::slice_multi_object` exists and is device-tested, but isn't wired into this UI) — see `docs/WORK_ORDER.md`.
 - No filament/material model connects to slicing at all — the three settings above are the entire "material" surface.
 - Spoolman integration (`Spoolman.kt`) is **read-only inventory display**, structurally disconnected from `SlicingCoordinator`/`SliceAndPrintPanel` — it cannot influence a slice today.
-- No project persistence (§2.3), no model library/Discover (confirmed absent, only the one `MainActivity.kt:643` placeholder string exists), no print-history/reprint concept beyond a raw pass-through of the printer's own job log.
+- Project persistence now exists as of Phase 1/WO-17 (§2.3) — no model library/Discover (confirmed absent, only the one `MainActivity.kt:643` placeholder string exists), no print-history/reprint concept beyond a raw pass-through of the printer's own job log.
 
 ---
 
@@ -311,11 +313,18 @@ The app's existing model (credentials in encrypted storage, everything else in-r
 
 Legend — Existing app: Complete / Partial / Mock-UI-only / Backend-only / Missing. Target: P0 / P1 / P2 / P3 / Not planned.
 
+**Note, 2026-09-22**: this matrix (like the rest of §2-§14) was audited at a point in time and
+isn't kept in sync line-by-line as Phase 1 lands. `docs/WORK_ORDER.md`'s WO-17 entries are the
+current, authoritative status for the "Multi-object plate/arrange" and "Project persistence" rows
+below — both moved from Missing to Partial this session (a real Room-backed `Project`/
+`ProjectObject` workspace with add/duplicate/remove/placement exists at Files → Projects; manual
+arrange and slicing from that screen are still open).
+
 | Capability | Existing app | Prusa/EasyPrint | Bambu Handy | Creality Cloud | Anycubic | Elegoo Matrix | Snapmaker | **Target** |
 |---|---|---|---|---|---|---|---|---|
 | On-device real slicing | **Complete** | cloud-assisted | n/a (profile-driven) | cloud | app-side | n/a | app-side | **P0 (keep, extend)** |
 | Move/rotate/scale | **Complete** | yes | limited | yes | yes | limited | yes | **P0 (multi-object)** |
-| Multi-object plate/arrange | **Missing** | yes | yes | yes | yes | limited | yes | **P0** |
+| Multi-object plate/arrange | **Partial (WO-17: add/duplicate/remove/placement; no auto-arrange, no slicing from this screen yet)** | yes | yes | yes | yes | limited | yes | **P0** |
 | Multi-plate | **Missing** | yes | yes | limited | no | no | no | **P1** |
 | Support painting | **Complete** | yes | limited | limited | limited | no | yes | **P0 (keep)** |
 | Build-volume bounds check | **Complete** | yes | yes | yes | yes | yes | yes | **P0 (keep, extend for multi-object)** |
@@ -335,7 +344,7 @@ Legend — Existing app: Complete / Partial / Mock-UI-only / Backend-only / Miss
 | AI failure detection | **Missing** | no | limited | yes | limited | no | no | **P2, capability-gated, honest-or-absent** |
 | Notifications (typed) | **Partial (6 of ~9 types)** | yes | yes | yes | yes | yes | yes | **P0/P1** |
 | Print history w/ reprint | **Backend-only (no reprint)** | yes | yes | yes | yes | yes | yes | **P1** |
-| Project persistence | **Missing** | yes | yes | yes | yes | yes | yes | **P0** |
+| Project persistence | **Partial (WO-17: Room-backed, survives process death; no rename/delete from the project list yet)** | yes | yes | yes | yes | yes | yes | **P0** |
 | Multi-printer dashboard | **Complete (flat list)** | n/a | yes | yes | limited | limited | limited | **P0 (keep)** |
 | Account/cloud sync | **Missing (by design)** | yes | yes | yes | yes | yes | yes | **P1 — owner-approved 2026-09-22 (Phase 11)** |
 | Model discover/marketplace | **Missing** | yes | yes | yes | limited | limited | yes | **P3, owner-gated** |

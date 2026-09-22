@@ -1044,16 +1044,35 @@ P28/M7 sections for what each one built and its commit hash.)*
       correctly retargeted the highlight to the tapped object) - screenshots
       taken at each step, no crashes in logcat. Full
       `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate passes.
-    - **Still open** (Phase 1's remaining scope): a real device test for
-      `ProjectEditorScreen`/`ProjectWorkspace`'s add/duplicate/remove/select/
-      drag flow (covered manually this entry, not yet by an automated
-      `connectedDebugAndroidTest`), real auto-arrange (2D bin packing with
-      rotation), collision detection between objects, slicing a project
-      (wiring `engine::slice_multi_object` into this new screen - today it
-      only edits placement, it doesn't slice/print yet), renaming/deleting a
-      project from its list row, and whether the existing single-object
-      `SliceAndPrintPanel.kt`/Prepare-tab flow stays as a separate
-      quick-slice path long-term or eventually folds into this one.
+    - **`ProjectWorkspaceDeviceTest`** (automated coverage for the manual
+      pass above) - real, loaded `cube.stl` geometry, two fixture objects
+      80mm apart, tap-to-select and drag-to-move driven through Compose's
+      own touch-injection against the real `ProjectGLRenderer`/GLSurfaceView
+      on real hardware, not a mock. **A real bug surfaced writing it**:
+      `pickObject`'s sphere-center math used `geometry.center + offset`
+      directly, which is only correct for the identity transform (zero
+      rotation, unit scale) - it silently ignores the pivot
+      (`geometry.origin`) that the renderer's own model matrix and
+      `computeOutOfBounds` both already rotate/scale about, so a rotated or
+      scaled object's real tap target would have drifted from what's
+      actually drawn. Fixed to share the identical rotate-about-pivot math.
+      Separately, an early version of the test itself picked screen
+      fractions by assuming the two fixtures would mirror symmetrically
+      (they don't - azimuth 45° makes one fixture nearer the camera than
+      the other, giving it a much larger and differently-positioned screen
+      footprint) - caught by scanning real tap outcomes across the
+      viewport on the real device rather than trusting the geometry math
+      alone, the same discipline this WO's native-slicing tests used
+      earlier. 3 tests, all passing on Razr 2026; full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate re-run clean.
+    - **Still open** (Phase 1's remaining scope): real auto-arrange (2D bin
+      packing with rotation), collision detection between objects, slicing
+      a project (wiring `engine::slice_multi_object` into this new screen -
+      today it only edits placement, it doesn't slice/print yet),
+      renaming/deleting a project from its list row, and whether the
+      existing single-object `SliceAndPrintPanel.kt`/Prepare-tab flow stays
+      as a separate quick-slice path long-term or eventually folds into
+      this one.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

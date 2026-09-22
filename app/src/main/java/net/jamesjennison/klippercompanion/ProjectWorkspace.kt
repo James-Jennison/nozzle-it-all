@@ -319,13 +319,25 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
     for (wo in objects) {
         val t = wo.projectObject.transform()
         val g = wo.geometry
+        // An earlier version used `g.center + offset` directly - mathematically identical to
+        // this for the zero-rotation/unit-scale case (the rotate-about-pivot terms cancel out),
+        // which is why a same-numbers real-device test didn't catch it, but silently wrong for
+        // any rotated or scaled object, since it ignores the pivot the renderer's own model
+        // matrix (and computeOutOfBounds's bed-polygon check) actually rotate/scale about. This
+        // applies the identical rotate-about-pivot-then-translate math both of those already use,
+        // so the picked sphere is centered on the point that's actually on screen at any
+        // transform, not just the identity one.
+        val pivot = g.origin
+        val rad = Math.toRadians(t.rotationZDeg.toDouble())
+        val cosR = kotlin.math.cos(rad).toFloat(); val sinR = kotlin.math.sin(rad).toFloat()
+        val lx = (g.center[0] - pivot[0]) * t.scale
+        val ly = (g.center[1] - pivot[1]) * t.scale
+        val lz = (g.center[2] - pivot[2]) * t.scale
         val worldCenter = floatArrayOf(
-            g.center[0] + (t.offsetXMm - 0f), // center already includes local origin offset from mesh load
-            g.center[1] + t.offsetYMm,
-            g.center[2],
+            pivot[0] + lx * cosR - ly * sinR + t.offsetXMm,
+            pivot[1] + lx * sinR + ly * cosR + t.offsetYMm,
+            pivot[2] + lz,
         )
-        // Sphere grows with pivot-to-center offset accounted for by using center directly (already
-        // in the same local space as origin); radius scales with the object's own live scale.
         val cx = worldCenter[0] - rayOrigin[0]
         val cy = worldCenter[1] - rayOrigin[1]
         val cz = worldCenter[2] - rayOrigin[2]
@@ -367,6 +379,14 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
     var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
     val renderer = remember { ProjectGLRenderer() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    // Which object ids the camera has already been auto-framed for - re-framing on every
+    // transform-only update would fight a manual orbit/zoom the owner is mid-gesture on, but a
+    // *newly added* object (not yet in this set) should still pull the camera back far enough to
+    // see it, the same real problem ModelViewer.kt solves for its own single object via
+    // `renderer.cameraState = CameraOrbit(45f, 25f, loaded.radius * 3f)` on load - fixed distance
+    // here would put a 200mm-plate project's far objects off-screen (or a single small object lost
+    // in a huge default view), a real usability gap this closes.
+    var framedIds by remember { mutableStateOf(emptySet<String>()) }
 
     LaunchedEffect(objects, selectedId, bedShape) {
         val renderables = withContext(Dispatchers.Default) {
@@ -377,6 +397,28 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
             }
         }
         renderer.pendingObjects = renderables
+        val liveIds = objects.map { it.projectObject.id }.toSet()
+        if (liveIds.isNotEmpty() && !framedIds.containsAll(liveIds)) {
+            var centerX = 0f; var centerY = 0f; var centerZ = 0f
+            for (wo in objects) {
+                val t = wo.projectObject.transform()
+                centerX += wo.geometry.origin[0] + t.offsetXMm
+                centerY += wo.geometry.origin[1] + t.offsetYMm
+                centerZ += wo.geometry.origin[2]
+            }
+            val n = objects.size
+            centerX /= n; centerY /= n; centerZ /= n
+            var maxSpan = 1f
+            for (wo in objects) {
+                val t = wo.projectObject.transform()
+                val ox = wo.geometry.origin[0] + t.offsetXMm
+                val oy = wo.geometry.origin[1] + t.offsetYMm
+                val dist = sqrt((ox - centerX) * (ox - centerX) + (oy - centerY) * (oy - centerY)) + wo.geometry.radius * t.scale
+                if (dist > maxSpan) maxSpan = dist
+            }
+            renderer.cameraState = CameraOrbit(45f, 25f, maxSpan * 3f)
+            framedIds = liveIds
+        }
         glView?.requestRender()
     }
 

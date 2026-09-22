@@ -46,4 +46,39 @@ object NativeEngine {
     // for all 3 (matches thumbnail_render.cpp's flat-shading choice). Throws RuntimeException
     // on any failure, same convention as nativeSliceFile.
     external fun nativeLoadMeshPreview(inputModelPath: String): FloatArray
+
+    // Support painting (WO-14 part D). A stateful session (open once per model, paint any
+    // number of strokes, slice, close) - see engine::open_paint_session's own comment
+    // (slic3r_engine.hpp) for why this is a session rather than a single stateless call: a real
+    // brush-paint algorithm (TriangleSelector, the same one the real GUI uses) needs its
+    // spatial-index/selection state to persist across strokes.
+    external fun nativeOpenPaintSession(inputModelPath: String): Long
+
+    // origin/dir: a world-space ray in the same bed-centered coordinates nativeLoadMeshPreview's
+    // vertices are already in - built from the GL camera's own view/projection matrices, no
+    // extra transform needed on the Kotlin side. radiusMm is the brush radius. enforcer=true
+    // paints "print support here"; false paints "never support here" (a blocker). A ray that
+    // misses the model entirely is a silent no-op, not an error.
+    external fun nativePaintStroke(
+        handle: Long, originX: Double, originY: Double, originZ: Double,
+        dirX: Double, dirY: Double, dirZ: Double, radiusMm: Double, enforcer: Boolean,
+    )
+
+    // The currently enforcer-painted triangles, in the same world-space coordinates
+    // nativeLoadMeshPreview uses, as a flat position-only buffer (3 floats/vertex - no normals,
+    // meant for an unlit highlight overlay while painting).
+    external fun nativeGetPaintedFacets(handle: Long): FloatArray
+
+    // Slices the session's own already-loaded (and possibly painted) in-memory model directly -
+    // does not close the session. Same profilePaths/overrideKeys/overrideValues contract as
+    // nativeSliceFile.
+    external fun nativeSlicePaintSession(
+        handle: Long, outputGcodePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+    )
+
+    // Releases the session's native memory (the loaded model, its AABB tree and triangle
+    // selector). Must be called exactly once per nativeOpenPaintSession call, or that memory
+    // leaks for the process lifetime - there is no finalizer.
+    external fun nativeClosePaintSession(handle: Long)
 }

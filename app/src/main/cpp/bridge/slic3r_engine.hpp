@@ -29,4 +29,38 @@ void slice_file(const std::string& input_model_path,
 // the triangle's own flat face normal (matches thumbnail_render.cpp's flat-shading choice).
 std::vector<float> load_mesh_preview(const std::string& input_model_path);
 
+// Support painting (WO-14 part D): a stateful session over a loaded model's first object/volume
+// (v1 scope - the common single-part case every real model used so far actually is), reusing the
+// same real, headless-usable libslic3r machinery the upstream GUI relies on for the identical
+// feature: AABBMesh for ray-mesh hit testing, TriangleSelector for the actual brush-paint
+// algorithm, ModelVolume::supported_facets for the result print.apply() already reads during
+// support generation with zero new slicing-side wiring. See slic3r_engine.cpp for the concrete
+// per-call reasoning (each traced against the real upstream GUI source, not guessed).
+using PaintSessionHandle = int64_t;
+
+// Opens a session (loads + bed-centers the model, same as slice_file()/load_mesh_preview()) and
+// returns an opaque handle. Throws if the model has no paintable volume.
+PaintSessionHandle open_paint_session(const std::string& input_model_path);
+
+// origin/dir are a world-space ray (the same bed-centered coordinate space load_mesh_preview's
+// vertices are already in, so the Kotlin GL camera's own unprojection needs no extra transform).
+// A ray that misses the mesh entirely is a silent no-op, not an error - a normal outcome for an
+// ordinary stray touch during a drag.
+void paint_stroke(PaintSessionHandle handle, double originX, double originY, double originZ,
+                   double dirX, double dirY, double dirZ, double radiusMm, bool enforcer);
+
+// The currently enforcer-painted triangles, transformed into the same world-space coordinates
+// load_mesh_preview uses, as a flat position-only buffer (3 floats/vertex, no normals - this is
+// meant for an unlit highlight overlay, not a second lit mesh).
+std::vector<float> get_painted_facets(PaintSessionHandle handle);
+
+// Slices using the session's own already-loaded (and possibly painted) in-memory model directly -
+// no re-load from disk, no serialization round-trip for the painted state. Does not close the
+// session; the caller closes it explicitly once done.
+void slice_paint_session(PaintSessionHandle handle, const std::string& output_gcode_path,
+                          const std::vector<std::string>& profile_paths,
+                          const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
+
+void close_paint_session(PaintSessionHandle handle);
+
 } // namespace engine

@@ -43,6 +43,27 @@ void throw_java_exception(JNIEnv* env, const std::string& message) {
     }
 }
 
+jfloatArray to_jfloat_array(JNIEnv* env, const std::vector<float>& buffer) {
+    jfloatArray result = env->NewFloatArray(static_cast<jsize>(buffer.size()));
+    if (result != nullptr) {
+        env->SetFloatArrayRegion(result, 0, static_cast<jsize>(buffer.size()), buffer.data());
+    }
+    return result;
+}
+
+std::vector<std::string> to_string_vector(JNIEnv* env, jobjectArray array) {
+    std::vector<std::string> result;
+    if (array != nullptr) {
+        jsize count = env->GetArrayLength(array);
+        for (jsize i = 0; i < count; ++i) {
+            auto element = static_cast<jstring>(env->GetObjectArrayElement(array, i));
+            result.push_back(jstring_to_string(env, element));
+            env->DeleteLocalRef(element);
+        }
+    }
+    return result;
+}
+
 } // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -153,4 +174,72 @@ Java_org_orcaslicer_engine_NativeEngine_nativeLoadMeshPreview(
         throw_java_exception(env, "Unknown native error while loading the mesh preview");
         return nullptr;
     }
+}
+
+// Support painting (WO-14 part D). See engine::open_paint_session/paint_stroke/
+// get_painted_facets/slice_paint_session/close_paint_session in slic3r_engine.cpp/hpp for the
+// real, upstream-GUI-traced transform reasoning - this file is only the JNI marshalling.
+extern "C" JNIEXPORT jlong JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeOpenPaintSession(JNIEnv* env, jclass, jstring jInputModelPath) {
+    try {
+        return static_cast<jlong>(engine::open_paint_session(jstring_to_string(env, jInputModelPath)));
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+        return 0;
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error while opening the paint session");
+        return 0;
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativePaintStroke(
+    JNIEnv* env, jclass, jlong handle,
+    jdouble originX, jdouble originY, jdouble originZ,
+    jdouble dirX, jdouble dirY, jdouble dirZ,
+    jdouble radiusMm, jboolean enforcer) {
+    try {
+        engine::paint_stroke(static_cast<engine::PaintSessionHandle>(handle), originX, originY, originZ, dirX, dirY, dirZ, radiusMm, enforcer == JNI_TRUE);
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error during a paint stroke");
+    }
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeGetPaintedFacets(JNIEnv* env, jclass, jlong handle) {
+    try {
+        return to_jfloat_array(env, engine::get_painted_facets(static_cast<engine::PaintSessionHandle>(handle)));
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+        return nullptr;
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error while reading painted facets");
+        return nullptr;
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSlicePaintSession(
+    JNIEnv* env, jclass, jlong handle, jstring jOutputGcodePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues) {
+    try {
+        std::vector<std::pair<std::string, std::string>> config_overrides;
+        std::vector<std::string> keys = to_string_vector(env, jOverrideKeys);
+        std::vector<std::string> values = to_string_vector(env, jOverrideValues);
+        for (size_t i = 0; i < keys.size() && i < values.size(); ++i) {
+            config_overrides.emplace_back(keys[i], values[i]);
+        }
+        engine::slice_paint_session(static_cast<engine::PaintSessionHandle>(handle), jstring_to_string(env, jOutputGcodePath),
+            to_string_vector(env, jProfilePaths), config_overrides);
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error while slicing the paint session");
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeClosePaintSession(JNIEnv*, jclass, jlong handle) {
+    engine::close_paint_session(static_cast<engine::PaintSessionHandle>(handle));
 }

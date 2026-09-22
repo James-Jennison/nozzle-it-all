@@ -23,9 +23,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -54,6 +58,24 @@ import java.util.Locale
  * testing against the Snapmaker U1, owner watching throughout. See
  * docs/FEATURE_PARITY_ROADMAP.md's Phase 1 section for what this gates. */
 const val LIVE_HEATER_FAN_CONTROLS_ENABLED = true
+
+/** A real stop-sign octagon, not just a red pill - per council-design's review of the Control
+ * tab redesign, color alone didn't sufficiently distinguish Emergency Stop from ordinary
+ * controls. Only regular (equal-edge) when its own bounding box is square, which is why the
+ * button this is applied to is always sized with Modifier.size(...), never fillMaxWidth(). The
+ * 0.2929 corner-cut fraction (1 - 1/sqrt(2)) is the one that makes all eight edges equal length. */
+val StopOctagonShape = GenericShape { size, _ ->
+    val cut = minOf(size.width, size.height) * 0.2929f
+    moveTo(cut, 0f)
+    lineTo(size.width - cut, 0f)
+    lineTo(size.width, cut)
+    lineTo(size.width, size.height - cut)
+    lineTo(size.width - cut, size.height)
+    lineTo(cut, size.height)
+    lineTo(0f, size.height - cut)
+    lineTo(0f, cut)
+    close()
+}
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -197,8 +219,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var editingMacro by remember(state.generation) {mutableStateOf<String?>(null)}
     var preparingMacro by remember(state.generation) {mutableStateOf<String?>(null)}
     var runningMacro by remember(state.generation) {mutableStateOf<PrinterCommand?>(null)}
-    var macroFilter by remember(state.address) {mutableStateOf("")}
-    var showHiddenMacros by remember(state.address) {mutableStateOf(false)}
+    var macrosOpen by remember(state.address) {mutableStateOf(false)}
+    if(macrosOpen) MacrosBrowserPanel(state.catalog.macros, macroOptions, ::saveMacro, refresh, {editingMacro=it}, {preparingMacro=it}) {macrosOpen=false}
     val hostView=LocalView.current
     var cameraVisible by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -459,65 +481,104 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 1 -> {
-                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !nonKlipper) {
-                        item { OutlinedButton({heaterOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-heaters")){Text("Heater controls")} }
-                        item { OutlinedButton({fanOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-fans")){Text("Fan controls")} }
-                        item { OutlinedButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")} }
-                        item { OutlinedButton({toolOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-tools")){Text("Tool controls")} }
-                        item { OutlinedButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")} }
-                        // Feature-detected, not gated to a printer kind: shows "not detected"
-                        // rather than being hidden, matching Helix's own honest-empty-state panel.
-                        item { OutlinedButton({pandaBreathOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-panda")){Text("Panda Breath (chamber/dryer)")} }
-                        if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")} }
-                        // PAXX-specific hardware (unlike Panda Breath/Spoolman above, which are
-                        // generic-Klipper feature-detected) - gated to printer kind, not owned by
-                        // the owner, built at their request for other PAXX owners.
-                        if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) item { OutlinedButton({aceOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-ace")){Text("multiACE")} }
-                        // Last in this section, not first: destructive, so it should never sit
-                        // where a thumb reaching for an ordinary control could hit it by accident
-                        // (same reasoning Helix's own EstopBar comment gives).
-                        item {
-                            Button({estopConfirm=true}, enabled=state.connected, modifier=Modifier.fillMaxWidth().testTag("emergency-stop"),
-                                colors=ButtonDefaults.buttonColors(containerColor=MaterialTheme.colorScheme.error, contentColor=MaterialTheme.colorScheme.onError)) { Text("EMERGENCY STOP") }
-                        }
-                    }
-                    if(!nonKlipper) {
-                        item { OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")} }
-                        item { OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")} }
-                        item { OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")} }
-                        item { OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")} }
-                        item { OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")} }
-                        // Feature-detected (honest "not found" rather than hidden) like Panda
-                        // Breath above - not gated to the owner actually running Spoolman.
-                        item { OutlinedButton({spoolmanOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-spoolman")){Text("Spoolman")} }
-                        item { OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text(if(LIVE_HEATER_FAN_CONTROLS_ENABLED) "Console" else "Read-only console")} }
-                    }
-                    item { OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")} }
-                    if(bambu) item { Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.") }
-                    else if(prusa) item { Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.") }
-                    else item {
-                        Text("Organize and prepare macros locally. Execution requires an idle printer and confirmation.")
-                        OutlinedTextField(macroFilter,{macroFilter=it},label={Text("Search macros or groups")},modifier=Modifier.fillMaxWidth())
-                        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            FilterChip(showHiddenMacros,{showHiddenMacros=!showHiddenMacros},label={Text("Show hidden")},modifier=Modifier.testTag("show-hidden-macros"))
-                            TextButton(refresh) {Text("Refresh lists")}
-                        }
-                    }
-                    if(state.catalog.macros.isEmpty() && !nonKlipper) item {Text("No available macros. Connect to a ready printer, then refresh.")}
-                    val macros=if(nonKlipper) emptyList() else state.catalog.macros.filter {(it.contains(macroFilter,true)||(macroOptions[it]?.group?:"").contains(macroFilter,true))&&(showHiddenMacros||macroOptions[it]?.hidden!=true)}.sortedWith(compareByDescending<String> {macroOptions[it]?.favorite==true}.thenBy {macroOptions[it]?.group?:""}.thenBy {it})
-                    items(macros,key={it}) {macro ->
-                        val options=macroOptions[macro]?:MacroOptions()
-                        Card(Modifier.fillMaxWidth()) {Column(Modifier.padding(12.dp)) {
-                            Text(macro,style=MaterialTheme.typography.titleMedium)
-                            if(options.group.isNotBlank())Text(options.group)
-                            if(options.hidden)Text("Hidden from the default list",style=MaterialTheme.typography.bodySmall)
-                            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                                TextButton({saveMacro(macro,options.copy(favorite=!options.favorite))}){Text(if(options.favorite)"Unfavorite" else "Favorite")}
-                                TextButton({editingMacro=macro}){Text("Organize")}
-                                TextButton({saveMacro(macro,options.copy(hidden=!options.hidden))},modifier=Modifier.testTag("hide-macro-$macro")){Text(if(options.hidden)"Unhide" else "Hide")}
-                                if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !options.hidden) OutlinedButton({preparingMacro=macro}){Text("Run")}
+                    // Redesigned 2026-09-22 after a council-of-reviewers consultation (owner
+                    // request) unanimously flagged the previous version - 13+ visually identical
+                    // full-width OutlinedButton pills stacked with no grouping - as a real
+                    // "one long page of pills" usability problem. Every existing testTag below
+                    // is unchanged; only layout/shape/grouping changed.
+                    //
+                    // Emergency Stop moved first (owner: "easily accessible", not buried after a
+                    // scroll) and reshaped into an actual stop-sign octagon (owner's own idea,
+                    // addressing the one point the reviewers disagreed on - council-design argued
+                    // color alone wasn't enough shape differentiation from ordinary controls).
+                    // "Can't accidentally tap it" now comes from three independent things, not
+                    // position-in-scroll: a shape found nowhere else in this app, generous
+                    // isolating padding, and the pre-existing confirm dialog (estopConfirm) that
+                    // still gates the actual command - a stray tap here was never one tap away
+                    // from actually estopping, and still isn't.
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !nonKlipper) item {
+                        Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                            Button({estopConfirm=true}, enabled=state.connected,
+                                modifier=Modifier.size(140.dp).testTag("emergency-stop"),
+                                shape = StopOctagonShape, contentPadding = PaddingValues(0.dp),
+                                border = BorderStroke(4.dp, MaterialTheme.colorScheme.onError),
+                                colors=ButtonDefaults.buttonColors(containerColor=MaterialTheme.colorScheme.error, contentColor=MaterialTheme.colorScheme.onError)) {
+                                Text("STOP", style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold, textAlign=TextAlign.Center,
+                                    modifier=Modifier.semantics { contentDescription = "Emergency stop" })
                             }
-                        }}
+                        }
+                    }
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !nonKlipper) item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Hardware controls", style=MaterialTheme.typography.titleMedium)
+                            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                FilledTonalButton({heaterOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-heaters")){Text("Heater controls")}
+                                FilledTonalButton({fanOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-fans")){Text("Fan controls")}
+                                FilledTonalButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")}
+                                FilledTonalButton({toolOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-tools")){Text("Tool controls")}
+                                FilledTonalButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")}
+                                // Feature-detected, not gated to a printer kind: shows "not
+                                // detected" rather than being hidden, matching Helix's own
+                                // honest-empty-state panel.
+                                FilledTonalButton({pandaBreathOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-panda")){Text("Panda Breath (chamber/dryer)")}
+                                if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) FilledTonalButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")}
+                                // PAXX-specific hardware (unlike Panda Breath/Spoolman above,
+                                // which are generic-Klipper feature-detected) - gated to printer
+                                // kind, not owned by the owner, built at their request for other
+                                // PAXX owners.
+                                if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) FilledTonalButton({aceOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-ace")){Text("multiACE")}
+                            }
+                        }
+                    }
+                    if(!nonKlipper) item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Diagnostics & status", style=MaterialTheme.typography.titleMedium)
+                            FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")}
+                                OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")}
+                                OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")}
+                                OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")}
+                                OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")}
+                                // Feature-detected (honest "not found" rather than hidden) like
+                                // Panda Breath above - not gated to the owner actually running
+                                // Spoolman.
+                                OutlinedButton({spoolmanOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-spoolman")){Text("Spoolman")}
+                                OutlinedButton({consoleOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-console")){Text(if(LIVE_HEATER_FAN_CONTROLS_ENABLED) "Console" else "Read-only console")}
+                                OutlinedButton({controlPreview=true},modifier=Modifier.testTag("advanced-control-preview")) {Text("Preview advanced controls")}
+                                // The full macro list lives behind this now (owner request,
+                                // 2026-09-22) - see MacrosBrowserPanel. This tab only shows
+                                // whichever macros have been favorited there.
+                                OutlinedButton({macrosOpen=true},modifier=Modifier.testTag("open-macros")) {Text("Advanced macros")}
+                            }
+                        }
+                    }
+                    if(bambu) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("LAN mode limitations", style=MaterialTheme.typography.titleSmall)
+                        Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.")
+                    } } }
+                    else if(prusa) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
+                        Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")
+                    } } }
+                    else {
+                        // Owner request, 2026-09-22: the Control tab should show the operations
+                        // someone needs to operate their printer - dedicated controls above, not
+                        // a raw dump of whatever arbitrary macros the printer's config happens to
+                        // define. Only macros explicitly favorited in MacrosBrowserPanel show
+                        // here, and the whole section is omitted (not an empty placeholder) when
+                        // there are none - no guessing at which macro names are "essential".
+                        val favoriteMacros=state.catalog.macros.filter {macroOptions[it]?.favorite==true}.sorted()
+                        if(favoriteMacros.isNotEmpty()) item {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Favorite macros", style=MaterialTheme.typography.titleMedium)
+                                favoriteMacros.forEach { macro -> Card(Modifier.fillMaxWidth()) {
+                                    Row(Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(macro, style=MaterialTheme.typography.titleMedium, modifier=Modifier.weight(1f))
+                                        if(LIVE_HEATER_FAN_CONTROLS_ENABLED) Button({preparingMacro=macro}){Text("Run")}
+                                    }
+                                } }
+                            }
+                        }
                     }
                 }
                 2 -> {

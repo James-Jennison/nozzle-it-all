@@ -217,4 +217,34 @@ class CompanionScreenTest {
         assertEquals(100,offset)
     }
 
+    @Test fun onlyFavoritedMacrosShowOnControlTabRestLiveInTheAdvancedBrowser() {
+        // Owner request, 2026-09-22: the Control tab should show dedicated everyday controls,
+        // not a raw dump of the printer's own arbitrary macro inventory - only macros explicitly
+        // favorited in MacrosBrowserPanel (Advanced macros) should appear there, and the section
+        // is omitted entirely when nothing is favorited yet.
+        val address = "http://macro-scope-fixture.local/"
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = context.getSharedPreferences("macro-options", 0)
+        val key = java.security.MessageDigest.getInstance("SHA-256").digest(address.toByteArray()).joinToString("") {"%02x".format(it)}
+        try {
+            prefs.edit().remove(key).apply()
+            compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address, connected=true,
+                catalog=Catalog(emptyList(), listOf("BED_MESH_CALIBRATE","CANCEL_PRINT"), emptyList(), emptyList())), {}, {}, {}, {_,_->}) } }
+            compose.onNodeWithTag("nav-1").performClick()
+            compose.onNodeWithText("Favorite macros").assertDoesNotExist()
+            compose.onNodeWithTag("screen-list").performScrollToNode(hasTestTag("open-macros"))
+            compose.onNodeWithTag("open-macros").performClick()
+            compose.onNodeWithText("BED_MESH_CALIBRATE").assertExists()
+            compose.onNodeWithText("CANCEL_PRINT").assertExists()
+            compose.onAllNodesWithText("Favorite")[0].performScrollTo().performClick()
+            compose.onNodeWithText("Close").performClick()
+            // The Control tab body is a LazyColumn (unlike the browser dialog's eager
+            // verticalScroll Column) - the newly-favorited section won't be in the semantics
+            // tree at all until scrolled into view.
+            compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Favorite macros"))
+            compose.onNodeWithText("Favorite macros").assertExists()
+            compose.onNodeWithText("BED_MESH_CALIBRATE").assertExists()
+            compose.onNodeWithText("CANCEL_PRINT").assertDoesNotExist()
+        } finally { prefs.edit().remove(key).apply() }
+    }
 }

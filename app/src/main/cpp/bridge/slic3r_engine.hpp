@@ -23,4 +23,10 @@ void slice_file(const std::string& input_model_path,
                  const std::vector<std::string>& profile_paths,
                  const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
 
+// Loads input_model_path (STL/3MF/OBJ) the same way slice_file() does - real Model::read_from_file,
+// bed-centered - but stops short of slicing. Returns a flat interleaved vertex buffer for a
+// real-time GL preview: 6 floats per vertex (x,y,z,nx,ny,nz), 3 vertices per triangle, nx/ny/nz
+// the triangle's own flat face normal (matches thumbnail_render.cpp's flat-shading choice).
+std::vector<float> load_mesh_preview(const std::string& input_model_path);
+
 } // namespace engine

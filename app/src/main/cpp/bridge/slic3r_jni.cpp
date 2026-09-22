@@ -127,3 +127,30 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceFile(
         throw_java_exception(env, "Unknown native error during slicing");
     }
 }
+
+// Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - not a second,
+// weaker parser - and returns a flat interleaved vertex buffer for an in-app 3D preview: 6
+// floats per vertex (x,y,z,nx,ny,nz), 3 vertices per triangle. See engine::load_mesh_preview.
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeLoadMeshPreview(
+    JNIEnv* env, jclass, jstring jInputModelPath) {
+    try {
+        const std::string input_path = jstring_to_string(env, jInputModelPath);
+        std::vector<float> buffer = engine::load_mesh_preview(input_path);
+        // One bulk SetFloatArrayRegion call, not per-element JNI calls - a real perf cliff at
+        // the vertex counts a detailed model can reach.
+        jfloatArray result = env->NewFloatArray(static_cast<jsize>(buffer.size()));
+        if (result == nullptr) {
+            throw_java_exception(env, "Could not allocate the mesh preview buffer.");
+            return nullptr;
+        }
+        env->SetFloatArrayRegion(result, 0, static_cast<jsize>(buffer.size()), buffer.data());
+        return result;
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+        return nullptr;
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error while loading the mesh preview");
+        return nullptr;
+    }
+}

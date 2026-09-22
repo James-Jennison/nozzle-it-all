@@ -38,4 +38,12 @@ object NativeEngine {
         inputModelPath: String, outputGcodePath: String, profilePaths: Array<String>,
         overrideKeys: Array<String>, overrideValues: Array<String>,
     )
+
+    // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - real
+    // Model::read_from_file, bed-centered - but stops short of slicing. Returns a flat
+    // interleaved vertex buffer for a real-time 3D preview: 6 floats per vertex
+    // (x,y,z,nx,ny,nz), 3 vertices per triangle, the triangle's own flat face normal repeated
+    // for all 3 (matches thumbnail_render.cpp's flat-shading choice). Throws RuntimeException
+    // on any failure, same convention as nativeSliceFile.
+    external fun nativeLoadMeshPreview(inputModelPath: String): FloatArray
 }

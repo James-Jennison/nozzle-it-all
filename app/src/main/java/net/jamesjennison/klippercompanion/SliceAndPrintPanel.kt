@@ -2,14 +2,28 @@ package net.jamesjennison.klippercompanion
 
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -23,16 +37,18 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * WO-13 Phases 2/3: shares a model file (STL/3MF/OBJ) in, lets the owner customize a small,
- * deliberately bounded set of slicing settings (SliceCustomization.kt - not OrcaSlicer's full
- * surface), slices it on-device for the currently selected printer, then stages the resulting
- * G-code into the same review-then-confirm machinery every other mutating command already uses -
- * this panel itself only ever gets as far as an enabled Confirm button; nothing prints without
- * that separate, explicit tap.
+ * WO-13/WO-14: a full-screen, EasyPrint-inspired visual slicer (owner request, 2026-09-22 - "a
+ * visual, on-device, in-app slicer", real PrusaSlicer EasyPrint screenshots as the reference).
+ * Shares a model file (STL/3MF/OBJ) in, shows it in a real rotatable 3D view (ModelViewer.kt)
+ * alongside a small, deliberately bounded settings surface (SliceCustomization.kt - not
+ * OrcaSlicer's full surface), slices it on-device, shows the real sliced toolpath in 3D
+ * (SlicedPreview.kt) with real stats (GcodeStats.kt), confirms the printer/bed is ready, then
+ * stages the resulting G-code into the same review-then-confirm machinery every other mutating
+ * command already uses - nothing prints without that final, explicit tap.
  *
  * Deliberately targets the currently selected printer (state.address), the same convention
  * BambuPrintPanel already uses for its own share-intent flow, rather than adding a separate
- * printer-picker UI.
+ * printer-picker UI - the "Printer" tab below is a real summary of that choice, not a picker.
  */
 @Composable fun SliceAndPrintPanel(uri: Uri, state: ScreenState, execute: (PrinterCommand, Int)->Unit, close: ()->Unit) {
     val context = LocalContext.current
@@ -49,11 +65,28 @@ import java.io.File
     // Customization is reviewed before anything runs - see SliceCustomization.kt for exactly
     // what this covers and why it's this specific short list, not OrcaSlicer's full settings.
     var customizing by remember(uri) { mutableStateOf(true) }
+    var tab by remember(uri) { mutableIntStateOf(0) }
     var layerHeightText by remember(uri) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.layerHeightMm.toString()) }
     var infillText by remember(uri) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.infillPercent.toString()) }
     var supportsEnabled by remember(uri) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.supportsEnabled) }
     var customizeError by remember(uri) { mutableStateOf<String?>(null) }
     var customization by remember(uri) { mutableStateOf<SliceCustomization?>(null) }
+    // Copied as soon as the panel opens (not inside the slicing effect) - both the pre-slice 3D
+    // preview and the eventual slice call need the same local file.
+    var localModel by remember(uri) { mutableStateOf<File?>(null) }
+    var copyError by remember(uri) { mutableStateOf<String?>(null) }
+    // Post-slice toolpath review (owner request: "a visual, on-device, in-app slicer" -
+    // PrusaSlicer's EasyPrint as the reference point). Reuses GcodePreview.parse() verbatim -
+    // the same real parser already used for Bambu-shared-file preview and live print tracking -
+    // rendered in 3D (SlicedPreview.kt) instead of the flat 2D LayerPreview used elsewhere.
+    var reviewedLayers by remember(uri) { mutableStateOf(false) }
+    var slicedToolpath by remember(uri) { mutableStateOf<Toolpath?>(null) }
+    var toolpathError by remember(uri) { mutableStateOf<String?>(null) }
+    var gcodeStats by remember(uri) { mutableStateOf<GcodeStats?>(null) }
+    // A last, lightweight human-attention gate before the real "Start print" confirm below -
+    // matches the EasyPrint reference's own "is the bed ready?" step. Purely a UI gate; nothing
+    // here sends a command.
+    var printerReady by remember(uri) { mutableStateOf(false) }
 
     if(name.isEmpty()) {
         AlertDialog(onDismissRequest=close,title={Text("Unsupported file")},
@@ -79,50 +112,42 @@ import java.io.File
         return
     }
 
-    if(customizing) {
-        AlertDialog(onDismissRequest=close, title={Text("Customize this print")},
-            text={ Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                Text(name, style=MaterialTheme.typography.titleSmall)
-                Text("For $⁠${profile.label}. A small, deliberately short list - not every OrcaSlicer setting, just the ones that most change how a print turns out.", style=MaterialTheme.typography.bodySmall)
-                OutlinedTextField(layerHeightText, {layerHeightText=it}, label={Text("Layer height (mm)")}, singleLine=true, modifier=Modifier.testTag("slice-layer-height"))
-                OutlinedTextField(infillText, {infillText=it}, label={Text("Infill (%)")}, singleLine=true, modifier=Modifier.testTag("slice-infill"))
-                Row(verticalAlignment=Alignment.CenterVertically) {
-                    Checkbox(supportsEnabled, {supportsEnabled=it}, modifier=Modifier.testTag("slice-supports"))
-                    Text("Print supports")
-                }
-                customizeError?.let { Text(it, color=MaterialTheme.colorScheme.error) }
-            } },
-            confirmButton={ TextButton({
-                val layerHeight = validateLayerHeight(layerHeightText)
-                val infill = validateInfillPercent(infillText)
-                if(layerHeight == null) { customizeError = "Enter a layer height between 0.04 and 0.6mm."; return@TextButton }
-                if(infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; return@TextButton }
-                customization = SliceCustomization(layerHeight, infill, supportsEnabled)
-                customizing = false
-            }, modifier=Modifier.testTag("slice-customize-next")) { Text("Slice") } },
-            dismissButton={TextButton(close){Text("Cancel")}})
-        return
+    LaunchedEffect(uri) {
+        copyError = null
+        localModel = try {
+            withContext(Dispatchers.IO) { copySharedModel(context.applicationContext, uri, name) }
+        } catch(e: Exception) { copyError = e.message ?: "Could not read the shared file."; null }
     }
 
-    LaunchedEffect(uri, profile.address, customization) {
+    LaunchedEffect(localModel, profile.address, customization) {
         val chosen = customization ?: return@LaunchedEffect
+        val model = localModel ?: return@LaunchedEffect
         working = true; stage = "Slicing…"; error = null
-        val localModel = try {
-            withContext(Dispatchers.IO) { copySharedModel(context.applicationContext, uri, name) }
-        } catch(e: Exception) { working = false; error = e.message ?: "Could not read the shared file."; return@LaunchedEffect }
-        when(val outcome = SlicingCoordinator.slice(context.applicationContext, localModel, profile, chosen.toOverrides())) {
-            is SliceOutcome.Success -> { sliced = outcome.gcode; stage = "Uploading…" }
+        when(val outcome = SlicingCoordinator.slice(context.applicationContext, model, profile, chosen.toOverrides())) {
+            is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
             is SliceOutcome.FirmwareBlocked -> { working = false; error = outcome.reason }
             is SliceOutcome.Failed -> { working = false; error = outcome.message }
         }
     }
-    // A second effect rather than folding into the one above: the upload step needs a live,
-    // connected printer (LiveFileChanges.ready() requires it), so it only starts once slicing
-    // itself has already succeeded, and re-runs independently if the user backgrounds/returns.
-    LaunchedEffect(sliced, state.connected) {
+    // Toolpath + stats parsing, both off the main thread the same way slicing itself is
+    // dispatched. A parse failure doesn't block printing - the review is a visualization aid,
+    // not a correctness gate; the actual G-code was already produced successfully.
+    LaunchedEffect(sliced) {
         val gcode = sliced ?: return@LaunchedEffect
+        toolpathError = null
+        try {
+            slicedToolpath = withContext(Dispatchers.Default) { gcode.inputStream().buffered().use { GcodePreview.parse(it) } }
+        } catch(e: Exception) { toolpathError = e.message ?: "Could not build a layer preview of the sliced G-code." }
+        gcodeStats = runCatching { withContext(Dispatchers.Default) { GcodeStatsParser.parse(gcode) } }.getOrNull()
+    }
+    // The upload step needs a live, connected printer (LiveFileChanges.ready() requires it), so
+    // it only starts once slicing has succeeded and the owner has reviewed the sliced layers,
+    // and re-runs independently if the user backgrounds/returns.
+    LaunchedEffect(sliced, reviewedLayers, state.connected) {
+        val gcode = sliced ?: return@LaunchedEffect
+        if(!reviewedLayers) return@LaunchedEffect
         if(!state.connected) { working = false; error = "Connect to ${state.address} to upload the sliced file."; return@LaunchedEffect }
-        working = true
+        working = true; stage = "Uploading…"
         val backend = LiveFileChanges(state.address, File(context.cacheDir, "live-file"), rawApiKey = state.apiKeyFor(state.address))
         try {
             val requested = gcode.name
@@ -134,23 +159,103 @@ import java.io.File
         finally { backend.close() }
     }
 
-    AlertDialog(onDismissRequest={ if(!working) close() }, title={Text("Slice and print on this printer?")},
-        text={ Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            KilnFrame(accent=true) { Column(Modifier.padding(14.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text(name, style=MaterialTheme.typography.titleSmall)
-                Text("Slices on-device for ${profile.label}, uploads the result to ${state.address}, then waits for you to confirm the print separately.")
-                customization?.let { Text("${it.layerHeightMm}mm layers · ${it.infillPercent}% infill · supports ${if(it.supportsEnabled) "on" else "off"}", style=MaterialTheme.typography.bodySmall) }
-            } }
-            if(working) Text(stage)
-            error?.let { Text(it, color=MaterialTheme.colorScheme.error) }
-            stagedFilename?.let { Text("Ready: $it", style=MaterialTheme.typography.bodySmall) }
-        } },
-        confirmButton={ TextButton({
-            val filename = stagedFilename ?: return@TextButton
-            execute(Moonraker.start(filename), state.generation)
-            close()
-        }, enabled=!working && error==null && stagedFilename!=null, modifier=Modifier.testTag("slice-and-print-confirm")) { Text("Start print") } },
-        dismissButton={TextButton({ if(!working) close() }, enabled=!working){Text("Cancel")}})
+    BackHandler(enabled = !working) { close() }
+
+    // This panel renders outside Scaffold's own inset-aware padding (it's a full-screen takeover,
+    // not Scaffold content), so it has to handle the status/navigation bar insets itself - caught
+    // live: the bottom "Slice" action rendered underneath the system navigation bar/buttons.
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()) {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                IconButton({ if(!working) close() }, Modifier.testTag("slicer-close")) { CompanionIcon(CompanionSymbol.CLOSE) }
+            }
+            when {
+                customizing -> {
+                    TabRow(tab) {
+                        Tab(tab == 0, { tab = 0 }, text = { Text("Model") }, modifier = Modifier.testTag("slicer-tab-model"))
+                        Tab(tab == 1, { tab = 1 }, text = { Text("Settings") }, modifier = Modifier.testTag("slicer-tab-settings"))
+                        Tab(tab == 2, { tab = 2 }, text = { Text("Printer") }, modifier = Modifier.testTag("slicer-tab-printer"))
+                    }
+                    Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        when(tab) {
+                            0 -> {
+                                ModelViewer(localModel)
+                                copyError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                            }
+                            1 -> {
+                                Text("A small, deliberately short list - not every OrcaSlicer setting, just the ones that most change how a print turns out.", style = MaterialTheme.typography.bodySmall)
+                                OutlinedTextField(layerHeightText, {layerHeightText=it}, label={Text("Layer height (mm)")}, singleLine=true, modifier=Modifier.testTag("slice-layer-height"))
+                                OutlinedTextField(infillText, {infillText=it}, label={Text("Infill (%)")}, singleLine=true, modifier=Modifier.testTag("slice-infill"))
+                                Row(verticalAlignment=Alignment.CenterVertically) {
+                                    Checkbox(supportsEnabled, {supportsEnabled=it}, modifier=Modifier.testTag("slice-supports"))
+                                    Text("Print supports")
+                                }
+                                customizeError?.let { Text(it, color=MaterialTheme.colorScheme.error) }
+                            }
+                            2 -> {
+                                Text(profile.label, style = MaterialTheme.typography.titleSmall)
+                                Text(state.address, style = MaterialTheme.typography.bodySmall)
+                                Text("Slicing always targets whichever printer is currently selected on the Home tab - there's no separate picker here.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                    Button({
+                        val layerHeight = validateLayerHeight(layerHeightText)
+                        val infill = validateInfillPercent(infillText)
+                        if(layerHeight == null) { customizeError = "Enter a layer height between 0.04 and 0.6mm."; tab = 1; return@Button }
+                        if(infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; tab = 1; return@Button }
+                        customization = SliceCustomization(layerHeight, infill, supportsEnabled)
+                        customizing = false
+                    }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-customize-next")) { Text("Slice") }
+                }
+                sliced == null -> {
+                    Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        if(working) { CircularProgressIndicator(); Text(stage) }
+                        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+                !reviewedLayers -> {
+                    Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Sliced result", style = MaterialTheme.typography.titleSmall)
+                        gcodeStats?.let { s ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.testTag("slice-stats")) {
+                                s.printTime?.let { Text(it) }
+                                s.filamentUsedGrams?.let { Text("${it}g") }
+                                s.filamentUsedMm?.let { Text("${(it/1000).let{m->"%.2f".format(m)}}m") }
+                            }
+                        }
+                        slicedToolpath?.let { SlicedPreview(it) } ?: toolpathError?.let { Text(it, color=MaterialTheme.colorScheme.error) } ?: Text("Building layer preview…")
+                    }
+                    Button({ reviewedLayers = true }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-review-continue")) { Text("Continue") }
+                }
+                !printerReady -> {
+                    Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Is ${profile.label} ready to print?", style = MaterialTheme.typography.titleMedium)
+                        Text("Have you cleared the bed and removed the previous print?", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Button({ printerReady = true }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-printer-ready")) { Text("Printer is ready") }
+                }
+                else -> {
+                    Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KilnFrame(accent=true) { Column(Modifier.padding(14.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Text(name, style=MaterialTheme.typography.titleSmall)
+                            Text("Slices on-device for ${profile.label}, uploads the result to ${state.address}, then waits for you to confirm the print separately.")
+                            customization?.let { Text("${it.layerHeightMm}mm layers · ${it.infillPercent}% infill · supports ${if(it.supportsEnabled) "on" else "off"}", style=MaterialTheme.typography.bodySmall) }
+                        } }
+                        if(working) Text(stage)
+                        error?.let { Text(it, color=MaterialTheme.colorScheme.error) }
+                        stagedFilename?.let { Text("Ready: $it", style=MaterialTheme.typography.bodySmall) }
+                    }
+                    Button({
+                        val filename = stagedFilename ?: return@Button
+                        execute(Moonraker.start(filename), state.generation)
+                        close()
+                    }, enabled=!working && error==null && stagedFilename!=null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-and-print-confirm")) { Text("Start print") }
+                }
+            }
+        }
+    }
 }
 
 private fun copySharedModel(context: android.content.Context, uri: Uri, name: String): File {

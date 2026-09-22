@@ -20,24 +20,14 @@
 
 namespace engine {
 
-void slice_file(const std::string& input_model_path,
-                 const std::string& output_gcode_path,
-                 const std::vector<std::string>& profile_paths,
-                 const std::vector<std::pair<std::string, std::string>>& config_overrides) {
+namespace {
+
+// Shared by slice_file() and load_mesh_preview(): load a model file and place it exactly where
+// slicing will actually place it - real coordinates, not the mesh's own local origin. See
+// slice_file()'s own history for why centering matters (a real off-bed print abort on real
+// hardware, not a hypothetical).
+Slic3r::Model load_and_place_model(const std::string& input_model_path, Slic3r::DynamicPrintConfig& config) {
     using namespace Slic3r;
-
-    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
-
-    for (const std::string& profile_path : profile_paths) {
-        DynamicPrintConfig profile_config;
-        profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
-        config.apply(profile_config);
-    }
-
-    for (const auto& [key, value] : config_overrides) {
-        config.set_deserialize_strict(key, value);
-    }
-
     Model model = Model::read_from_file(input_model_path, &config);
     if (model.objects.empty()) {
         throw std::runtime_error("No printable objects found in " + input_model_path);
@@ -57,17 +47,39 @@ void slice_file(const std::string& input_model_path,
     // path skipped that step entirely. Caught live: a real print on the CC1 aborted right after
     // the purge line with Klipper's own "Move out of range" error, because roughly half of
     // squatchee_spin_mount's toolpath fell into negative Y.
-    {
-        Points bed_shape = Slic3r::get_bed_shape(config);
-        if (!bed_shape.empty()) {
-            BoundingBox bed_bbox(bed_shape);
-            model.center_instances_around_point(unscale(bed_bbox.center()));
-        }
+    Points bed_shape = Slic3r::get_bed_shape(config);
+    if (!bed_shape.empty()) {
+        BoundingBox bed_bbox(bed_shape);
+        model.center_instances_around_point(unscale(bed_bbox.center()));
     }
 
     for (ModelObject* object : model.objects) {
         object->ensure_on_bed();
     }
+    return model;
+}
+
+} // namespace
+
+void slice_file(const std::string& input_model_path,
+                 const std::string& output_gcode_path,
+                 const std::vector<std::string>& profile_paths,
+                 const std::vector<std::pair<std::string, std::string>>& config_overrides) {
+    using namespace Slic3r;
+
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+
+    for (const std::string& profile_path : profile_paths) {
+        DynamicPrintConfig profile_config;
+        profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        config.apply(profile_config);
+    }
+
+    for (const auto& [key, value] : config_overrides) {
+        config.set_deserialize_strict(key, value);
+    }
+
+    Model model = load_and_place_model(input_model_path, config);
 
     // Captured now (world/bed coordinates, after centering) and before print.apply()/process(),
     // which are free to mutate `model` - see thumbnail_render.hpp. Real printer screens (COSMOS,
@@ -90,6 +102,31 @@ void slice_file(const std::string& input_model_path,
 
     print.process();
     print.export_gcode(output_gcode_path, nullptr, thumbnail_cb);
+}
+
+std::vector<float> load_mesh_preview(const std::string& input_model_path) {
+    using namespace Slic3r;
+
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    Model model = load_and_place_model(input_model_path, config);
+    TriangleMesh mesh = model.mesh();
+    const indexed_triangle_set& its = mesh.its;
+
+    std::vector<float> buffer;
+    buffer.reserve(its.indices.size() * 3 * 6);
+    for (const Vec3i32& tri : its.indices) {
+        const Vec3f& v0 = its.vertices[tri(0)];
+        const Vec3f& v1 = its.vertices[tri(1)];
+        const Vec3f& v2 = its.vertices[tri(2)];
+        Vec3f normal = (v1 - v0).cross(v2 - v0);
+        float len = normal.norm();
+        if (len > 1e-9f) normal /= len;
+        for (const Vec3f& v : {v0, v1, v2}) {
+            buffer.push_back(v.x()); buffer.push_back(v.y()); buffer.push_back(v.z());
+            buffer.push_back(normal.x()); buffer.push_back(normal.y()); buffer.push_back(normal.z());
+        }
+    }
+    return buffer;
 }
 
 } // namespace engine

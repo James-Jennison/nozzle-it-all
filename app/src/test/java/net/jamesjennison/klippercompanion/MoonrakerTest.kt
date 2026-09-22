@@ -125,5 +125,31 @@ class MoonrakerTest {
             api.close()
         }
     }
+    @Test fun firmwareIdentityReadsRealCosmosShape() {
+        // Exact response shape confirmed live against a real Elegoo Centauri Carbon, 2026-09-22.
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":{"app":"OpenCentauri Cosmos","state":"ready","software_version":"Release - 26.08.0","hostname":"cosmos"}}"""))
+            server.start()
+            val api = Moonraker(server.url("/").toString())
+            val identity = api.firmwareIdentity()
+            assertEquals("OpenCentauri Cosmos", identity.app)
+            assertEquals("Release - 26.08.0", identity.version)
+            val req = server.takeRequest()
+            assertEquals("/printer/info", req.requestUrl!!.encodedPath)
+            api.close()
+        }
+    }
+    @Test fun firmwareIdentityDefaultsBlankAppForANonCosmosPrinter() {
+        // Exact shape confirmed live against a real Snapmaker U1 (no "app" field at all).
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":{"state":"ready","software_version":"1.6.0.267_20260815150420","hostname":"lava"}}"""))
+            server.start()
+            val api = Moonraker(server.url("/").toString())
+            val identity = api.firmwareIdentity()
+            assertEquals("", identity.app)
+            assertEquals("1.6.0.267_20260815150420", identity.version)
+            api.close()
+        }
+    }
 
 }

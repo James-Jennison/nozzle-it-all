@@ -32,6 +32,8 @@ class PrinterModelTest {
         override fun command(command: PrinterCommand) { sent++; lastCommand = command; afterSend?.invoke() }
         var closed = false
         override fun close() { closed = true }
+        var firmwareIdentityResult: FirmwareIdentity? = null
+        override fun firmwareIdentity(): FirmwareIdentity = firmwareIdentityResult ?: throw ApiFailure("Fixture: firmware identity unavailable.")
     }
     private val pause = PrinterCommand("Pause", "printer/print/pause", allowedStates=setOf("printing"))
     @Test fun savedProfilesMigrateNormalizeAndRejectInvalidAddresses() {
@@ -263,6 +265,37 @@ class PrinterModelTest {
         advanceTimeBy(2_500); runCurrent()
         assertFalse("a second consecutive failure is a real disconnect", model.state.value.connected)
         model.disconnect(); model.foreground(false)
+    }
+    @Test fun detectFirmwareRecordsALiveReadingIntoTheProfile() = runTest(dispatcher) {
+        val fake = Fake()
+        fake.firmwareIdentityResult = FirmwareIdentity("OpenCentauri Cosmos", "Release - 26.08.0")
+        val model = PrinterModel(initialProfiles = listOf(PrinterProfile(fake.address, slicingModel = SlicingPrinterModel.ELEGOO_CENTAURI_CARBON)), serviceFactory = { fake }, clock = { 100_000 }, io = dispatcher)
+        var result: Result<FirmwareIdentity>? = null
+        model.detectFirmware(fake.address) { result = it }; runCurrent()
+        assertTrue(result?.isSuccess == true)
+        assertEquals("Release - 26.08.0", model.state.value.profiles.single().declaredFirmwareVersion)
+        assertEquals(CosmosProfileGeneration.CURRENT, model.state.value.profiles.single().declaredCosmosProfileGeneration)
+    }
+    @Test fun detectFirmwareFailureLeavesTheProfileUnchanged() = runTest(dispatcher) {
+        val fake = Fake() // firmwareIdentityResult left null -> throws
+        val model = PrinterModel(initialProfiles = listOf(PrinterProfile(fake.address, slicingModel = SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, declaredFirmwareVersion = "26.05.0")), serviceFactory = { fake }, clock = { 100_000 }, io = dispatcher)
+        var result: Result<FirmwareIdentity>? = null
+        model.detectFirmware(fake.address) { result = it }; runCurrent()
+        assertTrue(result?.isFailure == true)
+        assertEquals("26.05.0", model.state.value.profiles.single().declaredFirmwareVersion)
+    }
+    @Test fun detectFirmwareOnAnUnknownAddressFailsImmediately() = runTest(dispatcher) {
+        val model = PrinterModel(clock = { 100_000 }, io = dispatcher)
+        var result: Result<FirmwareIdentity>? = null
+        model.detectFirmware("http://not-saved.local/") { result = it }
+        assertTrue(result?.isFailure == true)
+    }
+    @Test fun changingSlicingModelClearsAnyPreviouslyDeclaredFirmwareVersion() = runTest(dispatcher) {
+        val fake = Fake()
+        val model = PrinterModel(initialProfiles = listOf(PrinterProfile(fake.address, slicingModel = SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, declaredFirmwareVersion = "Release - 26.08.0")), serviceFactory = { fake }, clock = { 100_000 }, io = dispatcher)
+        model.updateProfile(fake.address, fake.address, "", "", slicingModel = SlicingPrinterModel.GENERIC_KLIPPER)
+        assertEquals("", model.state.value.profiles.single().declaredFirmwareVersion)
+        assertEquals(SlicingPrinterModel.GENERIC_KLIPPER, model.state.value.profiles.single().slicingModel)
     }
 
 }

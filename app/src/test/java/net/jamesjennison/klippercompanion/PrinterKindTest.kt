@@ -58,6 +58,29 @@ class PrinterKindTest {
         assertTrue(printerServiceFor(PrinterProfile("http://u1.local/"), "http://u1.local/") is Moonraker)
         assertTrue(printerServiceFor(null, "http://u1.local/") is Moonraker)
     }
+    @Test fun slicingModelAndDeclaredFirmwareVersionRoundTrip() {
+        val prefs = InMemoryPrefs()
+        val secrets = InMemoryPrefs()
+        val profile = PrinterProfile("http://cc1.local/", "CC1", slicingModel = SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, declaredFirmwareVersion = "Release - 26.08.0")
+        PrinterPreferences.saveProfiles(prefs, secrets, profile.address, listOf(profile))
+        val loaded = PrinterPreferences.profiles(prefs, secrets).single()
+        assertEquals(profile, loaded)
+        assertEquals(CosmosProfileGeneration.CURRENT, loaded.declaredCosmosProfileGeneration)
+    }
+    @Test fun missingOrUnrecognizedSlicingModelDefaultsToNull() {
+        val prefs = InMemoryPrefs(mutableMapOf("profilesV1" to
+            """[{"address":"http://a.local/","name":"A","favorite":false,"cameraId":""},
+                {"address":"http://b.local/","name":"B","favorite":false,"cameraId":"","slicingModel":"SOME_FUTURE_MODEL"}]"""))
+        val secrets = InMemoryPrefs()
+        val profiles = PrinterPreferences.profiles(prefs, secrets)
+        assertNull(profiles[0].slicingModel)
+        assertNull(profiles[1].slicingModel)
+    }
+    @Test fun declaredCosmosProfileGenerationIsNullForNonCentauriCarbonModels() {
+        assertNull(PrinterProfile("http://u1.local/", slicingModel = SlicingPrinterModel.SNAPMAKER_U1, declaredFirmwareVersion = "26.08.0").declaredCosmosProfileGeneration)
+        assertNull(PrinterProfile("http://cc1.local/", slicingModel = SlicingPrinterModel.ELEGOO_CENTAURI_CARBON).declaredCosmosProfileGeneration) // blank version
+        assertNull(PrinterProfile("http://cc1.local/", slicingModel = SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, declaredFirmwareVersion = "garbage").declaredCosmosProfileGeneration)
+    }
     @Test fun missingOrUnrecognizedKindDefaultsToGenericKlipper() {
         val prefs = InMemoryPrefs(mutableMapOf("profilesV1" to
             """[{"address":"http://a.local/","name":"A","favorite":false,"cameraId":""},

@@ -57,6 +57,9 @@ interface PrinterService {
     fun toolStatus(): ToolStatus = throw ApiFailure("Tool controls unavailable.")
     fun pandaBreathStatus(): PandaBreathStatus = throw ApiFailure("Panda Breath unavailable.")
     fun aceStatus(): AceStatus = throw ApiFailure("multiACE unavailable.")
+    // WO-13: read live before ever using a Centauri-Carbon/COSMOS-specific slicer profile - see
+    // FirmwareIdentity.kt's own header comment on why a cached/stale value is not safe here.
+    fun firmwareIdentity(): FirmwareIdentity = throw ApiFailure("Firmware identity unavailable.")
     // Snapmaker U1/PAXX only (PrinterKind.SNAPMAKER_U1_PAXX); see Bespok3d.kt.
     fun bespok3dProbe(): Bespok3dProbe = throw ApiFailure("Bespok3d bridge unavailable.")
     fun bespok3dStatus(connection: Bespok3dConnection): Bespok3dStatus? = throw ApiFailure("Bespok3d bridge unavailable.")
@@ -277,6 +280,16 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val result = request("printer/objects/query", mapOf("webhooks" to "state", "print_stats" to "state", "ace" to "")) as? JSONObject
             ?: throw ApiFailure("multiACE status unavailable.")
         return AceControls.parse(result)
+    }
+    // Confirmed live against a real Elegoo Centauri Carbon running COSMOS: printer/info's "app"
+    // field is "OpenCentauri Cosmos" and "software_version" is e.g. "Release - 26.08.0". A
+    // Snapmaker U1 has no "app" field at all (optString defaults it blank) and a plain
+    // "software_version" like "1.6.0.267_20260815150420". Never called by snapshot()'s own
+    // regular poll - only right before a Centauri-Carbon-specific slice, deliberately, per
+    // FirmwareIdentity.kt's header comment.
+    override fun firmwareIdentity(): FirmwareIdentity {
+        val info = request("printer/info") as? JSONObject ?: throw ApiFailure("Firmware identity unavailable.")
+        return FirmwareIdentity(app = info.optString("app", ""), version = info.optString("software_version", ""))
     }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")

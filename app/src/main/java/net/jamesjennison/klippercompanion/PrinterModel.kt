@@ -85,7 +85,7 @@ class PrinterModel(
     private fun persist(address: String = _state.value.address, profiles: List<PrinterProfile> = _state.value.profiles) {
         saveSettings(address, profiles.map { it.address }); saveProfiles(address, profiles)
     }
-    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String, kind: PrinterKind? = null, serial: String? = null): String? {
+    fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String, kind: PrinterKind? = null, serial: String? = null, slicingModel: SlicingPrinterModel? = null): String? {
         if(_state.value.busy) return "Wait for the current command to finish."
         val current = _state.value
         // The profile is resolved before the address is: which validator applies depends on the kind
@@ -101,12 +101,40 @@ class PrinterModel(
         // for the connected printer via disconnect(), for a background one via savedMonitor.remove().
         if(oldAddress == current.address) { if(oldAddress != normalized || keyChanged) disconnect() }
         else if(normalized == oldAddress && keyChanged) savedMonitor.remove(oldAddress)
-        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey,kind=normalizedKind,serial=(serial ?: it.serial).trim().take(40)) else it }
+        // Changing which slicing profile family a printer maps to invalidates any previously
+        // confirmed firmware declaration - WO-13's declaredFirmwareVersion is specifically a
+        // confirmation *for a given slicingModel*, not a fact about the printer in isolation.
+        val newSlicingModel = slicingModel ?: existing.slicingModel
+        val declaredFirmwareVersion = if (newSlicingModel != existing.slicingModel) "" else existing.declaredFirmwareVersion
+        val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey,kind=normalizedKind,serial=(serial ?: it.serial).trim().take(40),slicingModel=newSlicingModel,declaredFirmwareVersion=declaredFirmwareVersion) else it }
         val selected = if(current.address == oldAddress) normalized else _state.value.address
         _state.value = _state.value.copy(address=selected,profiles=profiles,savedPrinters=profiles.map { it.address })
         persist()
         monitorSavedPrinters()
         return null
+    }
+    // WO-13: a live-only read, deliberately separate from updateProfile - never guesses or
+    // defaults a firmware declaration, only ever records what a real printer just reported (see
+    // FirmwareIdentity.kt's own header comment on why a stale/cached value is unsafe here).
+    // Callable for any saved profile, not just the currently connected one, since firmware needs
+    // to be confirmed before a printer is ever actively connected to slice for it.
+    fun detectFirmware(address: String, onResult: (Result<FirmwareIdentity>) -> Unit) {
+        if (_state.value.profiles.none { it.address == address }) { onResult(Result.failure(ApiFailure("This profile is no longer available."))); return }
+        viewModelScope.launch {
+            val result = try {
+                val identity = withContext(io) {
+                    val service = resolvedServiceFactory(address)
+                    try { service.firmwareIdentity() } finally { runCatching { service.close() } }
+                }
+                Result.success(identity)
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+            result.getOrNull()?.let { identity ->
+                val profiles = _state.value.profiles.map { if (it.address == address) it.copy(declaredFirmwareVersion = identity.version) else it }
+                _state.value = _state.value.copy(profiles = profiles)
+                persist()
+            }
+            onResult(result)
+        }
     }
     fun favoriteProfile(address: String) {
         if(_state.value.busy) return

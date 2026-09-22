@@ -24,14 +24,17 @@ object PrinterPreferences {
             // For a BAMBU_LAB profile this same slot holds the access code - same class of secret
             // (a control-granting credential), so it gets the same encrypted storage.
             val apiKey = try { secrets.getString(address, "") ?: "" } catch (_: Exception) { "" }
-            PrinterProfile(address, p.optString("name").take(80), p.optBoolean("favorite"), p.optString("cameraId"), apiKey, kind, p.optString("serial").take(40))
+            // Same absent/unrecognized-value tolerance as "kind": an older saved profile (or a
+            // downgrade after a future value was written) has no slicingModel at all, not a bad one.
+            val slicingModel = p.optString("slicingModel").takeIf { it.isNotBlank() }?.let { runCatching { SlicingPrinterModel.valueOf(it) }.getOrNull() }
+            PrinterProfile(address, p.optString("name").take(80), p.optBoolean("favorite"), p.optString("cameraId"), apiKey, kind, p.optString("serial").take(40), slicingModel, p.optString("declaredFirmwareVersion").take(80))
         }.getOrNull() }.distinctBy { it.address }
     } catch (_: Exception) { emptyList() }
     fun save(prefs: SharedPreferences, address: String, printers: List<String>) {
         prefs.edit().putString("address", address).putStringSet("savedPrinters", printers.toSet()).apply()
     }
     fun saveProfiles(prefs: SharedPreferences, secrets: SharedPreferences, address: String, profiles: List<PrinterProfile>) {
-        val json = JSONArray().apply { profiles.forEach { p -> put(JSONObject().put("address",p.address).put("name",p.name).put("favorite",p.favorite).put("cameraId",p.cameraId).put("kind",p.kind.name).put("serial",p.serial)) } }
+        val json = JSONArray().apply { profiles.forEach { p -> put(JSONObject().put("address",p.address).put("name",p.name).put("favorite",p.favorite).put("cameraId",p.cameraId).put("kind",p.kind.name).put("serial",p.serial).put("slicingModel",p.slicingModel?.name ?: "").put("declaredFirmwareVersion",p.declaredFirmwareVersion)) } }
         prefs.edit().putString("address",address).putStringSet("savedPrinters",profiles.map { it.address }.toSet()).putString("profilesV1",json.toString()).apply()
         val keep = profiles.map { it.address }.toSet()
         secrets.edit().apply {

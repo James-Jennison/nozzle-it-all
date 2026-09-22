@@ -202,6 +202,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var detailAddress by rememberSaveable { mutableStateOf<String?>(null) }
     val overview = tab == 0 && detailAddress == null
+    // WO-13: the Prepare tab's own entry point into slicing, parallel to (not replacing) the
+    // share-intent one - picking a file here needs no other app to share from. Reuses
+    // SliceAndPrintPanel exactly as the share-intent path does; only how the Uri arrives differs.
+    var pickedModel by remember { mutableStateOf<Uri?>(null) }
+    val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri != null) pickedModel = uri }
     BackHandler(tab == 0 && detailAddress != null) { detailAddress = null }
     fun openPrinter(selected: String) {
         if(state.busy) return
@@ -540,12 +545,15 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 3 -> {
-                    // No slicer in this app yet (a later, higher-risk phase - see the roadmap);
-                    // a clearly-labeled placeholder here, not a half-built feature, matches how
-                    // this app already handles other not-yet-live surfaces (e.g. ControlPreviewPanel).
+                    // WO-13: on-device slicing landed here (picking a file) and via the
+                    // share-intent flow (sharing one in from elsewhere) - both open the same
+                    // SliceAndPrintPanel. A MakerWorld model browser is still genuinely
+                    // unbuilt - see docs/WORK_ORDER.md's WO-13 entry.
                     item {
                         Text("Prepare", style = MaterialTheme.typography.titleLarge)
-                        Text("On-device slicing and a MakerWorld model browser are planned but not built yet. This tab is a placeholder for that work.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("prepare-placeholder"))
+                        Text("Slice an STL, 3MF or OBJ model on-device for the currently selected printer, then review and start the print. A MakerWorld model browser is planned but not built yet.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("prepare-placeholder"))
+                        Button({ pickModel.launch(arrayOf("*/*")) }, enabled = state.address.isNotBlank(), modifier = Modifier.testTag("pick-model-to-slice")) { Text("Pick a model to slice") }
+                        if(state.address.isBlank()) Text("Select a printer first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -578,6 +586,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             else -> AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}})
         }
     }
+    // Prepare tab's own picker (WO-13) - same SliceAndPrintPanel the share-intent path above
+    // opens, just reached by picking a file directly instead of sharing one in.
+    pickedModel?.let { uri -> SliceAndPrintPanel(uri,state,execute,{pickedModel=null}) }
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
     runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}

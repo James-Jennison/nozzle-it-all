@@ -4,26 +4,31 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * WO-13 Phases 2/3: shares a model file (STL/3MF/OBJ) in, slices it on-device for the currently
- * selected printer, then stages the resulting G-code into the same review-then-confirm machinery
- * every other mutating command already uses - this panel itself only ever gets as far as an
- * enabled Confirm button; nothing prints without that separate, explicit tap.
+ * WO-13 Phases 2/3: shares a model file (STL/3MF/OBJ) in, lets the owner customize a small,
+ * deliberately bounded set of slicing settings (SliceCustomization.kt - not OrcaSlicer's full
+ * surface), slices it on-device for the currently selected printer, then stages the resulting
+ * G-code into the same review-then-confirm machinery every other mutating command already uses -
+ * this panel itself only ever gets as far as an enabled Confirm button; nothing prints without
+ * that separate, explicit tap.
  *
  * Deliberately targets the currently selected printer (state.address), the same convention
  * BambuPrintPanel already uses for its own share-intent flow, rather than adding a separate
@@ -36,12 +41,19 @@ import java.io.File
             ?.use { if(it.moveToFirst()) it.getString(0) else null }
     }.getOrNull()) }
     val profile = remember(state.address, state.profiles) { state.profiles.find { it.address == state.address } }
-    var stage by remember(uri) { mutableStateOf("Slicing…") }
-    var working by remember(uri) { mutableStateOf(true) }
+    var stage by remember(uri) { mutableStateOf("") }
+    var working by remember(uri) { mutableStateOf(false) }
     var error by remember(uri) { mutableStateOf<String?>(null) }
     var sliced by remember(uri) { mutableStateOf<File?>(null) }
     var stagedFilename by remember(uri) { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    // Customization is reviewed before anything runs - see SliceCustomization.kt for exactly
+    // what this covers and why it's this specific short list, not OrcaSlicer's full settings.
+    var customizing by remember(uri) { mutableStateOf(true) }
+    var layerHeightText by remember(uri) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.layerHeightMm.toString()) }
+    var infillText by remember(uri) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.infillPercent.toString()) }
+    var supportsEnabled by remember(uri) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.supportsEnabled) }
+    var customizeError by remember(uri) { mutableStateOf<String?>(null) }
+    var customization by remember(uri) { mutableStateOf<SliceCustomization?>(null) }
 
     if(name.isEmpty()) {
         AlertDialog(onDismissRequest=close,title={Text("Unsupported file")},
@@ -67,12 +79,38 @@ import java.io.File
         return
     }
 
-    LaunchedEffect(uri, profile.address) {
+    if(customizing) {
+        AlertDialog(onDismissRequest=close, title={Text("Customize this print")},
+            text={ Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text(name, style=MaterialTheme.typography.titleSmall)
+                Text("For $⁠${profile.label}. A small, deliberately short list - not every OrcaSlicer setting, just the ones that most change how a print turns out.", style=MaterialTheme.typography.bodySmall)
+                OutlinedTextField(layerHeightText, {layerHeightText=it}, label={Text("Layer height (mm)")}, singleLine=true, modifier=Modifier.testTag("slice-layer-height"))
+                OutlinedTextField(infillText, {infillText=it}, label={Text("Infill (%)")}, singleLine=true, modifier=Modifier.testTag("slice-infill"))
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    Checkbox(supportsEnabled, {supportsEnabled=it}, modifier=Modifier.testTag("slice-supports"))
+                    Text("Print supports")
+                }
+                customizeError?.let { Text(it, color=MaterialTheme.colorScheme.error) }
+            } },
+            confirmButton={ TextButton({
+                val layerHeight = validateLayerHeight(layerHeightText)
+                val infill = validateInfillPercent(infillText)
+                if(layerHeight == null) { customizeError = "Enter a layer height between 0.04 and 0.6mm."; return@TextButton }
+                if(infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; return@TextButton }
+                customization = SliceCustomization(layerHeight, infill, supportsEnabled)
+                customizing = false
+            }, modifier=Modifier.testTag("slice-customize-next")) { Text("Slice") } },
+            dismissButton={TextButton(close){Text("Cancel")}})
+        return
+    }
+
+    LaunchedEffect(uri, profile.address, customization) {
+        val chosen = customization ?: return@LaunchedEffect
         working = true; stage = "Slicing…"; error = null
         val localModel = try {
             withContext(Dispatchers.IO) { copySharedModel(context.applicationContext, uri, name) }
         } catch(e: Exception) { working = false; error = e.message ?: "Could not read the shared file."; return@LaunchedEffect }
-        when(val outcome = SlicingCoordinator.slice(context.applicationContext, localModel, profile)) {
+        when(val outcome = SlicingCoordinator.slice(context.applicationContext, localModel, profile, chosen.toOverrides())) {
             is SliceOutcome.Success -> { sliced = outcome.gcode; stage = "Uploading…" }
             is SliceOutcome.FirmwareBlocked -> { working = false; error = outcome.reason }
             is SliceOutcome.Failed -> { working = false; error = outcome.message }
@@ -101,6 +139,7 @@ import java.io.File
             KilnFrame(accent=true) { Column(Modifier.padding(14.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 Text(name, style=MaterialTheme.typography.titleSmall)
                 Text("Slices on-device for ${profile.label}, uploads the result to ${state.address}, then waits for you to confirm the print separately.")
+                customization?.let { Text("${it.layerHeightMm}mm layers · ${it.infillPercent}% infill · supports ${if(it.supportsEnabled) "on" else "off"}", style=MaterialTheme.typography.bodySmall) }
             } }
             if(working) Text(stage)
             error?.let { Text(it, color=MaterialTheme.colorScheme.error) }

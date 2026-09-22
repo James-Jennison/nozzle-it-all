@@ -31,7 +31,13 @@ object SlicingCoordinator {
     // SlicingCoordinatorDeviceTest never caught this because it drives slice() via runBlocking
     // in an instrumented test process, not Android's actual main looper - a real gap in what
     // that test coverage was actually proving. The whole body now runs on Dispatchers.IO.
-    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile): SliceOutcome = withContext(Dispatchers.IO) {
+    // overrides: real OrcaSlicer config keys (layer_height, sparse_infill_density "NN%",
+    // enable_support "0"/"1", ...) applied on top of the resolved profile pack - see
+    // SliceCustomization.kt for the specific, bounded set this app's own UI actually exposes.
+    // Not a general escape hatch for arbitrary config keys from outside this codebase; the JNI
+    // bridge itself will happily accept any key libslic3r recognizes, but nothing here validates
+    // one from an untrusted source.
+    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap()): SliceOutcome = withContext(Dispatchers.IO) {
         val model = profile.slicingModel ?: return@withContext SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first.")
         val cosmosGeneration = if (model == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) {
             // checkCentauriCarbonFirmwareMatch treats a null generation as "this call site isn't
@@ -73,7 +79,7 @@ object SlicingCoordinator {
             val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }
             outputDir.listFiles()?.forEach { it.delete() }
             val output = File(outputDir, modelFile.nameWithoutExtension.take(80) + ".gcode")
-            NativeEngine.nativeSliceFile(modelFile.absolutePath, output.absolutePath, profilePaths.toTypedArray(), emptyArray(), emptyArray())
+            NativeEngine.nativeSliceFile(modelFile.absolutePath, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
             SliceOutcome.Success(output)
         } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
     }

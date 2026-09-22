@@ -322,6 +322,65 @@ P28/M7 sections for what each one built and its commit hash.)*
       — passed for real against `192.168.1.x`, confirming `addProfile` and
       `openPrinter` both fire with the correct committed profile. Full
       existing gate still green after every fix in this follow-up.
+    - **Follow-up, same day: slice customization + two real bugs caught by an
+      actual failed print on the CC1, commits pending.** Added a focused,
+      deliberately bounded customization step to `SliceAndPrintPanel` (layer
+      height, infill %, supports on/off — `SliceCustomization.kt`; not
+      OrcaSlicer's full settings surface) reviewed before slicing starts,
+      passed through `SlicingCoordinator.slice()`'s new `overrides` param into
+      the same config-override mechanism already used for the
+      `use_relative_e_distances` fix.
+      **The owner then tried a real print of `squatchee_spin_mount` against
+      the CC1 and only the purge line came out.** Pulled the real job history
+      and `gcode_store` off the printer directly (Moonraker's own API, not a
+      guess): status `cancelled` after 14s of real print time, with Klipper's
+      own log showing `!! Move out of range: 6.875 -2.769 0.485` right after
+      the KAMP purge routine. **Root cause**: `slic3r_engine.cpp`'s
+      `slice_file()` called `ModelObject::ensure_on_bed()` (Z only) but never
+      centered the model in X/Y — `Model::read_from_file()` places instances
+      at the mesh's own local origin, not the bed's real coordinates, so a
+      part not already centered on its own local (0,0) ends up sliced partly
+      off-bed. Fixed with `model.center_instances_around_point(bed center)`
+      (via `Slic3r::get_bed_shape(config)`), mirroring what OrcaSlicer's own
+      GUI always does on import — this headless path had just never done it.
+      **Verified two ways**: rebuilt the on-device `slic3r_cli_test` tool
+      (already used earlier for CLI verification) and reran it on the Razr —
+      the same cube fixture that would previously slice wherever its raw mesh
+      coordinates put it now lands exactly straddling the bed center; and two
+      new tests in `SlicingCoordinatorDeviceTest` (`slicedGcodeStaysWithinThe
+      ConfiguredBedBounds`, parsing the real output's own `bed_shape` comment
+      and every `G1 X/Y` move) passed for real against the U1.
+      **Separately, the owner also asked for G-code thumbnails** (so a job
+      shows a picture on the printer's own screen, not just a filename) —
+      confirmed via the same job-history pull that our sliced files had no
+      `thumbnails` metadata at all, unlike every desktop-sliced file already
+      on that printer. Cause: `slice_file()` passed a null `thumbnail_cb` to
+      `Print::export_gcode()`, even though the engine's own default
+      `thumbnails` config value already requests 48x48 and 300x300 PNGs — the
+      GUI normally supplies this callback by rendering its live OpenGL scene,
+      which doesn't exist headless (`SLIC3R_GUI=OFF`). Added
+      `thumbnail_render.cpp` — a small, from-scratch software rasterizer
+      (isometric projection, per-triangle flat shading, a real z-buffer for
+      hidden-surface removal) of the model's own sliced mesh, using
+      libslic3r's existing (non-GUI) PNG encoding and G-code embedding
+      machinery. **Verified for real**: decoded the actual embedded PNG
+      output from a real device slice and visually confirmed a correctly
+      shaded, recognizable isometric cube; a new
+      `slicedGcodeEmbedsRealThumbnails` device test (checks for real
+      `; thumbnail begin 48x48` / `300x300` blocks) passed against the U1.
+      **Also fixed in passing, reported live by the owner**: the
+      "Printer acknowledged Start …" command notice
+      (`ScreenState.commandNotice`) had no owner to ever clear it — it just
+      sat pinned over the bottom nav until some later command happened to
+      overwrite it. `PrinterModel.dismissCommandNotice()` plus an explicit
+      Dismiss action and a 6s auto-dismiss timer in `MainActivity`'s
+      `snackbarHost` fix that.
+      Full existing gate (`testDebugUnitTest lintDebug assembleDebug`) green;
+      `SlicingCoordinatorDeviceTest`'s full 7-test suite passed against the
+      real U1. **Still open**: no physical print has been carried through to
+      completion since these fixes — that confirmation needs the owner
+      physically present, same as every other hardware acceptance pass in
+      this project.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

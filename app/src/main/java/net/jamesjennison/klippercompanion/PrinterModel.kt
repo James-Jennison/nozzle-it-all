@@ -429,6 +429,11 @@ class PrinterModel(
             _state.value = _state.value.copy(commandNotice = message)
         }
     }
+    // The command-notice banner (MainActivity's snackbarHost) has no other owner to clear it -
+    // it used to just sit there until the next command overwrote it, effectively a permanent
+    // banner for anything the user didn't immediately act on again. Called both by an explicit
+    // dismiss tap and by MainActivity's own auto-dismiss timer.
+    fun dismissCommandNotice() { _state.value = _state.value.copy(commandNotice = "") }
     override fun onCleared() { savedMonitor.stop(); api?.close() }
 }
 

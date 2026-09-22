@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -125,7 +126,8 @@ class MainActivity : ComponentActivity() {
                 }
                 CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
                     backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop,
-                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, addProfile=model::addProfile)
+                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, addProfile=model::addProfile,
+                    dismissCommandNotice=model::dismissCommandNotice)
             }
         }
     }
@@ -135,7 +137,7 @@ class MainActivity : ComponentActivity() {
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String? = {_,_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
     backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null, addProfile:(PrinterProfile)->String?={null},
-    stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={},
+    stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={}, dismissCommandNotice:()->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
     configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
@@ -255,7 +257,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     LaunchedEffect(state.generation, state.connected) { if(!state.connected || pending?.second != state.generation) pending = null }
     Scaffold(containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = {
-            if(state.commandNotice.isNotBlank()) Snackbar(Modifier.padding(12.dp).testTag("command-notice")) { Text(state.commandNotice) }
+            // Used to just sit there forever once set (ScreenState.commandNotice has no other
+            // owner to clear it) until the next command happened to overwrite it - effectively a
+            // permanent banner pinned over the bottom nav for anything the user didn't
+            // immediately act on again. Now a real dismissible notice: an explicit close action,
+            // plus an auto-dismiss timer so an unattended notice doesn't linger indefinitely.
+            if(state.commandNotice.isNotBlank()) {
+                LaunchedEffect(state.commandNotice) { delay(6000); dismissCommandNotice() }
+                Snackbar(Modifier.padding(12.dp).testTag("command-notice"),
+                    action = { TextButton({ dismissCommandNotice() }, Modifier.testTag("command-notice-dismiss")) { Text("Dismiss") } }) { Text(state.commandNotice) }
+            }
         },
         bottomBar = {
             if (!expandedCamera) NavigationBar(containerColor = MaterialTheme.colorScheme.background) {

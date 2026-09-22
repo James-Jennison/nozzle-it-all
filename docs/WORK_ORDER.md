@@ -1065,10 +1065,44 @@ P28/M7 sections for what each one built and its commit hash.)*
       alone, the same discipline this WO's native-slicing tests used
       earlier. 3 tests, all passing on Razr 2026; full
       `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate re-run clean.
+    - **Slicing and printing a whole project** - the largest remaining
+      piece from the previous entry, now real: `SlicingCoordinator` gained
+      `sliceProject()`, a multi-object counterpart to the existing
+      `slice()` sharing its firmware-confirmation/profile-pack resolution
+      logic (refactored into a private `resolveProfilePaths` both now
+      call, rather than a second copy that could drift) and calling
+      `engine::slice_multi_object` via `nativeSliceMultiObject` instead of
+      slicing one file. `ProjectEditorScreen` gained the real settings/
+      Slice/review/print pipeline - layer height, infill, supports
+      (`SliceCustomization`, unchanged), a Slice action, then the same
+      real stages `SliceAndPrintPanel` already established for the
+      single-object flow (sliced 3D toolpath preview + real G-code stats,
+      a printer-ready confirmation, a real upload via `LiveFileChanges`,
+      then an explicit Start print tap - `Moonraker.start`). Deliberately
+      a separate, parallel implementation, not a shared component with
+      `SliceAndPrintPanel` - keeps that already-tested single-object flow
+      untouched, matching this WO's own established precedent for the
+      renderer. **Verified**: `sliceProjectPlacesEachRealObjectAtItsOwnTransform`
+      (`SlicingCoordinatorDeviceTest`) proves the coordinator wires real
+      `ModelTransform` values through to the native call correctly (2
+      distinct per-object G-code ids, correct real toolpath X-spread) -
+      and a full manual pass on real hardware (Razr 2026, real Snapmaker
+      U1 at 192.168.1.x): created a project, added a real `cube.stl`,
+      tapped Slice, got a real sliced result (9m1s, 3.7g, 1.24m, a real
+      101-layer 3D toolpath preview), confirmed printer-ready, watched a
+      real upload complete (`Ready: project-<uuid>.gcode`) with Start
+      print enabled - stopped short of actually tapping Start print to
+      avoid triggering a real physical print during verification. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      existing `SlicingCoordinatorDeviceTest`/`SlicingCoordinatorMainThreadDeviceTest`
+      suites re-run clean after the refactor (9/9 passing on Razr 2026).
     - **Still open** (Phase 1's remaining scope): real auto-arrange (2D bin
-      packing with rotation), collision detection between objects, slicing
-      a project (wiring `engine::slice_multi_object` into this new screen -
-      today it only edits placement, it doesn't slice/print yet),
+      packing with rotation), collision detection between objects, a
+      device test for `ProjectEditorScreen`'s own slice/review/print UI
+      flow (covered manually this entry, not yet by an automated
+      `connectedDebugAndroidTest` the way `ProjectWorkspaceDeviceTest`
+      covers the workspace itself), support painting for a project's
+      objects (single-object-only today, see `ModelViewer`'s Paint mode),
       renaming/deleting a project from its list row, and whether the
       existing single-object `SliceAndPrintPanel.kt`/Prepare-tab flow stays
       as a separate quick-slice path long-term or eventually folds into

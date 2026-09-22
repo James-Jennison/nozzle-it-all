@@ -36,6 +36,33 @@ class SlicingCoordinatorDeviceTest {
         val gcode = (outcome as SliceOutcome.Success).gcode
         assertTrue(gcode.exists() && gcode.length() > 1000)
     }
+    @Test fun emptyProjectIsRejectedBeforeTouchingTheNetwork() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val profile = PrinterProfile("http://192.168.1.110/", "U1", slicingModel = SlicingPrinterModel.SNAPMAKER_U1)
+        val outcome = SlicingCoordinator.sliceProject(context, emptyList(), profile)
+        assertTrue("expected Failed for an empty project, got $outcome", outcome is SliceOutcome.Failed)
+    }
+    @Test fun sliceProjectPlacesEachRealObjectAtItsOwnTransform() = runBlocking {
+        // WO-17 (Phase 1): proves the real multi-object workspace's own eventual slice path
+        // (ProjectEditorScreen -> SlicingCoordinator.sliceProject -> engine::slice_multi_object)
+        // through the same firmware-confirmation/profile-pack resolution slice() already uses,
+        // not a second, untested path - MultiObjectSlicingDeviceTest already proved the native
+        // call itself places objects correctly; this proves the coordinator wires real
+        // ModelTransform values through to it correctly.
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val profile = PrinterProfile("http://192.168.1.110/", "U1", slicingModel = SlicingPrinterModel.SNAPMAKER_U1)
+        val a = cube(context)
+        val b = File(context.cacheDir, "coordinator_cube_b.stl").also { a.copyTo(it, overwrite = true) }
+        val objects = listOf(a to ModelTransform(offsetXMm = -30f), b to ModelTransform(offsetXMm = 30f))
+        val outcome = SlicingCoordinator.sliceProject(context, objects, profile)
+        assertTrue("expected Success, got $outcome", outcome is SliceOutcome.Success)
+        val gcode = (outcome as SliceOutcome.Success).gcode.readText()
+        val objectIds = Regex("; printing object [^\\n]* id:(\\d+)").findAll(gcode).map { it.groupValues[1] }.toSet()
+        assertEquals("expected exactly 2 distinct real per-object G-code ids", 2, objectIds.size)
+        val xCoords = Regex("G1 [^\\n]*X(-?[0-9]+\\.?[0-9]*)").findAll(gcode).mapNotNull { it.groupValues[1].toDoubleOrNull() }.toList()
+        val spread = xCoords.max() - xCoords.min()
+        assertTrue("expected toolpath X spread of at least 50mm across two objects 60mm apart, got ${spread}mm", spread >= 50.0)
+    }
     @Test fun slicedGcodeEmbedsRealThumbnails() = runBlocking {
         // Real bug hit live: a print on the CC1 was uploaded and started with no thumbnail at
         // all (confirmed via Moonraker's own job history - no "thumbnails" field, unlike every

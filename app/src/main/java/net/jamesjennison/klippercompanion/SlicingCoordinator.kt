@@ -51,7 +51,68 @@ object SlicingCoordinator {
     // separately at slice time for a painted model would silently disagree with what was
     // actually painted.
     suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) {
-        val model = profile.slicingModel ?: return@withContext SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first.")
+        when (val resolved = resolveProfilePaths(context, profile)) {
+            is ProfileResolution.Blocked -> return@withContext resolved.outcome
+            is ProfileResolution.Ready -> return@withContext try {
+                val output = freshOutputFile(context, modelFile.nameWithoutExtension.take(80))
+                if (paintSessionHandle != null) {
+                    NativeEngine.nativeSlicePaintSession(paintSessionHandle, output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+                } else {
+                    NativeEngine.nativeSliceFile(
+                        modelFile.absolutePath, output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                        transform.offsetXMm.toDouble(), transform.offsetYMm.toDouble(), transform.rotationZDeg.toDouble(), transform.scale.toDouble(),
+                    )
+                }
+                SliceOutcome.Success(output)
+            } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
+        }
+    }
+
+    // Phase 1 (Consumer Slicer Plan §16): the real multi-object counterpart to slice() above -
+    // same firmware confirmation/profile-pack resolution (resolveProfilePaths, shared, not a
+    // second copy), but calls engine::slice_multi_object via nativeSliceMultiObject instead of
+    // slicing one file. No paint-session support here - a paint session is tied to one already-
+    // loaded single-object model (engine::open_paint_session), and painting a specific object
+    // within a multi-object project isn't built yet (see docs/WORK_ORDER.md's WO-17 "still open"
+    // list). Does not itself check for overlapping objects - same real, deliberate gap
+    // slice_multi_object's own native-side comment documents; collision detection is a separate
+    // UI concern, still open.
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap()): SliceOutcome = withContext(Dispatchers.IO) {
+        if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
+        when (val resolved = resolveProfilePaths(context, profile)) {
+            is ProfileResolution.Blocked -> return@withContext resolved.outcome
+            is ProfileResolution.Ready -> return@withContext try {
+                val output = freshOutputFile(context, "project")
+                NativeEngine.nativeSliceMultiObject(
+                    objects.map { it.first.absolutePath }.toTypedArray(),
+                    objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
+                    objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
+                    objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
+                    objects.map { it.second.scale.toDouble() }.toDoubleArray(),
+                    output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                )
+                SliceOutcome.Success(output)
+            } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
+        }
+    }
+
+    private fun freshOutputFile(context: Context, baseName: String): File {
+        val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }
+        outputDir.listFiles()?.forEach { it.delete() }
+        return File(outputDir, "$baseName.gcode")
+    }
+
+    private sealed class ProfileResolution {
+        data class Ready(val profilePaths: List<String>) : ProfileResolution()
+        data class Blocked(val outcome: SliceOutcome) : ProfileResolution()
+    }
+
+    // The firmware-confirmation + profile-pack resolution both slice() and sliceProject() need -
+    // factored out so the real Centauri Carbon live-firmware-match logic (and its own hard-won
+    // real bug fixes, see the git history on the branch this shipped on) exists in exactly one
+    // place, not two that could quietly drift apart.
+    private suspend fun resolveProfilePaths(context: Context, profile: PrinterProfile): ProfileResolution {
+        val model = profile.slicingModel ?: return ProfileResolution.Blocked(SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first."))
         val cosmosGeneration = if (model == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) {
             // checkCentauriCarbonFirmwareMatch treats a null generation as "this call site isn't
             // about a Centauri Carbon profile at all" and returns Match unconditionally (see its
@@ -62,7 +123,7 @@ object SlicingCoordinator {
             // this ever ran against the real printer tonight - see SlicingCoordinatorDeviceTest's
             // centauriCarbonProfileWithNoDeclaredFirmwareIsBlockedEvenAgainstTheRealPrinter.
             val declared = profile.declaredCosmosProfileGeneration
-                ?: return@withContext SliceOutcome.FirmwareBlocked("This printer's firmware has never been confirmed. Use \"Detect firmware now\" in Edit printer before slicing for it.")
+                ?: return ProfileResolution.Blocked(SliceOutcome.FirmwareBlocked("This printer's firmware has never been confirmed. Use \"Detect firmware now\" in Edit printer before slicing for it."))
             val service = printerServiceFor(profile, profile.address)
             // The real exception is captured and surfaced below, not swallowed into a generic
             // message - a live read can fail for very different, actionable reasons (printer
@@ -74,10 +135,10 @@ object SlicingCoordinator {
             // a real problem (wrong port, wrong address, auth) without re-deriving it by hand.
             var readFailure: String? = null
             val live = try { service.firmwareIdentity() } catch (e: Exception) { readFailure = e.message ?: e.javaClass.simpleName; null } finally { runCatching { service.close() } }
-            if (live == null) return@withContext SliceOutcome.FirmwareBlocked("Could not read this printer's current firmware before slicing for a Centauri Carbon/COSMOS profile: ${readFailure ?: "no response"}. Check the connection and try again.")
+            if (live == null) return ProfileResolution.Blocked(SliceOutcome.FirmwareBlocked("Could not read this printer's current firmware before slicing for a Centauri Carbon/COSMOS profile: ${readFailure ?: "no response"}. Check the connection and try again."))
             when (val match = checkCentauriCarbonFirmwareMatch(live, declared)) {
-                is FirmwareMatchResult.Mismatch -> return@withContext SliceOutcome.FirmwareBlocked(match.reason)
-                is FirmwareMatchResult.Unknown -> return@withContext SliceOutcome.FirmwareBlocked(match.reason)
+                is FirmwareMatchResult.Mismatch -> return ProfileResolution.Blocked(SliceOutcome.FirmwareBlocked(match.reason))
+                is FirmwareMatchResult.Unknown -> return ProfileResolution.Blocked(SliceOutcome.FirmwareBlocked(match.reason))
                 FirmwareMatchResult.Match -> {}
             }
             // Recomputed from the live reading just confirmed matching, not the persisted
@@ -86,22 +147,8 @@ object SlicingCoordinator {
             live?.let { cosmosRequiresCurrentProfile(it.version) }?.let { if (it) CosmosProfileGeneration.CURRENT else CosmosProfileGeneration.LEGACY }
         } else null
         val pack = slicingProfilePack(model, cosmosGeneration)
-            ?: return@withContext SliceOutcome.Failed("No bundled slicer profile exists yet for this printer's confirmed firmware.")
-        return@withContext try {
-            val profilePaths = pack.materialize(context)
-            val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }
-            outputDir.listFiles()?.forEach { it.delete() }
-            val output = File(outputDir, modelFile.nameWithoutExtension.take(80) + ".gcode")
-            if (paintSessionHandle != null) {
-                NativeEngine.nativeSlicePaintSession(paintSessionHandle, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
-            } else {
-                NativeEngine.nativeSliceFile(
-                    modelFile.absolutePath, output.absolutePath, profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
-                    transform.offsetXMm.toDouble(), transform.offsetYMm.toDouble(), transform.rotationZDeg.toDouble(), transform.scale.toDouble(),
-                )
-            }
-            SliceOutcome.Success(output)
-        } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
+            ?: return ProfileResolution.Blocked(SliceOutcome.Failed("No bundled slicer profile exists yet for this printer's confirmed firmware."))
+        return ProfileResolution.Ready(pack.materialize(context))
     }
 }
 

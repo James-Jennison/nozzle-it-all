@@ -34,13 +34,14 @@ superseded by `CONSUMER_SLICER_PLAN.md` for the areas it covers.
 Opt-in background print alerts (completed/error/cancelled/offline/back-online/paused) run via a
 foreground service independent of the app being open. A separate "Projects" section (Files tab)
 persists a real multi-object build plate across process death — add/duplicate/remove objects, move/
-rotate/scale each one, backed by Room (see `docs/WORK_ORDER.md`'s WO-17 entries for what's landed
-and what's still open, most current for this area — it's updated more often than this file).
-Slicing a project from that screen isn't wired up yet; the single-object share-intent/Prepare-tab
-slicing flow above is still the only path that actually slices and starts a print. No materials/
-multicolor or a model-discovery surface yet — see the plan document's gap matrix for the fuller
-current-vs-target breakdown, though `docs/WORK_ORDER.md` supersedes it for anything the two
-disagree on.
+rotate/scale each one, backed by Room — and slices the whole plate at once on-device, with the
+same review-then-confirm pipeline (sliced 3D preview + stats, printer-ready confirmation, upload,
+explicit Start print) the single-object share-intent/Prepare-tab flow above already uses (see
+`docs/WORK_ORDER.md`'s WO-17 entries for what's landed and what's still open, most current for
+this area — it's updated more often than this file; no auto-arrange or collision detection yet,
+so overlapping placements are on the owner to avoid). No materials/multicolor or a model-discovery
+surface yet — see the plan document's gap matrix for the fuller current-vs-target breakdown,
+though `docs/WORK_ORDER.md` supersedes it for anything the two disagree on.
 
 Only use a trusted LAN endpoint for printer control. HTTP is supported for conventional local
 Moonraker installations. This app rejects URL credentials and does not store passwords or API

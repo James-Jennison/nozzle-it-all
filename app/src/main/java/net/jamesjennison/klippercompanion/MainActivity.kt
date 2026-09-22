@@ -721,7 +721,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             dismissButton = { TextButton({ newProjectNameDraft = null }) { Text("Cancel") } })
     }
     if(editingProjectId != null || editingNewProjectName != null) {
-        ProjectEditorScreen(editingProjectId, editingNewProjectName) { editingProjectId = null; editingNewProjectName = null }
+        ProjectEditorScreen(editingProjectId, editingNewProjectName, state, execute) { editingProjectId = null; editingNewProjectName = null }
     }
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}

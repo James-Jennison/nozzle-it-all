@@ -68,7 +68,7 @@ Live status: 2s foreground polling per saved printer (`SavedPrinterMonitor.kt`) 
 - Real build-volume bounds checking against the actual per-printer `machine.json` bed shape (`BedShape.kt`), gating the real Slice action.
 - Slicing settings: 3 fields only (layer height, infill %, supports on/off — `SliceCustomization.kt`), no simple/advanced tiering.
 - Real post-slice 3D toolpath preview with a layer slider and real G-code-footer-parsed stats (time/filament) — `SlicedPreview.kt`, `GcodeStats.kt`.
-- **Single object, single material, single plate only** for the share-intent/Prepare-tab flow described above — that flow itself is unchanged. **A separate multi-object flow now exists (Phase 1, WO-17, Files → Projects)**: real add/duplicate/remove of objects on a shared plate, each with its own move/rotate/scale, rendered by a genuinely separate `ProjectGLRenderer` (not a retrofit of `ModelViewer`'s `MeshGLRenderer`). Still no auto-arrange, no collision detection, and nothing on that screen calls the slicer yet (`engine::slice_multi_object` exists and is device-tested, but isn't wired into this UI) — see `docs/WORK_ORDER.md`.
+- **Single object, single material, single plate only** for the share-intent/Prepare-tab flow described above — that flow itself is unchanged. **A separate multi-object flow now exists (Phase 1, WO-17, Files → Projects)**: real add/duplicate/remove of objects on a shared plate, each with its own move/rotate/scale, rendered by a genuinely separate `ProjectGLRenderer` (not a retrofit of `ModelViewer`'s `MeshGLRenderer`), and now slices the whole plate at once (`SlicingCoordinator.sliceProject`/`engine::slice_multi_object`) through the same review-then-confirm pipeline the single-object flow uses. Still no auto-arrange, no collision detection, and no per-object support painting — see `docs/WORK_ORDER.md`.
 - No filament/material model connects to slicing at all — the three settings above are the entire "material" surface.
 - Spoolman integration (`Spoolman.kt`) is **read-only inventory display**, structurally disconnected from `SlicingCoordinator`/`SliceAndPrintPanel` — it cannot influence a slice today.
 - Project persistence now exists as of Phase 1/WO-17 (§2.3) — no model library/Discover (confirmed absent, only the one `MainActivity.kt:643` placeholder string exists), no print-history/reprint concept beyond a raw pass-through of the printer's own job log.
@@ -324,7 +324,7 @@ arrange and slicing from that screen are still open).
 |---|---|---|---|---|---|---|---|---|
 | On-device real slicing | **Complete** | cloud-assisted | n/a (profile-driven) | cloud | app-side | n/a | app-side | **P0 (keep, extend)** |
 | Move/rotate/scale | **Complete** | yes | limited | yes | yes | limited | yes | **P0 (multi-object)** |
-| Multi-object plate/arrange | **Partial (WO-17: add/duplicate/remove/placement; no auto-arrange, no slicing from this screen yet)** | yes | yes | yes | yes | limited | yes | **P0** |
+| Multi-object plate/arrange | **Partial (WO-17: add/duplicate/remove/placement, slices and prints the whole plate; no auto-arrange, no collision detection)** | yes | yes | yes | yes | limited | yes | **P0** |
 | Multi-plate | **Missing** | yes | yes | limited | no | no | no | **P1** |
 | Support painting | **Complete** | yes | limited | limited | limited | no | yes | **P0 (keep)** |
 | Build-volume bounds check | **Complete** | yes | yes | yes | yes | yes | yes | **P0 (keep, extend for multi-object)** |

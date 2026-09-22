@@ -9,16 +9,30 @@ name: CI
 #
 # The AWS Device Farm instrumented-test stage (owner-confirmed access, real device/OS
 # fragmentation coverage this app has never had) runs against the real "Nozzle It All" Device
-# Farm project (console-created, project ARN below) and its curated "Top Devices" pool (5
-# devices) - both real ARNs, not placeholders. Needs AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY as
-# repo secrets (a narrowly-scoped IAM user, devicefarm run/upload/read actions only - see
-# docs/WORK_ORDER.md's Phase 0 entry for how these were created).
+# Farm project (console-created, project ARN below). Needs AWS_ACCESS_KEY_ID/
+# AWS_SECRET_ACCESS_KEY as repo secrets (a narrowly-scoped IAM user, devicefarm run/upload/read
+# actions only - see docs/WORK_ORDER.md's Phase 0 entry for how these were created).
+#
+# Cost control (owner decision, 2026-09-22, after the first real runs against the 1000-minute
+# free trial): device-farm is manual-only (workflow_dispatch), not triggered on every push -
+# device-minutes are billed per device, so a run against every commit would burn the trial (and
+# real money after it) on intermediate work, not just the checkpoints that matter. Trigger it
+# explicitly (`gh workflow run ci.yml`, or the Actions tab's "Run workflow" button) when you
+# actually want real-device coverage. build-and-test still runs on every push - it costs nothing
+# beyond this self-hosted runner's own time.
+#
+# Also uses `ci-small-pool` (3 devices: a recent Pixel, a recent Galaxy, a Pixel Tablet - real
+# device ARNs, not placeholders), not the curated "Top Devices" pool (5 devices) the first runs
+# used - roughly 40% fewer device-minutes per run for routine use, at the cost of less breadth
+# per run. Device Farm bills per device-minute, summed across every device in the pool, not per
+# run - see WORK_ORDER.md for the actual first-run costs this was based on.
 
 on:
   push:
     branches: [codex/android-mvp, main]
   pull_request:
     branches: [codex/android-mvp, main]
+  workflow_dispatch: {}
 
 jobs:
   build-and-test:
@@ -73,6 +87,7 @@ jobs:
 
   device-farm:
     needs: build-and-test
+    if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, linux, x64, android-native]
     timeout-minutes: 60
     env:
@@ -80,7 +95,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-west-2
       PROJECT_ARN: "arn:aws:devicefarm:us-west-2:000000000000:project:1aced661-0a79-4dc0-b5bb-8ab8372a3970"
-      DEVICE_POOL_ARN: "arn:aws:devicefarm:us-west-2::devicepool:082d10e5-d7d7-48a5-ba5c-b33d66efa1f5"
+      DEVICE_POOL_ARN: "arn:aws:devicefarm:us-west-2:000000000000:devicepool:1aced661-0a79-4dc0-b5bb-8ab8372a3970/f6f8c8e4-3714-4474-9b57-84c1e87ad2f9"
     steps:
       - uses: actions/download-artifact@v4
         with:

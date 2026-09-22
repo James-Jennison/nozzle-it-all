@@ -814,6 +814,49 @@ P28/M7 sections for what each one built and its commit hash.)*
         environment (different from the "scroll to/can't find node" shape
         of the other flaky tests), not chased further here. Tracked as a
         real open item, not swept in with the already-known flakiness.
+    - **Cost control (owner decision, 2026-09-22)**, after seeing the real
+      minute cost of the first two runs (1000-minute one-time free trial;
+      822 remained after ~178 minutes across exploration + two real CI
+      runs; $0.17/device-minute after the trial - a full 5-device run like
+      the first two costs ~$15-16 at that rate): `device-farm` changed from
+      running on every push to **manual-only**
+      (`workflow_dispatch` - `gh workflow run ci.yml` or the Actions tab's
+      "Run workflow" button); `build-and-test` still runs on every push at
+      no AWS cost. Created `ci-small-pool` (3 real devices: a recent Pixel
+      phone, a recent Galaxy phone, a Pixel Tablet - real ARNs, gathered via
+      `aws devicefarm list-devices`, not placeholders) as the new default
+      pool for routine runs - roughly 40% fewer device-minutes than the
+      curated 5-device "Top Devices" pool used for the first two runs, at
+      the cost of narrower coverage per run. Device Farm bills per
+      device-minute, summed across every device in the pool - a 5-device
+      run isn't "however long it took," it's the sum of all 5 devices' own
+      times (~91 minutes total for the first real run, even though
+      wall-clock was much shorter since devices run in parallel).
+    - **Real, permanent gap found while picking `ci-small-pool`'s
+      devices**: AWS Device Farm's entire device fleet has **zero
+      foldables and zero Motorola devices** (confirmed via
+      `list-devices` - no Galaxy Z Fold/Flip, no Pixel Fold, no Razr, no
+      Motorola device of any kind). This app's two real physical test
+      devices are both Motorola Razr foldables, and `docs/
+      HANDOFF_M4A_2026-09-17.md` already documents real foldable-specific
+      quirks (dual displays, `adb exec-out screencap` needing a real
+      `--display-id`) that Device Farm structurally cannot exercise. The
+      physical Razr phones remain necessary for foldable-specific
+      verification regardless of how much Device Farm coverage is added -
+      not a gap Device Farm can close, tracked so it isn't mistaken for an
+      oversight later.
+    - **Fixing the remaining known-flaky tests explicitly deferred, not
+      attempted blind**: an initial look at `M2DeviceTest`'s failure
+      suggested a missing-synchronization bug (interacting with "Run" text
+      immediately after a nav click, no wait) - but `ConsoleDeviceTest` uses
+      the identical immediate-click pattern and passes reliably, which
+      disproves that theory. None of the 5 remaining flaky/new-finding
+      tests (`M2DeviceTest`, `BedMeshPanelDeviceTest`,
+      `ActiveFilenameDeviceTest`, `DashboardDeviceTest`,
+      `ConfigSavePanelDeviceTest`) got a fix landed here - real root-causing
+      needs live-device iteration (physical or spending real Device Farm
+      minutes) to verify each hypothesis, not speculative patches. Left as
+      a clearly scoped, separate follow-up rather than guessed at.
     - **Still open** (Phase 0's remaining scope): stopping the native bridge
       from flattening multi-object models past the proof-of-concept stage
       (i.e. actually threading `Model::objects` through to the viewer/slicer

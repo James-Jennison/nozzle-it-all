@@ -8,9 +8,11 @@ name: CI
 # question 5) - a hosted GitHub runner cannot build this target at all.
 #
 # The AWS Device Farm instrumented-test stage (owner-confirmed access, real device/OS
-# fragmentation coverage this app has never had) is intentionally not wired up yet: it needs a
-# project/device-pool ARN and AWS credentials as repo secrets that don't exist yet. See
-# docs/WORK_ORDER.md's Phase 0 entry - this is a real, tracked gap, not an oversight.
+# fragmentation coverage this app has never had) runs against the real "Nozzle It All" Device
+# Farm project (console-created, project ARN below) and its curated "Top Devices" pool (5
+# devices) - both real ARNs, not placeholders. Needs AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY as
+# repo secrets (a narrowly-scoped IAM user, devicefarm run/upload/read actions only - see
+# docs/WORK_ORDER.md's Phase 0 entry for how these were created).
 
 on:
   push:
@@ -40,7 +42,7 @@ jobs:
         run: ./gradlew testDebugUnitTest lintDebug --no-daemon
 
       - name: Assemble debug (native build, arm64-v8a)
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon
 
       - name: Upload lint/test reports
         if: always()
@@ -56,11 +58,76 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           retention-days: 14
 
-  # TODO (Phase 0, tracked in docs/WORK_ORDER.md): a device-farm job that assembles
-  # app-debug + app-debug-androidTest, uploads both to AWS Device Farm, and runs the
-  # instrumented suite across a real Android device pool - blocked on AWS credentials
-  # (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY as repo secrets) and a real project/device-pool
-  # ARN, neither of which exist in this repo yet.
+  device-farm:
+    needs: build-and-test
+    runs-on: [self-hosted, linux, x64, android-native]
+    timeout-minutes: 60
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-west-2
+      PROJECT_ARN: "arn:aws:devicefarm:us-west-2:000000000000:project:1aced661-0a79-4dc0-b5bb-8ab8372a3970"
+      DEVICE_POOL_ARN: "arn:aws:devicefarm:us-west-2::devicepool:082d10e5-d7d7-48a5-ba5c-b33d66efa1f5"
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-debug
+          path: apks
+
+      # Uploads both APKs, waits for Device Farm to finish processing each (SUCCEEDED/FAILED),
+      # schedules an INSTRUMENTATION run against the real device pool above, then polls until the
+      # run completes and fails the job on anything other than PASSED - a real gate, not just a
+      # kick-off. jq is used throughout since Device Farm's CLI output has no simpler shape for
+      # the specific fields needed (upload/run ARNs, statuses, per-device results).
+      - name: Upload app + test package, schedule and wait for the Device Farm run
+        run: |
+          set -euo pipefail
+
+          upload_and_wait() {
+            local file="$1" type="$2" name
+            name=$(basename "$file")
+            local upload_json upload_arn upload_url
+            upload_json=$(aws devicefarm create-upload --project-arn "$PROJECT_ARN" --name "$name" --type "$type")
+            upload_arn=$(echo "$upload_json" | jq -r '.upload.arn')
+            upload_url=$(echo "$upload_json" | jq -r '.upload.url')
+            curl -sS -T "$file" "$upload_url"
+            for _ in $(seq 1 30); do
+              status=$(aws devicefarm get-upload --arn "$upload_arn" | jq -r '.upload.status')
+              if [ "$status" = "SUCCEEDED" ]; then echo "$upload_arn"; return 0; fi
+              if [ "$status" = "FAILED" ]; then echo "::error::Upload $name failed processing" >&2; exit 1; fi
+              sleep 10
+            done
+            echo "::error::Upload $name never reached SUCCEEDED" >&2
+            exit 1
+          }
+
+          app_arn=$(upload_and_wait apks/app-debug.apk ANDROID_APP)
+          test_arn=$(upload_and_wait apks/app-debug-androidTest.apk INSTRUMENTATION_TEST_PACKAGE)
+
+          run_json=$(aws devicefarm schedule-run \
+            --project-arn "$PROJECT_ARN" \
+            --app-arn "$app_arn" \
+            --device-pool-arn "$DEVICE_POOL_ARN" \
+            --name "ci-${GITHUB_SHA::7}" \
+            --test "type=INSTRUMENTATION,testPackageArn=$test_arn")
+          run_arn=$(echo "$run_json" | jq -r '.run.arn')
+          echo "Device Farm run: https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/$(basename "$PROJECT_ARN")/runs/$(basename "$run_arn")"
+
+          for _ in $(seq 1 90); do
+            run_status=$(aws devicefarm get-run --arn "$run_arn" | jq -r '.run.status')
+            if [ "$run_status" = "COMPLETED" ]; then break; fi
+            sleep 20
+          done
+
+          run_json=$(aws devicefarm get-run --arn "$run_arn")
+          result=$(echo "$run_json" | jq -r '.run.result')
+          echo "$run_json" | jq '{status: .run.status, result: .run.result, counters: .run.counters}'
+          if [ "$result" != "PASSED" ]; then
+            echo "::error::Device Farm run result was $result, not PASSED"
+            exit 1
+          fi

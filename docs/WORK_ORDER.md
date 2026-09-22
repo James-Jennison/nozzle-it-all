@@ -285,6 +285,43 @@ P28/M7 sections for what each one built and its commit hash.)*
       deliberately never at "confirmed and sent." That confirmation step
       needs the owner physically present, same as every other hardware
       acceptance pass in this project.
+    - **Follow-up, same morning: `AddPrinterWizard`, commits pending.** The
+      owner checked the app live and found two real gaps in what shipped
+      overnight: the Prepare tab still showed its old placeholder (slicing
+      was only reachable via share-intent, never wired into the tab that
+      already existed for it — fixed by adding a "Pick a model to slice"
+      entry point there, same `SliceAndPrintPanel`); and the Edit printer
+      dialog's new slicing-profile/firmware section was unreachable because
+      the dialog's content `Column` had no scroll modifier (fixed, same
+      pattern already used elsewhere in this codebase, e.g. `HeaterPanel.kt`).
+      A live slice attempt against the real CC1 then surfaced two more real
+      issues: a firmware-read failure showed only a generic message with the
+      actual exception swallowed (confirmed via `curl` that the printer was
+      fully reachable a minute later — a transient blip made undiagnosable
+      by the vague message; fixed to include the real exception), and manual
+      "Detect firmware now" was an easy step to forget (fixed: runs
+      automatically via `LaunchedEffect` as soon as a printer's slicing
+      profile is set to Centauri Carbon).
+      The owner then asked, twice, for printer setup to go through a proper
+      wizard instead of the old single "type an address, tap Connect" flow
+      (which created a bare, unconfigured `PrinterProfile` via
+      `PrinterModel.connect()`'s own implicit fallback, with everything else
+      requiring a separate trip to Edit printer). Scoped explicitly via
+      `AskUserQuestion` before building: `AddPrinterWizard.kt` is a 4-step
+      guided flow (type/address/credentials → slicing profile → firmware
+      confirmation, Centauri-Carbon-only → a live connectivity test that
+      must pass before Finish is enabled), replacing the old flow entirely.
+      A new `PrinterModel.addProfile()` is the wizard's single commit step;
+      every live check before that (firmware read, connectivity test) builds
+      its own short-lived `PrinterService` directly, the same ad hoc pattern
+      `SlicingCoordinator`/`NozzlePrinterWidget` already use, since the
+      profile doesn't exist in `PrinterModel`'s own state until Finish.
+      **Device-verified**: `AddPrinterWizardDeviceTest`'s full happy path —
+      type the real U1's address, advance through slicing profile (none),
+      let the live connectivity test resolve against the real printer, Finish
+      — passed for real against `192.168.1.x`, confirming `addProfile` and
+      `openPrinter` both fire with the correct committed profile. Full
+      existing gate still green after every fix in this follow-up.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

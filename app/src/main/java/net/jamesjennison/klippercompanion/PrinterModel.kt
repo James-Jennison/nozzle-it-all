@@ -85,6 +85,21 @@ class PrinterModel(
     private fun persist(address: String = _state.value.address, profiles: List<PrinterProfile> = _state.value.profiles) {
         saveSettings(address, profiles.map { it.address }); saveProfiles(address, profiles)
     }
+    // AddPrinterWizard's own save path - distinct from connect()'s implicit bare-profile
+    // creation (which only ever produces PrinterProfile(address), no name/kind/slicing model)
+    // and from updateProfile (which requires an existing profile to find by address). The
+    // wizard already normalizes and live-tests everything before calling this, so this is a
+    // thin, final commit step, not a second round of validation.
+    fun addProfile(profile: PrinterProfile): String? {
+        if(_state.value.busy) return "Wait for the current command to finish."
+        val current = _state.value
+        if(current.profiles.any { it.address == profile.address }) return "That printer address is already saved."
+        val profiles = current.profiles + profile
+        _state.value = current.copy(profiles = profiles, savedPrinters = profiles.map { it.address })
+        persist(profiles = profiles)
+        monitorSavedPrinters()
+        return null
+    }
     fun updateProfile(oldAddress: String, address: String, name: String, apiKey: String, kind: PrinterKind? = null, serial: String? = null, slicingModel: SlicingPrinterModel? = null): String? {
         if(_state.value.busy) return "Wait for the current command to finish."
         val current = _state.value

@@ -125,7 +125,7 @@ class MainActivity : ComponentActivity() {
                 }
                 CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
                     backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop,
-                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware)
+                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, addProfile=model::addProfile)
             }
         }
     }
@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String? = {_,_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
-    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null,
+    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null, addProfile:(PrinterProfile)->String?={null},
     stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
@@ -215,8 +215,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         tab = 0
     }
     LaunchedEffect(tab, detailAddress, state.generation) { listState.scrollToItem(0) }
-    var address by rememberSaveable(state.address) { mutableStateOf(state.address) }
     var editingProfile by remember(state.generation) { mutableStateOf<PrinterProfile?>(null) }
+    var addingPrinter by remember { mutableStateOf(false) }
     var fileQuery by rememberSaveable(state.address) { mutableStateOf("") }
     var folder by rememberSaveable(state.address) { mutableStateOf("") }
     var newestFirst by rememberSaveable { mutableStateOf(false) }
@@ -335,13 +335,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 item {
+                    // Replaced the old single-field "type an address, tap Connect" flow (owner
+                    // request, 2026-09-22): that path created a bare, unconfigured profile
+                    // (PrinterModel.connect's own fallback) with no name, kind, slicing profile
+                    // or live verification - every one of those then needed a separate trip to
+                    // Edit printer. AddPrinterWizard folds type/address/credentials, slicing
+                    // profile, firmware confirmation and a real connectivity test into one guided
+                    // flow, and is now the only way to add a printer.
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Moonraker or frontend address") }, placeholder = { Text("http://192.168.1.110") }, singleLine = true, enabled = !state.busy)
-                        Text("Use your local Mainsail / Fluidd address, or Moonraker with port 7125. No account required.", style = MaterialTheme.typography.bodyMedium)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button({ openPrinter(address) }, modifier = Modifier.testTag("connect-printer"), enabled = !state.busy && address.isNotBlank()) { Text("Connect") }
-                            OutlinedButton(disconnect, enabled = !state.busy && state.address.isNotBlank()) { Text("Disconnect") }
-                        }
+                        Button({ addingPrinter = true }, modifier = Modifier.fillMaxWidth().testTag("open-add-printer-wizard"), enabled = !state.busy) { Text("Add printer") }
+                        OutlinedButton(disconnect, enabled = !state.busy && state.address.isNotBlank()) { Text("Disconnect") }
                     }
                 }
             } else when(tab) {
@@ -593,6 +596,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
     runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}
     editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile,detectFirmware) }
+    if(addingPrinter) AddPrinterWizard(state.savedPrinters, addProfile, ::openPrinter) { addingPrinter = false }
     pending?.let { (command, epoch) ->
         AlertDialog(onDismissRequest = { pending = null }, title = { Text(command.title + "?") },
             text = { Column { Text("This sends a command to ${state.address}. It may move or heat your printer. Confirm only when the printer is safe and ready.");command.arguments["script"]?.let {Text("Command: $it")};if(command.allowedStates.isNotEmpty() && state.snapshot?.state !in command.allowedStates)Text("Unavailable in the current print state.") } },

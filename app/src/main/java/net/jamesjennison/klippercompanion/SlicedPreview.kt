@@ -52,10 +52,23 @@ void main() { fragColor = vec4(vColor, 1.0); }
 // This app's print-orange accent (matches ModelViewer.kt/thumbnail_render.cpp) for real
 // extrusion moves; a muted gray for travel moves - the same 2-color distinction the existing 2D
 // LayerPreview already draws (solid vs. dashed there; solid vs. dim here).
-private val EXTRUSION_COLOR = floatArrayOf(242f / 255f, 117f / 255f, 78f / 255f)
+private val DEFAULT_EXTRUSION_COLOR = floatArrayOf(242f / 255f, 117f / 255f, 78f / 255f)
 private val TRAVEL_COLOR = floatArrayOf(0.45f, 0.47f, 0.49f)
 
-private fun buildLineBuffer(toolpath: Toolpath, uptoLayer: Int, showTravel: Boolean): FloatArray {
+// Phase 5 (§16): "per-material toolpath coloring" - a real project material's own colorHex
+// (Materials.kt - either a bundled swatch or a real Spoolman-reported color) replaces the fixed
+// print-orange default when one is known, so the preview actually reflects the filament that
+// will print, not a generic placeholder. Falls back to the app's own default accent for a
+// 6-digit hex string that fails to parse, rather than crashing on a malformed real-world value.
+internal fun parseHexColor(hex: String?): FloatArray? {
+    val clean = hex?.removePrefix("#")?.takeIf { it.length == 6 } ?: return null
+    return try {
+        val value = clean.toLong(16)
+        floatArrayOf(((value shr 16) and 0xFF) / 255f, ((value shr 8) and 0xFF) / 255f, (value and 0xFF) / 255f)
+    } catch (e: NumberFormatException) { null }
+}
+
+private fun buildLineBuffer(toolpath: Toolpath, uptoLayer: Int, showTravel: Boolean, extrusionColor: FloatArray): FloatArray {
     val lines = ArrayList<Float>()
     fun append(segments: List<ToolpathSegment>, color: FloatArray) {
         for (s in segments) {
@@ -65,7 +78,7 @@ private fun buildLineBuffer(toolpath: Toolpath, uptoLayer: Int, showTravel: Bool
             lines.add(s.x2); lines.add(s.y2); lines.add(z); lines.add(color[0]); lines.add(color[1]); lines.add(color[2])
         }
     }
-    append(toolpath.segments, EXTRUSION_COLOR)
+    append(toolpath.segments, extrusionColor)
     if (showTravel) append(toolpath.travels, TRAVEL_COLOR)
     return lines.toFloatArray()
 }
@@ -151,11 +164,12 @@ class ToolpathGLRenderer : GLSurfaceView.Renderer {
     }
 }
 
-@Composable fun SlicedPreview(toolpath: Toolpath, modifier: Modifier = Modifier) {
+@Composable fun SlicedPreview(toolpath: Toolpath, modifier: Modifier = Modifier, materialColorHex: String? = null) {
     var glView by remember(toolpath) { mutableStateOf<GLSurfaceView?>(null) }
     val renderer = remember(toolpath) { ToolpathGLRenderer() }
     var layer by remember(toolpath) { mutableIntStateOf(toolpath.heights.lastIndex.coerceAtLeast(0)) }
     var showTravel by remember(toolpath) { mutableStateOf(false) }
+    val extrusionColor = remember(materialColorHex) { parseHexColor(materialColorHex) ?: DEFAULT_EXTRUSION_COLOR }
     var minDistance by remember(toolpath) { mutableFloatStateOf(1f) }
     var maxDistance by remember(toolpath) { mutableFloatStateOf(1000f) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -166,8 +180,8 @@ class ToolpathGLRenderer : GLSurfaceView.Renderer {
         minDistance = radius * 1.2f; maxDistance = radius * 8f
         renderer.cameraState = CameraOrbit(45f, 35f, radius * 3f)
     }
-    LaunchedEffect(toolpath, layer, showTravel) {
-        renderer.pendingLines = buildLineBuffer(toolpath, layer, showTravel)
+    LaunchedEffect(toolpath, layer, showTravel, extrusionColor) {
+        renderer.pendingLines = buildLineBuffer(toolpath, layer, showTravel, extrusionColor)
         glView?.requestRender()
     }
 

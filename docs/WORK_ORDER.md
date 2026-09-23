@@ -1445,6 +1445,74 @@ P28/M7 sections for what each one built and its commit hash.)*
       criterion (picking printer + material + quality preset - all now
       real decisions with trustworthy defaults - is enough to reach
       Print).
+18. **WO-21 — Phase 5 of the Consumer Slicer Plan, owner-approved 2026-09-23
+    ("continue").** "Extend the existing toolpath preview with per-material
+    coloring and pre-slice validation" (§16). Continuous bounds/collision
+    validation for multi-object was already real as of Phase 1
+    (`ProjectWorkspace`'s own live out-of-bounds/collision checks, WO-17) -
+    this phase's real remaining scope was the slice-time half.
+    - **`SliceValidation.kt`** (new): `MachineLimits`
+      (min/max_layer_height, real per-printer machine.json fields) and
+      `FilamentTemperatureRange` (nozzle_temperature_range_low/high, real
+      per-profile-pack filament.json fields) - both parsed from the exact
+      same bundled asset files every slice already applies, not invented
+      separately. `validateSliceConfiguration()` produces
+      `SliceValidationIssue`s: a layer height outside the printer's real
+      declared range **blocks** slicing (a genuine hardware/firmware
+      bound); a material's nozzle temperature outside the bundled
+      profile's own declared range is a **non-blocking warning** (real,
+      but not a hard limit - PETG/ABS commonly print legitimately hotter
+      than a PLA-centric bundled default, so this informs rather than
+      second-guesses a deliberate choice).
+      **Confirmed this has real teeth today, not just in theory**: this
+      app's own bundled PETG (240°C) and ABS (250°C) `MaterialProfile`
+      presets (Phase 3) genuinely exceed every bundled profile pack's own
+      declared 190-230°C range - a real, currently-true mismatch, caught
+      by a dedicated test and reproduced live on real hardware.
+    - **Wired into both slicing flows**: `ProjectEditorScreen` shows every
+      validation issue live (as settings change, not only after tapping
+      Slice) and disables Slice while a blocking one exists;
+      `SliceAndPrintPanel` (single-object, no material selection) gets
+      the layer-height check on its own "Slice" step. Neither flow's
+      existing behavior changed for a configuration that was already
+      valid.
+    - **Per-material toolpath coloring**: `SlicedPreview` gained
+      `materialColorHex`, converting a real material's `colorHex` (a
+      Spoolman-reported color, when one exists) into the sliced-preview's
+      extrusion-path color via a real hex parser (`parseHexColor`),
+      falling back to the existing print-orange default when no material
+      or no color is set - `ProjectEditorScreen` passes the project's
+      current material's color through.
+    - **Verified**: `SliceValidationTest` (12 JVM unit tests - real parse
+      coverage against every bundled machine.json/filament.json, the
+      pure validation decision logic including the real PETG/ABS-exceeds-
+      range case, absence-of-data never being treated as "out of range")
+      and `SlicedPreviewTest` (4 unit tests for the hex-color parser).
+      A full manual pass on real hardware (Razr 2026, real Snapmaker U1):
+      picked PETG, watched the real live warning
+      ("PETG's nozzle temperature (240°C) is outside this printer's
+      bundled profile's declared range (190°C-230°C)...") appear with
+      Slice still enabled, sliced successfully, and confirmed the
+      preview's extrusion color correctly falls back to the default
+      orange for a bundled material with no configured color (no crash,
+      no regression) - a live Spoolman-sourced color couldn't be
+      end-to-end verified on this device (no moonraker-spoolman
+      configured on the real U1 used throughout this session), so that
+      specific path relies on `SlicedPreviewTest`'s unit coverage plus
+      code review rather than a real-device screenshot. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      **entire** `connectedDebugAndroidTest` suite re-run clean: 165
+      tests, 0 failures, 0 errors, 8 skipped, on Razr 2026.
+    - **Not built this entry**: the blocking layer-height check has no
+      real device test exercising an actual out-of-range value, since
+      every bundled profile's own min/max_layer_height today comfortably
+      contains all three `QualityPreset` values (Draft 0.28/Standard
+      0.2/Fine 0.12mm against ranges of roughly 0.05-0.35mm) - the check
+      is real and unit-tested against synthetic bounds, but has no
+      currently-true real-world trigger the way the material-temperature
+      warning does. **Phase 5 is done** against the plan's own stated
+      scope and acceptance criterion (a genuinely invalid configuration
+      is now caught before slicing starts, with an actionable message).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

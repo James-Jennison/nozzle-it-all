@@ -47,9 +47,13 @@ presets, or a real spool read live from Spoolman — its actual configured nozzl
 not invented ones) that flows straight into slicing, closing Phase 3. Slicing settings are now a
 real beginner-tier surface — named quality presets (Draft/Standard/Fine) instead of a raw
 layer-height number, a support Auto mode that reads the model's own real geometry to decide
-whether it needs support, and bed-adhesion/copies controls — closing Phase 4. (See
-`docs/WORK_ORDER.md`'s WO-17 through WO-20 entries for the detailed history, most current for this
-area — it's updated more often than this file.) No multicolor or a model-discovery surface yet —
+whether it needs support, and bed-adhesion/copies controls — closing Phase 4. Slicing is now
+validated before it starts — a real per-printer layer-height range and a material's nozzle
+temperature against its bundled profile's own declared range, both read from the same profile
+data every slice already uses — and the sliced 3D preview colors its toolpath by the project's
+actual material when one has a known color, closing Phase 5. (See `docs/WORK_ORDER.md`'s WO-17
+through WO-21 entries for the detailed history, most current for this area — it's updated more
+often than this file.) No multicolor or a model-discovery surface yet —
 see the plan document's gap matrix for the fuller current-vs-target breakdown, though
 `docs/WORK_ORDER.md` supersedes it for anything the two disagree on.
 

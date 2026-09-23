@@ -115,11 +115,19 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // flow already reads) - used both for ProjectWorkspace's out-of-bounds tinting and as
     // Auto-arrange's real target width, not an invented default.
     var bedShape by remember(projectId, newProjectName) { mutableStateOf<BedShape?>(null) }
+    // Phase 5 (§16): real slice-time validation data - this printer's own declared layer-height
+    // range and filament temperature range, read from the same bundled profile pack every slice
+    // already applies (not invented separately). Loaded alongside bedShape since both come from
+    // the same asset read.
+    var machineLimits by remember(projectId, newProjectName) { mutableStateOf<MachineLimits?>(null) }
+    var filamentRange by remember(projectId, newProjectName) { mutableStateOf<FilamentTemperatureRange?>(null) }
     LaunchedEffect(profile?.slicingModel) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
-        bedShape = try {
-            withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
-        } catch (e: Exception) { null }
+        try {
+            bedShape = withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            machineLimits = withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            filamentRange = withContext(Dispatchers.IO) { filamentTemperatureRangeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+        } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
     // Phase 4 (§4/§16, "basic-mode settings... beginner tier"): replaces the old raw
@@ -178,6 +186,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     fun startSlicing() {
         val infill = validateInfillPercent(infillText)
         if (infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; return }
+        // Phase 5 (§16): a genuinely invalid configuration is caught here, before the native
+        // engine ever sees it - a blocking issue (a real machine limit) stops slicing outright;
+        // a non-blocking one (the bundled profile's own declared-but-not-hard-limit range) is
+        // still shown to the owner but doesn't stop them from proceeding.
+        val blockingIssue = validateSliceConfiguration(machineLimits, quality.layerHeightMm, filamentRange, vm.currentMaterial()).firstOrNull { it.blocking }
+        if (blockingIssue != null) { customizeError = blockingIssue.message; return }
         customizeError = null
         sliced = null; sliceError = null; stagedFilename = null
         stage = ProjectEditorStage.SLICING
@@ -351,6 +365,17 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                         Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
                         Text("Brim (bed adhesion)")
                     }
+                    // Phase 5 (§16): real slice-time validation, shown live (not only after
+                    // tapping Slice) so the owner sees a problem while still adjusting settings.
+                    val validationIssues = validateSliceConfiguration(machineLimits, quality.layerHeightMm, filamentRange, currentMaterial)
+                    validationIssues.forEach { issue ->
+                        Text(
+                            issue.message,
+                            color = if (issue.blocking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.testTag(if (issue.blocking) "project-validation-error" else "project-validation-warning"),
+                        )
+                    }
                     customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     if (profile == null) Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     // Phase 2 real bug fix: this screen's own upload step (LiveFileChanges/
@@ -363,7 +388,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                         "On-device slicing isn't wired up yet for ${profile.label} - its printer type needs an upload/print path this app doesn't implement.",
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-unsupported-printer"),
                     )
-                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode, modifier = Modifier.fillMaxWidth().testTag("project-slice")) { Text("Slice") }
+                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode && validationIssues.none { it.blocking }, modifier = Modifier.fillMaxWidth().testTag("project-slice")) { Text("Slice") }
                 }
                 stage == ProjectEditorStage.SLICING && sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -381,7 +406,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                 s.filamentUsedMm?.let { Text("${(it / 1000).let { m -> "%.2f".format(m) }}m") }
                             }
                         }
-                        slicedToolpath?.let { SlicedPreview(it) } ?: toolpathError?.let { Text(it, color = MaterialTheme.colorScheme.error) } ?: Text("Building layer preview…")
+                        slicedToolpath?.let { SlicedPreview(it, materialColorHex = currentMaterial?.colorHex) } ?: toolpathError?.let { Text(it, color = MaterialTheme.colorScheme.error) } ?: Text("Building layer preview…")
                     }
                     Button({ stage = ProjectEditorStage.PRINTER_READY }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-review-continue")) { Text("Continue") }
                 }

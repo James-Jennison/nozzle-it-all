@@ -99,10 +99,18 @@ import java.io.File
     // firmware generation for the same physical printer - this is a UI aid for fitting the model
     // on the bed, not the real firmware safety gate, which is still enforced at slice time.
     var bedShape by remember(uri) { mutableStateOf<BedShape?>(null) }
+    // Phase 5 (§16): the real per-printer layer-height range (machine.json's own
+    // min_layer_height/max_layer_height) - see SliceValidation.kt. This flow has no material
+    // selection, so only the layer-height check applies here (the temperature-range check needs
+    // a MaterialProfile, which ProjectEditorScreen's multi-object flow is the one that has).
+    var machineLimits by remember(uri) { mutableStateOf<MachineLimits?>(null) }
     LaunchedEffect(profile?.slicingModel) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         bedShape = try {
             withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+        } catch (e: Exception) { null }
+        machineLimits = try {
+            withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
         } catch (e: Exception) { null }
     }
     // Owned here, not by ModelViewer (which only lives during the "customizing" step and would
@@ -255,6 +263,10 @@ import java.io.File
                         if(layerHeight == null) { customizeError = "Enter a layer height between 0.04 and 0.6mm."; tab = 1; return@Button }
                         if(infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; tab = 1; return@Button }
                         if(transformState.outOfBounds) { tab = 0; return@Button }
+                        // Phase 5 (§16): a genuinely invalid layer height for this printer's own
+                        // declared real range is caught here, before the native engine sees it.
+                        val blockingIssue = validateSliceConfiguration(machineLimits, layerHeight, null, null).firstOrNull { it.blocking }
+                        if(blockingIssue != null) { customizeError = blockingIssue.message; tab = 1; return@Button }
                         customization = SliceCustomization(layerHeight, infill, supportsEnabled)
                         customizing = false
                     }, enabled = !transformState.outOfBounds, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-customize-next")) { Text("Slice") }

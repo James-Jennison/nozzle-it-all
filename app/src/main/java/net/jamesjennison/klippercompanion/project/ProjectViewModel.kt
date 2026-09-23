@@ -109,6 +109,22 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
     // project or one where no material has been picked yet.
     fun currentMaterial(): MaterialProfile? = _objects.value.firstOrNull()?.material()
 
+    // Phase 8 (§11, §16, WO-25): real, genuine per-object material + tool-slot assignment -
+    // unlike setProjectMaterial (which keeps every object in lockstep, the correct behavior for
+    // every single-extruder target this app slices for today), this updates exactly one object,
+    // letting different objects on the same plate diverge. Deliberately a separate method rather
+    // than a mode flag on setProjectMaterial: callers (ProjectEditorScreen) decide which one to
+    // offer based on the real target printer's own tool count (ToolSlots.kt), so a single-
+    // extruder project's UI never even shows a path that could call this and quietly break the
+    // "every object shares one material" invariant that UI still promises.
+    suspend fun setObjectMaterial(objectId: String, material: MaterialProfile?, toolSlotIndex: Int?) {
+        val target = _objects.value.find { it.id == objectId } ?: return
+        val updated = target.withMaterial(material).withToolSlot(toolSlotIndex)
+        dao.upsertObjects(listOf(updated))
+        _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
+        touch()
+    }
+
     suspend fun renameProject(name: String) {
         val current = _project.value ?: return
         val updated = current.copy(name = name, modifiedAt = System.currentTimeMillis())

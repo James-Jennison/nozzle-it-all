@@ -63,9 +63,14 @@ object NativeEngine {
     // detect overlapping objects - collision detection is a separate, real UI concern. Throws
     // RuntimeException on any failure (including mismatched array lengths), same convention as
     // nativeSliceFile.
+    // toolSlotIndices (Phase 8 follow-up, §11, WO-25): a real per-object OrcaSlicer "extruder"
+    // config assignment (0 = printer default, unchanged behavior - see slic3r_engine.cpp's own
+    // comment on why 0 is safe as a no-op even though add_object() itself always force-sets a
+    // real "extruder" value on the clone it creates). Pass IntArray(modelPaths.size()) of zeros
+    // for today's existing single-material behavior.
     external fun nativeSliceMultiObject(
         modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
-        rotationZDeg: DoubleArray, scale: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray, toolSlotIndices: IntArray,
         outputGcodePath: String, profilePaths: Array<String>,
         overrideKeys: Array<String>, overrideValues: Array<String>,
     )

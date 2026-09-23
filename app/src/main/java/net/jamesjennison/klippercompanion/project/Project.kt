@@ -61,6 +61,14 @@ data class ProjectObject(
     val materialDisplayName: String? = null,
     val materialTempNozzleC: Int? = null,
     val materialTempBedC: Int? = null,
+    // Phase 8 (§11, §16, WO-25): which real tool/extruder slot this object's material is
+    // assigned to (a real ToolSlot.index, see ToolSlots.kt) - null means "default"/tool 0, the
+    // same behavior every single-extruder project already has (materialId alone fully describes
+    // slicing there; toolSlotIndex only matters once a project targets a printer whose bundled
+    // profile declares more than one real extruder). Persisted per-object, not per-project,
+    // because that's the whole point of this column - different objects on the same plate can
+    // now genuinely target different physical tools.
+    val toolSlotIndex: Int? = null,
 )
 
 // Room maps an entity's declared columns only, so the ModelTransform round-trip lives here as
@@ -92,3 +100,9 @@ fun ProjectObject.withMaterial(material: MaterialProfile?): ProjectObject = copy
     materialId = material?.id, materialDisplayName = material?.displayName,
     materialTempNozzleC = material?.tempNozzleC, materialTempBedC = material?.tempBedC,
 )
+
+// Phase 8 (§11, §16, WO-25): real per-object tool assignment - see ProjectObject.toolSlotIndex's
+// own comment. Separate from withMaterial() (material and tool slot are independent choices - a
+// project could reassign which physical tool prints an object without changing what material it
+// prints in, or vice versa).
+fun ProjectObject.withToolSlot(index: Int?): ProjectObject = copy(toolSlotIndex = index)

@@ -94,8 +94,16 @@ object SlicingCoordinator {
     // bundle (engine::slice_multi_object_bambu_bundle/nativeSliceMultiObjectBambuBundle) instead
     // of plain .gcode - the same single-object branch slice() above already has, extended to the
     // multi-object case (ProjectEditorScreen.kt).
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap()): SliceOutcome = withContext(Dispatchers.IO) {
+    // toolSlotIndices (Phase 8 follow-up, §11, WO-25): parallel to `objects` (index i is that
+    // object's own real tool/extruder assignment - see ToolSlots.kt), applied only on the plain-
+    // gcode Moonraker path today (nativeSliceMultiObject) - the Bambu bundle path doesn't take
+    // per-object tool assignment yet (every bundled Bambu profile is single-extruder today, so
+    // there is nothing real to assign there - see WORK_ORDER.md's own note on this). Defaults to
+    // empty, meaning "every object keeps the printer's default extruder" - unchanged behavior
+    // for every caller that predates this parameter.
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
+        require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
@@ -111,12 +119,14 @@ object SlicingCoordinator {
                         output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
                     )
                 } else {
+                    val slots = toolSlotIndices.ifEmpty { List(objects.size) { 0 } }
                     NativeEngine.nativeSliceMultiObject(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
+                        slots.toIntArray(),
                         output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
                     )
                 }

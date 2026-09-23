@@ -25,7 +25,17 @@ val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
     }
 }
 
-@Database(entities = [Project::class, ProjectObject::class], version = 2, exportSchema = false)
+// Phase 8 (WO-25): version 3 - project_objects gains toolSlotIndex, the real per-object tool/
+// extruder assignment ToolSlots.kt's own data model needs (§11's ToolSlot/MaterialAssignment).
+// Same real-migration discipline as MIGRATION_1_2 - existing projects must keep their objects,
+// not lose them to a destructive fallback.
+val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE project_objects ADD COLUMN toolSlotIndex INTEGER")
+    }
+}
+
+@Database(entities = [Project::class, ProjectObject::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
 
@@ -35,7 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext, AppDatabase::class.java, "nozzle_it_all.db",
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
     }
 }

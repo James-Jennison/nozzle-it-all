@@ -348,7 +348,7 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
 // real, separate Phase 1 UI concern (Consumer Slicer Plan §16), not something the slicer engine
 // enforces; slicing genuinely overlapping objects produces genuinely overlapping (garbage)
 // geometry, same as it would in the real upstream GUI.
-void slice_multi_object(const std::vector<std::pair<std::string, ModelTransform>>& objects,
+void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform, int>>& objects,
                          const std::string& output_gcode_path,
                          const std::vector<std::string>& profile_paths,
                          const std::vector<std::pair<std::string, std::string>>& config_overrides) {
@@ -369,9 +369,23 @@ void slice_multi_object(const std::vector<std::pair<std::string, ModelTransform>
     }
 
     Model combined;
-    for (const auto& [path, transform] : objects) {
+    for (const auto& [path, transform, tool_index] : objects) {
         Model loaded = load_and_place_model(path, config, transform);
         for (ModelObject* object : loaded.objects) {
+            // Phase 8 follow-up (§11, WO-25): the real per-object "extruder" config option -
+            // print.apply(model, config) below (via slice_model's shared tail) merges this
+            // object's own ModelConfigObject over the print's global config, the same real
+            // per-object-override mechanism the desktop GUI's own "Set extruder" uses. Must be
+            // set *before* combined.add_object() below, not after: Model::add_object's own real
+            // implementation (Model.cpp) force-sets "extruder" to 1 on the clone it creates
+            // whenever the source object doesn't already have a real, nonzero value - true for
+            // every object today regardless of this parameter, and unchanged by it when
+            // tool_index is 0 (this app's existing default, every prior caller). Passing a real
+            // nonzero tool_index here is what makes that forced-default branch see an
+            // already-set, nonzero value and leave it alone.
+            if (tool_index != 0) {
+                object->config.set("extruder", tool_index);
+            }
             combined.add_object(*object);
         }
     }

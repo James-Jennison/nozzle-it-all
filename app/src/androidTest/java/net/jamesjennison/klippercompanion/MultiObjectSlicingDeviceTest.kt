@@ -38,7 +38,7 @@ class MultiObjectSlicingDeviceTest {
         // the default centered position.
         NativeEngine.nativeSliceMultiObject(
             arrayOf(a.absolutePath, b.absolutePath),
-            doubleArrayOf(-30.0, 30.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 1.0),
+            doubleArrayOf(-30.0, 30.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 1.0), intArrayOf(0, 0),
             output.absolutePath, emptyArray(), arrayOf("use_relative_e_distances"), arrayOf("0"),
         )
 
@@ -74,7 +74,7 @@ class MultiObjectSlicingDeviceTest {
         assertThrows(RuntimeException::class.java) {
             NativeEngine.nativeSliceMultiObject(
                 arrayOf(a.absolutePath),
-                doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0), doubleArrayOf(0.0), doubleArrayOf(1.0),
+                doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0), doubleArrayOf(0.0), doubleArrayOf(1.0), intArrayOf(0),
                 output.absolutePath, emptyArray(), emptyArray(), emptyArray(),
             )
         }

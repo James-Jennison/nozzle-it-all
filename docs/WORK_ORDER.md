@@ -1791,6 +1791,92 @@ P28/M7 sections for what each one built and its commit hash.)*
       real-`false`-everywhere capability - no printer integration here
       reports one) remains unbuilt, matching Phase 7's own scope (it
       names filament load/unload, not sensing).
+22. **WO-25 — Phase 8 first real increment, owner-directed 2026-09-22
+    ("Data model first" - explicitly chosen over three deeper, riskier
+    options: Snapmaker U1 end-to-end, Prusa XL toolchanger, or a plan-
+    only pass - after a scoping question given Phase 8's own flagged
+    highest-risk status).** Real ToolSlot/MaterialAssignment data model
+    (§11) plus the minimum real native plumbing to make per-object tool
+    assignment possible later, deliberately with **no new user-facing
+    UI this entry** - see "Not built" below for exactly why.
+    - **Real per-printer-*model* tool count** (`ToolSlots.kt`,
+      `parseToolCount`): reads the bundled `machine.json`'s own
+      `extruder_colour` array length - the same real, authoritative
+      OrcaSlicer signal `nozzle_diameter`/`extruder_offset` are always
+      kept in lockstep with. Confirms `slicer_profiles/snapmaker_u1/
+      machine.json` already declares 4 real extruders; every other
+      bundled profile declares 1. **Corrects this plan's own §11 model**
+      (see the 2026-09-22 correction note added there in this same
+      session, prompted by the owner pointing out Prusa's real XL
+      toolchanger): tool count must be resolved per bundled printer
+      *model*, never assumed from `PrinterKind`/vendor - `PRUSA_LINK`
+      alone already spans single-extruder (MK4/MK3.9/MINI) and
+      5-toolhead (XL) real hardware, though no bundled XL profile
+      exists yet to actually resolve a real 5 for it (a real, disclosed
+      gap, not silently assumed).
+    - **Real schema**: `ProjectObject` gains `toolSlotIndex: Int?`
+      (Room migration 2→3, a real `ALTER TABLE` - same discipline
+      `MIGRATION_1_2` already established, no destructive fallback).
+      `ProjectViewModel.setObjectMaterial(objectId, material,
+      toolSlotIndex)` - genuine per-object assignment, independent of
+      `setProjectMaterial`'s existing "keep every object in lockstep"
+      behavior (unchanged, still what every single-extruder project
+      correctly wants).
+    - **Real native plumbing, empirically verified NOT sufficient alone**:
+      `engine::slice_multi_object`/`nativeSliceMultiObject` gained a
+      per-object `tool_index` parameter that sets the real OrcaSlicer
+      per-object `"extruder"` config option (`ModelObject::config.
+      set("extruder", N)` before `Model::add_object()` - the same
+      mechanism the desktop GUI's own "Set extruder" uses, confirmed by
+      reading `PrintConfig.cpp`/`Model.hpp`/`Model.cpp` directly, not
+      assumed). **Real finding, not guessed**: this alone produces zero
+      observable difference in the sliced G-code today. Diffing two real
+      slices of the same two objects on the Snapmaker U1 profile (the
+      one bundled machine.json with >1 real extruder) - one with tool
+      indices `[1,2]`, one with `[0,0]` - showed no difference beyond
+      filenames baked into comments. Root cause, also confirmed by
+      reading the bundled asset directly: `slicer_profiles/snapmaker_u1/
+      filament.json` configures exactly one real filament slot (every
+      `filament_*` array has length 1, no `filament_colour` key at all)
+      despite its own machine.json declaring 4 - OrcaSlicer's per-object
+      `"extruder"` selects *which configured filament slot* prints an
+      object, and only one is ever configured here, so every request
+      normalizes to that same slot. A real multi-slot filament config is
+      separate, larger, not-yet-built work. The parameter is kept
+      (harmless - `tool_index = 0`, unchanged for every existing caller,
+      is exactly today's behavior) as real, correct groundwork for that
+      later increment, not removed and not pretended to already work.
+    - **Deliberately no UI this entry**: given the native finding above,
+      surfacing a per-object material/tool picker now - even gated to
+      the one printer with >1 declared extruder - would be exactly the
+      "looks real, does nothing" trap this codebase treats as a hard
+      line (§9). The next Phase 8 increment (Snapmaker U1 or Prusa XL
+      end-to-end, an explicit option this session declined for now) is
+      where a real multi-slot filament config gets built and a picker
+      can honestly ship.
+    - **Verified**: `ToolSlotsTest` (6 unit tests - real tool count
+      against every bundled `machine.json`, the real Snapmaker U1 4/
+      everyone-else 1 split, a safe fallback-to-1 for missing/malformed
+      data, `toolSlotsFor`'s own real capability mapping).
+      `ToolAssignmentSlicingDeviceTest` (3 device tests) proves the new
+      native parameter is real and harmless - doesn't crash, doesn't
+      drop an object, doesn't corrupt single-tool slicing, and a
+      mismatched array length fails with a real exception - while
+      explicitly *not* asserting a G-code difference it doesn't
+      actually produce yet (see its own header comment for the full
+      evidence trail). Full `testDebugUnitTest`/`lintDebug`/
+      `assembleDebug` gate and the **entire** device-test suite re-run
+      clean on Razr 2026 (`ZP22235MHM`) only, same discipline as
+      WO-22 through WO-24.
+    - **Not built this entry, real and explicit**: no per-object
+      material/tool-assignment UI (see above); no multi-slot filament
+      config for Snapmaker U1 or any other profile; no Prusa XL bundled
+      profile (still just `PRUSA_GENERIC`, single-extruder); purge/flush
+      estimation and toolchange visualization (Phase 8's own stated
+      Objective, both genuinely downstream of a working multi-tool
+      slice existing first); no real Snapmaker U1/Prusa XL/Bambu AMS
+      hardware exists to verify any of this against a physical printer
+      (the owner has none of the three).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

@@ -63,10 +63,25 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
                                       const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
 
 // Phase 1 (Consumer Slicer Plan §16): slices a real multi-object build plate - each (model path,
-// placement) pair loaded and placed exactly the way slice_file()'s single-object path already
-// does, then merged into one Model and sliced together into one G-code file. See the .cpp for why
-// this doesn't itself do collision detection (a separate, real UI concern).
-void slice_multi_object(const std::vector<std::pair<std::string, ModelTransform>>& objects,
+// placement, tool_index) triple loaded and placed exactly the way slice_file()'s single-object
+// path already does, then merged into one Model and sliced together into one G-code file. See the
+// .cpp for why this doesn't itself do collision detection (a separate, real UI concern).
+//
+// tool_index (Phase 8 follow-up, §11, WO-25): the real per-object OrcaSlicer "extruder" config
+// option (PrintConfig.cpp - registered coInt, min 0, "0 = inherit defaults"/1-N select a specific
+// extruder identity) applied to each object's own ModelConfigObject before combining - the same
+// real mechanism the desktop GUI's own per-object "Set extruder" uses, not an invented one. 0
+// (the default for every existing caller) means "don't set it, inherit the printer's default
+// extruder" - identical to today's behavior before this parameter existed.
+//
+// Known, empirically-confirmed real limitation (ToolAssignmentSlicingDeviceTest's own header
+// comment has the full evidence): this alone does NOT yet produce a differentiated tool-change in
+// the sliced G-code against any bundled profile today, including Snapmaker U1 (the one bundled
+// machine.json declaring >1 real extruder) - its own filament.json only ever configures one real
+// filament slot, so every requested extruder id normalizes to that same slot. A real multi-slot
+// filament config is separate, larger, not-yet-built work; this parameter is genuinely correct,
+// real plumbing for when that exists, not a currently-working feature.
+void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform, int>>& objects,
                          const std::string& output_gcode_path,
                          const std::vector<std::string>& profile_paths,
                          const std::vector<std::pair<std::string, std::string>>& config_overrides = {});

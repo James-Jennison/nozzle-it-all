@@ -184,7 +184,11 @@ class ProjectWorkspaceDeviceTest {
         // instead of accumulating locally would report only the last of 10 ~9-degree increments
         // (comfortably clearing a loose "not exactly 0" check) rather than the real cumulative
         // ~90 degrees, so this asserts the real cumulative figure specifically.
-        assertTrue("expected the full cumulative twist (~90 degrees) to be reflected in rotation, not just its last tiny increment - got ${lastTransform!!.rotationZDeg}", lastTransform!!.rotationZDeg > 45f)
+        // abs(): this test's own job is proving the cumulative-magnitude bug stays fixed, not
+        // pinning down which sign is visually "correct" - that's a separate, real, owner-verified
+        // fix (rotationZDeg = current - rotation, not + rotation) with its own comment at the
+        // call site in ProjectWorkspace.kt.
+        assertTrue("expected the full cumulative twist (~90 degrees) to be reflected in rotation, not just its last tiny increment - got ${lastTransform!!.rotationZDeg}", kotlin.math.abs(lastTransform!!.rotationZDeg) > 45f)
     }
 
     @Test fun emptyWorkspaceShowsThePlaceholder() {

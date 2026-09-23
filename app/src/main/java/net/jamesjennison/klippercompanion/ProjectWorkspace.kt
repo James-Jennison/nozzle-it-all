@@ -576,10 +576,21 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                                 offsetX += to[0] - from[0]
                                 offsetY += to[1] - from[1]
                             }
+                            // Real bug fix (owner-reported, live on the Razr 2026: "rotation is
+                            // rotating the opposite direction than intended - trying to rotate
+                            // left rotates right and vice versa"): Compose's own `rotation` here
+                            // is a screen-space angle (positive = clockwise as drawn, standard
+                            // Android/Compose convention, Y axis down), but rotationZDeg feeds
+                            // Matrix.rotateM's rotation about +Z (OpenGL's right-hand rule -
+                            // positive = counterclockwise when viewed from the +Z side looking
+                            // back toward the origin, the same side this plate's default camera
+                            // orbit views it from). Adding the raw value directly span the two
+                            // opposite conventions - negating it here is the real fix, not a
+                            // cosmetic sign flip elsewhere.
                             val updated = ModelTransform(
                                 offsetXMm = offsetX,
                                 offsetYMm = offsetY,
-                                rotationZDeg = (current.rotationZDeg + rotation) % 360f,
+                                rotationZDeg = (current.rotationZDeg - rotation) % 360f,
                                 scale = (current.scale * zoom).coerceIn(0.1f, 10f),
                             )
                             runningTransform = updated

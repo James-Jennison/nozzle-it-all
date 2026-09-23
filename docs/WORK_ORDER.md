@@ -2079,6 +2079,134 @@ P28/M7 sections for what each one built and its commit hash.)*
       screen this entry - the underlying mechanism (WO-25/26/27) and
       this new UI's own logic (this entry) are each independently
       verified, not yet exercised together as one live user flow.
+26. **WO-29 — Phase 8, same session continuation, closes WO-28's own
+    disclosed device-test gap.** WO-28 shipped the per-object
+    material+tool assignment UI with only a unit-tested pure function
+    (`multiToolSliceInputsFor`) behind it - no device test of
+    `ProjectEditorScreen` itself. Adds `ProjectEditorScreenDeviceTest.kt`
+    (4 real device tests), seeding real projects into the screen's own
+    real singleton `AppDatabase` (no injection point exists here,
+    matching `ProjectViewModelDeviceTest`'s real-Room discipline but
+    against the actual production database):
+    - a control test proving the existing single-tool "Choose a
+      material" dialog still opens correctly (baseline for the newer
+      per-object dialog)
+    - single-tool targets show only the shared material picker, no
+      per-object UI
+    - multi-tool targets (Snapmaker U1) show per-object Assign controls
+      instead, one per object on the plate
+    - assigning a tool+material to one object updates only that
+      object's row, leaving a second, untouched object on its default
+    - **Two real Compose-testing issues found and fixed along the way**:
+      off-screen rows need `performScrollTo()` before `performClick()`
+      (coordinate-based dispatch requires the target within the visible
+      viewport); a second `AlertDialog`'s own popup window is invisible
+      to `onRoot()`/`onNodeWith*` without `useUnmergedTree = true` - this
+      cost the most debugging time, since the dialog being open but its
+      buttons receiving clicks outside their actual visible bounds
+      looked identical to the dialog silently not opening.
+    - **Closes Phase 8's own remaining disclosed gap from WO-28**: the
+      per-object assign flow is now exercised end to end on a real
+      device screen (Razr 2026), not just proven independently at the
+      logic layer and the native-slicing layer. Still not exercised
+      against real multi-tool printer hardware (the owner has none of
+      the three: Snapmaker U1 with multiple loaded materials, Prusa XL,
+      or Bambu AMS) and purge/flush estimation and toolchange
+      visualization remain unbuilt - unchanged from WO-25 through
+      WO-28's own lists.
+    - **Verified**: full `testDebugUnitTest`/`lintDebug`/`assembleDebug`
+      gate and the complete device-test suite (194 tests) re-run clean
+      on Razr 2026 (`ZP22235MHM`).
+27. **WO-30 — Owner request 2026-09-23: the Prepare tab becomes the real
+    in-app slicer, and the plate gets a desktop-style toolbar.** Owner
+    reference: "Desktop-like power adapted to mobile" (EasyPrint-style
+    screenshots), refined through the session to "make these our own, do
+    not blatantly copy them", "keep the bottom navigation tabs", "the
+    model chooser should be in the actual slicer window, not a separate
+    pill that starts the process", and finally "the Prepare tab should
+    default right to the in-app slicer" with no landing pill at all.
+    - **`MainActivity.kt` real navigation change**: the Prepare tab used
+      to run the system file picker before any slicer UI existed
+      (pick-model-to-slice -> pickedModel -> a single-object
+      `SliceAndPrintPanel` share-intent reuse). Replaced entirely:
+      entering the Prepare tab now auto-creates and opens a real project
+      (`ProjectEditorScreen`, the same multi-object editor Files >
+      Projects already uses) immediately - "Add models" inside that
+      screen is the real in-window model chooser. Closing it returns to
+      Home rather than instantly reopening a fresh one. The old
+      `pickModel`/`pickedModel` wiring is now dead and removed. **The
+      share-intent entry point (another app sending a model to this
+      one) is unchanged** - it still opens the single-object
+      `SliceAndPrintPanel` directly, separate from the Prepare tab.
+    - **`ProjectEditorScreen.kt` real toolbar**: the plate gained a
+      left-hand toolbar (Duplicate, Hide, Reset, Remove, Layout, then
+      Move/Rotate added in a follow-up below) next to the real 3D
+      `ProjectWorkspace`, a live mm dimensions readout for the selected
+      object, and a "Models N/N" switcher - this app's own take, not a
+      copy of the reference's icon set or layout. Move/Scale/Rotate
+      stay as the existing combined drag/pinch/twist gesture rather
+      than splitting into three modes, matching `ModelViewer.kt`'s
+      established Select/Transform pattern. Hide is a local, UI-only
+      visibility toggle - a hidden object still slices exactly as if
+      shown, an explicit scope choice, not a half-built
+      exclude-from-slice feature. A later follow-up (below) split the
+      EDIT stage into Model/Settings/Printer tabs instead of one long
+      scrolling page, after owner visual-design feedback.
+    - **Real, pre-existing pinch/rotate bug found and fixed** (owner
+      report, live on the Razr 2026: "it allows me to pinch momentarily
+      then jumps back to full size. Attempted rotation has no effect."):
+      `detectTransformGestures`' own pan/zoom/rotation callback
+      parameters are incremental since the *previous* callback, not
+      cumulative since the gesture started (confirmed against Compose
+      foundation's own `TransformGestureDetector.kt`); `ProjectWorkspace`
+      was re-reading its "current" transform from a `remember`ed
+      parameter frozen for the whole gesture, so every callback
+      discarded all prior deltas. Fixed with a local running transform
+      accumulated across callback invocations. Two new
+      `ProjectWorkspaceDeviceTest.kt` tests reproduce this with real
+      synthetic multi-touch and assert the real cumulative result
+      (~4.7x scale, ~90 degrees) - verified failing against the pre-fix
+      code (scale 1.04, rotation 4.5 degrees, the exact reported
+      symptom) before confirming the fix.
+    - **Real inverted-rotation bug found and fixed** (owner report, live
+      on the Razr 2026: "rotation is rotating the opposite direction
+      than intended"): a genuine sign mismatch between
+      `detectTransformGestures`' screen-space rotation convention
+      (positive = clockwise) and `Matrix.rotateM`'s OpenGL right-hand
+      rule (positive = counterclockwise, as viewed from this plate's
+      default camera orbit) - fixed by subtracting instead of adding.
+    - **Real empty-plate grid bug found and fixed**: the 3D viewport
+      only drew the bed grid once an object existed - `onSurfaceCreated`
+      only re-armed `pendingObjects` for a non-empty plate, so the
+      empty-plate grid was also lost across any pause/resume
+      (backgrounding tears down and recreates the GL context). Fixed by
+      keying that re-arm on `bedShape` being known too.
+    - **Move/Rotate toolbar toggle** (owner request, live on the Razr
+      2026: "I should be able to rotate the model just by swiping around
+      the box, not having to necessarily pinch and rotate"): a real
+      `WorkspaceInteractionMode` (MOVE, the existing default; ROTATE,
+      new) gesture-mode parameter - in ROTATE mode a one-finger drag's
+      horizontal distance becomes a rotation instead of an offset
+      change; a genuine two-finger twist still works in both modes
+      (they never conflict). Move/Rotate join the plate toolbar as a
+      real persistent mode toggle with its own highlighted "active"
+      state.
+    - **Verified**: `PlateToolbarDeviceTest.kt` (Duplicate/Hide/Reset/
+      model-switcher, real Room read-back, not just UI assertion);
+      `ProjectWorkspaceDeviceTest.kt` gained cases for the cumulative
+      pinch/rotate fix and the new ROTATE-mode one-finger swipe. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate passed
+      throughout; the full device suite reached 200 tests passing on
+      the Razr 2026 (`ZP22235MHM`) as of the inverted-rotation fix. The
+      final follow-up (Move/Rotate toggle) verified its specific
+      new/changed tests (`PlateToolbarDeviceTest` 4/4,
+      `ProjectWorkspaceDeviceTest` 6/6) passing before the owner needed
+      to disconnect USB/ADB for the day - **the full ~200-test device
+      suite was mid-run and did not finish**; re-running it fully is the
+      first step before further work builds on top of this entry.
+      Manually walked the Prepare -> editor -> Add Models -> toolbar
+      flow, the Model/Settings/Printer tabs, and the pause/resume grid
+      fix live on that device.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

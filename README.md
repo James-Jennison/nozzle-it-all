@@ -6,7 +6,8 @@ account, or analytics — local-first is a deliberate, load-bearing design choic
 closed later (see [Local-first vs. cloud](#local-first-vs-cloud) below).
 
 Where this project is headed: [`docs/CONSUMER_SLICER_PLAN.md`](docs/CONSUMER_SLICER_PLAN.md) — a
-detailed, owner-approved architecture and roadmap (14 phases, Android + iOS + multi-OS Desktop)
+detailed, owner-approved architecture and roadmap (14 phases; target platforms are Android +
+Desktop for Windows/Linux — iOS and macOS were both deferred, not cancelled, see the plan's §6a)
 audited against the real repository, not aspirational. Active/in-progress work is tracked in
 [`docs/WORK_ORDER.md`](docs/WORK_ORDER.md). Earlier planning docs
 ([`FEATURE_PARITY_ROADMAP.md`](docs/FEATURE_PARITY_ROADMAP.md),
@@ -18,7 +19,10 @@ superseded by `CONSUMER_SLICER_PLAN.md` for the areas it covers.
 - **Printer control**: connect to Klipper/Moonraker, Bambu Lab (LAN MQTT/FTPS), Prusa Link, and
   Snapmaker U1/PAXX printers. Monitor state/temperatures, continuous WebRTC camera video, browse
   G-code files, run macros, start/pause/resume/cancel with explicit confirmation. Saved printer
-  profiles with one active printer at a time.
+  profiles with one active printer at a time. Klipper/Snapmaker targets also get real jog
+  movement, a bed-leveling trigger, a timelapse-render trigger, and filament load/unload, each
+  gated live on what the connected printer actually reports supporting (Phase 7/WO-24) — Bambu
+  Lab and Prusa Link have no equivalent transport/endpoint for these today.
 - **On-device slicing engine**: a real, AGPL-3.0-or-later, on-device slicing engine
   cross-compiled from upstream [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer)'s
   `libslic3r` (not a cloud call, not a mock) — see
@@ -38,13 +42,16 @@ move/rotate/scale each object, a real collision check (a proper rotated-rectangl
 not just a bounding-box guess) that blocks slicing while objects overlap, and a one-tap
 auto-arrange (real 2D bin packing, not a stub) to resolve it — backed by Room, and slices the whole
 plate at once on-device with the same review-then-confirm pipeline (sliced 3D preview + stats,
-printer-ready confirmation, upload, explicit Start print) the single-object share-intent/Prepare-tab
-flow above already uses. This closes Phase 1 of the roadmap. A single `PrinterCapabilities` object
+printer-ready confirmation, upload, explicit Start print) the single-object share-intent flow
+above already uses. (The Prepare tab itself now opens this same multi-object project editor
+directly, not the single-object flow — see WO-30.) This closes Phase 1 of the roadmap. A single `PrinterCapabilities` object
 (one per vendor: Klipper/Moonraker, Snapmaker U1/PAXX, Bambu Lab, Prusa Link) now drives every
 control-visibility decision in the app, replacing the printer-kind conditionals that used to be
-scattered across the UI — closing Phase 2. A project now picks a single material (four bundled
+scattered across the UI — closing Phase 2. A project now picks a material (four bundled
 presets, or a real spool read live from Spoolman — its actual configured nozzle/bed temperatures,
-not invented ones) that flows straight into slicing, closing Phase 3. Slicing settings are now a
+not invented ones) that flows straight into slicing, closing Phase 3 — project-wide on every
+single-tool printer, or per-object on a printer with more than one real tool slot (see multicolor
+below). Slicing settings are now a
 real beginner-tier surface — named quality presets (Draft/Standard/Fine) instead of a raw
 layer-height number, a support Auto mode that reads the model's own real geometry to decide
 whether it needs support, and bed-adhesion/copies controls — closing Phase 4. Slicing is now
@@ -52,10 +59,22 @@ validated before it starts — a real per-printer layer-height range and a mater
 temperature against its bundled profile's own declared range, both read from the same profile
 data every slice already uses — and the sliced 3D preview colors its toolpath by the project's
 actual material when one has a known color, closing Phase 5. (See `docs/WORK_ORDER.md`'s WO-17
-through WO-21 entries for the detailed history, most current for this area — it's updated more
-often than this file.) No multicolor or a model-discovery surface yet —
-see the plan document's gap matrix for the fuller current-vs-target breakdown, though
-`docs/WORK_ORDER.md` supersedes it for anything the two disagree on.
+through WO-24 entries for the detailed history, most current for this area — it's updated more
+often than this file.) Real per-object multi-tool/multicolor assignment now exists for
+printers with more than one real declared tool slot — today that's the Snapmaker U1 only, the
+one bundled printer profile (`machine.json`) that declares more than one extruder. `Files` and
+the Prepare tab's project editor show a per-object material + tool-slot picker on that target
+(project-wide printers keep the single shared material picker, unchanged); slicing genuinely
+emits distinct per-object tool-change G-code, not a cosmetic label — root-caused and fixed at
+the native `libslic3r` level, then generalized into production code and device-tested (WO-25
+through WO-29; see `docs/CONSUMER_SLICER_PLAN.md`'s Phase 8 section and `docs/WORK_ORDER.md`'s
+WO-25–WO-29 entries for the full evidence trail). Not yet built: purge/flush estimation,
+toolchange visualization, a Prusa XL bundled profile (Prusa Link is currently single-extruder
+only in this app), and any AMS-style Bambu material mapping — and none of this has been run
+against real multi-tool hardware, since the owner doesn't own a Snapmaker U1 with multiple
+loaded materials or a Prusa XL. There's also still no model-discovery surface — see the plan
+document's gap matrix for the fuller current-vs-target breakdown, though `docs/WORK_ORDER.md`
+supersedes it for anything the two disagree on.
 
 Only use a trusted LAN endpoint for printer control. HTTP is supported for conventional local
 Moonraker installations. This app rejects URL credentials and does not store passwords or API
@@ -93,9 +112,10 @@ owner-operated, on real hardware.
 
 CI (`.github/workflows/ci.yml`) runs unit tests, lint, and the full native build on a self-hosted
 runner provisioned with the pinned NDK/CMake and the `orcaslicer-android-engine` dependency —
-required because the native build cannot run on a stock hosted GitHub runner. AWS Device Farm
-instrumented-test coverage across a real device pool is planned but not yet wired up (needs AWS
-credentials/project ARNs as repo secrets).
+required because the native build cannot run on a stock hosted GitHub runner. A separate
+manual-trigger (`workflow_dispatch`) job runs the instrumented suite on AWS Device Farm across a
+real device pool (WO-16) — manual-only, not on every push, to control per-device-minute billing;
+see the workflow file's own header comment for the real ARNs and cost reasoning.
 
 ## Sources
 

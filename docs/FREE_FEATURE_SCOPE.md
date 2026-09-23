@@ -1,5 +1,7 @@
 # Free feature expansion
 
+> **Superseded (2026-09-23).** This document is stale and kept for history. Current scope, phases and status are in [`CONSUMER_SLICER_PLAN.md`](CONSUMER_SLICER_PLAN.md) and [`WORK_ORDER.md`](WORK_ORDER.md). For example, on-device slicing shipped in WO-13 through WO-30, which this document does not reflect. This document's Android-only scope and its "No iOS parity work" line predate the owner's 2026-09-23 decision that Desktop (Windows/Linux) and Web are committed targets (iOS and macOS remain deferred). The body below has not been rewritten.
+
 Detailed delivery sequence: [Android feature parity roadmap](FEATURE_PARITY_ROADMAP.md).
 
 Owner direction recorded 2026-09-06: include useful equivalents of the paid capabilities in SimplyPrint, Mobileraker, OctoApp, Obico and Printer Tools in our Android application for free where feasible.

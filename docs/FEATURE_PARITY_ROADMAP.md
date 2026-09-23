@@ -1,5 +1,7 @@
 # Android Klipper feature parity roadmap
 
+> **Superseded (2026-09-23).** This document is stale and kept for history. Current scope, phases and status are in [`CONSUMER_SLICER_PLAN.md`](CONSUMER_SLICER_PLAN.md) and [`WORK_ORDER.md`](WORK_ORDER.md). For example, on-device slicing shipped in WO-13 through WO-30, which this document does not reflect. The body below has not been rewritten.
+
 Created 2026-09-06. Owner: James Jennison. Implementation: Codex.
 
 Goal: make our app a free, practical alternative to the useful Klipper capabilities

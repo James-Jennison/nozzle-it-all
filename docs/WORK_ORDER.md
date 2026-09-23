@@ -2207,6 +2207,119 @@ P28/M7 sections for what each one built and its commit hash.)*
       Manually walked the Prepare -> editor -> Add Models -> toolbar
       flow, the Model/Settings/Printer tabs, and the pause/resume grid
       fix live on that device.
+28. **WO-31 — R8 minification and resource shrinking for release builds
+    (commit `cfb6466`, 2026-09-23).**
+    - **Real change**: `app/build.gradle.kts` enables minification and
+      resource shrinking for the release variant only; `app/proguard-rules.pro`
+      gains a JNI keep rule for `org.orcaslicer.engine.NativeEngine` (its
+      names are baked into static JNI symbols in the native library) plus
+      `-dontwarn` groups for optional dependencies confirmed absent.
+      Debug and test variants are unchanged.
+    - **Measured** (release APK): installed size 109.9 MB -> 73.6 MB;
+      download size 47.1 MB -> 34.8 MB; dex 41.5 MB (5 files) -> 5.9 MB
+      (1 file). Native libs unchanged: `libslic3rengine.so` is 57.5 MB,
+      now about 78% of the APK.
+    - **Verified**: the minified build launches; a native mesh-preview JNI
+      call works; a slice reaches the native engine.
+    - **Not verified on the minified build**: Bambu MQTT/TLS
+      (hivemq/Netty/BouncyCastle); `EncryptedSharedPreferences` (Tink);
+      Bespok3d SSH/signature checks (jsch/bcpg); Room; Glance.
+    - **Not built this entry**: the instrumented suite cannot run against a
+      minified build (R8 strips Kotlin stdlib classes the test harness
+      needs in the shared process), so these need a manual smoke test;
+      no signing config exists yet.
+29. **WO-32 — Fix false "Unsupported coordinate magnitude." on UUID-named
+    Klipper objects (commit `ffd41db`, 2026-09-23).**
+    - **Real bug** (owner-reported, Razr 2026): the sliced-result screen
+      showed the error instead of the layer preview/stats. **Root cause**:
+      the project editor stores models under random UUID filenames and the
+      engine names objects after them, so Klipper G-code carries
+      `EXCLUDE_OBJECT_DEFINE NAME=<uuid>.stl_id_0_copy_0` lines;
+      `GcodePreview.parse` tokenized parameters on every line, so a UUID
+      tail like `b36836200` parsed as B=36836200 and tripped the
+      10,000,000 sanity bound.
+    - **Fix**: only G0-G3 and G92 lines parse parameters.
+    - **Verified**: `M2Test` (2 new tests) and `SlicingProfilePacksDeviceTest`
+      (end to end); full device suite 202/202 on the Razr 2026.
+30. **WO-33 — Architecture decisions: Desktop, Web and shared modules
+    (owner-approved 2026-09-23, from an architecture audit).** Decisions
+    only; nothing here is built. Detail: `CONSUMER_SLICER_PLAN.md` §6b and
+    Phases 9S, 9a-9g, 13, 14.
+    - **Decided, owner-approved 2026-09-23:**
+      1. Platform family: Android + Windows desktop + Linux desktop + Web.
+         iOS and macOS remain deferred. Web is a committed production
+         target, not optional.
+      2. Web: a PWA served by an owner-operated "Nozzle Engine Service".
+         The same headless engine and printer adapters ship (a) embedded in
+         the Desktop app as its local agent (loopback by default, LAN only
+         after pairing) and (b) as a self-hostable headless service
+         (container/systemd). Slicing and printer protocols run in the
+         service; the browser is UI plus offline cache; the service serves
+         its own PWA same-origin (avoids mixed content, CORS and Local
+         Network Access problems). Printer credentials stay in the
+         service/agent and never reach a central Nozzle service.
+         **Non-goal:** no Nozzle-hosted multi-tenant service and no Nozzle
+         account. Reason (audit): browsers cannot reach Bambu printers
+         directly (MQTT 8883, implicit FTPS 990 and camera port 6000 are raw
+         TCP), Moonraker needs `cors_domains` plus Local Network Access
+         approval, PrusaLink CORS is unverified.
+      3. WebAssembly slicing is not the plan: a time-boxed, gated spike
+         only. The dependency chain (CGAL/GMP/MPFR, OCCT 7.6, OpenCV 4.6,
+         Boost 1.86 incl. Locale, oneTBB with about 234 parallel call sites)
+         is untested in WASM; community ports (OrcaWasm, orcaslicer-wasm)
+         exist but their claims are unverified. It becomes an optional
+         "small local slice in the browser" tier only if the spike passes:
+         build with `emcmake`; stub OCCT/OpenCV/OpenVDB/assimp in turn;
+         cross-build Boost/CGAL/TBB or shim; byte-compare G-code with
+         Android on real models; measure peak memory vs the wasm32 4 GiB
+         cap; verify Worker-termination cancellation; COOP/COEP hosting in
+         three browsers.
+      4. Desktop: Kotlin Multiplatform + Compose Desktop shell, LWJGL/OpenGL
+         3.3 viewport behind a renderer interface, and the slicer engine as
+         an isolated worker process behind a plain C API (crash isolation,
+         hard-kill cancellation). The Android JNI bridge stays as a second
+         thin front-end over the same C++ engine core. Upstream OrcaSlicer's
+         wxWidgets GUI is not embedded.
+      5. Delivery order after Android Phase 9: shared-module extraction ->
+         Engine Service + Linux Desktop -> Web v1 -> Windows Desktop (owner
+         chose Web before Windows).
+      6. New phases (existing numbering kept; the set is now Phases 0-14
+         plus 9S): Phase 9S shared `:domain`/`:transport` extraction plus a
+         command/undo model, before multi-plate work; 9a settings
+         tiers/search/custom+inheriting profiles/compare; 9b multi-plate +
+         undo/redo + project export/import; 9c cut/place-on-face/measure/
+         mirror/auto-orient; 9d painting in the project editor + modifiers +
+         blockers + seam painting; 9e calibration workflow; 9f slice
+         cancel/progress/foreground service/memory handling; 9g release
+         engineering (signing, minified-build smoke test, SBOM,
+         attestations, engine pinning); Phase 14 Web (14a service API +
+         auth + pairing, 14b PWA shell, 14c prepare + 3D viewport, 14d
+         preview + device, 14e offline, 14x WASM spike). Phase 11 sync is
+         hosted by the self-hostable Engine Service. Phase 13 gains 13a
+         engine C API + worker (Linux first; early Windows MSVC
+         headless-build spike), 13b shell + viewport, 13c workstation
+         features, 13d packaging/signing/attestations.
+      7. Engine provenance: pin the engine source (exact Orca revision plus
+         the committed patch). **Approved TODO, not done.** Today the engine
+         is built from an unreleased upstream nightly (`824b216f`,
+         `version.inc` 2.5.0-dev) with the Android patch uncommitted, in a
+         directory with no git remote, and the app's bridge sources
+         (`app/src/main/cpp/bridge/slic3r_engine.cpp`) have diverged from
+         the engine repo's `jni/` copy (the app copy is authoritative).
+         Also approved, not done: commission a qualified legal review (AGPL
+         obligations across Android/Desktop/WASM/service; LGPL static
+         linking of GMP/MPFR/OCCT; CGAL GPL/commercial parts; mcut dual
+         GPL/commercial; libigl copyleft; whether the OpenSSL 1.1.1w line is
+         end-of-life - to verify). No legal conclusions are recorded here.
+    - **OPEN, not decided:** Web UI technology (Compose Multiplatform Web vs
+      TypeScript; needs a spike, Web-target stability not verified);
+      whether/how much time to spend on the WASM spike; Play distribution vs
+      offline-first for the 57.5 MB engine; Phase 11 sync conflict policy;
+      hardware for physical acceptance (Prusa XL, Bambu AMS, MMU, CFS) or an
+      explicit "unverified" label; signing identity (Azure Artifact Signing
+      eligibility rules).
+    - **Not built this entry:** everything above. Docs only; no source,
+      build or test changes.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

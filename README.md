@@ -6,9 +6,10 @@ account, or analytics — local-first is a deliberate, load-bearing design choic
 closed later (see [Local-first vs. cloud](#local-first-vs-cloud) below).
 
 Where this project is headed: [`docs/CONSUMER_SLICER_PLAN.md`](docs/CONSUMER_SLICER_PLAN.md) — a
-detailed, owner-approved architecture and roadmap (14 phases; target platforms are Android +
-Desktop for Windows/Linux — iOS and macOS were both deferred, not cancelled, see the plan's §6a)
-audited against the real repository, not aspirational. Active/in-progress work is tracked in
+detailed, owner-approved architecture and roadmap (Phases 0-14 plus Phase 9S; target platforms
+are Android + Windows desktop + Linux desktop + Web, owner-approved 2026-09-23 — iOS and macOS
+were both deferred, not cancelled, see the plan's §6a and §6b; Desktop and Web are planned, not
+built) audited against the real repository, not aspirational. Active/in-progress work is tracked in
 [`docs/WORK_ORDER.md`](docs/WORK_ORDER.md). Earlier planning docs
 ([`FEATURE_PARITY_ROADMAP.md`](docs/FEATURE_PARITY_ROADMAP.md),
 [`FREE_FEATURE_SCOPE.md`](docs/FREE_FEATURE_SCOPE.md)) predate this scope change and are

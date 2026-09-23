@@ -423,6 +423,14 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
     return bestId
 }
 
+// WO-30 follow-up (owner: "I should be able to rotate the model just by swiping around the box,
+// not having to necessarily pinch and rotate"): which real action a one-finger drag on the
+// selected object performs. MOVE (the default, unchanged) repositions it on the bed; ROTATE spins
+// it around Z, driven by the drag's own horizontal pixel distance (a real, ordinary swipe -
+// tuned so a full-width swipe is roughly a half turn) rather than requiring a genuine two-finger
+// twist, which stays available in both modes for anyone who prefers it.
+enum class WorkspaceInteractionMode { MOVE, ROTATE }
+
 /**
  * The real multi-object build-plate view: renders every object in [objects] at once (via
  * [ProjectGLRenderer]), tap to select one (highlighted, drives [onSelect]), drag to move the
@@ -440,6 +448,9 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
     onSelect: (String?) -> Unit,
     onTransformChange: (String, ModelTransform) -> Unit,
     bedShape: BedShape? = null,
+    // WO-30 follow-up: MOVE by default so every existing caller (and ProjectWorkspaceDeviceTest's
+    // own drag test) keeps today's real, tested behavior unchanged.
+    interactionMode: WorkspaceInteractionMode = WorkspaceInteractionMode.MOVE,
     // Phase 1 (Consumer Slicer Plan §16): object ids the caller has already determined are
     // colliding with at least one other object (ProjectEditorScreen's own real footprintsOverlap
     // check, the same rotate-about-pivot math this file's pickObject/plateCenterOf already use) -
@@ -531,7 +542,11 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                             onSelect(hit)
                         }
                     }
-                    .pointerInput(objects.map { it.projectObject.id }, selectedId) {
+                    // interactionMode is a real key here (not just read from the closure) so
+                    // toggling Move/Rotate mid-idle (no gesture in progress) relaunches this
+                    // coroutine and picks up the new mode immediately - the same staleness class
+                    // of bug this file's own runningTransform fix (below) exists to avoid.
+                    .pointerInput(objects.map { it.projectObject.id }, selectedId, interactionMode) {
                         // Real bug fix (owner-reported, live on the Razr 2026: "it allows me to
                         // pinch momentarily then jumps back to full size. Attempted rotation has
                         // no effect"): detectTransformGestures' own pan/zoom/rotation are each
@@ -568,13 +583,30 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                             val current = runningTransform ?: selected.projectObject.transform()
                             var offsetX = current.offsetXMm
                             var offsetY = current.offsetYMm
-                            val vp = renderer.lastVpMatrix
-                            val w = renderer.viewportWidth; val h = renderer.viewportHeight
-                            if (vp != null && w > 1 && h > 1 && (pan.x != 0f || pan.y != 0f)) {
-                                val from = rayPlaneXY(vp, w, h, centroid.x - pan.x, centroid.y - pan.y, 0f)
-                                val to = rayPlaneXY(vp, w, h, centroid.x, centroid.y, 0f)
-                                offsetX += to[0] - from[0]
-                                offsetY += to[1] - from[1]
+                            // WO-30 follow-up (owner: "I should be able to rotate the model just
+                            // by swiping around the box, not having to necessarily pinch and
+                            // rotate"): in ROTATE mode, the drag's own horizontal pixel distance
+                            // becomes a rotation instead of an offset - a plain one-finger swipe,
+                            // not a two-finger twist. A genuine two-finger twist (`rotation`,
+                            // below) still applies in both modes for anyone who prefers it; the
+                            // two never conflict since one-finger drags never produce a nonzero
+                            // `rotation` in the first place (it needs two points to measure an
+                            // angle between).
+                            var swipeRotationDeg = 0f
+                            if (interactionMode == WorkspaceInteractionMode.MOVE) {
+                                val vp = renderer.lastVpMatrix
+                                val w = renderer.viewportWidth; val h = renderer.viewportHeight
+                                if (vp != null && w > 1 && h > 1 && (pan.x != 0f || pan.y != 0f)) {
+                                    val from = rayPlaneXY(vp, w, h, centroid.x - pan.x, centroid.y - pan.y, 0f)
+                                    val to = rayPlaneXY(vp, w, h, centroid.x, centroid.y, 0f)
+                                    offsetX += to[0] - from[0]
+                                    offsetY += to[1] - from[1]
+                                }
+                            } else {
+                                // Same sensitivity as the no-selection camera-orbit azimuth above
+                                // (pan.x * 0.4f) - a familiar, already-tuned feel, not a new
+                                // invented constant.
+                                swipeRotationDeg = pan.x * 0.4f
                             }
                             // Real bug fix (owner-reported, live on the Razr 2026: "rotation is
                             // rotating the opposite direction than intended - trying to rotate
@@ -586,11 +618,13 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                             // back toward the origin, the same side this plate's default camera
                             // orbit views it from). Adding the raw value directly span the two
                             // opposite conventions - negating it here is the real fix, not a
-                            // cosmetic sign flip elsewhere.
+                            // cosmetic sign flip elsewhere. swipeRotationDeg is defined with the
+                            // same sign convention (matches the camera-orbit azimuth's own
+                            // `cam.azimuthDeg - pan.x * 0.4f` above) so it's negated the same way.
                             val updated = ModelTransform(
                                 offsetXMm = offsetX,
                                 offsetYMm = offsetY,
-                                rotationZDeg = (current.rotationZDeg - rotation) % 360f,
+                                rotationZDeg = (current.rotationZDeg - rotation - swipeRotationDeg) % 360f,
                                 scale = (current.scale * zoom).coerceIn(0.1f, 10f),
                             )
                             runningTransform = updated

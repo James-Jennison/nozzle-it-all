@@ -102,13 +102,44 @@ class ProjectWorkspaceDeviceTest {
         compose.waitForIdle()
         compose.onNodeWithTag("project-workspace").performTouchInput {
             // A real drag on the already-selected object, not a tap - TRANSFORM-equivalent
-            // behavior lives directly in ProjectWorkspace's own detectTransformGestures handler
-            // (no separate mode toggle, unlike ModelViewer).
+            // behavior lives directly in ProjectWorkspace's own detectTransformGestures handler.
+            // Default interactionMode (MOVE) - see interactionModeRotateTurnsAOneFingerSwipeIntoRotationInsteadOfAMove
+            // below for the WO-30 follow-up ROTATE mode toggle.
             swipe(Offset(width * 0.8f, height * 0.5f), Offset(width * 0.5f, height * 0.3f), durationMillis = 200)
         }
         compose.waitForIdle()
         assertNotNull("expected the drag to report a new transform for the selected object", lastTransform)
         assertNotEquals("expected the drag to actually move the object, not report a no-op transform", right.projectObject.transform(), lastTransform)
+    }
+
+    // WO-30 follow-up (owner: "I should be able to rotate the model just by swiping around the
+    // box, not having to necessarily pinch and rotate") - in ROTATE mode, the exact same kind of
+    // one-finger swipe draggingTheSelectedObjectChangesItsOffset above used to move the object
+    // should instead rotate it (and leave its position alone), no second finger required.
+    @Test fun interactionModeRotateTurnsAOneFingerSwipeIntoRotationInsteadOfAMove() {
+        val (left, right) = fixtures()
+        var selectedId by mutableStateOf<String?>("right")
+        var lastTransform: ModelTransform? = null
+        compose.setContent {
+            CompanionTheme {
+                ProjectWorkspace(
+                    objects = listOf(left, right),
+                    selectedId = selectedId,
+                    onSelect = { selectedId = it },
+                    onTransformChange = { id, t -> if (id == "right") lastTransform = t },
+                    interactionMode = WorkspaceInteractionMode.ROTATE,
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("project-workspace").performTouchInput {
+            swipe(Offset(width * 0.8f, height * 0.5f), Offset(width * 0.5f, height * 0.3f), durationMillis = 200)
+        }
+        compose.waitForIdle()
+        assertNotNull("expected the swipe to report a new transform for the selected object", lastTransform)
+        assertNotEquals("expected a one-finger swipe in ROTATE mode to actually rotate the object", 0f, lastTransform!!.rotationZDeg)
+        assertEquals("expected ROTATE mode to leave the object's own position alone - only MOVE mode should touch offset", right.projectObject.transform().offsetXMm, lastTransform!!.offsetXMm, 0.001f)
+        assertEquals(right.projectObject.transform().offsetYMm, lastTransform!!.offsetYMm, 0.001f)
     }
 
     // WO-30 follow-up (owner: "Why am I unable to pinch to shrink or rotate the model?") -

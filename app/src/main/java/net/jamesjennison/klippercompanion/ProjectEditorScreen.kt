@@ -3,6 +3,7 @@ package net.jamesjennison.klippercompanion
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -76,6 +78,10 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // see is what gets edited, not necessarily what gets printed" - an explicit, honest scope
     // choice, not a half-built exclude-from-slice feature).
     var hiddenIds by remember(projectId, newProjectName) { mutableStateOf(setOf<String>()) }
+    // WO-30 follow-up (owner: "I should be able to rotate the model just by swiping around the
+    // box, not having to necessarily pinch and rotate"): which real action a one-finger drag on
+    // the selected object performs - see WorkspaceInteractionMode's own doc comment.
+    var interactionMode by remember(projectId, newProjectName) { mutableStateOf(WorkspaceInteractionMode.MOVE) }
     var geometry by remember(projectId, newProjectName) { mutableStateOf<Map<String, MeshGeometry>>(emptyMap()) }
     var addError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var loadError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
@@ -387,6 +393,20 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                 Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Column(Modifier.testTag("project-toolbar"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            // WO-30 follow-up: Move/Rotate is a persistent
+                                            // interaction-mode toggle (which one is "on" changes
+                                            // what a one-finger drag on the workspace below does),
+                                            // not a momentary action like the buttons under it -
+                                            // `active` gives each a highlighted background so
+                                            // that's visible at a glance, always enabled (no
+                                            // selection required, unlike the object-specific
+                                            // actions below).
+                                            PlateToolbarButton("Move", CompanionSymbol.MOVE, enabled = true, active = interactionMode == WorkspaceInteractionMode.MOVE, testTag = "project-mode-move") {
+                                                interactionMode = WorkspaceInteractionMode.MOVE
+                                            }
+                                            PlateToolbarButton("Rotate", CompanionSymbol.ROTATE, enabled = true, active = interactionMode == WorkspaceInteractionMode.ROTATE, testTag = "project-mode-rotate") {
+                                                interactionMode = WorkspaceInteractionMode.ROTATE
+                                            }
                                             PlateToolbarButton("Duplicate", CompanionSymbol.DUPLICATE, enabled = selectedId != null, testTag = "project-duplicate-object") {
                                                 selectedId?.let { id -> scope.launch { selectedId = vm.duplicateObject(id)?.id } }
                                             }
@@ -411,6 +431,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                 onTransformChange = { id, transform -> scope.launch { vm.updateObjectTransform(id, transform) } },
                                                 bedShape = bedShape,
                                                 collidingIds = collidingIds,
+                                                interactionMode = interactionMode,
                                             )
                                             // WO-30: the selected object's real, current bounding
                                             // box in mm - (max-min) per axis on its loaded
@@ -727,11 +748,19 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
 // entry in the plate's own left-hand toolbar, now drawn at full onSurface contrast (near-white)
 // when enabled, matching this app's existing thin-stroke CompanionIcon set rather than the
 // reference screenshots' own icon glyphs. `enabled = false` still renders (dimmed) rather than
-// disappearing, so the toolbar's shape doesn't shift as selection changes.
-@Composable private fun PlateToolbarButton(label: String, symbol: CompanionSymbol, enabled: Boolean, testTag: String, onClick: () -> Unit) {
+// disappearing, so the toolbar's shape doesn't shift as selection changes. `active` (WO-30
+// follow-up: the Move/Rotate interaction-mode toggle) gives a persistent-mode button its own
+// highlighted background, distinct from a momentary action like Duplicate/Reset that has no
+// "on" state to show.
+@Composable private fun PlateToolbarButton(label: String, symbol: CompanionSymbol, enabled: Boolean, testTag: String, active: Boolean = false, onClick: () -> Unit) {
     val color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.testTag(testTag)) {
-        IconButton(onClick, enabled = enabled) { CompanionIcon(symbol, color = color) }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.Transparent, RoundedCornerShape(8.dp))
+            .testTag(testTag),
+    ) {
+        IconButton(onClick, enabled = enabled) { CompanionIcon(symbol, color = if (active) MaterialTheme.colorScheme.primary else color) }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) MaterialTheme.colorScheme.primary else color)
     }
 }

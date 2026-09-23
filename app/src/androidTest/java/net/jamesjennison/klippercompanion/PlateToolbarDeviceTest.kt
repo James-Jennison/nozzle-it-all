@@ -60,6 +60,7 @@ class PlateToolbarDeviceTest {
         val (projectId, objectIds) = seedProject("DuplicateProject", 1)
         openScreen(projectId)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
         compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-model-index").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("project-duplicate-object").performScrollTo().performClick()
@@ -70,7 +71,13 @@ class PlateToolbarDeviceTest {
         val (projectId, objectIds) = seedProject("HideProject", 2)
         openScreen(projectId)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
         compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        // Real race, not just a slow render: "Hide" is disabled until selectedId actually
+        // propagates, and a click on a disabled IconButton is silently discarded - no amount of
+        // waiting afterward recovers it, so this waits for the row's own "Selected" text (proof
+        // selectedId really reached this composition) before touching the toolbar at all.
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-hide-object").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("project-hide-object").performScrollTo().performClick()
         // Hiding the selected object clears the selection and drops it from the plate's own
@@ -84,7 +91,14 @@ class PlateToolbarDeviceTest {
         val (projectId, objectIds) = seedProject("SwitcherProject", 2)
         openScreen(projectId)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
         compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        // Real race: the switcher's own "Models N/2" index is derived from selectedId - clicking
+        // Next before selectedId has actually propagated reads a stale/absent selection
+        // (currentIndex == -1), which Next's own "already at the end, wrap to 0" branch turns
+        // into a same-object no-op, silently discarding the click's intended effect. Waiting for
+        // the row's own "Selected" text first (proof selectedId really landed) avoids that.
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-model-index").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("project-model-next").performScrollTo().performClick()
         compose.onNodeWithTag("project-model-index").assertTextContains("2/2", substring = true)
@@ -96,6 +110,7 @@ class PlateToolbarDeviceTest {
         val (projectId, objectIds) = seedProject("ResetProject", 1)
         openScreen(projectId)
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
         compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-workspace").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("project-workspace").performTouchInput {

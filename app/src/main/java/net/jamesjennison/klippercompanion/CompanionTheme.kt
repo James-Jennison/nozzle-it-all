@@ -128,9 +128,10 @@ private fun kilnTypography(): Typography {
 
 // HOME/CONTROL/FILES redrawn and SLICE/SETTINGS added for the 5-tab nav (see MainActivity's
 // bottom nav); PRINTER/CAMERA/EXPAND/CLOSE/NOZZLE/BED are unchanged, used outside the nav bar.
-// DUPLICATE/HIDE/RESET/LAYOUT/PREV/NEXT (WO-30): the project editor's own plate toolbar - drawn
-// in this file's existing thin-stroke line style, not copied from any reference app's icon set.
-enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT }
+// DUPLICATE/HIDE/RESET/LAYOUT/PREV/NEXT (WO-30) and MOVE/ROTATE (WO-30 follow-up, the plate's own
+// Move/Rotate interaction-mode toggle): the project editor's own plate toolbar - drawn in this
+// file's existing thin-stroke line style, not copied from any reference app's icon set.
+enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT, MOVE, ROTATE }
 
 /** Original outlined symbols; parent controls provide accessible text labels. */
 @Composable fun CompanionIcon(symbol: CompanionSymbol, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
@@ -190,6 +191,21 @@ enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND,
             CompanionSymbol.LAYOUT -> { box(4f,4f,7f,7f);box(13f,4f,7f,7f);box(4f,13f,7f,7f);box(13f,13f,7f,7f) }
             CompanionSymbol.PREV -> { line(15f,5f,9f,12f);line(9f,12f,15f,19f) }
             CompanionSymbol.NEXT -> { line(9f,5f,15f,12f);line(15f,12f,9f,19f) }
+            // A 4-way arrow cross - drag-to-reposition.
+            CompanionSymbol.MOVE -> {
+                line(12f,3f,12f,21f); line(3f,12f,21f,12f)
+                line(12f,3f,9f,6f); line(12f,3f,15f,6f)
+                line(12f,21f,9f,18f); line(12f,21f,15f,18f)
+                line(3f,12f,6f,9f); line(3f,12f,6f,15f)
+                line(21f,12f,18f,9f); line(21f,12f,18f,15f)
+            }
+            // A full circular arrow with two arrowheads (unlike RESET's single partial arc with
+            // one arrowhead and a tick) - a persistent two-way spin, not an undo-to-default.
+            CompanionSymbol.ROTATE -> {
+                drawArc(color, 20f, 320f, useCenter = false, topLeft = Offset(4f * u, 4f * u), size = Size(16f * u, 16f * u), style = stroke)
+                line(19.4f, 8.7f, 20f, 4f); line(19.4f, 8.7f, 15f, 7.3f)
+                line(4.6f, 15.3f, 4f, 20f); line(4.6f, 15.3f, 9f, 16.7f)
+            }
         }
     }
 }

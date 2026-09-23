@@ -38,6 +38,22 @@ void slice_file(const std::string& input_model_path,
                  const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
                  const ModelTransform& transform = {});
 
+// Phase 6 (Consumer Slicer Plan §16): produces a real Bambu-compatible .gcode.3mf bundle - the
+// same file shape store_bbs_3mf() (Format/bbs_3mf.hpp, real libslic3r, already linked into this
+// headless engine) writes for the desktop GUI's own "send to printer" action, using the identical
+// SaveStrategy flags Plater.cpp uses for that real case (Silence|WithGcode|SkipModel|
+// SkipAuxiliary). Deliberately does NOT go through PartPlateList::store_to_3mf_structure
+// (slic3r/GUI/PartPlate.cpp) - that's real code too, but it's part of the GUI module and pulls in
+// wxWidgets, which this build deliberately never links (SLIC3R_GUI=OFF). Instead this builds the
+// same PlateData struct store_bbs_3mf() actually consumes directly - PlateData itself is a plain
+// libslic3r struct (Format/bbs_3mf.hpp), not GUI-scoped, confirmed by reading the real source
+// before writing this, not assumed. See slic3r_engine.cpp for field-by-field justification.
+void slice_bambu_bundle(const std::string& input_model_path,
+                         const std::string& output_bundle_path,
+                         const std::vector<std::string>& profile_paths,
+                         const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
+                         const ModelTransform& transform = {});
+
 // Phase 1 (Consumer Slicer Plan §16): slices a real multi-object build plate - each (model path,
 // placement) pair loaded and placed exactly the way slice_file()'s single-object path already
 // does, then merged into one Model and sliced together into one G-code file. See the .cpp for why

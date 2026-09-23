@@ -50,15 +50,28 @@ object SlicingCoordinator {
     // engine::open_paint_session), so nativeSlicePaintSession takes none here; passing one
     // separately at slice time for a painted model would silently disagree with what was
     // actually painted.
+    // Phase 6 (Consumer Slicer Plan §16): for a Bambu Lab target, produces a real .gcode.3mf
+    // bundle (engine::slice_bambu_bundle/nativeSliceBambuBundle) instead of plain .gcode - the
+    // shape BambuPrinterService.startPrint()/BambuPrintRequest already require, matching what
+    // BambuPrintPanel's own share-intent path already uploads+prints. Not available with a paint
+    // session (nativeSlicePaintSession only ever produces plain .gcode - painting a Bambu target
+    // isn't wired up yet, same real gap noted on SlicingCoordinator's own paintSessionHandle
+    // doc); callers pass null for a Bambu target in that case, which this doesn't itself enforce
+    // (ModelViewer/SliceAndPrintPanel already keep Paint mode and target-printer independent, so
+    // this is defense-in-depth, not the only guard).
     suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) {
         when (val resolved = resolveProfilePaths(context, profile)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
-                val output = freshOutputFile(context, modelFile.nameWithoutExtension.take(80))
-                if (paintSessionHandle != null) {
-                    NativeEngine.nativeSlicePaintSession(paintSessionHandle, output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
-                } else {
-                    NativeEngine.nativeSliceFile(
+                val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
+                val output = freshOutputFile(context, modelFile.nameWithoutExtension.take(80), bambuBundle = bambuTarget)
+                when {
+                    paintSessionHandle != null -> NativeEngine.nativeSlicePaintSession(paintSessionHandle, output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+                    bambuTarget -> NativeEngine.nativeSliceBambuBundle(
+                        modelFile.absolutePath, output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                        transform.offsetXMm.toDouble(), transform.offsetYMm.toDouble(), transform.rotationZDeg.toDouble(), transform.scale.toDouble(),
+                    )
+                    else -> NativeEngine.nativeSliceFile(
                         modelFile.absolutePath, output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
                         transform.offsetXMm.toDouble(), transform.offsetYMm.toDouble(), transform.rotationZDeg.toDouble(), transform.scale.toDouble(),
                     )
@@ -96,10 +109,10 @@ object SlicingCoordinator {
         }
     }
 
-    private fun freshOutputFile(context: Context, baseName: String): File {
+    private fun freshOutputFile(context: Context, baseName: String, bambuBundle: Boolean = false): File {
         val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }
         outputDir.listFiles()?.forEach { it.delete() }
-        return File(outputDir, "$baseName.gcode")
+        return File(outputDir, if (bambuBundle) "$baseName.gcode.3mf" else "$baseName.gcode")
     }
 
     private sealed class ProfileResolution {

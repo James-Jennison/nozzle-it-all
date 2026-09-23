@@ -322,7 +322,7 @@ arrange and slicing from that screen are still open).
 
 | Capability | Existing app | Prusa/EasyPrint | Bambu Handy | Creality Cloud | Anycubic | Elegoo Matrix | Snapmaker | **Target** |
 |---|---|---|---|---|---|---|---|---|
-| On-device real slicing | **Complete** | cloud-assisted | n/a (profile-driven) | cloud | app-side | n/a | app-side | **P0 (keep, extend)** |
+| On-device real slicing | **Complete for Klipper/Snapmaker; Bambu Lab now also complete (WO-22: `engine::slice_bambu_bundle`/`store_bbs_3mf` produce a real .gcode.3mf bundle on-device, uploaded+printed via the existing FTPS+MQTT flow - Phase 6 partially closed 2026-09-22); Prusa Link still blocked (no upload endpoint implemented)** | cloud-assisted | n/a (profile-driven) | cloud | app-side | n/a | app-side | **P0 (keep, extend)** |
 | Move/rotate/scale | **Complete** | yes | limited | yes | yes | limited | yes | **P0 (multi-object)** |
 | Multi-object plate/arrange | **Complete (WO-17: add/duplicate/remove/rename/delete/placement, real auto-arrange and collision detection, slices and prints the whole plate - Phase 1 closed 2026-09-23)** | yes | yes | yes | yes | limited | yes | **P0** |
 | Multi-plate | **Missing** | yes | yes | limited | no | no | no | **P1** |

@@ -379,11 +379,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     if (profile == null) Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     // Phase 2 real bug fix: this screen's own upload step (LiveFileChanges/
-                    // Moonraker.start, below) always assumed Moonraker unconditionally, same gap
-                    // SliceAndPrintPanel already had and fixed for Bambu Lab - Prusa Link would
-                    // have silently failed the same way, since PrusaLinkPrinterService has no
-                    // generic file-upload endpoint this app implements.
-                    val acceptsSlicedGcode = profile?.let { capabilitiesFor(it.kind).acceptsOnDeviceSlicedGcode } ?: true
+                    // Moonraker.start, below) always assumed Moonraker unconditionally - Prusa
+                    // Link would silently fail that way, since PrusaLinkPrinterService has no
+                    // generic file-upload endpoint this app implements. Phase 6 note: Bambu Lab's
+                    // own acceptsOnDeviceSlicedGcode is true now (see PrinterCapabilities.kt), but
+                    // that's SlicingCoordinator.slice()'s single-object .gcode.3mf bundle path
+                    // (SliceAndPrintPanel.kt) - this screen's multi-object plate still only slices
+                    // through sliceProject()/nativeSliceMultiObject, which produces plain .gcode,
+                    // not a bundle, so Bambu Lab is deliberately excluded here too until multi-
+                    // object Bambu bundle export is built.
+                    val acceptsSlicedGcode = profile?.let { it.kind != PrinterKind.BAMBU_LAB && capabilitiesFor(it.kind).acceptsOnDeviceSlicedGcode } ?: true
                     if (profile != null && !acceptsSlicedGcode) Text(
                         "On-device slicing isn't wired up yet for ${profile.label} - its printer type needs an upload/print path this app doesn't implement.",
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-unsupported-printer"),

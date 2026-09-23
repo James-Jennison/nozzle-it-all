@@ -40,7 +40,7 @@ class PrinterCapabilitiesTest {
         assertTrue("Bambu chamber cam is real", caps.supportsCamera)
         assertFalse("BambuPrinterService implements none of the Klipper reader interfaces", caps.supportsKlipperExtras)
         assertTrue("routes shared .gcode.3mf files to BambuPrintPanel", caps.supportsNativePrintFileFlow)
-        assertFalse("this app's slicer only produces plain .gcode, Bambu needs .gcode.3mf", caps.acceptsOnDeviceSlicedGcode)
+        assertTrue("Phase 6 (§16): engine::slice_bambu_bundle now produces a real .gcode.3mf via store_bbs_3mf - see BambuBundleDeviceTest", caps.acceptsOnDeviceSlicedGcode)
         assertFalse(caps.verifiedOnRealHardware)
     }
 

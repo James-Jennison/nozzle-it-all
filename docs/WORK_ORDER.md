@@ -1513,6 +1513,114 @@ P28/M7 sections for what each one built and its commit hash.)*
       warning does. **Phase 5 is done** against the plan's own stated
       scope and acceptance criterion (a genuinely invalid configuration
       is now caught before slicing starts, with an actionable message).
+19. **WO-22 — Phase 6 of the Consumer Slicer Plan, owner-directed 2026-09-22
+    ("I mean OrcaSlicer has the ability to print to Bambu printers, surely
+    you can get the information from the Orca source?" / "And if not from
+    there, Bambuddy allows Bambu control, surely there is something you
+    can use from that source").** Real, partial progress on Phase 6's
+    "reliable slice → transfer → print across all 4 vendor integrations"
+    (§16): Bambu Lab on-device slicing is now real; Prusa Link upload is
+    still not built (separate, still-open gap, unchanged this entry).
+    - **Owner explicitly rejected deferring Bambu.** Initial research
+      (background agent) found `store_bbs_3mf` (the real bundle writer,
+      `libslic3r/Format/bbs_3mf.cpp`, already linked into this headless
+      engine) but its only known caller, `PartPlateList::store_to_3mf_
+      structure`, is GUI-module code (`slic3r/GUI/PartPlate.cpp`,
+      wxWidgets-linked) that this app's `SLIC3R_GUI=OFF` build can't use -
+      the agent's initial read leaned toward deferring Bambu. Owner
+      pushed back directly, twice, naming two real sources to dig into
+      further rather than accept that conclusion: the vendored OrcaSlicer
+      source itself, and Bambuddy (`maziggy/bambuddy`, a real self-hosted
+      Bambu management project). Reading both further did settle it:
+      `PlateData` (the struct `store_bbs_3mf` actually consumes) is a
+      plain, non-GUI `libslic3r` struct - buildable directly without
+      `PartPlateList` at all - and `CLI::export_project` (`OrcaSlicer.cpp`)
+      confirmed a much simpler, non-GUI reference for the real
+      `SaveStrategy` flags a bundle export needs. Bambuddy's own
+      `slicer_api.py` docstring independently confirmed OrcaSlicer's CLI
+      has a working, documented `.gcode.3mf` export path. Neither source
+      was skimmed for a reassuring quote - both were read closely enough
+      to find the concrete facts that made the real implementation
+      possible (see below).
+    - **`engine::slice_bambu_bundle`** (new, `slic3r_engine.cpp/.hpp`):
+      builds a `PlateData`/`StoreParams` directly (bypassing the GUI-only
+      `PartPlateList` path entirely) and calls the real `store_bbs_3mf`
+      with the same `SaveStrategy` flags the desktop GUI's own "send to
+      printer" action uses (`Silence|WithGcode|SkipModel|SkipAuxiliary`).
+      Produces a real Bambu-compatible `.gcode.3mf`: real embedded
+      G-code, a real MD5 computed by the writer itself from the embedded
+      bytes (not precomputed), a real thumbnail (reusing this engine's
+      existing headless rasterizer), and a real `slice_info.config` with
+      the bundled machine.json's own declared printer model.
+    - **Two real, independently-confirmed bugs fixed along the way, not
+      guessed at:**
+      - `bambu_generic/machine.json` declared `"gcode_flavor": "klipper"` -
+        wrong; the real upstream OrcaSlicer Bambu profile chain (`Bambu
+        Lab A1 0.4 nozzle.json` → `fdm_bbl_3dp_001_common.json` →
+        `fdm_machine_common.json`) declares `"marlin"`, and nothing in
+        that chain overrides it back. Fixed to match.
+      - **The real blocker**, root-caused via a temporary boost::log→
+        logcat diagnostic (this build never installs a boost::log sink,
+        so `bbs_3mf.cpp`'s own narrating `BOOST_LOG_TRIVIAL` calls went
+        nowhere observable - added, used, then removed once done, same
+        discipline as WO-13's own native-debugging precedent): every
+        real attempt failed with `store_bbs_3mf` returning `false`,
+        traced to `Model::get_backup_path()` falling back to the bare,
+        root-relative `"/orcaslicer_model/..."` - a real "Read-only file
+        system" failure on Android - because this app never calls
+        `Slic3r::set_temporary_dir()`, so `Utils.cpp`'s own
+        `g_temporary_dir` was empty. Fixed by pointing it at the caller's
+        own writable output directory before slicing (every call site
+        already passes an app-cache-relative bundle path), plus a
+        best-effort `Model::remove_backup_path_if_exist()` cleanup after
+        export.
+    - **Wired into the real print flow, not left native-only**:
+      `PrinterCapabilities.acceptsOnDeviceSlicedGcode` is now `true` for
+      `BAMBU_LAB`; `SlicingCoordinator.slice()` branches to
+      `nativeSliceBambuBundle`/a `.gcode.3mf` output for a Bambu target
+      instead of `nativeSliceFile`; `SliceAndPrintPanel` skips the
+      Moonraker-only `LiveFileChanges` upload step for a Bambu target
+      (the bundle uploads as part of one real print command instead,
+      `BambuPrinterService.startPrint` - the same FTPS+MQTT flow
+      `BambuPrintPanel`'s own share-intent path already uses) and, for
+      the toolpath/stats review step, extracts the real embedded
+      `Metadata/plate_1.gcode` out of the bundle into a throwaway temp
+      file first (the existing `GcodePreview`/`GcodeStatsParser` parsers
+      expect plain G-code text, not a zip). `ProjectEditorScreen`'s
+      separate multi-object plate flow deliberately still excludes Bambu
+      Lab - it only slices through `nativeSliceMultiObject`, which has no
+      Bambu-bundle counterpart yet - a real, explicit, still-open gap,
+      not an oversight.
+    - **Verified**: `BambuBundleDeviceTest` (new, 7 real device tests
+      against the real bundled Bambu profile pack and a real cube
+      fixture) - a genuine non-trivial zip, the real 3MF container files,
+      real G-code inside `Metadata/plate_1.gcode` with a real OrcaSlicer
+      header, the archive's own declared MD5 verified against an
+      independently-computed MD5 of the actual embedded bytes (not a
+      placeholder), a real non-empty PNG thumbnail, `slice_info.config`
+      containing the real bundled printer model ("Bambu Lab A1"), and no
+      leftover intermediate `.gcode.tmp` file. `PrinterCapabilitiesTest`
+      updated to assert the new, true `acceptsOnDeviceSlicedGcode`
+      value for Bambu Lab. Full `testDebugUnitTest`/`lintDebug`/
+      `assembleDebug` gate and the **entire** device-test suite re-run
+      clean: 172 tests, 0 failures, on Razr 2026 (`ZP22235MHM`) only -
+      the Razr 2023 (`ZY22HXCVPM`) is in use by another project this
+      session and was deliberately left untouched, run via direct
+      `adb shell am instrument` rather than gradle's
+      `connectedDebugAndroidTest` (which enumerates every attached
+      device with no built-in single-device filter).
+    - **Not built this entry, real and explicit**: Prusa Link upload
+      (Phase 6's other real gap - `PUT /api/v1/files/{storage}/{path}`
+      with `Print-After-Upload`, plus a real pre-existing storage-path
+      bug this session's earlier research already found -
+      `PrusaLinkPrinterService` hardcodes `local` but MK4/MK3.9/MINI/XL
+      firmware only has `/usb`); multi-object Bambu bundle export
+      (`ProjectEditorScreen`'s plate flow); no real Bambu Lab hardware
+      exists to verify a printer actually accepts and prints this bundle
+      (the owner has none) - everything above is verified as far as
+      real, structural, on-device checks can go without it, matching
+      this project's own standing, honest disclosure convention for
+      every Bambu/PrusaLink integration in this codebase.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

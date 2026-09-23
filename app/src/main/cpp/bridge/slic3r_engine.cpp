@@ -21,8 +21,13 @@
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/Config.hpp"
 #include "libslic3r/TriangleSelector.hpp"
+#include "libslic3r/Format/bbs_3mf.hpp"
+#include "libslic3r/GCode/GCodeProcessor.hpp"
+#include "libslic3r/Utils.hpp"
 
 #include "thumbnail_render.hpp"
+
+#include <boost/filesystem.hpp>
 
 namespace engine {
 
@@ -158,6 +163,130 @@ void slice_file(const std::string& input_model_path,
 
     Model model = load_and_place_model(input_model_path, config, transform);
     slice_model(model, config, output_gcode_path);
+}
+
+// Phase 6 (Consumer Slicer Plan §16): the real Bambu-compatible .gcode.3mf bundle - see
+// slic3r_engine.hpp's own header comment for why this builds PlateData directly rather than
+// going through the GUI-only PartPlateList::store_to_3mf_structure. Every field set below was
+// checked against the real writer (libslic3r/Format/bbs_3mf.cpp) that actually consumes it:
+// - gcode_file/is_sliced_valid: _add_gcode_file_to_archive() reads gcode_file as a real
+//   filesystem path (must exist on disk), copies it into "Metadata/plate_N.gcode" inside the
+//   zip, and rewrites plate_data->gcode_file to that in-archive path itself - the caller doesn't
+//   need to place the file there manually.
+// - gcode_file_md5: computed and written by the exporter itself (a real MD5 over the same file),
+//   not something this function needs to precompute.
+// - slice_filaments_info: filled by PlateData::parse_filament_info(GCodeProcessorResult*), a
+//   real libslic3r method - requires a real (non-null) GCodeProcessorResult from
+//   Print::export_gcode(), unlike every other slice path in this file which passes nullptr there
+//   since nothing else needs it.
+// - objects_and_instances: left empty deliberately - the <instance> block that reads it in
+//   _add_slice_info_config_file_to_archive() is itself gated on `!m_skip_model`, and this
+//   function's own SaveStrategy sets SkipModel (matching Bambu's real "send to printer" flags,
+//   Plater.cpp's own PLATE_TO_PRINTER strategy) - so nothing ever reads this field for this
+//   strategy combination.
+// - printer_model_id: the config's own real "printer_model" value (e.g. "Bambu Lab A1"), not
+//   invented - already present in every bundled Bambu machine.json.
+// - project_presets stays empty in the returned StoreParams (set by the caller below): the
+//   archive writer only embeds project presets when `project_presets.size() > 0`
+//   (_BBS_3MF_Exporter::_save_model_to_file), so an empty vector is a real, intentional no-op,
+//   not a missing-data workaround.
+void slice_bambu_bundle(const std::string& input_model_path,
+                         const std::string& output_bundle_path,
+                         const std::vector<std::string>& profile_paths,
+                         const std::vector<std::pair<std::string, std::string>>& config_overrides,
+                         const ModelTransform& transform) {
+    using namespace Slic3r;
+
+    // Real bug fix, root-caused via a temporary logcat diagnostic (a boost::log sink forwarding
+    // to __android_log_print, since this build otherwise never routes BOOST_LOG_TRIVIAL anywhere
+    // observable - since removed, its job done): store_bbs_3mf's own
+    // _add_project_config_file_to_archive() writes a real temp file under Model::get_backup_path()
+    // before zipping it in - and this app never calls Slic3r::set_temporary_dir(), so
+    // Utils.cpp's own g_temporary_dir is empty, which makes get_backup_path() fall back to the
+    // bare, non-writable, root-relative "/orcaslicer_model/..." (Model.cpp) - confirmed on-device
+    // as a real "Read-only file system" failure creating that path's "/3D/Objects" subdir, not
+    // guessed. output_bundle_path is always inside the caller's own writable app cache dir (every
+    // Kotlin call site passes an appContext.cacheDir-relative path), so its parent directory is a
+    // real, guaranteed-writable place to point the engine's temp/backup machinery at.
+    set_temporary_dir(boost::filesystem::path(output_bundle_path).parent_path().string());
+
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    for (const std::string& profile_path : profile_paths) {
+        DynamicPrintConfig profile_config;
+        profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        config.apply(profile_config);
+    }
+    for (const auto& [key, value] : config_overrides) {
+        config.set_deserialize_strict(key, value);
+    }
+
+    Model model = load_and_place_model(input_model_path, config, transform);
+
+    // A real plate thumbnail (Metadata/plate_1.png) - the same headless rasterizer every other
+    // slice path already uses for the .gcode file's own embedded thumbnail comments, invoked
+    // directly here to get a real ThumbnailData object for the bundle instead.
+    ThumbnailsGeneratorCallback thumbnail_cb = make_thumbnail_callback(model.mesh());
+    // ThumbnailsParams.sizes is a const member (aggregate-initialized only, not assignable after
+    // construction) - hence brace-init in field-declaration order rather than the usual
+    // default-then-set-fields pattern.
+    ThumbnailsParams thumb_params{Vec2ds{Vec2d(512, 512)}, true, false, false, true, 0, true};
+    ThumbnailsList thumbnails = thumbnail_cb(thumb_params);
+
+    Print print;
+    for (ModelObject* object : model.objects) {
+        print.auto_assign_extruders(object);
+    }
+    print.apply(model, config);
+
+    StringObjectException validation_error = print.validate();
+    if (!validation_error.string.empty()) {
+        throw std::runtime_error("Validation failed: " + validation_error.string);
+    }
+
+    print.process();
+
+    // A real intermediate .gcode file, consumed (copied, then discarded) below - the deliverable
+    // here is the .gcode.3mf bundle, not this file itself.
+    std::string temp_gcode_path = output_bundle_path + ".gcode.tmp";
+    GCodeProcessorResult gcode_result;
+    print.export_gcode(temp_gcode_path, &gcode_result, thumbnail_cb);
+
+    PlateData plate_data;
+    plate_data.plate_index = 0;
+    plate_data.is_sliced_valid = true;
+    plate_data.gcode_file = temp_gcode_path;
+    plate_data.printer_model_id = config.opt_string("printer_model");
+    plate_data.config = config;
+    if (!thumbnails.empty()) {
+        plate_data.plate_thumbnail.load_from(thumbnails.front());
+    }
+    plate_data.parse_filament_info(&gcode_result);
+
+    PlateDataPtrs plate_data_list = {&plate_data};
+    std::vector<Preset*> project_presets; // deliberately empty - see this function's own header comment
+    std::vector<ThumbnailData*> thumbnail_data_ptrs = {&plate_data.plate_thumbnail};
+
+    StoreParams store_params;
+    store_params.path = output_bundle_path;
+    store_params.model = &model;
+    store_params.plate_data_list = plate_data_list;
+    store_params.project_presets = project_presets;
+    store_params.config = &config;
+    store_params.thumbnail_data = thumbnail_data_ptrs;
+    // Matches the real desktop GUI's own "send to printer" flags (Plater.cpp) for exactly this
+    // case: a print-dispatch bundle, not a full editable project - silent (no progress UI, this
+    // is headless), the G-code included, the 3D model itself and auxiliary files omitted (the
+    // printer only needs the G-code + its own metadata to print, not a re-editable project).
+    store_params.strategy = SaveStrategy::Silence | SaveStrategy::WithGcode | SaveStrategy::SkipModel | SaveStrategy::SkipAuxiliary;
+    store_params.export_plate_idx = 0;
+
+    bool ok = store_bbs_3mf(store_params);
+    boost::system::error_code ec;
+    boost::filesystem::remove(temp_gcode_path, ec); // best-effort cleanup, not load-bearing for correctness
+    model.remove_backup_path_if_exist(); // best-effort cleanup of the scratch dir set_temporary_dir() pointed at above
+    if (!ok) {
+        throw std::runtime_error("Failed to write the .gcode.3mf bundle.");
+    }
 }
 
 // Phase 1 (Consumer Slicer Plan §16): a real multi-object build plate, sliced together into one

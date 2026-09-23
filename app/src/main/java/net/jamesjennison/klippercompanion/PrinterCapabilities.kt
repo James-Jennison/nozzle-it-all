@@ -28,11 +28,14 @@ data class PrinterCapabilities(
     // Bambu's own .gcode.3mf bundle upload/print flow (BambuPrintPanel) - a vendor-specific
     // print-request shape, not a general slicing capability.
     val supportsNativePrintFileFlow: Boolean,
-    // This app's on-device slicer only ever produces plain .gcode. Bambu needs a .gcode.3mf
-    // bundle it doesn't produce (a real, honest gap - see SlicingCoordinator.kt). Prusa Link has
-    // no generic file-upload endpoint this app implements (PrusaLinkPrinterService only ever
-    // sends print-control commands) - slicing would succeed but the upload step would silently
-    // hit Moonraker-shaped endpoints a real PrusaLink printer doesn't have. Both are honestly
+    // Phase 6 (Consumer Slicer Plan §16): Bambu Lab now produces its own real .gcode.3mf bundle
+    // on-device (engine::slice_bambu_bundle, store_bbs_3mf - see slic3r_engine.cpp/.hpp and
+    // BambuBundleDeviceTest) and uploads+prints it through the same real FTPS+MQTT flow
+    // BambuPrintPanel's share-intent path already uses (BambuPrinterService.startPrint) - see
+    // SlicingCoordinator.slice()'s own branch on PrinterKind.BAMBU_LAB. Prusa Link still has no
+    // generic file-upload endpoint this app implements (PrusaLinkPrinterService only ever sends
+    // print-control commands) - slicing would succeed but the upload step would silently hit
+    // Moonraker-shaped endpoints a real PrusaLink printer doesn't have, so it's still honestly
     // blocked rather than attempted and left to fail against real hardware.
     val acceptsOnDeviceSlicedGcode: Boolean,
     val hasBespok3d: Boolean,
@@ -66,7 +69,7 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
     )
     PrinterKind.BAMBU_LAB -> PrinterCapabilities(
         transport = PrinterTransport.BAMBU_MQTT, supportsPauseResumeCancel = false, supportsCamera = true,
-        supportsKlipperExtras = false, supportsNativePrintFileFlow = true, acceptsOnDeviceSlicedGcode = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = true, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )
     PrinterKind.PRUSA_LINK -> PrinterCapabilities(

@@ -166,6 +166,55 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceFile(
     }
 }
 
+// Phase 6 (Consumer Slicer Plan §16): the real Bambu-compatible .gcode.3mf bundle - same
+// parameter shape as nativeSliceFile, minus the transform (the caller only ever slices one
+// already-placed model for this path today - see slic3r_engine.hpp for why the bundle itself
+// doesn't need per-object placement metadata for a single-object print).
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSliceBambuBundle(
+    JNIEnv* env, jclass,
+    jstring jInputModelPath, jstring jOutputBundlePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues,
+    jdouble offsetXMm, jdouble offsetYMm, jdouble rotationZDeg, jdouble scale) {
+    try {
+        const std::string input_path = jstring_to_string(env, jInputModelPath);
+        const std::string output_path = jstring_to_string(env, jOutputBundlePath);
+
+        std::vector<std::string> profile_paths;
+        if (jProfilePaths != nullptr) {
+            jsize profile_count = env->GetArrayLength(jProfilePaths);
+            for (jsize i = 0; i < profile_count; ++i) {
+                auto jPath = static_cast<jstring>(env->GetObjectArrayElement(jProfilePaths, i));
+                profile_paths.push_back(jstring_to_string(env, jPath));
+                env->DeleteLocalRef(jPath);
+            }
+        }
+
+        std::vector<std::pair<std::string, std::string>> config_overrides;
+        if (jOverrideKeys != nullptr) {
+            jsize override_count = env->GetArrayLength(jOverrideKeys);
+            for (jsize i = 0; i < override_count; ++i) {
+                auto jKey = static_cast<jstring>(env->GetObjectArrayElement(jOverrideKeys, i));
+                auto jValue = static_cast<jstring>(env->GetObjectArrayElement(jOverrideValues, i));
+                config_overrides.emplace_back(jstring_to_string(env, jKey), jstring_to_string(env, jValue));
+                env->DeleteLocalRef(jKey);
+                env->DeleteLocalRef(jValue);
+            }
+        }
+
+        engine::ModelTransform transform;
+        transform.offset_x_mm = offsetXMm;
+        transform.offset_y_mm = offsetYMm;
+        transform.rotation_z_deg = rotationZDeg;
+        transform.scale = scale;
+
+        engine::slice_bambu_bundle(input_path, output_path, profile_paths, config_overrides, transform);
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error during Bambu bundle export");
+    }
+}
+
 // Phase 1 (WO-16 follow-up): slices a real multi-object build plate into one G-code file. Model
 // paths and the four per-object transform arrays are parallel arrays (index i is one object) -
 // the simplest JNI shape for a variable-length list of (path, transform) pairs, matching this

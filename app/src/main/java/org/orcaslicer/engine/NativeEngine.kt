@@ -44,6 +44,17 @@ object NativeEngine {
         offsetXMm: Double, offsetYMm: Double, rotationZDeg: Double, scale: Double,
     )
 
+    // Phase 6 (Consumer Slicer Plan §16): produces a real Bambu-compatible .gcode.3mf bundle
+    // (a zip container, not plain .gcode) - see slic3r_engine.hpp's own comment for how this
+    // reuses libslic3r's real store_bbs_3mf() writer without linking the GUI module. Same
+    // parameter shape as nativeSliceFile; outputBundlePath should end in ".gcode.3mf" to match
+    // what BambuPrinterService/bambuPrintName already expect.
+    external fun nativeSliceBambuBundle(
+        inputModelPath: String, outputBundlePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+        offsetXMm: Double, offsetYMm: Double, rotationZDeg: Double, scale: Double,
+    )
+
     // Phase 1 (Consumer Slicer Plan §16): slices a real multi-object build plate into one G-code
     // file. modelPaths and the four transform arrays are parallel arrays (index i is one
     // object's own path + placement) - each object is loaded and placed exactly the way

@@ -121,13 +121,20 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // the same asset read.
     var machineLimits by remember(projectId, newProjectName) { mutableStateOf<MachineLimits?>(null) }
     var filamentRange by remember(projectId, newProjectName) { mutableStateOf<FilamentTemperatureRange?>(null) }
+    // Phase 8 follow-up (§11, §16, WO-28): the real per-object material/tool assignment UI below
+    // only appears when the target's own bundled machine.json actually declares more than one
+    // extruder (ToolSlots.kt's own parseToolCount - today, only Snapmaker U1) - every other
+    // printer keeps exactly today's single-material-per-project UX unchanged, not a hidden
+    // no-op control (§20).
+    var toolCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
     LaunchedEffect(profile?.slicingModel) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         try {
             bedShape = withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
             machineLimits = withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
             filamentRange = withContext(Dispatchers.IO) { filamentTemperatureRangeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
-        } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null }
+            toolCount = withContext(Dispatchers.IO) { toolCountFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) } ?: 1
+        } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1 }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
     // Phase 4 (§4/§16, "basic-mode settings... beginner tier"): replaces the old raw
@@ -151,11 +158,17 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // not separate state, so it's always exactly what would actually get sliced.
     val currentMaterial = objects.firstOrNull()?.material()
     var materialPickerOpen by remember(projectId, newProjectName) { mutableStateOf(false) }
+    // Phase 8 follow-up (§11, §16, WO-28): the real per-object material+tool picker, only ever
+    // opened when toolCount > 1 (see the "Objects on this plate" section below) - holds the
+    // object id being assigned, reusing the exact same Bundled/Spoolman material list the
+    // single-material picker already loads below (materialPickerOpen and this are never both
+    // non-null/true at once - each printer target uses exactly one of the two real pickers).
+    var perObjectPickerFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var copiesText by remember(projectId, newProjectName) { mutableStateOf("1") }
     var spoolmanSpools by remember(projectId, newProjectName) { mutableStateOf<List<SpoolmanSpool>?>(null) }
     var spoolmanError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
-    LaunchedEffect(materialPickerOpen, state.address, state.connected) {
-        if (!materialPickerOpen) return@LaunchedEffect
+    LaunchedEffect(materialPickerOpen, perObjectPickerFor, state.address, state.connected) {
+        if (!materialPickerOpen && perObjectPickerFor == null) return@LaunchedEffect
         val target = profile ?: return@LaunchedEffect
         if (capabilitiesFor(target.kind).transport != PrinterTransport.MOONRAKER) { spoolmanError = null; spoolmanSpools = emptyList(); return@LaunchedEffect }
         if (!state.connected) { spoolmanError = "Connect to ${target.label} to read its Spoolman inventory."; spoolmanSpools = emptyList(); return@LaunchedEffect }
@@ -203,15 +216,25 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         scope.launch {
             working = true; sliceStageLabel = "Slicing…"
             val target = profile ?: run { working = false; sliceError = "Select a printer first."; return@launch }
-            val objectsToSlice = objects.mapNotNull { obj ->
-                Uri.parse(obj.sourceFileUri).path?.let { File(it) to obj.transform() }
-            }
+            // Kept as (ProjectObject, File, ModelTransform) triples, not split into two separately-
+            // filtered lists, so a dropped (unparseable-URI) object can never desync objectsToSlice
+            // from the per-object tool assignments below - both are always built from this same,
+            // already-filtered list.
+            val slicableObjects = objects.mapNotNull { obj -> Uri.parse(obj.sourceFileUri).path?.let { path -> Triple(obj, File(path), obj.transform()) } }
+            val objectsToSlice = slicableObjects.map { (_, file, transform) -> file to transform }
+            // Phase 8 follow-up (§11, §16, WO-28): real per-object tool assignment - see
+            // multiToolSliceInputsFor's own doc comment (ToolSlots.kt) for the real 1-based
+            // convention and slot-material fallback. Pure/extracted so it's directly unit-
+            // testable without a Compose test harness.
+            val (toolSlotIndices, slotMaterials) = multiToolSliceInputsFor(slicableObjects.map { (obj, _, _) -> obj }, toolCount)
             // Phase 3 (§11): the project's material (if one was picked) overrides the same real
             // nozzle_temperature/bed-plate-temperature config keys the basic settings already
             // use this mechanism for - applied on top of, not instead of, layer height/infill/
             // supports, so picking a material never silently resets the rest of these settings.
-            val overrides = basicSettings.toOverrides(needsSupport) + (vm.currentMaterial()?.toOverrides() ?: emptyMap())
-            when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides)) {
+            // Skipped for a multi-tool target: slotMaterials above already carries each object's
+            // own real material into sliceProject's own multi-slot config generation instead.
+            val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap()))
+            when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials)) {
                 is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
                 is SliceOutcome.Failed -> { working = false; sliceError = outcome.message }
@@ -345,12 +368,27 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
 
                     Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
                     if (objects.isEmpty()) Text("No objects yet - add an STL, 3MF or OBJ model to start this project's build plate.", style = MaterialTheme.typography.bodySmall)
-                    objects.forEach { obj -> ProjectObjectRow(obj, selected = obj.id == selectedId, onClick = { selectedId = obj.id }) }
+                    objects.forEach { obj ->
+                        ProjectObjectRow(obj, selected = obj.id == selectedId, onClick = { selectedId = obj.id },
+                            // toolCount > 1 (§11, WO-28): real per-object assignment - each row
+                            // shows its own material + tool slot and opens the per-object picker,
+                            // instead of the single project-wide row below (mutually exclusive,
+                            // matching the real capability the target printer actually has).
+                            toolAssignment = if (toolCount > 1) (obj.material()?.displayName ?: "No material") + " · Tool ${obj.toolSlotIndex ?: 1}" else null,
+                            onAssign = if (toolCount > 1) { { perObjectPickerFor = obj.id } } else null)
+                    }
 
-                    Text("Material", style = MaterialTheme.typography.titleSmall)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(currentMaterial?.displayName ?: "None selected - using the printer's default profile", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).testTag("project-material-current"))
-                        OutlinedButton({ materialPickerOpen = true }, enabled = objects.isNotEmpty(), modifier = Modifier.testTag("project-choose-material")) { Text("Choose") }
+                    if (toolCount <= 1) {
+                        Text("Material", style = MaterialTheme.typography.titleSmall)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(currentMaterial?.displayName ?: "None selected - using the printer's default profile", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).testTag("project-material-current"))
+                            OutlinedButton({ materialPickerOpen = true }, enabled = objects.isNotEmpty(), modifier = Modifier.testTag("project-choose-material")) { Text("Choose") }
+                        }
+                    } else {
+                        // Real multi-tool target (§11, WO-25/26/27/28): no single project-wide
+                        // material makes sense here - each object above already carries its own
+                        // real material + tool assignment, tap "Assign" on a row to change it.
+                        Text("$toolCount real tool slots on ${profile?.label ?: "this printer"} - tap \"Assign\" on an object above to pick its material and tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-multitool-hint"))
                     }
 
                     Text("Slicing settings", style = MaterialTheme.typography.titleSmall)
@@ -492,18 +530,72 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             confirmButton = { TextButton({ materialPickerOpen = false }) { Text("Close") } },
         )
     }
+    // Phase 8 follow-up (§11, §16, WO-28): the real per-object material+tool picker - opened only
+    // for a multi-tool target (toolCount > 1 above). Reuses the exact same Bundled/Spoolman
+    // material list the single-material picker already loads (same LaunchedEffect trigger),
+    // adding a real tool-slot chooser (1..toolCount, ToolSlots.kt's own real per-model count) -
+    // both are set together via vm.setObjectMaterial, the genuine per-object assignment method
+    // WO-25 built (independent of setProjectMaterial's lockstep-every-object behavior).
+    perObjectPickerFor?.let { objectId ->
+        val target = objects.find { it.id == objectId }
+        var pendingToolSlot by remember(objectId) { mutableIntStateOf(target?.toolSlotIndex ?: 1) }
+        AlertDialog(
+            onDismissRequest = { perObjectPickerFor = null }, title = { Text("Assign material and tool") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tool slot", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        (1..toolCount).forEach { slot ->
+                            FilterChip(pendingToolSlot == slot, { pendingToolSlot = slot }, label = { Text("Tool $slot") }, modifier = Modifier.testTag("project-object-tool-$slot"))
+                        }
+                    }
+                    Text("Material", style = MaterialTheme.typography.labelMedium)
+                    TextButton({ scope.launch { vm.setObjectMaterial(objectId, null, pendingToolSlot) }; perObjectPickerFor = null }, modifier = Modifier.testTag("object-material-none")) { Text("None - use the printer's default profile") }
+                    Text("Bundled", style = MaterialTheme.typography.labelMedium)
+                    BUNDLED_MATERIAL_PROFILES.forEach { m ->
+                        TextButton({ scope.launch { vm.setObjectMaterial(objectId, m, pendingToolSlot) }; perObjectPickerFor = null }, modifier = Modifier.testTag("object-material-${m.id}")) {
+                            Text("${m.displayName} · ${m.tempNozzleC}°C / ${m.tempBedC}°C bed")
+                        }
+                    }
+                    Text("From Spoolman", style = MaterialTheme.typography.labelMedium)
+                    spoolmanError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    val spools = spoolmanSpools
+                    if (spools != null && spools.isEmpty() && spoolmanError == null) Text("No spools found.", style = MaterialTheme.typography.bodySmall)
+                    spools?.forEach { spool ->
+                        val m = spool.toMaterialProfile()
+                        TextButton({ scope.launch { vm.setObjectMaterial(objectId, m, pendingToolSlot) }; perObjectPickerFor = null }, modifier = Modifier.testTag("object-material-${m.id}")) {
+                            Text(m.displayName + (m.tempNozzleC?.let { " · ${it}°C" } ?: " · no temperature set"))
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton({ perObjectPickerFor = null }) { Text("Close") } },
+        )
+    }
 }
 
-@Composable private fun ProjectObjectRow(obj: ProjectObject, selected: Boolean, onClick: () -> Unit) {
+// toolAssignment/onAssign (§11, WO-28): both null for every single-tool target (today's existing
+// behavior, unchanged) - non-null only when the target printer's own bundled profile declares
+// more than one real tool slot, in which case this row shows that object's own real material +
+// tool assignment and a way to change it, instead of relying on the single project-wide picker.
+@Composable private fun ProjectObjectRow(obj: ProjectObject, selected: Boolean, onClick: () -> Unit, toolAssignment: String? = null, onAssign: (() -> Unit)? = null) {
     Card(
         Modifier.fillMaxWidth().testTag("project-object-${obj.id}"),
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
         ),
     ) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(Uri.parse(obj.sourceFileUri).lastPathSegment ?: obj.id, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            TextButton(onClick) { Text(if (selected) "Selected" else "Select") }
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(Uri.parse(obj.sourceFileUri).lastPathSegment ?: obj.id, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                TextButton(onClick) { Text(if (selected) "Selected" else "Select") }
+            }
+            if (toolAssignment != null && onAssign != null) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(toolAssignment, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f).testTag("project-object-assignment-${obj.id}"))
+                    TextButton(onAssign, modifier = Modifier.testTag("project-object-assign-${obj.id}")) { Text("Assign") }
+                }
+            }
         }
     }
 }

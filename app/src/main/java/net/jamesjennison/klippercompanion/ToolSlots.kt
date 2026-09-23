@@ -1,6 +1,8 @@
 package net.jamesjennison.klippercompanion
 
 import android.content.Context
+import net.jamesjennison.klippercompanion.project.ProjectObject
+import net.jamesjennison.klippercompanion.project.material
 
 // Phase 8 (Consumer Slicer Plan §11, §16), first real increment - data model only this pass, not
 // yet wired to any vendor's real toolchange G-code (see WORK_ORDER.md's own entry for what's
@@ -67,3 +69,21 @@ internal fun parseBaseFilamentDiameter(filamentJson: String): Double {
 
 internal fun SlicingProfilePack.readBaseFilamentDiameter(context: Context): Double =
     parseBaseFilamentDiameter(context.assets.open(filamentPath).use { it.reader().readText() })
+
+// Phase 8 follow-up (§11, §16, WO-28): pure, so ProjectEditorScreen's own real per-object
+// assignment UI can be unit-tested without a Compose test harness. `orderedObjects` is a
+// project's own `ProjectObject` list in the *same order* the caller is about to hand the
+// matching model files to `SlicingCoordinator.sliceProject` - both outputs are index-parallel to
+// it, matching `sliceProject`'s own real `toolSlotIndices`/`slotMaterials` contract.
+//
+// toolSlotIndices: each object's own real, 1-based tool assignment (`toolSlotIndex`, null
+// defaults to tool 1 - every real object must print on *some* tool, never left unassigned).
+// slotMaterials: one real MaterialProfile per real tool slot (index i = slot i+1) - the first
+// object found assigned to that slot, or null if none is (sliceProject's own real fallback then
+// applies the printer's default material to that slot, not a crash or a silently wrong one).
+internal fun multiToolSliceInputsFor(orderedObjects: List<ProjectObject>, toolCount: Int): Pair<List<Int>, List<MaterialProfile?>> {
+    if (toolCount <= 1) return emptyList<Int>() to emptyList()
+    val toolSlotIndices = orderedObjects.map { it.toolSlotIndex ?: 1 }
+    val slotMaterials = (1..toolCount).map { slot -> orderedObjects.firstOrNull { (it.toolSlotIndex ?: 1) == slot }?.material() }
+    return toolSlotIndices to slotMaterials
+}

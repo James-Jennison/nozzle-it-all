@@ -1,5 +1,8 @@
 package net.jamesjennison.klippercompanion
 
+import net.jamesjennison.klippercompanion.project.ProjectObject
+import net.jamesjennison.klippercompanion.project.withMaterial
+import net.jamesjennison.klippercompanion.project.withToolSlot
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
@@ -65,5 +68,40 @@ class ToolSlotsTest {
         assertEquals(1.75, parseBaseFilamentDiameter("""{}"""), 0.001)
         assertEquals(1.75, parseBaseFilamentDiameter("""{"filament_diameter": []}"""), 0.001)
         assertEquals(1.75, parseBaseFilamentDiameter("""{"filament_diameter": ["not-a-number"]}"""), 0.001)
+    }
+
+    // Phase 8 follow-up (WO-28): the pure logic ProjectEditorScreen's own real per-object
+    // assignment UI relies on, extracted specifically so it's testable without a Compose harness.
+    private val red = MaterialProfile("custom-red", "Red PLA", "PLA", colorHex = "#FF0000", source = MaterialSource.CUSTOM)
+    private val blue = MaterialProfile("custom-blue", "Blue PLA", "PLA", colorHex = "#0000FF", source = MaterialSource.CUSTOM)
+    private fun projectObject(id: String, toolSlotIndex: Int?, material: MaterialProfile?) =
+        ProjectObject(id = id, projectId = "p", sourceFileUri = "file:///$id.stl").withToolSlot(toolSlotIndex).withMaterial(material)
+
+    @Test fun singleToolTargetProducesNoAssignmentsAtAll() {
+        val (indices, materials) = multiToolSliceInputsFor(listOf(projectObject("a", 1, red)), toolCount = 1)
+        assertTrue(indices.isEmpty()); assertTrue(materials.isEmpty())
+    }
+    @Test fun multiToolTargetBuildsRealIndexParallelToolAssignments() {
+        val objects = listOf(projectObject("a", 1, red), projectObject("b", 2, blue))
+        val (indices, materials) = multiToolSliceInputsFor(objects, toolCount = 4)
+        assertEquals(listOf(1, 2), indices)
+        assertEquals(listOf(red.id, blue.id, null, null), materials.map { it?.id })
+    }
+    @Test fun unassignedObjectDefaultsToToolOne() {
+        val objects = listOf(projectObject("a", null, red))
+        val (indices, _) = multiToolSliceInputsFor(objects, toolCount = 2)
+        assertEquals(listOf(1), indices)
+    }
+    @Test fun aSlotWithNoAssignedObjectHasANullMaterialNotACrash() {
+        val objects = listOf(projectObject("a", 1, red))
+        val (_, materials) = multiToolSliceInputsFor(objects, toolCount = 3)
+        assertEquals(3, materials.size)
+        assertNull(materials[1]); assertNull(materials[2])
+    }
+    @Test fun emptyObjectListProducesEmptyAssignmentsNotAnException() {
+        val (indices, materials) = multiToolSliceInputsFor(emptyList(), toolCount = 4)
+        assertTrue(indices.isEmpty())
+        assertEquals(4, materials.size)
+        assertTrue(materials.all { it == null })
     }
 }

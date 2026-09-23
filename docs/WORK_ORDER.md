@@ -2018,6 +2018,67 @@ P28/M7 sections for what each one built and its commit hash.)*
       verify any of this against a physical printer - all unchanged from
       WO-25/WO-26's own lists. The real slicing mechanism is now fully
       proven and production-ready; what remains is exposing it in the UI.
+25. **WO-28 — Phase 8, same session continuation ("continue") following
+    WO-27.** Builds the real per-object assignment UI WO-27's own "not
+    built" note named - the last piece of Phase 8's own stated
+    acceptance criterion ("assign 2+ colors to a real model").
+    - **`ProjectEditorScreen` real UI, gated on the target's own real
+      tool count** (`toolCountFor`, loaded alongside `bedShape`/
+      `machineLimits` in the same existing `LaunchedEffect`): for a
+      single-tool target (every printer today except Snapmaker U1),
+      nothing changes - the existing single, project-wide material
+      picker stays exactly as it was. For a genuinely multi-tool target,
+      each row in "Objects on this plate" gains its own real material +
+      tool-slot summary and an "Assign" button opening a real picker
+      (tool-slot chip row, 1..toolCount, plus the same Bundled/Spoolman
+      material list the single-material picker already loads) that
+      calls `ProjectViewModel.setObjectMaterial` (WO-25's own genuine
+      per-object method, not `setProjectMaterial`'s lockstep one) - the
+      single project-wide "Material" row is replaced with an explanatory
+      hint instead of shown alongside a control that would now be
+      misleading.
+    - **`ToolSlots.kt` gains `multiToolSliceInputsFor`**: the real,
+      pure logic building `sliceProject`'s own `toolSlotIndices`/
+      `slotMaterials` parameters from a project's real `ProjectObject`
+      list - extracted out of the composable specifically so it's
+      directly unit-testable without a Compose test harness (this
+      screen had none before this entry). An unassigned object
+      defaults to tool 1 (every real object must print on *some* tool);
+      a tool slot nothing was assigned to gets a `null` material, which
+      `sliceProject`/`MultiToolFilamentConfig` already fall back to the
+      printer's default for, not a crash.
+    - **`startSlicing()` real bug avoided, not hit**: the tool
+      assignments and the model files handed to `sliceProject` are now
+      built from the *same* already-filtered `(ProjectObject, File,
+      ModelTransform)` triple list, not two independently-filtered
+      lists that could desync if an object's URI ever failed to parse -
+      caught during design, not live.
+    - **Verified**: `ToolSlotsTest` gained 6 new cases for
+      `multiToolSliceInputsFor` (single-tool target produces no
+      assignments at all; real index-parallel multi-tool output;
+      unassigned-object-defaults-to-tool-1; an unassigned slot's `null`
+      material; an empty object list produces empty/null output, not an
+      exception). Full `testDebugUnitTest`/`lintDebug`/`assembleDebug`
+      gate and the **entire** device-test suite re-run clean on Razr
+      2026 (`ZP22235MHM`) only, same discipline as every prior WO this
+      session.
+    - **Not built this entry, real and explicit**: no dedicated Compose
+      device test for `ProjectEditorScreen` itself (this screen had no
+      existing UI test harness before this entry, and building one from
+      scratch - fake `ScreenState`/`execute`/file providers - is real,
+      separate work not rushed into this same pass; the pure logic
+      backing the new UI is unit-tested instead, per this entry's own
+      `multiToolSliceInputsFor` extraction). No purge/flush estimation,
+      no toolchange visualization, no Prusa XL bundled profile, no real
+      Snapmaker U1/Prusa XL/Bambu AMS hardware to verify any of this
+      against a physical printer - all unchanged from prior entries.
+      **Phase 8's own acceptance criterion is now structurally
+      satisfiable end to end** (assign 2+ real tool/material
+      combinations in the real UI, slice, get real distinct tool-change
+      G-code) but has not been walked through manually on a real device
+      screen this entry - the underlying mechanism (WO-25/26/27) and
+      this new UI's own logic (this entry) are each independently
+      verified, not yet exercised together as one live user flow.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

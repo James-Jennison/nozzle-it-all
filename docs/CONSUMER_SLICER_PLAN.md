@@ -274,6 +274,8 @@ Every `when(profile.kind)`/`nonKlipper`-style conditional scattered across `Main
 
 Promote material from "three slicer settings" to a first-class entity, while explicitly supporting the full range of real hardware this plan must not hardcode around (§5 of the original brief): single-material, independent multi-toolhead, AMS/CFS-style systems, and true multicolor systems like the Snapmaker U1 this app already integrates with.
 
+**Correction, verified 2026-09-22 (owner-flagged, then checked against real current products)**: this model must not treat "independent multi-toolhead" as a Snapmaker-U1-only case. The **Prusa XL is a real, already-shipping toolchanger** (up to 5 independent toolheads, each its own extruder/hotend, auto-swapping on the gantry - shipping since 2023, not new) - and it is one of the four firmware targets `PrusaLinkPrinterService.kt`'s own header comment already documents supporting (MK4/MK3.9/MINI/**XL**). So `PrinterKind.PRUSA_LINK` cannot be assumed `SingleExtruder` the way earlier drafts of this plan implied; Phase 8 must resolve `ToolSlot.capability` per real printer model where a `PrinterKind` covers more than one physical machine (Prusa Link already does), not per vendor. **Bambu Lab, by contrast, has no shipped toolchanger as of this check** - its real current lineup (X1/P1/A1/H2 series, including the H2C's "Vortek" system) is all AMS-style filament-swap-through-one-nozzle or hotend-swap, not full toolhead-swap; a genuine Bambu toolchanger exists only as a patent filing published 2026-08-14 (Shenzhen Tuozhu Technology, Bambu's parent, "Holder and 3D Printer," CN122560412A/CN122560413A) - real signal of direction, not a product to design a shipped capability around yet. Revisit this note if Bambu ships one.
+
 ```
 MaterialProfile(id, type, manufacturer, colorHex, tempNozzle, tempBed, source: Bundled|Spoolman|Custom)
 ToolSlot(index, capability: SingleExtruder|IndependentTool|AmsSlot)   // from PrinterCapabilities.toolCount
@@ -439,8 +441,8 @@ Each phase is independently shippable and testable. No phase requires a backend 
 
 ### Phase 8 — Multicolor / Multimaterial
 **Objective**: real tool/material mapping, per-object and per-painted-region material assignment, purge/flush estimation, toolchange visualization.
-**Dependencies**: Phases 1–3 (project, capabilities, materials) must all be solid first — this is explicitly the highest-risk phase per the original brief, and this plan agrees: do it after the foundation, not concurrently with it.
-**Acceptance criteria**: on the Snapmaker U1 (an integration this app already has), assign 2+ colors to a real model, slice, and confirm the G-code contains real toolchange sequences at the correct layers.
+**Dependencies**: Phases 1–3 (project, capabilities, materials) must all be solid first — this is explicitly the highest-risk phase per the original brief, and this plan agrees: do it after the foundation, not concurrently with it. **Real hardware diversity driving that risk, corrected 2026-09-22 (see §11)**: this app already targets at least two genuinely different independent-multi-toolhead machines (Snapmaker U1, Prusa XL - not just one), plus Bambu's AMS-style filament-swap-through-one-nozzle - each needs its own real toolchange G-code strategy, not one shared code path.
+**Acceptance criteria**: on the Snapmaker U1 (an integration this app already has), assign 2+ colors to a real model, slice, and confirm the G-code contains real toolchange sequences at the correct layers. **Prusa XL, once owned/available for testing, needs the equivalent check for its own real multi-toolhead G-code** - not assumed to work just because Snapmaker U1 does, since the two are different real toolchanger implementations.
 
 ### Phase 9 — Advanced Slicing
 **Objective**: progressive-disclosure expert controls (§4's advanced tier), multi-plate.

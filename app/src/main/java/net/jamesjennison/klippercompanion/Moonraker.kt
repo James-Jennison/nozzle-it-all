@@ -27,8 +27,10 @@ data class Camera(val name: String, val snapshot: String, val stream: String = "
 data class Catalog(val files: List<String>, val macros: List<String>, val cameras: List<Camera>, val warnings: List<String>, val fileInfo: List<FileInfo> = emptyList())
 // path/arguments are HTTP-shaped and only mean anything to Moonraker. bambuPrintRequest is the
 // one command kind that isn't an HTTP call at all (MQTT + FTPS, see BambuPrinterService); it
-// leaves them empty.
-data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null, val bambuPrintRequest: BambuPrintRequest? = null, val pandaBreathRequest: PandaBreathRequest? = null, val aceRequest: AceRequest? = null)
+// leaves them empty. prusaLinkPrintRequest (Phase 6, WO-23) is the Prusa Link equivalent - a
+// real single PUT (upload + Print-After-Upload) rather than Moonraker's separate upload/start
+// steps, see PrusaLinkPrinterService.uploadAndPrint().
+data class PrinterCommand(val title: String, val path: String, val arguments: Map<String, String> = emptyMap(), val allowedStates: Set<String> = emptySet(), val heaterRequest: HeaterRequest? = null, val fanRequest: FanRequest? = null, val speedFlowRequest: SpeedFlowRequest? = null, val macroRequest: MacroRequest? = null, val ledRequest: LedRequest? = null, val toolRequest: ToolRequest? = null, val bambuPrintRequest: BambuPrintRequest? = null, val pandaBreathRequest: PandaBreathRequest? = null, val aceRequest: AceRequest? = null, val prusaLinkPrintRequest: PrusaLinkPrintRequest? = null)
 
 interface PrinterService {
     val address: String

@@ -1621,6 +1621,89 @@ P28/M7 sections for what each one built and its commit hash.)*
       real, structural, on-device checks can go without it, matching
       this project's own standing, honest disclosure convention for
       every Bambu/PrusaLink integration in this codebase.
+20. **WO-23 — Phase 6 completion, owner-directed 2026-09-22 ("Finish Prusa
+    Link upload, and multi-object Bambu bundle export").** Closes both
+    real gaps WO-22 left open.
+    - **Prusa Link real upload+print** (`PrusaLinkPrinterService.
+      uploadAndPrint`): one real `PUT /api/v1/files/{storage}/{path}`
+      with `Print-After-Upload: ?1` and `Overwrite: ?1` (prusa3d/
+      Prusa-Link-Web's own published `spec/openapi.yaml`, fetched and
+      read directly, not assumed) - upload and print-start in one call,
+      not a separate round trip. **Real, pre-existing bug fixed**:
+      every call site in this class (file listing, print-start, and the
+      new upload) hardcoded `local` as the target storage; a real
+      MK4/MK3.9/MINI/XL only ever exposes a writable `/usb` (its own
+      `LOCAL`-type entry, when present, is the printer's tiny internal
+      flash and reports `read_only: true` - confirmed against
+      `Prusa-Firmware-Buddy`'s own source, not guessed). Fixed by adding
+      `resolveWritableStorage()` - a real `GET /api/v1/storage` call
+      that picks the first `available && !read_only` entry's own
+      declared `path`, used by every call site instead of a literal.
+      **Real large-upload fix**: OkHttp's own reactive digest
+      `Authenticator` (`PrusaLinkDigestAuthenticator`, this session's own
+      from-scratch RFC 2617 implementation - PrusaLink's entire API
+      requires digest auth with no alternative scheme) only answers a
+      401 after the request already tried once - for a large streamed
+      G-code body, that means sending the whole file to the printer
+      twice. `PrusaLinkDigestAuthenticator` now remembers the last real
+      challenge it answered and exposes `preemptiveHeader()`, so
+      `uploadAndPrint()` attaches a real, already-computed Authorization
+      header up front (falling back to one genuinely unauthenticated
+      attempt - letting the reactive path handle it as before - only if
+      a stale nonce is itself rejected). A separate `uploadClient` (real,
+      longer write/read/call timeouts than the small JSON status/control
+      client) is used for the upload call specifically, since a
+      multi-hundred-megabyte file over a real LAN link can genuinely
+      exceed the 4s/6s/8s timeouts sized for small requests.
+      `PrinterCapabilities.acceptsOnDeviceSlicedGcode` is now `true` for
+      `PRUSA_LINK`; `SliceAndPrintPanel`/`ProjectEditorScreen` both skip
+      their Moonraker-only `LiveFileChanges` upload step for a Prusa Link
+      target and dispatch a single `PrinterCommand(prusaLinkPrintRequest
+      = ...)` instead, the same shape `bambuPrintRequest` already uses
+      for Bambu.
+    - **Multi-object Bambu bundle export** (`engine::
+      slice_multi_object_bambu_bundle`/`nativeSliceMultiObjectBambuBundle`):
+      the real multi-object counterpart to WO-22's `slice_bambu_bundle` -
+      same relationship `slice_multi_object` already has to `slice_file`.
+      The shared PlateData/StoreParams-building tail (`bundle_model`,
+      `slic3r_engine.cpp`) was factored out of `slice_bambu_bundle` so
+      both the single- and multi-object bundle paths write the identical
+      real bundle shape (real embedded G-code, real MD5, real thumbnail,
+      real `slice_info.config`) rather than a second, parallel
+      bundle-writing implementation. `ProjectEditorScreen`'s own
+      `acceptsSlicedGcode` gate no longer excludes Bambu Lab - it now
+      trusts `PrinterCapabilities` directly, same as `SliceAndPrintPanel`.
+    - **Verified**: `PrusaLinkPrinterServiceTest` gained real MockWebServer
+      contract tests for `resolveWritableStorage()` (picks the real
+      writable `/usb` entry over a read-only `/local` one; fails honestly
+      when nothing is writable) and `uploadAndPrint()` (a real `PUT` to
+      the resolved storage path with both documented headers present, the
+      real file bytes in the request body; a rejected upload surfaces as
+      a real `ApiFailure`, not a silent no-op). `PrinterCapabilitiesTest`
+      updated for Prusa Link's new `acceptsOnDeviceSlicedGcode`.
+      `MultiObjectBambuBundleDeviceTest` (new, 4 device tests): a real
+      bundle containing two distinct real per-object G-code ids (not a
+      flattened single object), a real toolpath X-coordinate spread
+      confirming the two objects are genuinely placed 60mm apart inside
+      the bundle (not sliced twice at the same spot), the embedded MD5
+      matching the embedded G-code, and mismatched transform-array
+      lengths failing with a real exception - mirroring the same real
+      checks `BambuBundleDeviceTest`/`MultiObjectSlicingDeviceTest`
+      already run for their own single-object/plain-`.gcode` cases. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      **entire** device-test suite re-run clean on Razr 2026
+      (`ZP22235MHM`) only, via direct `adb shell am instrument` - same
+      discipline as WO-22, the Razr 2023 left untouched throughout.
+    - **Not built this entry, real and explicit**: no real Prusa Link or
+      Bambu Lab hardware exists to verify either upload path against a
+      physical printer (the owner has neither) - both are verified as
+      far as real contract-tier (PrusaLink, no owned hardware - M7's own
+      documentation-tier standard) and structural on-device (Bambu)
+      checks can go without it. Phase 6's own acceptance criterion (the
+      same Prepare→Print flow working identically across all vendors) is
+      now met for all four integrations this app has - Klipper/Snapmaker
+      via Moonraker, Bambu Lab via its bundle+FTPS/MQTT path, Prusa Link
+      via its own upload+print endpoint.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

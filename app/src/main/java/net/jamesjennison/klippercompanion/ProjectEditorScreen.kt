@@ -219,6 +219,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         }
     }
 
+    // Phase 6 follow-up (WO-23): mirrors SliceAndPrintPanel.kt's own bambuTarget/prusaTarget
+    // flags - a Bambu Lab target's `sliced` is a real .gcode.3mf bundle (zip), not plain
+    // G-code (see SlicingCoordinator.sliceProject()'s own branch), and neither Bambu nor Prusa
+    // Link need this screen's Moonraker-only LiveFileChanges upload step below.
+    val bambuTarget = profile?.kind == PrinterKind.BAMBU_LAB
+    val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).
@@ -226,18 +232,22 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         val gcode = sliced ?: return@LaunchedEffect
         toolpathError = null
         try {
-            slicedToolpath = withContext(Dispatchers.Default) { gcode.inputStream().buffered().use { GcodePreview.parse(it) } }
+            val plainGcode = withContext(Dispatchers.IO) { if (bambuTarget) extractBambuBundleGcode(context.applicationContext, gcode) else gcode }
+            slicedToolpath = withContext(Dispatchers.Default) { plainGcode.inputStream().buffered().use { GcodePreview.parse(it) } }
+            gcodeStats = runCatching { withContext(Dispatchers.Default) { GcodeStatsParser.parse(plainGcode) } }.getOrNull()
         } catch (e: Exception) { toolpathError = e.message ?: "Could not build a layer preview of the sliced G-code." }
-        gcodeStats = runCatching { withContext(Dispatchers.Default) { GcodeStatsParser.parse(gcode) } }.getOrNull()
     }
 
     // Upload runs once the owner has reviewed the sliced layers and confirmed the printer is
     // ready - the same two-gate sequence SliceAndPrintPanel already uses before touching the
-    // network with a real file write.
+    // network with a real file write. Bambu Lab and Prusa Link skip this entirely - both real
+    // upload+print through one single command below (BambuPrinterService.startPrint,
+    // PrusaLinkPrinterService.uploadAndPrint), not a separate Moonraker-shaped upload step.
     LaunchedEffect(sliced, stage, state.connected) {
         val gcode = sliced ?: return@LaunchedEffect
         if (stage != ProjectEditorStage.STAGED) return@LaunchedEffect
         val target = profile ?: return@LaunchedEffect
+        if (bambuTarget || prusaTarget) { stagedFilename = gcode.name; return@LaunchedEffect }
         if (!state.connected) { working = false; sliceError = "Connect to ${target.address} to upload the sliced file."; return@LaunchedEffect }
         working = true; sliceStageLabel = "Uploading…"
         val backend = LiveFileChanges(target.address, File(context.cacheDir, "live-file"), rawApiKey = state.apiKeyFor(target.address))
@@ -378,17 +388,15 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     }
                     customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     if (profile == null) Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    // Phase 2 real bug fix: this screen's own upload step (LiveFileChanges/
-                    // Moonraker.start, below) always assumed Moonraker unconditionally - Prusa
-                    // Link would silently fail that way, since PrusaLinkPrinterService has no
-                    // generic file-upload endpoint this app implements. Phase 6 note: Bambu Lab's
-                    // own acceptsOnDeviceSlicedGcode is true now (see PrinterCapabilities.kt), but
-                    // that's SlicingCoordinator.slice()'s single-object .gcode.3mf bundle path
-                    // (SliceAndPrintPanel.kt) - this screen's multi-object plate still only slices
-                    // through sliceProject()/nativeSliceMultiObject, which produces plain .gcode,
-                    // not a bundle, so Bambu Lab is deliberately excluded here too until multi-
-                    // object Bambu bundle export is built.
-                    val acceptsSlicedGcode = profile?.let { it.kind != PrinterKind.BAMBU_LAB && capabilitiesFor(it.kind).acceptsOnDeviceSlicedGcode } ?: true
+                    // Phase 2 real bug fix, still real: this screen's own upload step (LiveFileChanges/
+                    // Moonraker.start, below) always assumed Moonraker unconditionally - Prusa Link
+                    // would silently fail that way. Phase 6 follow-up (WO-23): SlicingCoordinator.
+                    // sliceProject() now has a real Bambu-bundle branch of its own
+                    // (nativeSliceMultiObjectBambuBundle) and PrusaLinkPrinterService has a real
+                    // generic upload+print endpoint, so every printer kind's own
+                    // acceptsOnDeviceSlicedGcode is trusted directly here now, same as
+                    // SliceAndPrintPanel.kt.
+                    val acceptsSlicedGcode = profile?.let { capabilitiesFor(it.kind).acceptsOnDeviceSlicedGcode } ?: true
                     if (profile != null && !acceptsSlicedGcode) Text(
                         "On-device slicing isn't wired up yet for ${profile.label} - its printer type needs an upload/print path this app doesn't implement.",
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-unsupported-printer"),
@@ -438,7 +446,19 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     }
                     Button({
                         val filename = stagedFilename ?: return@Button
-                        execute(Moonraker.start(filename), state.generation)
+                        when {
+                            bambuTarget -> {
+                                val bundle = sliced ?: return@Button
+                                execute(PrinterCommand("Print $filename", "", bambuPrintRequest = BambuPrintRequest(bundle, filename),
+                                    allowedStates = setOf("standby", "complete", "cancelled", "error")), state.generation)
+                            }
+                            prusaTarget -> {
+                                val gcode = sliced ?: return@Button
+                                execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest = PrusaLinkPrintRequest(gcode, filename),
+                                    allowedStates = setOf("standby", "complete", "cancelled", "error")), state.generation)
+                            }
+                            else -> execute(Moonraker.start(filename), state.generation)
+                        }
                         close()
                     }, enabled = !working && sliceError == null && stagedFilename != null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-and-print-confirm")) { Text("Start print") }
                 }

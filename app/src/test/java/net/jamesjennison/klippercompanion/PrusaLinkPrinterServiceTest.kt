@@ -39,9 +39,18 @@ class PrusaLinkPrinterServiceTest {
             try { assertFalse(api.snapshot().ready) } finally { api.close() }
         }
     }
+    // Real, standard storage_list body (prusa3d/Prusa-Link-Web's own Storage schema) mirroring an
+    // MK4/MK3.9/MINI/XL: a read-only internal LOCAL entry (real - confirmed against
+    // Prusa-Firmware-Buddy's own source, WO-22/WO-23's own research) alongside a writable USB
+    // entry - the case resolveWritableStorage() must pick /usb over /local, not assume "local".
+    private val storageResponse = """{"storage_list":[
+        {"name":"Internal","type":"LOCAL","path":"/local","available":true,"read_only":true},
+        {"name":"USB Drive","type":"USB","path":"/usb","available":true,"read_only":false}
+    ]}"""
     @Test fun catalogListsOnlyPrintFilesFromTheRootFolder() {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setBody("""{"name":"local","type":"FOLDER","read_only":false,"m_timestamp":0,
+            server.enqueue(MockResponse().setBody(storageResponse))
+            server.enqueue(MockResponse().setBody("""{"name":"usb","type":"FOLDER","read_only":false,"m_timestamp":0,
                 "children":[
                   {"name":"SPICE~1.gco","type":"PRINT_FILE","read_only":false,"m_timestamp":0},
                   {"name":"firmware.bbf","type":"FIRMWARE","read_only":false,"m_timestamp":0},
@@ -53,19 +62,35 @@ class PrusaLinkPrinterServiceTest {
                 val catalog = api.catalog()
                 assertEquals(listOf("SPICE~1.gco"), catalog.files)
                 assertTrue(catalog.warnings.isNotEmpty())
+                server.takeRequest() // GET /api/v1/storage
+                assertEquals("/api/v1/files/usb", server.takeRequest().requestUrl!!.encodedPath)
             } finally { api.close() }
         }
     }
-    @Test fun startPrintPostsToTheEncodedFilePath() {
+    @Test fun startPrintPostsToTheRealWritableStorageNotAHardcodedLocal() {
         MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(storageResponse))
             server.enqueue(MockResponse().setResponseCode(204))
             server.start()
             val api = PrusaLinkPrinterService(server.url("/").toString(), "secret")
             try {
                 api.command(Moonraker.start("my file.gcode"))
+                server.takeRequest() // GET /api/v1/storage
                 val request = server.takeRequest()
                 assertEquals("POST", request.method)
-                assertEquals("/api/v1/files/local/my%20file.gcode", request.requestUrl!!.encodedPath)
+                assertEquals("/api/v1/files/usb/my%20file.gcode", request.requestUrl!!.encodedPath)
+            } finally { api.close() }
+        }
+    }
+    @Test fun resolveWritableStorageFailsHonestlyWhenNothingIsWritable() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"storage_list":[
+                {"name":"Internal","type":"LOCAL","path":"/local","available":true,"read_only":true}
+            ]}"""))
+            server.start()
+            val api = PrusaLinkPrinterService(server.url("/").toString(), "secret")
+            try {
+                assertThrows(ApiFailure::class.java) { api.command(Moonraker.start("a.gcode")) }
             } finally { api.close() }
         }
     }
@@ -91,6 +116,41 @@ class PrusaLinkPrinterServiceTest {
             try {
                 assertThrows(ApiFailure::class.java) { api.command(PrinterCommand("Cancel print", "printer/print/cancel")) }
             } finally { api.close() }
+        }
+    }
+    // Phase 6 (WO-23): the real upload+print path - one PUT with Print-After-Upload: ?1, not a
+    // separate upload-then-start round trip, and against the real writable storage, not "local".
+    @Test fun uploadAndPrintPutsToRealStorageWithPrintAfterUploadHeader() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(storageResponse))
+            server.enqueue(MockResponse().setResponseCode(201))
+            server.start()
+            val api = PrusaLinkPrinterService(server.url("/").toString(), "secret")
+            val file = java.io.File.createTempFile("prusalink-upload-test", ".gcode").apply { writeText("G1 X0 Y0\n") }
+            try {
+                api.command(PrinterCommand("Print", "", prusaLinkPrintRequest = PrusaLinkPrintRequest(file, "test.gcode")))
+                server.takeRequest() // GET /api/v1/storage
+                val upload = server.takeRequest()
+                assertEquals("PUT", upload.method)
+                assertEquals("/api/v1/files/usb/test.gcode", upload.requestUrl!!.encodedPath)
+                assertEquals("?1", upload.getHeader("Print-After-Upload"))
+                assertEquals("?1", upload.getHeader("Overwrite"))
+                assertEquals("G1 X0 Y0\n", upload.body.readUtf8())
+            } finally { api.close(); file.delete() }
+        }
+    }
+    @Test fun uploadAndPrintSurfacesAnHonestFailureOnRejection() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(storageResponse))
+            server.enqueue(MockResponse().setResponseCode(409))
+            server.start()
+            val api = PrusaLinkPrinterService(server.url("/").toString(), "secret")
+            val file = java.io.File.createTempFile("prusalink-upload-test", ".gcode").apply { writeText("G1\n") }
+            try {
+                assertThrows(ApiFailure::class.java) {
+                    api.command(PrinterCommand("Print", "", prusaLinkPrintRequest = PrusaLinkPrintRequest(file, "test.gcode")))
+                }
+            } finally { api.close(); file.delete() }
         }
     }
     @Test fun unrecognizedCommandPathIsRejected() {

@@ -266,6 +266,56 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObject(
     }
 }
 
+// Phase 6 follow-up (WO-23): the real multi-object counterpart to nativeSliceBambuBundle above -
+// same parallel-array marshalling nativeSliceMultiObject already uses, producing a
+// .gcode.3mf bundle (engine::slice_multi_object_bambu_bundle) instead of plain .gcode.
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObjectBambuBundle(
+    JNIEnv* env, jclass,
+    jobjectArray jModelPaths, jdoubleArray jOffsetXMm, jdoubleArray jOffsetYMm,
+    jdoubleArray jRotationZDeg, jdoubleArray jScale,
+    jstring jOutputBundlePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues) {
+    try {
+        std::vector<std::string> model_paths = to_string_vector(env, jModelPaths);
+        std::vector<double> offsets_x = to_double_vector(env, jOffsetXMm);
+        std::vector<double> offsets_y = to_double_vector(env, jOffsetYMm);
+        std::vector<double> rotations_z = to_double_vector(env, jRotationZDeg);
+        std::vector<double> scales = to_double_vector(env, jScale);
+
+        if (offsets_x.size() != model_paths.size() || offsets_y.size() != model_paths.size() ||
+            rotations_z.size() != model_paths.size() || scales.size() != model_paths.size()) {
+            throw_java_exception(env, "Model paths and transform arrays must be the same length.");
+            return;
+        }
+
+        std::vector<std::pair<std::string, engine::ModelTransform>> objects;
+        objects.reserve(model_paths.size());
+        for (size_t i = 0; i < model_paths.size(); ++i) {
+            engine::ModelTransform transform;
+            transform.offset_x_mm = offsets_x[i];
+            transform.offset_y_mm = offsets_y[i];
+            transform.rotation_z_deg = rotations_z[i];
+            transform.scale = scales[i];
+            objects.emplace_back(model_paths[i], transform);
+        }
+
+        const std::string output_path = jstring_to_string(env, jOutputBundlePath);
+        std::vector<std::string> profile_paths = to_string_vector(env, jProfilePaths);
+        std::vector<std::string> keys = to_string_vector(env, jOverrideKeys);
+        std::vector<std::string> values = to_string_vector(env, jOverrideValues);
+        std::vector<std::pair<std::string, std::string>> config_overrides;
+        for (size_t i = 0; i < keys.size() && i < values.size(); ++i) {
+            config_overrides.emplace_back(keys[i], values[i]);
+        }
+
+        engine::slice_multi_object_bambu_bundle(objects, output_path, profile_paths, config_overrides);
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex.what());
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error during multi-object Bambu bundle export");
+    }
+}
+
 // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - not a second,
 // weaker parser - and returns a flat interleaved vertex buffer for an in-app 3D preview: 6
 // floats per vertex (x,y,z,nx,ny,nz), 3 vertices per triangle. See engine::load_mesh_preview.

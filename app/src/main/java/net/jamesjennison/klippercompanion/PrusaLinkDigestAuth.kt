@@ -16,6 +16,16 @@ import java.util.concurrent.atomic.AtomicInteger
 // check against; built fresh from Prusa's own published spec.
 internal class PrusaLinkDigestAuthenticator(private val username: String, private val password: String) : Authenticator {
     private val nonceCount = AtomicInteger(0)
+    // Phase 6 (WO-23): remembers the last real challenge this authenticator answered, so a caller
+    // about to send a large request body (the PUT upload endpoint, PrusaLinkPrinterService.
+    // uploadAndPrint()) can attach a real Authorization header up front via preemptiveHeader()
+    // below, instead of relying on this Authenticator's own reactive retry - which would mean
+    // OkHttp serializes the whole file to the socket once unauthenticated (rejected with 401),
+    // then a second time after retrying with credentials. Any earlier request in the same session
+    // (snapshot()/catalog()'s own digest handshake) already populates this.
+    @Volatile private var lastChallenge: DigestChallenge? = null
+    private data class DigestChallenge(val realm: String, val nonce: String, val qop: String?, val opaque: String?)
+
     override fun authenticate(route: Route?, response: Response): Request? {
         // A request that already carries an Authorization header and still got a 401 has a wrong
         // password, not a fresh challenge to answer - retrying would loop forever.
@@ -25,19 +35,32 @@ internal class PrusaLinkDigestAuthenticator(private val username: String, privat
         val nonce = challenge.authParams["nonce"] ?: return null
         val qop = challenge.authParams["qop"]?.split(",")?.map { it.trim() }?.firstOrNull { it == "auth" }
         val opaque = challenge.authParams["opaque"]
+        lastChallenge = DigestChallenge(realm, nonce, qop, opaque)
         val uri = response.request.url.encodedPath + (response.request.url.encodedQuery?.let { "?$it" } ?: "")
         val method = response.request.method
+        val headerValue = headerFor(method, uri, realm, nonce, qop, opaque)
+        return response.request.newBuilder().header("Authorization", headerValue).build()
+    }
+
+    /** See this authenticator's own field comment above. Returns null if no real challenge has
+     * been answered yet in this session - the caller falls back to an ordinary, unauthenticated
+     * first attempt and lets [authenticate] above handle the reactive 401 retry as usual. */
+    fun preemptiveHeader(method: String, uri: String): String? {
+        val challenge = lastChallenge ?: return null
+        return headerFor(method, uri, challenge.realm, challenge.nonce, challenge.qop, challenge.opaque)
+    }
+
+    private fun headerFor(method: String, uri: String, realm: String, nonce: String, qop: String?, opaque: String?): String {
         val cnonce = md5Hex("${System.nanoTime()}:${Math.random()}").take(16)
         val nc = "%08x".format(nonceCount.incrementAndGet())
         val ha1 = md5Hex("$username:$realm:$password")
         val ha2 = md5Hex("$method:$uri")
         val digestResponse = if (qop != null) md5Hex("$ha1:$nonce:$nc:$cnonce:$qop:$ha2") else md5Hex("$ha1:$nonce:$ha2")
-        val headerValue = buildString {
+        return buildString {
             append("Digest username=\"$username\", realm=\"$realm\", nonce=\"$nonce\", uri=\"$uri\", response=\"$digestResponse\"")
             if (qop != null) append(", qop=$qop, nc=$nc, cnonce=\"$cnonce\"")
             if (opaque != null) append(", opaque=\"$opaque\"")
         }
-        return response.request.newBuilder().header("Authorization", headerValue).build()
     }
     companion object {
         internal fun md5Hex(input: String): String =

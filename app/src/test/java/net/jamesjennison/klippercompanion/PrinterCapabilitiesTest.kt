@@ -55,7 +55,7 @@ class PrinterCapabilitiesTest {
         assertFalse("PrusaLinkPrinterService.image() throws - no camera implemented", caps.supportsCamera)
         assertFalse(caps.supportsKlipperExtras)
         assertFalse(caps.supportsNativePrintFileFlow)
-        assertFalse("no generic PrusaLink file-upload endpoint is implemented", caps.acceptsOnDeviceSlicedGcode)
+        assertTrue("WO-23: PrusaLinkPrinterService.uploadAndPrint() is now a real generic upload+print endpoint", caps.acceptsOnDeviceSlicedGcode)
         assertFalse(caps.verifiedOnRealHardware)
     }
 

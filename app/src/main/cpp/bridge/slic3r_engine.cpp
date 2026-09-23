@@ -140,6 +140,70 @@ void slice_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, const
     print.export_gcode(output_gcode_path, nullptr, thumbnail_cb);
 }
 
+// The real Bambu-compatible .gcode.3mf bundle tail, shared by slice_bambu_bundle() (a fresh
+// single-object load) and slice_multi_object_bambu_bundle() (a combined multi-object plate) -
+// both end the same way, just start from a different already-loaded/placed Model, mirroring
+// slice_model()'s own single-vs-multi-object sharing above. See slice_bambu_bundle()'s own
+// header comment (this file, below) for why each PlateData/StoreParams field is set the way it
+// is - that reasoning is unchanged here, just factored out so it isn't duplicated per caller.
+void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, const std::string& output_bundle_path) {
+    using namespace Slic3r;
+
+    ThumbnailsGeneratorCallback thumbnail_cb = make_thumbnail_callback(model.mesh());
+    ThumbnailsParams thumb_params{Vec2ds{Vec2d(512, 512)}, true, false, false, true, 0, true};
+    ThumbnailsList thumbnails = thumbnail_cb(thumb_params);
+
+    Print print;
+    for (ModelObject* object : model.objects) {
+        print.auto_assign_extruders(object);
+    }
+    print.apply(model, config);
+
+    StringObjectException validation_error = print.validate();
+    if (!validation_error.string.empty()) {
+        throw std::runtime_error("Validation failed: " + validation_error.string);
+    }
+
+    print.process();
+
+    std::string temp_gcode_path = output_bundle_path + ".gcode.tmp";
+    GCodeProcessorResult gcode_result;
+    print.export_gcode(temp_gcode_path, &gcode_result, thumbnail_cb);
+
+    PlateData plate_data;
+    plate_data.plate_index = 0;
+    plate_data.is_sliced_valid = true;
+    plate_data.gcode_file = temp_gcode_path;
+    plate_data.printer_model_id = config.opt_string("printer_model");
+    plate_data.config = config;
+    if (!thumbnails.empty()) {
+        plate_data.plate_thumbnail.load_from(thumbnails.front());
+    }
+    plate_data.parse_filament_info(&gcode_result);
+
+    PlateDataPtrs plate_data_list = {&plate_data};
+    std::vector<Preset*> project_presets; // deliberately empty - see slice_bambu_bundle()'s own header comment
+    std::vector<ThumbnailData*> thumbnail_data_ptrs = {&plate_data.plate_thumbnail};
+
+    StoreParams store_params;
+    store_params.path = output_bundle_path;
+    store_params.model = &model;
+    store_params.plate_data_list = plate_data_list;
+    store_params.project_presets = project_presets;
+    store_params.config = &config;
+    store_params.thumbnail_data = thumbnail_data_ptrs;
+    store_params.strategy = SaveStrategy::Silence | SaveStrategy::WithGcode | SaveStrategy::SkipModel | SaveStrategy::SkipAuxiliary;
+    store_params.export_plate_idx = 0;
+
+    bool ok = store_bbs_3mf(store_params);
+    boost::system::error_code ec;
+    boost::filesystem::remove(temp_gcode_path, ec); // best-effort cleanup, not load-bearing for correctness
+    model.remove_backup_path_if_exist(); // best-effort cleanup of the scratch dir set_temporary_dir() pointed at
+    if (!ok) {
+        throw std::runtime_error("Failed to write the .gcode.3mf bundle.");
+    }
+}
+
 } // namespace
 
 void slice_file(const std::string& input_model_path,
@@ -221,72 +285,51 @@ void slice_bambu_bundle(const std::string& input_model_path,
     }
 
     Model model = load_and_place_model(input_model_path, config, transform);
+    bundle_model(model, config, output_bundle_path);
+}
 
-    // A real plate thumbnail (Metadata/plate_1.png) - the same headless rasterizer every other
-    // slice path already uses for the .gcode file's own embedded thumbnail comments, invoked
-    // directly here to get a real ThumbnailData object for the bundle instead.
-    ThumbnailsGeneratorCallback thumbnail_cb = make_thumbnail_callback(model.mesh());
-    // ThumbnailsParams.sizes is a const member (aggregate-initialized only, not assignable after
-    // construction) - hence brace-init in field-declaration order rather than the usual
-    // default-then-set-fields pattern.
-    ThumbnailsParams thumb_params{Vec2ds{Vec2d(512, 512)}, true, false, false, true, 0, true};
-    ThumbnailsList thumbnails = thumbnail_cb(thumb_params);
+// Phase 6 follow-up (WO-23): the real multi-object counterpart to slice_bambu_bundle() above -
+// same relationship slice_multi_object() already has to slice_file()/slice_model(). Each
+// (path, transform) pair is loaded and placed exactly the way slice_multi_object() already does
+// (real per-file bed-centering, then that object's own transform on top), copied into one
+// combined Model, then handed to the same bundle_model() tail slice_bambu_bundle() uses - so a
+// multi-object Bambu plate gets the identical real .gcode.3mf bundle shape (real embedded
+// G-code, real MD5, real thumbnail, real slice_info.config) a single-object one does, not a
+// second, parallel bundle-writing path. Does not itself detect overlapping objects, same real,
+// deliberate gap slice_multi_object()'s own header comment documents.
+void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, ModelTransform>>& objects,
+                                      const std::string& output_bundle_path,
+                                      const std::vector<std::string>& profile_paths,
+                                      const std::vector<std::pair<std::string, std::string>>& config_overrides) {
+    using namespace Slic3r;
 
-    Print print;
-    for (ModelObject* object : model.objects) {
-        print.auto_assign_extruders(object);
+    if (objects.empty()) {
+        throw std::runtime_error("No objects to slice.");
     }
-    print.apply(model, config);
 
-    StringObjectException validation_error = print.validate();
-    if (!validation_error.string.empty()) {
-        throw std::runtime_error("Validation failed: " + validation_error.string);
+    // See slice_bambu_bundle()'s own comment on this call - identical real bug fix, needed here
+    // for the same reason.
+    set_temporary_dir(boost::filesystem::path(output_bundle_path).parent_path().string());
+
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    for (const std::string& profile_path : profile_paths) {
+        DynamicPrintConfig profile_config;
+        profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        config.apply(profile_config);
+    }
+    for (const auto& [key, value] : config_overrides) {
+        config.set_deserialize_strict(key, value);
     }
 
-    print.process();
-
-    // A real intermediate .gcode file, consumed (copied, then discarded) below - the deliverable
-    // here is the .gcode.3mf bundle, not this file itself.
-    std::string temp_gcode_path = output_bundle_path + ".gcode.tmp";
-    GCodeProcessorResult gcode_result;
-    print.export_gcode(temp_gcode_path, &gcode_result, thumbnail_cb);
-
-    PlateData plate_data;
-    plate_data.plate_index = 0;
-    plate_data.is_sliced_valid = true;
-    plate_data.gcode_file = temp_gcode_path;
-    plate_data.printer_model_id = config.opt_string("printer_model");
-    plate_data.config = config;
-    if (!thumbnails.empty()) {
-        plate_data.plate_thumbnail.load_from(thumbnails.front());
+    Model combined;
+    for (const auto& [path, transform] : objects) {
+        Model loaded = load_and_place_model(path, config, transform);
+        for (ModelObject* object : loaded.objects) {
+            combined.add_object(*object);
+        }
     }
-    plate_data.parse_filament_info(&gcode_result);
 
-    PlateDataPtrs plate_data_list = {&plate_data};
-    std::vector<Preset*> project_presets; // deliberately empty - see this function's own header comment
-    std::vector<ThumbnailData*> thumbnail_data_ptrs = {&plate_data.plate_thumbnail};
-
-    StoreParams store_params;
-    store_params.path = output_bundle_path;
-    store_params.model = &model;
-    store_params.plate_data_list = plate_data_list;
-    store_params.project_presets = project_presets;
-    store_params.config = &config;
-    store_params.thumbnail_data = thumbnail_data_ptrs;
-    // Matches the real desktop GUI's own "send to printer" flags (Plater.cpp) for exactly this
-    // case: a print-dispatch bundle, not a full editable project - silent (no progress UI, this
-    // is headless), the G-code included, the 3D model itself and auxiliary files omitted (the
-    // printer only needs the G-code + its own metadata to print, not a re-editable project).
-    store_params.strategy = SaveStrategy::Silence | SaveStrategy::WithGcode | SaveStrategy::SkipModel | SaveStrategy::SkipAuxiliary;
-    store_params.export_plate_idx = 0;
-
-    bool ok = store_bbs_3mf(store_params);
-    boost::system::error_code ec;
-    boost::filesystem::remove(temp_gcode_path, ec); // best-effort cleanup, not load-bearing for correctness
-    model.remove_backup_path_if_exist(); // best-effort cleanup of the scratch dir set_temporary_dir() pointed at above
-    if (!ok) {
-        throw std::runtime_error("Failed to write the .gcode.3mf bundle.");
-    }
+    bundle_model(combined, config, output_bundle_path);
 }
 
 // Phase 1 (Consumer Slicer Plan §16): a real multi-object build plate, sliced together into one

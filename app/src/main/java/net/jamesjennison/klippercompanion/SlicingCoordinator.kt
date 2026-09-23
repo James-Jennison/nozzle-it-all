@@ -90,20 +90,36 @@ object SlicingCoordinator {
     // list). Does not itself check for overlapping objects - same real, deliberate gap
     // slice_multi_object's own native-side comment documents; collision detection is a separate
     // UI concern, still open.
+    // Phase 6 follow-up (WO-23): for a Bambu Lab target, produces a real multi-object .gcode.3mf
+    // bundle (engine::slice_multi_object_bambu_bundle/nativeSliceMultiObjectBambuBundle) instead
+    // of plain .gcode - the same single-object branch slice() above already has, extended to the
+    // multi-object case (ProjectEditorScreen.kt).
     suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap()): SliceOutcome = withContext(Dispatchers.IO) {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         when (val resolved = resolveProfilePaths(context, profile)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
-                val output = freshOutputFile(context, "project")
-                NativeEngine.nativeSliceMultiObject(
-                    objects.map { it.first.absolutePath }.toTypedArray(),
-                    objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
-                    objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
-                    objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
-                    objects.map { it.second.scale.toDouble() }.toDoubleArray(),
-                    output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
-                )
+                val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
+                val output = freshOutputFile(context, "project", bambuBundle = bambuTarget)
+                if (bambuTarget) {
+                    NativeEngine.nativeSliceMultiObjectBambuBundle(
+                        objects.map { it.first.absolutePath }.toTypedArray(),
+                        objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.scale.toDouble() }.toDoubleArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                    )
+                } else {
+                    NativeEngine.nativeSliceMultiObject(
+                        objects.map { it.first.absolutePath }.toTypedArray(),
+                        objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.scale.toDouble() }.toDoubleArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                    )
+                }
                 SliceOutcome.Success(output)
             } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
         }

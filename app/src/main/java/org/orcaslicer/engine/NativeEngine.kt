@@ -70,6 +70,16 @@ object NativeEngine {
         overrideKeys: Array<String>, overrideValues: Array<String>,
     )
 
+    // Phase 6 follow-up (WO-23): the real multi-object counterpart to nativeSliceBambuBundle -
+    // same parallel-array shape as nativeSliceMultiObject, producing a .gcode.3mf bundle instead
+    // of plain .gcode (engine::slice_multi_object_bambu_bundle).
+    external fun nativeSliceMultiObjectBambuBundle(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray,
+        outputBundlePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+    )
+
     // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - real
     // Model::read_from_file, bed-centered - but stops short of slicing. Returns 3 floats (the
     // model's own real transform pivot - see engine::load_mesh_preview) followed by a flat

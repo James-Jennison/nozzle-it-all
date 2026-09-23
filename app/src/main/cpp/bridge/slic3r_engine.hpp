@@ -54,6 +54,14 @@ void slice_bambu_bundle(const std::string& input_model_path,
                          const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
                          const ModelTransform& transform = {});
 
+// Phase 6 follow-up (WO-23): the real multi-object counterpart to slice_bambu_bundle() above -
+// same relationship slice_multi_object() (below) already has to slice_file(). See
+// slic3r_engine.cpp's own header comment on the bundle_model() tail these two share.
+void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, ModelTransform>>& objects,
+                                      const std::string& output_bundle_path,
+                                      const std::vector<std::string>& profile_paths,
+                                      const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
+
 // Phase 1 (Consumer Slicer Plan §16): slices a real multi-object build plate - each (model path,
 // placement) pair loaded and placed exactly the way slice_file()'s single-object path already
 // does, then merged into one Model and sliced together into one G-code file. See the .cpp for why

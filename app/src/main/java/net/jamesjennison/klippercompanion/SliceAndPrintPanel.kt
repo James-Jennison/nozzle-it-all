@@ -141,16 +141,13 @@ import java.io.File
         return
     }
     if(!capabilitiesFor(profile.kind).acceptsOnDeviceSlicedGcode) {
-        // Real, honest gap (see SlicingCoordinator.kt / docs/WORK_ORDER.md): Bambu Lab now
-        // produces and uploads its own real .gcode.3mf bundle on-device (Phase 6, §16 - see
-        // this file's bambuTarget branch below), so only Prusa Link still lands here. This step
-        // below (`LiveFileChanges`/`Moonraker.start`) always speaks Moonraker's own upload/start
-        // protocol unconditionally, which a real PrusaLink printer doesn't implement
-        // (PrusaLinkPrinterService's command() only ever sends print-control requests, never a
-        // generic file upload) - slicing would have "succeeded" and then silently failed (or
-        // worse, hit the wrong endpoint) at the upload step against real hardware.
-        AlertDialog(onDismissRequest=close,title={Text("Not yet supported for Prusa Link")},
-            text={Text("On-device slicing for Prusa Link printers isn't wired up yet - the upload step needs a Prusa Link-specific file transfer this app doesn't implement. Slice in PrusaSlicer and upload from there instead.")},
+        // Defense in depth, not currently reachable: every vendor this app integrates today
+        // (Klipper/Snapmaker via Moonraker, Bambu Lab via its own .gcode.3mf bundle path, Prusa
+        // Link via PrusaLinkPrinterService.uploadAndPrint - WO-22/WO-23) has a real upload/print
+        // path this panel knows how to drive. Kept as a real, honest gate for whatever printer
+        // kind is added next, rather than assuming every future vendor works the same way.
+        AlertDialog(onDismissRequest=close,title={Text("Not yet supported for ${profile.label}")},
+            text={Text("On-device slicing isn't wired up yet for this printer type - its upload/print path isn't implemented in this app.")},
             confirmButton={TextButton(close){Text("Close")}})
         return
     }
@@ -184,6 +181,12 @@ import java.io.File
     // exactly the way BambuPrinterService itself would if it ever needed to inspect the G-code
     // rather than just upload the bundle whole.
     val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
+    // Phase 6 (WO-23): Prusa Link's own real upload+print endpoint (PrusaLinkPrinterService.
+    // uploadAndPrint - a single PUT with Print-After-Upload) is, like Bambu's, one atomic
+    // command rather than Moonraker's separate upload-then-start - see the LaunchedEffect below.
+    // Unlike Bambu, this app's slicer output for a Prusa Link target is already plain .gcode (no
+    // bundle), so the toolpath/stats extraction above only ever branches on bambuTarget.
+    val prusaTarget = profile.kind == PrinterKind.PRUSA_LINK
     // Toolpath + stats parsing, both off the main thread the same way slicing itself is
     // dispatched. A parse failure doesn't block printing - the review is a visualization aid,
     // not a correctness gate; the actual G-code was already produced successfully.
@@ -196,16 +199,18 @@ import java.io.File
             gcodeStats = runCatching { withContext(Dispatchers.Default) { GcodeStatsParser.parse(plainGcode) } }.getOrNull()
         } catch(e: Exception) { toolpathError = e.message ?: "Could not build a layer preview of the sliced G-code." }
     }
-    // Bambu Lab has no separate upload step here: BambuPrinterService.startPrint() (the same real
-    // FTPS+MQTT flow BambuPrintPanel's share-intent path already uses) uploads the bundle as part
-    // of the single print command dispatched below, so this just carries the bundle's own name
-    // forward once the owner has reviewed the sliced layers - no network call happens yet.
-    // Every other vendor still needs a real, separate Moonraker upload (LiveFileChanges) before
-    // the later "Start print" tap can reference a filename already on the printer.
+    // Bambu Lab and Prusa Link have no separate upload step here: BambuPrinterService.startPrint()
+    // (the same real FTPS+MQTT flow BambuPrintPanel's share-intent path already uses) and
+    // PrusaLinkPrinterService.uploadAndPrint() (a single real PUT with Print-After-Upload) each
+    // upload as part of the single print command dispatched below, so this just carries the
+    // sliced file's own name forward once the owner has reviewed the layers - no network call
+    // happens yet. Every other vendor still needs a real, separate Moonraker upload
+    // (LiveFileChanges) before the later "Start print" tap can reference a filename already on
+    // the printer.
     LaunchedEffect(sliced, reviewedLayers, state.connected) {
         val gcode = sliced ?: return@LaunchedEffect
         if(!reviewedLayers) return@LaunchedEffect
-        if(bambuTarget) { stagedFilename = gcode.name; return@LaunchedEffect }
+        if(bambuTarget || prusaTarget) { stagedFilename = gcode.name; return@LaunchedEffect }
         if(!state.connected) { working = false; error = "Connect to ${state.address} to upload the sliced file."; return@LaunchedEffect }
         working = true; stage = "Uploading…"
         val backend = LiveFileChanges(state.address, File(context.cacheDir, "live-file"), rawApiKey = state.apiKeyFor(state.address))
@@ -320,12 +325,18 @@ import java.io.File
                     }
                     Button({
                         val filename = stagedFilename ?: return@Button
-                        if(bambuTarget) {
-                            val bundle = sliced ?: return@Button
-                            execute(PrinterCommand("Print $filename", "", bambuPrintRequest=BambuPrintRequest(bundle, filename),
-                                allowedStates=setOf("standby","complete","cancelled","error")), state.generation)
-                        } else {
-                            execute(Moonraker.start(filename), state.generation)
+                        when {
+                            bambuTarget -> {
+                                val bundle = sliced ?: return@Button
+                                execute(PrinterCommand("Print $filename", "", bambuPrintRequest=BambuPrintRequest(bundle, filename),
+                                    allowedStates=setOf("standby","complete","cancelled","error")), state.generation)
+                            }
+                            prusaTarget -> {
+                                val gcode = sliced ?: return@Button
+                                execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest=PrusaLinkPrintRequest(gcode, filename),
+                                    allowedStates=setOf("standby","complete","cancelled","error")), state.generation)
+                            }
+                            else -> execute(Moonraker.start(filename), state.generation)
                         }
                         close()
                     }, enabled=!working && error==null && stagedFilename!=null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-and-print-confirm")) { Text("Start print") }
@@ -338,12 +349,13 @@ import java.io.File
 /**
  * Extracts the real embedded G-code (Metadata/plate_1.gcode) from a Bambu .gcode.3mf bundle -
  * the same in-archive path store_bbs_3mf() writes it to (see BambuBundleDeviceTest's own
- * verification of this exact path) - into a throwaway temp file, purely so this panel's existing
- * plain-G-code toolpath/stats parsers (GcodePreview.parse/GcodeStatsParser.parse) can read it.
- * The bundle itself, not this extracted copy, is what actually gets uploaded to the printer.
+ * verification of this exact path) - into a throwaway temp file, purely so a toolpath/stats
+ * parser built for plain G-code (GcodePreview.parse/GcodeStatsParser.parse) can read it. The
+ * bundle itself, not this extracted copy, is what actually gets uploaded to the printer. Shared
+ * (not file-private) - both this panel and ProjectEditorScreen.kt's multi-object flow need it.
  */
-private fun extractBambuBundleGcode(context: android.content.Context, bundle: File): File {
-    val target = File(context.cacheDir, "sliced-output/bambu-preview.gcode")
+internal fun extractBambuBundleGcode(context: android.content.Context, bundle: File): File {
+    val target = File(context.cacheDir, "sliced-output/bambu-preview-${bundle.nameWithoutExtension}.gcode")
     java.util.zip.ZipFile(bundle).use { zip ->
         val entry = zip.getEntry("Metadata/plate_1.gcode")
             ?: throw ApiFailure("The sliced bundle has no embedded G-code to preview.")

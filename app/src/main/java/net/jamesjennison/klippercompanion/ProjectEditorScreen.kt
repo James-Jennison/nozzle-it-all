@@ -166,6 +166,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var infillText by remember(projectId, newProjectName) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.infillPercent.toString()) }
     var supportMode by remember(projectId, newProjectName) { mutableStateOf(SupportMode.AUTO) }
     var adhesionBrim by remember(projectId, newProjectName) { mutableStateOf(true) }
+    var advancedOverrides by remember(projectId, newProjectName) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var customizeError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var working by remember(projectId, newProjectName) { mutableStateOf(false) }
     var sliceStageLabel by remember(projectId, newProjectName) { mutableStateOf("") }
@@ -260,7 +261,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             // supports, so picking a material never silently resets the rest of these settings.
             // Skipped for a multi-tool target: slotMaterials above already carries each object's
             // own real material into sliceProject's own multi-slot config generation instead.
-            val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap()))
+            val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides)
             when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials)) {
                 is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
@@ -561,6 +562,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
                                     Text("Brim (bed adhesion)")
                                 }
+                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", { advancedOverrides = it })
                                 validationIssues.forEach { issue ->
                                     Text(
                                         issue.message,

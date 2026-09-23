@@ -66,6 +66,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // Activity, which would otherwise retain state across switching between different projects.
     val vm = remember(projectId, newProjectName) { ProjectViewModel(context.applicationContext, AppDatabase.get(context.applicationContext).projectDao()) }
     var selectedId by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    // WO-30 (owner request: "Desktop-like power adapted to mobile" - a real EasyPrint-style plate
+    // toolbar): which objects are currently hidden from the workspace. Local, UI-only state, not
+    // persisted on ProjectObject - hiding is a workspace visibility aid, not a print-time
+    // decision, so a hidden object is still sliced exactly as if it were shown (matches "what you
+    // see is what gets edited, not necessarily what gets printed" - an explicit, honest scope
+    // choice, not a half-built exclude-from-slice feature).
+    var hiddenIds by remember(projectId, newProjectName) { mutableStateOf(setOf<String>()) }
     var geometry by remember(projectId, newProjectName) { mutableStateOf<Map<String, MeshGeometry>>(emptyMap()) }
     var addError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var loadError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
@@ -309,7 +316,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 !ready -> Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
                 loadError != null -> Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp)) { Text(loadError!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("project-editor-error")) }
                 stage == ProjectEditorStage.EDIT -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val workspaceObjects = objects.mapNotNull { obj -> geometry[obj.id]?.let { WorkspaceObject(obj, it) } }
+                    val allWorkspaceObjects = objects.mapNotNull { obj -> geometry[obj.id]?.let { WorkspaceObject(obj, it) } }
+                    // WO-30: a hidden object never reaches ProjectWorkspace at all - it can't be
+                    // rendered, picked, or counted as colliding while hidden. If the currently
+                    // selected object is the one just hidden, the selection is cleared too (below,
+                    // where hiddenIds is toggled) so the toolbar's per-selection buttons don't sit
+                    // enabled against an object nothing on screen can point back to.
+                    val workspaceObjects = allWorkspaceObjects.filter { it.projectObject.id !in hiddenIds }
                     // Real pairwise collision check (footprintsOverlap, the same rotate-about-
                     // pivot SAT math auto-arrange's own sizing uses) - recomputed from current
                     // state each recomposition, not cached, so a drag in ProjectWorkspace above
@@ -326,27 +339,83 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                         }
                         colliding
                     }
-                    ProjectWorkspace(
-                        objects = workspaceObjects,
-                        selectedId = selectedId,
-                        onSelect = { selectedId = it },
-                        onTransformChange = { id, transform -> scope.launch { vm.updateObjectTransform(id, transform) } },
-                        bedShape = bedShape,
-                        collidingIds = collidingIds,
-                    )
-                    val missingGeometryCount = objects.size - workspaceObjects.size
+                    // WO-30 (owner request, 2026-09-23 - "Desktop-like power adapted to mobile",
+                    // real EasyPrint-style reference screenshots): a left-hand plate toolbar next
+                    // to the real 3D workspace, our own take on that reference rather than a copy
+                    // of its icon set/layout - Select is already implicit in ProjectWorkspace's own
+                    // tap-to-select/drag-to-transform gestures (no separate mode toggle needed,
+                    // unchanged from before this entry), so this toolbar covers what wasn't already
+                    // reachable: Duplicate/Remove (moved here from the flat button row below),
+                    // Hide (new), Reset transform (new), and Auto Layout (renamed from
+                    // "Auto-arrange", same real runAutoArrange() underneath).
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(Modifier.testTag("project-toolbar"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            PlateToolbarButton("Duplicate", CompanionSymbol.DUPLICATE, enabled = selectedId != null, testTag = "project-duplicate-object") {
+                                selectedId?.let { id -> scope.launch { selectedId = vm.duplicateObject(id)?.id } }
+                            }
+                            PlateToolbarButton("Hide", CompanionSymbol.HIDE, enabled = selectedId != null, testTag = "project-hide-object") {
+                                selectedId?.let { id -> hiddenIds = hiddenIds + id; selectedId = null }
+                            }
+                            PlateToolbarButton("Reset", CompanionSymbol.RESET, enabled = selectedId != null, testTag = "project-reset-object") {
+                                selectedId?.let { id -> scope.launch { vm.updateObjectTransform(id, ModelTransform()) } }
+                            }
+                            PlateToolbarButton("Remove", CompanionSymbol.CLOSE, enabled = selectedId != null, testTag = "project-remove-object") {
+                                selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } }
+                            }
+                            PlateToolbarButton("Layout", CompanionSymbol.LAYOUT, enabled = objects.size > 1, testTag = "project-auto-arrange") {
+                                scope.launch { runAutoArrange() }
+                            }
+                        }
+                        Column(Modifier.weight(1f)) {
+                            ProjectWorkspace(
+                                objects = workspaceObjects,
+                                selectedId = selectedId,
+                                onSelect = { selectedId = it },
+                                onTransformChange = { id, transform -> scope.launch { vm.updateObjectTransform(id, transform) } },
+                                bedShape = bedShape,
+                                collidingIds = collidingIds,
+                            )
+                            // WO-30: the selected object's real, current bounding box in mm -
+                            // (max-min) per axis on its loaded geometry, scaled by its own live
+                            // transform.scale (the same scale ProjectWorkspace's own drag-to-scale
+                            // gesture already writes) - not a static "model size" read once at
+                            // import, so this stays correct after a Scale-mode drag or a Reset.
+                            val selectedWorkspaceObject = workspaceObjects.find { it.projectObject.id == selectedId }
+                            val dimensionsText = selectedWorkspaceObject?.let { wo ->
+                                val t = wo.projectObject.transform()
+                                val g = wo.geometry
+                                "%.1f x %.1f x %.1f mm".format((g.maxX - g.minX) * t.scale, (g.maxY - g.minY) * t.scale, (g.maxZ - g.minZ) * t.scale)
+                            } ?: "Select an object to see its size"
+                            Text(dimensionsText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-object-dimensions"))
+                            // WO-30: "Models N/N" - cycles selection through the plate's own
+                            // visible object order (the same order the "Objects on this plate"
+                            // list below renders), matching the reference's own model-switcher
+                            // affordance rather than requiring a tap on the 3D view or the list.
+                            if (workspaceObjects.isNotEmpty()) {
+                                val currentIndex = workspaceObjects.indexOfFirst { it.projectObject.id == selectedId }
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton({
+                                        val i = if (currentIndex <= 0) workspaceObjects.size - 1 else currentIndex - 1
+                                        selectedId = workspaceObjects[i].projectObject.id
+                                    }, Modifier.testTag("project-model-prev")) { CompanionIcon(CompanionSymbol.PREV) }
+                                    Text("Models ${if (currentIndex >= 0) currentIndex + 1 else 0}/${workspaceObjects.size}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-model-index"))
+                                    IconButton({
+                                        val i = if (currentIndex < 0 || currentIndex >= workspaceObjects.size - 1) 0 else currentIndex + 1
+                                        selectedId = workspaceObjects[i].projectObject.id
+                                    }, Modifier.testTag("project-model-next")) { CompanionIcon(CompanionSymbol.NEXT) }
+                                }
+                            }
+                        }
+                    }
+                    val missingGeometryCount = objects.size - allWorkspaceObjects.size
                     if (missingGeometryCount > 0) Text("Loading $missingGeometryCount model(s)…", style = MaterialTheme.typography.bodySmall)
+                    if (hiddenIds.isNotEmpty()) Text("${hiddenIds.size} object(s) hidden - still included when slicing.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (collidingIds.isNotEmpty()) Text(
-                        "${collidingIds.size} object(s) overlap - move them apart before slicing, or use Auto-arrange.",
+                        "${collidingIds.size} object(s) overlap - move them apart before slicing, or use Layout.",
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-collision-warning"),
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button({ pickModel.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("project-add-object")) { Text("Add model") }
-                        OutlinedButton({ selectedId?.let { id -> scope.launch { selectedId = vm.duplicateObject(id)?.id } } }, enabled = selectedId != null, modifier = Modifier.testTag("project-duplicate-object")) { Text("Duplicate") }
-                        OutlinedButton({ selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } } }, enabled = selectedId != null, modifier = Modifier.testTag("project-remove-object")) { Text("Remove") }
-                    }
-                    OutlinedButton({ scope.launch { runAutoArrange() } }, enabled = objects.size > 1, modifier = Modifier.testTag("project-auto-arrange")) { Text("Auto-arrange") }
+                    Button({ pickModel.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("project-add-object")) { Text("Add models") }
                     // Phase 4 (§4/§16): "copies" - sets the selected object's total count on the
                     // plate at once (duplicating up or removing down to N), then resolves
                     // placement through the same real auto-arrange path above rather than
@@ -369,7 +438,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
                     if (objects.isEmpty()) Text("No objects yet - add an STL, 3MF or OBJ model to start this project's build plate.", style = MaterialTheme.typography.bodySmall)
                     objects.forEach { obj ->
-                        ProjectObjectRow(obj, selected = obj.id == selectedId, onClick = { selectedId = obj.id },
+                        ProjectObjectRow(obj, selected = obj.id == selectedId,
+                            // Selecting a hidden row un-hides it too - a "Select" tap that quietly
+                            // did nothing visible on the workspace above would be a confusing
+                            // dead end, not a real toggle.
+                            onClick = { hiddenIds = hiddenIds - obj.id; selectedId = obj.id },
+                            hidden = obj.id in hiddenIds,
+                            onToggleHidden = { hiddenIds = if (obj.id in hiddenIds) hiddenIds - obj.id else hiddenIds + obj.id; if (selectedId == obj.id) selectedId = null },
                             // toolCount > 1 (§11, WO-28): real per-object assignment - each row
                             // shows its own material + tool slot and opens the per-object picker,
                             // instead of the single project-wide row below (mutually exclusive,
@@ -578,7 +653,9 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
 // behavior, unchanged) - non-null only when the target printer's own bundled profile declares
 // more than one real tool slot, in which case this row shows that object's own real material +
 // tool assignment and a way to change it, instead of relying on the single project-wide picker.
-@Composable private fun ProjectObjectRow(obj: ProjectObject, selected: Boolean, onClick: () -> Unit, toolAssignment: String? = null, onAssign: (() -> Unit)? = null) {
+// hidden/onToggleHidden (WO-30): mirrors the plate toolbar's own Hide button - a hidden object is
+// dropped from the workspace but this row is the only place left to bring it back.
+@Composable private fun ProjectObjectRow(obj: ProjectObject, selected: Boolean, onClick: () -> Unit, hidden: Boolean = false, onToggleHidden: (() -> Unit)? = null, toolAssignment: String? = null, onAssign: (() -> Unit)? = null) {
     Card(
         Modifier.fillMaxWidth().testTag("project-object-${obj.id}"),
         colors = androidx.compose.material3.CardDefaults.cardColors(
@@ -587,7 +664,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(Uri.parse(obj.sourceFileUri).lastPathSegment ?: obj.id, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text(Uri.parse(obj.sourceFileUri).lastPathSegment ?: obj.id, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), color = if (hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                if (onToggleHidden != null) TextButton(onToggleHidden, modifier = Modifier.testTag("project-object-toggle-hidden-${obj.id}")) { Text(if (hidden) "Show" else "Hide") }
                 TextButton(onClick) { Text(if (selected) "Selected" else "Select") }
             }
             if (toolAssignment != null && onAssign != null) {
@@ -597,5 +675,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 }
             }
         }
+    }
+}
+
+// WO-30: one entry in the plate's own left-hand toolbar - an icon over a short label, matching
+// this app's existing thin-stroke CompanionIcon set rather than the reference screenshots' own
+// icon glyphs. `enabled = false` still renders (dimmed, via IconButton's own disabled tinting)
+// rather than disappearing, so the toolbar's shape doesn't shift as selection changes.
+@Composable private fun PlateToolbarButton(label: String, symbol: CompanionSymbol, enabled: Boolean, testTag: String, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.testTag(testTag)) {
+        IconButton(onClick, enabled = enabled) { CompanionIcon(symbol, color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)) }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f))
     }
 }

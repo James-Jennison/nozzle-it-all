@@ -251,11 +251,6 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var detailAddress by rememberSaveable { mutableStateOf<String?>(null) }
     val overview = tab == 0 && detailAddress == null
-    // WO-13: the Prepare tab's own entry point into slicing, parallel to (not replacing) the
-    // share-intent one - picking a file here needs no other app to share from. Reuses
-    // SliceAndPrintPanel exactly as the share-intent path does; only how the Uri arrives differs.
-    var pickedModel by remember { mutableStateOf<Uri?>(null) }
-    val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri != null) pickedModel = uri }
     // WO-17 (Phase 1): the Files tab's "Projects" section - a saved multi-object build plate,
     // separate from the single-object share-intent/Prepare-tab flow above. editingProjectId
     // opens an existing project; editingNewProjectName creates one on open (see
@@ -264,6 +259,18 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var editingProjectId by remember { mutableStateOf<String?>(null) }
     var editingNewProjectName by remember { mutableStateOf<String?>(null) }
     var newProjectNameDraft by rememberSaveable { mutableStateOf<String?>(null) }
+    // WO-30 (owner request, 2026-09-23: "the Prepare tab should default right to the in-app
+    // slicer" - no landing pill/placeholder first): entering the Prepare tab with no project
+    // already open auto-creates one and opens the real editor immediately, the same
+    // ProjectEditorScreen Files > Projects' own "Open" already uses. Auto-named (no upfront
+    // naming prompt) since this is the quick-start entry point - it can be renamed later from
+    // Files > Projects. Guarded on both editing* being null so switching tabs away and back
+    // doesn't spawn a second project on top of one already open.
+    LaunchedEffect(tab) {
+        if (tab == 3 && editingProjectId == null && editingNewProjectName == null) {
+            editingNewProjectName = "New print ${java.text.SimpleDateFormat("MMM d, HH:mm").format(java.util.Date())}"
+        }
+    }
     BackHandler(tab == 0 && detailAddress != null) { detailAddress = null }
     fun openPrinter(selected: String) {
         if(state.busy) return
@@ -712,15 +719,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                 }
                 3 -> {
-                    // WO-13: on-device slicing landed here (picking a file) and via the
-                    // share-intent flow (sharing one in from elsewhere) - both open the same
-                    // SliceAndPrintPanel. A MakerWorld model browser is still genuinely
-                    // unbuilt - see docs/WORK_ORDER.md's WO-13 entry.
+                    // WO-30: the LaunchedEffect(tab) above opens the real editor
+                    // (ProjectEditorScreen, a full-screen overlay below) the moment this tab
+                    // becomes active - this is only the one-frame gap before that overlay
+                    // appears, not a real landing page.
                     item {
-                        Text("Prepare", style = MaterialTheme.typography.titleLarge)
-                        Text("Slice an STL, 3MF or OBJ model on-device for the currently selected printer, then review and start the print. A MakerWorld model browser is planned but not built yet.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("prepare-placeholder"))
-                        Button({ pickModel.launch(arrayOf("*/*")) }, enabled = state.address.isNotBlank(), modifier = Modifier.testTag("pick-model-to-slice")) { Text("Pick a model to slice") }
-                        if(state.address.isBlank()) Text("Select a printer first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
                     }
                 }
             }
@@ -753,9 +757,6 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             else -> AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}})
         }
     }
-    // Prepare tab's own picker (WO-13) - same SliceAndPrintPanel the share-intent path above
-    // opens, just reached by picking a file directly instead of sharing one in.
-    pickedModel?.let { uri -> SliceAndPrintPanel(uri,state,execute,{pickedModel=null}) }
     // WO-17 (Phase 1): the Files tab's "Projects" section above stages a name here before the
     // real ProjectViewModel.newProject() call happens inside ProjectEditorScreen itself (kept
     // there, not here, so the create-and-persist step and the editor that immediately follows it
@@ -767,7 +768,15 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             dismissButton = { TextButton({ newProjectNameDraft = null }) { Text("Cancel") } })
     }
     if(editingProjectId != null || editingNewProjectName != null) {
-        ProjectEditorScreen(editingProjectId, editingNewProjectName, state, execute) { editingProjectId = null; editingNewProjectName = null }
+        ProjectEditorScreen(editingProjectId, editingNewProjectName, state, execute) {
+            editingProjectId = null; editingNewProjectName = null
+            // WO-30: closing the Prepare tab's own auto-opened editor returns to Home rather than
+            // this tab's LaunchedEffect(tab) immediately spawning another fresh project the instant
+            // this one closes - Home is a real destination; re-entering Prepare later starts a new
+            // print same as today. Closing a project opened from Files > Projects (tab == 2) still
+            // just drops back to that same list, unchanged.
+            if(tab == 3) tab = 0
+        }
     }
     renamingProjectId?.let { id ->
         AlertDialog(onDismissRequest = { renamingProjectId = null }, title = { Text("Rename project") },

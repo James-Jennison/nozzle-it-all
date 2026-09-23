@@ -128,7 +128,9 @@ private fun kilnTypography(): Typography {
 
 // HOME/CONTROL/FILES redrawn and SLICE/SETTINGS added for the 5-tab nav (see MainActivity's
 // bottom nav); PRINTER/CAMERA/EXPAND/CLOSE/NOZZLE/BED are unchanged, used outside the nav bar.
-enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS }
+// DUPLICATE/HIDE/RESET/LAYOUT/PREV/NEXT (WO-30): the project editor's own plate toolbar - drawn
+// in this file's existing thin-stroke line style, not copied from any reference app's icon set.
+enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT }
 
 /** Original outlined symbols; parent controls provide accessible text labels. */
 @Composable fun CompanionIcon(symbol: CompanionSymbol, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
@@ -167,6 +169,27 @@ enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND,
                 drawCircle(color,8f*u,Offset(12*u,12*u),style=stroke)
                 line(12f,1f,12f,3f);line(12f,21f,12f,23f);line(1f,12f,3f,12f);line(21f,12f,23f,12f)
             }
+            // Two offset squares - a second copy peeking out behind the first.
+            CompanionSymbol.DUPLICATE -> { box(4f,7f,11f,11f);box(9f,3f,11f,11f) }
+            // An open eye: almond outline with a pupil dot, plus a diagonal strike when hidden -
+            // callers pass a different `color` for the hidden state, this glyph carries its own
+            // strike unconditionally as the "hide" affordance's own recognizable shape.
+            CompanionSymbol.HIDE -> {
+                val p=Path().apply { moveTo(2*u,12*u);quadraticBezierTo(12*u,3*u,22*u,12*u);quadraticBezierTo(12*u,21*u,2*u,12*u);close() }
+                drawPath(p,color,style=stroke)
+                drawCircle(color,2.6f*u,Offset(12*u,12*u),style=stroke)
+                line(3f,20f,21f,4f)
+            }
+            // A counter-clockwise arc with a small arrowhead - undo back to the object's default
+            // placement.
+            CompanionSymbol.RESET -> {
+                drawArc(color,40f,260f,useCenter=false,topLeft=Offset(4*u,4*u),size=Size(16*u,16*u),style=stroke)
+                line(4.5f,7.5f,4f,4f);line(4.5f,7.5f,8f,7f)
+            }
+            // A 2x2 grid: auto-arranging the plate into an orderly layout.
+            CompanionSymbol.LAYOUT -> { box(4f,4f,7f,7f);box(13f,4f,7f,7f);box(4f,13f,7f,7f);box(13f,13f,7f,7f) }
+            CompanionSymbol.PREV -> { line(15f,5f,9f,12f);line(9f,12f,15f,19f) }
+            CompanionSymbol.NEXT -> { line(9f,5f,15f,12f);line(15f,12f,9f,19f) }
         }
     }
 }

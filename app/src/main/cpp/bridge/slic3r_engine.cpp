@@ -24,6 +24,8 @@
 #include "libslic3r/Format/bbs_3mf.hpp"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
 #include "libslic3r/Utils.hpp"
+#include "libslic3r/TriangleMesh.hpp"
+#include "libslic3r/TriangleMeshSlicer.hpp"
 
 #include "thumbnail_render.hpp"
 
@@ -253,6 +255,30 @@ void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, cons
 }
 
 } // namespace
+
+CutResult cut_mesh_soup(const std::vector<float>& soup, float z) {
+    using namespace Slic3r;
+    if (soup.empty() || soup.size() % 9 != 0) throw std::runtime_error("Unexpected mesh data for cutting.");
+    indexed_triangle_set mesh;
+    const size_t triangles = soup.size() / 9;
+    mesh.vertices.reserve(triangles * 3);
+    mesh.indices.reserve(triangles);
+    for (size_t t = 0; t < triangles; ++t) {
+        for (size_t k = 0; k < 3; ++k) mesh.vertices.emplace_back(soup[t * 9 + k * 3], soup[t * 9 + k * 3 + 1], soup[t * 9 + k * 3 + 2]);
+        mesh.indices.emplace_back(int(t * 3), int(t * 3 + 1), int(t * 3 + 2));
+    }
+    its_merge_vertices(mesh);
+    indexed_triangle_set upper, lower;
+    cut_mesh(mesh, z, &upper, &lower, true);
+    auto flatten = [](const indexed_triangle_set& its) {
+        std::vector<float> out;
+        out.reserve(its.indices.size() * 9);
+        for (const auto& f : its.indices)
+            for (int k = 0; k < 3; ++k) { const auto& v = its.vertices[f(k)]; out.push_back(v.x()); out.push_back(v.y()); out.push_back(v.z()); }
+        return out;
+    };
+    return CutResult{flatten(upper), flatten(lower)};
+}
 
 void request_cancel() {
     g_cancel_requested = true;

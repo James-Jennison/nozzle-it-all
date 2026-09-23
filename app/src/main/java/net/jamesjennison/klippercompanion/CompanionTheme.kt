@@ -131,7 +131,7 @@ private fun kilnTypography(): Typography {
 // DUPLICATE/HIDE/RESET/LAYOUT/PREV/NEXT (WO-30) and MOVE/ROTATE (WO-30 follow-up, the plate's own
 // Move/Rotate interaction-mode toggle): the project editor's own plate toolbar - drawn in this
 // file's existing thin-stroke line style, not copied from any reference app's icon set.
-enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT, MOVE, ROTATE, UNDO, REDO }
+enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT, MOVE, ROTATE, UNDO, REDO, FLAT, ORIENT, MIRROR, MEASURE, CUT }
 
 /** Original outlined symbols; parent controls provide accessible text labels. */
 @Composable fun CompanionIcon(symbol: CompanionSymbol, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
@@ -191,6 +191,11 @@ enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND,
             CompanionSymbol.LAYOUT -> { box(4f,4f,7f,7f);box(13f,4f,7f,7f);box(4f,13f,7f,7f);box(13f,13f,7f,7f) }
             CompanionSymbol.UNDO -> { drawArc(color,-160f,220f,useCenter=false,topLeft=Offset(5*u,7*u),size=Size(15*u,12*u),style=stroke); line(5.5f,9f,5f,4.5f); line(5.5f,9f,10f,8.5f) }
             CompanionSymbol.REDO -> { drawArc(color,-60f,220f,useCenter=false,topLeft=Offset(4*u,7*u),size=Size(15*u,12*u),style=stroke); line(18.5f,9f,19f,4.5f); line(18.5f,9f,14f,8.5f) }
+            CompanionSymbol.FLAT -> { box(5f,5f,14f,10f); line(3f,20f,21f,20f); line(3f,20f,3f,17f); line(21f,20f,21f,17f) }
+            CompanionSymbol.ORIENT -> { box(6f,6f,12f,12f); line(12f,2f,12f,5f); line(9f,3.5f,12f,2f); line(15f,3.5f,12f,2f); line(12f,22f,12f,19f) }
+            CompanionSymbol.MIRROR -> { line(12f,3f,12f,21f); line(4f,8f,4f,16f); line(4f,8f,10f,12f); line(4f,16f,10f,12f); line(20f,8f,20f,16f); line(20f,8f,14f,12f); line(20f,16f,14f,12f) }
+            CompanionSymbol.MEASURE -> { line(3f,15f,21f,9f); line(6f,14f,7f,11.5f); line(10f,12.7f,11f,10.2f); line(14f,11.3f,15f,8.8f); line(18f,10f,19f,7.5f) }
+            CompanionSymbol.CUT -> { box(5f,6f,14f,12f); line(2f,12f,22f,12f); line(2f,10f,2f,14f); line(22f,10f,22f,14f) }
             CompanionSymbol.PREV -> { line(15f,5f,9f,12f);line(9f,12f,15f,19f) }
             CompanionSymbol.NEXT -> { line(9f,5f,15f,12f);line(15f,12f,9f,19f) }
             // A 4-way arrow cross - drag-to-reposition.

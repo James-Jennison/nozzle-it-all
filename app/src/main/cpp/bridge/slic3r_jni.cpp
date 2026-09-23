@@ -468,3 +468,28 @@ Java_org_orcaslicer_engine_NativeEngine_nativeResetCancel(JNIEnv*, jclass) { eng
 
 extern "C" JNIEXPORT jint JNICALL
 Java_org_orcaslicer_engine_NativeEngine_nativeSliceProgress(JNIEnv*, jclass) { return engine::slice_progress(); }
+
+// Returns [upper, lower] triangle soups (9 floats per triangle); either may be empty.
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeCutMesh(JNIEnv* env, jclass, jfloatArray jSoup, jfloat z) {
+    try {
+        if (jSoup == nullptr) throw std::runtime_error("No mesh to cut.");
+        const jsize n = env->GetArrayLength(jSoup);
+        std::vector<float> soup(static_cast<size_t>(n));
+        env->GetFloatArrayRegion(jSoup, 0, n, soup.data());
+        engine::CutResult result = engine::cut_mesh_soup(soup, z);
+        jclass floatArrayClass = env->FindClass("[F");
+        jobjectArray out = env->NewObjectArray(2, floatArrayClass, nullptr);
+        if (out == nullptr) throw std::runtime_error("Could not allocate the cut result.");
+        jfloatArray upper = to_jfloat_array(env, result.upper);
+        jfloatArray lower = to_jfloat_array(env, result.lower);
+        env->SetObjectArrayElement(out, 0, upper);
+        env->SetObjectArrayElement(out, 1, lower);
+        return out;
+    } catch (const std::exception& ex) {
+        throw_java_exception(env, ex);
+    } catch (...) {
+        throw_java_exception(env, "Unknown native error while cutting the mesh");
+    }
+    return nullptr;
+}

@@ -23,6 +23,10 @@ object NativeEngine {
     external fun nativeResetCancel()
     external fun nativeSliceProgress(): Int
 
+    // Phase 9c: cuts a triangle soup (9 floats/triangle) at height z (mesh coordinates) and caps both halves.
+    // Returns [upper, lower]; a half with no geometry comes back empty.
+    external fun nativeCutMesh(soup: FloatArray, z: Float): Array<FloatArray>
+
     // Temporary diagnostic for WO-13's in-app-vs-CLI-tool investigation - see
     // docs/WORK_ORDER.md and slic3r_jni.cpp's own comment on this function.
     external fun nativeDiagnoseConfigDef(): String

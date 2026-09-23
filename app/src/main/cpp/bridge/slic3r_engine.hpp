@@ -160,4 +160,9 @@ void reset_cancel();
 // 0-100, the engine's own status percent for the slice currently (or most recently) running.
 int slice_progress();
 
+// Phase 9c: cuts a triangle soup (9 floats per triangle) with the horizontal plane at z (mesh coordinates) and
+// caps both halves with libslic3r's own cap triangulation. Either half may come back empty.
+struct CutResult { std::vector<float> upper; std::vector<float> lower; };
+CutResult cut_mesh_soup(const std::vector<float>& soup, float z);
+
 } // namespace engine

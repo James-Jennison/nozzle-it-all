@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -65,6 +66,7 @@ import java.io.File
  * the Files tab), matching this session's own owner-confirmed choice to keep that already-tested
  * flow untouched rather than retrofit it.
  */
+private enum class PickMode { FACE, MEASURE }
 private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, STAGED }
 
 @Composable fun ProjectEditorScreen(projectId: String?, newProjectName: String?, state: ScreenState, execute: (PrinterCommand, Int) -> Unit, close: () -> Unit) {
@@ -87,6 +89,14 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // the selected object performs - see WorkspaceInteractionMode's own doc comment.
     var interactionMode by remember(projectId, newProjectName) { mutableStateOf(WorkspaceInteractionMode.MOVE) }
     var geometry by remember(projectId, newProjectName) { mutableStateOf<Map<String, MeshGeometry>>(emptyMap()) }
+    val geometrySource = remember(projectId, newProjectName) { HashMap<String, String>() }
+    var pickMode by remember(projectId, newProjectName) { mutableStateOf<PickMode?>(null) }
+    var measurePointA by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
+    var toolMessage by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    var cutDialogFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    var cutFraction by remember(projectId, newProjectName) { mutableStateOf(0.5f) }
+    var keepUpper by remember(projectId, newProjectName) { mutableStateOf(true) }
+    var keepLower by remember(projectId, newProjectName) { mutableStateOf(true) }
     var addError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var loadError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var ready by remember(projectId, newProjectName) { mutableStateOf(false) }
@@ -124,12 +134,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // re-parses a file just because its placement moved (ProjectGLRenderer separately relies on
     // this same "same geometry reference" stability to skip re-uploading its own VBO).
     LaunchedEffect(objects) {
-        val missing = objects.filter { it.id !in geometry }
+        // Reloaded when an edit (mirror, lay flat, cut) swapped the object's model file.
+        val missing = objects.filter { it.id !in geometry || geometrySource[it.id] != it.sourceFileUri }
         if (missing.isEmpty()) return@LaunchedEffect
         val loaded = HashMap<String, MeshGeometry>()
         for (obj in missing) {
             val path = Uri.parse(obj.sourceFileUri).path ?: continue
-            try { loaded[obj.id] = MeshLoader.load(path) } catch (_: Exception) { /* surfaced per-object below via a missing entry */ }
+            try { loaded[obj.id] = MeshLoader.load(path); geometrySource[obj.id] = obj.sourceFileUri } catch (_: Exception) { /* surfaced per-object below via a missing entry */ }
         }
         if (loaded.isNotEmpty()) geometry = geometry + loaded
     }
@@ -239,6 +250,44 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             val current = objects.find { it.id == id }?.transform() ?: return@mapNotNull null
             id to current.copy(offsetXMm = placement.offsetXMm, offsetYMm = placement.offsetYMm, rotationZDeg = placement.rotationZDeg)
         }.toMap())
+    }
+
+    // Nearest model hit under a world-space ray, using each object's real triangles (not its bounding sphere).
+    fun pickTriangle(origin: FloatArray, dir: FloatArray): Triple<ProjectObject, TriMesh, MeshHit>? {
+        var best: Triple<ProjectObject, TriMesh, MeshHit>? = null; var bestDist = Float.MAX_VALUE
+        for (obj in objects) {
+            val g = geometry[obj.id] ?: continue
+            val frame = PlacedFrame(obj.transform(), g.origin)
+            val (lo, ld) = frame.rayToLocal(origin, dir)
+            val mesh = MeshEdit.fromGeometry(g)
+            val hit = MeshEdit.rayHit(mesh, lo, ld) ?: continue
+            val worldDist = MeshEdit.distance(origin, frame.toWorld(hit.point))
+            if (worldDist < bestDist) { bestDist = worldDist; best = Triple(obj, mesh, hit) }
+        }
+        return best
+    }
+
+    fun handleRayTap(origin: FloatArray, dir: FloatArray) {
+        val mode = pickMode ?: return
+        val hit = pickTriangle(origin, dir)
+        if (hit == null) { toolMessage = "Tap directly on a model."; return }
+        val (obj, mesh, h) = hit
+        when (mode) {
+            PickMode.FACE -> {
+                pickMode = null; selectedId = obj.id
+                scope.launch { vm.replaceObjectMesh(obj.id, MeshEdit.layOnFace(mesh, MeshEdit.triangleNormal(mesh, h.triangle))); toolMessage = "Laid the tapped face flat on the bed." }
+            }
+            PickMode.MEASURE -> {
+                val world = PlacedFrame(obj.transform(), geometry.getValue(obj.id).origin).toWorld(h.point)
+                val a = measurePointA
+                if (a == null) { measurePointA = world; toolMessage = "Point A set - tap point B." }
+                else {
+                    val d = MeshEdit.distance(a, world)
+                    toolMessage = "Distance %.2f mm  (Δx %.2f, Δy %.2f, Δz %.2f)".format(d, kotlin.math.abs(world[0] - a[0]), kotlin.math.abs(world[1] - a[1]), kotlin.math.abs(world[2] - a[2]))
+                    measurePointA = null
+                }
+            }
+        }
     }
 
     fun startSlicing() {
@@ -477,6 +526,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                 bedShape = bedShape,
                                                 collidingIds = collidingIds,
                                                 interactionMode = interactionMode,
+                                                onRayTap = if (pickMode != null) { o, d -> handleRayTap(o, d) } else null,
                                             )
                                             // WO-30: the selected object's real, current bounding
                                             // box in mm - (max-min) per axis on its loaded
@@ -544,6 +594,34 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                 }
                                 addError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
+                                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                                androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().testTag("project-edit-tools"), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    PlateToolbarButton("Lay flat", CompanionSymbol.FLAT, enabled = objects.isNotEmpty(), active = pickMode == PickMode.FACE, testTag = "project-tool-face") {
+                                        measurePointA = null; pickMode = if (pickMode == PickMode.FACE) null else PickMode.FACE
+                                        toolMessage = if (pickMode == PickMode.FACE) "Tap the face you want on the bed." else null
+                                    }
+                                    PlateToolbarButton("Orient", CompanionSymbol.ORIENT, enabled = selectedId != null, testTag = "project-tool-orient") {
+                                        val id = selectedId; val g = id?.let { geometry[it] }
+                                        if (id != null && g != null) scope.launch {
+                                            val mesh = MeshEdit.fromGeometry(g)
+                                            val best = withContext(Dispatchers.Default) { MeshEdit.autoOrient(mesh) }
+                                            if (best == null) toolMessage = "This orientation is already good."
+                                            else { vm.replaceObjectMesh(id, MeshEdit.applyOrientation(mesh, best)); toolMessage = "Reoriented to reduce supports." }
+                                        }
+                                    }
+                                    for ((label, axis) in listOf("Mirror X" to 0, "Mirror Y" to 1)) {
+                                        PlateToolbarButton(label, CompanionSymbol.MIRROR, enabled = selectedId != null, testTag = "project-tool-mirror-${label.last().lowercaseChar()}") {
+                                            val id = selectedId; val g = id?.let { geometry[it] }
+                                            if (id != null && g != null) scope.launch { vm.replaceObjectMesh(id, MeshEdit.mirror(MeshEdit.fromGeometry(g), axis)); toolMessage = "$label applied (across the model's own axis)." }
+                                        }
+                                    }
+                                    PlateToolbarButton("Cut", CompanionSymbol.CUT, enabled = selectedId != null, testTag = "project-tool-cut") { cutDialogFor = selectedId; cutFraction = 0.5f; keepUpper = true; keepLower = true }
+                                    PlateToolbarButton("Measure", CompanionSymbol.MEASURE, enabled = objects.isNotEmpty(), active = pickMode == PickMode.MEASURE, testTag = "project-tool-measure") {
+                                        measurePointA = null; pickMode = if (pickMode == PickMode.MEASURE) null else PickMode.MEASURE
+                                        toolMessage = if (pickMode == PickMode.MEASURE) "Tap point A on a model." else null
+                                    }
+                                }
+                                toolMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-tool-message")) }
                                 Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
                                 if (objects.isEmpty()) Text("No objects yet - add an STL, 3MF or OBJ model to start this project's build plate.", style = MaterialTheme.typography.bodySmall)
                                 objects.forEach { obj ->
@@ -695,6 +773,38 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             }
         }
     }
+    cutDialogFor?.let { id ->
+        val g = geometry[id]; val obj = objects.find { it.id == id }
+        if (g == null || obj == null) { cutDialogFor = null } else {
+            val heightMm = (g.maxZ - g.minZ) * obj.scale
+            AlertDialog(onDismissRequest = { cutDialogFor = null }, title = { Text("Cut model") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Cut at %.1f mm of %.1f mm".format(cutFraction * heightMm, heightMm), modifier = Modifier.testTag("project-cut-readout"))
+                        Slider(cutFraction, { cutFraction = it }, valueRange = 0.02f..0.98f, modifier = Modifier.testTag("project-cut-height"))
+                        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(keepLower, { keepLower = it }); Text("Keep lower part") }
+                        Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(keepUpper, { keepUpper = it }); Text("Keep upper part") }
+                    }
+                },
+                confirmButton = {
+                    TextButton({
+                        cutDialogFor = null
+                        val z = g.minZ + cutFraction * (g.maxZ - g.minZ)
+                        scope.launch {
+                            try {
+                                val (upper, lower) = withContext(Dispatchers.Default) { MeshEdit.cut(MeshEdit.fromGeometry(g), z) }
+                                val gap = (g.maxX - g.minX) * obj.scale + 5f
+                                val parts = vm.cutObject(id, if (keepLower) lower else null, if (keepUpper) upper else null, gap)
+                                selectedId = parts.firstOrNull()?.id
+                                toolMessage = if (parts.isEmpty()) "Nothing left after the cut." else "Cut into ${parts.size} part(s) - lay each flat with Lay flat."
+                            } catch (e: Exception) { toolMessage = "Cut failed: ${e.message}" }
+                        }
+                    }, enabled = keepLower || keepUpper, modifier = Modifier.testTag("project-cut-apply")) { Text("Cut") }
+                },
+                dismissButton = { TextButton({ cutDialogFor = null }) { Text("Cancel") } })
+        }
+    }
+
     if (materialPickerOpen) {
         AlertDialog(
             onDismissRequest = { materialPickerOpen = false }, title = { Text("Choose a material") },

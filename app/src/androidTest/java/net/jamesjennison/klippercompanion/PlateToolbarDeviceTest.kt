@@ -89,6 +89,40 @@ class PlateToolbarDeviceTest {
         compose.onNodeWithTag("project-slice").assertTextContains("Slice Plate 2", substring = true)
     }
 
+    @Test fun editToolsApplyToTheSelectedObjectAndModesShowGuidance() {
+        val (projectId, objectIds) = seedProject("ToolsProject", 1)
+        openScreen(projectId)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("project-tool-orient").onChildren().onFirst().assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("project-tool-mirror-x").performScrollTo().performClick()
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("project-tool-message").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-tool-message").assertTextContains("Mirror X applied", substring = true)
+        compose.onNodeWithTag("project-tool-measure").performScrollTo().performClick()
+        compose.onNodeWithTag("project-tool-message").assertTextContains("Tap point A", substring = true)
+        compose.onNodeWithTag("project-tool-face").performScrollTo().performClick()
+        compose.onNodeWithTag("project-tool-message").assertTextContains("Tap the face", substring = true)
+        compose.onNodeWithTag("project-tool-face").performClick() // toggles off again
+        compose.waitUntil(3000) { compose.onAllNodesWithTag("project-tool-message").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test fun cutDialogSplitsTheSelectedObjectIntoTwoParts() {
+        val (projectId, objectIds) = seedProject("CutUiProject", 1)
+        openScreen(projectId)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(8000) { runCatching { compose.onNodeWithTag("project-tool-cut").onChildren().onFirst().assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("project-tool-cut").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-cut-apply", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-cut-readout", useUnmergedTree = true).assertTextContains("Cut at", substring = true)
+        compose.onNodeWithTag("project-cut-apply", useUnmergedTree = true).performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("Cut into 2", substring = true).fetchSemanticsNodes().isNotEmpty() }
+    }
+
     @Test fun undoAndRedoButtonsRestoreARemovedObject() {
         val (projectId, objectIds) = seedProject("UndoProject", 2)
         openScreen(projectId)
@@ -153,7 +187,7 @@ class PlateToolbarDeviceTest {
         compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
         compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-workspace").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("project-workspace").performTouchInput {
+        compose.onNodeWithTag("project-workspace").performScrollTo().performTouchInput {
             swipe(Offset(width * 0.8f, height * 0.5f), Offset(width * 0.5f, height * 0.3f), durationMillis = 200)
         }
         compose.waitForIdle()

@@ -221,6 +221,41 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         touch()
     }
 
+    /** Replaces an object's model with an edited mesh (mirror, lay flat, orient). One undo step; the old file is kept for undo. */
+    suspend fun replaceObjectMesh(objectId: String, mesh: net.jamesjennison.klippercompanion.TriMesh) {
+        val project = _project.value ?: return
+        val target = _objects.value.find { it.id == objectId } ?: return
+        val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            ProjectFileStore.newModelFile(context, project.id, "stl").also { net.jamesjennison.klippercompanion.MeshEdit.writeBinaryStl(mesh, it) }
+        }
+        record()
+        val updated = target.copy(sourceFileUri = Uri.fromFile(file).toString())
+        dao.upsertObjects(listOf(updated))
+        _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
+        touch()
+    }
+
+    /**
+     * Replaces [objectId] with the cut halves. The first non-null half keeps the object's id and placement; the other
+     * becomes a new object beside it (shifted [gapMm] along X, same plate and material). One undo step.
+     */
+    suspend fun cutObject(objectId: String, lower: net.jamesjennison.klippercompanion.TriMesh?, upper: net.jamesjennison.klippercompanion.TriMesh?, gapMm: Float): List<ProjectObject> {
+        val project = _project.value ?: return emptyList()
+        val target = _objects.value.find { it.id == objectId } ?: return emptyList()
+        val halves = listOfNotNull(lower, upper)
+        if (halves.isEmpty()) return emptyList()
+        val files = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            halves.map { mesh -> ProjectFileStore.newModelFile(context, project.id, "stl").also { net.jamesjennison.klippercompanion.MeshEdit.writeBinaryStl(mesh, it) } }
+        }
+        record()
+        val first = target.copy(sourceFileUri = Uri.fromFile(files[0]).toString())
+        val added = files.drop(1).mapIndexed { i, f -> target.copy(id = UUID.randomUUID().toString(), sourceFileUri = Uri.fromFile(f).toString(), offsetXMm = target.offsetXMm + gapMm * (i + 1)) }
+        dao.upsertObjects(listOf(first) + added)
+        _objects.value = _objects.value.map { if (it.id == objectId) first else it } + added
+        touch()
+        return listOf(first) + added
+    }
+
     /** Writes the whole project (every plate) as a .nozzleproj archive. */
     fun exportArchive(out: java.io.OutputStream) {
         val project = _project.value ?: error("No project open.")

@@ -30,6 +30,10 @@ object ProjectFileStore {
         return target
     }
 
+    /** A fresh, uniquely named model file inside the project's own storage (for edited/cut meshes). */
+    fun newModelFile(context: Context, projectId: String, extension: String): File =
+        File(projectDir(context, projectId), "${java.util.UUID.randomUUID()}.$extension")
+
     fun deleteObject(context: Context, projectId: String, objectId: String) {
         projectDir(context, projectId).listFiles { f -> f.nameWithoutExtension == objectId }?.forEach { it.delete() }
     }

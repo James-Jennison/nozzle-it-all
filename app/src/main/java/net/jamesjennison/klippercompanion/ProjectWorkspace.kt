@@ -458,6 +458,9 @@ enum class WorkspaceInteractionMode { MOVE, ROTATE }
     // as placed" signals. Computed by the caller, not here, so ProjectEditorScreen's Slice gate
     // and this render tint can never disagree about which objects are flagged.
     collidingIds: Set<String> = emptySet(),
+    // Face-pick / measure tools: when non-null, a tap hands the world-space ray (origin, direction) to the
+    // caller instead of selecting.
+    onRayTap: ((FloatArray, FloatArray) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
@@ -532,12 +535,13 @@ enum class WorkspaceInteractionMode { MOVE, ROTATE }
         Box {
             AndroidView(
                 modifier = Modifier.fillMaxWidth().height(320.dp).testTag("project-workspace")
-                    .pointerInput(objects.map { it.projectObject.id }, selectedId) {
+                    .pointerInput(objects.map { it.projectObject.id }, selectedId, onRayTap != null) {
                         detectTapGestures { offset ->
                             val vp = renderer.lastVpMatrix ?: return@detectTapGestures
                             val w = renderer.viewportWidth; val h = renderer.viewportHeight
                             if (w <= 1 || h <= 1) return@detectTapGestures
                             val ray = unprojectRay(vp, w, h, offset.x, offset.y)
+                            if (onRayTap != null) { onRayTap(floatArrayOf(ray[0], ray[1], ray[2]), floatArrayOf(ray[3], ray[4], ray[5])); return@detectTapGestures }
                             val hit = pickObject(objects, floatArrayOf(ray[0], ray[1], ray[2]), floatArrayOf(ray[3], ray[4], ray[5]))
                             onSelect(hit)
                         }

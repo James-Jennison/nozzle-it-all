@@ -3,6 +3,7 @@
 // (same as OrcaSlicer itself, and the same family already governing this app since the Helix port).
 // See THIRD_PARTY_NOTICES.md and docs/WORK_ORDER.md's WO-13 entry.
 #pragma once
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -146,5 +147,17 @@ void slice_paint_session(PaintSessionHandle handle, const std::string& output_gc
                           const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
 
 void close_paint_session(PaintSessionHandle handle);
+
+// Thrown by every slice_* entry point when request_cancel() stopped it; any partial output is removed.
+struct SliceCancelled : std::runtime_error {
+    SliceCancelled() : std::runtime_error("Slicing cancelled") {}
+};
+
+// Asks the slice currently running (if any) to stop. A request made while nothing is running stays
+// pending for the next slice until reset_cancel() - callers reset before starting a slice they own.
+void request_cancel();
+void reset_cancel();
+// 0-100, the engine's own status percent for the slice currently (or most recently) running.
+int slice_progress();
 
 } // namespace engine

@@ -17,6 +17,12 @@ object NativeEngine {
 
     external fun nativeGetVersion(): String
 
+    // Cooperative cancel + polled progress. A cancelled slice throws java.util.concurrent.CancellationException
+    // and leaves no partial output. nativeResetCancel() clears a stale request before a new slice starts.
+    external fun nativeCancelSlice()
+    external fun nativeResetCancel()
+    external fun nativeSliceProgress(): Int
+
     // Temporary diagnostic for WO-13's in-app-vs-CLI-tool investigation - see
     // docs/WORK_ORDER.md and slic3r_jni.cpp's own comment on this function.
     external fun nativeDiagnoseConfigDef(): String

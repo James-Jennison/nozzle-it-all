@@ -24,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -168,6 +169,11 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var customizeError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var working by remember(projectId, newProjectName) { mutableStateOf(false) }
     var sliceStageLabel by remember(projectId, newProjectName) { mutableStateOf("") }
+    var sliceProgress by remember { mutableStateOf(0) }
+    LaunchedEffect(working, sliceStageLabel) {
+        sliceProgress = 0
+        while (working && sliceStageLabel == "Slicing…") { sliceProgress = SlicingCoordinator.progress().coerceIn(0, 100); kotlinx.coroutines.delay(200) }
+    }
     var sliceError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var sliced by remember(projectId, newProjectName) { mutableStateOf<File?>(null) }
     var slicedToolpath by remember(projectId, newProjectName) { mutableStateOf<Toolpath?>(null) }
@@ -259,6 +265,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
                 is SliceOutcome.Failed -> { working = false; sliceError = outcome.message }
+                SliceOutcome.Cancelled -> { working = false; stage = ProjectEditorStage.EDIT }
             }
         }
     }
@@ -322,7 +329,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 // Mid-slice (SLICING/PRINTER_READY/STAGED), this backs out to Edit instead of
                 // closing the whole screen outright - a real sliced-but-not-yet-started result
                 // shouldn't be one tap from losing the review entirely.
-                IconButton({ if (stage == ProjectEditorStage.EDIT) close() else stage = ProjectEditorStage.EDIT }, Modifier.testTag("project-editor-close")) {
+                IconButton({ if (stage == ProjectEditorStage.EDIT) close() else { if (working && sliceStageLabel == "Slicing…") SlicingCoordinator.cancel(); stage = ProjectEditorStage.EDIT } }, Modifier.testTag("project-editor-close")) {
                     CompanionIcon(CompanionSymbol.CLOSE)
                 }
             }
@@ -583,7 +590,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 }
                 stage == ProjectEditorStage.SLICING && sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (working) { CircularProgressIndicator(); Text(sliceStageLabel) }
+                        if (working) {
+                            if (sliceStageLabel == "Slicing…") {
+                                LinearProgressIndicator(progress = { sliceProgress / 100f }, modifier = Modifier.fillMaxWidth().testTag("project-slice-progress"))
+                                Text("$sliceStageLabel $sliceProgress%")
+                                OutlinedButton({ SlicingCoordinator.cancel() }, modifier = Modifier.testTag("project-slice-cancel")) { Text("Cancel") }
+                            } else { CircularProgressIndicator(); Text(sliceStageLabel) }
+                        }
                         sliceError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("project-slice-error")) }
                     }
                 }

@@ -33,6 +33,51 @@ namespace engine {
 
 namespace {
 
+// Cancellation + progress: one slice runs at a time (the Kotlin coordinator serializes them), so a
+// single registered Print is enough. PrintBase::cancel() only flips an atomic, so calling it from the
+// JNI cancel thread while process()/export_gcode() run on the slicing thread is safe; the engine then
+// unwinds itself via CanceledException at its next throw_if_canceled() checkpoint.
+std::mutex g_active_mutex;
+Slic3r::Print* g_active_print = nullptr;
+std::atomic<bool> g_cancel_requested{false};
+std::atomic<int> g_progress_percent{0};
+
+struct ActiveSlice {
+    explicit ActiveSlice(Slic3r::Print& print) {
+        g_progress_percent = 0;
+        print.set_status_callback([](const Slic3r::PrintBase::SlicingStatus& status) {
+            if (status.percent >= 0) g_progress_percent = status.percent;
+        });
+        std::lock_guard<std::mutex> lock(g_active_mutex);
+        g_active_print = &print;
+        if (g_cancel_requested.load()) print.cancel();
+    }
+    ~ActiveSlice() {
+        std::lock_guard<std::mutex> lock(g_active_mutex);
+        g_active_print = nullptr;
+    }
+};
+
+// Runs process()+export under the cancel registration; converts the engine's own CanceledException
+// into SliceCancelled and removes any partial output.
+template <typename Fn>
+void run_cancellable(Slic3r::Print& print, const std::string& partial_output, Fn&& fn) {
+    ActiveSlice active(print);
+    bool cancelled = false;
+    try {
+        fn();
+        cancelled = print.canceled();
+    } catch (const Slic3r::CanceledException&) {
+        cancelled = true;
+    }
+    if (cancelled) {
+        boost::system::error_code ec;
+        boost::filesystem::remove(partial_output, ec);
+        throw SliceCancelled();
+    }
+    g_progress_percent = 100;
+}
+
 // Shared by slice_file() and load_mesh_preview(): load a model file and place it exactly where
 // slicing will actually place it - real coordinates, not the mesh's own local origin. See
 // slice_file()'s own history for why centering matters (a real off-bed print abort on real
@@ -136,8 +181,10 @@ void slice_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, const
         throw std::runtime_error("Validation failed: " + validation_error.string);
     }
 
-    print.process();
-    print.export_gcode(output_gcode_path, nullptr, thumbnail_cb);
+    run_cancellable(print, output_gcode_path, [&] {
+        print.process();
+        print.export_gcode(output_gcode_path, nullptr, thumbnail_cb);
+    });
 }
 
 // The real Bambu-compatible .gcode.3mf bundle tail, shared by slice_bambu_bundle() (a fresh
@@ -164,11 +211,12 @@ void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, cons
         throw std::runtime_error("Validation failed: " + validation_error.string);
     }
 
-    print.process();
-
     std::string temp_gcode_path = output_bundle_path + ".gcode.tmp";
     GCodeProcessorResult gcode_result;
-    print.export_gcode(temp_gcode_path, &gcode_result, thumbnail_cb);
+    run_cancellable(print, temp_gcode_path, [&] {
+        print.process();
+        print.export_gcode(temp_gcode_path, &gcode_result, thumbnail_cb);
+    });
 
     PlateData plate_data;
     plate_data.plate_index = 0;
@@ -205,6 +253,16 @@ void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, cons
 }
 
 } // namespace
+
+void request_cancel() {
+    g_cancel_requested = true;
+    std::lock_guard<std::mutex> lock(g_active_mutex);
+    if (g_active_print != nullptr) g_active_print->cancel();
+}
+
+void reset_cancel() { g_cancel_requested = false; g_progress_percent = 0; }
+
+int slice_progress() { return g_progress_percent.load(); }
 
 void slice_file(const std::string& input_model_path,
                  const std::string& output_gcode_path,

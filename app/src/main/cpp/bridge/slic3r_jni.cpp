@@ -11,12 +11,9 @@
 // safe to call from a background thread, with no wxWidgets/GUI dependency
 // in the slicing path itself.
 //
-// Not yet implemented: progress reporting back to Java during a slice
-// (Print::process() takes no progress callback param; OrcaSlicer's GUI
-// gets progress via a separate status-update mechanism this bridge doesn't
-// wire up yet) and cancellation. Both are real follow-up work, not
-// stubbed-out here -- nativeSliceFile() is a complete, working slice call
-// as it stands, just a blocking one.
+// Cancellation and progress are polled, not called back: nativeCancelSlice() flips the running
+// Print's own cancel flag (the slice call then throws CancellationException), and
+// nativeSliceProgress() reads the engine's latest status percent.
 #include <jni.h>
 #include <string>
 #include <vector>
@@ -41,6 +38,15 @@ void throw_java_exception(JNIEnv* env, const std::string& message) {
     if (exClass != nullptr) {
         env->ThrowNew(exClass, message.c_str());
     }
+}
+
+void throw_java_exception(JNIEnv* env, const std::exception& ex) {
+    if (dynamic_cast<const engine::SliceCancelled*>(&ex) != nullptr) {
+        jclass cancelled = env->FindClass("java/util/concurrent/CancellationException");
+        if (cancelled != nullptr) env->ThrowNew(cancelled, ex.what());
+        return;
+    }
+    throw_java_exception(env, std::string(ex.what()));
 }
 
 jfloatArray to_jfloat_array(JNIEnv* env, const std::vector<float>& buffer) {
@@ -170,7 +176,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceFile(
 
         engine::slice_file(input_path, output_path, profile_paths, config_overrides, transform);
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
     } catch (...) {
         throw_java_exception(env, "Unknown native error during slicing");
     }
@@ -219,7 +225,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceBambuBundle(
 
         engine::slice_bambu_bundle(input_path, output_path, profile_paths, config_overrides, transform);
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
     } catch (...) {
         throw_java_exception(env, "Unknown native error during Bambu bundle export");
     }
@@ -276,7 +282,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObject(
 
         engine::slice_multi_object(objects, output_path, profile_paths, config_overrides);
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
     } catch (...) {
         throw_java_exception(env, "Unknown native error during multi-object slicing");
     }
@@ -326,7 +332,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObjectBambuBundle(
 
         engine::slice_multi_object_bambu_bundle(objects, output_path, profile_paths, config_overrides);
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
     } catch (...) {
         throw_java_exception(env, "Unknown native error during multi-object Bambu bundle export");
     }
@@ -351,7 +357,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeLoadMeshPreview(
         env->SetFloatArrayRegion(result, 0, static_cast<jsize>(buffer.size()), buffer.data());
         return result;
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
         return nullptr;
     } catch (...) {
         throw_java_exception(env, "Unknown native error while loading the mesh preview");
@@ -366,7 +372,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeCountModelObjects(
     try {
         return static_cast<jint>(engine::count_model_objects(jstring_to_string(env, jInputModelPath)));
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
         return 0;
     } catch (...) {
         throw_java_exception(env, "Unknown native error while counting model objects");
@@ -389,7 +395,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeOpenPaintSession(
         transform.scale = scale;
         return static_cast<jlong>(engine::open_paint_session(jstring_to_string(env, jInputModelPath), transform));
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
         return 0;
     } catch (...) {
         throw_java_exception(env, "Unknown native error while opening the paint session");
@@ -406,7 +412,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativePaintStroke(
     try {
         engine::paint_stroke(static_cast<engine::PaintSessionHandle>(handle), originX, originY, originZ, dirX, dirY, dirZ, radiusMm, enforcer == JNI_TRUE);
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
     } catch (...) {
         throw_java_exception(env, "Unknown native error during a paint stroke");
     }
@@ -417,7 +423,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeGetPaintedFacets(JNIEnv* env, jcla
     try {
         return to_jfloat_array(env, engine::get_painted_facets(static_cast<engine::PaintSessionHandle>(handle)));
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
         return nullptr;
     } catch (...) {
         throw_java_exception(env, "Unknown native error while reading painted facets");
@@ -438,7 +444,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSlicePaintSession(
         engine::slice_paint_session(static_cast<engine::PaintSessionHandle>(handle), jstring_to_string(env, jOutputGcodePath),
             to_string_vector(env, jProfilePaths), config_overrides);
     } catch (const std::exception& ex) {
-        throw_java_exception(env, ex.what());
+        throw_java_exception(env, ex);
     } catch (...) {
         throw_java_exception(env, "Unknown native error while slicing the paint session");
     }
@@ -448,3 +454,12 @@ extern "C" JNIEXPORT void JNICALL
 Java_org_orcaslicer_engine_NativeEngine_nativeClosePaintSession(JNIEnv*, jclass, jlong handle) {
     engine::close_paint_session(static_cast<engine::PaintSessionHandle>(handle));
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeCancelSlice(JNIEnv*, jclass) { engine::request_cancel(); }
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeResetCancel(JNIEnv*, jclass) { engine::reset_cancel(); }
+
+extern "C" JNIEXPORT jint JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSliceProgress(JNIEnv*, jclass) { return engine::slice_progress(); }

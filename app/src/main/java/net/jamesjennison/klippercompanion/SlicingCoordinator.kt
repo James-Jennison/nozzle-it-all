@@ -2,6 +2,7 @@ package net.jamesjennison.klippercompanion
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.orcaslicer.engine.NativeEngine
 import java.io.File
@@ -17,9 +18,15 @@ sealed class SliceOutcome {
     // not as an ordinary "slicing failed" error.
     data class FirmwareBlocked(val reason: String) : SliceOutcome()
     data class Failed(val message: String) : SliceOutcome()
+    data object Cancelled : SliceOutcome()
 }
 
 object SlicingCoordinator {
+    // The native engine runs one slice at a time (single cancel registration), so slices are serialized.
+    private val sliceLock = kotlinx.coroutines.sync.Mutex()
+    fun cancel() = NativeEngine.nativeCancelSlice()
+    /** Engine status percent 0-100 for the slice currently (or last) running. */
+    fun progress(): Int = NativeEngine.nativeSliceProgress()
     // Builds its own short-lived PrinterService for the live firmware check, the same ad hoc
     // pattern NozzlePrinterWidget and PrinterModel.detectFirmware already use, rather than
     // requiring the caller's own active connection - slicing should work from the share-intent
@@ -59,7 +66,7 @@ object SlicingCoordinator {
     // doc); callers pass null for a Bambu target in that case, which this doesn't itself enforce
     // (ModelViewer/SliceAndPrintPanel already keep Paint mode and target-printer independent, so
     // this is defense-in-depth, not the only guard).
-    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) {
+    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel()
         when (val resolved = resolveProfilePaths(context, profile)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
@@ -77,9 +84,10 @@ object SlicingCoordinator {
                     )
                 }
                 SliceOutcome.Success(output)
+            } catch (e: java.util.concurrent.CancellationException) { SliceOutcome.Cancelled
             } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
         }
-    }
+    } }
 
     // Phase 1 (Consumer Slicer Plan §16): the real multi-object counterpart to slice() above -
     // same firmware confirmation/profile-pack resolution (resolveProfilePaths, shared, not a
@@ -110,7 +118,7 @@ object SlicingCoordinator {
     // bundled filament.json base diameter, merged into `overrides`. Left empty (the default, and
     // every caller before this parameter existed), this is the same single-material slice every
     // project already produces - no multi-slot config is generated at all.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) {
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel()
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
@@ -161,9 +169,10 @@ object SlicingCoordinator {
                     )
                 }
                 SliceOutcome.Success(output)
+            } catch (e: java.util.concurrent.CancellationException) { SliceOutcome.Cancelled
             } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
         }
-    }
+    } }
 
     private fun freshOutputFile(context: Context, baseName: String, bambuBundle: Boolean = false): File {
         val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }

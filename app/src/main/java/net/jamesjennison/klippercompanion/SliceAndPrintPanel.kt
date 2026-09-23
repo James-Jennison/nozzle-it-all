@@ -18,6 +18,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -171,6 +172,7 @@ import java.io.File
             is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
             is SliceOutcome.FirmwareBlocked -> { working = false; error = outcome.reason }
             is SliceOutcome.Failed -> { working = false; error = outcome.message }
+            SliceOutcome.Cancelled -> { working = false; error = "Slicing cancelled." }
         }
     }
     // Phase 6 (Consumer Slicer Plan §16): for a Bambu Lab target, `sliced` is a real .gcode.3mf
@@ -287,7 +289,7 @@ import java.io.File
                 }
                 sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        if(working) { CircularProgressIndicator(); Text(stage) }
+                        if(working) { CircularProgressIndicator(); Text(stage); if(stage == "Slicing…") OutlinedButton({ SlicingCoordinator.cancel() }, modifier = Modifier.testTag("slice-cancel")) { Text("Cancel") } }
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     }
                 }

@@ -10,9 +10,16 @@ import org.json.JSONObject
 // services/moonraker.ts's spoolman* calls establish the exact Moonraker endpoints used below.
 // Helix's own spoolman.tsx additionally supports creating/editing spools, filaments and vendors,
 // a community filament catalog and an NFC/QR spool-label scanner; none of that is built here.
+// tempNozzleC/tempBedC: real Spoolman Filament fields (settings_extruder_temp/settings_bed_temp,
+// both `int | None` in Spoolman's own schema - https://github.com/Donkie/Spoolman,
+// spoolman/api/v1/models.py's Filament class), "Overridden extruder/bed temperature, in °C." Not
+// every filament in a real Spoolman install has these set (a spool without them stays null here,
+// not defaulted to something invented) - see Materials.kt for how a null temp is handled at
+// slice time.
 data class SpoolmanSpool(
     val id: Int, val remainingWeight: Double?, val totalWeight: Double?, val archived: Boolean,
     val filamentName: String?, val material: String?, val colorHex: String?, val vendorName: String?,
+    val tempNozzleC: Int? = null, val tempBedC: Int? = null,
 )
 data class SpoolmanInventory(val available: Boolean, val activeSpoolId: Int?, val spools: List<SpoolmanSpool>)
 interface SpoolmanReader : AutoCloseable {
@@ -29,9 +36,11 @@ object Spoolman {
             val vendor = filament?.optJSONObject("vendor")
             fun finite(obj: JSONObject?, field: String) = obj?.optDouble(field)?.takeIf { it.isFinite() }
             fun text(obj: JSONObject?, field: String) = obj?.optString(field)?.takeIf { it.isNotBlank() }
+            fun intOrNull(obj: JSONObject?, field: String) = if (obj?.has(field) == true && !obj.isNull(field)) obj.optInt(field) else null
             SpoolmanSpool(spool.optInt("id"), finite(spool, "remaining_weight"), finite(filament, "weight"),
                 spool.optBoolean("archived"), text(filament, "name"), text(filament, "material"),
-                text(filament, "color_hex"), text(vendor, "name"))
+                text(filament, "color_hex"), text(vendor, "name"),
+                intOrNull(filament, "settings_extruder_temp"), intOrNull(filament, "settings_bed_temp"))
         }
     }
 }

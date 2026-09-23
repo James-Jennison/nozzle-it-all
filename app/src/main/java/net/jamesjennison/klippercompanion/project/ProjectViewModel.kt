@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import net.jamesjennison.klippercompanion.MaterialProfile
 import net.jamesjennison.klippercompanion.ModelTransform
 import net.jamesjennison.klippercompanion.sliceableModelName
 import java.util.UUID
@@ -50,7 +51,11 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         val extension = validName.substringAfterLast('.')
         val objectId = UUID.randomUUID().toString()
         val localFile = ProjectFileStore.importObject(context, current.id, objectId, source, extension)
-        val added = ProjectObject(id = objectId, projectId = current.id, sourceFileUri = Uri.fromFile(localFile).toString())
+        // Phase 3 (§11): a newly added object picks up whatever material the project's existing
+        // objects already share - "single-material-per-project" (this phase's own scope) means a
+        // material picked before this add still applies, not just objects added before it.
+        val projectMaterial = _objects.value.firstOrNull()?.material()
+        val added = ProjectObject(id = objectId, projectId = current.id, sourceFileUri = Uri.fromFile(localFile).toString()).withMaterial(projectMaterial)
         dao.upsertObjects(listOf(added))
         _objects.value = _objects.value + added
         touch()
@@ -86,6 +91,23 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
         touch()
     }
+
+    // Phase 3 (§11): applies one material to every object on the plate at once -
+    // "single-material-per-project" is a real UI-level invariant this is the only place that
+    // enforces, not a separate project-level column (ProjectObject.materialId/etc were already
+    // planned ahead in the Phase 0 schema; this keeps that the one source of truth rather than
+    // adding a second, possibly-diverging place the "current" material could live).
+    suspend fun setProjectMaterial(material: MaterialProfile?) {
+        val updated = _objects.value.map { it.withMaterial(material) }
+        if (updated.isNotEmpty()) dao.upsertObjects(updated)
+        _objects.value = updated
+        touch()
+    }
+
+    // The project's current material, derived from its objects (all objects are kept in sync by
+    // setProjectMaterial above, so the first one's value is authoritative) - null for an empty
+    // project or one where no material has been picked yet.
+    fun currentMaterial(): MaterialProfile? = _objects.value.firstOrNull()?.material()
 
     suspend fun renameProject(name: String) {
         val current = _project.value ?: return

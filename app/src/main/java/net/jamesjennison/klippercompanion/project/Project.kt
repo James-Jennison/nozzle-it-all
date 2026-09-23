@@ -4,6 +4,8 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import net.jamesjennison.klippercompanion.MaterialProfile
+import net.jamesjennison.klippercompanion.MaterialSource
 import net.jamesjennison.klippercompanion.ModelTransform
 
 // Phase 0 (Consumer Slicer Plan §9, §16): real persistence infrastructure, built now because
@@ -51,6 +53,14 @@ data class ProjectObject(
     val rotationZDeg: Float = 0f,
     val scale: Float = 1f,
     val materialId: String? = null,
+    // Phase 3 (§11, WO-19): a denormalized snapshot of the chosen MaterialProfile's own real
+    // values, written alongside materialId - not re-resolved from Spoolman at slice time, since a
+    // spool a project was set up against days ago might be renamed, edited or unreachable by the
+    // time it's actually sliced. materialId still identifies *which* profile was picked (so the
+    // UI can show it selected again); these three columns are what slicing actually reads.
+    val materialDisplayName: String? = null,
+    val materialTempNozzleC: Int? = null,
+    val materialTempBedC: Int? = null,
 )
 
 // Room maps an entity's declared columns only, so the ModelTransform round-trip lives here as
@@ -63,4 +73,22 @@ fun ProjectObject.withTransform(transform: ModelTransform): ProjectObject = copy
     offsetYMm = transform.offsetYMm,
     rotationZDeg = transform.rotationZDeg,
     scale = transform.scale,
+)
+
+// Phase 3 (§11): reconstructs the denormalized MaterialProfile snapshot, if one was ever set -
+// `source` is always CUSTOM here since this is a stored snapshot, not a live Bundled/Spoolman
+// lookup (a caller that needs to know the *original* source can match materialId's own prefix,
+// e.g. "spoolman-"/"bundled-", the same convention toMaterialProfile()/BUNDLED_MATERIAL_PROFILES
+// already use for their ids).
+fun ProjectObject.material(): MaterialProfile? {
+    val id = materialId ?: return null
+    return MaterialProfile(
+        id = id, displayName = materialDisplayName ?: id, type = materialDisplayName ?: id,
+        tempNozzleC = materialTempNozzleC, tempBedC = materialTempBedC, source = MaterialSource.CUSTOM,
+    )
+}
+
+fun ProjectObject.withMaterial(material: MaterialProfile?): ProjectObject = copy(
+    materialId = material?.id, materialDisplayName = material?.displayName,
+    materialTempNozzleC = material?.tempNozzleC, materialTempBedC = material?.tempBedC,
 )

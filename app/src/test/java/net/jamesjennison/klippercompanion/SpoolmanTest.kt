@@ -20,10 +20,21 @@ class SpoolmanTest {
         assertEquals("PLA Basic", spool.filamentName); assertEquals("Bambu Lab", spool.vendorName)
         assertEquals("Bambu Lab PLA Basic", Spoolman.displayName(spool))
     }
+    // Phase 3 (Consumer Slicer Plan §11): real Spoolman Filament fields, confirmed against the
+    // actual upstream schema (spoolman/api/v1/models.py's Filament class, Donkie/Spoolman) -
+    // settings_extruder_temp/settings_bed_temp, both `int | None`.
+    @Test fun parsesRealFilamentTemperatureOverrides() {
+        val array = JSONArray("""[{"id":2,"filament":{"material":"PETG",
+            "settings_extruder_temp":240,"settings_bed_temp":80}}]""")
+        val spool = Spoolman.parseSpools(array).first()
+        assertEquals(240, spool.tempNozzleC)
+        assertEquals(80, spool.tempBedC)
+    }
     @Test fun missingFieldsFallBackHonestly() {
         val array = JSONArray("""[{"id":7}]""")
         val spool = Spoolman.parseSpools(array).first()
         assertNull(spool.filamentName); assertNull(spool.vendorName); assertNull(spool.remainingWeight)
+        assertNull(spool.tempNozzleC); assertNull(spool.tempBedC)
         assertEquals("Spool #7", Spoolman.displayName(spool))
     }
     @Test fun nonArrayOrOversizedResponseIsHandledSafely() {

@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import net.jamesjennison.klippercompanion.MaterialProfile
+import net.jamesjennison.klippercompanion.MaterialSource
 import net.jamesjennison.klippercompanion.ModelTransform
 import org.junit.After
 import org.junit.Assert.*
@@ -98,6 +100,45 @@ class ProjectViewModelDeviceTest {
 
         val vm2 = freshViewModel()
         assertFalse("expected the project to be gone from Room too", vm2.loadProject(project.id))
+    }
+
+    // Phase 3 (Consumer Slicer Plan §11, WO-19): proves setProjectMaterial's real Room
+    // round-trip (materialDisplayName/materialTempNozzleC/materialTempBedC, added in the
+    // MIGRATION_1_2 columns) survives a database reopen - the same "not just in-memory" bar
+    // every other real round-trip test in this class already holds itself to - and that a
+    // material picked before an object is even added still applies to that object once it is.
+    @Test fun projectMaterialAppliesToExistingAndNewObjectsAndSurvivesAReopen() = runBlocking {
+        val vm1 = freshViewModel()
+        val project = vm1.newProject("Material Test")
+        val objectA = vm1.addObject(cubeUri())
+        assertNull("no material picked yet", objectA.material())
+
+        val petg = MaterialProfile("spoolman-99", "Bambu Lab PETG Basic", "PETG", "Bambu Lab", "FF7043", tempNozzleC = 240, tempBedC = 80, source = MaterialSource.SPOOLMAN)
+        vm1.setProjectMaterial(petg)
+        assertEquals(petg.id, vm1.objects.value.single().material()?.id)
+        assertEquals(240, vm1.objects.value.single().material()?.tempNozzleC)
+
+        // A second object added after the material was picked must pick it up too - Phase 3's
+        // own "single-material-per-project" scope, not "material applies only to objects that
+        // existed at pick time."
+        val objectB = vm1.addObject(cubeUri())
+        assertEquals(petg.id, objectB.material()?.id)
+        assertEquals(80, objectB.material()?.tempBedC)
+
+        val vm2 = freshViewModel()
+        assertTrue(vm2.loadProject(project.id))
+        val reloadedMaterials = vm2.objects.value.map { it.material() }
+        assertEquals(2, reloadedMaterials.size)
+        reloadedMaterials.forEach { material ->
+            assertNotNull("expected the material snapshot to survive the reopen", material)
+            assertEquals("Bambu Lab PETG Basic", material!!.displayName)
+            assertEquals(240, material.tempNozzleC); assertEquals(80, material.tempBedC)
+        }
+        assertEquals(petg.id, vm2.currentMaterial()?.id)
+
+        // Clearing it back to null must also apply to every object, not leave a stale snapshot.
+        vm2.setProjectMaterial(null)
+        assertTrue(vm2.objects.value.all { it.material() == null })
     }
 
     @Test fun rejectsAnUnsupportedFileType() = runBlocking {

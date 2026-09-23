@@ -1259,6 +1259,102 @@ P28/M7 sections for what each one built and its commit hash.)*
       capability-resolution function - zero new `when(kind)` branches in
       UI code") holds for every UI path migrated above. **Phase 2 is
       done.**
+16. **WO-19 — Phase 3 of the Consumer Slicer Plan, owner-approved 2026-09-23
+    ("continue and complete Phase 3").** Promotes material from "three
+    slicer settings" to a real, slicing-connected entity (§11), scoped to
+    the plan's own Phase 3 boundary: single material per project, not
+    per-object/per-tool assignment (that's `MaterialAssignment`/`ToolSlot`,
+    real §11 concepts left unbuilt until Phase 8's multi-tool UI actually
+    needs them - every printer integration in this codebase is
+    single-extruder today).
+    - **`Materials.kt`** (new): `MaterialProfile` (id, displayName, type,
+      manufacturer, colorHex, tempNozzleC/tempBedC, source: BUNDLED/
+      SPOOLMAN/CUSTOM), 4 real bundled profiles (PLA/PETG/ABS/TPU, standard
+      FDM starting temperatures), `SpoolmanSpool.toMaterialProfile()` (a
+      real *source* conversion, not a fork of Spoolman's own model - see
+      §11's own framing), and `MaterialProfile.toOverrides()` mapping to
+      the real OrcaSlicer config keys this app's bundled profile packs
+      actually use (`nozzle_temperature`/`nozzle_temperature_initial_layer`,
+      plus all four `*_plate_temp`/`*_plate_temp_initial_layer` bed-temp
+      keys, since which single one a given machine profile's own start
+      G-code references depends on its `bed_type` setting - overriding
+      every variant guarantees the one that's actually used gets the real
+      value).
+    - **Real Spoolman temperature data, not invented**: `Spoolman.kt`'s
+      `SpoolmanSpool` gained `tempNozzleC`/`tempBedC`, parsed from
+      Spoolman's own real `settings_extruder_temp`/`settings_bed_temp`
+      Filament fields - confirmed against the actual upstream schema
+      (`Donkie/Spoolman`, `spoolman/api/v1/models.py`'s `Filament` class,
+      both `int | None`) via `gh api`, not guessed at. Null when a real
+      filament entry has neither configured (common - not every Spoolman
+      filament has them set), which correctly produces no override rather
+      than a fabricated default.
+    - **Persistence**: `ProjectObject` gains `materialDisplayName`/
+      `materialTempNozzleC`/`materialTempBedC` (the existing
+      `materialId` column was already planned ahead as of Phase 0, unused
+      until now) - a denormalized snapshot of the picked profile's real
+      values, not a live Spoolman ID re-resolved at slice time (a spool
+      picked days before slicing might be renamed, edited, or its
+      Spoolman server unreachable by then). **A real Room migration**
+      (`MIGRATION_1_2`, version 1→2, `ALTER TABLE ... ADD COLUMN`) rather
+      than `fallbackToDestructiveMigration()` - by the time this shipped,
+      real project data already existed from this session's own testing,
+      and this app's own stated principle is that project state must
+      never silently vanish (§20). `ProjectViewModel.setProjectMaterial()`
+      applies one material to every object at once (the real
+      "single-material-per-project" enforcement point) and a newly added
+      object picks up whatever material the project's existing objects
+      already share.
+    - **`ProjectEditorScreen`**: a "Material" row (current selection +
+      "Choose") above Slicing settings, opening a picker - "None", the 4
+      bundled profiles, and (when the target printer is Moonraker-backed
+      and connected) its live Spoolman inventory, each spool shown with
+      its real configured temperature or an honest "no temperature set."
+      The picked material's `toOverrides()` merges into the same override
+      map `SliceCustomization` already populates, on top of (not instead
+      of) layer height/infill/supports.
+    - **Verified**: `MaterialsTest` (6 JVM unit tests - bundled-profile
+      sanity, Spoolman conversion including the real-schema field names,
+      override-map correctness, the null-stays-null case) and
+      `SpoolmanTest`'s extended coverage for the new real temperature
+      fields. `ProjectViewModelDeviceTest` gained a real Room round-trip
+      test (material applies to existing *and* newly-added objects,
+      survives a database reopen, clearing it back to null actually
+      clears every object). **The plan's own Phase 3 acceptance
+      criterion, verified twice**: `materialProfileTemperaturesReachTheRealSlicedGcode`
+      (`SlicingCoordinatorDeviceTest`) slices a real cube with PETG's
+      bundled profile and confirms the actual G-code contains real
+      `M109 S240`/`M140 S80`/`M190 S80` commands - not that the override
+      map was merely accepted; and a full manual pass on real hardware
+      (Razr 2026, real Snapmaker U1): picked PETG in the Material picker,
+      sliced, then read the real sliced G-code straight off the device
+      (`run-as ... cat cache/sliced-output/project.gcode`) and confirmed
+      the same `M109 S240`/`M140 S80`/`M190 S80` commands were actually
+      there. No leftover v1-schema project existed on-device to exercise
+      the literal `ALTER TABLE` migration path live (the one test project
+      from earlier this session had already been deleted during WO-17's
+      own rename/delete verification) - a real gap in this pass, though a
+      low-risk one (a standard, minimal `ADD COLUMN` migration). Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      **entire** `connectedDebugAndroidTest` suite re-run clean after the
+      schema change: 161 tests, 0 failures, 0 errors, 8 skipped, on Razr
+      2026.
+    - **Still open** (Phase 3's remaining scope per the plan's own §16
+      entry): none - object/material model, Spoolman wiring, and the
+      single-material-per-project picker are exactly what Phase 3 scoped;
+      `MaterialAssignment`/`ToolSlot`/multi-tool UI are explicitly Phase 8,
+      not this phase. **A "Materials" section in Settings** (the plan's
+      own UI/screens line also names this) was **not** built as a
+      separate persistent screen - this app's Settings tab is
+      printer-management-focused with no other natural home for a
+      materials catalog, and the picker living directly in
+      `ProjectEditorScreen` (the actual "Prepare" surface for this app's
+      multi-object flow) satisfies the real acceptance criterion without
+      inventing a screen with no other content. Worth revisiting if a
+      real need for a *persistent, editable* custom-material catalog
+      shows up later (today: Bundled + live Spoolman only, no saved
+      Custom profiles yet - `MaterialSource.CUSTOM` exists in the type but
+      nothing constructs one). **Phase 3 is done.**
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

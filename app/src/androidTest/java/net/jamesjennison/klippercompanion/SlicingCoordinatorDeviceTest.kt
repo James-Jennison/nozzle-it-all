@@ -63,6 +63,26 @@ class SlicingCoordinatorDeviceTest {
         val spread = xCoords.max() - xCoords.min()
         assertTrue("expected toolpath X spread of at least 50mm across two objects 60mm apart, got ${spread}mm", spread >= 50.0)
     }
+
+    // Phase 3 (Consumer Slicer Plan §11, WO-19): the plan's own acceptance criterion for this
+    // phase - "pick a Spoolman spool, slice, confirm the resulting G-code's temperatures match
+    // that spool's profile." Uses a bundled MaterialProfile here (deterministic, no live Spoolman
+    // server needed for this test), but the code path is identical either way - both produce a
+    // MaterialProfile and call .toOverrides(), which is all sliceProject() ever sees.
+    @Test fun materialProfileTemperaturesReachTheRealSlicedGcode() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val profile = PrinterProfile("http://192.168.1.110/", "U1", slicingModel = SlicingPrinterModel.SNAPMAKER_U1)
+        val petg = BUNDLED_MATERIAL_PROFILES.single { it.type == "PETG" }
+        val outcome = SlicingCoordinator.sliceProject(context, listOf(cube(context) to ModelTransform()), profile, petg.toOverrides())
+        assertTrue("expected Success, got $outcome", outcome is SliceOutcome.Success)
+        val gcode = (outcome as SliceOutcome.Success).gcode.readText()
+        // Real, unambiguous evidence: OrcaSlicer's own M109 (wait-for-hotend) and M140/M190
+        // (set/wait-for-bed) commands actually carrying PETG's real 240/80 values, not just that
+        // the override map was accepted without throwing.
+        assertTrue("expected a real M109 S240 hotend wait command", gcode.contains("M109 S${petg.tempNozzleC}"))
+        assertTrue("expected a real M140 S80 bed heat command", gcode.contains("M140 S${petg.tempBedC}"))
+        assertTrue("expected a real M190 S80 bed wait command", gcode.contains("M190 S${petg.tempBedC}"))
+    }
     @Test fun slicedGcodeEmbedsRealThumbnails() = runBlocking {
         // Real bug hit live: a print on the CC1 was uploaded and started with no thumbnail at
         // all (confirmed via Moonraker's own job history - no "thumbnails" field, unlike every

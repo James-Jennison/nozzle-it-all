@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -37,6 +38,7 @@ import kotlinx.coroutines.withContext
 import net.jamesjennison.klippercompanion.project.AppDatabase
 import net.jamesjennison.klippercompanion.project.ProjectObject
 import net.jamesjennison.klippercompanion.project.ProjectViewModel
+import net.jamesjennison.klippercompanion.project.material
 import net.jamesjennison.klippercompanion.project.transform
 import java.io.File
 
@@ -131,6 +133,25 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var toolpathError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var gcodeStats by remember(projectId, newProjectName) { mutableStateOf<GcodeStats?>(null) }
     var stagedFilename by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    // Phase 3 (§11): the project's single, shared material (ProjectViewModel.setProjectMaterial
+    // keeps every object's own denormalized snapshot in sync) - derived from `objects` itself,
+    // not separate state, so it's always exactly what would actually get sliced.
+    val currentMaterial = objects.firstOrNull()?.material()
+    var materialPickerOpen by remember(projectId, newProjectName) { mutableStateOf(false) }
+    var spoolmanSpools by remember(projectId, newProjectName) { mutableStateOf<List<SpoolmanSpool>?>(null) }
+    var spoolmanError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    LaunchedEffect(materialPickerOpen, state.address, state.connected) {
+        if (!materialPickerOpen) return@LaunchedEffect
+        val target = profile ?: return@LaunchedEffect
+        if (capabilitiesFor(target.kind).transport != PrinterTransport.MOONRAKER) { spoolmanError = null; spoolmanSpools = emptyList(); return@LaunchedEffect }
+        if (!state.connected) { spoolmanError = "Connect to ${target.label} to read its Spoolman inventory."; spoolmanSpools = emptyList(); return@LaunchedEffect }
+        spoolmanError = null
+        try {
+            val inventory = withContext(Dispatchers.IO) { state.moonrakerFor(target.address).use { it.spoolmanInventory() } }
+            spoolmanSpools = if (inventory.available) inventory.spools.filterNot { it.archived } else emptyList()
+            if (!inventory.available) spoolmanError = "Spoolman not found for ${target.label}."
+        } catch (e: Exception) { spoolmanSpools = emptyList(); spoolmanError = e.message ?: "Could not read Spoolman inventory." }
+    }
 
     fun startSlicing() {
         val layerHeight = validateLayerHeight(layerHeightText)
@@ -147,7 +168,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             val objectsToSlice = objects.mapNotNull { obj ->
                 Uri.parse(obj.sourceFileUri).path?.let { File(it) to obj.transform() }
             }
-            when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, customization.toOverrides())) {
+            // Phase 3 (§11): the project's material (if one was picked) overrides the same real
+            // nozzle_temperature/bed-plate-temperature config keys SliceCustomization already
+            // uses this mechanism for - applied on top of, not instead of, layer height/infill/
+            // supports, so picking a material never silently resets the rest of these settings.
+            val overrides = customization.toOverrides() + (vm.currentMaterial()?.toOverrides() ?: emptyMap())
+            when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides)) {
                 is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
                 is SliceOutcome.Failed -> { working = false; sliceError = outcome.message }
@@ -262,6 +288,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     if (objects.isEmpty()) Text("No objects yet - add an STL, 3MF or OBJ model to start this project's build plate.", style = MaterialTheme.typography.bodySmall)
                     objects.forEach { obj -> ProjectObjectRow(obj, selected = obj.id == selectedId, onClick = { selectedId = obj.id }) }
 
+                    Text("Material", style = MaterialTheme.typography.titleSmall)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(currentMaterial?.displayName ?: "None selected - using the printer's default profile", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).testTag("project-material-current"))
+                        OutlinedButton({ materialPickerOpen = true }, enabled = objects.isNotEmpty(), modifier = Modifier.testTag("project-choose-material")) { Text("Choose") }
+                    }
+
                     Text("Slicing settings", style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(layerHeightText, { layerHeightText = it }, label = { Text("Layer height (mm)") }, singleLine = true, modifier = Modifier.testTag("project-layer-height"))
                     OutlinedTextField(infillText, { infillText = it }, label = { Text("Infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))
@@ -332,6 +364,33 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 }
             }
         }
+    }
+    if (materialPickerOpen) {
+        AlertDialog(
+            onDismissRequest = { materialPickerOpen = false }, title = { Text("Choose a material") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton({ scope.launch { vm.setProjectMaterial(null) }; materialPickerOpen = false }, modifier = Modifier.testTag("material-none")) { Text("None - use the printer's default profile") }
+                    Text("Bundled", style = MaterialTheme.typography.labelMedium)
+                    BUNDLED_MATERIAL_PROFILES.forEach { m ->
+                        TextButton({ scope.launch { vm.setProjectMaterial(m) }; materialPickerOpen = false }, modifier = Modifier.testTag("material-${m.id}")) {
+                            Text("${m.displayName} · ${m.tempNozzleC}°C / ${m.tempBedC}°C bed")
+                        }
+                    }
+                    Text("From Spoolman", style = MaterialTheme.typography.labelMedium)
+                    spoolmanError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    val spools = spoolmanSpools
+                    if (spools != null && spools.isEmpty() && spoolmanError == null) Text("No spools found.", style = MaterialTheme.typography.bodySmall)
+                    spools?.forEach { spool ->
+                        val m = spool.toMaterialProfile()
+                        TextButton({ scope.launch { vm.setProjectMaterial(m) }; materialPickerOpen = false }, modifier = Modifier.testTag("material-${m.id}")) {
+                            Text(m.displayName + (m.tempNozzleC?.let { " · ${it}°C" } ?: " · no temperature set"))
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton({ materialPickerOpen = false }) { Text("Close") } },
+        )
     }
 }
 

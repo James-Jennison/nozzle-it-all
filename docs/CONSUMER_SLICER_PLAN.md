@@ -334,8 +334,8 @@ arrange and slicing from that screen are still open).
 | Printer discovery (LAN/QR) | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |
 | Jog / manual move | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |
 | Bed-leveling trigger | **Missing (read-only viz)** | yes | yes | yes | yes | yes | yes | **P1** |
-| Material profile model | **Missing** | yes | yes | yes | yes | yes | yes | **P0** |
-| Spoolman → slicing integration | **Backend-only (disconnected)** | n/a | n/a | n/a | n/a | n/a | n/a | **P0 (wire it in)** |
+| Material profile model | **Complete (WO-19: `MaterialProfile`, single-material-per-project - Phase 3 closed 2026-09-23)** | yes | yes | yes | yes | yes | yes | **P0** |
+| Spoolman → slicing integration | **Complete (WO-19: real spool temperatures flow into slice overrides, confirmed in real sliced G-code)** | n/a | n/a | n/a | n/a | n/a | n/a | **P0 (wire it in)** |
 | Multicolor/multi-tool mapping | **Missing** | yes | yes (AMS) | yes | yes | limited | yes (U1) | **P1/P2** |
 | Toolchange/purge visualization | **Missing** | yes | yes | limited | limited | no | yes | **P2** |
 | Live printer dashboard | **Partial** | yes | yes | yes | yes | yes | yes | **P0 (extend: multi-printer)** |

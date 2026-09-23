@@ -96,15 +96,21 @@ object SlicingCoordinator {
     // multi-object case (ProjectEditorScreen.kt).
     // toolSlotIndices (Phase 8 follow-up, §11, WO-25/WO-26): parallel to `objects` (index i is
     // that object's own real, 1-based filament/tool assignment - see ToolSlots.kt and
-    // NativeEngine.nativeSliceMultiObject's own doc comment for the real 1-based convention and
-    // why a nonzero value alone isn't sufficient without a real N-slot filament config in
-    // `overrides` too), applied only on the plain-gcode Moonraker path today
-    // (nativeSliceMultiObject) - the Bambu bundle path doesn't take per-object tool assignment
-    // yet (every bundled Bambu profile is single-extruder today, so there is nothing real to
-    // assign there - see WORK_ORDER.md's own note on this). Defaults to empty, meaning "every
-    // object keeps the printer's default extruder" - unchanged behavior for every caller that
-    // predates this parameter.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) {
+    // NativeEngine.nativeSliceMultiObject's own doc comment for the real 1-based convention),
+    // applied only on the plain-gcode Moonraker path today (nativeSliceMultiObject) - the Bambu
+    // bundle path doesn't take per-object tool assignment yet (every bundled Bambu profile is
+    // single-extruder today, so there is nothing real to assign there - see WORK_ORDER.md's own
+    // note on this). Defaults to empty, meaning "every object keeps the printer's default
+    // extruder" - unchanged behavior for every caller that predates this parameter.
+    // slotMaterials (Phase 8 follow-up, §11, §16, WO-27): index i is real tool slot (i+1)'s own
+    // assigned MaterialProfile (null = unassigned, falls back to `overrides`' own material - see
+    // below). When non-empty, this builds the real multi-slot filament config
+    // (MultiToolFilamentConfig.overridesFor - the general form of the exact recipe
+    // ToolAssignmentSlicingDeviceTest proved end to end in WO-26) from the target's own real
+    // bundled filament.json base diameter, merged into `overrides`. Left empty (the default, and
+    // every caller before this parameter existed), this is the same single-material slice every
+    // project already produces - no multi-slot config is generated at all.
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
@@ -123,6 +129,27 @@ object SlicingCoordinator {
                     )
                 } else {
                     val slots = toolSlotIndices.ifEmpty { List(objects.size) { 0 } }
+                    val effectiveOverrides = if (slotMaterials.isEmpty()) overrides else {
+                        // resolved.profilePaths is materialized in SlicingProfilePack.materialize()'s
+                        // own fixed order (machine, process, filament) - index 0/2 are the real
+                        // machine/filament files this exact slice is about to load.
+                        val realToolCount = parseToolCount(File(resolved.profilePaths[0]).readText())
+                        // A real config inconsistency, not a cosmetic one: filament_diameter's own
+                        // array length must match the target's real declared extruder count
+                        // (ToolSlots.kt's own parseToolCount) or libslic3r's Print::validate()
+                        // rejects the slice outright ("Flush volumes matrix do not match to the
+                        // correct size!" - hit live building this feature, not assumed). Caught
+                        // here with an actionable message instead of surfacing that raw engine
+                        // error to a caller who passed the wrong number of slots.
+                        require(slotMaterials.size == realToolCount) {
+                            "slotMaterials must have exactly $realToolCount entries for this printer (one per its real declared tool slot), got ${slotMaterials.size}."
+                        }
+                        val baseFilamentJson = File(resolved.profilePaths[2]).readText()
+                        val baseDiameter = parseBaseFilamentDiameter(baseFilamentJson)
+                        val fallback = slotMaterials.filterNotNull().firstOrNull()
+                            ?: BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+                        overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback)
+                    }
                     NativeEngine.nativeSliceMultiObject(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
@@ -130,7 +157,7 @@ object SlicingCoordinator {
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
                         slots.toIntArray(),
-                        output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), effectiveOverrides.keys.toTypedArray(), effectiveOverrides.values.toTypedArray(),
                     )
                 }
                 SliceOutcome.Success(output)

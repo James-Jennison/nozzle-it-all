@@ -45,4 +45,25 @@ class ToolSlotsTest {
         assertEquals((0..3).toList(), slots.map { it.index })
         assertTrue(slots.all { it.capability == ToolCapability.INDEPENDENT_TOOL })
     }
+
+    // Phase 8 follow-up (WO-27): real base filament_diameter, parsed from every bundled
+    // filament.json this app actually ships - same discipline as everyToolCountTest above.
+    @Test fun everyBundledFilamentJsonReportsARealBaseFilamentDiameter() {
+        val root = File("src/main/assets/slicer_profiles")
+        val filamentFiles = root.listFiles()?.mapNotNull { dir -> File(dir, "filament.json").takeIf { it.exists() } }.orEmpty()
+        assertTrue("expected to find bundled filament.json files to test against", filamentFiles.isNotEmpty())
+        for (file in filamentFiles) {
+            val diameter = parseBaseFilamentDiameter(file.readText())
+            assertTrue("${file.parentFile?.name}: expected a real, plausible filament diameter", diameter in 1.0..5.0)
+        }
+    }
+    @Test fun snapmakerU1RealFilamentJsonReports175mm() {
+        val diameter = parseBaseFilamentDiameter(File("src/main/assets/slicer_profiles/snapmaker_u1/filament.json").readText())
+        assertEquals(1.75, diameter, 0.001)
+    }
+    @Test fun missingOrMalformedFilamentDiameterFallsBackTo175() {
+        assertEquals(1.75, parseBaseFilamentDiameter("""{}"""), 0.001)
+        assertEquals(1.75, parseBaseFilamentDiameter("""{"filament_diameter": []}"""), 0.001)
+        assertEquals(1.75, parseBaseFilamentDiameter("""{"filament_diameter": ["not-a-number"]}"""), 0.001)
+    }
 }

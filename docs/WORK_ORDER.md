@@ -1952,6 +1952,72 @@ P28/M7 sections for what each one built and its commit hash.)*
       profile, and no real Snapmaker U1/Prusa XL/Bambu AMS hardware to
       verify any of this against a physical printer - all unchanged
       from WO-25's own list.
+24. **WO-27 — Phase 8, same session continuation ("continue") following
+    WO-26.** Generalizes WO-26's hardcoded 4-slot recipe into real
+    production code driven by an arbitrary `MaterialAssignment` list,
+    correcting WO-26's own "not built" note along the way: replicating
+    *every* `filament_*` array key turned out not to be necessary -
+    confirmed by reading `Config.hpp` directly, `ConfigOptionVector::
+    get_at(i)` clamps to index 0 (`values.front()`) whenever `i` is past
+    the array's real length, rather than reading out of bounds, so any
+    key this code doesn't explicitly override safely and correctly
+    falls back to slot 1's own bundled value for every other slot - only
+    `filament_diameter` (the structural, extruder-count-determining key)
+    and the real identity keys (colour/type/temperature) need it.
+    - **`MultiToolFilamentConfig.overridesFor`** (new): the real,
+      general form of WO-26's proven recipe - takes a real base filament
+      diameter and a `List<MaterialProfile?>` (index i = real tool slot
+      i+1, null = unassigned, falls back to a real fallback material) and
+      builds the same five override keys WO-26 verified end to end. A
+      material with no declared `tempNozzleC` (a real, valid case - see
+      `MaterialProfile`'s own header comment) falls back to the fallback
+      material's own temperature, then a safe PLA-family default, never
+      a zero/invalid value.
+    - **`ToolSlots.kt` gains `parseBaseFilamentDiameter`**: the bundled
+      `filament.json`'s own real `filament_diameter` value (not a
+      hardcoded "1.75" assumption), the base value
+      `MultiToolFilamentConfig` replicates into the real N-entry
+      override.
+    - **`SlicingCoordinator.sliceProject` wired end to end**: a new
+      `slotMaterials` parameter (empty by default - unchanged behavior
+      for every existing caller) builds the real multi-slot filament
+      config from `resolved.profilePaths`' own already-materialized
+      filament file (no second profile-pack lookup) and merges it into
+      the slice's overrides. **Real bug caught building this, not
+      guessed**: `slotMaterials` must have exactly one entry per the
+      target's own real declared tool count (`ToolSlots.kt`'s
+      `parseToolCount`) - an early test passing only 2 entries for a
+      4-extruder Snapmaker U1 target hit a genuine libslic3r validation
+      failure ("Flush volumes matrix do not match to the correct
+      size!"), a real config inconsistency between the filament array's
+      length and the machine's own declared extruder count. Fixed with
+      an explicit, actionable `require()` check in `sliceProject` itself
+      rather than letting that raw engine error surface to a caller who
+      passed the wrong slot count.
+    - **Verified**: `MultiToolFilamentConfigTest` (6 unit tests - the
+      real override map built from real materials, null-slot/no-color/
+      no-temperature fallback behavior, whole-number diameter
+      formatting) and new `ToolSlotsTest` cases for
+      `parseBaseFilamentDiameter` (every bundled `filament.json`, the
+      real Snapmaker U1 1.75mm value, safe fallback on missing/malformed
+      data). `SlicingCoordinatorDeviceTest` gained a real end-to-end
+      proof (`sliceProjectWithRealSlotMaterialsProducesARealToolChange`)
+      that `sliceProject`'s own `slotMaterials` parameter - not a
+      hand-built override map - produces a genuine `T1` tool-change
+      against the real bundled Snapmaker U1 profile. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      **entire** device-test suite re-run clean on Razr 2026
+      (`ZP22235MHM`) only, same discipline as every prior WO this
+      session.
+    - **Not built this entry, real and explicit**: still no per-object
+      assignment UI (`ProjectEditorScreen` doesn't yet let an owner pick
+      a material *and* a tool slot per object - it still only offers the
+      single project-wide material picker WO-19 built); no purge/flush
+      estimation; no toolchange visualization; no Prusa XL bundled
+      profile; no real Snapmaker U1/Prusa XL/Bambu AMS hardware to
+      verify any of this against a physical printer - all unchanged from
+      WO-25/WO-26's own lists. The real slicing mechanism is now fully
+      proven and production-ready; what remains is exposing it in the UI.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

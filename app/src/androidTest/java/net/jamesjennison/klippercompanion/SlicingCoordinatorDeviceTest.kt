@@ -83,6 +83,31 @@ class SlicingCoordinatorDeviceTest {
         assertTrue("expected a real M140 S80 bed heat command", gcode.contains("M140 S${petg.tempBedC}"))
         assertTrue("expected a real M190 S80 bed wait command", gcode.contains("M190 S${petg.tempBedC}"))
     }
+    // Phase 8 follow-up (§11, §16, WO-27): proves the real, general multi-tool path
+    // (sliceProject's own slotMaterials -> MultiToolFilamentConfig.overridesFor -> the exact
+    // mechanism ToolAssignmentSlicingDeviceTest proved with hand-built overrides in WO-26) end to
+    // end through the real coordinator, not a hand-crafted override map.
+    @Test fun sliceProjectWithRealSlotMaterialsProducesARealToolChange() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val profile = PrinterProfile("http://192.168.1.110/", "U1", slicingModel = SlicingPrinterModel.SNAPMAKER_U1)
+        val a = cube(context)
+        val b = File(context.cacheDir, "coordinator_cube_multitool_b.stl").also { a.copyTo(it, overwrite = true) }
+        val objects = listOf(a to ModelTransform(offsetXMm = -30f), b to ModelTransform(offsetXMm = 30f))
+        val red = MaterialProfile("custom-red", "Red PLA", "PLA", colorHex = "#FF0000", tempNozzleC = 200, tempBedC = 60, source = MaterialSource.CUSTOM)
+        val blue = MaterialProfile("custom-blue", "Blue PLA", "PLA", colorHex = "#0000FF", tempNozzleC = 205, tempBedC = 60, source = MaterialSource.CUSTOM)
+        // slotMaterials must have one entry per the target's own real, bundled tool count
+        // (Snapmaker U1 = 4 - ToolSlots.kt's own parseToolCount), not just however many slots
+        // this project actually assigns - a mismatch is a real config inconsistency
+        // (Print::validate()'s own "Flush volumes matrix do not match to the correct size!"),
+        // caught live building this test, not assumed.
+        val outcome = SlicingCoordinator.sliceProject(
+            context, objects, profile, toolSlotIndices = listOf(1, 2), slotMaterials = listOf(red, blue, null, null),
+        )
+        assertTrue("expected Success, got $outcome", outcome is SliceOutcome.Success)
+        val gcode = (outcome as SliceOutcome.Success).gcode.readText()
+        val toolChanges = Regex("(?m)^T[0-9]+$").findAll(gcode).map { it.value }.toSet()
+        assertTrue("expected a real T1 tool-change command in the sliced G-code, got $toolChanges", toolChanges.contains("T1"))
+    }
     @Test fun slicedGcodeEmbedsRealThumbnails() = runBlocking {
         // Real bug hit live: a print on the CC1 was uploaded and started with no thumbnail at
         // all (confirmed via Moonraker's own job history - no "thumbnails" field, unlike every

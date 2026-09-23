@@ -50,3 +50,20 @@ internal fun toolCountFor(model: SlicingPrinterModel, cosmosGeneration: CosmosPr
 internal fun toolSlotsFor(toolCount: Int): List<ToolSlot> =
     if (toolCount <= 1) listOf(ToolSlot(0, ToolCapability.SINGLE_EXTRUDER))
     else (0 until toolCount).map { ToolSlot(it, ToolCapability.INDEPENDENT_TOOL) }
+
+// Phase 8 follow-up (§11, §16, WO-27): the bundled filament.json's own real filament_diameter
+// value (every bundled profile's own actual choice, e.g. "1.75" - not a hardcoded assumption).
+// MultiToolFilamentConfig.kt's own multiToolFilamentOverrides() needs this as the base value to
+// replicate into a real N-entry filament_diameter override - filament_diameter's own array
+// *length* is the real signal libslic3r uses to compute how many extruders exist at slice time
+// (confirmed by reading PrintApply.cpp directly - see WO-26), not machine.json's declared count,
+// so a genuine multi-tool slice must extend it even when only tool *identity* (colour/type/
+// temperature) is what the user actually cares about changing.
+internal fun parseBaseFilamentDiameter(filamentJson: String): Double {
+    val obj = org.json.JSONObject(filamentJson)
+    val diameters = obj.optJSONArray("filament_diameter")
+    return (0 until (diameters?.length() ?: 0)).mapNotNull { diameters?.optString(it)?.toDoubleOrNull() }.firstOrNull() ?: 1.75
+}
+
+internal fun SlicingProfilePack.readBaseFilamentDiameter(context: Context): Double =
+    parseBaseFilamentDiameter(context.assets.open(filamentPath).use { it.reader().readText() })

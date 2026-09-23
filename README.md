@@ -33,14 +33,16 @@ superseded by `CONSUMER_SLICER_PLAN.md` for the areas it covers.
 
 Opt-in background print alerts (completed/error/cancelled/offline/back-online/paused) run via a
 foreground service independent of the app being open. A separate "Projects" section (Files tab)
-persists a real multi-object build plate across process death — add/duplicate/remove objects, move/
-rotate/scale each one, backed by Room — and slices the whole plate at once on-device, with the
-same review-then-confirm pipeline (sliced 3D preview + stats, printer-ready confirmation, upload,
-explicit Start print) the single-object share-intent/Prepare-tab flow above already uses (see
-`docs/WORK_ORDER.md`'s WO-17 entries for what's landed and what's still open, most current for
-this area — it's updated more often than this file; no auto-arrange or collision detection yet,
-so overlapping placements are on the owner to avoid). No materials/multicolor or a model-discovery
-surface yet — see the plan document's gap matrix for the fuller current-vs-target breakdown,
+persists a real multi-object build plate across process death — add/duplicate/remove/rename/delete,
+move/rotate/scale each object, a real collision check (a proper rotated-rectangle overlap test,
+not just a bounding-box guess) that blocks slicing while objects overlap, and a one-tap
+auto-arrange (real 2D bin packing, not a stub) to resolve it — backed by Room, and slices the whole
+plate at once on-device with the same review-then-confirm pipeline (sliced 3D preview + stats,
+printer-ready confirmation, upload, explicit Start print) the single-object share-intent/Prepare-tab
+flow above already uses. This closes Phase 1 of the roadmap (see `docs/WORK_ORDER.md`'s WO-17
+entries for the detailed history, most current for this area — it's updated more often than this
+file). No materials/multicolor or a model-discovery surface yet — see the plan document's gap
+matrix for the fuller current-vs-target breakdown,
 though `docs/WORK_ORDER.md` supersedes it for anything the two disagree on.
 
 Only use a trusted LAN endpoint for printer control. HTTP is supported for conventional local

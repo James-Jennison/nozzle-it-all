@@ -108,6 +108,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // Targets whichever printer is currently selected on the Home tab - same convention
     // SliceAndPrintPanel/BambuPrintPanel already use, no separate picker here.
     val profile = remember(state.address, state.profiles) { state.profiles.find { it.address == state.address } }
+    // The real per-printer bed size/shape (same source SliceAndPrintPanel's own single-object
+    // flow already reads) - used both for ProjectWorkspace's out-of-bounds tinting and as
+    // Auto-arrange's real target width, not an invented default.
+    var bedShape by remember(projectId, newProjectName) { mutableStateOf<BedShape?>(null) }
+    LaunchedEffect(profile?.slicingModel) {
+        val model = profile?.slicingModel ?: return@LaunchedEffect
+        bedShape = try {
+            withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+        } catch (e: Exception) { null }
+    }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
     var layerHeightText by remember(projectId, newProjectName) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.layerHeightMm.toString()) }
     var infillText by remember(projectId, newProjectName) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.infillPercent.toString()) }
@@ -193,20 +203,59 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 loadError != null -> Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp)) { Text(loadError!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("project-editor-error")) }
                 stage == ProjectEditorStage.EDIT -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val workspaceObjects = objects.mapNotNull { obj -> geometry[obj.id]?.let { WorkspaceObject(obj, it) } }
+                    // Real pairwise collision check (footprintsOverlap, the same rotate-about-
+                    // pivot SAT math auto-arrange's own sizing uses) - recomputed from current
+                    // state each recomposition, not cached, so a drag in ProjectWorkspace above
+                    // updates this immediately. A small safety margin (not zero) matches typical
+                    // nozzle/extrusion clearance, not just "don't literally intersect."
+                    val collidingIds = remember(workspaceObjects) {
+                        val footprints = workspaceObjects.associate { it.projectObject.id to footprintOf(it.geometry, it.projectObject.transform()) }
+                        val colliding = mutableSetOf<String>()
+                        val ids = footprints.keys.toList()
+                        for (i in ids.indices) for (j in i + 1 until ids.size) {
+                            if (footprintsOverlap(footprints.getValue(ids[i]), footprints.getValue(ids[j]), marginMm = 2f)) {
+                                colliding += ids[i]; colliding += ids[j]
+                            }
+                        }
+                        colliding
+                    }
                     ProjectWorkspace(
                         objects = workspaceObjects,
                         selectedId = selectedId,
                         onSelect = { selectedId = it },
                         onTransformChange = { id, transform -> scope.launch { vm.updateObjectTransform(id, transform) } },
+                        bedShape = bedShape,
+                        collidingIds = collidingIds,
                     )
                     val missingGeometryCount = objects.size - workspaceObjects.size
                     if (missingGeometryCount > 0) Text("Loading $missingGeometryCount model(s)…", style = MaterialTheme.typography.bodySmall)
+                    if (collidingIds.isNotEmpty()) Text(
+                        "${collidingIds.size} object(s) overlap - move them apart before slicing, or use Auto-arrange.",
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-collision-warning"),
+                    )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button({ pickModel.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("project-add-object")) { Text("Add model") }
                         OutlinedButton({ selectedId?.let { id -> scope.launch { selectedId = vm.duplicateObject(id)?.id } } }, enabled = selectedId != null, modifier = Modifier.testTag("project-duplicate-object")) { Text("Duplicate") }
                         OutlinedButton({ selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } } }, enabled = selectedId != null, modifier = Modifier.testTag("project-remove-object")) { Text("Remove") }
                     }
+                    // Real bed width, not an invented default - falls back to the widest current
+                    // layout extent (not a fixed 200mm) when no bed shape is known yet, so
+                    // Auto-arrange never silently no-ops before a printer/profile is selected.
+                    OutlinedButton(
+                        {
+                            val bedWidth = bedShape?.points?.let { pts -> (pts.maxOf { it.first } - pts.minOf { it.first }).takeIf { it > 0f } } ?: 200f
+                            val items = workspaceObjects.map { wo -> ArrangeItem(wo.projectObject.id, (wo.geometry.maxX - wo.geometry.minX) / 2f * wo.projectObject.transform().scale, (wo.geometry.maxY - wo.geometry.minY) / 2f * wo.projectObject.transform().scale) }
+                            val placements = autoArrange(items, bedWidth)
+                            scope.launch {
+                                for ((id, placement) in placements) {
+                                    val current = objects.find { it.id == id }?.transform() ?: continue
+                                    vm.updateObjectTransform(id, current.copy(offsetXMm = placement.offsetXMm, offsetYMm = placement.offsetYMm, rotationZDeg = placement.rotationZDeg))
+                                }
+                            }
+                        },
+                        enabled = objects.size > 1, modifier = Modifier.testTag("project-auto-arrange"),
+                    ) { Text("Auto-arrange") }
                     addError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
                     Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
@@ -222,7 +271,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     }
                     customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     if (profile == null) Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null, modifier = Modifier.fillMaxWidth().testTag("project-slice")) { Text("Slice") }
+                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty(), modifier = Modifier.fillMaxWidth().testTag("project-slice")) { Text("Slice") }
                 }
                 stage == ProjectEditorStage.SLICING && sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {

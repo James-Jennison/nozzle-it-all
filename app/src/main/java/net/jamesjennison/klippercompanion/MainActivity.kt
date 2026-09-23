@@ -218,6 +218,14 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // remember/collectAsStateWithLifecycle itself.
     val projectDb = remember { net.jamesjennison.klippercompanion.project.AppDatabase.get(context.applicationContext) }
     val projects by projectDb.projectDao().observeProjects().collectAsStateWithLifecycle(initialValue = emptyList())
+    // Phase 1 (Consumer Slicer Plan §16, "Project save/load/rename/drafts"): rename/delete reuse
+    // ProjectViewModel's own real logic (renameProject/deleteProject, the latter also cleaning up
+    // ProjectFileStore's persisted object files) rather than calling projectDao directly here and
+    // duplicating that cleanup - a fresh, short-lived instance per action, loaded with the target
+    // project first since ProjectViewModel's own methods act on "the currently loaded project."
+    var renamingProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameDraft by rememberSaveable { mutableStateOf("") }
+    var deletingProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     val macroPrefs=remember {context.getSharedPreferences("macro-options",0)}
     val macroKey=remember(state.address) {java.security.MessageDigest.getInstance("SHA-256").digest(state.address.toByteArray()).joinToString("") {"%02x".format(it)}}
     var macroOptions by remember(macroKey) {mutableStateOf(MacroTools.decode(runCatching {macroPrefs.getString(macroKey,"{}")} .getOrNull()?:"{}"))}
@@ -619,6 +627,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             Card(Modifier.fillMaxWidth().testTag("project:${p.id}"), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(p.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                                    TextButton({ renamingProjectId = p.id; renameDraft = p.name }, modifier = Modifier.testTag("rename-project:${p.id}")) { Text("Rename") }
+                                    TextButton({ deletingProjectId = p.id }, modifier = Modifier.testTag("delete-project:${p.id}")) { Text("Delete") }
                                     TextButton({ editingProjectId = p.id }) { Text("Open") }
                                 }
                             }
@@ -722,6 +732,32 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     }
     if(editingProjectId != null || editingNewProjectName != null) {
         ProjectEditorScreen(editingProjectId, editingNewProjectName, state, execute) { editingProjectId = null; editingNewProjectName = null }
+    }
+    renamingProjectId?.let { id ->
+        AlertDialog(onDismissRequest = { renamingProjectId = null }, title = { Text("Rename project") },
+            text = { OutlinedTextField(renameDraft, { renameDraft = it }, label = { Text("Project name") }, singleLine = true, modifier = Modifier.testTag("rename-project-name")) },
+            confirmButton = { TextButton({
+                val name = renameDraft
+                if(name.isNotBlank()) uiScope.launch {
+                    val vm = net.jamesjennison.klippercompanion.project.ProjectViewModel(context.applicationContext, projectDb.projectDao())
+                    if(vm.loadProject(id)) vm.renameProject(name)
+                }
+                renamingProjectId = null
+            }, enabled = renameDraft.isNotBlank(), modifier = Modifier.testTag("rename-project-confirm")) { Text("Rename") } },
+            dismissButton = { TextButton({ renamingProjectId = null }) { Text("Cancel") } })
+    }
+    deletingProjectId?.let { id ->
+        val name = projects.find { it.id == id }?.name ?: "this project"
+        AlertDialog(onDismissRequest = { deletingProjectId = null }, title = { Text("Delete \"$name\"?") },
+            text = { Text("This removes the project and every object on its build plate. This can't be undone.") },
+            confirmButton = { TextButton({
+                uiScope.launch {
+                    val vm = net.jamesjennison.klippercompanion.project.ProjectViewModel(context.applicationContext, projectDb.projectDao())
+                    if(vm.loadProject(id)) vm.deleteProject()
+                }
+                deletingProjectId = null
+            }, modifier = Modifier.testTag("delete-project-confirm")) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton({ deletingProjectId = null }) { Text("Cancel") } })
     }
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}

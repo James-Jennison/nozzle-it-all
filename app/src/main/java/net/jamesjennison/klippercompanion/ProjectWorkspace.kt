@@ -374,6 +374,13 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
     onSelect: (String?) -> Unit,
     onTransformChange: (String, ModelTransform) -> Unit,
     bedShape: BedShape? = null,
+    // Phase 1 (Consumer Slicer Plan §16): object ids the caller has already determined are
+    // colliding with at least one other object (ProjectEditorScreen's own real footprintsOverlap
+    // check, the same rotate-about-pivot math this file's pickObject/plateCenterOf already use) -
+    // rendered with the same out-of-bounds red tint, since both are "this can't be sliced safely
+    // as placed" signals. Computed by the caller, not here, so ProjectEditorScreen's Slice gate
+    // and this render tint can never disagree about which objects are flagged.
+    collidingIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
 ) {
     var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
@@ -388,11 +395,11 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
     // in a huge default view), a real usability gap this closes.
     var framedIds by remember { mutableStateOf(emptySet<String>()) }
 
-    LaunchedEffect(objects, selectedId, bedShape) {
+    LaunchedEffect(objects, selectedId, bedShape, collidingIds) {
         val renderables = withContext(Dispatchers.Default) {
             objects.map { wo ->
                 val t = wo.projectObject.transform()
-                val outOfBounds = bedShape?.let { computeOutOfBounds(wo.geometry, t, it) } ?: false
+                val outOfBounds = (bedShape?.let { computeOutOfBounds(wo.geometry, t, it) } ?: false) || wo.projectObject.id in collidingIds
                 RenderableObject(wo.projectObject.id, wo.geometry, t, selected = wo.projectObject.id == selectedId, outOfBounds = outOfBounds)
             }
         }

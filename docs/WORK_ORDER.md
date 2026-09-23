@@ -1096,17 +1096,83 @@ P28/M7 sections for what each one built and its commit hash.)*
       `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
       existing `SlicingCoordinatorDeviceTest`/`SlicingCoordinatorMainThreadDeviceTest`
       suites re-run clean after the refactor (9/9 passing on Razr 2026).
-    - **Still open** (Phase 1's remaining scope): real auto-arrange (2D bin
-      packing with rotation), collision detection between objects, a
-      device test for `ProjectEditorScreen`'s own slice/review/print UI
-      flow (covered manually this entry, not yet by an automated
-      `connectedDebugAndroidTest` the way `ProjectWorkspaceDeviceTest`
-      covers the workspace itself), support painting for a project's
-      objects (single-object-only today, see `ModelViewer`'s Paint mode),
-      renaming/deleting a project from its list row, and whether the
-      existing single-object `SliceAndPrintPanel.kt`/Prepare-tab flow stays
-      as a separate quick-slice path long-term or eventually folds into
-      this one.
+    - **Still open, from the previous entry**: a device test for
+      `ProjectEditorScreen`'s own slice/review/print UI flow (covered
+      manually only - see the entry above), support painting for a
+      project's objects (single-object-only today, see `ModelViewer`'s
+      Paint mode), and whether the existing single-object
+      `SliceAndPrintPanel.kt`/Prepare-tab flow stays separate long-term or
+      eventually folds into this one. Both remain open below.
+    - **Phase 1 closed out, 2026-09-23 - auto-arrange, collision
+      detection, and project rename/delete, the plan's own remaining §16
+      Phase 1 scope items**:
+      - `ProjectArrange.kt`: a real 2D `Footprint` (a rotated rectangle in
+        world space, built from the object's own real bounding box and
+        transform pivot - the same rotate-about-pivot math `pickObject`/
+        `computeOutOfBounds`/the GL renderer's model matrix already use,
+        so it agrees with what's actually on screen), a real
+        separating-axis-theorem overlap test (`footprintsOverlap` - not a
+        coarser AABB-only or bounding-circle check, which would either
+        miss a real corner overlap between two independently-rotated
+        objects or falsely flag two rotated objects whose *un-rotated*
+        bounding boxes merely touch), and a real first-fit-decreasing-
+        height shelf-packing `autoArrange` (a standard, legitimate 2D
+        bin-packing heuristic - not a stub - that genuinely uses rotation,
+        choosing per item whichever of its two axis-aligned orientations
+        packs flatter). **A real bug caught by its own test, not assumed
+        correct**: the first version of `autoArrange`'s orientation choice
+        was backwards - it always picked the *taller* orientation, the
+        opposite of what shelf packing wants - caught by
+        `autoArrangePicksTheNarrowerOrientationPerItem` failing on its
+        first run, not by inspection.
+      - `ProjectEditorScreen` wires both in: a live pairwise collision
+        check (recomputed from current object state each recomposition)
+        that tints colliding objects red in `ProjectWorkspace` (reusing
+        the same red-tint channel `computeOutOfBounds` already drives,
+        since both mean "this can't be sliced safely as placed") and
+        disables Slice while any pair overlaps; an "Auto-arrange" button
+        that resolves the whole plate in one tap using the real bed width
+        (`bedShapeFor`, the same source `SliceAndPrintPanel` already
+        reads - not an invented default).
+      - `MainActivity`'s project list gained real Rename/Delete actions
+        per row, both reusing `ProjectViewModel.renameProject`/
+        `deleteProject` (loaded fresh per action) rather than calling
+        `ProjectDao` directly, so delete's real file cleanup
+        (`ProjectFileStore.deleteProject`) can't be bypassed by a second,
+        thinner code path.
+      - **Verified**: `ProjectArrangeTest` (10 JVM unit tests - footprint
+        math against a mesh whose local origin isn't its own centroid,
+        overlap detection including a real rotated-rectangle SAT case an
+        AABB check would get wrong, shelf-wrapping, empty input, the
+        orientation bug above) plus a full manual pass on real hardware
+        (Razr 2026): duplicated an object directly onto itself, watched
+        the real collision warning appear and both objects render red
+        with Slice disabled, tapped Auto-arrange and watched the plate
+        resolve to a real non-overlapping side-by-side layout with Slice
+        re-enabled; renamed a project (persisted, survived returning to
+        the list) and deleted one (confirmed both the Room row and its
+        persisted object files were actually gone via `run-as find`, not
+        just removed from the visible list). Full
+        `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and
+        `ProjectWorkspaceDeviceTest`/`ProjectViewModelDeviceTest` re-run
+        clean afterward (6/6 passing on Razr 2026). **Not** covered by an
+        automated `connectedDebugAndroidTest` for the rename/delete UI
+        specifically - `MainActivity`'s project list reads the app's real
+        production `AppDatabase` singleton (no test-database override
+        exists for it, unlike `ProjectViewModelDeviceTest`'s own isolated
+        file-backed database), so an automated UI test here would mutate
+        real user data rather than a fixture; the underlying
+        rename/delete logic itself is already device-tested via
+        `ProjectViewModel` directly.
+      - This closes every scope item the plan's own §16 Phase 1 entry
+        lists (object list, add/duplicate/delete, per-object transform,
+        auto-arrange, collision detection, save/load/rename/drafts) and
+        both of its acceptance criteria (multi-object persistence across
+        a simulated process death; slicing a real multi-object plate for
+        correct per-object G-code) - **Phase 1 is done**. Phase 2
+        (Printer Capability Layer) is next per the plan's own
+        recommended sequencing, and can run independently of Phase 1's
+        own remaining polish items above.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

@@ -66,7 +66,7 @@ object SlicingCoordinator {
     // doc); callers pass null for a Bambu target in that case, which this doesn't itself enforce
     // (ModelViewer/SliceAndPrintPanel already keep Paint mode and target-printer independent, so
     // this is defense-in-depth, not the only guard).
-    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel()
+    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel(); SliceService.start(context.applicationContext); try {
         when (val resolved = resolveProfilePaths(context, profile)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
@@ -87,7 +87,7 @@ object SlicingCoordinator {
             } catch (e: java.util.concurrent.CancellationException) { SliceOutcome.Cancelled
             } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
         }
-    } }
+    } finally { SliceService.stop(context.applicationContext) } } }
 
     // Phase 1 (Consumer Slicer Plan §16): the real multi-object counterpart to slice() above -
     // same firmware confirmation/profile-pack resolution (resolveProfilePaths, shared, not a
@@ -118,7 +118,7 @@ object SlicingCoordinator {
     // bundled filament.json base diameter, merged into `overrides`. Left empty (the default, and
     // every caller before this parameter existed), this is the same single-material slice every
     // project already produces - no multi-slot config is generated at all.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel()
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel(); SliceService.start(context.applicationContext); try {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
@@ -172,7 +172,7 @@ object SlicingCoordinator {
             } catch (e: java.util.concurrent.CancellationException) { SliceOutcome.Cancelled
             } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
         }
-    } }
+    } finally { SliceService.stop(context.applicationContext) } } }
 
     private fun freshOutputFile(context: Context, baseName: String, bambuBundle: Boolean = false): File {
         val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }

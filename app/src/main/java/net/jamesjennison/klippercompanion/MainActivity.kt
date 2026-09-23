@@ -257,6 +257,19 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // ProjectEditorScreen's own remember(projectId, newProjectName) key). Exactly one of the two
     // is ever non-null at a time.
     var editingProjectId by remember { mutableStateOf<String?>(null) }
+    var importMessage by remember { mutableStateOf<String?>(null) }
+    val importProject = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        uiScope.launch {
+            try {
+                val imported = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val importer = net.jamesjennison.klippercompanion.project.ProjectViewModel(context.applicationContext, projectDb.projectDao())
+                    context.contentResolver.openInputStream(uri)?.use { importer.importArchive(it) } ?: error("Cannot open that file.")
+                }
+                importMessage = null; editingProjectId = imported.id
+            } catch (e: Exception) { importMessage = "Import failed: ${e.message}" }
+        }
+    }
     var editingNewProjectName by remember { mutableStateOf<String?>(null) }
     var newProjectNameDraft by rememberSaveable { mutableStateOf<String?>(null) }
     // WO-30 (owner request, 2026-09-23: "the Prepare tab should default right to the in-app
@@ -663,7 +676,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                     if(showProjects) {
                         item {
-                            Button({ newProjectNameDraft = "" }, modifier = Modifier.testTag("new-project")) { Text("New project") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button({ newProjectNameDraft = "" }, modifier = Modifier.testTag("new-project")) { Text("New project") }
+                                OutlinedButton({ importProject.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("import-project")) { Text("Import project") }
+                            }
+                            importMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("import-project-message")) }
                         }
                         if(projects.isEmpty()) item { Text("No saved projects yet.", style = MaterialTheme.typography.bodySmall) }
                         items(projects, key = { "project:${it.id}" }) { p ->

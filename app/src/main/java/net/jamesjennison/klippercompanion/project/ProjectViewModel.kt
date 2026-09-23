@@ -2,6 +2,7 @@ package net.jamesjennison.klippercompanion.project
 
 import android.content.Context
 import android.net.Uri
+import java.io.File
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,8 +20,60 @@ import java.util.UUID
 class ProjectViewModel(private val context: Context, private val dao: ProjectDao) : ViewModel() {
     private val _project = MutableStateFlow<Project?>(null)
     val project: StateFlow<Project?> = _project.asStateFlow()
+    // _objects holds every object of the project across all plates; `objects` is the active plate's.
     private val _objects = MutableStateFlow<List<ProjectObject>>(emptyList())
-    val objects: StateFlow<List<ProjectObject>> = _objects.asStateFlow()
+    private val _visible = MutableStateFlow<List<ProjectObject>>(emptyList())
+    val objects: StateFlow<List<ProjectObject>> = _visible.asStateFlow()
+    val allObjects: StateFlow<List<ProjectObject>> = _objects.asStateFlow()
+    private val _plates = MutableStateFlow<List<Plate>>(emptyList())
+    val plates: StateFlow<List<Plate>> = _plates.asStateFlow()
+    private val _activePlateId = MutableStateFlow<String?>(null)
+    val activePlateId: StateFlow<String?> = _activePlateId.asStateFlow()
+
+    fun plateIdOf(obj: ProjectObject): String? = obj.plateId ?: _plates.value.firstOrNull()?.id
+    private fun publish() { _visible.value = _objects.value.filter { plateIdOf(it) == _activePlateId.value } }
+
+    fun selectPlate(plateId: String) { if (_plates.value.any { it.id == plateId }) { _activePlateId.value = plateId; publish() } }
+
+    suspend fun addPlate(): Plate {
+        val current = _project.value ?: error("No project open.")
+        val next = (_plates.value.maxOfOrNull { it.position } ?: -1) + 1
+        val plate = Plate(UUID.randomUUID().toString(), current.id, next, "Plate ${next + 1}")
+        dao.upsertPlates(listOf(plate))
+        _plates.value = _plates.value + plate
+        _activePlateId.value = plate.id
+        touch()
+        return plate
+    }
+
+    /** Only an empty plate can be removed, and never the last one. */
+    suspend fun removePlate(plateId: String): Boolean {
+        val target = _plates.value.find { it.id == plateId } ?: return false
+        if (_plates.value.size <= 1 || _objects.value.any { plateIdOf(it) == plateId }) return false
+        dao.deletePlate(target)
+        _plates.value = _plates.value - target
+        if (_activePlateId.value == plateId) _activePlateId.value = _plates.value.first().id
+        touch()
+        return true
+    }
+
+    suspend fun moveObjectToPlate(objectId: String, plateId: String) {
+        if (_plates.value.none { it.id == plateId }) return
+        val target = _objects.value.find { it.id == objectId } ?: return
+        if (plateIdOf(target) == plateId) return
+        record()
+        val moved = target.copy(plateId = plateId)
+        dao.upsertObjects(listOf(moved))
+        _objects.value = _objects.value.map { if (it.id == objectId) moved else it }
+        touch()
+    }
+
+    private suspend fun loadPlates(projectId: String) {
+        var plates = dao.getPlatesForProject(projectId)
+        if (plates.isEmpty()) { plates = listOf(Plate(UUID.randomUUID().toString(), projectId, 0, "Plate 1")); dao.upsertPlates(plates) }
+        _plates.value = plates
+        _activePlateId.value = plates.first().id
+    }
 
     private val history = UndoHistory<List<ProjectObject>>()
     private val _undoState = MutableStateFlow(false to false)
@@ -48,6 +101,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         dao.upsertProject(created)
         _project.value = created
         _objects.value = emptyList()
+        loadPlates(created.id); publish()
         history.clear(); publishUndoState()
         return created
     }
@@ -56,6 +110,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         val loaded = dao.loadProjectWithObjects(id) ?: return false
         _project.value = loaded.first
         _objects.value = loaded.second
+        loadPlates(loaded.first.id); publish()
         history.clear(); publishUndoState()
         // Files of removed objects are kept while undo could still bring them back; anything no
         // longer referenced when a project is (re)opened is orphaned for good.
@@ -81,7 +136,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         // material picked before this add still applies, not just objects added before it.
         val projectMaterial = _objects.value.firstOrNull()?.material()
         record()
-        val added = ProjectObject(id = objectId, projectId = current.id, sourceFileUri = Uri.fromFile(localFile).toString()).withMaterial(projectMaterial)
+        val added = ProjectObject(id = objectId, projectId = current.id, sourceFileUri = Uri.fromFile(localFile).toString(), plateId = _activePlateId.value).withMaterial(projectMaterial)
         dao.upsertObjects(listOf(added))
         _objects.value = _objects.value + added
         touch()
@@ -166,6 +221,37 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         touch()
     }
 
+    /** Writes the whole project (every plate) as a .nozzleproj archive. */
+    fun exportArchive(out: java.io.OutputStream) {
+        val project = _project.value ?: error("No project open.")
+        ProjectArchive.write(project.name, _plates.value, _objects.value, { File(Uri.parse(it.sourceFileUri).path!!) }, out)
+    }
+
+    /** Imports an archive as a brand-new project (new ids everywhere) and opens it. */
+    suspend fun importArchive(input: java.io.InputStream): Project {
+        val staging = File(context.cacheDir, "import-${UUID.randomUUID()}").also { it.mkdirs() }
+        try {
+            val parsed = ProjectArchive.read(input, staging)
+            val now = System.currentTimeMillis()
+            val project = Project(UUID.randomUUID().toString(), parsed.name, now, now)
+            val plateIds = parsed.plates.sortedBy { it.position }.associate { it.id to UUID.randomUUID().toString() }
+            val plates = parsed.plates.sortedBy { it.position }.mapIndexed { i, p -> Plate(plateIds.getValue(p.id), project.id, i, p.name) }
+            val objectIds = parsed.objects.associate { it.id to UUID.randomUUID().toString() }
+            val objects = parsed.objects.map { o ->
+                val id = objectIds.getValue(o.id)
+                val extension = o.file.substringAfterLast('.').lowercase()
+                val local = ProjectFileStore.importObject(context, project.id, id, Uri.fromFile(File(staging, o.file)), extension)
+                ProjectObject(id, project.id, Uri.fromFile(local).toString(), o.plateId?.let(plateIds::get), o.offsetXMm, o.offsetYMm, o.rotationZDeg, o.scale,
+                    o.materialId, o.materialDisplayName, o.materialTempNozzleC, o.materialTempBedC, o.toolSlotIndex)
+            }
+            dao.upsertProject(project)
+            if (plates.isNotEmpty()) dao.upsertPlates(plates)
+            if (objects.isNotEmpty()) dao.upsertObjects(objects)
+            loadProject(project.id)
+            return project
+        } finally { staging.deleteRecursively() }
+    }
+
     suspend fun renameProject(name: String) {
         val current = _project.value ?: return
         val updated = current.copy(name = name, modifiedAt = System.currentTimeMillis())
@@ -178,10 +264,11 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         dao.deleteProject(current)
         ProjectFileStore.deleteProject(context, current.id)
         _project.value = null
-        _objects.value = emptyList()
+        _objects.value = emptyList(); _plates.value = emptyList(); _activePlateId.value = null; publish()
     }
 
     private suspend fun touch() {
+        publish()
         val current = _project.value ?: return
         val updated = current.copy(modifiedAt = System.currentTimeMillis())
         dao.updateProject(updated)

@@ -5,6 +5,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -102,6 +105,19 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     val project by vm.project.collectAsState()
     val objects by vm.objects.collectAsState()
     val undoState by vm.undoState.collectAsState()
+    val plates by vm.plates.collectAsState()
+    val activePlateId by vm.activePlateId.collectAsState()
+    var moveMenuOpen by remember { mutableStateOf(false) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            exportMessage = try {
+                withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri)?.use { vm.exportArchive(it) } ?: error("Cannot write to that location.") }
+                "Project exported."
+            } catch (e: Exception) { "Export failed: ${e.message}" }
+        }
+    }
 
     // Loads each object's mesh geometry exactly once per source file - a transform-only change
     // to `objects` re-triggers this effect but every already-loaded id is skipped, so it never
@@ -399,6 +415,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                 // old flat button row), Hide (new), Reset transform (new), and
                                 // Auto Layout (renamed from "Auto-arrange", same real
                                 // runAutoArrange() underneath).
+                                exportMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-export-message")) }
+                                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                                androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().testTag("project-plates"), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    plates.forEachIndexed { index, plate ->
+                                        FilterChip(plate.id == activePlateId, { selectedId = null; vm.selectPlate(plate.id) }, label = { Text(plate.name) }, modifier = Modifier.testTag("project-plate-$index"))
+                                    }
+                                    OutlinedButton({ scope.launch { selectedId = null; vm.addPlate() } }, modifier = Modifier.testTag("project-plate-add")) { Text("+ Plate") }
+                                    OutlinedButton({ exportLauncher.launch("${project?.name ?: "project"}.nozzleproj") }, enabled = objects.isNotEmpty() || plates.size > 1, modifier = Modifier.testTag("project-export")) { Text("Export") }
+                                    if (plates.size > 1) OutlinedButton({ activePlateId?.let { id -> scope.launch { vm.removePlate(id) } } }, enabled = objects.isEmpty(), modifier = Modifier.testTag("project-plate-remove")) { Text("Remove plate") }
+                                }
                                 Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
                                     Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Column(Modifier.testTag("project-toolbar"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -427,6 +453,14 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                             }
                                             PlateToolbarButton("Remove", CompanionSymbol.CLOSE, enabled = selectedId != null, testTag = "project-remove-object") {
                                                 selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } }
+                                            }
+                                            Box {
+                                                PlateToolbarButton("To plate", CompanionSymbol.NEXT, enabled = selectedId != null && plates.size > 1, testTag = "project-move-to-plate") { moveMenuOpen = true }
+                                                DropdownMenu(moveMenuOpen, { moveMenuOpen = false }) {
+                                                    plates.filter { it.id != activePlateId }.forEach { plate ->
+                                                        DropdownMenuItem({ Text(plate.name) }, { moveMenuOpen = false; selectedId?.let { id -> scope.launch { vm.moveObjectToPlate(id, plate.id); selectedId = null } } }, modifier = Modifier.testTag("project-move-to-${plate.name}"))
+                                                    }
+                                                }
                                             }
                                             PlateToolbarButton("Undo", CompanionSymbol.UNDO, enabled = undoState.first, testTag = "project-undo") { scope.launch { vm.undo(); selectedId = selectedId?.takeIf { id -> vm.objects.value.any { it.id == id } } } }
                                             PlateToolbarButton("Redo", CompanionSymbol.REDO, enabled = undoState.second, testTag = "project-redo") { scope.launch { vm.redo(); selectedId = selectedId?.takeIf { id -> vm.objects.value.any { it.id == id } } } }
@@ -591,7 +625,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             }
                         }
                     }
-                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode && validationIssues.none { it.blocking }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice")) { Text("Slice") }
+                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode && validationIssues.none { it.blocking }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice")) { Text(if (plates.size > 1) "Slice ${plates.firstOrNull { it.id == activePlateId }?.name ?: "plate"}" else "Slice") }
                 }
                 stage == ProjectEditorStage.SLICING && sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {

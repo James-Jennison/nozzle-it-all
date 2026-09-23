@@ -29,6 +29,15 @@ interface ProjectDao {
     @Delete
     suspend fun deleteObject(projectObject: ProjectObject)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertPlates(plates: List<Plate>)
+
+    @Delete
+    suspend fun deletePlate(plate: Plate)
+
+    @Query("SELECT * FROM plates WHERE projectId = :projectId ORDER BY position")
+    suspend fun getPlatesForProject(projectId: String): List<Plate>
+
     @Query("SELECT * FROM projects ORDER BY modifiedAt DESC")
     fun observeProjects(): Flow<List<Project>>
 

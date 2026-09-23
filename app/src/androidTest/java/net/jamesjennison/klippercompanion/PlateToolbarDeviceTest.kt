@@ -67,6 +67,28 @@ class PlateToolbarDeviceTest {
         compose.waitUntil(5000) { compose.onAllNodesWithText("Models", substring = true).fetchSemanticsNodes().any { node -> node.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Text) { emptyList() }.any { it.text.contains("/2") } } }
     }
 
+    @Test fun platesCanBeAddedObjectsMovedBetweenThemAndTheSliceButtonNamesThePlate() {
+        val (projectId, objectIds) = seedProject("PlatesProject", 2)
+        openScreen(projectId)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-plate-add").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-plate-1").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isEmpty() } // new plate is empty
+        compose.onNodeWithTag("project-plate-0").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("project-move-to-plate").onChildren().onFirst().assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("project-move-to-plate").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-move-to-Plate 2", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-move-to-Plate 2", useUnmergedTree = true).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("project-plate-1").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-slice").assertTextContains("Slice Plate 2", substring = true)
+    }
+
     @Test fun undoAndRedoButtonsRestoreARemovedObject() {
         val (projectId, objectIds) = seedProject("UndoProject", 2)
         openScreen(projectId)

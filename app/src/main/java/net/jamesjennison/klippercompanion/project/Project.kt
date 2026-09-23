@@ -71,6 +71,15 @@ data class ProjectObject(
     val toolSlotIndex: Int? = null,
 )
 
+// Phase 9b: one build plate of a project. Objects with a null plateId (every project created before
+// plates existed) belong to the project's first plate.
+@Entity(
+    tableName = "plates",
+    foreignKeys = [ForeignKey(entity = Project::class, parentColumns = ["id"], childColumns = ["projectId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("projectId")],
+)
+data class Plate(@PrimaryKey val id: String, val projectId: String, val position: Int, val name: String)
+
 // Room maps an entity's declared columns only, so the ModelTransform round-trip lives here as
 // plain functions rather than an in-entity computed property (which Room would need an explicit
 // @Ignore on to avoid trying, and failing, to persist).

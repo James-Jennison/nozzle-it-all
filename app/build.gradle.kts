@@ -45,6 +45,12 @@ android {
    }
   }
  }
+ // WO-31 (owner request): real R8 shrinking/minification for release, measured to cut the
+ // release APK from 109.9MB to 73.6MB installed (47.1MB to 34.8MB download) - see
+ // docs/WORK_ORDER.md's WO-31 entry for the full before/after. proguard-rules.pro's own comments
+ // justify every rule (the JNI native-bridge keep rule is load-bearing, not boilerplate - see
+ // that file).
+ buildTypes { release { isMinifyEnabled = true; isShrinkResources = true; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") } }
  buildFeatures { compose = true }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }

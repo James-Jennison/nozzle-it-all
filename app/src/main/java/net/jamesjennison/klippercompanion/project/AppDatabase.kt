@@ -43,7 +43,15 @@ val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
     }
 }
 
-@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 4, exportSchema = false)
+// Phase 9d: version 5 - per-object paint strokes and modifier/blocker volumes.
+val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE project_objects ADD COLUMN paintJson TEXT")
+        db.execSQL("ALTER TABLE project_objects ADD COLUMN volumesJson TEXT")
+    }
+}
+
+@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
 
@@ -53,7 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext, AppDatabase::class.java, "nozzle_it_all.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
     }
 }

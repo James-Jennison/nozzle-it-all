@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import net.jamesjennison.klippercompanion.MaterialProfile
 import net.jamesjennison.klippercompanion.ModelTransform
+import net.jamesjennison.klippercompanion.PaintCodec
+import net.jamesjennison.klippercompanion.PaintStroke
+import net.jamesjennison.klippercompanion.ShapeVolume
+import net.jamesjennison.klippercompanion.VolumeCodec
 import net.jamesjennison.klippercompanion.sliceableModelName
 import java.util.UUID
 
@@ -229,7 +233,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
             ProjectFileStore.newModelFile(context, project.id, "stl").also { net.jamesjennison.klippercompanion.MeshEdit.writeBinaryStl(mesh, it) }
         }
         record()
-        val updated = target.copy(sourceFileUri = Uri.fromFile(file).toString())
+        val updated = target.copy(sourceFileUri = Uri.fromFile(file).toString(), paintJson = null, volumesJson = null) // strokes/volumes belong to the old mesh
         dao.upsertObjects(listOf(updated))
         _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
         touch()
@@ -248,12 +252,43 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
             halves.map { mesh -> ProjectFileStore.newModelFile(context, project.id, "stl").also { net.jamesjennison.klippercompanion.MeshEdit.writeBinaryStl(mesh, it) } }
         }
         record()
-        val first = target.copy(sourceFileUri = Uri.fromFile(files[0]).toString())
-        val added = files.drop(1).mapIndexed { i, f -> target.copy(id = UUID.randomUUID().toString(), sourceFileUri = Uri.fromFile(f).toString(), offsetXMm = target.offsetXMm + gapMm * (i + 1)) }
+        val first = target.copy(sourceFileUri = Uri.fromFile(files[0]).toString(), paintJson = null, volumesJson = null)
+        val added = files.drop(1).mapIndexed { i, f -> target.copy(id = UUID.randomUUID().toString(), sourceFileUri = Uri.fromFile(f).toString(), paintJson = null, volumesJson = null, offsetXMm = target.offsetXMm + gapMm * (i + 1)) }
         dao.upsertObjects(listOf(first) + added)
         _objects.value = _objects.value.map { if (it.id == objectId) first else it } + added
         touch()
         return listOf(first) + added
+    }
+
+    /** Appends brush strokes to an object (a drag's dabs coalesce into one undo step). */
+    suspend fun addPaintStrokes(objectId: String, strokes: List<PaintStroke>) {
+        val target = _objects.value.find { it.id == objectId } ?: return
+        val existing = PaintCodec.decode(target.paintJson)
+        if (strokes.isEmpty() || existing.size >= PaintCodec.MAX_STROKES) return
+        record(coalesceKey = "paint:$objectId")
+        val updated = target.copy(paintJson = PaintCodec.encode((existing + strokes).takeLast(PaintCodec.MAX_STROKES)))
+        dao.upsertObjects(listOf(updated))
+        _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
+        touch()
+    }
+
+    suspend fun clearPaint(objectId: String) {
+        val target = _objects.value.find { it.id == objectId } ?: return
+        if (target.paintJson == null) return
+        record()
+        val updated = target.copy(paintJson = null)
+        dao.upsertObjects(listOf(updated))
+        _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
+        touch()
+    }
+
+    suspend fun setVolumes(objectId: String, volumes: List<ShapeVolume>) {
+        val target = _objects.value.find { it.id == objectId } ?: return
+        record(coalesceKey = "volumes:$objectId")
+        val updated = target.copy(volumesJson = volumes.take(VolumeCodec.MAX_VOLUMES).takeIf { it.isNotEmpty() }?.let(VolumeCodec::encode))
+        dao.upsertObjects(listOf(updated))
+        _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
+        touch()
     }
 
     /** Writes the whole project (every plate) as a .nozzleproj archive. */
@@ -277,7 +312,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
                 val extension = o.file.substringAfterLast('.').lowercase()
                 val local = ProjectFileStore.importObject(context, project.id, id, Uri.fromFile(File(staging, o.file)), extension)
                 ProjectObject(id, project.id, Uri.fromFile(local).toString(), o.plateId?.let(plateIds::get), o.offsetXMm, o.offsetYMm, o.rotationZDeg, o.scale,
-                    o.materialId, o.materialDisplayName, o.materialTempNozzleC, o.materialTempBedC, o.toolSlotIndex)
+                    o.materialId, o.materialDisplayName, o.materialTempNozzleC, o.materialTempBedC, o.toolSlotIndex, o.paintJson, o.volumesJson)
             }
             dao.upsertProject(project)
             if (plates.isNotEmpty()) dao.upsertPlates(plates)

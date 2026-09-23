@@ -58,10 +58,15 @@ void slice_bambu_bundle(const std::string& input_model_path,
 // Phase 6 follow-up (WO-23): the real multi-object counterpart to slice_bambu_bundle() above -
 // same relationship slice_multi_object() (below) already has to slice_file(). See
 // slic3r_engine.cpp's own header comment on the bundle_model() tail these two share.
+// Phase 9d: per-object paint strokes and modifier/blocker volumes, in the text formats ObjectExtras.kt writes.
+// Parallel to the objects vector (empty string = none).
+struct ObjectExtras { std::string paint_strokes; std::string volume_specs; };
+
 void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, ModelTransform>>& objects,
                                       const std::string& output_bundle_path,
                                       const std::vector<std::string>& profile_paths,
-                                      const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
+                                      const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
+                                      const std::vector<ObjectExtras>& extras = {});
 
 // Phase 1 (Consumer Slicer Plan §16): slices a real multi-object build plate - each (model path,
 // placement, tool_index) triple loaded and placed exactly the way slice_file()'s single-object
@@ -90,7 +95,8 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
 void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform, int>>& objects,
                          const std::string& output_gcode_path,
                          const std::vector<std::string>& profile_paths,
-                         const std::vector<std::pair<std::string, std::string>>& config_overrides = {});
+                         const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
+                         const std::vector<ObjectExtras>& extras = {});
 
 // Loads input_model_path (STL/3MF/OBJ) the same way slice_file() does - real Model::read_from_file,
 // bed-centered - but stops short of slicing. Returns 3 floats (the first object's first

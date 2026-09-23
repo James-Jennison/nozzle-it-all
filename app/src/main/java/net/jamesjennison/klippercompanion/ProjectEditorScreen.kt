@@ -66,7 +66,16 @@ import java.io.File
  * the Files tab), matching this session's own owner-confirmed choice to keep that already-tested
  * flow untouched rather than retrofit it.
  */
-private enum class PickMode { FACE, MEASURE }
+private fun fmtMm(v: Float): String = if (v == v.toLong().toFloat()) v.toLong().toString() else "%.1f".format(v)
+
+private enum class PickMode { FACE, MEASURE, PAINT }
+
+// Editable form state of one modifier/blocker region (all text, validated on save). Positions are mm from the object's centre.
+private data class RegionDraft(
+    val index: Int, val kind: VolumeKind = VolumeKind.MODIFIER, val shape: VolumeShape = VolumeShape.BOX,
+    val x: String = "0", val y: String = "0", val z: String = "0", val sx: String = "10", val sy: String = "10", val sz: String = "10",
+    val infill: String = "", val walls: String = "",
+)
 private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, STAGED }
 
 @Composable fun ProjectEditorScreen(projectId: String?, newProjectName: String?, state: ScreenState, execute: (PrinterCommand, Int) -> Unit, close: () -> Unit) {
@@ -94,6 +103,14 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var measurePointA by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
     var toolMessage by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var cutDialogFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    var paintKind by remember(projectId, newProjectName) { mutableStateOf(PaintKind.SUPPORT_ENFORCER) }
+    var brushRadiusMm by remember(projectId, newProjectName) { mutableStateOf(3f) }
+    var lastDab by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
+    var regionDialog by remember(projectId, newProjectName) { mutableStateOf<RegionDraft?>(null) }
+    var overlays by remember(projectId, newProjectName) { mutableStateOf<Map<String, List<OverlayGroup>>>(emptyMap()) }
+    val overlayCache = remember(projectId, newProjectName) { HashMap<String, Triple<Pair<String?, String?>, MeshGeometry, List<OverlayGroup>>>() }
+    val discCache = remember(projectId, newProjectName) { HashMap<String, Pair<MeshGeometry, List<PaintDisc?>>>() }
+    val triMeshes = remember(projectId, newProjectName) { java.util.IdentityHashMap<MeshGeometry, TriMesh>() }
     var cutFraction by remember(projectId, newProjectName) { mutableStateOf(0.5f) }
     var keepUpper by remember(projectId, newProjectName) { mutableStateOf(true) }
     var keepLower by remember(projectId, newProjectName) { mutableStateOf(true) }
@@ -143,6 +160,36 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             try { loaded[obj.id] = MeshLoader.load(path); geometrySource[obj.id] = obj.sourceFileUri } catch (_: Exception) { /* surfaced per-object below via a missing entry */ }
         }
         if (loaded.isNotEmpty()) geometry = geometry + loaded
+    }
+
+    // Paint dabs and region outlines shown on each object. Dabs are ray-cast once and cached (a drag appends strokes, an
+    // undo only ever drops the tail), so painting never re-casts the whole history.
+    LaunchedEffect(objects.map { Triple(it.id, it.paintJson, it.volumesJson) }, geometry) {
+        val result = withContext(Dispatchers.Default) {
+            val out = HashMap<String, List<OverlayGroup>>()
+            for (obj in objects) {
+                val g = geometry[obj.id] ?: continue
+                val key = obj.paintJson to obj.volumesJson
+                val cached = overlayCache[obj.id]
+                if (cached != null && cached.first == key && cached.second === g) { out[obj.id] = cached.third; continue }
+                val strokes = PaintCodec.decode(obj.paintJson)
+                val previous = discCache[obj.id]?.takeIf { it.first === g }?.second ?: emptyList()
+                val mesh by lazy { triMeshes.getOrPut(g) { MeshEdit.fromGeometry(g) } }
+                val discs: List<PaintDisc?> = when {
+                    strokes.isEmpty() -> emptyList()
+                    strokes.size <= previous.size -> previous.take(strokes.size)
+                    else -> previous + strokes.drop(previous.size).map { OverlayBuilders.discsFor(listOf(it), mesh, g.origin).firstOrNull() }
+                }
+                discCache[obj.id] = g to discs
+                val center = floatArrayOf(0f, 0f, 0f)
+                val groups = OverlayBuilders.paintGroups(discs.filterNotNull()) +
+                    VolumeCodec.decode(obj.volumesJson).map { v -> OverlayBuilders.volumeOutline(v, floatArrayOf(v.center[0] + g.origin[0], v.center[1] + g.origin[1], v.center[2] + g.origin[2])) }
+                overlayCache[obj.id] = Triple(key, g, groups)
+                out[obj.id] = groups
+            }
+            out
+        }
+        overlays = result
     }
 
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -267,6 +314,22 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         return best
     }
 
+    fun handlePaintDrag(origin: FloatArray, dir: FloatArray, start: Boolean) {
+        if (start) lastDab = null
+        val id = selectedId ?: run { toolMessage = "Select an object to paint on."; return }
+        val obj = objects.find { it.id == id } ?: return
+        val g = geometry[id] ?: return
+        val (lo, ld) = PlacedFrame(obj.transform(), g.origin).rayToLocal(origin, dir)
+        val len = kotlin.math.sqrt(ld[0] * ld[0] + ld[1] * ld[1] + ld[2] * ld[2]); if (len < 1e-9f) return
+        val nd = floatArrayOf(ld[0] / len, ld[1] / len, ld[2] / len)
+        val hit = MeshEdit.rayHit(triMeshes.getOrPut(g) { MeshEdit.fromGeometry(g) }, lo, nd) ?: return
+        val localRadius = brushRadiusMm / obj.scale
+        lastDab?.let { if (MeshEdit.distance(it, hit.point) < localRadius * 0.5f) return }
+        lastDab = hit.point
+        val from = floatArrayOf(hit.point[0] - nd[0] * 5f, hit.point[1] - nd[1] * 5f, hit.point[2] - nd[2] * 5f)
+        scope.launch { vm.addPaintStrokes(id, listOf(PaintStroke(paintKind, g.objectFrame(from), nd, localRadius))) }
+    }
+
     fun handleRayTap(origin: FloatArray, dir: FloatArray) {
         val mode = pickMode ?: return
         val hit = pickTriangle(origin, dir)
@@ -277,6 +340,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 pickMode = null; selectedId = obj.id
                 scope.launch { vm.replaceObjectMesh(obj.id, MeshEdit.layOnFace(mesh, MeshEdit.triangleNormal(mesh, h.triangle))); toolMessage = "Laid the tapped face flat on the bed." }
             }
+            PickMode.PAINT -> {}
             PickMode.MEASURE -> {
                 val world = PlacedFrame(obj.transform(), geometry.getValue(obj.id).origin).toWorld(h.point)
                 val a = measurePointA
@@ -328,7 +392,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             // Skipped for a multi-tool target: slotMaterials above already carries each object's
             // own real material into sliceProject's own multi-slot config generation instead.
             val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides)
-            when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials)) {
+            when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
+                slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) })) {
                 is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
                 is SliceOutcome.Failed -> { working = false; sliceError = outcome.message }
@@ -404,7 +469,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 !ready -> Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
                 loadError != null -> Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp)) { Text(loadError!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("project-editor-error")) }
                 stage == ProjectEditorStage.EDIT -> Column(Modifier.weight(1f).fillMaxWidth()) {
-                    val allWorkspaceObjects = objects.mapNotNull { obj -> geometry[obj.id]?.let { WorkspaceObject(obj, it) } }
+                    val allWorkspaceObjects = objects.mapNotNull { obj -> geometry[obj.id]?.let { WorkspaceObject(obj, it, overlays[obj.id] ?: emptyList()) } }
                     // WO-30: a hidden object never reaches ProjectWorkspace at all - it can't be
                     // rendered, picked, or counted as colliding while hidden. If the currently
                     // selected object is the one just hidden, the selection is cleared too (below,
@@ -526,7 +591,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                 bedShape = bedShape,
                                                 collidingIds = collidingIds,
                                                 interactionMode = interactionMode,
-                                                onRayTap = if (pickMode != null) { o, d -> handleRayTap(o, d) } else null,
+                                                onRayTap = if (pickMode == PickMode.FACE || pickMode == PickMode.MEASURE) { o, d -> handleRayTap(o, d) } else null,
+                                                onRayDrag = if (pickMode == PickMode.PAINT) { o, d, start -> handlePaintDrag(o, d, start) } else null,
                                             )
                                             // WO-30: the selected object's real, current bounding
                                             // box in mm - (max-min) per axis on its loaded
@@ -616,12 +682,42 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                         }
                                     }
                                     PlateToolbarButton("Cut", CompanionSymbol.CUT, enabled = selectedId != null, testTag = "project-tool-cut") { cutDialogFor = selectedId; cutFraction = 0.5f; keepUpper = true; keepLower = true }
+                                    PlateToolbarButton("Paint", CompanionSymbol.PAINT, enabled = selectedId != null, active = pickMode == PickMode.PAINT, testTag = "project-tool-paint") {
+                                        measurePointA = null; pickMode = if (pickMode == PickMode.PAINT) null else PickMode.PAINT
+                                        toolMessage = if (pickMode == PickMode.PAINT) "Drag on the selected model to paint." else null
+                                    }
                                     PlateToolbarButton("Measure", CompanionSymbol.MEASURE, enabled = objects.isNotEmpty(), active = pickMode == PickMode.MEASURE, testTag = "project-tool-measure") {
                                         measurePointA = null; pickMode = if (pickMode == PickMode.MEASURE) null else PickMode.MEASURE
                                         toolMessage = if (pickMode == PickMode.MEASURE) "Tap point A on a model." else null
                                     }
                                 }
                                 toolMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-tool-message")) }
+                                if (pickMode == PickMode.PAINT) {
+                                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-paint-controls")) {
+                                        PaintKind.entries.forEach { k -> FilterChip(paintKind == k, { paintKind = k }, label = { Text(k.label) }, modifier = Modifier.testTag("project-paint-kind-${k.name.lowercase()}")) }
+                                    }
+                                    Text("Brush %.1f mm".format(brushRadiusMm), style = MaterialTheme.typography.bodySmall)
+                                    Slider(brushRadiusMm, { brushRadiusMm = it }, valueRange = 1f..15f, modifier = Modifier.testTag("project-paint-radius"))
+                                    OutlinedButton({ selectedId?.let { id -> scope.launch { vm.clearPaint(id) } } }, enabled = selectedId != null && objects.find { it.id == selectedId }?.paintJson != null, modifier = Modifier.testTag("project-paint-clear")) { Text("Clear paint on this model") }
+                                }
+                                selectedId?.let { id ->
+                                    val obj = objects.find { it.id == id }
+                                    val volumes = VolumeCodec.decode(obj?.volumesJson)
+                                    val g = geometry[id]
+                                    Text("Regions on this model", style = MaterialTheme.typography.titleSmall)
+                                    volumes.forEachIndexed { i, v ->
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("project-region-$i")) {
+                                            Text("${v.kind.label} · ${v.shape.label} ${v.size[0].toInt()}×${v.size[1].toInt()}×${v.size[2].toInt()} mm" + if (v.overrides.isNotEmpty()) " · ${v.overrides.size} setting(s)" else "", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                                            TextButton({
+                                                val c = g?.let { floatArrayOf(it.center[0] - it.origin[0], it.center[1] - it.origin[1], it.center[2] - it.origin[2]) } ?: floatArrayOf(0f, 0f, 0f)
+                                                regionDialog = RegionDraft(i, v.kind, v.shape, fmtMm(v.center[0] - c[0]), fmtMm(v.center[1] - c[1]), fmtMm(v.center[2] - c[2]), fmtMm(v.size[0]), fmtMm(v.size[1]), fmtMm(v.size[2]),
+                                                    v.overrides["sparse_infill_density"]?.removeSuffix("%").orEmpty(), v.overrides["wall_loops"].orEmpty())
+                                            }, modifier = Modifier.testTag("project-region-edit-$i")) { Text("Edit") }
+                                            TextButton({ scope.launch { vm.setVolumes(id, volumes.filterIndexed { j, _ -> j != i }) } }, modifier = Modifier.testTag("project-region-delete-$i")) { Text("Delete") }
+                                        }
+                                    }
+                                    OutlinedButton({ regionDialog = RegionDraft(-1) }, enabled = g != null && volumes.size < VolumeCodec.MAX_VOLUMES, modifier = Modifier.testTag("project-region-add")) { Text("+ Add region") }
+                                }
                                 Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
                                 if (objects.isEmpty()) Text("No objects yet - add an STL, 3MF or OBJ model to start this project's build plate.", style = MaterialTheme.typography.bodySmall)
                                 objects.forEach { obj ->
@@ -773,6 +869,61 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             }
         }
     }
+    regionDialog?.let { draft ->
+        val id = selectedId; val g = id?.let { geometry[it] }
+        if (id == null || g == null) { regionDialog = null } else {
+            fun num(t: String) = t.trim().toFloatOrNull()?.takeIf { it.isFinite() }
+            val sizes = listOf(num(draft.sx), num(draft.sy), num(draft.sz))
+            val pos = listOf(num(draft.x), num(draft.y), num(draft.z))
+            val infill = draft.infill.trim().takeIf { it.isNotEmpty() }?.let { it.toIntOrNull()?.takeIf { v -> v in 0..100 } ?: -1 }
+            val walls = draft.walls.trim().takeIf { it.isNotEmpty() }?.let { it.toIntOrNull()?.takeIf { v -> v in 1..20 } ?: -1 }
+            val valid = sizes.all { it != null && it > 0.1f && it < 2000f } && pos.all { it != null && kotlin.math.abs(it) < 2000f } && infill != -1 && walls != -1 &&
+                (draft.kind != VolumeKind.MODIFIER || infill != null || walls != null)
+            AlertDialog(onDismissRequest = { regionDialog = null }, title = { Text(if (draft.index < 0) "Add region" else "Edit region") },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            VolumeKind.entries.forEach { k -> FilterChip(draft.kind == k, { regionDialog = draft.copy(kind = k) }, label = { Text(k.label) }, modifier = Modifier.testTag("region-kind-${k.code}")) }
+                        }
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            VolumeShape.entries.forEach { sh -> FilterChip(draft.shape == sh, { regionDialog = draft.copy(shape = sh) }, label = { Text(sh.label) }, modifier = Modifier.testTag("region-shape-${sh.code}")) }
+                        }
+                        Text("Position from the model's centre (mm)", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedTextField(draft.x, { regionDialog = draft.copy(x = it) }, label = { Text("X") }, singleLine = true, modifier = Modifier.weight(1f).testTag("region-x"))
+                            OutlinedTextField(draft.y, { regionDialog = draft.copy(y = it) }, label = { Text("Y") }, singleLine = true, modifier = Modifier.weight(1f).testTag("region-y"))
+                            OutlinedTextField(draft.z, { regionDialog = draft.copy(z = it) }, label = { Text("Z") }, singleLine = true, modifier = Modifier.weight(1f).testTag("region-z"))
+                        }
+                        Text("Size (mm)", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedTextField(draft.sx, { regionDialog = draft.copy(sx = it) }, label = { Text("W") }, singleLine = true, modifier = Modifier.weight(1f).testTag("region-sx"))
+                            OutlinedTextField(draft.sy, { regionDialog = draft.copy(sy = it) }, label = { Text("D") }, singleLine = true, modifier = Modifier.weight(1f).testTag("region-sy"))
+                            OutlinedTextField(draft.sz, { regionDialog = draft.copy(sz = it) }, label = { Text("H") }, singleLine = true, modifier = Modifier.weight(1f).testTag("region-sz"))
+                        }
+                        if (draft.kind == VolumeKind.MODIFIER) {
+                            Text("Settings inside the region (leave blank to keep)", style = MaterialTheme.typography.bodySmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedTextField(draft.infill, { regionDialog = draft.copy(infill = it) }, label = { Text("Infill %") }, singleLine = true, isError = infill == -1, modifier = Modifier.weight(1f).testTag("region-infill"))
+                                OutlinedTextField(draft.walls, { regionDialog = draft.copy(walls = it) }, label = { Text("Walls") }, singleLine = true, isError = walls == -1, modifier = Modifier.weight(1f).testTag("region-walls"))
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton({
+                        val current = VolumeCodec.decode(objects.find { it.id == id }?.volumesJson)
+                        val centerOffset = floatArrayOf(g.center[0] - g.origin[0] + pos[0]!!, g.center[1] - g.origin[1] + pos[1]!!, g.center[2] - g.origin[2] + pos[2]!!)
+                        val overrides = if (draft.kind == VolumeKind.MODIFIER) buildMap { infill?.let { put("sparse_infill_density", "$it%") }; walls?.let { put("wall_loops", "$it") } } else emptyMap()
+                        val volume = ShapeVolume(draft.kind, draft.shape, centerOffset, floatArrayOf(sizes[0]!!, sizes[1]!!, sizes[2]!!), overrides)
+                        val updated = if (draft.index in current.indices) current.mapIndexed { i, v -> if (i == draft.index) volume else v } else current + volume
+                        regionDialog = null
+                        scope.launch { vm.setVolumes(id, updated) }
+                    }, enabled = valid, modifier = Modifier.testTag("region-save")) { Text("Save") }
+                },
+                dismissButton = { TextButton({ regionDialog = null }) { Text("Cancel") } })
+        }
+    }
+
     cutDialogFor?.let { id ->
         val g = geometry[id]; val obj = objects.find { it.id == id }
         if (g == null || obj == null) { cutDialogFor = null } else {

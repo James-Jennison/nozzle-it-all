@@ -243,9 +243,19 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceBambuBundle(
 // over a custom marshalled object type. jToolSlotIndices (Phase 8 follow-up, §11, WO-25) may be
 // null - every existing caller before this parameter existed - treated the same as an
 // all-zeros array (every object keeps the printer's default extruder).
-extern "C" JNIEXPORT void JNICALL
-Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObject(
-    JNIEnv* env, jclass,
+static std::vector<engine::ObjectExtras> extras_from(JNIEnv* env, jobjectArray jPaint, jobjectArray jVolumes, size_t count) {
+    std::vector<std::string> paint = jPaint != nullptr ? to_string_vector(env, jPaint) : std::vector<std::string>{};
+    std::vector<std::string> volumes = jVolumes != nullptr ? to_string_vector(env, jVolumes) : std::vector<std::string>{};
+    std::vector<engine::ObjectExtras> extras(count);
+    for (size_t i = 0; i < count; ++i) {
+        if (i < paint.size()) extras[i].paint_strokes = paint[i];
+        if (i < volumes.size()) extras[i].volume_specs = volumes[i];
+    }
+    return extras;
+}
+
+static void nativeSliceMultiObject_impl(
+    JNIEnv* env, jobjectArray jPaint, jobjectArray jVolumes,
     jobjectArray jModelPaths, jdoubleArray jOffsetXMm, jdoubleArray jOffsetYMm,
     jdoubleArray jRotationZDeg, jdoubleArray jScale, jintArray jToolSlotIndices,
     jstring jOutputGcodePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues) {
@@ -285,7 +295,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObject(
             config_overrides.emplace_back(keys[i], values[i]);
         }
 
-        engine::slice_multi_object(objects, output_path, profile_paths, config_overrides);
+        engine::slice_multi_object(objects, output_path, profile_paths, config_overrides, extras_from(env, jPaint, jVolumes, objects.size()));
     } catch (const std::exception& ex) {
         throw_java_exception(env, ex);
     } catch (...) {
@@ -296,9 +306,8 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObject(
 // Phase 6 follow-up (WO-23): the real multi-object counterpart to nativeSliceBambuBundle above -
 // same parallel-array marshalling nativeSliceMultiObject already uses, producing a
 // .gcode.3mf bundle (engine::slice_multi_object_bambu_bundle) instead of plain .gcode.
-extern "C" JNIEXPORT void JNICALL
-Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObjectBambuBundle(
-    JNIEnv* env, jclass,
+static void nativeSliceMultiObjectBambuBundle_impl(
+    JNIEnv* env, jobjectArray jPaint, jobjectArray jVolumes,
     jobjectArray jModelPaths, jdoubleArray jOffsetXMm, jdoubleArray jOffsetYMm,
     jdoubleArray jRotationZDeg, jdoubleArray jScale,
     jstring jOutputBundlePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues) {
@@ -335,7 +344,7 @@ Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObjectBambuBundle(
             config_overrides.emplace_back(keys[i], values[i]);
         }
 
-        engine::slice_multi_object_bambu_bundle(objects, output_path, profile_paths, config_overrides);
+        engine::slice_multi_object_bambu_bundle(objects, output_path, profile_paths, config_overrides, extras_from(env, jPaint, jVolumes, objects.size()));
     } catch (const std::exception& ex) {
         throw_java_exception(env, ex);
     } catch (...) {
@@ -492,4 +501,43 @@ Java_org_orcaslicer_engine_NativeEngine_nativeCutMesh(JNIEnv* env, jclass, jfloa
         throw_java_exception(env, "Unknown native error while cutting the mesh");
     }
     return nullptr;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObject(
+    JNIEnv* env, jclass, jobjectArray jModelPaths, jdoubleArray jOffsetXMm, jdoubleArray jOffsetYMm,
+    jdoubleArray jRotationZDeg, jdoubleArray jScale, jintArray jToolSlotIndices,
+    jstring jOutputGcodePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues) {
+    nativeSliceMultiObject_impl(env, nullptr, nullptr, jModelPaths, jOffsetXMm, jOffsetYMm, jRotationZDeg, jScale, jToolSlotIndices,
+                                jOutputGcodePath, jProfilePaths, jOverrideKeys, jOverrideValues);
+}
+
+// Phase 9d: same as nativeSliceMultiObject plus per-object paint strokes and modifier/blocker volumes.
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObjectEx(
+    JNIEnv* env, jclass, jobjectArray jModelPaths, jdoubleArray jOffsetXMm, jdoubleArray jOffsetYMm,
+    jdoubleArray jRotationZDeg, jdoubleArray jScale, jintArray jToolSlotIndices,
+    jstring jOutputGcodePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues,
+    jobjectArray jPaintStrokes, jobjectArray jVolumeSpecs) {
+    nativeSliceMultiObject_impl(env, jPaintStrokes, jVolumeSpecs, jModelPaths, jOffsetXMm, jOffsetYMm, jRotationZDeg, jScale, jToolSlotIndices,
+                                jOutputGcodePath, jProfilePaths, jOverrideKeys, jOverrideValues);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObjectBambuBundle(
+    JNIEnv* env, jclass, jobjectArray jModelPaths, jdoubleArray jOffsetXMm, jdoubleArray jOffsetYMm,
+    jdoubleArray jRotationZDeg, jdoubleArray jScale,
+    jstring jOutputBundlePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues) {
+    nativeSliceMultiObjectBambuBundle_impl(env, nullptr, nullptr, jModelPaths, jOffsetXMm, jOffsetYMm, jRotationZDeg, jScale,
+                                           jOutputBundlePath, jProfilePaths, jOverrideKeys, jOverrideValues);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_org_orcaslicer_engine_NativeEngine_nativeSliceMultiObjectBambuBundleEx(
+    JNIEnv* env, jclass, jobjectArray jModelPaths, jdoubleArray jOffsetXMm, jdoubleArray jOffsetYMm,
+    jdoubleArray jRotationZDeg, jdoubleArray jScale,
+    jstring jOutputBundlePath, jobjectArray jProfilePaths, jobjectArray jOverrideKeys, jobjectArray jOverrideValues,
+    jobjectArray jPaintStrokes, jobjectArray jVolumeSpecs) {
+    nativeSliceMultiObjectBambuBundle_impl(env, jPaintStrokes, jVolumeSpecs, jModelPaths, jOffsetXMm, jOffsetYMm, jRotationZDeg, jScale,
+                                           jOutputBundlePath, jProfilePaths, jOverrideKeys, jOverrideValues);
 }

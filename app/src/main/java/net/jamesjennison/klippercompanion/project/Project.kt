@@ -69,6 +69,9 @@ data class ProjectObject(
     // because that's the whole point of this column - different objects on the same plate can
     // now genuinely target different physical tools.
     val toolSlotIndex: Int? = null,
+    // Phase 9d: PaintCodec / VolumeCodec text (see ObjectExtras.kt); null = none.
+    val paintJson: String? = null,
+    val volumesJson: String? = null,
 )
 
 // Phase 9b: one build plate of a project. Objects with a null plateId (every project created before

@@ -123,6 +123,58 @@ class PlateToolbarDeviceTest {
         compose.waitUntil(15000) { compose.onAllNodesWithText("Cut into 2", substring = true).fetchSemanticsNodes().isNotEmpty() }
     }
 
+    private fun dbObject(projectId: String, objectId: String) = runBlocking {
+        val vm = ProjectViewModel(context(), AppDatabase.get(context()).projectDao())
+        vm.loadProject(projectId); vm.allObjects.value.first { it.id == objectId }
+    }
+
+    @Test fun paintModeDragsPaintStrokesOntoTheSelectedModelAndClearRemovesThem() {
+        val (projectId, objectIds) = seedProject("PaintUiProject", 1)
+        openScreen(projectId)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(8000) { runCatching { compose.onNodeWithTag("project-tool-paint").onChildren().onFirst().assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("project-tool-paint").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-paint-controls").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-paint-kind-support_blocker").performScrollTo().performClick()
+        compose.onNodeWithTag("project-workspace").performScrollTo().performTouchInput {
+            swipe(Offset(width * 0.42f, height * 0.5f), Offset(width * 0.58f, height * 0.55f), durationMillis = 400)
+        }
+        var strokes = emptyList<PaintStroke>()
+        val deadline = System.currentTimeMillis() + 8000
+        while (System.currentTimeMillis() < deadline && strokes.isEmpty()) { Thread.sleep(200); strokes = PaintCodec.decode(dbObject(projectId, objectIds[0]).paintJson) }
+        assertTrue("expected the drag to store paint strokes", strokes.isNotEmpty())
+        assertTrue(strokes.all { it.kind == PaintKind.SUPPORT_BLOCKER })
+        compose.onNodeWithTag("project-paint-clear").performScrollTo().performClick()
+        val cleared = System.currentTimeMillis() + 8000
+        while (System.currentTimeMillis() < cleared && dbObject(projectId, objectIds[0]).paintJson != null) Thread.sleep(200)
+        assertNull(dbObject(projectId, objectIds[0]).paintJson)
+    }
+
+    @Test fun regionsCanBeAddedEditedAndDeletedOnTheSelectedModel() {
+        val (projectId, objectIds) = seedProject("RegionUiProject", 1)
+        openScreen(projectId)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("project-region-add").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-region-add").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("region-save", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("region-save", useUnmergedTree = true).assertIsNotEnabled() // a modifier needs at least one setting
+        compose.onNodeWithTag("region-infill", useUnmergedTree = true).performTextInput("80")
+        compose.onNodeWithTag("region-sx", useUnmergedTree = true).performTextClearance(); compose.onNodeWithTag("region-sx", useUnmergedTree = true).performTextInput("25")
+        compose.onNodeWithTag("region-save", useUnmergedTree = true).assertIsEnabled().performClick()
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("project-region-0").fetchSemanticsNodes().isNotEmpty() }
+        val volumes = VolumeCodec.decode(dbObject(projectId, objectIds[0]).volumesJson)
+        assertEquals(1, volumes.size); assertEquals(25f, volumes[0].size[0]); assertEquals("80%", volumes[0].overrides["sparse_infill_density"])
+        compose.onNodeWithTag("project-region-delete-0").performScrollTo().performClick()
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("project-region-0").fetchSemanticsNodes().isEmpty() }
+        assertNull(dbObject(projectId, objectIds[0]).volumesJson)
+    }
+
     @Test fun undoAndRedoButtonsRestoreARemovedObject() {
         val (projectId, objectIds) = seedProject("UndoProject", 2)
         openScreen(projectId)

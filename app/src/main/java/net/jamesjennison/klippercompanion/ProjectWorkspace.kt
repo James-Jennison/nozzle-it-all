@@ -4,6 +4,7 @@ import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
@@ -58,18 +59,27 @@ import kotlin.math.sqrt
 // the same `framedIds: Set<String>` the real per-object camera-framing logic already uses.
 private const val EMPTY_PLATE_FRAMED_KEY = "__empty_plate__"
 
+// Extra geometry drawn over an object in its own model matrix (painted regions, modifier/blocker outlines):
+// [vertices] are position + normal (6 floats each), in the same frame as the object's mesh; [lines] draws
+// GL_LINES instead of triangles.
+class OverlayGroup(val color: FloatArray, val vertices: FloatArray, val lines: Boolean = false)
+
 data class RenderableObject(
     val id: String,
     val geometry: MeshGeometry,
     val transform: ModelTransform,
     val selected: Boolean = false,
     val outOfBounds: Boolean = false,
+    val overlays: List<OverlayGroup> = emptyList(),
 )
 
 private class PerObjectGLState {
     var vbo = 0
     var vertexCount = 0
     var uploaded = false
+    var overlaySource: List<OverlayGroup>? = null
+    var overlayVbos = IntArray(0)
+    var overlayCounts = IntArray(0)
 }
 
 class ProjectGLRenderer : GLSurfaceView.Renderer {
@@ -140,22 +150,37 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
             for (id in stale) {
                 val state = perObject.remove(id) ?: continue
                 GLES30.glDeleteBuffers(1, intArrayOf(state.vbo), 0)
+                if (state.overlayVbos.isNotEmpty()) GLES30.glDeleteBuffers(state.overlayVbos.size, state.overlayVbos, 0)
                 perObjectGeometry.remove(id)
             }
             for (obj in objects) {
                 val previousGeometry = perObjectGeometry[obj.id]
-                if (previousGeometry === obj.geometry) continue // same geometry reference - only the transform changed, no re-upload needed
-                val state = perObject.getOrPut(obj.id) {
-                    val handles = IntArray(1)
-                    GLES30.glGenBuffers(1, handles, 0)
-                    PerObjectGLState().also { it.vbo = handles[0] }
+                if (previousGeometry !== obj.geometry) { // same geometry reference - only the transform changed, no re-upload needed
+                    val state = perObject.getOrPut(obj.id) {
+                        val handles = IntArray(1)
+                        GLES30.glGenBuffers(1, handles, 0)
+                        PerObjectGLState().also { it.vbo = handles[0] }
+                    }
+                    GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, state.vbo)
+                    val buffer = directFloatBuffer(obj.geometry.vertexData)
+                    GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, obj.geometry.vertexData.size * 4, buffer, GLES30.GL_STATIC_DRAW)
+                    state.vertexCount = obj.geometry.vertexData.size / 6
+                    state.uploaded = true
+                    perObjectGeometry[obj.id] = obj.geometry
                 }
-                GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, state.vbo)
-                val buffer = directFloatBuffer(obj.geometry.vertexData)
-                GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, obj.geometry.vertexData.size * 4, buffer, GLES30.GL_STATIC_DRAW)
-                state.vertexCount = obj.geometry.vertexData.size / 6
-                state.uploaded = true
-                perObjectGeometry[obj.id] = obj.geometry
+                val state = perObject[obj.id] ?: continue
+                if (state.overlaySource !== obj.overlays) {
+                    if (state.overlayVbos.isNotEmpty()) GLES30.glDeleteBuffers(state.overlayVbos.size, state.overlayVbos, 0)
+                    val vbos = IntArray(obj.overlays.size)
+                    if (vbos.isNotEmpty()) GLES30.glGenBuffers(vbos.size, vbos, 0)
+                    obj.overlays.forEachIndexed { i, group ->
+                        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbos[i])
+                        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, group.vertices.size * 4, directFloatBuffer(group.vertices), GLES30.GL_STATIC_DRAW)
+                    }
+                    state.overlayVbos = vbos
+                    state.overlayCounts = IntArray(obj.overlays.size) { obj.overlays[it].vertices.size / 6 }
+                    state.overlaySource = obj.overlays
+                }
             }
             // WO-30 follow-up: an empty plate still draws the real bed's own grid (bedShape),
             // instead of buildPlateGrid's own object-footprint fallback, which has nothing to
@@ -230,6 +255,23 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
             GLES30.glEnableVertexAttribArray(1)
             GLES30.glVertexAttribPointer(1, 3, GLES30.GL_FLOAT, false, 24, 12)
             GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, state.vertexCount)
+            // Painted regions / region outlines, in the same model matrix, nudged toward the camera so they win the depth test.
+            if (state.overlayVbos.isNotEmpty()) {
+                GLES30.glEnable(GLES30.GL_POLYGON_OFFSET_FILL)
+                GLES30.glPolygonOffset(-2f, -2f)
+                obj.overlays.forEachIndexed { i, group ->
+                    if (i >= state.overlayVbos.size || state.overlayCounts[i] == 0) return@forEachIndexed
+                    GLES30.glUniform3f(GLES30.glGetUniformLocation(meshProgram, "uBaseColor"), group.color[0], group.color[1], group.color[2])
+                    GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, state.overlayVbos[i])
+                    GLES30.glEnableVertexAttribArray(0)
+                    GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 24, 0)
+                    GLES30.glEnableVertexAttribArray(1)
+                    GLES30.glVertexAttribPointer(1, 3, GLES30.GL_FLOAT, false, 24, 12)
+                    if (group.lines) { GLES30.glDisable(GLES30.GL_CULL_FACE); GLES30.glDrawArrays(GLES30.GL_LINES, 0, state.overlayCounts[i]); GLES30.glEnable(GLES30.GL_CULL_FACE) }
+                    else GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, state.overlayCounts[i])
+                }
+                GLES30.glDisable(GLES30.GL_POLYGON_OFFSET_FILL)
+            }
         }
     }
 
@@ -372,7 +414,7 @@ void main() { fragColor = vec4(uColor, 1.0); }
 // composable actually needs (a caller/ViewModel loads geometry per object, e.g. via
 // MeshLoader.load(object.sourceFileUri's path), once per distinct file, same as ModelViewer's own
 // MeshLoader.load call).
-data class WorkspaceObject(val projectObject: ProjectObject, val geometry: MeshGeometry)
+data class WorkspaceObject(val projectObject: ProjectObject, val geometry: MeshGeometry, val overlays: List<OverlayGroup> = emptyList())
 
 // Nearest-hit test for tap-to-select: a real ray/sphere intersection against each object's own
 // bounding sphere (geometry.center/radius, live-transformed by offset+scale) - a deliberate v1
@@ -461,6 +503,9 @@ enum class WorkspaceInteractionMode { MOVE, ROTATE }
     // Face-pick / measure tools: when non-null, a tap hands the world-space ray (origin, direction) to the
     // caller instead of selecting.
     onRayTap: ((FloatArray, FloatArray) -> Unit)? = null,
+    // Paint tool: when non-null a one-finger drag reports rays (origin, direction, isStart) instead of moving the
+    // object or orbiting the camera.
+    onRayDrag: ((FloatArray, FloatArray, Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     var glView by remember { mutableStateOf<GLSurfaceView?>(null) }
@@ -480,7 +525,7 @@ enum class WorkspaceInteractionMode { MOVE, ROTATE }
             objects.map { wo ->
                 val t = wo.projectObject.transform()
                 val outOfBounds = (bedShape?.let { computeOutOfBounds(wo.geometry, t, it) } ?: false) || wo.projectObject.id in collidingIds
-                RenderableObject(wo.projectObject.id, wo.geometry, t, selected = wo.projectObject.id == selectedId, outOfBounds = outOfBounds)
+                RenderableObject(wo.projectObject.id, wo.geometry, t, selected = wo.projectObject.id == selectedId, outOfBounds = outOfBounds, overlays = wo.overlays)
             }
         }
         renderer.bedShape = bedShape
@@ -550,7 +595,22 @@ enum class WorkspaceInteractionMode { MOVE, ROTATE }
                     // toggling Move/Rotate mid-idle (no gesture in progress) relaunches this
                     // coroutine and picks up the new mode immediately - the same staleness class
                     // of bug this file's own runningTransform fix (below) exists to avoid.
-                    .pointerInput(objects.map { it.projectObject.id }, selectedId, interactionMode) {
+                    .pointerInput(onRayDrag != null) {
+                        if (onRayDrag == null) return@pointerInput
+                        fun report(pos: androidx.compose.ui.geometry.Offset, start: Boolean) {
+                            val vp = renderer.lastVpMatrix ?: return
+                            val w = renderer.viewportWidth; val h = renderer.viewportHeight
+                            if (w <= 1 || h <= 1) return
+                            val ray = unprojectRay(vp, w, h, pos.x, pos.y)
+                            onRayDrag(floatArrayOf(ray[0], ray[1], ray[2]), floatArrayOf(ray[3], ray[4], ray[5]), start)
+                        }
+                        detectDragGestures(
+                            onDragStart = { report(it, true) },
+                            onDrag = { change, _ -> change.consume(); report(change.position, false) },
+                        )
+                    }
+                    .pointerInput(objects.map { it.projectObject.id }, selectedId, interactionMode, onRayDrag != null) {
+                        if (onRayDrag != null) return@pointerInput
                         // Real bug fix (owner-reported, live on the Razr 2026: "it allows me to
                         // pinch momentarily then jumps back to full size. Attempted rotation has
                         // no effect"): detectTransformGestures' own pan/zoom/rotation are each

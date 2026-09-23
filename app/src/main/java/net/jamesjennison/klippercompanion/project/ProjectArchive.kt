@@ -16,6 +16,7 @@ data class ArchivePlate(val id: String, val name: String, val position: Int)
 data class ArchiveObject(
     val id: String, val file: String, val plateId: String?, val offsetXMm: Float, val offsetYMm: Float, val rotationZDeg: Float, val scale: Float,
     val materialId: String?, val materialDisplayName: String?, val materialTempNozzleC: Int?, val materialTempBedC: Int?, val toolSlotIndex: Int?,
+    val paintJson: String? = null, val volumesJson: String? = null,
 )
 data class ParsedArchive(val name: String, val plates: List<ArchivePlate>, val objects: List<ArchiveObject>)
 
@@ -39,6 +40,7 @@ object ProjectArchive {
                     .put("materialId", o.materialId ?: JSONObject.NULL).put("materialDisplayName", o.materialDisplayName ?: JSONObject.NULL)
                     .put("materialTempNozzleC", o.materialTempNozzleC ?: JSONObject.NULL).put("materialTempBedC", o.materialTempBedC ?: JSONObject.NULL)
                     .put("toolSlotIndex", o.toolSlotIndex ?: JSONObject.NULL)
+                    .put("paintJson", o.paintJson ?: JSONObject.NULL).put("volumesJson", o.volumesJson ?: JSONObject.NULL)
             }))
         ZipOutputStream(out).use { zip ->
             zip.putNextEntry(ZipEntry("project.json")); zip.write(manifest.toString().toByteArray()); zip.closeEntry()
@@ -93,12 +95,17 @@ object ProjectArchive {
                 fun s(k: String) = if (o.isNull(k)) null else o.getString(k).take(200)
                 fun n(k: String) = if (o.isNull(k)) null else o.getInt(k)
                 val scale = f("scale"); if (scale <= 0f) throw InvalidProjectArchive("Invalid scale.")
-                ArchiveObject(o.getString("id"), file, s("plateId"), f("offsetXMm"), f("offsetYMm"), f("rotationZDeg"), scale, s("materialId"), s("materialDisplayName"), n("materialTempNozzleC"), n("materialTempBedC"), n("toolSlotIndex"))
+                ArchiveObject(o.getString("id"), file, s("plateId"), f("offsetXMm"), f("offsetYMm"), f("rotationZDeg"), scale, s("materialId"), s("materialDisplayName"), n("materialTempNozzleC"), n("materialTempBedC"), n("toolSlotIndex"),
+                    sanitizedPaint(o), sanitizedVolumes(o))
             }
         }
         if (plates.map { it.id }.toSet().let { ids -> objects.any { it.plateId != null && it.plateId !in ids } }) throw InvalidProjectArchive("Object refers to a missing plate.")
         return ParsedArchive(name, plates, objects)
     }
+
+    // Re-encoded through the codecs, so a tampered archive can only ever carry well-formed, bounded, validated data.
+    private fun sanitizedPaint(o: JSONObject): String? = if (o.isNull("paintJson") || !o.has("paintJson")) null else net.jamesjennison.klippercompanion.PaintCodec.decode(o.getString("paintJson")).takeIf { it.isNotEmpty() }?.let(net.jamesjennison.klippercompanion.PaintCodec::encode)
+    private fun sanitizedVolumes(o: JSONObject): String? = if (o.isNull("volumesJson") || !o.has("volumesJson")) null else net.jamesjennison.klippercompanion.VolumeCodec.decode(o.getString("volumesJson")).takeIf { it.isNotEmpty() }?.let(net.jamesjennison.klippercompanion.VolumeCodec::encode)
 
     private fun ZipInputStream.readBounded(limit: Long): ByteArray? {
         val out = java.io.ByteArrayOutputStream(); val buffer = ByteArray(8192); var total = 0L

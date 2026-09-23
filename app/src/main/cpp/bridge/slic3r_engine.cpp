@@ -26,6 +26,7 @@
 #include "libslic3r/Utils.hpp"
 #include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/TriangleMeshSlicer.hpp"
+#include <sstream>
 
 #include "thumbnail_render.hpp"
 
@@ -79,6 +80,7 @@ void run_cancellable(Slic3r::Print& print, const std::string& partial_output, Fn
     }
     g_progress_percent = 100;
 }
+
 
 // Shared by slice_file() and load_mesh_preview(): load a model file and place it exactly where
 // slicing will actually place it - real coordinates, not the mesh's own local origin. See
@@ -157,6 +159,112 @@ Slic3r::Model load_and_place_model(const std::string& input_model_path, Slic3r::
     }
     return model;
 }
+
+// Phase 9d: paint strokes and modifier/blocker volumes. Both arrive in the object's mesh frame - the "default
+// placement" frame load_mesh_preview() reports (bed-centred instance, no user transform) - so they stay valid
+// however the user moves, rotates or scales the object afterwards.
+struct PaintStrokeRec { int kind; Slic3r::Vec3d origin; Slic3r::Vec3d dir; double radius; };
+
+std::vector<std::string> split_text(const std::string& text, char sep) {
+    std::vector<std::string> out;
+    std::string item;
+    std::istringstream stream(text);
+    while (std::getline(stream, item, sep)) out.push_back(item);
+    return out;
+}
+
+bool parse_vec3(const std::string& text, Slic3r::Vec3d& out) {
+    std::vector<std::string> p = split_text(text, ',');
+    if (p.size() != 3) return false;
+    try { out = Slic3r::Vec3d(std::stod(p[0]), std::stod(p[1]), std::stod(p[2])); } catch (...) { return false; }
+    return true;
+}
+
+std::vector<PaintStrokeRec> parse_strokes(const std::string& text) {
+    std::vector<PaintStrokeRec> out;
+    for (const std::string& rec : split_text(text, ';')) {
+        std::vector<std::string> p = split_text(rec, ',');
+        if (p.size() != 8) continue;
+        try {
+            PaintStrokeRec s;
+            s.kind = std::stoi(p[0]);
+            s.origin = Slic3r::Vec3d(std::stod(p[1]), std::stod(p[2]), std::stod(p[3]));
+            s.dir = Slic3r::Vec3d(std::stod(p[4]), std::stod(p[5]), std::stod(p[6]));
+            s.radius = std::stod(p[7]);
+            if (s.kind >= 0 && s.kind <= 3 && s.radius > 0.0 && s.dir.norm() > 1e-9) out.push_back(s);
+        } catch (...) {}
+    }
+    return out;
+}
+
+void apply_paint_strokes(Slic3r::ModelObject* object, const std::vector<PaintStrokeRec>& strokes) {
+    using namespace Slic3r;
+    if (strokes.empty() || object->volumes.empty()) return;
+    ModelVolume* volume = object->volumes.front();
+    AABBMesh aabb(volume->mesh());
+    TriangleSelector support_selector(volume->mesh());
+    TriangleSelector seam_selector(volume->mesh());
+    Transform3d inv = volume->get_matrix().inverse(); // object frame -> the volume's own mesh frame
+    bool support_painted = false, seam_painted = false;
+    for (const PaintStrokeRec& s : strokes) {
+        Vec3d local_origin = inv * s.origin;
+        Vec3d local_dir = (inv.linear() * s.dir).normalized();
+        AABBMesh::hit_result hit = aabb.query_ray_hit(local_origin, local_dir);
+        if (!hit.is_hit()) continue;
+        const bool seam = s.kind >= 2;
+        const bool enforcer = (s.kind % 2) == 0;
+        TriangleSelector::ClippingPlane clip;
+        std::unique_ptr<TriangleSelector::Cursor> cursor = TriangleSelector::SinglePointCursor::cursor_factory(
+            hit.position().cast<float>(), local_origin.cast<float>(), static_cast<float>(s.radius),
+            TriangleSelector::CursorType::SPHERE, Transform3d::Identity(), clip);
+        (seam ? seam_selector : support_selector).select_patch(hit.face(), std::move(cursor),
+            enforcer ? EnforcerBlockerType::ENFORCER : EnforcerBlockerType::BLOCKER, Transform3d::Identity(), /*triangle_splitting=*/true);
+        (seam ? seam_painted : support_painted) = true;
+    }
+    if (support_painted) volume->supported_facets.set(support_selector);
+    if (seam_painted) volume->seam_facets.set(seam_selector);
+}
+
+void apply_volume_specs(Slic3r::ModelObject* object, const std::string& text) {
+    using namespace Slic3r;
+    for (const std::string& rec : split_text(text, ';')) {
+        std::vector<std::string> p = split_text(rec, ':');
+        if (p.size() < 4) continue;
+        Vec3d center, size;
+        if (!parse_vec3(p[2], center) || !parse_vec3(p[3], size)) continue;
+        if (size.minCoeff() <= 0.0) continue;
+        ModelVolumeType type;
+        if (p[0] == "modifier") type = ModelVolumeType::PARAMETER_MODIFIER;
+        else if (p[0] == "blocker") type = ModelVolumeType::SUPPORT_BLOCKER;
+        else if (p[0] == "enforcer") type = ModelVolumeType::SUPPORT_ENFORCER;
+        else continue;
+        TriangleMesh mesh;
+        if (p[1] == "box") mesh = make_cube(size.x(), size.y(), size.z());
+        else if (p[1] == "cylinder") { mesh = make_cylinder(0.5, 1.0); mesh.scale(Vec3f(size.x(), size.y(), size.z())); }
+        else if (p[1] == "sphere") { mesh = make_sphere(0.5); mesh.scale(Vec3f(size.x(), size.y(), size.z())); }
+        else continue;
+        ModelVolume* volume = object->add_volume(std::move(mesh), type);
+        volume->set_offset(center); // already in the object's frame
+        if (type == ModelVolumeType::PARAMETER_MODIFIER && p.size() == 5 && !p[4].empty()) {
+            ConfigSubstitutionContext substitutions(ForwardCompatibilitySubstitutionRule::Disable);
+            for (const std::string& kv : split_text(p[4], '|')) {
+                size_t eq = kv.find('=');
+                if (eq == std::string::npos) continue;
+                volume->config.set_deserialize(kv.substr(0, eq), kv.substr(eq + 1), substitutions);
+            }
+        }
+    }
+}
+
+// Applies one object's extras. Strokes and volumes arrive in the object's own frame - MeshGeometry coordinates
+// minus MeshGeometry.origin - which does not depend on the bed the model is later centred on (the preview loads
+// with a default bed, the real slice with the printer's own).
+void apply_object_extras(Slic3r::ModelObject* object, const ObjectExtras& extras) {
+    if (object == nullptr) return;
+    apply_paint_strokes(object, parse_strokes(extras.paint_strokes));
+    apply_volume_specs(object, extras.volume_specs);
+}
+
 
 // The actual process/export tail, shared by slice_file() (fresh load from disk) and
 // slice_paint_session() (an already-loaded, possibly support-painted in-memory model) - both end
@@ -384,7 +492,8 @@ void slice_bambu_bundle(const std::string& input_model_path,
 void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, ModelTransform>>& objects,
                                       const std::string& output_bundle_path,
                                       const std::vector<std::string>& profile_paths,
-                                      const std::vector<std::pair<std::string, std::string>>& config_overrides) {
+                                      const std::vector<std::pair<std::string, std::string>>& config_overrides,
+                                      const std::vector<ObjectExtras>& extras) {
     using namespace Slic3r;
 
     if (objects.empty()) {
@@ -406,11 +515,16 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
     }
 
     Model combined;
+    size_t object_index = 0;
     for (const auto& [path, transform] : objects) {
         Model loaded = load_and_place_model(path, config, transform);
+        const size_t first_object_of_file = combined.objects.size();
         for (ModelObject* object : loaded.objects) {
             combined.add_object(*object);
         }
+        if (object_index < extras.size() && combined.objects.size() > first_object_of_file)
+            apply_object_extras(combined.objects[first_object_of_file], extras[object_index]);
+        ++object_index;
     }
 
     bundle_model(combined, config, output_bundle_path);
@@ -435,7 +549,8 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
 void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform, int>>& objects,
                          const std::string& output_gcode_path,
                          const std::vector<std::string>& profile_paths,
-                         const std::vector<std::pair<std::string, std::string>>& config_overrides) {
+                         const std::vector<std::pair<std::string, std::string>>& config_overrides,
+                         const std::vector<ObjectExtras>& extras) {
     using namespace Slic3r;
 
     if (objects.empty()) {
@@ -453,8 +568,10 @@ void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform
     }
 
     Model combined;
+    size_t object_index = 0;
     for (const auto& [path, transform, tool_index] : objects) {
         Model loaded = load_and_place_model(path, config, transform);
+        const size_t first_object_of_file = combined.objects.size();
         for (ModelObject* object : loaded.objects) {
             // Phase 8 follow-up (§11, WO-25): real per-object tool assignment - root-caused via a
             // temporary __android_log_print diagnostic (since removed) after the generic
@@ -483,6 +600,10 @@ void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform
             }
             combined.add_object(*object);
         }
+        // Applied to the copy inside `combined` (Model::add_object clones the object), which is what gets sliced.
+        if (object_index < extras.size() && combined.objects.size() > first_object_of_file)
+            apply_object_extras(combined.objects[first_object_of_file], extras[object_index]);
+        ++object_index;
     }
 
     slice_model(combined, config, output_gcode_path);

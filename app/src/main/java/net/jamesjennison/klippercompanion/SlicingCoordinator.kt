@@ -21,6 +21,9 @@ sealed class SliceOutcome {
     data object Cancelled : SliceOutcome()
 }
 
+/** Per-object paint strokes and volumes in ObjectExtras.kt's text formats ("" = none). */
+data class ObjectExtrasText(val paint: String = "", val volumes: String = "")
+
 object SlicingCoordinator {
     // The native engine runs one slice at a time (single cancel registration), so slices are serialized.
     private val sliceLock = kotlinx.coroutines.sync.Mutex()
@@ -118,7 +121,7 @@ object SlicingCoordinator {
     // bundled filament.json base diameter, merged into `overrides`. Left empty (the default, and
     // every caller before this parameter existed), this is the same single-material slice every
     // project already produces - no multi-slot config is generated at all.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel(); SliceService.start(context.applicationContext); try {
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel(); SliceService.start(context.applicationContext); try {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
@@ -127,13 +130,14 @@ object SlicingCoordinator {
                 val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
                 val output = freshOutputFile(context, "project", bambuBundle = bambuTarget)
                 if (bambuTarget) {
-                    NativeEngine.nativeSliceMultiObjectBambuBundle(
+                    NativeEngine.nativeSliceMultiObjectBambuBundleEx(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
                         output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                        objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
                     )
                 } else {
                     val slots = toolSlotIndices.ifEmpty { List(objects.size) { 0 } }
@@ -158,7 +162,7 @@ object SlicingCoordinator {
                             ?: BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
                         overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback)
                     }
-                    NativeEngine.nativeSliceMultiObject(
+                    NativeEngine.nativeSliceMultiObjectEx(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
@@ -166,6 +170,7 @@ object SlicingCoordinator {
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
                         slots.toIntArray(),
                         output.absolutePath, resolved.profilePaths.toTypedArray(), effectiveOverrides.keys.toTypedArray(), effectiveOverrides.values.toTypedArray(),
+                        objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
                     )
                 }
                 SliceOutcome.Success(output)

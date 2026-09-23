@@ -89,6 +89,16 @@ object NativeEngine {
         overrideKeys: Array<String>, overrideValues: Array<String>,
     )
 
+    // Phase 9d: nativeSliceMultiObject plus per-object paint strokes / modifier+blocker volumes (parallel to
+    // modelPaths; "" = none) in the text formats of ObjectExtras.kt (PaintCodec / VolumeCodec).
+    external fun nativeSliceMultiObjectEx(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray, toolSlotIndices: IntArray,
+        outputGcodePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+        paintStrokes: Array<String>, volumeSpecs: Array<String>,
+    )
+
     // Phase 6 follow-up (WO-23): the real multi-object counterpart to nativeSliceBambuBundle -
     // same parallel-array shape as nativeSliceMultiObject, producing a .gcode.3mf bundle instead
     // of plain .gcode (engine::slice_multi_object_bambu_bundle).
@@ -97,6 +107,14 @@ object NativeEngine {
         rotationZDeg: DoubleArray, scale: DoubleArray,
         outputBundlePath: String, profilePaths: Array<String>,
         overrideKeys: Array<String>, overrideValues: Array<String>,
+    )
+
+    external fun nativeSliceMultiObjectBambuBundleEx(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray,
+        outputBundlePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+        paintStrokes: Array<String>, volumeSpecs: Array<String>,
     )
 
     // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - real

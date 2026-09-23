@@ -17,6 +17,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <new>
 #include <stdexcept>
 
 #include "slic3r_engine.hpp"
@@ -44,6 +45,10 @@ void throw_java_exception(JNIEnv* env, const std::exception& ex) {
     if (dynamic_cast<const engine::SliceCancelled*>(&ex) != nullptr) {
         jclass cancelled = env->FindClass("java/util/concurrent/CancellationException");
         if (cancelled != nullptr) env->ThrowNew(cancelled, ex.what());
+        return;
+    }
+    if (dynamic_cast<const std::bad_alloc*>(&ex) != nullptr) {
+        throw_java_exception(env, std::string("Not enough memory to slice this model. Try fewer or smaller objects, a larger layer height, or close other apps."));
         return;
     }
     throw_java_exception(env, std::string(ex.what()));

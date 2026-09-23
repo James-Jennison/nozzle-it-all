@@ -271,7 +271,17 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     }
                     customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     if (profile == null) Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty(), modifier = Modifier.fillMaxWidth().testTag("project-slice")) { Text("Slice") }
+                    // Phase 2 real bug fix: this screen's own upload step (LiveFileChanges/
+                    // Moonraker.start, below) always assumed Moonraker unconditionally, same gap
+                    // SliceAndPrintPanel already had and fixed for Bambu Lab - Prusa Link would
+                    // have silently failed the same way, since PrusaLinkPrinterService has no
+                    // generic file-upload endpoint this app implements.
+                    val acceptsSlicedGcode = profile?.let { capabilitiesFor(it.kind).acceptsOnDeviceSlicedGcode } ?: true
+                    if (profile != null && !acceptsSlicedGcode) Text(
+                        "On-device slicing isn't wired up yet for ${profile.label} - its printer type needs an upload/print path this app doesn't implement.",
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-unsupported-printer"),
+                    )
+                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode, modifier = Modifier.fillMaxWidth().testTag("project-slice")) { Text("Slice") }
                 }
                 stage == ProjectEditorStage.SLICING && sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {

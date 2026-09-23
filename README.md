@@ -39,10 +39,13 @@ not just a bounding-box guess) that blocks slicing while objects overlap, and a 
 auto-arrange (real 2D bin packing, not a stub) to resolve it — backed by Room, and slices the whole
 plate at once on-device with the same review-then-confirm pipeline (sliced 3D preview + stats,
 printer-ready confirmation, upload, explicit Start print) the single-object share-intent/Prepare-tab
-flow above already uses. This closes Phase 1 of the roadmap (see `docs/WORK_ORDER.md`'s WO-17
-entries for the detailed history, most current for this area — it's updated more often than this
-file). No materials/multicolor or a model-discovery surface yet — see the plan document's gap
-matrix for the fuller current-vs-target breakdown,
+flow above already uses. This closes Phase 1 of the roadmap. A single `PrinterCapabilities` object
+(one per vendor: Klipper/Moonraker, Snapmaker U1/PAXX, Bambu Lab, Prusa Link) now drives every
+control-visibility decision in the app, replacing the printer-kind conditionals that used to be
+scattered across the UI — closing Phase 2. (See `docs/WORK_ORDER.md`'s WO-17/WO-18 entries for the
+detailed history, most current for this area — it's updated more often than this file.) No
+materials/multicolor or a model-discovery surface yet — see the plan document's gap matrix for the
+fuller current-vs-target breakdown,
 though `docs/WORK_ORDER.md` supersedes it for anything the two disagree on.
 
 Only use a trusted LAN endpoint for printer control. HTTP is supported for conventional local

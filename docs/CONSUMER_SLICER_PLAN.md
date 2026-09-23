@@ -330,7 +330,7 @@ arrange and slicing from that screen are still open).
 | Build-volume bounds check | **Complete** | yes | yes | yes | yes | yes | yes | **P0 (keep, extend for multi-object)** |
 | Basic/advanced slicing tiers | **Missing** | yes | n/a | yes | yes | n/a | yes | **P0 basic / P2 advanced** |
 | Sliced 3D preview + stats | **Complete** | yes | yes | yes | yes | limited | yes | **P0 (keep, extend per-material)** |
-| Printer capability abstraction | **Missing (2 conflicting enums)** | n/a | yes | yes | yes | yes | yes | **P0** |
+| Printer capability abstraction | **Complete (WO-18: `PrinterCapabilities`, every UI kind-branch migrated - Phase 2 closed 2026-09-23)** | n/a | yes | yes | yes | yes | yes | **P0** |
 | Printer discovery (LAN/QR) | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |
 | Jog / manual move | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |
 | Bed-leveling trigger | **Missing (read-only viz)** | yes | yes | yes | yes | yes | yes | **P1** |
@@ -344,7 +344,7 @@ arrange and slicing from that screen are still open).
 | AI failure detection | **Missing** | no | limited | yes | limited | no | no | **P2, capability-gated, honest-or-absent** |
 | Notifications (typed) | **Partial (6 of ~9 types)** | yes | yes | yes | yes | yes | yes | **P0/P1** |
 | Print history w/ reprint | **Backend-only (no reprint)** | yes | yes | yes | yes | yes | yes | **P1** |
-| Project persistence | **Partial (WO-17: Room-backed, survives process death; no rename/delete from the project list yet)** | yes | yes | yes | yes | yes | yes | **P0** |
+| Project persistence | **Complete (WO-17: Room-backed, survives process death, rename/delete from the project list - Phase 1 closed 2026-09-23)** | yes | yes | yes | yes | yes | yes | **P0** |
 | Multi-printer dashboard | **Complete (flat list)** | n/a | yes | yes | limited | limited | limited | **P0 (keep)** |
 | Account/cloud sync | **Missing (by design)** | yes | yes | yes | yes | yes | yes | **P1 — owner-approved 2026-09-22 (Phase 11)** |
 | Model discover/marketplace | **Missing** | yes | yes | yes | limited | limited | yes | **P3, owner-gated** |

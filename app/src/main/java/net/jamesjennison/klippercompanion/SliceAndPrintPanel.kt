@@ -132,14 +132,21 @@ import java.io.File
             confirmButton={TextButton(close){Text("Close")}})
         return
     }
-    if(profile.kind == PrinterKind.BAMBU_LAB) {
+    if(!capabilitiesFor(profile.kind).acceptsOnDeviceSlicedGcode) {
         // Real, honest gap (see SlicingCoordinator.kt / docs/WORK_ORDER.md's WO-13 entry): the
         // engine's export_gcode() produces plain .gcode, not the .gcode.3mf bundle
-        // BambuPrintRequest/bambuPrintName require. Slicing itself would succeed; the handoff to
-        // this printer's own print-start path is what's not built yet - say so plainly rather
-        // than attempt something that would fail bambuPrintName's own validation.
-        AlertDialog(onDismissRequest=close,title={Text("Not yet supported for Bambu Lab")},
-            text={Text("On-device slicing for Bambu Lab printers isn't wired up yet - it needs a .gcode.3mf bundle, and this app's slicing engine currently only produces plain .gcode. Slice in Bambu Studio or Orca and share the exported .gcode.3mf instead.")},
+        // BambuPrintRequest/bambuPrintName require - Bambu Lab is blocked for that reason.
+        // Phase 2 real bug fix: Prusa Link is blocked here too now - this step below
+        // (`LiveFileChanges`/`Moonraker.start`) always spoke Moonraker's own upload/start
+        // protocol unconditionally, which a real PrusaLink printer doesn't implement
+        // (PrusaLinkPrinterService's command() only ever sends print-control requests, never a
+        // generic file upload) - slicing would have "succeeded" and then silently failed (or
+        // worse, hit the wrong endpoint) at the upload step against real hardware.
+        val vendorName = if(profile.kind == PrinterKind.BAMBU_LAB) "Bambu Lab" else "Prusa Link"
+        AlertDialog(onDismissRequest=close,title={Text("Not yet supported for $vendorName")},
+            text={Text(if(profile.kind == PrinterKind.BAMBU_LAB)
+                "On-device slicing for Bambu Lab printers isn't wired up yet - it needs a .gcode.3mf bundle, and this app's slicing engine currently only produces plain .gcode. Slice in Bambu Studio or Orca and share the exported .gcode.3mf instead."
+            else "On-device slicing for Prusa Link printers isn't wired up yet - the upload step needs a Prusa Link-specific file transfer this app doesn't implement. Slice in PrusaSlicer and upload from there instead.")},
             confirmButton={TextButton(close){Text("Close")}})
         return
     }

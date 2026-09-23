@@ -303,16 +303,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var expandedCamera by remember(state.generation, state.connected) { mutableStateOf(false) }
     BackHandler(expandedCamera) { expandedCamera = false }
     val enabled = state.connected && state.snapshot?.ready == true && !state.busy
-    // A Bambu printer speaks MQTT/FTPS, not Moonraker: every Klipper-only control below is hidden
-    // rather than shown failing, because BambuPrinterService implements none of them.
-    val bambu = state.kindFor(state.address) == PrinterKind.BAMBU_LAB
-    // A Prusa Link printer speaks PrusaLink's own REST API, same non-Klipper situation as Bambu -
-    // PrusaLinkPrinterService implements none of the Klipper-only readers either. Pause/Resume/
-    // Cancel and Start print DO work for it (see PrusaLinkPrinterService's command()), so this is
-    // deliberately separate from `bambu` rather than folded into one "nonKlipper" flag - only the
-    // Klipper-only controls below need the wider gate.
-    val prusa = state.kindFor(state.address) == PrinterKind.PRUSA_LINK
-    val nonKlipper = bambu || prusa
+    // Phase 2 (Consumer Slicer Plan §10): one real capability object, replacing the old
+    // bambu/prusa/nonKlipper flags below - see PrinterCapabilities.kt for what each field means
+    // and why Bambu/Prusa (both non-Moonraker) share `supportsKlipperExtras = false` while
+    // `supportsPauseResumeCancel` differs (PrusaLinkPrinterService's command() does support
+    // pause/resume/cancel; BambuPrinterService's does not).
+    val capabilities = state.capabilitiesFor(state.address)
     LaunchedEffect(state.generation, state.connected) { if(!state.connected || pending?.second != state.generation) pending = null }
     Scaffold(containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = {
@@ -473,9 +469,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 }
                                 LinearProgressIndicator(progress = { state.snapshot?.activeProgress ?: 0f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape))
                                 Text("Elapsed ${formatDuration(state.snapshot?.printDuration)}" + (estimatedRemaining(state.snapshot,state.activeMetadata)?.let { " · Remaining time is a slicer-based estimate." } ?: ""), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                // Pause/resume/cancel are Moonraker HTTP calls; BambuPrinterService
-                                // only carries print requests, so they are hidden rather than broken.
-                                if(!bambu) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // BambuPrinterService's command() only carries print requests (no
+                                // pause/resume/cancel); PrusaLinkPrinterService's does support all
+                                // three, same as Moonraker - hence capabilities.supportsPauseResumeCancel,
+                                // not a printer-kind check.
+                                if(capabilities.supportsPauseResumeCancel) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton({ pending = PrinterCommand("Pause print", "printer/print/pause", allowedStates = setOf("printing")) to state.generation }, enabled = enabled && state.snapshot?.state == "printing") { Text("Pause") }
                                     OutlinedButton({ pending = PrinterCommand("Resume print", "printer/print/resume", allowedStates = setOf("paused")) to state.generation }, enabled = enabled && state.snapshot?.state == "paused") { Text("Resume") }
                                 TextButton({ pending = PrinterCommand("Cancel print", "printer/print/cancel", allowedStates = setOf("printing", "paused")) to state.generation }, enabled = enabled && state.snapshot?.state in setOf("printing", "paused")) { Text("Cancel print", color = if(enabled && state.snapshot?.state in setOf("printing", "paused")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)) }
@@ -519,7 +517,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     // isolating padding, and the pre-existing confirm dialog (estopConfirm) that
                     // still gates the actual command - a stray tap here was never one tap away
                     // from actually estopping, and still isn't.
-                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !nonKlipper) item {
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && capabilities.supportsKlipperExtras) item {
                         Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
                             Button({estopConfirm=true}, enabled=state.connected,
                                 modifier=Modifier.size(140.dp).testTag("emergency-stop"),
@@ -531,7 +529,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             }
                         }
                     }
-                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && !nonKlipper) item {
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && capabilities.supportsKlipperExtras) item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Hardware controls", style=MaterialTheme.typography.titleMedium)
                             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -544,16 +542,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 // detected" rather than being hidden, matching Helix's own
                                 // honest-empty-state panel.
                                 FilledTonalButton({pandaBreathOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-panda")){Text("Panda Breath (chamber/dryer)")}
-                                if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) FilledTonalButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")}
+                                if(capabilities.hasBespok3d) FilledTonalButton({bespok3dOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-bespok3d")){Text("Bespok3d / remote screen")}
                                 // PAXX-specific hardware (unlike Panda Breath/Spoolman above,
                                 // which are generic-Klipper feature-detected) - gated to printer
-                                // kind, not owned by the owner, built at their request for other
-                                // PAXX owners.
-                                if(state.kindFor(state.address)==PrinterKind.SNAPMAKER_U1_PAXX) FilledTonalButton({aceOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-ace")){Text("multiACE")}
+                                // capability, not owned by the owner, built at their request for
+                                // other PAXX owners.
+                                if(capabilities.hasMultiAce) FilledTonalButton({aceOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-ace")){Text("multiACE")}
                             }
                         }
                     }
-                    if(!nonKlipper) item {
+                    if(capabilities.supportsKlipperExtras) item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Diagnostics & status", style=MaterialTheme.typography.titleMedium)
                             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -575,11 +573,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             }
                         }
                     }
-                    if(bambu) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if(capabilities.transport == PrinterTransport.BAMBU_MQTT) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("LAN mode limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.")
                     } } }
-                    else if(prusa) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")
                     } } }
@@ -611,7 +609,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     item {
                         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                             FilterChip(!showHistory && !showProjects,{showHistory=false;showProjects=false},label={Text("Files")})
-                            if(!nonKlipper) FilterChip(showHistory,{showHistory=true;showProjects=false;loadHistory(0)},label={Text("History")},modifier=Modifier.testTag("show-history"))
+                            if(capabilities.supportsKlipperExtras) FilterChip(showHistory,{showHistory=true;showProjects=false;loadHistory(0)},label={Text("History")},modifier=Modifier.testTag("show-history"))
                             // WO-17 (Phase 1): saved multi-object build plates, independent of
                             // any printer connection - unlike Files/History above, this never
                             // needs `state.connected` since it's purely local storage.
@@ -633,7 +631,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 }
                             }
                         }
-                    } else if(showHistory && !nonKlipper) {
+                    } else if(showHistory && capabilities.supportsKlipperExtras) {
                         item { HistoryHeader(state,loadHistory) }
                         items(state.history, key={"job:${it.id}"}) { job ->
                             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
@@ -713,7 +711,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         }.getOrNull() }
         when {
             sliceableModelName(sharedName).isNotEmpty() -> SliceAndPrintPanel(uri,state,execute,consumeShare)
-            bambu -> BambuPrintPanel(uri,state,execute,consumeShare)
+            capabilities.supportsNativePrintFileFlow -> BambuPrintPanel(uri,state,execute,consumeShare)
             else -> AlertDialog(onDismissRequest=consumeShare,title={Text("Import shared G-code?")},text={Text("Copy this document into the local workspace. It will not be uploaded or printed.")},confirmButton={TextButton({workspace.import(uri);tab=2;consumeShare()}){Text("Import")}},dismissButton={TextButton(consumeShare){Text("Cancel")}})
         }
     }

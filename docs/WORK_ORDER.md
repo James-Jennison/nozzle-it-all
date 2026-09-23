@@ -1173,6 +1173,92 @@ P28/M7 sections for what each one built and its commit hash.)*
         (Printer Capability Layer) is next per the plan's own
         recommended sequencing, and can run independently of Phase 1's
         own remaining polish items above.
+15. **WO-18 — Phase 2 of the Consumer Slicer Plan, owner-approved 2026-09-23
+    ("continue" through Phase 2, full migration).** Replaces the
+    `PrinterKind`-shaped `bambu`/`prusa`/`nonKlipper` conditionals scattered
+    across the UI with one real `PrinterCapabilities` object (§10).
+    - **`PrinterCapabilities.kt`** (new): `PrinterTransport` (MOONRAKER/
+      BAMBU_MQTT/PRUSA_LINK) plus a real capability data class -
+      `supportsPauseResumeCancel`, `supportsCamera`, `supportsKlipperExtras`
+      (the ~15-reader-interface Moonraker-only group, kept as one flag since
+      nothing in this codebase differentiates within it today),
+      `supportsNativePrintFileFlow` (Bambu's `.gcode.3mf` routing),
+      `acceptsOnDeviceSlicedGcode`, `hasBespok3d`/`hasMultiAce` (PAXX add-ons),
+      `verifiedOnRealHardware`, plus the plan's own not-yet-implemented
+      fields (`hasFilamentSensor`/`supportsJog`/`supportsBedLevelingTrigger`/
+      `supportsTimelapseTrigger`, explicit `false` for every vendor, not
+      omitted) - resolved by a pure `capabilitiesFor(PrinterKind)` function,
+      deliberately synchronous (no Context/IO) since it only replaces the
+      profile-derivable UI-gating checks; bed shape/bundled slicer profile
+      stay exactly where they already lived (`SlicingCoordinator`'s
+      `resolveProfilePaths`, `bedShapeFor`) since those are a real, separate,
+      already-async concern (which slicer profile) Phase 3 (materials)
+      builds on next, not the transport/vendor duality this phase targets.
+    - **Migrated every real `when(kind)`/`nonKlipper`-style UI gate**
+      (`MainActivity.kt`'s `bambu`/`prusa`/`nonKlipper` flags and all ~13 use
+      sites, `PrinterTiles.kt`'s `unverifiedOnRealHardware`) to read
+      `capabilities` instead - zero behavior change for the paths that were
+      already correct, confirmed by the full existing device-test suite
+      staying green (see Verified below).
+    - **Two real bugs found and fixed along the way** (not part of the
+      refactor itself, but surfaced by mapping every kind-branch before
+      migrating them):
+      - `FilePanels.kt`'s "Follow active print"/"Printer file changes"
+        buttons were gated on `kindFor != BAMBU_LAB`, which left them
+        *visible* for a Prusa Link printer too - `LivePrintPreviewPanel`/
+        `LiveFilePanel` construct a `Moonraker` client directly, so tapping
+        either against a real Prusa printer would have hit the wrong
+        host/protocol. Now gated on `capabilities.transport == MOONRAKER`.
+      - `SliceAndPrintPanel.kt` and `ProjectEditorScreen.kt` both only
+        blocked Bambu Lab from on-device slicing; neither blocked Prusa
+        Link, even though the upload step (`LiveFileChanges`/
+        `Moonraker.start`) unconditionally speaks Moonraker's own protocol,
+        which `PrusaLinkPrinterService` doesn't implement (no generic
+        file-upload endpoint) - slicing would have "succeeded" and then
+        failed or misbehaved at the upload step against a real Prusa
+        printer. Both screens now honestly block Prusa Link the same way
+        they already blocked Bambu Lab (`acceptsOnDeviceSlicedGcode`).
+    - **Deliberately out of scope, not overlooked**: the ~28 panels that
+      construct a `Moonraker` client directly rather than going through
+      `PrinterService` (`MainActivity`'s `state.moonrakerFor`/bare
+      `Moonraker(...)` factories) - real architectural debt, but not a
+      `when(kind)` branch, and MainActivity's own capability gating already
+      keeps Bambu/Prusa printers from ever reaching those panels; profile
+      creation forms (`M1Panels.kt`/`AddPrinterWizard.kt`'s per-vendor
+      credential fields and model chips) - those author a profile's own
+      `kind`/`slicingModel` before any capability object could exist, a
+      different concern from gating an already-resolved profile.
+    - **Verified**: `PrinterCapabilitiesTest` (9 JVM unit tests - one
+      capability-resolution test per vendor integration, the plan's own
+      Tests requirement, plus the not-yet-implemented-capabilities and
+      `ScreenState.capabilitiesFor` resolution cases) and
+      `PrinterCapabilitiesDeviceTest` (4 real Compose UI tests - a Bambu
+      profile hides every Klipper-only control and shows its own
+      limitations card, a Prusa profile hides Klipper extras but keeps
+      real pause/resume/cancel and shows its own limitations card, a
+      Snapmaker U1/PAXX profile shows its vendor add-on buttons, a generic
+      Klipper profile shows everything with no limitations card - the
+      plan's own "a capability-gated control is hidden for printers that
+      lack it" requirement). Given the plan's own risk note ("needs the
+      existing 100+ device tests re-run in full, not spot-checked"), the
+      **entire** `connectedDebugAndroidTest` suite was re-run on real
+      hardware after the migration, not just the new/touched tests: 159
+      tests, 0 failures, 0 errors, 8 skipped (real-hardware-opt-in tests,
+      unaffected) - confirmed clean on Razr 2026. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate passes, plus a
+      manual screenshot pass against the real Snapmaker U1 confirming the
+      Control tab renders identically (Bespok3d/multiACE, hardware
+      controls, diagnostics group all present and correct).
+    - **Still open** (Phase 2's remaining scope per the plan's own §16
+      entry): none of the plan's own listed scope items remain - object
+      list/add/duplicate/delete were Phase 1; Phase 2's stated scope
+      ("capability resolution per printer, migrate every conditional UI
+      path... to read capabilities instead of ad-hoc kind checks") is
+      fully covered. The acceptance criteria ("adding a 5th printer vendor
+      requires only a new `PrinterTransport` implementation and a
+      capability-resolution function - zero new `when(kind)` branches in
+      UI code") holds for every UI path migrated above. **Phase 2 is
+      done.**
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

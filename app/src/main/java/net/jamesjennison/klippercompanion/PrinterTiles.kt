@@ -35,7 +35,9 @@ fun ScreenState.connectedPrinterTiles(): List<PrinterTile> =
 // M7's own exit criteria require unverified-by-hardware status to be visible in the app itself,
 // not just in docs - both BAMBU_LAB (M8c) and PRUSA_LINK (P26) are real, wired code the owner has
 // no matching hardware to physically verify against. See FEATURE_PARITY_ROADMAP.md's M7 section.
-val PrinterKind.unverifiedOnRealHardware: Boolean get() = this == PrinterKind.BAMBU_LAB || this == PrinterKind.PRUSA_LINK
+// Phase 2: routed through PrinterCapabilities (one source of truth) rather than its own
+// independent `== BAMBU_LAB || == PRUSA_LINK` check that could quietly drift from it.
+val PrinterKind.unverifiedOnRealHardware: Boolean get() = !capabilitiesFor(this).verifiedOnRealHardware
 
 @Composable
 fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> Unit, cameraContent: @Composable (PrinterTile) -> Unit = { PrinterTileCamera(it) }) {

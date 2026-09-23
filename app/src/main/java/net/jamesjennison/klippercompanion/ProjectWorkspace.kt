@@ -3,15 +3,19 @@ package net.jamesjennison.klippercompanion
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -50,6 +54,10 @@ import kotlin.math.sqrt
 // ProjectObject's own id - the renderer diffs its internal per-object GL state by this id, not by
 // list position, so reordering/adding/removing objects doesn't force a full re-upload of
 // everything.
+// Never a real ProjectObject id (those are UUID.randomUUID().toString()) - safe as a sentinel in
+// the same `framedIds: Set<String>` the real per-object camera-framing logic already uses.
+private const val EMPTY_PLATE_FRAMED_KEY = "__empty_plate__"
+
 data class RenderableObject(
     val id: String,
     val geometry: MeshGeometry,
@@ -68,6 +76,12 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
     // Same volatile-handoff contract as MeshGLRenderer.pendingMesh: written by the UI thread,
     // consumed once at the top of onDrawFrame, never touched from the GL thread's own state.
     @Volatile var pendingObjects: List<RenderableObject>? = null
+    // WO-30 follow-up (owner: unhappy with the empty-plate viewport - "Add a model to start..."
+    // over a flat black box, no real bed visible at all): the real per-printer bed polygon
+    // (BedShape.kt, the same one ProjectWorkspace already reads for out-of-bounds tinting), read
+    // here too so onDrawFrame can draw a real bed grid even with zero objects on the plate, rather
+    // than only ever drawing a grid sized around at least one already-loaded object's geometry.
+    @Volatile var bedShape: BedShape? = null
     @Volatile var cameraState: CameraOrbit = CameraOrbit(45f, 30f, 200f)
     @Volatile var lastVpMatrix: FloatArray? = null
     @Volatile var viewportWidth = 1
@@ -102,9 +116,13 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
         gridVbo = buffers[0]
         gridVertexCount = 0
         perObject.clear()
-        // Force re-upload of every currently-known object into the fresh EGL context (e.g. after
-        // onPause()/onResume() across backgrounding tore the old context/VBOs down).
-        if (currentObjects.isNotEmpty()) pendingObjects = currentObjects
+        // Force re-upload of every currently-known object (and the bed/plate grid) into the
+        // fresh EGL context (e.g. after onPause()/onResume() across backgrounding tore the old
+        // context/VBOs down) - real bug caught live: backgrounding then resuming this screen with
+        // zero objects on an otherwise-known bed left the grid gone (gridVbo is a fresh, empty
+        // buffer in the new context) because this only ever re-armed pendingObjects for a
+        // non-empty plate. bedShape != null covers the empty-plate-with-a-known-bed case too.
+        if (currentObjects.isNotEmpty() || bedShape != null) pendingObjects = currentObjects
     }
 
     override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) {
@@ -139,7 +157,10 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
                 state.uploaded = true
                 perObjectGeometry[obj.id] = obj.geometry
             }
-            val grid = buildPlateGrid(objects)
+            // WO-30 follow-up: an empty plate still draws the real bed's own grid (bedShape),
+            // instead of buildPlateGrid's own object-footprint fallback, which has nothing to
+            // measure with zero objects and previously left the whole viewport blank.
+            val grid = if (objects.isNotEmpty()) buildPlateGrid(objects) else bedShape?.let { buildBedGrid(it) } ?: FloatArray(0)
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, gridVbo)
             val gridBuffer = directFloatBuffer(grid)
             GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, grid.size * 4, gridBuffer, GLES30.GL_STATIC_DRAW)
@@ -148,9 +169,13 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
             pendingObjects = null
         }
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
-        if (currentObjects.isEmpty()) return
+        // WO-30 follow-up: only bail out with nothing drawn when there's truly nothing to show -
+        // no objects AND no known bed shape yet (the very first frame or two, before the real
+        // per-printer profile has loaded). Once a bed shape is known, its grid (uploaded above)
+        // still deserves a real camera and a real draw call even with zero objects on it.
+        if (currentObjects.isEmpty() && bedShape == null) return
 
-        val plateCenter = plateCenterOf(currentObjects)
+        val plateCenter = if (currentObjects.isNotEmpty()) plateCenterOf(currentObjects) else bedShape?.let { bedCenterOf(it) } ?: floatArrayOf(0f, 0f, 0f)
         val cam = cameraState
         val azRad = Math.toRadians(cam.azimuthDeg.toDouble())
         val elRad = Math.toRadians(cam.elevationDeg.toDouble())
@@ -260,6 +285,47 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
         }
         return lines.toFloatArray()
     }
+
+    // WO-30 follow-up: the real bed polygon's own bounding box, centered and stepped the same way
+    // buildPlateGrid already does for an object-footprint grid - drawn when the plate has zero
+    // objects, so the viewport shows the actual printer's bed instead of nothing at all.
+    private fun buildBedGrid(bed: BedShape): FloatArray {
+        val xs = bed.points.map { it.first }; val ys = bed.points.map { it.second }
+        val minX = xs.min(); val maxX = xs.max(); val minY = ys.min(); val maxY = ys.max()
+        val centerX = (minX + maxX) / 2f; val centerY = (minY + maxY) / 2f
+        val half = (maxOf(maxX - minX, maxY - minY) / 2f).coerceAtLeast(20f)
+        val step = (half * 2f / 10f).coerceAtLeast(0.1f)
+        val lines = ArrayList<Float>()
+        var x = -half
+        while (x <= half + 1e-4f) {
+            lines.addAll(listOf(centerX + x, centerY - half, 0f, centerX + x, centerY + half, 0f))
+            x += step
+        }
+        var y = -half
+        while (y <= half + 1e-4f) {
+            lines.addAll(listOf(centerX - half, centerY + y, 0f, centerX + half, centerY + y, 0f))
+            y += step
+        }
+        return lines.toFloatArray()
+    }
+
+    private fun bedCenterOf(bed: BedShape): FloatArray {
+        val centerX = bed.points.map { it.first }.average().toFloat()
+        val centerY = bed.points.map { it.second }.average().toFloat()
+        return floatArrayOf(centerX, centerY, 0f)
+    }
+
+}
+
+// The real bed's own diagonal span - the empty-plate camera's own default framing distance,
+// matching the same "* 3f" multiplier ProjectWorkspace's own compose-side auto-frame effect uses
+// for a populated plate (CameraOrbit(45f, 25f, maxSpan * 3f)). Top-level (not a member of
+// ProjectGLRenderer) since it's called from the composable side, before any renderer instance's
+// own per-frame state is relevant.
+private fun defaultDistanceFor(bed: BedShape): Float {
+    val xs = bed.points.map { it.first }; val ys = bed.points.map { it.second }
+    val span = maxOf((xs.max() - xs.min()), (ys.max() - ys.min())).coerceAtLeast(20f)
+    return span * 1.6f
 }
 
 private const val MESH_VERTEX_SHADER = """#version 300 es
@@ -403,8 +469,18 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                 RenderableObject(wo.projectObject.id, wo.geometry, t, selected = wo.projectObject.id == selectedId, outOfBounds = outOfBounds)
             }
         }
+        renderer.bedShape = bedShape
         renderer.pendingObjects = renderables
         val liveIds = objects.map { it.projectObject.id }.toSet()
+        // WO-30 follow-up: an empty plate still gets a real, one-time camera framing around the
+        // real bed (once bedShape is known) instead of sitting at the renderer's own fixed
+        // CameraOrbit(45, 30, 200) default, which is wildly wrong for most real bed sizes. The
+        // sentinel key (never a real object id) marks this framing as already done so it doesn't
+        // refight a manual orbit/zoom gesture on every later recomposition.
+        if (liveIds.isEmpty() && bedShape != null && EMPTY_PLATE_FRAMED_KEY !in framedIds) {
+            renderer.cameraState = CameraOrbit(45f, 25f, defaultDistanceFor(bedShape))
+            framedIds = setOf(EMPTY_PLATE_FRAMED_KEY)
+        }
         if (liveIds.isNotEmpty() && !framedIds.containsAll(liveIds)) {
             var centerX = 0f; var centerY = 0f; var centerZ = 0f
             for (wo in objects) {
@@ -456,6 +532,27 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                         }
                     }
                     .pointerInput(objects.map { it.projectObject.id }, selectedId) {
+                        // Real bug fix (owner-reported, live on the Razr 2026: "it allows me to
+                        // pinch momentarily then jumps back to full size. Attempted rotation has
+                        // no effect"): detectTransformGestures' own pan/zoom/rotation are each
+                        // INCREMENTAL since the *previous* callback, not cumulative since the
+                        // gesture started (confirmed against Compose foundation's own
+                        // TransformGestureDetector.kt - onGesture is fed event.calculateZoom()/
+                        // calculateRotation() per pointer event, not an accumulated total). The
+                        // old code re-read `current = selected.projectObject.transform()` from
+                        // this composable's own `objects` parameter on every single callback -
+                        // but this `pointerInput` coroutine keeps running unchanged (its keys are
+                        // just the object id list + selectedId) for the *whole* gesture, so that
+                        // parameter is frozen at whatever it was when the gesture began; the real,
+                        // just-written value from `onTransformChange`'s own async Room round trip
+                        // never reaches this closure mid-gesture. Every callback was therefore
+                        // computing base(frozen at gesture start) * only-the-latest-increment
+                        // instead of accumulating increment-over-increment, so the reported scale/
+                        // rotation tracked only the single most recent (often tiny,
+                        // near-identity) delta rather than the real cumulative pinch/twist - a
+                        // real, cumulative local running transform, not the possibly-stale
+                        // `objects` parameter, is the actual fix.
+                        var runningTransform: ModelTransform? = null
                         detectTransformGestures { centroid, pan, zoom, rotation ->
                             val selected = objects.find { it.projectObject.id == selectedId }
                             if (selected == null) {
@@ -468,7 +565,7 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                                 glView?.requestRender()
                                 return@detectTransformGestures
                             }
-                            val current = selected.projectObject.transform()
+                            val current = runningTransform ?: selected.projectObject.transform()
                             var offsetX = current.offsetXMm
                             var offsetY = current.offsetYMm
                             val vp = renderer.lastVpMatrix
@@ -479,15 +576,14 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                                 offsetX += to[0] - from[0]
                                 offsetY += to[1] - from[1]
                             }
-                            onTransformChange(
-                                selected.projectObject.id,
-                                ModelTransform(
-                                    offsetXMm = offsetX,
-                                    offsetYMm = offsetY,
-                                    rotationZDeg = (current.rotationZDeg + rotation) % 360f,
-                                    scale = (current.scale * zoom).coerceIn(0.1f, 10f),
-                                ),
+                            val updated = ModelTransform(
+                                offsetXMm = offsetX,
+                                offsetYMm = offsetY,
+                                rotationZDeg = (current.rotationZDeg + rotation) % 360f,
+                                scale = (current.scale * zoom).coerceIn(0.1f, 10f),
                             )
+                            runningTransform = updated
+                            onTransformChange(selected.projectObject.id, updated)
                         }
                     },
                 factory = { ctx ->
@@ -502,7 +598,18 @@ private fun pickObject(objects: List<WorkspaceObject>, rayOrigin: FloatArray, ra
                 onRelease = { it.onPause() },
             )
             if (objects.isEmpty()) {
-                Text("Add a model to start this project's build plate.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-workspace-empty"))
+                // WO-30 follow-up: now floats centered over the real bed grid instead of pinned
+                // top-left over what used to be a flat black box - a real background scrim keeps
+                // it legible against the grid lines behind it.
+                Text(
+                    "Add a model to start this project's build plate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.align(Alignment.Center)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .testTag("project-workspace-empty"),
+                )
             }
         }
     }

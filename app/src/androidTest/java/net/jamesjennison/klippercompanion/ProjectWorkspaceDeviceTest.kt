@@ -111,6 +111,82 @@ class ProjectWorkspaceDeviceTest {
         assertNotEquals("expected the drag to actually move the object, not report a no-op transform", right.projectObject.transform(), lastTransform)
     }
 
+    // WO-30 follow-up (owner: "Why am I unable to pinch to shrink or rotate the model?") -
+    // draggingTheSelectedObjectChangesItsOffset above only ever exercised the single-finger pan
+    // component of detectTransformGestures; scale/rotation had no real device coverage at all.
+    @Test fun pinchOutOnTheSelectedObjectIncreasesItsScale() {
+        val (left, right) = fixtures()
+        var selectedId by mutableStateOf<String?>("right")
+        var lastTransform: ModelTransform? = null
+        compose.setContent {
+            CompanionTheme {
+                ProjectWorkspace(
+                    objects = listOf(left, right),
+                    selectedId = selectedId,
+                    onSelect = { selectedId = it },
+                    onTransformChange = { id, t -> if (id == "right") lastTransform = t },
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("project-workspace").performTouchInput {
+            val center = Offset(width * 0.5f, height * 0.5f)
+            pinch(center - Offset(30f, 0f), center - Offset(140f, 0f), center + Offset(30f, 0f), center + Offset(140f, 0f), durationMillis = 300)
+        }
+        compose.waitForIdle()
+        assertNotNull("expected the pinch to report a new transform for the selected object", lastTransform)
+        // Real bug this test is specifically built to catch (owner-reported: "it allows me to
+        // pinch momentarily then jumps back to full size"): detectTransformGestures reports each
+        // callback's zoom as incremental-since-the-last-callback, not cumulative-since-gesture-
+        // start. A version of the handler that (re-)reads its "current" scale from this
+        // composable's own possibly-stale `objects` parameter on every callback - instead of
+        // accumulating locally - ends up reporting only the single most recent, often tiny,
+        // increment (finger separation here grows from 60px to 280px, a ~4.7x ratio; the last of
+        // ~15-30 synthetic steps alone is only a few percent) rather than the real cumulative
+        // ~4.7x. A loose "not exactly 1.0" check can't tell these apart - both are technically
+        // "not 1.0" - so this asserts the real, much larger, cumulative figure specifically.
+        assertTrue("expected the full cumulative pinch (~4.7x finger-distance growth) to be reflected in scale, not just its last tiny increment - got ${lastTransform!!.scale}", lastTransform!!.scale > 2f)
+    }
+
+    @Test fun twoFingerTwistOnTheSelectedObjectChangesItsRotation() {
+        val (left, right) = fixtures()
+        var selectedId by mutableStateOf<String?>("right")
+        var lastTransform: ModelTransform? = null
+        compose.setContent {
+            CompanionTheme {
+                ProjectWorkspace(
+                    objects = listOf(left, right),
+                    selectedId = selectedId,
+                    onSelect = { selectedId = it },
+                    onTransformChange = { id, t -> if (id == "right") lastTransform = t },
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("project-workspace").performTouchInput {
+            val center = Offset(width * 0.5f, height * 0.5f)
+            val r = 100f
+            down(0, center + Offset(r, 0f))
+            down(1, center + Offset(-r, 0f))
+            val steps = 10
+            for (i in 1..steps) {
+                val angle = (Math.PI / 2) * i / steps
+                val cosA = kotlin.math.cos(angle).toFloat(); val sinA = kotlin.math.sin(angle).toFloat()
+                moveTo(0, center + Offset(r * cosA, r * sinA))
+                moveTo(1, center + Offset(-r * cosA, -r * sinA))
+            }
+            up(0); up(1)
+        }
+        compose.waitForIdle()
+        assertNotNull("expected the twist to report a new transform for the selected object", lastTransform)
+        // Same class of real bug as the pinch test above (owner-reported: "attempted rotation has
+        // no effect") - a handler that re-reads a possibly-stale base rotation each callback
+        // instead of accumulating locally would report only the last of 10 ~9-degree increments
+        // (comfortably clearing a loose "not exactly 0" check) rather than the real cumulative
+        // ~90 degrees, so this asserts the real cumulative figure specifically.
+        assertTrue("expected the full cumulative twist (~90 degrees) to be reflected in rotation, not just its last tiny increment - got ${lastTransform!!.rotationZDeg}", lastTransform!!.rotationZDeg > 45f)
+    }
+
     @Test fun emptyWorkspaceShowsThePlaceholder() {
         compose.setContent {
             CompanionTheme {

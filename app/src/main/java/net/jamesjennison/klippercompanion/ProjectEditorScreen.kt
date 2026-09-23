@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -25,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -144,6 +147,11 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1 }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
+    // WO-30 follow-up (owner: "too much text/settings visible at once"): the EDIT stage's plate,
+    // slicing settings and printer summary now live behind their own tabs (mirroring
+    // SliceAndPrintPanel.kt's own Model/Settings/Printer split) instead of one long scrolling
+    // page - every existing testTag inside each section is unchanged, only which tab shows it.
+    var editorTab by remember(projectId, newProjectName) { mutableIntStateOf(0) }
     // Phase 4 (§4/§16, "basic-mode settings... beginner tier"): replaces the old raw
     // layer-height-in-mm text field with named Draft/Standard/Fine presets, and adds a real
     // geometry-driven "Auto" support decision - see BasicSlicing.kt.
@@ -315,7 +323,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             when {
                 !ready -> Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator() }
                 loadError != null -> Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp)) { Text(loadError!!, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("project-editor-error")) }
-                stage == ProjectEditorStage.EDIT -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                stage == ProjectEditorStage.EDIT -> Column(Modifier.weight(1f).fillMaxWidth()) {
                     val allWorkspaceObjects = objects.mapNotNull { obj -> geometry[obj.id]?.let { WorkspaceObject(obj, it) } }
                     // WO-30: a hidden object never reaches ProjectWorkspace at all - it can't be
                     // rendered, picked, or counted as colliding while hidden. If the currently
@@ -339,168 +347,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                         }
                         colliding
                     }
-                    // WO-30 (owner request, 2026-09-23 - "Desktop-like power adapted to mobile",
-                    // real EasyPrint-style reference screenshots): a left-hand plate toolbar next
-                    // to the real 3D workspace, our own take on that reference rather than a copy
-                    // of its icon set/layout - Select is already implicit in ProjectWorkspace's own
-                    // tap-to-select/drag-to-transform gestures (no separate mode toggle needed,
-                    // unchanged from before this entry), so this toolbar covers what wasn't already
-                    // reachable: Duplicate/Remove (moved here from the flat button row below),
-                    // Hide (new), Reset transform (new), and Auto Layout (renamed from
-                    // "Auto-arrange", same real runAutoArrange() underneath).
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Column(Modifier.testTag("project-toolbar"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            PlateToolbarButton("Duplicate", CompanionSymbol.DUPLICATE, enabled = selectedId != null, testTag = "project-duplicate-object") {
-                                selectedId?.let { id -> scope.launch { selectedId = vm.duplicateObject(id)?.id } }
-                            }
-                            PlateToolbarButton("Hide", CompanionSymbol.HIDE, enabled = selectedId != null, testTag = "project-hide-object") {
-                                selectedId?.let { id -> hiddenIds = hiddenIds + id; selectedId = null }
-                            }
-                            PlateToolbarButton("Reset", CompanionSymbol.RESET, enabled = selectedId != null, testTag = "project-reset-object") {
-                                selectedId?.let { id -> scope.launch { vm.updateObjectTransform(id, ModelTransform()) } }
-                            }
-                            PlateToolbarButton("Remove", CompanionSymbol.CLOSE, enabled = selectedId != null, testTag = "project-remove-object") {
-                                selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } }
-                            }
-                            PlateToolbarButton("Layout", CompanionSymbol.LAYOUT, enabled = objects.size > 1, testTag = "project-auto-arrange") {
-                                scope.launch { runAutoArrange() }
-                            }
-                        }
-                        Column(Modifier.weight(1f)) {
-                            ProjectWorkspace(
-                                objects = workspaceObjects,
-                                selectedId = selectedId,
-                                onSelect = { selectedId = it },
-                                onTransformChange = { id, transform -> scope.launch { vm.updateObjectTransform(id, transform) } },
-                                bedShape = bedShape,
-                                collidingIds = collidingIds,
-                            )
-                            // WO-30: the selected object's real, current bounding box in mm -
-                            // (max-min) per axis on its loaded geometry, scaled by its own live
-                            // transform.scale (the same scale ProjectWorkspace's own drag-to-scale
-                            // gesture already writes) - not a static "model size" read once at
-                            // import, so this stays correct after a Scale-mode drag or a Reset.
-                            val selectedWorkspaceObject = workspaceObjects.find { it.projectObject.id == selectedId }
-                            val dimensionsText = selectedWorkspaceObject?.let { wo ->
-                                val t = wo.projectObject.transform()
-                                val g = wo.geometry
-                                "%.1f x %.1f x %.1f mm".format((g.maxX - g.minX) * t.scale, (g.maxY - g.minY) * t.scale, (g.maxZ - g.minZ) * t.scale)
-                            } ?: "Select an object to see its size"
-                            Text(dimensionsText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-object-dimensions"))
-                            // WO-30: "Models N/N" - cycles selection through the plate's own
-                            // visible object order (the same order the "Objects on this plate"
-                            // list below renders), matching the reference's own model-switcher
-                            // affordance rather than requiring a tap on the 3D view or the list.
-                            if (workspaceObjects.isNotEmpty()) {
-                                val currentIndex = workspaceObjects.indexOfFirst { it.projectObject.id == selectedId }
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    IconButton({
-                                        val i = if (currentIndex <= 0) workspaceObjects.size - 1 else currentIndex - 1
-                                        selectedId = workspaceObjects[i].projectObject.id
-                                    }, Modifier.testTag("project-model-prev")) { CompanionIcon(CompanionSymbol.PREV) }
-                                    Text("Models ${if (currentIndex >= 0) currentIndex + 1 else 0}/${workspaceObjects.size}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-model-index"))
-                                    IconButton({
-                                        val i = if (currentIndex < 0 || currentIndex >= workspaceObjects.size - 1) 0 else currentIndex + 1
-                                        selectedId = workspaceObjects[i].projectObject.id
-                                    }, Modifier.testTag("project-model-next")) { CompanionIcon(CompanionSymbol.NEXT) }
-                                }
-                            }
-                        }
-                    }
-                    val missingGeometryCount = objects.size - allWorkspaceObjects.size
-                    if (missingGeometryCount > 0) Text("Loading $missingGeometryCount model(s)…", style = MaterialTheme.typography.bodySmall)
-                    if (hiddenIds.isNotEmpty()) Text("${hiddenIds.size} object(s) hidden - still included when slicing.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (collidingIds.isNotEmpty()) Text(
-                        "${collidingIds.size} object(s) overlap - move them apart before slicing, or use Layout.",
-                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-collision-warning"),
-                    )
-
-                    Button({ pickModel.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("project-add-object")) { Text("Add models") }
-                    // Phase 4 (§4/§16): "copies" - sets the selected object's total count on the
-                    // plate at once (duplicating up or removing down to N), then resolves
-                    // placement through the same real auto-arrange path above rather than
-                    // leaving N copies stacked on top of each other.
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(copiesText, { copiesText = it }, label = { Text("Copies of selected") }, singleLine = true, modifier = Modifier.weight(1f).testTag("project-copies"))
-                        Button({
-                            val base = objects.find { it.id == selectedId } ?: return@Button
-                            val n = copiesText.trim().toIntOrNull()?.coerceIn(1, 20) ?: return@Button
-                            scope.launch {
-                                val siblings = objects.filter { it.sourceFileUri == base.sourceFileUri }
-                                if (n > siblings.size) repeat(n - siblings.size) { vm.duplicateObject(base.id) }
-                                else if (n < siblings.size) siblings.filter { it.id != base.id }.take(siblings.size - n).forEach { vm.removeObject(it.id) }
-                                runAutoArrange()
-                            }
-                        }, enabled = selectedId != null, modifier = Modifier.testTag("project-apply-copies")) { Text("Set") }
-                    }
-                    addError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-
-                    Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
-                    if (objects.isEmpty()) Text("No objects yet - add an STL, 3MF or OBJ model to start this project's build plate.", style = MaterialTheme.typography.bodySmall)
-                    objects.forEach { obj ->
-                        ProjectObjectRow(obj, selected = obj.id == selectedId,
-                            // Selecting a hidden row un-hides it too - a "Select" tap that quietly
-                            // did nothing visible on the workspace above would be a confusing
-                            // dead end, not a real toggle.
-                            onClick = { hiddenIds = hiddenIds - obj.id; selectedId = obj.id },
-                            hidden = obj.id in hiddenIds,
-                            onToggleHidden = { hiddenIds = if (obj.id in hiddenIds) hiddenIds - obj.id else hiddenIds + obj.id; if (selectedId == obj.id) selectedId = null },
-                            // toolCount > 1 (§11, WO-28): real per-object assignment - each row
-                            // shows its own material + tool slot and opens the per-object picker,
-                            // instead of the single project-wide row below (mutually exclusive,
-                            // matching the real capability the target printer actually has).
-                            toolAssignment = if (toolCount > 1) (obj.material()?.displayName ?: "No material") + " · Tool ${obj.toolSlotIndex ?: 1}" else null,
-                            onAssign = if (toolCount > 1) { { perObjectPickerFor = obj.id } } else null)
-                    }
-
-                    if (toolCount <= 1) {
-                        Text("Material", style = MaterialTheme.typography.titleSmall)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(currentMaterial?.displayName ?: "None selected - using the printer's default profile", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).testTag("project-material-current"))
-                            OutlinedButton({ materialPickerOpen = true }, enabled = objects.isNotEmpty(), modifier = Modifier.testTag("project-choose-material")) { Text("Choose") }
-                        }
-                    } else {
-                        // Real multi-tool target (§11, WO-25/26/27/28): no single project-wide
-                        // material makes sense here - each object above already carries its own
-                        // real material + tool assignment, tap "Assign" on a row to change it.
-                        Text("$toolCount real tool slots on ${profile?.label ?: "this printer"} - tap \"Assign\" on an object above to pick its material and tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-multitool-hint"))
-                    }
-
-                    Text("Slicing settings", style = MaterialTheme.typography.titleSmall)
-                    Text("Quality", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QualityPreset.entries.forEach { preset ->
-                            FilterChip(quality == preset, { quality = preset }, label = { Text("${preset.label} (${preset.layerHeightMm}mm)") }, modifier = Modifier.testTag("project-quality-${preset.name}"))
-                        }
-                    }
-                    OutlinedTextField(infillText, { infillText = it }, label = { Text("Strength - infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))
-                    // Real geometry-driven default (Phase 4's own "intelligent defaulting"): Auto
-                    // reads whether any object on the plate actually has a real overhang
-                    // (meshNeedsSupport) rather than asking the owner to already know.
+                    // Computed once, above the tabs, so the persistent Slice button's own enabled
+                    // check below is correct regardless of which tab happens to be showing.
                     val autoNeedsSupport = objects.any { obj -> geometry[obj.id]?.let { meshNeedsSupport(it) } == true }
-                    Text("Supports" + if (supportMode == SupportMode.AUTO) " · detected: ${if (autoNeedsSupport) "this model needs support" else "no support needed"}" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(supportMode == SupportMode.OFF, { supportMode = SupportMode.OFF }, label = { Text("Off") }, modifier = Modifier.testTag("project-support-off"))
-                        FilterChip(supportMode == SupportMode.AUTO, { supportMode = SupportMode.AUTO }, label = { Text("Auto") }, modifier = Modifier.testTag("project-support-auto"))
-                        FilterChip(supportMode == SupportMode.ON, { supportMode = SupportMode.ON }, label = { Text("On") }, modifier = Modifier.testTag("project-support-on"))
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
-                        Text("Brim (bed adhesion)")
-                    }
                     // Phase 5 (§16): real slice-time validation, shown live (not only after
                     // tapping Slice) so the owner sees a problem while still adjusting settings.
                     val validationIssues = validateSliceConfiguration(machineLimits, quality.layerHeightMm, filamentRange, currentMaterial)
-                    validationIssues.forEach { issue ->
-                        Text(
-                            issue.message,
-                            color = if (issue.blocking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.testTag(if (issue.blocking) "project-validation-error" else "project-validation-warning"),
-                        )
-                    }
-                    customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                    if (profile == null) Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     // Phase 2 real bug fix, still real: this screen's own upload step (LiveFileChanges/
                     // Moonraker.start, below) always assumed Moonraker unconditionally - Prusa Link
                     // would silently fail that way. Phase 6 follow-up (WO-23): SlicingCoordinator.
@@ -510,11 +362,203 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     // acceptsOnDeviceSlicedGcode is trusted directly here now, same as
                     // SliceAndPrintPanel.kt.
                     val acceptsSlicedGcode = profile?.let { capabilitiesFor(it.kind).acceptsOnDeviceSlicedGcode } ?: true
-                    if (profile != null && !acceptsSlicedGcode) Text(
-                        "On-device slicing isn't wired up yet for ${profile.label} - its printer type needs an upload/print path this app doesn't implement.",
-                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-unsupported-printer"),
-                    )
-                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode && validationIssues.none { it.blocking }, modifier = Modifier.fillMaxWidth().testTag("project-slice")) { Text("Slice") }
+
+                    TabRow(editorTab) {
+                        Tab(editorTab == 0, { editorTab = 0 }, text = { Text("Model") }, modifier = Modifier.testTag("project-tab-model"))
+                        Tab(editorTab == 1, { editorTab = 1 }, text = { Text("Settings") }, modifier = Modifier.testTag("project-tab-settings"))
+                        Tab(editorTab == 2, { editorTab = 2 }, text = { Text("Printer") }, modifier = Modifier.testTag("project-tab-printer"))
+                    }
+                    Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        when (editorTab) {
+                            0 -> {
+                                // WO-30 (owner request, 2026-09-23 - "Desktop-like power adapted
+                                // to mobile", real EasyPrint-style reference screenshots, later
+                                // "make these our own, do not blatantly copy them"): a left-hand
+                                // plate toolbar next to the real 3D workspace, grouped into one
+                                // real panel (Surface, not floating loose over the background -
+                                // owner: "the icons are too light and hard to read" /
+                                // "overall visual design") - Select is already implicit in
+                                // ProjectWorkspace's own tap-to-select/drag-to-transform gestures
+                                // (no separate mode toggle needed), so this toolbar covers what
+                                // wasn't already reachable: Duplicate/Remove (moved here from the
+                                // old flat button row), Hide (new), Reset transform (new), and
+                                // Auto Layout (renamed from "Auto-arrange", same real
+                                // runAutoArrange() underneath).
+                                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                                    Row(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Column(Modifier.testTag("project-toolbar"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            PlateToolbarButton("Duplicate", CompanionSymbol.DUPLICATE, enabled = selectedId != null, testTag = "project-duplicate-object") {
+                                                selectedId?.let { id -> scope.launch { selectedId = vm.duplicateObject(id)?.id } }
+                                            }
+                                            PlateToolbarButton("Hide", CompanionSymbol.HIDE, enabled = selectedId != null, testTag = "project-hide-object") {
+                                                selectedId?.let { id -> hiddenIds = hiddenIds + id; selectedId = null }
+                                            }
+                                            PlateToolbarButton("Reset", CompanionSymbol.RESET, enabled = selectedId != null, testTag = "project-reset-object") {
+                                                selectedId?.let { id -> scope.launch { vm.updateObjectTransform(id, ModelTransform()) } }
+                                            }
+                                            PlateToolbarButton("Remove", CompanionSymbol.CLOSE, enabled = selectedId != null, testTag = "project-remove-object") {
+                                                selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } }
+                                            }
+                                            PlateToolbarButton("Layout", CompanionSymbol.LAYOUT, enabled = objects.size > 1, testTag = "project-auto-arrange") {
+                                                scope.launch { runAutoArrange() }
+                                            }
+                                        }
+                                        Column(Modifier.weight(1f)) {
+                                            ProjectWorkspace(
+                                                objects = workspaceObjects,
+                                                selectedId = selectedId,
+                                                onSelect = { selectedId = it },
+                                                onTransformChange = { id, transform -> scope.launch { vm.updateObjectTransform(id, transform) } },
+                                                bedShape = bedShape,
+                                                collidingIds = collidingIds,
+                                            )
+                                            // WO-30: the selected object's real, current bounding
+                                            // box in mm - (max-min) per axis on its loaded
+                                            // geometry, scaled by its own live transform.scale
+                                            // (the same scale ProjectWorkspace's own drag-to-
+                                            // scale gesture already writes) - not a static
+                                            // "model size" read once at import, so this stays
+                                            // correct after a Scale-mode drag or a Reset.
+                                            val selectedWorkspaceObject = workspaceObjects.find { it.projectObject.id == selectedId }
+                                            val dimensionsText = selectedWorkspaceObject?.let { wo ->
+                                                val t = wo.projectObject.transform()
+                                                val g = wo.geometry
+                                                "%.1f x %.1f x %.1f mm".format((g.maxX - g.minX) * t.scale, (g.maxY - g.minY) * t.scale, (g.maxZ - g.minZ) * t.scale)
+                                            } ?: "Select an object to see its size"
+                                            Text(dimensionsText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp).testTag("project-object-dimensions"))
+                                            // WO-30: "Models N/N" - cycles selection through the
+                                            // plate's own visible object order (the same order
+                                            // the "Objects on this plate" list below renders),
+                                            // matching the reference's own model-switcher
+                                            // affordance rather than requiring a tap on the 3D
+                                            // view or the list.
+                                            if (workspaceObjects.isNotEmpty()) {
+                                                val currentIndex = workspaceObjects.indexOfFirst { it.projectObject.id == selectedId }
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    IconButton({
+                                                        val i = if (currentIndex <= 0) workspaceObjects.size - 1 else currentIndex - 1
+                                                        selectedId = workspaceObjects[i].projectObject.id
+                                                    }, Modifier.testTag("project-model-prev")) { CompanionIcon(CompanionSymbol.PREV, color = MaterialTheme.colorScheme.onSurface) }
+                                                    Text("Models ${if (currentIndex >= 0) currentIndex + 1 else 0}/${workspaceObjects.size}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-model-index"))
+                                                    IconButton({
+                                                        val i = if (currentIndex < 0 || currentIndex >= workspaceObjects.size - 1) 0 else currentIndex + 1
+                                                        selectedId = workspaceObjects[i].projectObject.id
+                                                    }, Modifier.testTag("project-model-next")) { CompanionIcon(CompanionSymbol.NEXT, color = MaterialTheme.colorScheme.onSurface) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                val missingGeometryCount = objects.size - allWorkspaceObjects.size
+                                if (missingGeometryCount > 0) Text("Loading $missingGeometryCount model(s)…", style = MaterialTheme.typography.bodySmall)
+                                if (hiddenIds.isNotEmpty()) Text("${hiddenIds.size} object(s) hidden - still included when slicing.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (collidingIds.isNotEmpty()) Text(
+                                    "${collidingIds.size} object(s) overlap - move them apart before slicing, or use Layout.",
+                                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-collision-warning"),
+                                )
+
+                                Button({ pickModel.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("project-add-object")) { Text("Add models") }
+                                // Phase 4 (§4/§16): "copies" - sets the selected object's total
+                                // count on the plate at once (duplicating up or removing down to
+                                // N), then resolves placement through the same real auto-arrange
+                                // path above rather than leaving N copies stacked on top of
+                                // each other.
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(copiesText, { copiesText = it }, label = { Text("Copies of selected") }, singleLine = true, modifier = Modifier.weight(1f).testTag("project-copies"))
+                                    Button({
+                                        val base = objects.find { it.id == selectedId } ?: return@Button
+                                        val n = copiesText.trim().toIntOrNull()?.coerceIn(1, 20) ?: return@Button
+                                        scope.launch {
+                                            val siblings = objects.filter { it.sourceFileUri == base.sourceFileUri }
+                                            if (n > siblings.size) repeat(n - siblings.size) { vm.duplicateObject(base.id) }
+                                            else if (n < siblings.size) siblings.filter { it.id != base.id }.take(siblings.size - n).forEach { vm.removeObject(it.id) }
+                                            runAutoArrange()
+                                        }
+                                    }, enabled = selectedId != null, modifier = Modifier.testTag("project-apply-copies")) { Text("Set") }
+                                }
+                                addError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+
+                                Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
+                                if (objects.isEmpty()) Text("No objects yet - add an STL, 3MF or OBJ model to start this project's build plate.", style = MaterialTheme.typography.bodySmall)
+                                objects.forEach { obj ->
+                                    ProjectObjectRow(obj, selected = obj.id == selectedId,
+                                        // Selecting a hidden row un-hides it too - a "Select" tap
+                                        // that quietly did nothing visible on the workspace above
+                                        // would be a confusing dead end, not a real toggle.
+                                        onClick = { hiddenIds = hiddenIds - obj.id; selectedId = obj.id },
+                                        hidden = obj.id in hiddenIds,
+                                        onToggleHidden = { hiddenIds = if (obj.id in hiddenIds) hiddenIds - obj.id else hiddenIds + obj.id; if (selectedId == obj.id) selectedId = null },
+                                        // toolCount > 1 (§11, WO-28): real per-object assignment -
+                                        // each row shows its own material + tool slot and opens
+                                        // the per-object picker, instead of the single project-
+                                        // wide row below (mutually exclusive, matching the real
+                                        // capability the target printer actually has).
+                                        toolAssignment = if (toolCount > 1) (obj.material()?.displayName ?: "No material") + " · Tool ${obj.toolSlotIndex ?: 1}" else null,
+                                        onAssign = if (toolCount > 1) { { perObjectPickerFor = obj.id } } else null)
+                                }
+
+                                if (toolCount <= 1) {
+                                    Text("Material", style = MaterialTheme.typography.titleSmall)
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(currentMaterial?.displayName ?: "None selected - using the printer's default profile", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).testTag("project-material-current"))
+                                        OutlinedButton({ materialPickerOpen = true }, enabled = objects.isNotEmpty(), modifier = Modifier.testTag("project-choose-material")) { Text("Choose") }
+                                    }
+                                } else {
+                                    // Real multi-tool target (§11, WO-25/26/27/28): no single
+                                    // project-wide material makes sense here - each object above
+                                    // already carries its own real material + tool assignment,
+                                    // tap "Assign" on a row to change it.
+                                    Text("$toolCount real tool slots on ${profile?.label ?: "this printer"} - tap \"Assign\" on an object above to pick its material and tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-multitool-hint"))
+                                }
+                            }
+                            1 -> {
+                                Text("Quality", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    QualityPreset.entries.forEach { preset ->
+                                        FilterChip(quality == preset, { quality = preset }, label = { Text("${preset.label} (${preset.layerHeightMm}mm)") }, modifier = Modifier.testTag("project-quality-${preset.name}"))
+                                    }
+                                }
+                                OutlinedTextField(infillText, { infillText = it }, label = { Text("Strength - infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))
+                                // Real geometry-driven default (Phase 4's own "intelligent
+                                // defaulting"): Auto reads whether any object on the plate
+                                // actually has a real overhang (meshNeedsSupport) rather than
+                                // asking the owner to already know.
+                                Text("Supports" + if (supportMode == SupportMode.AUTO) " · detected: ${if (autoNeedsSupport) "this model needs support" else "no support needed"}" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(supportMode == SupportMode.OFF, { supportMode = SupportMode.OFF }, label = { Text("Off") }, modifier = Modifier.testTag("project-support-off"))
+                                    FilterChip(supportMode == SupportMode.AUTO, { supportMode = SupportMode.AUTO }, label = { Text("Auto") }, modifier = Modifier.testTag("project-support-auto"))
+                                    FilterChip(supportMode == SupportMode.ON, { supportMode = SupportMode.ON }, label = { Text("On") }, modifier = Modifier.testTag("project-support-on"))
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
+                                    Text("Brim (bed adhesion)")
+                                }
+                                validationIssues.forEach { issue ->
+                                    Text(
+                                        issue.message,
+                                        color = if (issue.blocking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.testTag(if (issue.blocking) "project-validation-error" else "project-validation-warning"),
+                                    )
+                                }
+                                customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                            }
+                            2 -> {
+                                if (profile != null) {
+                                    Text(profile.label, style = MaterialTheme.typography.titleSmall)
+                                    Text(state.address, style = MaterialTheme.typography.bodySmall)
+                                    Text("Slicing always targets whichever printer is currently selected on the Home tab - there's no separate picker here.", style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (profile != null && !acceptsSlicedGcode) Text(
+                                    "On-device slicing isn't wired up yet for ${profile.label} - its printer type needs an upload/print path this app doesn't implement.",
+                                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-unsupported-printer"),
+                                )
+                            }
+                        }
+                    }
+                    Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode && validationIssues.none { it.blocking }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice")) { Text("Slice") }
                 }
                 stage == ProjectEditorStage.SLICING && sliced == null -> {
                     Column(Modifier.weight(1f).fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -678,13 +722,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     }
 }
 
-// WO-30: one entry in the plate's own left-hand toolbar - an icon over a short label, matching
-// this app's existing thin-stroke CompanionIcon set rather than the reference screenshots' own
-// icon glyphs. `enabled = false` still renders (dimmed, via IconButton's own disabled tinting)
-// rather than disappearing, so the toolbar's shape doesn't shift as selection changes.
+// WO-30 follow-up (owner: "the icons are too light and hard to read" - onSurfaceVariant, #9AA5AA
+// in this theme's dark scheme, reads as washed-out at a 24dp icon's 1.7dp stroke width): one
+// entry in the plate's own left-hand toolbar, now drawn at full onSurface contrast (near-white)
+// when enabled, matching this app's existing thin-stroke CompanionIcon set rather than the
+// reference screenshots' own icon glyphs. `enabled = false` still renders (dimmed) rather than
+// disappearing, so the toolbar's shape doesn't shift as selection changes.
 @Composable private fun PlateToolbarButton(label: String, symbol: CompanionSymbol, enabled: Boolean, testTag: String, onClick: () -> Unit) {
+    val color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.testTag(testTag)) {
-        IconButton(onClick, enabled = enabled) { CompanionIcon(symbol, color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)) }
-        Text(label, style = MaterialTheme.typography.labelSmall, color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f))
+        IconButton(onClick, enabled = enabled) { CompanionIcon(symbol, color = color) }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }

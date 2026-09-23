@@ -1877,6 +1877,81 @@ P28/M7 sections for what each one built and its commit hash.)*
       slice existing first); no real Snapmaker U1/Prusa XL/Bambu AMS
       hardware exists to verify any of this against a physical printer
       (the owner has none of the three).
+23. **WO-26 — Phase 8 breakthrough, same session continuation ("continue")
+    following WO-25.** Root-caused and fixed the exact real gap WO-25
+    documented ("this alone does NOT yet produce a differentiated
+    tool-change") - a genuine per-object multi-tool slice against the
+    real bundled Snapmaker U1 profile now works, verified end to end,
+    not assumed.
+    - **Real root cause #1**: the generic per-object `"extruder"` config
+      key (the same one the desktop GUI's own "Set extruder" writes)
+      reached `ModelObject::config` correctly (confirmed via a temporary
+      `__android_log_print` diagnostic, since removed) but had zero
+      effect on the sliced G-code. Reading `PrintApply.cpp`/
+      `PrintObject.cpp` directly found why: `region_config_from_model_
+      volume()` - the real function building the per-region config
+      GCode generation actually reads tool selection from - only looks
+      at six concrete per-feature filament-id keys
+      (`outer_wall_filament_id`/`inner_wall_filament_id`/
+      `sparse_infill_filament_id`/`internal_solid_filament_id`/
+      `top_surface_filament_id`/`bottom_surface_filament_id`).
+      `DynamicPrintConfig::normalize_fdm()`, the real function that
+      would normally translate `"extruder"` into those six keys, is
+      commented out in this vendored engine's own `PrintApply.cpp` -
+      confirmed by reading it, not assumed. **Fixed**: `engine::
+      slice_multi_object` now sets those six keys directly (reproducing
+      `normalize_fdm`'s own real behavior by hand) instead of the
+      generic `"extruder"` key.
+    - **Real root cause #2**: even with those keys set, every requested
+      tool silently clamped back to 1
+      (`PrintObject.cpp::clamp_feature_filament_to_valid`), because
+      libslic3r computes how many extruders *really* exist from
+      `filament_diameter`'s own array length (`PrintApply.cpp`: `size_t
+      num_extruders = m_config.filament_diameter.size()`) - not
+      `machine.json`'s `nozzle_diameter`/`extruder_colour` (which only
+      bound how many *could* exist, per `ToolSlots.kt`'s own
+      `parseToolCount`). The bundled `snapmaker_u1/filament.json` only
+      ever declares one real `filament_diameter` entry. **Fixed by a
+      caller-side config override**, not a further native change:
+      `config_overrides` can already set `filament_diameter` (and the
+      other per-slot keys) to a real 4-entry array via the existing
+      generic mechanism.
+    - **`tool_index`'s real convention corrected and documented**: it is
+      OrcaSlicer's own 1-based filament/extruder identity (1 = the
+      first real slot → `T0`, 2 → `T1`, ...), not 0-based - confirmed
+      empirically (requesting tool 1/tool 2 for two objects produced
+      real `T0`/`T1` in the sliced output, not `T1`/`T2`). `0` remains
+      the "unassigned, printer default" sentinel.
+    - **Verified end to end against the real bundled Snapmaker U1
+      profile** (`ToolAssignmentSlicingDeviceTest`, rewritten - 4 device
+      tests): two objects assigned to different real tool slots, with a
+      real 4-slot filament config override (`filament_diameter`/
+      `filament_colour`/`filament_type`/`nozzle_temperature`/
+      `nozzle_temperature_initial_layer`), produce a genuine `T1`
+      tool-change command in the sliced G-code; the same two objects
+      assigned to the *same* slot produce no `T1` (a real negative
+      control, proving the tool change tracks the assignment rather
+      than always appearing once a multi-slot config exists); the
+      existing default (`tool_index=0`, no multi-slot override) still
+      slices ordinary real G-code unchanged; a mismatched tool-index
+      array length still fails with a real exception. Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      **entire** device-test suite re-run clean on Razr 2026
+      (`ZP22235MHM`) only, same discipline as every prior WO this
+      session.
+    - **Not built this entry, real and explicit**: the real 4-slot
+      filament-config recipe above is hardcoded in the device test, not
+      yet generalized into production Kotlin that builds it from an
+      arbitrary `MaterialAssignment` list - doing that safely means
+      replicating *every* other `filament_*` array key from the base
+      bundled profile (not just the five varied here) to avoid an
+      out-of-range read elsewhere in libslic3r for a key this entry
+      didn't think to override, real, careful work not rushed into this
+      same pass. Still no per-object assignment UI, no purge/flush
+      estimation, no toolchange visualization, no Prusa XL bundled
+      profile, and no real Snapmaker U1/Prusa XL/Bambu AMS hardware to
+      verify any of this against a physical printer - all unchanged
+      from WO-25's own list.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

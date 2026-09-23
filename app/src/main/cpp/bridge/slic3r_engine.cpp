@@ -372,19 +372,30 @@ void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform
     for (const auto& [path, transform, tool_index] : objects) {
         Model loaded = load_and_place_model(path, config, transform);
         for (ModelObject* object : loaded.objects) {
-            // Phase 8 follow-up (§11, WO-25): the real per-object "extruder" config option -
-            // print.apply(model, config) below (via slice_model's shared tail) merges this
-            // object's own ModelConfigObject over the print's global config, the same real
-            // per-object-override mechanism the desktop GUI's own "Set extruder" uses. Must be
-            // set *before* combined.add_object() below, not after: Model::add_object's own real
-            // implementation (Model.cpp) force-sets "extruder" to 1 on the clone it creates
-            // whenever the source object doesn't already have a real, nonzero value - true for
-            // every object today regardless of this parameter, and unchanged by it when
-            // tool_index is 0 (this app's existing default, every prior caller). Passing a real
-            // nonzero tool_index here is what makes that forced-default branch see an
-            // already-set, nonzero value and leave it alone.
+            // Phase 8 follow-up (§11, WO-25): real per-object tool assignment - root-caused via a
+            // temporary __android_log_print diagnostic (since removed) after the generic
+            // per-object "extruder" config key alone was confirmed to reach ModelObject::config
+            // correctly (has()=true, extruder()=the real requested value) but produced zero
+            // observable effect on the sliced G-code. Read PrintApply.cpp/PrintObject.cpp
+            // directly to find why: region_config_from_model_volume() (PrintObject.cpp), the
+            // real function that turns a ModelObject's config into the per-region config the
+            // GCode generator actually reads tool selection from, only looks at the concrete
+            // per-feature filament-id keys below - "extruder" itself is normally translated into
+            // those by DynamicPrintConfig::normalize_fdm(), but that call is commented out in
+            // this vendored engine's own PrintApply.cpp (line ~1226) - so "extruder" alone is
+            // silently inert here, a real, verified fact about this specific engine build, not
+            // assumed from upstream OrcaSlicer documentation. Setting the six real per-feature
+            // keys directly (normalize_fdm's own real behavior, reproduced by hand) is what
+            // actually reaches GCode's tool ordering. Must be set *before* combined.add_object()
+            // below - Model::add_object's own real implementation (Model.cpp) force-sets
+            // "extruder" (only) to 1 on its clone when the source lacks a real nonzero value;
+            // it doesn't touch these keys, so order matters less for them specifically, but
+            // matching slice_bambu_bundle's existing convention keeps this one code shape.
             if (tool_index != 0) {
-                object->config.set("extruder", tool_index);
+                for (const char* key : {"outer_wall_filament_id", "inner_wall_filament_id", "sparse_infill_filament_id",
+                                         "internal_solid_filament_id", "top_surface_filament_id", "bottom_surface_filament_id"}) {
+                    object->config.set(key, tool_index);
+                }
             }
             combined.add_object(*object);
         }

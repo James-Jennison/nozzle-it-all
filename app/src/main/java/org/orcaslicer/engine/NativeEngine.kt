@@ -63,11 +63,15 @@ object NativeEngine {
     // detect overlapping objects - collision detection is a separate, real UI concern. Throws
     // RuntimeException on any failure (including mismatched array lengths), same convention as
     // nativeSliceFile.
-    // toolSlotIndices (Phase 8 follow-up, §11, WO-25): a real per-object OrcaSlicer "extruder"
-    // config assignment (0 = printer default, unchanged behavior - see slic3r_engine.cpp's own
-    // comment on why 0 is safe as a no-op even though add_object() itself always force-sets a
-    // real "extruder" value on the clone it creates). Pass IntArray(modelPaths.size()) of zeros
-    // for today's existing single-material behavior.
+    // toolSlotIndices (Phase 8 follow-up, §11, WO-25/WO-26): a real, 1-based OrcaSlicer filament/
+    // extruder identity per object (1 = the first real filament slot, 2 = the second, ... - 0 =
+    // "unassigned", printer default, unchanged behavior). Pass IntArray(modelPaths.size()) of
+    // zeros for today's existing single-material behavior. A nonzero value alone is necessary but
+    // not sufficient for a genuinely different tool to print that object - the target profile's
+    // own overrideKeys/overrideValues must also give it a real N-slot filament config (see
+    // slic3r_engine.hpp's own comment on `filament_diameter`'s real role here, and
+    // ToolAssignmentSlicingDeviceTest for the concrete recipe verified against the real bundled
+    // Snapmaker U1 profile), or the requested tool silently clamps back to 1.
     external fun nativeSliceMultiObject(
         modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
         rotationZDeg: DoubleArray, scale: DoubleArray, toolSlotIndices: IntArray,

@@ -67,20 +67,25 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
 // path already does, then merged into one Model and sliced together into one G-code file. See the
 // .cpp for why this doesn't itself do collision detection (a separate, real UI concern).
 //
-// tool_index (Phase 8 follow-up, §11, WO-25): the real per-object OrcaSlicer "extruder" config
-// option (PrintConfig.cpp - registered coInt, min 0, "0 = inherit defaults"/1-N select a specific
-// extruder identity) applied to each object's own ModelConfigObject before combining - the same
-// real mechanism the desktop GUI's own per-object "Set extruder" uses, not an invented one. 0
-// (the default for every existing caller) means "don't set it, inherit the printer's default
-// extruder" - identical to today's behavior before this parameter existed.
-//
-// Known, empirically-confirmed real limitation (ToolAssignmentSlicingDeviceTest's own header
-// comment has the full evidence): this alone does NOT yet produce a differentiated tool-change in
-// the sliced G-code against any bundled profile today, including Snapmaker U1 (the one bundled
-// machine.json declaring >1 real extruder) - its own filament.json only ever configures one real
-// filament slot, so every requested extruder id normalizes to that same slot. A real multi-slot
-// filament config is separate, larger, not-yet-built work; this parameter is genuinely correct,
-// real plumbing for when that exists, not a currently-working feature.
+// tool_index (Phase 8 follow-up, §11, WO-25/WO-26): a real 1-based OrcaSlicer filament/extruder
+// identity (matching the real "*_filament_id" config options' own convention - 1 = the first
+// filament slot, 0 = "don't set, inherit the default"). Applied to each object's own
+// ModelConfigObject *before* combining, as the six concrete per-feature keys
+// (outer_wall_filament_id/inner_wall_filament_id/sparse_infill_filament_id/
+// internal_solid_filament_id/top_surface_filament_id/bottom_surface_filament_id), not the more
+// general "extruder" key the desktop GUI's own per-object "Set extruder" writes - see the .cpp's
+// own comment on why: this vendored engine's DynamicPrintConfig::normalize_fdm(), the real
+// function that would normally translate "extruder" into those six keys, is commented out in its
+// own PrintApply.cpp, confirmed by reading it directly, not assumed. This alone is not sufficient
+// for a real multi-tool slice, only necessary: the caller's config_overrides must also give the
+// target profile a real N-filament-slot config (filament_diameter's own array length is what
+// libslic3r actually uses to compute how many extruders exist - PrintApply.cpp's own `size_t
+// num_extruders = m_config.filament_diameter.size()` - not machine.json's nozzle_diameter/
+// extruder_colour, which only bound how many *could* exist), or every filament id here gets
+// silently clamped back down to 1 (PrintObject.cpp's own clamp_feature_filament_to_valid).
+// Empirically verified end to end against the real Snapmaker U1 bundled profile - see
+// ToolAssignmentSlicingDeviceTest's own header comment for the real config_overrides recipe that
+// produces genuine, distinct Tx tool-change commands in the sliced G-code.
 void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform, int>>& objects,
                          const std::string& output_gcode_path,
                          const std::vector<std::string>& profile_paths,

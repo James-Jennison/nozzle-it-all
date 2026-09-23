@@ -64,6 +64,29 @@ class M2Test {
         assertEquals(2,origin.segments.size);assertEquals(10f,origin.segments.last().y2)
     }
 
+    // Real failure captured on the Razr 2026 (a Centauri Carbon Cosmos slice through the project editor):
+    // the slicer names each object after its UUID-named source file, and this exact Klipper line's
+    // `b36836200` used to be tokenized as the numeric word B=36836200, failing the whole layer preview
+    // with "Unsupported coordinate magnitude." - ~3% of freshly created objects hit some variant of it.
+    @Test fun klipperExcludeObjectNamesContainingLongDigitRunsDoNotFailThePreview() {
+        val gcode="G90\nM83\n" +
+            "EXCLUDE_OBJECT_DEFINE NAME=7f08782c-8753-4a81-9941-b36836200d1c.stl_id_0_copy_0 CENTER=128,128 POLYGON=[[118,118],[138,118],[138,138],[118,138],[118,118]]\n" +
+            "G0 X10 Y10 Z0.2\nEXCLUDE_OBJECT_START NAME=7f08782c-8753-4a81-9941-b36836200d1c.stl_id_0_copy_0\n" +
+            "G1 X20 E1\nEXCLUDE_OBJECT_END NAME=7f08782c-8753-4a81-9941-b36836200d1c.stl_id_0_copy_0\n"
+        val p=GcodePreview.parse(ByteArrayInputStream(gcode.toByteArray()))
+        assertEquals(1,p.segments.size);assertEquals(20f,p.segments.single().x2)
+    }
+
+    // The sanity bound itself must still guard the commands that actually consume coordinates.
+    @Test fun absurdCoordinatesOnRealMotionAndOriginCommandsAreStillRejected() {
+        for(s in listOf("G0 X0 Y0\nG1 X99999999 E1","G92 X99999999","G0 X0 Y0\nG1 Y-99999999 E1","G0 X0 Y0\nG1 X10 E99999999")) {
+            // Message checked, not just the exception type - "No supported extrusion paths found." is also an
+            // IllegalArgumentException and would otherwise let this pass without the bound ever firing.
+            val e=assertThrows(IllegalArgumentException::class.java) {GcodePreview.parse(ByteArrayInputStream(s.toByteArray()))}
+            assertEquals("Unsupported coordinate magnitude.",e.message)
+        }
+    }
+
     @Test fun unsupportedGeometryAndCancellationFailHonestly() {
         for(s in listOf("G0 X0 Y0\nG2 X10 Y10 E1","\u0000","X".repeat(16385))) {
             assertThrows(IllegalArgumentException::class.java) {GcodePreview.parse(ByteArrayInputStream(s.toByteArray()))}

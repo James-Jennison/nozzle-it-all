@@ -36,6 +36,30 @@ class SlicingProfilePacksDeviceTest {
         assertFalse("must not contain the old, COSMOS-incompatible M729", gcode.contains("M729"))
         assertFalse("must not contain the old, COSMOS-incompatible M8213", gcode.contains("M8213"))
     }
+    // Real bug found on the Razr 2026 (owner: "I always want errors investigated"): the project editor stores
+    // each model under a random UUID filename and the engine names its objects after that file, so a Klipper
+    // `EXCLUDE_OBJECT_DEFINE NAME=<uuid>.stl...` line reaches GcodePreview. A UUID containing a letter followed
+    // by 8+ digits (`b36836200`) used to be tokenized as the numeric word B=36836200, failing the whole sliced
+    // preview with "Unsupported coordinate magnitude." Uses that exact real failing filename through the same
+    // multi-object JNI path the project editor uses, then runs the real output through the real preview parser.
+    @Test fun uuidNamedObjectsInCosmosExcludeObjectLinesDoNotBreakThePreviewParser() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val input = File(appContext.cacheDir, "7f08782c-8753-4a81-9941-b36836200d1c.stl")
+        testContext.assets.open("cube.stl").use { it.copyTo(input.outputStream()) }
+        val output = File(appContext.cacheDir, "uuid_named_cosmos.gcode")
+        output.delete()
+        val pack = slicingProfilePack(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, CosmosProfileGeneration.CURRENT) ?: throw AssertionError("no COSMOS profile pack")
+        NativeEngine.nativeSliceMultiObject(
+            arrayOf(input.absolutePath), doubleArrayOf(0.0), doubleArrayOf(0.0), doubleArrayOf(0.0), doubleArrayOf(1.0), intArrayOf(0),
+            output.absolutePath, pack.materialize(appContext).toTypedArray(), emptyArray(), emptyArray(),
+        )
+        assertTrue("expected real g-code output", output.exists() && output.length() > 1000)
+        assertTrue("test premise: the COSMOS pack must actually emit the UUID-named EXCLUDE_OBJECT line this guards",
+            output.readText().contains("EXCLUDE_OBJECT_DEFINE NAME=7f08782c-8753-4a81-9941-b36836200d1c"))
+        val toolpath = output.inputStream().buffered().use { GcodePreview.parse(it) }
+        assertTrue("expected real extrusion segments", toolpath.segments.isNotEmpty())
+    }
     @Test fun snapmakerU1ProfileSlicesRealGcode() {
         val gcode = sliceCube(SlicingPrinterModel.SNAPMAKER_U1)
         assertTrue(gcode.contains("G1"))

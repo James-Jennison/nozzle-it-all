@@ -10,6 +10,7 @@ data class Toolpath(val segments:List<ToolpathSegment>,val heights:List<Float>,v
 object GcodePreview {
     const val MAX_BYTES=256L*1024*1024
     private const val MAX_SEGMENTS=120_000
+    private val PARAMETERIZED_COMMANDS=setOf("G92","G0","G00","G1","G01","G2","G02","G3","G03")
     private val token=Regex("([A-Z_]+)([+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+))?")
     fun parse(input:InputStream,cancelled:()->Boolean={Thread.currentThread().isInterrupted}):Toolpath {
         var bytes=0L;var x=0.0;var y=0.0;var z=0.0;var e=0.0;var xyzAbsolute=true;var eAbsolute=true;var units=1.0
@@ -34,7 +35,10 @@ object GcodePreview {
             val text=clean.toString().trim().uppercase(java.util.Locale.ROOT);line.setLength(0)
             if(text.isEmpty())return
             val tokens=token.findAll(text).toList().let {all->if(all.firstOrNull()?.groupValues?.get(1)=="N") all.drop(1) else all};val command=tokens.firstOrNull()?.let{it.groupValues[1]+it.groupValues[2]}?:return
-            val v=tokens.drop(1).mapNotNull{t->t.groupValues[2].toDoubleOrNull()?.let{t.groupValues[1] to it}}.toMap()
+            // Only the motion/origin commands below ever read `v`. Tokenizing every other line's free text as
+            // numeric G-code words is what made a Klipper `EXCLUDE_OBJECT_DEFINE NAME=<uuid>.stl...` line
+            // whose UUID contained e.g. `b36836200` parse as B=36836200 and fail the whole preview.
+            val v=if(command in PARAMETERIZED_COMMANDS)tokens.drop(1).mapNotNull{t->t.groupValues[2].toDoubleOrNull()?.let{t.groupValues[1] to it}}.toMap() else emptyMap()
             require(v.values.all{it.isFinite()&&abs(it)<=10_000_000}){"Unsupported coordinate magnitude."}
             when(command) {
                 "G90"->xyzAbsolute=true;"G91"->xyzAbsolute=false;"M82"->eAbsolute=true;"M83"->eAbsolute=false

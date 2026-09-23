@@ -71,13 +71,17 @@ class ProjectViewModelDeviceTest {
         vm1.updateObjectTransform(objectB.id, ModelTransform(offsetXMm = 15f, rotationZDeg = 90f, scale = 1.5f))
         vm1.removeObject(objectA.id)
         assertEquals(2, vm1.objects.value.size)
-        assertFalse("expected object A's persisted file to be deleted", File(Uri.parse(objectA.sourceFileUri).path!!).exists())
+        // The file is kept while undo could restore the object, and pruned once the project is reopened.
+        assertTrue("expected object A's file kept", File(Uri.parse(objectA.sourceFileUri).path!!).exists())
 
         // Reopen as a genuinely separate ViewModel/database instance - proves this round-tripped
         // through real storage, not just an in-memory list this test itself is holding.
         val vm2 = freshViewModel()
         val loaded = vm2.loadProject(project.id)
         assertTrue(loaded)
+        // The duplicate still references A's file, so it must survive (the old "deleted" expectation
+        // would have broken the duplicate).
+        assertTrue("expected the duplicate's shared file to survive", File(Uri.parse(objectA.sourceFileUri).path!!).exists())
         assertEquals("Test Project", vm2.project.value?.name)
         val reloadedIds = vm2.objects.value.map { it.id }.toSet()
         assertEquals(setOf(objectB.id, duplicate.id), reloadedIds)

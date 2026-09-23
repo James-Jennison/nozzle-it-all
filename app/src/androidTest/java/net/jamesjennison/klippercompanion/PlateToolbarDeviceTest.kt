@@ -67,6 +67,24 @@ class PlateToolbarDeviceTest {
         compose.waitUntil(5000) { compose.onAllNodesWithText("Models", substring = true).fetchSemanticsNodes().any { node -> node.config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Text) { emptyList() }.any { it.text.contains("/2") } } }
     }
 
+    @Test fun undoAndRedoButtonsRestoreARemovedObject() {
+        val (projectId, objectIds) = seedProject("UndoProject", 2)
+        openScreen(projectId)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-undo").performScrollTo().onChildren().onFirst().assertIsNotEnabled()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-remove-object").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isEmpty() }
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("project-undo").onChildren().onFirst().assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("project-undo").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5000) { runCatching { compose.onNodeWithTag("project-redo").onChildren().onFirst().assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("project-redo").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isEmpty() }
+    }
+
     @Test fun hideRemovesFromWorkspaceAndShowBringsItBack() {
         val (projectId, objectIds) = seedProject("HideProject", 2)
         openScreen(projectId)

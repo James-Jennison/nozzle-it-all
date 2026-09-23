@@ -22,12 +22,33 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
     private val _objects = MutableStateFlow<List<ProjectObject>>(emptyList())
     val objects: StateFlow<List<ProjectObject>> = _objects.asStateFlow()
 
+    private val history = UndoHistory<List<ProjectObject>>()
+    private val _undoState = MutableStateFlow(false to false)
+    /** (canUndo, canRedo) */
+    val undoState: StateFlow<Pair<Boolean, Boolean>> = _undoState.asStateFlow()
+    private fun record(coalesceKey: Any? = null) { history.record(_objects.value, coalesceKey); publishUndoState() }
+    private fun publishUndoState() { _undoState.value = history.canUndo to history.canRedo }
+
+    suspend fun undo(): Boolean = restore(history.undo(_objects.value))
+    suspend fun redo(): Boolean = restore(history.redo(_objects.value))
+    private suspend fun restore(target: List<ProjectObject>?): Boolean {
+        publishUndoState()
+        target ?: return false
+        val keep = target.map { it.id }.toSet()
+        _objects.value.filter { it.id !in keep }.forEach { dao.deleteObject(it) }
+        if (target.isNotEmpty()) dao.upsertObjects(target)
+        _objects.value = target
+        touch()
+        return true
+    }
+
     suspend fun newProject(name: String): Project {
         val now = System.currentTimeMillis()
         val created = Project(id = UUID.randomUUID().toString(), name = name, createdAt = now, modifiedAt = now)
         dao.upsertProject(created)
         _project.value = created
         _objects.value = emptyList()
+        history.clear(); publishUndoState()
         return created
     }
 
@@ -35,6 +56,10 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         val loaded = dao.loadProjectWithObjects(id) ?: return false
         _project.value = loaded.first
         _objects.value = loaded.second
+        history.clear(); publishUndoState()
+        // Files of removed objects are kept while undo could still bring them back; anything no
+        // longer referenced when a project is (re)opened is orphaned for good.
+        ProjectFileStore.pruneUnreferenced(context, loaded.first.id, loaded.second.map { it.sourceFileUri }.toSet())
         return true
     }
 
@@ -55,6 +80,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         // objects already share - "single-material-per-project" (this phase's own scope) means a
         // material picked before this add still applies, not just objects added before it.
         val projectMaterial = _objects.value.firstOrNull()?.material()
+        record()
         val added = ProjectObject(id = objectId, projectId = current.id, sourceFileUri = Uri.fromFile(localFile).toString()).withMaterial(projectMaterial)
         dao.upsertObjects(listOf(added))
         _objects.value = _objects.value + added
@@ -68,6 +94,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
     // what actually resolves placement/overlap properly, this is just a sane, visible default.
     suspend fun duplicateObject(objectId: String): ProjectObject? {
         val original = _objects.value.find { it.id == objectId } ?: return null
+        record()
         val duplicate = original.copy(id = UUID.randomUUID().toString(), offsetXMm = original.offsetXMm + 20f)
         dao.upsertObjects(listOf(duplicate))
         _objects.value = _objects.value + duplicate
@@ -78,14 +105,26 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
     suspend fun removeObject(objectId: String) {
         val current = _project.value ?: return
         val target = _objects.value.find { it.id == objectId } ?: return
+        record()
         dao.deleteObject(target)
-        ProjectFileStore.deleteObject(context, current.id, objectId)
         _objects.value = _objects.value.filterNot { it.id == objectId }
+        touch()
+    }
+
+    /** One undo step for a batch placement change (auto-arrange). */
+    suspend fun updateTransforms(transforms: Map<String, ModelTransform>) {
+        val changed = _objects.value.filter { it.id in transforms }.map { it.withTransform(transforms.getValue(it.id)) }
+        if (changed.isEmpty()) return
+        record()
+        dao.upsertObjects(changed)
+        val byId = changed.associateBy { it.id }
+        _objects.value = _objects.value.map { byId[it.id] ?: it }
         touch()
     }
 
     suspend fun updateObjectTransform(objectId: String, transform: ModelTransform) {
         val target = _objects.value.find { it.id == objectId } ?: return
+        record(coalesceKey = objectId)
         val updated = target.withTransform(transform)
         dao.upsertObjects(listOf(updated))
         _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
@@ -98,6 +137,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
     // planned ahead in the Phase 0 schema; this keeps that the one source of truth rather than
     // adding a second, possibly-diverging place the "current" material could live).
     suspend fun setProjectMaterial(material: MaterialProfile?) {
+        record()
         val updated = _objects.value.map { it.withMaterial(material) }
         if (updated.isNotEmpty()) dao.upsertObjects(updated)
         _objects.value = updated
@@ -119,6 +159,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
     // "every object shares one material" invariant that UI still promises.
     suspend fun setObjectMaterial(objectId: String, material: MaterialProfile?, toolSlotIndex: Int?) {
         val target = _objects.value.find { it.id == objectId } ?: return
+        record()
         val updated = target.withMaterial(material).withToolSlot(toolSlotIndex)
         dao.upsertObjects(listOf(updated))
         _objects.value = _objects.value.map { if (it.id == objectId) updated else it }

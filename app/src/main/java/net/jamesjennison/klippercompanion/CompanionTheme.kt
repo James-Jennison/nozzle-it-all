@@ -131,7 +131,7 @@ private fun kilnTypography(): Typography {
 // DUPLICATE/HIDE/RESET/LAYOUT/PREV/NEXT (WO-30) and MOVE/ROTATE (WO-30 follow-up, the plate's own
 // Move/Rotate interaction-mode toggle): the project editor's own plate toolbar - drawn in this
 // file's existing thin-stroke line style, not copied from any reference app's icon set.
-enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT, MOVE, ROTATE }
+enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT, MOVE, ROTATE, UNDO, REDO }
 
 /** Original outlined symbols; parent controls provide accessible text labels. */
 @Composable fun CompanionIcon(symbol: CompanionSymbol, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
@@ -189,6 +189,8 @@ enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND,
             }
             // A 2x2 grid: auto-arranging the plate into an orderly layout.
             CompanionSymbol.LAYOUT -> { box(4f,4f,7f,7f);box(13f,4f,7f,7f);box(4f,13f,7f,7f);box(13f,13f,7f,7f) }
+            CompanionSymbol.UNDO -> { drawArc(color,-160f,220f,useCenter=false,topLeft=Offset(5*u,7*u),size=Size(15*u,12*u),style=stroke); line(5.5f,9f,5f,4.5f); line(5.5f,9f,10f,8.5f) }
+            CompanionSymbol.REDO -> { drawArc(color,-60f,220f,useCenter=false,topLeft=Offset(4*u,7*u),size=Size(15*u,12*u),style=stroke); line(18.5f,9f,19f,4.5f); line(18.5f,9f,14f,8.5f) }
             CompanionSymbol.PREV -> { line(15f,5f,9f,12f);line(9f,12f,15f,19f) }
             CompanionSymbol.NEXT -> { line(9f,5f,15f,12f);line(15f,12f,9f,19f) }
             // A 4-way arrow cross - drag-to-reposition.

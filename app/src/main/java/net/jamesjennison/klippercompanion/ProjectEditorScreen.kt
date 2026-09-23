@@ -101,6 +101,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
 
     val project by vm.project.collectAsState()
     val objects by vm.objects.collectAsState()
+    val undoState by vm.undoState.collectAsState()
 
     // Loads each object's mesh geometry exactly once per source file - a transform-only change
     // to `objects` re-triggers this effect but every already-loaded id is skipped, so it never
@@ -218,10 +219,10 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         val bedWidth = bedShape?.points?.let { pts -> (pts.maxOf { it.first } - pts.minOf { it.first }).takeIf { it > 0f } } ?: 200f
         val items = objs.map { wo -> ArrangeItem(wo.projectObject.id, (wo.geometry.maxX - wo.geometry.minX) / 2f * wo.projectObject.transform().scale, (wo.geometry.maxY - wo.geometry.minY) / 2f * wo.projectObject.transform().scale) }
         val placements = autoArrange(items, bedWidth)
-        for ((id, placement) in placements) {
-            val current = objects.find { it.id == id }?.transform() ?: continue
-            vm.updateObjectTransform(id, current.copy(offsetXMm = placement.offsetXMm, offsetYMm = placement.offsetYMm, rotationZDeg = placement.rotationZDeg))
-        }
+        vm.updateTransforms(placements.mapNotNull { (id, placement) ->
+            val current = objects.find { it.id == id }?.transform() ?: return@mapNotNull null
+            id to current.copy(offsetXMm = placement.offsetXMm, offsetYMm = placement.offsetYMm, rotationZDeg = placement.rotationZDeg)
+        }.toMap())
     }
 
     fun startSlicing() {
@@ -427,6 +428,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                             PlateToolbarButton("Remove", CompanionSymbol.CLOSE, enabled = selectedId != null, testTag = "project-remove-object") {
                                                 selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } }
                                             }
+                                            PlateToolbarButton("Undo", CompanionSymbol.UNDO, enabled = undoState.first, testTag = "project-undo") { scope.launch { vm.undo(); selectedId = selectedId?.takeIf { id -> vm.objects.value.any { it.id == id } } } }
+                                            PlateToolbarButton("Redo", CompanionSymbol.REDO, enabled = undoState.second, testTag = "project-redo") { scope.launch { vm.redo(); selectedId = selectedId?.takeIf { id -> vm.objects.value.any { it.id == id } } } }
                                             PlateToolbarButton("Layout", CompanionSymbol.LAYOUT, enabled = objects.size > 1, testTag = "project-auto-arrange") {
                                                 scope.launch { runAutoArrange() }
                                             }

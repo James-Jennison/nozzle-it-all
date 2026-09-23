@@ -34,6 +34,13 @@ object ProjectFileStore {
         projectDir(context, projectId).listFiles { f -> f.nameWithoutExtension == objectId }?.forEach { it.delete() }
     }
 
+    // Deletes model files no object references any more. Duplicated objects share one file, so
+    // references (not object ids) decide what is safe to delete.
+    fun pruneUnreferenced(context: Context, projectId: String, referencedFileUris: Set<String>) {
+        val referenced = referencedFileUris.mapNotNull { Uri.parse(it).path?.let(::File)?.name }.toSet()
+        projectDir(context, projectId).listFiles()?.filter { it.isFile && it.name !in referenced }?.forEach { it.delete() }
+    }
+
     fun deleteProject(context: Context, projectId: String) {
         projectDir(context, projectId).deleteRecursively()
     }

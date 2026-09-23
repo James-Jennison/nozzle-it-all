@@ -3,7 +3,6 @@ package net.jamesjennison.klippercompanion
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,10 +19,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -121,9 +122,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         } catch (e: Exception) { null }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
-    var layerHeightText by remember(projectId, newProjectName) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.layerHeightMm.toString()) }
+    // Phase 4 (§4/§16, "basic-mode settings... beginner tier"): replaces the old raw
+    // layer-height-in-mm text field with named Draft/Standard/Fine presets, and adds a real
+    // geometry-driven "Auto" support decision - see BasicSlicing.kt.
+    var quality by remember(projectId, newProjectName) { mutableStateOf(QualityPreset.STANDARD) }
     var infillText by remember(projectId, newProjectName) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.infillPercent.toString()) }
-    var supportsEnabled by remember(projectId, newProjectName) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.supportsEnabled) }
+    var supportMode by remember(projectId, newProjectName) { mutableStateOf(SupportMode.AUTO) }
+    var adhesionBrim by remember(projectId, newProjectName) { mutableStateOf(true) }
     var customizeError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var working by remember(projectId, newProjectName) { mutableStateOf(false) }
     var sliceStageLabel by remember(projectId, newProjectName) { mutableStateOf("") }
@@ -138,6 +143,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // not separate state, so it's always exactly what would actually get sliced.
     val currentMaterial = objects.firstOrNull()?.material()
     var materialPickerOpen by remember(projectId, newProjectName) { mutableStateOf(false) }
+    var copiesText by remember(projectId, newProjectName) { mutableStateOf("1") }
     var spoolmanSpools by remember(projectId, newProjectName) { mutableStateOf<List<SpoolmanSpool>?>(null) }
     var spoolmanError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     LaunchedEffect(materialPickerOpen, state.address, state.connected) {
@@ -153,15 +159,33 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         } catch (e: Exception) { spoolmanSpools = emptyList(); spoolmanError = e.message ?: "Could not read Spoolman inventory." }
     }
 
+    // Real bed width, not an invented default - falls back to the widest current layout extent
+    // (not a fixed 200mm) when no bed shape is known yet, so this never silently no-ops before a
+    // printer/profile is selected. Shared by the Auto-arrange button and "Copies" below, so
+    // adding N copies and resolving their placement is always the same one real code path.
+    suspend fun runAutoArrange() {
+        val objs = objects.mapNotNull { obj -> geometry[obj.id]?.let { WorkspaceObject(obj, it) } }
+        if (objs.size <= 1) return
+        val bedWidth = bedShape?.points?.let { pts -> (pts.maxOf { it.first } - pts.minOf { it.first }).takeIf { it > 0f } } ?: 200f
+        val items = objs.map { wo -> ArrangeItem(wo.projectObject.id, (wo.geometry.maxX - wo.geometry.minX) / 2f * wo.projectObject.transform().scale, (wo.geometry.maxY - wo.geometry.minY) / 2f * wo.projectObject.transform().scale) }
+        val placements = autoArrange(items, bedWidth)
+        for ((id, placement) in placements) {
+            val current = objects.find { it.id == id }?.transform() ?: continue
+            vm.updateObjectTransform(id, current.copy(offsetXMm = placement.offsetXMm, offsetYMm = placement.offsetYMm, rotationZDeg = placement.rotationZDeg))
+        }
+    }
+
     fun startSlicing() {
-        val layerHeight = validateLayerHeight(layerHeightText)
         val infill = validateInfillPercent(infillText)
-        if (layerHeight == null) { customizeError = "Enter a layer height between 0.04 and 0.6mm."; return }
         if (infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; return }
         customizeError = null
         sliced = null; sliceError = null; stagedFilename = null
         stage = ProjectEditorStage.SLICING
-        val customization = SliceCustomization(layerHeight, infill, supportsEnabled)
+        val basicSettings = BasicSliceSettings(quality, infill, supportMode, adhesionBrim)
+        // Real geometry-driven decision (AUTO mode only consults this) - true if *any* object on
+        // the plate has a real overhang, not just the selected one, since the whole plate slices
+        // together.
+        val needsSupport = objects.any { obj -> geometry[obj.id]?.let { meshNeedsSupport(it) } == true }
         scope.launch {
             working = true; sliceStageLabel = "Slicing…"
             val target = profile ?: run { working = false; sliceError = "Select a printer first."; return@launch }
@@ -169,10 +193,10 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 Uri.parse(obj.sourceFileUri).path?.let { File(it) to obj.transform() }
             }
             // Phase 3 (§11): the project's material (if one was picked) overrides the same real
-            // nozzle_temperature/bed-plate-temperature config keys SliceCustomization already
-            // uses this mechanism for - applied on top of, not instead of, layer height/infill/
+            // nozzle_temperature/bed-plate-temperature config keys the basic settings already
+            // use this mechanism for - applied on top of, not instead of, layer height/infill/
             // supports, so picking a material never silently resets the rest of these settings.
-            val overrides = customization.toOverrides() + (vm.currentMaterial()?.toOverrides() ?: emptyMap())
+            val overrides = basicSettings.toOverrides(needsSupport) + (vm.currentMaterial()?.toOverrides() ?: emptyMap())
             when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides)) {
                 is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
@@ -213,7 +237,17 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         finally { backend.close() }
     }
 
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()) {
+    // Real bug fix (owner-reported, 2026-09-23: "several screens... especially around the
+    // slicer" had hard-to-read text): a plain Box + background() never sets LocalContentColor,
+    // so every Text() here without its own explicit color fell back to LocalContentColor's own
+    // top-level default (Color.Black in Compose Material3) - nearly invisible against this
+    // theme's near-black background. MainActivity's own screen reads fine because it renders
+    // inside Scaffold, which is a Surface under the hood and sets LocalContentColor correctly;
+    // this screen and SliceAndPrintPanel.kt are separate full-screen overlays that never got
+    // that for free. Surface sets it automatically via contentColorFor(color) - the real,
+    // minimal fix, not a per-Text color patch that the next new Text() here would need to
+    // remember too.
+    Surface(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(project?.name ?: "Project", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).testTag("project-editor-title"))
@@ -265,23 +299,24 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                         OutlinedButton({ selectedId?.let { id -> scope.launch { selectedId = vm.duplicateObject(id)?.id } } }, enabled = selectedId != null, modifier = Modifier.testTag("project-duplicate-object")) { Text("Duplicate") }
                         OutlinedButton({ selectedId?.let { id -> scope.launch { vm.removeObject(id); selectedId = null } } }, enabled = selectedId != null, modifier = Modifier.testTag("project-remove-object")) { Text("Remove") }
                     }
-                    // Real bed width, not an invented default - falls back to the widest current
-                    // layout extent (not a fixed 200mm) when no bed shape is known yet, so
-                    // Auto-arrange never silently no-ops before a printer/profile is selected.
-                    OutlinedButton(
-                        {
-                            val bedWidth = bedShape?.points?.let { pts -> (pts.maxOf { it.first } - pts.minOf { it.first }).takeIf { it > 0f } } ?: 200f
-                            val items = workspaceObjects.map { wo -> ArrangeItem(wo.projectObject.id, (wo.geometry.maxX - wo.geometry.minX) / 2f * wo.projectObject.transform().scale, (wo.geometry.maxY - wo.geometry.minY) / 2f * wo.projectObject.transform().scale) }
-                            val placements = autoArrange(items, bedWidth)
+                    OutlinedButton({ scope.launch { runAutoArrange() } }, enabled = objects.size > 1, modifier = Modifier.testTag("project-auto-arrange")) { Text("Auto-arrange") }
+                    // Phase 4 (§4/§16): "copies" - sets the selected object's total count on the
+                    // plate at once (duplicating up or removing down to N), then resolves
+                    // placement through the same real auto-arrange path above rather than
+                    // leaving N copies stacked on top of each other.
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(copiesText, { copiesText = it }, label = { Text("Copies of selected") }, singleLine = true, modifier = Modifier.weight(1f).testTag("project-copies"))
+                        Button({
+                            val base = objects.find { it.id == selectedId } ?: return@Button
+                            val n = copiesText.trim().toIntOrNull()?.coerceIn(1, 20) ?: return@Button
                             scope.launch {
-                                for ((id, placement) in placements) {
-                                    val current = objects.find { it.id == id }?.transform() ?: continue
-                                    vm.updateObjectTransform(id, current.copy(offsetXMm = placement.offsetXMm, offsetYMm = placement.offsetYMm, rotationZDeg = placement.rotationZDeg))
-                                }
+                                val siblings = objects.filter { it.sourceFileUri == base.sourceFileUri }
+                                if (n > siblings.size) repeat(n - siblings.size) { vm.duplicateObject(base.id) }
+                                else if (n < siblings.size) siblings.filter { it.id != base.id }.take(siblings.size - n).forEach { vm.removeObject(it.id) }
+                                runAutoArrange()
                             }
-                        },
-                        enabled = objects.size > 1, modifier = Modifier.testTag("project-auto-arrange"),
-                    ) { Text("Auto-arrange") }
+                        }, enabled = selectedId != null, modifier = Modifier.testTag("project-apply-copies")) { Text("Set") }
+                    }
                     addError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
                     Text("Objects on this plate", style = MaterialTheme.typography.titleSmall)
@@ -295,11 +330,26 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     }
 
                     Text("Slicing settings", style = MaterialTheme.typography.titleSmall)
-                    OutlinedTextField(layerHeightText, { layerHeightText = it }, label = { Text("Layer height (mm)") }, singleLine = true, modifier = Modifier.testTag("project-layer-height"))
-                    OutlinedTextField(infillText, { infillText = it }, label = { Text("Infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))
+                    Text("Quality", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        QualityPreset.entries.forEach { preset ->
+                            FilterChip(quality == preset, { quality = preset }, label = { Text("${preset.label} (${preset.layerHeightMm}mm)") }, modifier = Modifier.testTag("project-quality-${preset.name}"))
+                        }
+                    }
+                    OutlinedTextField(infillText, { infillText = it }, label = { Text("Strength - infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))
+                    // Real geometry-driven default (Phase 4's own "intelligent defaulting"): Auto
+                    // reads whether any object on the plate actually has a real overhang
+                    // (meshNeedsSupport) rather than asking the owner to already know.
+                    val autoNeedsSupport = objects.any { obj -> geometry[obj.id]?.let { meshNeedsSupport(it) } == true }
+                    Text("Supports" + if (supportMode == SupportMode.AUTO) " · detected: ${if (autoNeedsSupport) "this model needs support" else "no support needed"}" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(supportMode == SupportMode.OFF, { supportMode = SupportMode.OFF }, label = { Text("Off") }, modifier = Modifier.testTag("project-support-off"))
+                        FilterChip(supportMode == SupportMode.AUTO, { supportMode = SupportMode.AUTO }, label = { Text("Auto") }, modifier = Modifier.testTag("project-support-auto"))
+                        FilterChip(supportMode == SupportMode.ON, { supportMode = SupportMode.ON }, label = { Text("On") }, modifier = Modifier.testTag("project-support-on"))
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(supportsEnabled, { supportsEnabled = it }, modifier = Modifier.testTag("project-supports"))
-                        Text("Print supports")
+                        Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
+                        Text("Brim (bed adhesion)")
                     }
                     customizeError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                     if (profile == null) Text("Select a printer on the Home tab first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -349,7 +399,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(project?.name ?: "Project", style = MaterialTheme.typography.titleSmall)
                                 Text("Slices this project's whole plate on-device for ${profile?.label ?: state.address}, uploads the result to ${state.address}, then waits for you to confirm the print separately.")
-                                Text("${objects.size} object(s) · $layerHeightText mm layers · $infillText% infill · supports ${if (supportsEnabled) "on" else "off"}", style = MaterialTheme.typography.bodySmall)
+                                Text("${objects.size} object(s) · ${quality.label} (${quality.layerHeightMm}mm) · $infillText% infill · supports ${supportMode.name.lowercase()}", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         if (working) Text(sliceStageLabel)

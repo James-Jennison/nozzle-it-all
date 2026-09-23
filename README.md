@@ -44,11 +44,14 @@ flow above already uses. This closes Phase 1 of the roadmap. A single `PrinterCa
 control-visibility decision in the app, replacing the printer-kind conditionals that used to be
 scattered across the UI — closing Phase 2. A project now picks a single material (four bundled
 presets, or a real spool read live from Spoolman — its actual configured nozzle/bed temperatures,
-not invented ones) that flows straight into slicing, closing Phase 3. (See `docs/WORK_ORDER.md`'s
-WO-17/WO-18/WO-19 entries for the detailed history, most current for this area — it's updated more
-often than this file.) No multicolor or a model-discovery surface yet — see the plan document's gap
-matrix for the fuller current-vs-target breakdown, though `docs/WORK_ORDER.md` supersedes it for
-anything the two disagree on.
+not invented ones) that flows straight into slicing, closing Phase 3. Slicing settings are now a
+real beginner-tier surface — named quality presets (Draft/Standard/Fine) instead of a raw
+layer-height number, a support Auto mode that reads the model's own real geometry to decide
+whether it needs support, and bed-adhesion/copies controls — closing Phase 4. (See
+`docs/WORK_ORDER.md`'s WO-17 through WO-20 entries for the detailed history, most current for this
+area — it's updated more often than this file.) No multicolor or a model-discovery surface yet —
+see the plan document's gap matrix for the fuller current-vs-target breakdown, though
+`docs/WORK_ORDER.md` supersedes it for anything the two disagree on.
 
 Only use a trusted LAN endpoint for printer control. HTTP is supported for conventional local
 Moonraker installations. This app rejects URL credentials and does not store passwords or API

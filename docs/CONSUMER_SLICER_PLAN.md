@@ -328,7 +328,7 @@ arrange and slicing from that screen are still open).
 | Multi-plate | **Missing** | yes | yes | limited | no | no | no | **P1** |
 | Support painting | **Complete** | yes | limited | limited | limited | no | yes | **P0 (keep)** |
 | Build-volume bounds check | **Complete** | yes | yes | yes | yes | yes | yes | **P0 (keep, extend for multi-object)** |
-| Basic/advanced slicing tiers | **Missing** | yes | n/a | yes | yes | n/a | yes | **P0 basic / P2 advanced** |
+| Basic/advanced slicing tiers | **Basic complete (WO-20: quality preset/strength/supports/brim, real geometry-driven support defaulting - Phase 4 closed 2026-09-23); advanced tier still not built** | yes | n/a | yes | yes | n/a | yes | **P0 basic / P2 advanced** |
 | Sliced 3D preview + stats | **Complete** | yes | yes | yes | yes | limited | yes | **P0 (keep, extend per-material)** |
 | Printer capability abstraction | **Complete (WO-18: `PrinterCapabilities`, every UI kind-branch migrated - Phase 2 closed 2026-09-23)** | n/a | yes | yes | yes | yes | yes | **P0** |
 | Printer discovery (LAN/QR) | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |

@@ -1355,6 +1355,96 @@ P28/M7 sections for what each one built and its commit hash.)*
       shows up later (today: Bundled + live Spoolman only, no saved
       Custom profiles yet - `MaterialSource.CUSTOM` exists in the type but
       nothing constructs one). **Phase 3 is done.**
+17. **WO-20 — Phase 4 of the Consumer Slicer Plan, owner-approved 2026-09-23
+    ("continue"), plus a real text-contrast bug fix (owner-reported mid-phase,
+    2026-09-23: "several of your screens have text that is difficult to
+    read, especially around the slicer... the text itself is dark against
+    a dark background").**
+    - **`BasicSlicing.kt`** (new): the plan's own "basic-mode settings"
+      surface - `QualityPreset` (Draft/Standard/Fine → real 0.28/0.2/0.12mm
+      layer heights, Standard matching this app's pre-existing default so
+      an untouched project behaves identically to before this phase),
+      `SupportMode` (Off/Auto/On), `BasicSliceSettings`, and the plan's own
+      "intelligent defaulting engine" piece: `meshNeedsSupport()`, a real
+      overhang detector over the mesh's own actual vertex/normal data (a
+      face needs support if its real normal points >45° below horizontal,
+      excluding the object's own real bed-contact base at `minZ`) - not a
+      guess, not left to the owner to already know. Z-axis rotation (the
+      only rotation `ModelTransform` supports) never changes a normal's Z
+      component, so the check is valid at any live rotation without
+      needing to re-transform the mesh.
+    - **`ProjectEditorScreen`**: replaced the raw layer-height text field
+      with real Quality preset chips, added Support Off/Auto/On chips
+      (Auto shows a live "detected: this model needs/doesn't need
+      support" readout, driven by the same real geometry check that feeds
+      the actual slice), a Brim (bed adhesion) toggle (only overrides
+      `brim_width` when turned off - on leaves each bundled profile's own
+      real default of 5mm in effect, not a re-typed copy of it), and a
+      "Copies of selected" control (duplicates/removes down to N total
+      instances of the selected object, then runs the same real
+      auto-arrange path so N copies never land stacked on top of each
+      other).
+    - **A real, unrelated bug found and fixed along the way**: the owner
+      reported hard-to-read text, "especially around the slicer." Root
+      cause: `ProjectEditorScreen`/`SliceAndPrintPanel` both render as
+      full-screen overlays via a plain `Box(...).background(...)`, which
+      never sets `LocalContentColor` - every `Text()` without its own
+      explicit `color` fell back to Compose Material3's own top-level
+      default (`Color.Black`), nearly invisible against this theme's
+      near-black background. `MainActivity`'s own screen never showed
+      this because it renders inside `Scaffold`, which *is* a `Surface`
+      under the hood and sets `LocalContentColor` correctly for free -
+      these two full-screen panels, added outside that, never got it.
+      Confirmed real via screenshots before and after (several labels -
+      "Objects on this plate," "Material," "Slicing settings," "Brim (bed
+      adhesion)," the screen's own title - were essentially unreadable
+      dark-on-dark). Fixed by replacing the plain `Box` root with
+      `Surface(..., color = MaterialTheme.colorScheme.background)` in
+      both files - `Surface` sets `LocalContentColor` via
+      `contentColorFor(color)` automatically, so this is the real,
+      minimal fix (not a per-`Text` color patch every future addition to
+      either screen would have to remember on its own). A codebase-wide
+      grep confirmed no other full-screen panel uses the same broken
+      bare-`Box` pattern - every other panel either renders inside
+      `Scaffold` or inside `AlertDialog` (itself `Surface`-backed).
+    - **Verified**: `BasicSlicingTest` (10 JVM unit tests - overhang
+      detection against hand-built triangle fixtures including a real
+      SAT-adjacent shallow-angle threshold case, quality-preset layer
+      heights, explicit-vs-auto support precedence, the brim
+      on/off-only-overrides-when-off behavior) and
+      `BasicSlicingDeviceTest` (4 real device tests using the same real
+      overhang fixture `PaintSessionDeviceTest` already established -
+      `meshNeedsSupport` against real loaded geometry for both a flat
+      cube and a genuinely overhanging pillar-and-cap model, then a full
+      real slice proving AUTO mode actually emits real "support material"
+      extrusion in the G-code for the overhanging model, and that an
+      explicit Off choice suppresses it even when the geometry says
+      otherwise). A full manual pass on real hardware (Razr 2026, real
+      Snapmaker U1): created a project, selected Fine quality, sliced, and
+      confirmed the real output was 167 layers for a 20.05mm model at
+      0.12mm (20.05/0.12 ≈ 167.1) versus 101 layers at Standard's 0.2mm
+      from an earlier slice of the same model - the real math, not just
+      that the field accepted a value. Also visually re-verified both
+      slicer screens after the contrast fix (screenshots before/after).
+      Full `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      **entire** `connectedDebugAndroidTest` suite re-run clean: 165
+      tests, 0 failures, 0 errors, 8 skipped, on Razr 2026.
+    - **Not built this entry**: "copies" only affects placement via
+      auto-arrange (no dedicated per-copy transform UI beyond that); no
+      golden-default table exists yet cross-referencing printer × material
+      × model-geometry combinations against an approved expected-defaults
+      table (the plan's own Tests line) - today's defaults are fixed,
+      sensible constants (Standard quality, 15% infill, Auto support) plus
+      the one real geometry-driven decision (support), not a broader
+      per-printer/per-material defaulting matrix; nothing in this
+      codebase's existing capability/material model yet varies quality or
+      infill by printer or material, so there was no real matrix to
+      generate defaults from yet. **Phase 4 is done** against the plan's
+      own stated scope (quality preset, strength, supports on/auto/off,
+      adhesion/brim, copies, geometry-driven defaulting) and acceptance
+      criterion (picking printer + material + quality preset - all now
+      real decisions with trustworthy defaults - is enough to reach
+      Print).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

@@ -3,7 +3,6 @@ package net.jamesjennison.klippercompanion
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -207,7 +207,13 @@ import java.io.File
     // This panel renders outside Scaffold's own inset-aware padding (it's a full-screen takeover,
     // not Scaffold content), so it has to handle the status/navigation bar insets itself - caught
     // live: the bottom "Slice" action rendered underneath the system navigation bar/buttons.
-    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding().navigationBarsPadding()) {
+    // Real bug fix (owner-reported, 2026-09-23 - hard-to-read text "especially around the
+    // slicer"): a plain Box + background() never sets LocalContentColor, so every Text() here
+    // without its own explicit color fell back to LocalContentColor's own top-level default
+    // (Color.Black), nearly invisible against this theme's near-black background. Surface sets
+    // it correctly via contentColorFor(color), same fix as ProjectEditorScreen.kt's identical
+    // pattern.
+    Surface(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))

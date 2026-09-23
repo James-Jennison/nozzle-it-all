@@ -34,12 +34,19 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-@Composable fun TimelapsePanel(address: String, connected: Boolean, close: () -> Unit, factory: (String) -> TimelapseReader = { Moonraker(it) }) {
+// canRender (Phase 7, §16): the caller's own transport-level capability
+// (PrinterCapabilities.supportsTimelapseTrigger) - false by default, matching BedMeshPanel's own
+// canCalibrate convention, so a caller that only wants read/playback (this panel's original
+// purpose) gets exactly today's behavior.
+@Composable fun TimelapsePanel(address: String, connected: Boolean, close: () -> Unit, factory: (String) -> TimelapseReader = { Moonraker(it) }, canRender: Boolean = false) {
     var clips by remember(address) { mutableStateOf<List<TimelapseClip>?>(null) }
     var note by remember(address) { mutableStateOf("Loading timelapses…") }
     var epoch by remember(address) { mutableIntStateOf(0) }
     var playing by remember(address) { mutableStateOf<TimelapseClip?>(null) }
     var downloadNote by remember(address) { mutableStateOf("") }
+    var rendering by remember(address) { mutableStateOf(false) }
+    var renderConfirm by remember(address) { mutableStateOf(false) }
+    var renderNote by remember(address) { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val contentResolver = LocalContext.current.contentResolver
@@ -105,8 +112,35 @@ import java.util.concurrent.TimeUnit
                 }
             }
             TextButton({ load() }, enabled = connected, modifier = Modifier.testTag("refresh-timelapses")) { Text("Refresh") }
+            // Real trigger (Phase 7, §16): a manual moonraker-timelapse render, gated on the
+            // transport-level capability - the component itself may still not be installed on a
+            // given printer, which surfaces as a real error from renderTimelapse() rather than
+            // being pre-checked (unlike bed-mesh calibration, there's no cheap live "is this
+            // installed" query to make first; Moonraker just 404s the endpoint).
+            if (canRender) {
+                Button({ renderConfirm = true }, enabled = connected && !rendering, modifier = Modifier.testTag("render-timelapse")) {
+                    Text(if (rendering) "Rendering…" else "Render now")
+                }
+                if (renderNote.isNotBlank()) Text(renderNote, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("render-timelapse-note"))
+            }
         }
     })
+    if (renderConfirm) AlertDialog(onDismissRequest = { renderConfirm = false }, title = { Text("Render timelapse now?") },
+        text = { Text("Asks $address to render whatever frames it has already captured into a video now, rather than waiting for the current print to finish.") },
+        confirmButton = { Button({
+            renderConfirm = false; rendering = true; renderNote = ""
+            scope.launch {
+                val reader = try { factory(address) } catch (e: Exception) { renderNote = e.message ?: "Timelapse unavailable."; rendering = false; return@launch }
+                try {
+                    val result = withContext(Dispatchers.IO) { reader.renderTimelapse() }
+                    renderNote = result.message.ifBlank { "Status: ${result.status}." }
+                    if (result.succeeded) load()
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { renderNote = e.message ?: "Could not render the timelapse." }
+                finally { rendering = false; reader.close() }
+            }
+        }, modifier = Modifier.testTag("confirm-render-timelapse")) { Text("Render") } },
+        dismissButton = { TextButton({ renderConfirm = false }) { Text("Cancel") } })
 }
 
 @Composable private fun TimelapseRow(address: String, clip: TimelapseClip, factory: (String) -> TimelapseReader, onPlay: () -> Unit, onDownload: () -> Unit) {

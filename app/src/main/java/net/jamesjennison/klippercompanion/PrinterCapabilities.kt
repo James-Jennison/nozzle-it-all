@@ -47,13 +47,32 @@ data class PrinterCapabilities(
     // implements yet - always false today, not omitted, so a future real implementation only has
     // to flip one value here rather than add a new field and re-audit every call site.
     val hasFilamentSensor: Boolean = false,
+    // Phase 7 (Consumer Slicer Plan §16): real relative-move G-code (G91/G1/G90) plus G28 homing,
+    // sent via printer/gcode/script (JogPanel.kt) - a Moonraker/Klipper-only capability. Neither
+    // Bambu's MQTT protocol nor Prusa Link's documented v1 API (prusa3d/Prusa-Link-Web's own
+    // openapi.yaml, read directly - no jog/move endpoint exists there) offers an equivalent.
     val supportsJog: Boolean = false,
     // Bed mesh is already real, but read-only (BedMeshPanel visualizes it) - *triggering* a new
-    // level is a different, unbuilt capability.
+    // level (BED_MESH_CALIBRATE, a real Klipper gcode command registered only when `[bed_mesh]`
+    // is configured - klippy/extras/bed_mesh.py, confirmed by reading it directly) is a Klipper-
+    // only capability; BedMeshPanel itself still further gates the real "Calibrate now" button on
+    // that printer's own live printer/objects/list actually registering bed_mesh, since not every
+    // Klipper printer has it configured even when the transport supports it in principle.
     val supportsBedLevelingTrigger: Boolean = false,
-    // Timelapse *playback/download* is already real (TimelapsePanel) - *triggering* a render is
-    // a different, unbuilt capability (RENDER_TIMELAPSE is not implemented anywhere).
+    // Timelapse *playback/download* is already real (TimelapsePanel) - *triggering* a render
+    // (a real POST /machine/timelapse/render, moonraker-timelapse's own documented endpoint,
+    // confirmed by reading mainsail-crew/moonraker-timelapse's component source directly) is a
+    // Moonraker-only capability, further gated on that component actually being installed (same
+    // graceful-degradation TimelapsePanel already has for playback).
     val supportsTimelapseTrigger: Boolean = false,
+    // Phase 7: LOAD_FILAMENT/UNLOAD_FILAMENT are real, common Klipper macro names (not a built-in
+    // gcode command - Klipper itself ships neither), so this is a transport-level "this kind of
+    // macro-driven control is possible here" signal, not a guarantee any specific printer has
+    // defined them. FilamentLoadUnloadControls.kt further gates the actual buttons on that
+    // printer's own live macro catalog (state.catalog.macros) genuinely containing one of those
+    // names, case-insensitively - same "no dead buttons" discipline this app's existing
+    // "Favorite macros" section already uses, not a static assumption.
+    val supportsFilamentLoadUnload: Boolean = false,
 )
 
 fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
@@ -61,11 +80,13 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         transport = PrinterTransport.MOONRAKER, supportsPauseResumeCancel = true, supportsCamera = true,
         supportsKlipperExtras = true, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = true,
+        supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
     )
     PrinterKind.SNAPMAKER_U1_PAXX -> PrinterCapabilities(
         transport = PrinterTransport.MOONRAKER, supportsPauseResumeCancel = true, supportsCamera = true,
         supportsKlipperExtras = true, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = true, hasMultiAce = true, verifiedOnRealHardware = true,
+        supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
     )
     PrinterKind.BAMBU_LAB -> PrinterCapabilities(
         transport = PrinterTransport.BAMBU_MQTT, supportsPauseResumeCancel = false, supportsCamera = true,

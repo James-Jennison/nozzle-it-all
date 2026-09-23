@@ -7,8 +7,23 @@ interface TimelapseReader : AutoCloseable {
     fun timelapses(): List<TimelapseClip>
     fun timelapseThumbnail(path: String): ByteArray
     fun timelapseVideoUrl(path: String): TimelapseVideoUrl
+    // Phase 7 (Consumer Slicer Plan §16): a real manual render trigger - moonraker-timelapse's
+    // own documented POST /machine/timelapse/render (mainsail-crew/moonraker-timelapse's
+    // component source, read directly, not assumed). Distinct from every other mutating command
+    // in this app (which all go through the generic PrinterCommand/execute() pipeline and expect
+    // a bare {"result": "ok"}) because this endpoint returns a real, richer JSON object -
+    // {"action":"render","status":...,"msg":...,...} - so it's called directly against this
+    // reader instead, the same way timelapses()/meshStatus() already are for reads.
+    fun renderTimelapse(): TimelapseRenderResult = throw ApiFailure("Timelapse rendering is not supported for this printer.")
 }
 data class TimelapseClip(val path: String, val size: Long?, val modified: Double?, val posterPath: String?)
+// status mirrors moonraker-timelapse's own real values (timelapse.py's render()): "started" is
+// the only real success case; "skipped" (no frames captured), "running" (already rendering) and
+// "error" (e.g. ffmpeg missing) are all real, non-exceptional outcomes worth showing as-is rather
+// than folding into a generic ApiFailure.
+data class TimelapseRenderResult(val status: String, val message: String) {
+    val succeeded: Boolean get() = status == "started"
+}
 object Timelapses {
     // moonraker-timelapse (the Mainsail/Fluidd-compatible component) renders into this
     // extension set; anything else under the "timelapse" file root isn't a finished video.

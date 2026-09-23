@@ -45,4 +45,33 @@ class BedMeshPanelDeviceTest {
         compose.onNodeWithText("Disconnected. Connect to read the bed mesh.").assertExists()
         assertFalse(queried)
     }
+    // Phase 7 (WO-24): the real "Calibrate now" trigger - hidden unless the printer's own live
+    // objects/list confirms bed_mesh is actually configured (§20, no dead buttons), even when the
+    // caller's transport-level canCalibrate is true.
+    @Test fun calibrateButtonHiddenWhenBedMeshNotConfigured() {
+        val reader = object : MeshReader {
+            override fun meshStatus() = BedMeshStatus("", emptyList(), emptyList(), emptyList())
+            override fun supportsBedMeshCalibration() = false
+            override fun close() {}
+        }
+        compose.setContent { CompanionTheme { BedMeshPanel("http://fixture.local/", true, {}, { reader }, execute = { _, _ -> }, canCalibrate = true, printReady = true) } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("mesh-status").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("calibrate-mesh").assertDoesNotExist()
+    }
+    @Test fun calibrateNowSendsTheRealGcode() {
+        var sent: PrinterCommand? = null
+        val reader = object : MeshReader {
+            override fun meshStatus() = BedMeshStatus("", emptyList(), emptyList(), emptyList())
+            override fun supportsBedMeshCalibration() = true
+            override fun close() {}
+        }
+        compose.setContent { CompanionTheme { BedMeshPanel("http://fixture.local/", true, {}, { reader },
+            execute = { command, _ -> sent = command }, canCalibrate = true, printReady = true) } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("calibrate-mesh").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("calibrate-mesh").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("confirm-calibrate-mesh").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("confirm-calibrate-mesh").performClick()
+        compose.waitUntil(5000) { sent != null }
+        assertEquals("BED_MESH_CALIBRATE", sent!!.arguments["script"])
+    }
 }

@@ -200,6 +200,11 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val list = request("server/files/list", mapOf("root" to "timelapse")) as? JSONArray ?: throw ApiFailure("Timelapse unavailable.")
         return Timelapses.parse(list)
     }
+    override fun renderTimelapse(): TimelapseRenderResult {
+        val result = request("machine/timelapse/render", mutate = true, httpClient = commandClient) as? JSONObject
+            ?: throw ApiFailure("Timelapse render request failed.")
+        return TimelapseRenderResult(result.optString("status", "error"), result.optString("msg", ""))
+    }
     override fun timelapseThumbnail(path: String): ByteArray = fileBytes("timelapse", path, 2_000_000, "timelapse thumbnail")
     override fun timelapseVideoUrl(path: String): TimelapseVideoUrl {
         validateFilePath(path, "Invalid timelapse path.")
@@ -219,6 +224,11 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val result=request("printer/objects/query",mapOf("bed_mesh" to "profile_name,mesh_min,mesh_max,probed_matrix")) as? JSONObject
             ?: throw ApiFailure("Bed mesh unavailable.")
         return BedMesh.parse(result)
+    }
+    override fun supportsBedMeshCalibration(): Boolean {
+        val listed = request("printer/objects/list") as? JSONObject ?: return false
+        val objects = listed.optJSONArray("objects") ?: return false
+        return (0 until objects.length()).any { objects.optString(it) == "bed_mesh" }
     }
     override fun toolheadTemperatures(): List<ToolheadTemperature> {
         val listed = request("printer/objects/list") as? JSONObject ?: throw ApiFailure("Toolhead list unavailable.")

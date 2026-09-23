@@ -9,6 +9,13 @@ data class BedMeshStatus(val profileName: String, val meshMin: List<Double>, val
 }
 interface MeshReader : AutoCloseable {
     fun meshStatus(): BedMeshStatus
+    // Phase 7 (Consumer Slicer Plan §16): whether this printer's live Klipper config actually
+    // registers BED_MESH_CALIBRATE - real per-printer signal (printer/objects/list; bed_mesh is
+    // only present when `[bed_mesh]` is configured, klippy/extras/bed_mesh.py read directly, not
+    // assumed), not a static per-transport capability. meshStatus() alone can't tell "not
+    // configured" apart from "configured but never calibrated" (Moonraker's objects/query simply
+    // omits an unregistered object rather than erroring), which is why this is a separate call.
+    fun supportsBedMeshCalibration(): Boolean = false
 }
 object BedMesh {
     private const val MAX_ROWS = 64

@@ -332,15 +332,15 @@ arrange and slicing from that screen are still open).
 | Sliced 3D preview + stats | **Complete (WO-21: per-material toolpath coloring, real slice-time validation - Phase 5 closed 2026-09-23)** | yes | yes | yes | yes | limited | yes | **P0 (keep, extend per-material)** |
 | Printer capability abstraction | **Complete (WO-18: `PrinterCapabilities`, every UI kind-branch migrated - Phase 2 closed 2026-09-23)** | n/a | yes | yes | yes | yes | yes | **P0** |
 | Printer discovery (LAN/QR) | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |
-| Jog / manual move | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |
-| Bed-leveling trigger | **Missing (read-only viz)** | yes | yes | yes | yes | yes | yes | **P1** |
+| Jog / manual move | **Complete for Klipper/Snapmaker (WO-24: real G91/G1/G90 + G28 homing, JogPanel.kt - Phase 7 closed 2026-09-22); Bambu/Prusa Link genuinely have no equivalent transport/endpoint** | yes | yes | yes | yes | yes | yes | **P1** |
+| Bed-leveling trigger | **Complete for Klipper/Snapmaker (WO-24: real BED_MESH_CALIBRATE, gated on the printer's own live bed_mesh detection)** | yes | yes | yes | yes | yes | yes | **P1** |
 | Material profile model | **Complete (WO-19: `MaterialProfile`, single-material-per-project - Phase 3 closed 2026-09-23)** | yes | yes | yes | yes | yes | yes | **P0** |
 | Spoolman → slicing integration | **Complete (WO-19: real spool temperatures flow into slice overrides, confirmed in real sliced G-code)** | n/a | n/a | n/a | n/a | n/a | n/a | **P0 (wire it in)** |
 | Multicolor/multi-tool mapping | **Missing** | yes | yes (AMS) | yes | yes | limited | yes (U1) | **P1/P2** |
 | Toolchange/purge visualization | **Missing** | yes | yes | limited | limited | no | yes | **P2** |
 | Live printer dashboard | **Partial** | yes | yes | yes | yes | yes | yes | **P0 (extend: multi-printer)** |
 | Camera live view | **Complete (2 protocols)** | yes | yes | yes | yes | yes | yes | **P0 (keep)** |
-| Timelapse trigger | **Missing (playback only)** | yes | yes | yes | limited | no | limited | **P1** |
+| Timelapse trigger | **Complete for Klipper/Snapmaker (WO-24: real POST /machine/timelapse/render trigger)** | yes | yes | yes | limited | no | limited | **P1** |
 | AI failure detection | **Missing** | no | limited | yes | limited | no | no | **P2, capability-gated, honest-or-absent** |
 | Notifications (typed) | **Partial (6 of ~9 types)** | yes | yes | yes | yes | yes | yes | **P0/P1** |
 | Print history w/ reprint | **Backend-only (no reprint)** | yes | yes | yes | yes | yes | yes | **P1** |
@@ -432,9 +432,10 @@ Each phase is independently shippable and testable. No phase requires a backend 
 **Scope**: unify the currently-inconsistent upload/start paths (Bambu FTPS, Moonraker HTTP, Prusa Link) behind one `PrintPipeline` interface driven by `PrinterCapabilities`.
 **Acceptance criteria**: the same Prepare→Print flow works identically (from the user's perspective) across all 4 vendors, even though the transport differs.
 
-### Phase 7 — Live Printer Control
+### Phase 7 — Live Printer Control — **closed 2026-09-22 (WO-24)**
 **Objective**: close the real control gaps found in the audit (§2.7): jog, filament load/unload, bed-leveling trigger, timelapse trigger — all capability-gated (Phase 2).
 **Acceptance criteria**: on a printer that supports it, jog/bed-leveling/timelapse-trigger genuinely work against real hardware; on one that doesn't, the control simply doesn't appear (no dead buttons — §20).
+**Status**: all four built for Klipper/Snapmaker (Moonraker-only - Bambu/Prusa Link genuinely have no equivalent transport/endpoint, confirmed by reading each one's own real API rather than assumed). Jog and bed-leveling/timelapse triggers are further gated live per-printer (an idle-printer check for jog, a real `printer/objects/list` bed_mesh check, a real macro-catalog check for filament load/unload) so the "no dead buttons" criterion holds even for a Klipper printer missing the relevant module/macro. Not yet verified against real hardware this session - see WORK_ORDER.md's WO-24 entry for what's covered by contract/device tests instead.
 
 ### Phase 8 — Multicolor / Multimaterial
 **Objective**: real tool/material mapping, per-object and per-painted-region material assignment, purge/flush estimation, toolchange visualization.

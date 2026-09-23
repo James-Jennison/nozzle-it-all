@@ -1704,6 +1704,93 @@ P28/M7 sections for what each one built and its commit hash.)*
       now met for all four integrations this app has - Klipper/Snapmaker
       via Moonraker, Bambu Lab via its bundle+FTPS/MQTT path, Prusa Link
       via its own upload+print endpoint.
+21. **WO-24 — Phase 7 of the Consumer Slicer Plan, owner-directed 2026-09-22
+    ("continue").** Closes the real control gaps the audit (§2.7) found:
+    "No jog/movement controls, no filament load/unload command, no
+    bed-leveling *trigger* ... found anywhere in the control surface."
+    All four are Moonraker/Klipper-only (`PrinterCapabilities.supportsJog`/
+    `supportsBedLevelingTrigger`/`supportsTimelapseTrigger`/
+    `supportsFilamentLoadUnload`, now `true` for `GENERIC_KLIPPER`/
+    `SNAPMAKER_U1_PAXX`, still `false` for Bambu/Prusa Link - neither
+    vendor's real transport/API has an equivalent, confirmed by reading
+    Prusa Link's own published `openapi.yaml` directly rather than
+    assumed) - and each is further gated live per-printer where a static
+    transport flag alone would risk a dead button (§20).
+    - **Jog** (`JogPanel.kt`, new): real relative-move G-code
+      (`G91`/`G1`/`G90`) plus `G28` homing, sent via
+      `printer/gcode/script` - the same mechanism Console.kt's raw-command
+      entry and `Moonraker.macro()` already use, not a new protocol.
+      Deliberately skips this codebase's usual review-then-confirm
+      two-step (HeaterPanel/LedPanel's own pattern) - those panels need it
+      because they first fetch live server state to validate a request;
+      jogging needs no such round trip, and every mainstream Klipper UI
+      (Mainsail, Fluidd, KlipperScreen) treats it as immediate, repeated
+      taps. The real safety gate is instead: only enabled on an idle,
+      ready printer (`HeaterControls.idleStates`, the same real gate
+      heating already uses), plus Klipper's own firmware-side kinematic
+      limits rejecting an out-of-range move regardless.
+    - **Bed-leveling trigger** (`BedMeshPanel.kt`): a real "Calibrate
+      now" button sending `BED_MESH_CALIBRATE` (`klippy/extras/
+      bed_mesh.py`, read directly - this command is only registered when
+      `[bed_mesh]` is configured). Gated on a **new, real per-printer
+      signal**, `MeshReader.supportsBedMeshCalibration()` (a real
+      `printer/objects/list` query) - `meshStatus()` alone can't
+      distinguish "not configured" from "configured but never
+      calibrated" (Moonraker's `objects/query` just omits an
+      unregistered object rather than erroring), so a static capability
+      flag alone would have shown a dead button on any Klipper printer
+      without `[bed_mesh]`. Keeps the existing review-then-confirm
+      pattern (a real physical bed probe, worth the same protection
+      heater/LED changes get).
+    - **Timelapse trigger** (`TimelapsePanel.kt`): a real "Render now"
+      button calling the real, documented `POST /machine/timelapse/
+      render` endpoint (`mainsail-crew/moonraker-timelapse`'s own
+      component source, read directly - confirmed real values:
+      `started`/`skipped`/`running`/`error`, not a bare Moonraker "ok").
+      **New `TimelapseReader.renderTimelapse()`** is called directly
+      against the reader (like `timelapses()`/`meshStatus()` already
+      are for reads) rather than through the generic `PrinterCommand`/
+      `execute()` pipeline, because that pipeline's `command()` requires
+      exactly the string `"ok"` back and this endpoint genuinely returns
+      a richer JSON object - routing it through the generic path would
+      have made every real success look like a failure.
+    - **Filament load/unload**: no new backend at all - Klipper ships no
+      built-in load/unload command, so real support means finding the
+      printer's own live macro (`LOAD_FILAMENT`/`UNLOAD_FILAMENT`, the
+      near-universal Klipper macro convention, or `M701`/`M702`) in its
+      already-fetched macro catalog and reusing the exact same real
+      macro-run pipeline (`MacroForm` → `MacroReviewPanel` → `execute`)
+      the existing "Favorite macros" section already uses - a new
+      "Filament" section in `MainActivity`'s Control tab that only
+      appears when one of those real macro names is actually present.
+    - **Verified**: `MoonrakerTest` gained real MockWebServer contract
+      tests for `renderTimelapse()` (a real success response, a real
+      non-exceptional `skipped` status, a missing-component 404
+      surfacing as a real `ApiFailure`) and `supportsBedMeshCalibration()`
+      (true only when `bed_mesh` is actually in the live object list).
+      `PrinterCapabilitiesTest` updated for the four new flags.
+      `JogPanelDeviceTest` (5 tests): the real default/changed step
+      distance in the sent G-code, real `G28`/`G28 Z` homing scripts,
+      and every jog control disabled with an explicit message while
+      printing. `BedMeshPanelDeviceTest`/`TimelapsePanelDeviceTest`
+      gained real trigger-button tests (hidden without the live
+      capability signal; a confirmed tap sends the real command/calls
+      the real reader method and shows its real result). Full
+      `testDebugUnitTest`/`lintDebug`/`assembleDebug` gate and the
+      **entire** device-test suite re-run clean on Razr 2026
+      (`ZP22235MHM`) only, via direct `adb shell am instrument` - same
+      discipline as WO-22/WO-23, the Razr 2023 left untouched throughout.
+    - **Not built this entry, real and explicit**: no real Klipper/
+      Snapmaker hardware was reachable from this session to verify any
+      of the four against a physical printer (the owner's own earlier
+      real-hardware verification in this codebase used a real Snapmaker
+      U1/Centauri Carbon, not available to this session) - all four are
+      verified as far as real MockWebServer contract tests and
+      Compose device tests against fake readers can go without it.
+      Filament sensor status (`hasFilamentSensor`, a separate, still
+      real-`false`-everywhere capability - no printer integration here
+      reports one) remains unbuilt, matching Phase 7's own scope (it
+      names filament load/unload, not sensing).
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

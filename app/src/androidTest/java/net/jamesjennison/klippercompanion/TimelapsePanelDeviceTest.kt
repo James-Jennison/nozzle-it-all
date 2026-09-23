@@ -6,10 +6,11 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-private class FakeTimelapseReader(private val clips: List<TimelapseClip>) : TimelapseReader {
+private class FakeTimelapseReader(private val clips: List<TimelapseClip>, private val renderResult: TimelapseRenderResult? = null) : TimelapseReader {
     override fun timelapses() = clips
     override fun timelapseThumbnail(path: String): ByteArray = throw ApiFailure("No poster in this fixture.")
     override fun timelapseVideoUrl(path: String) = TimelapseVideoUrl("http://fixture.local/server/files/timelapse/$path")
+    override fun renderTimelapse(): TimelapseRenderResult = renderResult ?: throw ApiFailure("No render result configured in this fixture.")
     override fun close() {}
 }
 
@@ -40,6 +41,24 @@ class TimelapsePanelDeviceTest {
         val reader = FakeTimelapseReader(emptyList())
         compose.setContent { CompanionTheme { TimelapsePanel("http://fixture.local/", true, {}, { reader }) } }
         compose.waitUntil(5000) { compose.onAllNodesWithText("No timelapse videos found. Requires the moonraker-timelapse component to be installed and enabled.").fetchSemanticsNodes().isNotEmpty() }
+    }
+    // Phase 7 (WO-24): the real render-now trigger - button hidden without canRender (§20, no
+    // dead buttons), and a confirmed tap actually calls renderTimelapse() and shows its real
+    // status message.
+    @Test fun renderButtonHiddenWithoutCapability() {
+        val reader = FakeTimelapseReader(emptyList())
+        compose.setContent { CompanionTheme { TimelapsePanel("http://fixture.local/", true, {}, { reader }, canRender = false) } }
+        compose.onNodeWithTag("render-timelapse").assertDoesNotExist()
+    }
+    @Test fun renderNowTriggersARealRenderAndShowsItsStatus() {
+        val reader = FakeTimelapseReader(emptyList(), TimelapseRenderResult("started", "started render, 42 frames"))
+        compose.setContent { CompanionTheme { TimelapsePanel("http://fixture.local/", true, {}, { reader }, canRender = true) } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("render-timelapse").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("render-timelapse").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("confirm-render-timelapse").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("confirm-render-timelapse").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("render-timelapse-note").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("started render, 42 frames").assertExists()
     }
     @Test fun disconnectedShowsExplicitMessageWithoutQuerying() {
         var queried = false

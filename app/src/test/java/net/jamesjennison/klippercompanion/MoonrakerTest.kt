@@ -63,6 +63,59 @@ class MoonrakerTest {
             assertEquals(1,server.requestCount); api.close()
         }
     }
+    // Phase 7 (WO-24): renderTimelapse() calls the real moonraker-timelapse endpoint directly
+    // (not through command()'s generic "ok" acknowledgement path) because it returns a real,
+    // richer JSON object - {"action":"render","status":...,"msg":...} - confirmed against
+    // mainsail-crew/moonraker-timelapse's own component source.
+    @Test fun renderTimelapseParsesARealSuccessResponse() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":{"action":"render","status":"started","framecount":"120"}}""")); server.start()
+            val api = Moonraker(server.url("/").toString())
+            val result = api.renderTimelapse()
+            assertTrue(result.succeeded)
+            assertEquals("started", result.status)
+            val req = server.takeRequest()
+            assertEquals("POST", req.method); assertEquals("/machine/timelapse/render", req.requestUrl!!.encodedPath)
+            api.close()
+        }
+    }
+    @Test fun renderTimelapseSurfacesARealNonExceptionalSkip() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":{"action":"render","status":"skipped","msg":"no frames to render, skip"}}""")); server.start()
+            val api = Moonraker(server.url("/").toString())
+            val result = api.renderTimelapse()
+            assertFalse(result.succeeded)
+            assertEquals("skipped", result.status); assertEquals("no frames to render, skip", result.message)
+            api.close()
+        }
+    }
+    @Test fun renderTimelapseMissingComponentIsAnHonestFailure() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(404)); server.start()
+            val api = Moonraker(server.url("/").toString())
+            assertThrows(ApiFailure::class.java) { api.renderTimelapse() }
+            api.close()
+        }
+    }
+    // Phase 7 (WO-24): real per-printer signal, not a static capability - bed_mesh is only
+    // registered in Moonraker's own object list when `[bed_mesh]` is actually configured
+    // (klippy/extras/bed_mesh.py, read directly).
+    @Test fun supportsBedMeshCalibrationReadsTheRealObjectList() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":{"objects":["gcode_move","bed_mesh","toolhead"]}}""")); server.start()
+            val api = Moonraker(server.url("/").toString())
+            assertTrue(api.supportsBedMeshCalibration())
+            api.close()
+        }
+    }
+    @Test fun supportsBedMeshCalibrationIsFalseWhenNotConfigured() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"result":{"objects":["gcode_move","toolhead"]}}""")); server.start()
+            val api = Moonraker(server.url("/").toString())
+            assertFalse(api.supportsBedMeshCalibration())
+            api.close()
+        }
+    }
     @Test fun invalidMacroCannotInjectGcode() {
         try { Moonraker.macro("HOME\nG28"); fail() } catch(_: IllegalArgumentException) { }
     }

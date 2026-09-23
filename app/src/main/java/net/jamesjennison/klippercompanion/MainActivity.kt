@@ -169,11 +169,21 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     spoolmanFactory:(String)->SpoolmanReader={ a -> state.moonrakerFor(a) },
     aceFactory:(String)->AceReader={ a -> state.moonrakerFor(a) },
     tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
+    // Phase 7 (§16): hoisted up from further below (it's a pure derived value, no side effects)
+    // so the panel-open blocks right below can pass real per-printer control-gate flags
+    // (supportsJog/supportsBedLevelingTrigger/supportsTimelapseTrigger/supportsFilamentLoadUnload)
+    // into BedMeshPanel/TimelapsePanel/JogPanel rather than those panels guessing.
+    val capabilities = state.capabilitiesFor(state.address)
     var consoleOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(consoleOpen) ConsolePanel(state.address,state.connected,{consoleOpen=false},consoleFactory,
         ready=state.snapshot?.ready==true,execute=if(LIVE_HEATER_FAN_CONTROLS_ENABLED) execute else null,generation=state.generation)
     var meshOpen by remember(state.address,state.generation) { mutableStateOf(false) }
-    if(meshOpen) BedMeshPanel(state.address,state.connected,{meshOpen=false},meshFactory)
+    if(meshOpen) BedMeshPanel(state.address,state.connected,{meshOpen=false},meshFactory,
+        execute=if(LIVE_HEATER_FAN_CONTROLS_ENABLED) execute else null,generation=state.generation,
+        canCalibrate=LIVE_HEATER_FAN_CONTROLS_ENABLED && capabilities.supportsBedLevelingTrigger,
+        printReady=state.snapshot?.ready==true && state.snapshot.state in HeaterControls.idleStates)
+    var jogOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(jogOpen && LIVE_HEATER_FAN_CONTROLS_ENABLED) JogPanel(state,execute,{jogOpen=false})
     var toolheadsOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(toolheadsOpen) ToolheadsPanel(state.address,state.connected,{toolheadsOpen=false},toolheadsFactory)
     var fanStatusOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -200,7 +210,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var pandaBreathOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(pandaBreathOpen) PandaBreathPanel(state,execute,{pandaBreathOpen=false},pandaBreathFactory)
     var timelapseOpen by remember(state.address,state.generation) { mutableStateOf(false) }
-    if(timelapseOpen) TimelapsePanel(state.address,state.connected,{timelapseOpen=false},timelapseFactory)
+    if(timelapseOpen) TimelapsePanel(state.address,state.connected,{timelapseOpen=false},timelapseFactory,
+        canRender=LIVE_HEATER_FAN_CONTROLS_ENABLED && capabilities.supportsTimelapseTrigger)
     var spoolmanOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(spoolmanOpen) SpoolmanPanel(state.address,state.connected,{spoolmanOpen=false},spoolmanFactory)
     var controlPreview by rememberSaveable { mutableStateOf(false) }
@@ -307,8 +318,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // bambu/prusa/nonKlipper flags below - see PrinterCapabilities.kt for what each field means
     // and why Bambu/Prusa (both non-Moonraker) share `supportsKlipperExtras = false` while
     // `supportsPauseResumeCancel` differs (PrusaLinkPrinterService's command() does support
-    // pause/resume/cancel; BambuPrinterService's does not).
-    val capabilities = state.capabilitiesFor(state.address)
+    // pause/resume/cancel; BambuPrinterService's does not). (Declared near the top of this
+    // function now - see its own comment there.)
     LaunchedEffect(state.generation, state.connected) { if(!state.connected || pending?.second != state.generation) pending = null }
     Scaffold(containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = {
@@ -538,6 +549,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 FilledTonalButton({ledOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-leds")){Text("Light controls")}
                                 FilledTonalButton({toolOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-tools")){Text("Tool controls")}
                                 FilledTonalButton({speedFlowOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-speedflow")){Text("Speed / flow")}
+                                // Phase 7 (§16): real relative-move jog + homing - see JogPanel.kt
+                                // for why this is gated on an idle printer inside the panel
+                                // itself rather than here (the panel needs to react live to the
+                                // printer going busy mid-session, not just at open time).
+                                if(capabilities.supportsJog) FilledTonalButton({jogOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-jog")){Text("Jog controls")}
                                 // Feature-detected, not gated to a printer kind: shows "not
                                 // detected" rather than being hidden, matching Helix's own
                                 // honest-empty-state panel.
@@ -548,6 +564,28 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 // capability, not owned by the owner, built at their request for
                                 // other PAXX owners.
                                 if(capabilities.hasMultiAce) FilledTonalButton({aceOpen=true},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-ace")){Text("multiACE")}
+                            }
+                        }
+                    }
+                    // Phase 7 (§16): real, but only as real as the printer's own config - Klipper
+                    // ships no built-in filament load/unload command, so this is gated on the
+                    // printer's own live macro catalog actually defining one of these common
+                    // names (LOAD_FILAMENT/UNLOAD_FILAMENT, the near-universal Klipper macro
+                    // convention; M701/M702, the Marlin-style gcode some configs alias) - not
+                    // shown at all otherwise (§20, no dead buttons). Reuses the exact same real
+                    // macro-run pipeline (MacroForm -> MacroReviewPanel -> execute) "Favorite
+                    // macros" below already uses, rather than inventing a second command path.
+                    if(LIVE_HEATER_FAN_CONTROLS_ENABLED && capabilities.supportsFilamentLoadUnload) {
+                        val loadNames = setOf("LOAD_FILAMENT", "M701"); val unloadNames = setOf("UNLOAD_FILAMENT", "M702")
+                        val load = state.catalog.macros.firstOrNull { it.uppercase() in loadNames }
+                        val unload = state.catalog.macros.firstOrNull { it.uppercase() in unloadNames }
+                        if(load != null || unload != null) item {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Filament", style=MaterialTheme.typography.titleMedium)
+                                FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                    load?.let { name -> FilledTonalButton({preparingMacro=name},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-load-filament")){Text("Load filament")} }
+                                    unload?.let { name -> FilledTonalButton({preparingMacro=name},enabled=state.connected && state.snapshot?.ready==true,modifier=Modifier.testTag("open-unload-filament")){Text("Unload filament")} }
+                                }
                             }
                         }
                     }

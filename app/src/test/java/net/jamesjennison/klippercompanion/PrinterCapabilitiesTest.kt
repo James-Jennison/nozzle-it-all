@@ -19,6 +19,13 @@ class PrinterCapabilitiesTest {
         assertFalse(caps.hasBespok3d)
         assertFalse(caps.hasMultiAce)
         assertTrue(caps.verifiedOnRealHardware)
+        // Phase 7 (§16): real G-code jog/bed-leveling-trigger/timelapse-render-trigger/filament
+        // load-unload, all Moonraker/Klipper-only - see JogPanel.kt/BedMeshPanel.kt/
+        // TimelapsePanel.kt/FilamentLoadUnloadControls.kt.
+        assertTrue(caps.supportsJog)
+        assertTrue(caps.supportsBedLevelingTrigger)
+        assertTrue(caps.supportsTimelapseTrigger)
+        assertTrue(caps.supportsFilamentLoadUnload)
     }
 
     @Test fun snapmakerU1PaxxGetsMoonrakerPlusVendorAddOns() {
@@ -28,6 +35,10 @@ class PrinterCapabilitiesTest {
         assertTrue("expected PAXX vendor add-ons", caps.hasBespok3d)
         assertTrue("expected PAXX vendor add-ons", caps.hasMultiAce)
         assertTrue(caps.verifiedOnRealHardware)
+        assertTrue(caps.supportsJog)
+        assertTrue(caps.supportsBedLevelingTrigger)
+        assertTrue(caps.supportsTimelapseTrigger)
+        assertTrue(caps.supportsFilamentLoadUnload)
     }
 
     // BambuPrinterService's command() only ever carries a print request (bambuPrintRequest) -
@@ -59,15 +70,26 @@ class PrinterCapabilitiesTest {
         assertFalse(caps.verifiedOnRealHardware)
     }
 
-    // Real, plan-specified capabilities no transport implements yet - explicit false, not a
-    // missing field, for every vendor.
-    @Test fun noVendorImplementsTheNotYetBuiltCapabilitiesYet() {
+    // hasFilamentSensor remains a real, plan-specified capability no transport implements yet -
+    // explicit false, not a missing field, for every vendor. Phase 7 (§16) built real jog/bed-
+    // leveling-trigger/timelapse-trigger/filament-load-unload for the Moonraker-backed vendors
+    // (see the two tests above) - Bambu Lab and Prusa Link genuinely have neither the transport
+    // nor the documented endpoints for any of them (BAMBU_MQTT: no jog/bed-mesh/timelapse concept
+    // at all; Prusa Link's own published openapi.yaml has no jog/move endpoint), so this test now
+    // only asserts false for those two.
+    @Test fun noVendorImplementsFilamentSensingYet() {
         for (kind in PrinterKind.entries) {
+            assertFalse("$kind", capabilitiesFor(kind).hasFilamentSensor)
+        }
+    }
+
+    @Test fun bambuAndPrusaLinkHaveNoneOfThePhase7Controls() {
+        for (kind in listOf(PrinterKind.BAMBU_LAB, PrinterKind.PRUSA_LINK)) {
             val caps = capabilitiesFor(kind)
-            assertFalse("$kind", caps.hasFilamentSensor)
             assertFalse("$kind", caps.supportsJog)
             assertFalse("$kind", caps.supportsBedLevelingTrigger)
             assertFalse("$kind", caps.supportsTimelapseTrigger)
+            assertFalse("$kind", caps.supportsFilamentLoadUnload)
         }
     }
 

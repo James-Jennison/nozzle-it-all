@@ -11,7 +11,7 @@ import org.junit.runner.RunWith
 class SelfCheckDeviceTest {
     @Test fun everyDependencyCheckPasses() = runBlocking<Unit> {
         val results = SelfCheck.run(InstrumentationRegistry.getInstrumentation().targetContext)
-        assertEquals(9, results.size)
+        assertEquals(10, results.size)
         val failed = results.filterNot { it.ok }
         assertTrue("self-check failures: " + failed.joinToString { "${it.name}: ${it.detail}" }, failed.isEmpty())
     }

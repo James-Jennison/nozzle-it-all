@@ -48,3 +48,9 @@ attestations. It has not run yet: it needs a tag push and the signing secrets on
   (release APK 77.4 -> 85.1 MB). It shows the libraries load and fail cleanly; it does not prove a real Bambu or U1 session works.
 - **Not exercised under the shipped minification:** a real Bambu printer session (MQTT/FTPS) and a real U1 SSH enrolment
   (need the printers), and a placed Glance widget (the check only asks Glance for its widget list).
+
+## MyMiniFactory (Discover) credentials
+Optional build-time values, supplied like the signing variables (environment or `~/.gradle/gradle.properties`, never committed):
+`MMF_API_KEY` (enables browsing) and `MMF_CLIENT_KEY` (enables sign-in for downloads). Without them Discover asks the user for their own
+keys and stores them encrypted. Whether one shared key may ship in the APK is a question for MyMiniFactory's terms; the
+user-supplied path avoids it. The client must register `nozzleitall://mmf-auth` as its redirect URI.

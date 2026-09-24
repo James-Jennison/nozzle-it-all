@@ -2403,6 +2403,37 @@ P28/M7 sections for what each one built and its commit hash.)*
       physical multi-tool print was run; Bambu AMS multi-material is not wired (the Bambu bundle path is single-material, and
       libslic3r's AMS handling is unverified here).
 
+33. **WO-36 - Phase 10 (Discover / MyMiniFactory) built against the documented API, 2026-09-23.**
+    Read the real contract first (`MyMiniFactory/api-documentation`: OpenAPI file and oauth2-instructions). Facts that shaped the
+    design: browse/search/detail/files accept a developer **API key** (`key` query parameter), but `download_url` and
+    `archive_download_url` are documented as **OAuth-only, "not with API key"**; for mobile clients MyMiniFactory prescribes the
+    implicit grant followed by a "mobile login" exchange (needs the client's public `client_key`) and a refresh call.
+    - **Built:** `MmfParser` (strict: https-only URLs without credentials, control characters stripped, lengths/counts capped, HTML
+      fields ignored, license terms reported per the API and never guessed); `MyMiniFactoryClient` (search with every documented
+      filter, detail, files; bounded responses; errors mapped to plain messages; the API key never appears in an error; downloads
+      are https-only, size-capped, follow at most three redirects, and the OAuth token is sent only to `*.myminifactory.com`);
+      `MyMiniFactoryOAuth` + `MmfAuthManager` (authorize URL with anti-forgery state, strict redirect parsing, mobile login, refresh
+      before expiry, sign-out on a refused refresh, session kept when merely offline); `MmfArchive` (safe zip unpacking); a
+      **Discover tab** (search, sort, remix/commercial/no-support filters, paging, license chips, detail with credit line and full
+      license statements, file picker, sign-in/sign-out, key setup); `MmfImporter` (download, unpack, create a project, save the
+      credit line - shown in the editor - Room 6->7); the `nozzleitall://mmf-auth` deep link; encrypted key/session storage
+      (`MmfSettings`); a self-check entry for the client. Optional build-time keys: `MMF_API_KEY`, `MMF_CLIENT_KEY` (gradle property
+      or environment, never committed); otherwise the user pastes their own in Discover.
+    - **Verified:** 28 new unit tests (parser, client against MockWebServer, auth, archive) and 14 device tests (setup and key
+      validation, results and license chips, sort/filter/paging requests, duplicate-page robustness, error display, detail
+      credit/license, sign-in gating, a full download of a single STL plus a zip into a project with attribution and cleaned-up temp
+      files, forged sign-in state rejected, tab and deep-link routing, manifest scope); all 10 self-checks pass on the obfuscated
+      release build. Two real bugs fixed on the way: overlapping result pages crashed the list (now de-duplicated by id), and result
+      cards / license lists were not merged for accessibility.
+    - **NOT verified - no live MyMiniFactory call has ever been made** (that needs a developer client only the owner can create):
+      real response shapes beyond the OpenAPI file, the search query syntax, rate limits, what hosts `download_url` really points
+      at, whether the sign-in redirect `nozzleitall://mmf-auth` is accepted (it must be registered on the client), and whether
+      MyMiniFactory's terms allow shipping one shared API key in the app (the user-supplied-key path avoids that). The meaning of the
+      `share` license term is an interpretation of the schema's one-line description. Paid ("store") models are marked but
+      purchase is not handled; downloading may simply fail for them.
+    - **Owner steps to make it live:** create a client at myminifactory.com/pages/for-developers, register `nozzleitall://mmf-auth` as
+      its redirect, then either build with `MMF_API_KEY`/`MMF_CLIENT_KEY` or paste the keys in Discover.
+
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

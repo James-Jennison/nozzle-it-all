@@ -56,7 +56,12 @@ val MIGRATION_5_6 = object : androidx.room.migration.Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE projects ADD COLUMN calibration TEXT") }
 }
 
-@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 6, exportSchema = false)
+// Phase 10: version 7 - projects.attribution.
+val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE projects ADD COLUMN attribution TEXT") }
+}
+
+@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 7, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
 
@@ -66,7 +71,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext, AppDatabase::class.java, "nozzle_it_all.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
         }
     }
 }

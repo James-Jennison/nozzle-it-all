@@ -335,6 +335,12 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         } finally { staging.deleteRecursively() }
     }
 
+    suspend fun setAttribution(text: String?) {
+        val current = _project.value ?: return
+        val updated = current.copy(attribution = text?.take(500), modifiedAt = System.currentTimeMillis())
+        dao.updateProject(updated); _project.value = updated
+    }
+
     suspend fun renameProject(name: String) {
         val current = _project.value ?: return
         val updated = current.copy(name = name, modifiedAt = System.currentTimeMillis())

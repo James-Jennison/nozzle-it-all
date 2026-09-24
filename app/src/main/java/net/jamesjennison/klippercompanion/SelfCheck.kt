@@ -62,6 +62,10 @@ object SelfCheck {
                 val tmp = File(app.cacheDir, "self-check.gcode.3mf").also { it.writeText("self-check") } // non-empty, so validation passes and the TLS connect path runs
                 try { failsCleanly { BambuFtpsClient().upload(BambuFtpsConfig("127.0.0.1", "00M00A000000000", "00000000", 1500, 1500), tmp) } } finally { tmp.delete() }
             },
+            check("MyMiniFactory client (Discover)") {
+                MmfParser.parseSearch("""{"total_count":0,"items":[]}""")
+                failsCleanly { MyMiniFactoryClient("selfcheckkey", okhttp3.HttpUrl.Builder().scheme("https").host("127.0.0.1").port(1).addPathSegments("api/v2/").build()).search(MmfSearch("x")) }
+            },
             check("Home-screen widget (Glance)") { "${GlanceAppWidgetManager(app).getGlanceIds(NozzlePrinterWidget::class.java).size} widget(s) placed" },
         )
     }

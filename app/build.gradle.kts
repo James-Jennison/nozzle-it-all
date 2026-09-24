@@ -16,6 +16,10 @@ android {
   // 2023) and the only ABI the vendored slicing engine's dependencies were built for. NDK
   // 27.1.12297006 (pinned below) matches what that engine was built and verified with.
   ndk { abiFilters += "arm64-v8a" }
+  // Phase 10: optional MyMiniFactory developer credentials, supplied by the owner at build time (never committed).
+  // MMF_API_KEY enables Discover browsing; MMF_CLIENT_KEY enables sign-in (file downloads). Empty = the user enters their own in Discover.
+  buildConfigField("String", "MMF_API_KEY", "\"${providers.gradleProperty("MMF_API_KEY").orElse(providers.environmentVariable("MMF_API_KEY")).getOrElse("")}\"")
+  buildConfigField("String", "MMF_CLIENT_KEY", "\"${providers.gradleProperty("MMF_CLIENT_KEY").orElse(providers.environmentVariable("MMF_CLIENT_KEY")).getOrElse("")}\"")
   externalNativeBuild {
    cmake {
     // CMAKE_BUILD_TYPE=Release regardless of the Gradle Debug/Release variant - matches
@@ -85,7 +89,7 @@ android {
    testProguardFiles("proguard-smoke-test.pro")
   }
  }
- buildFeatures { compose = true }
+ buildFeatures { compose = true; buildConfig = true }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
  // Pinned rather than "latest": the exact NDK this native build has been verified against

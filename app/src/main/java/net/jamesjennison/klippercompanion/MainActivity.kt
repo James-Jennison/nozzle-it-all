@@ -89,6 +89,11 @@ class MainActivity : ComponentActivity() {
     // review/confirm flow, same rule every other mutating command in this app already follows.
     private var stagedAddress by mutableStateOf<String?>(null)
     private var stagedAction by mutableStateOf<String?>(null)
+    private fun receiveMmfRedirect(value: Intent?) {
+        val d = value?.data ?: return
+        if (d.scheme == "nozzleitall" && d.host == "mmf-auth") MmfRedirects.pending = d.toString()
+    }
+
     private fun receiveShare(value: Intent?) {
         if(value?.action==Intent.ACTION_SEND) {
             @Suppress("DEPRECATION")
@@ -98,9 +103,9 @@ class MainActivity : ComponentActivity() {
         val address = value?.getStringExtra(EXTRA_STAGE_ADDRESS)
         if(address != null) { stagedAddress = address; stagedAction = value.getStringExtra(EXTRA_STAGE_ACTION) }
     }
-    override fun onNewIntent(intent:Intent) {super.onNewIntent(intent);setIntent(intent);receiveShare(intent)}
+    override fun onNewIntent(intent:Intent) {super.onNewIntent(intent);setIntent(intent);receiveShare(intent);receiveMmfRedirect(intent)}
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState);receiveShare(intent); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+        super.onCreate(savedInstanceState);receiveShare(intent);receiveMmfRedirect(intent); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         NozzleLog.sink = { level, tag, message -> if (level == 'w') android.util.Log.w(tag, message) else android.util.Log.i(tag, message) }
         setContent {
             val appearancePrefs = remember { getSharedPreferences("appearance", 0) }
@@ -259,6 +264,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // is ever non-null at a time.
     var editingProjectId by remember { mutableStateOf<String?>(null) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(MmfRedirects.pending) { if (MmfRedirects.pending != null) tab = 5 }
     var selfCheckRunning by remember { mutableStateOf(false) }
     var selfCheckResults by remember { mutableStateOf<List<SelfCheckResult>>(emptyList()) }
     var interruptedSliceNotice by remember { mutableStateOf(SlicingCoordinator.consumeInterruptedSlice(context.applicationContext)) }
@@ -374,7 +380,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 // label read as confusing next to a tab bar that's otherwise about what you do,
                 // not what you're looking at.
                 listOf("Home" to CompanionSymbol.DASHBOARD, "Control" to CompanionSymbol.CONTROL, "Files" to CompanionSymbol.FILES,
-                    "Prepare" to CompanionSymbol.SLICE, "Settings" to CompanionSymbol.SETTINGS).forEachIndexed { index, (title, symbol) ->
+                    "Prepare" to CompanionSymbol.SLICE, "Settings" to CompanionSymbol.SETTINGS, "Discover" to CompanionSymbol.DISCOVER).forEachIndexed { index, (title, symbol) ->
                     NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
                 }
             }
@@ -386,6 +392,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     IconButton({ expandedCamera = false }, Modifier.testTag("close-camera").semantics { contentDescription = "Close full screen camera" }) { CompanionIcon(CompanionSymbol.CLOSE) }
                 }
                 CameraContent(state)
+            }
+        } else if (tab == 5) {
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                DiscoverScreen(settings = remember { MmfSettings(context.applicationContext) }, dao = projectDb.projectDao(), signInRedirect = MmfRedirects.pending, onRedirectConsumed = { MmfRedirects.pending = null },
+                    onStartSignIn = { url -> runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } },
+                    onOpenProject = { id -> editingProjectId = id })
             }
         } else LazyColumn(state = listState, modifier = Modifier.testTag("screen-list").fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
             // The title block (app icon/name + tab subtitle) and its trailing Manage-printers

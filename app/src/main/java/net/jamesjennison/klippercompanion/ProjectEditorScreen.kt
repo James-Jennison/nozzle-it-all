@@ -513,7 +513,11 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     Surface(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(project?.name ?: "Project", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).testTag("project-editor-title"))
+                Column(Modifier.weight(1f)) {
+                    Text(project?.name ?: "Project", style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("project-editor-title"))
+                    // Credit for a model downloaded from MyMiniFactory (their guidelines require attribution).
+                    project?.attribution?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-attribution")) }
+                }
                 // Mid-slice (SLICING/PRINTER_READY/STAGED), this backs out to Edit instead of
                 // closing the whole screen outright - a real sliced-but-not-yet-started result
                 // shouldn't be one tap from losing the review entirely.

@@ -25,6 +25,8 @@ data class Project(
     val targetPrinterId: String? = null,
     // Phase 9e: CalibrationSpec.encode() for a calibration project; null for an ordinary one.
     val calibration: String? = null,
+    // Phase 10: where a downloaded model came from (designer, source, link) - MyMiniFactory's guidelines require credit.
+    val attribution: String? = null,
 )
 
 // One imported model within a Project's build plate. `transform` reuses the existing

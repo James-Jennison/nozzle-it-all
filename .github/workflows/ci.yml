@@ -33,7 +33,12 @@ on:
     tags: ['v*']
   pull_request:
     branches: [codex/android-mvp, main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      device_pool_arn:
+        description: "Device Farm pool ARN (blank = ci-small-pool). The curated Top Devices pool that produced the Sept 22 runs is arn:aws:devicefarm:us-west-2::devicepool:082d10e5-d7d7-48a5-ba5c-b33d66efa1f5"
+        required: false
+        default: ""
 
 jobs:
   build-and-test:
@@ -104,7 +109,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-west-2
       PROJECT_ARN: "arn:aws:devicefarm:us-west-2:000000000000:project:1aced661-0a79-4dc0-b5bb-8ab8372a3970"
-      DEVICE_POOL_ARN: "arn:aws:devicefarm:us-west-2:000000000000:devicepool:1aced661-0a79-4dc0-b5bb-8ab8372a3970/f6f8c8e4-3714-4474-9b57-84c1e87ad2f9"
+      DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || 'arn:aws:devicefarm:us-west-2:000000000000:devicepool:1aced661-0a79-4dc0-b5bb-8ab8372a3970/f6f8c8e4-3714-4474-9b57-84c1e87ad2f9' }}
     steps:
       - uses: actions/download-artifact@v4
         with:

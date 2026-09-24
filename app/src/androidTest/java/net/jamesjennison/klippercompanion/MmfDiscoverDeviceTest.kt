@@ -172,7 +172,7 @@ class MmfDiscoverDeviceTest {
         compose.onNodeWithTag("project-attribution").assertTextContains("by Alice A on MyMiniFactory", substring = true)
     }
 
-    @Test fun freeAndPaidFiltersAskTheApiAndFdmOnlyIsExplained() {
+    @Test fun freeAndPaidFiltersAskTheApiAndFdmIsAlwaysOn() {
         val api = FakeApi(listOf(obj(1, "A"), obj(2, "B")))
         show(freshSettings(key = "buildkey1234"), api)
         compose.waitUntil(8000) { api.requests.isNotEmpty() }
@@ -180,13 +180,9 @@ class MmfDiscoverDeviceTest {
         compose.onNodeWithTag("mmf-filter-paid").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.PAID }
         compose.onNodeWithTag("mmf-filter-all").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.ANY }
         compose.onAllNodesWithTag("mmf-filter-credit").assertCountEquals(0) // every model asks for credit, so it is not a filter
-        compose.onAllNodesWithTag("mmf-fdm-note").assertCountEquals(0)
-        compose.onNodeWithTag("mmf-filter-fdm").performClick()
-        compose.waitUntil(8000) { api.requests.last().fdmOnly }
-        compose.onNodeWithTag("mmf-fdm-note").assertTextContains("tagged FDM", substring = true)
-        val n = api.requests.size; compose.onNodeWithTag("mmf-filter-fdm").performClick()
-        compose.waitUntil(8000) { api.requests.size > n && !api.requests.last().fdmOnly }
-        compose.onAllNodesWithTag("mmf-fdm-note").assertCountEquals(0)
+        compose.onAllNodesWithTag("mmf-filter-fdm").assertCountEquals(0) // FDM is always on, not a filter
+        assertTrue(api.requests.all { it.fdmOnly })
+        compose.onNodeWithTag("mmf-fdm-note").assertTextContains("FDM models only", substring = true)
     }
 
     // Regression: consuming the redirect used to cancel the in-flight sign-in (the effect's key changed), leaving the token
@@ -237,17 +233,12 @@ class MmfDiscoverDeviceTest {
         compose.onNodeWithText("Signed in - downloads enabled until", substring = true).assertExists()
     }
 
-    @Test fun fdmOnlyAlsoHidesModelsThatMentionResin() {
+    @Test fun resinLookingModelsAreAlwaysHidden() {
         val fdm = obj(1, "Plain vase"); val resin = obj(2, "Bust | PRESUPPORTED | Free")
         val api = FakeApi(listOf(fdm, resin))
         show(freshSettings(key = "buildkey1234"), api)
         compose.waitUntil(8000) { compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
         val has = { id: Long -> runCatching { compose.onNodeWithTag("mmf-results").performScrollToNode(hasTestTag("mmf-result-$id")) }.isSuccess }
-        assertTrue(has(1)); assertTrue(has(2))
-        compose.onNodeWithTag("mmf-results").performScrollToIndex(0)
-        val n = api.requests.size; compose.onNodeWithTag("mmf-filter-fdm").performClick()
-        compose.waitUntil(15000) { api.requests.size > n }
-        compose.waitUntil(15000) { compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
-        assertTrue(has(1)); assertFalse("the presupported (resin) model is hidden under FDM only", has(2))
+        assertTrue(has(1)); assertFalse("the presupported (resin) model is hidden", has(2))
     }
 }

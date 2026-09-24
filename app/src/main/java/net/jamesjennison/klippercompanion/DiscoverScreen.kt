@@ -56,7 +56,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(MmfSort.POPULARITY) }
     var filterMode by remember { mutableStateOf(DiscoverFilter.ALL) }
-    var fdmOnly by remember { mutableStateOf(false) }
+    val fdmOnly = true // Nozzle It All prints on FDM machines only, so resin/SLA models are never shown.
     var remix by remember { mutableStateOf(false) }; var commercial by remember { mutableStateOf(false) }; var supportFree by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf<List<MmfObject>>(emptyList()) }; var total by remember { mutableStateOf(0) }; var page by remember { mutableStateOf(1) }
     var loading by remember { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }
@@ -147,7 +147,6 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
                     item { FilterChip(remix, { remix = !remix; search(true) }, label = { Text("Remix OK") }, modifier = Modifier.testTag("mmf-filter-remix")) }
                     item { FilterChip(commercial, { commercial = !commercial; search(true) }, label = { Text("Commercial OK") }, modifier = Modifier.testTag("mmf-filter-commercial")) }
                     item { FilterChip(supportFree, { supportFree = !supportFree; search(true) }, label = { Text("No supports") }, modifier = Modifier.testTag("mmf-filter-support")) }
-                    item { FilterChip(fdmOnly, { fdmOnly = !fdmOnly; search(true) }, label = { Text("FDM only") }, modifier = Modifier.testTag("mmf-filter-fdm")) }
                 }
                 AccountRow(signedIn, if (signedIn) settings.load()?.takeIf { !it.refreshable }?.expiresAtMs else null, clientKey != null, clientDraft, { clientDraft = it }, accountMessage,
                     onSignIn = { val k = clientKey ?: return@AccountRow; setAccountMessage(null); onStartSignIn(MmfAuthLinks.authorizeUrl(k, settings.beginSignIn())) },
@@ -160,7 +159,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
                     items(filterMode.apply(results).filter { !fdmOnly || !it.mentionsResin() }, key = { it.id }) { o -> ResultCard(o) { selected = o } }
                     if (results.isNotEmpty() && results.size < total && !exhausted) item { OutlinedButton({ search(false) }, enabled = !loading, modifier = Modifier.fillMaxWidth().testTag("mmf-more")) { Text(if (loading) "Loading…" else "Load more (${results.size} of $total)") } }
                 }
-                if (fdmOnly) Text("FDM only: models their designers tagged FDM, minus any that mention resin, SLA, DLP or pre-supported. Untagged models are not included.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("mmf-fdm-note"))
+                if (fdmOnly) Text("Showing FDM models only: designer-tagged FDM, minus any that mention resin, SLA, DLP or pre-supported. Untagged models are not included.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("mmf-fdm-note"))
                 Text("Models and images are provided by MyMiniFactory. Searches are sent to MyMiniFactory; nothing else leaves your device.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

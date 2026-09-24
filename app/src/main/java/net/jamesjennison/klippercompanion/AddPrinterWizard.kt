@@ -3,10 +3,12 @@ package net.jamesjennison.klippercompanion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -49,6 +51,30 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
 
     fun draftProfile() = PrinterProfile(normalizedAddressResult, name.trim().take(80), false, "", apiKey.trim().take(200), kind, serial.trim().take(40), slicingModel, declaredFirmwareVersion)
 
+    var scanning by remember { mutableStateOf(false) }
+    var scanNote by remember { mutableStateOf("") }
+    val found = remember { mutableStateListOf<DiscoveredPrinter>() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    fun applyDiscovered(p: DiscoveredPrinter) {
+        if(name.isBlank()) name = p.name
+        address = p.address; kind = p.kind; slicingModel = p.slicingModel
+        if(p.serial.isNotBlank()) serial = p.serial
+        typeError = null
+    }
+    fun runScan() {
+        scanning = true; scanNote = "Looking for printers on this network…"; found.clear()
+        scope.launch {
+            val hosts = withContext(Dispatchers.IO) { LocalNetwork.scanHosts(context) }
+            if(hosts.isEmpty()) { scanNote = "Not connected to a Wi-Fi/LAN network, so there is nothing to scan."; scanning = false; return@launch }
+            withContext(Dispatchers.IO) {
+                val lock = LocalNetwork.multicastLock(context)
+                try { PrinterScanner().scan(hosts) { p -> scope.launch(Dispatchers.Main) { found += p } } } finally { runCatching { lock?.release() } }
+            }
+            scanning = false
+            scanNote = if(found.isEmpty()) "No printers answered. Bambu printers need LAN mode on; you can still enter the address below." else "Tap a printer to fill in the form. You still enter any password or access code."
+        }
+    }
+
     fun runFirmwareDetection() {
         detecting = true; detectNote = ""
         scope.launch {
@@ -82,7 +108,17 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when(step) {
                 WizardStep.TYPE_AND_ADDRESS -> {
-                    Text("Step 1 of ${if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) 4 else 4}: printer type and address", style = MaterialTheme.typography.labelLarge)
+                    Text("Step 1 of 4: printer type and address", style = MaterialTheme.typography.labelLarge)
+                    OutlinedButton({ runScan() }, enabled = !scanning, modifier = Modifier.testTag("wizard-scan")) { Text(if(scanning) "Scanning…" else "Scan network", maxLines = 1) }
+                    if(scanNote.isNotBlank()) Text(scanNote, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("wizard-scan-note"))
+                    found.forEach { p ->
+                        val saved = existingAddresses.any { it.contains(p.address) }
+                        OutlinedButton({ applyDiscovered(p) }, enabled = !saved, modifier = Modifier.fillMaxWidth().testTag("wizard-found-${p.address}")) {
+                            Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                                Text(p.name, maxLines = 1); Text(p.address + " · " + (if(saved) "already saved" else p.detail), style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                            }
+                        }
+                    }
                     OutlinedTextField(name, { name = it.take(80) }, label = { Text("Printer name") }, singleLine = true)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(kind==PrinterKind.GENERIC_KLIPPER, {kind=PrinterKind.GENERIC_KLIPPER}, label={Text("Generic Klipper")})

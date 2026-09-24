@@ -51,10 +51,6 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
-// Shared with PrintMonitorService's own consecutive-failure debounce (ConnectionDebounce.kt) -
-// same tolerance for the same reason: a single blip (mobile network handoff, VPN re-handshake)
-// should not read as a real disconnect in either the foreground dashboard or a background alert.
-const val CONSECUTIVE_FAILURE_TOLERANCE = 2
 class PrinterModel(
     initialAddress: String = "",
     private val saveSettings: (String, List<String>) -> Unit = { _, _ -> },

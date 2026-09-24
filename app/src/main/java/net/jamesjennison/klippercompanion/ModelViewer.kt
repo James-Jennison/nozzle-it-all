@@ -69,11 +69,6 @@ data class CameraOrbit(val azimuthDeg: Float, val elevationDeg: Float, val dista
 // minX/maxX/minY/maxY/maxZ: the mesh's real local-space axis-aligned bounding box - used by
 // computeOutOfBounds() to test the model's actual footprint corners (after the live transform)
 // against the real per-printer bed polygon, not a circular bounding-sphere approximation.
-data class MeshGeometry(
-    val vertexData: FloatArray, val triangleCount: Int, val center: FloatArray, val radius: Float,
-    val origin: FloatArray, val minZ: Float,
-    val minX: Float, val maxX: Float, val minY: Float, val maxY: Float, val maxZ: Float,
-)
 
 object MeshLoader {
     // Off the GL thread entirely - NativeEngine.nativeLoadMeshPreview() and this bounding-sphere

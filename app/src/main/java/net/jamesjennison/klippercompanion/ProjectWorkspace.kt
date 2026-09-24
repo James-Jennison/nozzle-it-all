@@ -59,10 +59,6 @@ import kotlin.math.sqrt
 // the same `framedIds: Set<String>` the real per-object camera-framing logic already uses.
 private const val EMPTY_PLATE_FRAMED_KEY = "__empty_plate__"
 
-// Extra geometry drawn over an object in its own model matrix (painted regions, modifier/blocker outlines):
-// [vertices] are position + normal (6 floats each), in the same frame as the object's mesh; [lines] draws
-// GL_LINES instead of triangles.
-class OverlayGroup(val color: FloatArray, val vertices: FloatArray, val lines: Boolean = false)
 
 data class RenderableObject(
     val id: String,

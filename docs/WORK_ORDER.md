@@ -2334,8 +2334,15 @@ P28/M7 sections for what each one built and its commit hash.)*
       nozzle-relative, documented as assuming a 0.4 mm nozzle). Per-filament/machine vector keys are not in the catalog.
     - **9S undo** (`1d8daad`): snapshot undo/redo for every project edit (drag coalescing, 50 steps). Removing an object no
       longer deletes its model file at once (undo needs it, and a duplicate shares the original's file - the old behaviour
-      would have broken the duplicate); unreferenced files are pruned when a project is reopened. **The shared-module
-      extraction half of 9S (`:domain`/`:transport`) is NOT done**; `settings.gradle.kts` still has only `:app`.
+      would have broken the duplicate); unreferenced files are pruned when a project is reopened. Shared-module extraction (the
+      other half of 9S): new Gradle JVM modules `:domain` (40 files: slicing settings, mesh editing, G-code parsing, printer
+      capability/control models, the printer-service interface) and `:transport` (21 files: Moonraker, Prusa Link, Bambu
+      MQTT/FTPS/camera, Bespok3d SSH and client), same package names so no imports changed; a `verifyNoAndroidImports`
+      check (run in CI) keeps both Android-free. Splits needed: PrinterService abstractions out of Moonraker.kt,
+      MoonrakerRules, NozzleLog (logging sink), MeshGeometry/ModelTransform/OverlayGroup data classes, MeshEdit.cut as an app
+      extension (native), `internal` widened to public across the module boundary. This is a plain-JVM extraction, not
+      Kotlin Multiplatform: nothing was compiled for a non-Android target yet, so JDK-only APIs the Android runtime lacks
+      would not be caught by these modules' own compile.
     - **9b multi-plate + export/import** (`95c42c7`): plates table (Room 3->4), plate chips, move object to plate, slice the
       active plate, `.nozzleproj` zip export/import with zip-slip/size/extension/number validation.
     - **9c mirror/lay-on-face/auto-orient/measure/cut** (`974eeb9`): edits are baked into a new STL in the project (so preview and

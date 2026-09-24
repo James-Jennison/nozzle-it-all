@@ -58,7 +58,7 @@ jobs:
         run: python3 scripts/engine_pin.py verify --engine-root "$ORCASLICER_ENGINE_ROOT"
 
       - name: Unit tests + lint
-        run: ./gradlew testDebugUnitTest lintDebug --no-daemon
+        run: ./gradlew testDebugUnitTest lintDebug :domain:check :transport:check --no-daemon
 
       - name: Assemble debug (native build, arm64-v8a)
         run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon

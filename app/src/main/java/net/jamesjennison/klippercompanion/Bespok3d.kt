@@ -13,16 +13,7 @@ import org.json.JSONObject
 // to load the bundled package bundle — see Bespok3dU1EnrollmentService below.
 
 /** A daemon the phone has already paired with (see Bespok3dClient.requestAccess). */
-data class Bespok3dConnection(val identity: String, val token: String, val certificatePem: String)
 
-interface Bespok3dReader : AutoCloseable {
-    /** Read-only daemon detection; does not require an existing pairing. */
-    fun bespok3dProbe(): Bespok3dProbe
-    /** Returns null (not IOException) only for the daemon's explicit "pairing pending" response. */
-    fun bespok3dStatus(connection: Bespok3dConnection): Bespok3dStatus?
-    fun bespok3dPlugins(connection: Bespok3dConnection): Bespok3dPluginCatalog
-    fun bespok3dInstallPlugins(connection: Bespok3dConnection, pluginIds: List<String>, vars: Map<String, Map<String, String>> = emptyMap()): Bespok3dPluginInstallResult
-}
 
 /**
  * SSH-based U1 probe/enrollment. Kept separate from Bespok3dReader/PrinterService: every call

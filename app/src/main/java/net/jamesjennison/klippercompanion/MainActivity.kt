@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent:Intent) {super.onNewIntent(intent);setIntent(intent);receiveShare(intent)}
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState);receiveShare(intent); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+        NozzleLog.sink = { level, tag, message -> if (level == 'w') android.util.Log.w(tag, message) else android.util.Log.i(tag, message) }
         setContent {
             val appearancePrefs = remember { getSharedPreferences("appearance", 0) }
             var appearance by remember { mutableStateOf(DashboardOptions.decode(runCatching { appearancePrefs.getString("options", null) }.getOrNull())) }

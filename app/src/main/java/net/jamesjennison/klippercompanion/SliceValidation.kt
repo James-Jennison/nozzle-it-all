@@ -57,9 +57,10 @@ fun validateSliceConfiguration(
         val tooHigh = limits.maxLayerHeightMm?.let { layerHeightMm > it + 1e-9 } ?: false
         if (tooLow || tooHigh) issues += SliceValidationIssue.LayerHeightOutOfRange(layerHeightMm, limits)
     }
-    if (filamentRange != null && material?.tempNozzleC != null) {
-        val tooLow = filamentRange.lowC?.let { material.tempNozzleC < it } ?: false
-        val tooHigh = filamentRange.highC?.let { material.tempNozzleC > it } ?: false
+    val nozzleTemp = material?.tempNozzleC
+    if (filamentRange != null && material != null && nozzleTemp != null) {
+        val tooLow = filamentRange.lowC?.let { nozzleTemp < it } ?: false
+        val tooHigh = filamentRange.highC?.let { nozzleTemp > it } ?: false
         if (tooLow || tooHigh) issues += SliceValidationIssue.MaterialTemperatureOutsideProfileRange(material, filamentRange)
     }
     return issues

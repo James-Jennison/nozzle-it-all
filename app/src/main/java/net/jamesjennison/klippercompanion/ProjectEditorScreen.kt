@@ -391,10 +391,15 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             // supports, so picking a material never silently resets the rest of these settings.
             // Skipped for a multi-tool target: slotMaterials above already carries each object's
             // own real material into sliceProject's own multi-slot config generation instead.
-            val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides)
+            val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
             when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
                 slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) })) {
-                is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
+                is SliceOutcome.Success -> {
+                    // Calibration towers change a machine setting with height: patch the sliced plain G-code (not a Bambu bundle).
+                    val cal = CalibrationSpec.decode(project?.calibration)
+                    if (cal != null && target.kind != PrinterKind.BAMBU_LAB) withContext(Dispatchers.IO) { Calibration.applyToFile(outcome.gcode, cal) }
+                    sliced = outcome.gcode; working = false
+                }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
                 is SliceOutcome.Failed -> { working = false; sliceError = outcome.message }
                 SliceOutcome.Cancelled -> { working = false; stage = ProjectEditorStage.EDIT }

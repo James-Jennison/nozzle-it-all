@@ -23,6 +23,8 @@ data class Project(
     val modifiedAt: Long,
     // Phase 2's PrinterCapabilities reference (§10) - nullable until Phase 2 exists.
     val targetPrinterId: String? = null,
+    // Phase 9e: CalibrationSpec.encode() for a calibration project; null for an ordinary one.
+    val calibration: String? = null,
 )
 
 // One imported model within a Project's build plate. `transform` reuses the existing

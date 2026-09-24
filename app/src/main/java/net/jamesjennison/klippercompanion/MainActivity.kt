@@ -258,6 +258,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // is ever non-null at a time.
     var editingProjectId by remember { mutableStateOf<String?>(null) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    var calibrationDialog by remember { mutableStateOf(false) }
+    var calibrationKind by remember { mutableStateOf(CalibrationKind.TEMPERATURE) }
+    var calStart by remember { mutableStateOf("230") }
+    var calStep by remember { mutableStateOf("-5") }
+    var calSections by remember { mutableStateOf("5") }
     val importProject = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         uiScope.launch {
@@ -679,6 +684,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button({ newProjectNameDraft = "" }, modifier = Modifier.testTag("new-project")) { Text("New project") }
                                 OutlinedButton({ importProject.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("import-project")) { Text("Import project") }
+                                OutlinedButton({ calibrationDialog = true }, modifier = Modifier.testTag("new-calibration")) { Text("Calibration") }
                             }
                             importMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("import-project-message")) }
                         }
@@ -778,6 +784,42 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // real ProjectViewModel.newProject() call happens inside ProjectEditorScreen itself (kept
     // there, not here, so the create-and-persist step and the editor that immediately follows it
     // share one real code path rather than two).
+    if(calibrationDialog) {
+        val spec = if(calibrationKind == CalibrationKind.TEMPERATURE) {
+            val start = calStart.trim().toIntOrNull(); val step = calStep.trim().toIntOrNull(); val sections = calSections.trim().toIntOrNull()
+            if(start != null && step != null && sections != null) CalibrationSpec(calibrationKind, start, step, sections).takeIf { it.valid() } else null
+        } else CalibrationSpec(calibrationKind)
+        AlertDialog(onDismissRequest = { calibrationDialog = false }, title = { Text("Calibration print") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        CalibrationKind.entries.forEach { k -> FilterChip(calibrationKind == k, { calibrationKind = k }, label = { Text(k.label) }, modifier = Modifier.testTag("calibration-kind-${k.code}")) }
+                    }
+                    Text(calibrationKind.help, style = MaterialTheme.typography.bodySmall)
+                    if(calibrationKind == CalibrationKind.TEMPERATURE) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedTextField(calStart, { calStart = it }, label = { Text("Start °C") }, singleLine = true, modifier = Modifier.weight(1f).testTag("calibration-start"))
+                            OutlinedTextField(calStep, { calStep = it }, label = { Text("Step °C") }, singleLine = true, modifier = Modifier.weight(1f).testTag("calibration-step"))
+                            OutlinedTextField(calSections, { calSections = it }, label = { Text("Sections") }, singleLine = true, modifier = Modifier.weight(1f).testTag("calibration-sections"))
+                        }
+                        if(spec == null) Text("Every section must be between 150 and 320 °C (2-12 sections).", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = { TextButton({
+                val chosen = spec ?: return@TextButton
+                calibrationDialog = false
+                uiScope.launch {
+                    try {
+                        val created = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            net.jamesjennison.klippercompanion.project.ProjectViewModel(context.applicationContext, projectDb.projectDao()).newCalibrationProject(chosen)
+                        }
+                        editingProjectId = created.id
+                    } catch (e: Exception) { importMessage = "Could not create the calibration project: ${e.message}" }
+                }
+            }, enabled = spec != null, modifier = Modifier.testTag("calibration-create")) { Text("Create") } },
+            dismissButton = { TextButton({ calibrationDialog = false }) { Text("Cancel") } })
+    }
     newProjectNameDraft?.let { draft ->
         AlertDialog(onDismissRequest = { newProjectNameDraft = null }, title = { Text("New project") },
             text = { OutlinedTextField(draft, { newProjectNameDraft = it }, label = { Text("Project name") }, singleLine = true, modifier = Modifier.testTag("new-project-name")) },

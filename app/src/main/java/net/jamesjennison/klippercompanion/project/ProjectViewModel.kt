@@ -110,6 +110,19 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         return created
     }
 
+    /** A project holding the generated calibration model for [spec]; the spec drives overrides and post-processing at slice time. */
+    suspend fun newCalibrationProject(spec: net.jamesjennison.klippercompanion.CalibrationSpec): Project {
+        val created = newProject(spec.kind.label)
+        val withSpec = created.copy(calibration = spec.encode())
+        dao.updateProject(withSpec); _project.value = withSpec
+        val file = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            File(context.cacheDir, "calibration-${UUID.randomUUID()}.stl").also { net.jamesjennison.klippercompanion.MeshEdit.writeBinaryStl(net.jamesjennison.klippercompanion.Calibration.mesh(spec), it) }
+        }
+        try { addObject(Uri.fromFile(file)) } finally { file.delete() }
+        history.clear(); publishUndoState()
+        return withSpec
+    }
+
     suspend fun loadProject(id: String): Boolean {
         val loaded = dao.loadProjectWithObjects(id) ?: return false
         _project.value = loaded.first

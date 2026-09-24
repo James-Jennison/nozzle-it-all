@@ -39,6 +39,14 @@ on:
         description: "Device Farm pool ARN (blank = ci-small-pool). The curated Top Devices pool that produced the Sept 22 runs is arn:aws:devicefarm:us-west-2::devicepool:082d10e5-d7d7-48a5-ba5c-b33d66efa1f5"
         required: false
         default: ""
+      app_upload_arn:
+        description: "Reuse this existing Device Farm app upload instead of uploading the built APK (blank = upload). For isolating signing problems."
+        required: false
+        default: ""
+      test_upload_arn:
+        description: "Reuse this existing Device Farm test-package upload instead of uploading the built one (blank = upload)."
+        required: false
+        default: ""
 
 jobs:
   build-and-test:
@@ -109,6 +117,8 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-west-2
       PROJECT_ARN: "arn:aws:devicefarm:us-west-2:000000000000:project:1aced661-0a79-4dc0-b5bb-8ab8372a3970"
+      APP_UPLOAD_ARN: ${{ inputs.app_upload_arn }}
+      TEST_UPLOAD_ARN: ${{ inputs.test_upload_arn }}
       DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || 'arn:aws:devicefarm:us-west-2:000000000000:devicepool:1aced661-0a79-4dc0-b5bb-8ab8372a3970/f6f8c8e4-3714-4474-9b57-84c1e87ad2f9' }}
     steps:
       - uses: actions/download-artifact@v4
@@ -143,8 +153,11 @@ jobs:
             exit 1
           }
 
-          app_arn=$(upload_and_wait apks/app-debug.apk ANDROID_APP)
-          test_arn=$(upload_and_wait apks/app-debug-androidTest.apk INSTRUMENTATION_TEST_PACKAGE)
+          app_arn="${APP_UPLOAD_ARN:-}"
+          [ -n "$app_arn" ] || app_arn=$(upload_and_wait apks/app-debug.apk ANDROID_APP)
+          test_arn="${TEST_UPLOAD_ARN:-}"
+          [ -n "$test_arn" ] || test_arn=$(upload_and_wait apks/app-debug-androidTest.apk INSTRUMENTATION_TEST_PACKAGE)
+          echo "app upload: $app_arn"; echo "test upload: $test_arn"
 
           run_json=$(aws devicefarm schedule-run \
             --project-arn "$PROJECT_ARN" \

@@ -77,9 +77,9 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
         onRedirectConsumed()
         try {
             if (state == null) throw MmfAuthLinks.SignInFailed("No sign-in was in progress.")
-            val (token, _) = MmfAuthLinks.parseRedirect(redirect, state)
+            val (token, expiresIn) = MmfAuthLinks.parseRedirect(redirect, state)
             val device = MmfDeviceInfo(settings.deviceId(), android.os.Build.MANUFACTURER, android.os.Build.MODEL, java.util.Locale.getDefault().toLanguageTag(), "NozzleItAll/${BuildConfig.VERSION_NAME}")
-            io { (auth ?: throw MmfException.NotConfigured()).completeSignIn(token, device) }
+            io { (auth ?: throw MmfException.NotConfigured()).completeSignIn(token, expiresIn, device) }
             signedIn = true; accountMessage = "Signed in to MyMiniFactory."
         } catch (e: MmfAuthLinks.SignInFailed) { accountMessage = e.message } catch (e: MmfException) { accountMessage = e.message }
         finally { settings.endSignIn() }

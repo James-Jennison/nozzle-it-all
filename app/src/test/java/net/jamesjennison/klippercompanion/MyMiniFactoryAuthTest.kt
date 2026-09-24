@@ -32,7 +32,7 @@ class MyMiniFactoryAuthTest {
     }
 
     private fun withOauth(now: () -> Long = { 1_000_000L }, block: (MockWebServer, MyMiniFactoryOAuth) -> Unit) = MockWebServer().use { s ->
-        s.start(); block(s, MyMiniFactoryOAuth("CLIENTKEY", s.url("/"), clock = now, allowInsecureHttpForTests = true))
+        s.start(); block(s, MyMiniFactoryOAuth("CLIENTKEY", s.url("/"), s.url("/api/v2/"), clock = now, allowInsecureHttpForTests = true))
     }
 
     @Test fun mobileLoginSendsTheDocumentedFormAndReturnsATwoHourSession() = withOauth { s, o ->
@@ -54,16 +54,16 @@ class MyMiniFactoryAuthTest {
     @Test fun managerHandsOutAValidTokenRefreshesNearExpiryAndSignsOutWhenRefreshIsRefused() {
         MockWebServer().use { s ->
             s.start(); var now = 0L
-            val oauth = MyMiniFactoryOAuth("K", s.url("/"), clock = { now }, allowInsecureHttpForTests = true)
+            val oauth = MyMiniFactoryOAuth("K", s.url("/"), s.url("/api/v2/"), clock = { now }, allowInsecureHttpForTests = true)
             val store = InMemoryMmfTokenStore(); val mgr = MmfAuthManager(store, oauth) { now }
             assertNull(mgr.validAccessToken()); assertFalse(mgr.isSignedIn())
-            s.enqueue(MockResponse().setBody("""{"access_token":"first-token-1","expires_in":7200}"""))
-            mgr.completeSignIn("implicit-tok", device); assertTrue(mgr.isSignedIn())
-            assertEquals("first-token-1", mgr.validAccessToken()); assertEquals(1, s.requestCount)
+            s.enqueue(MockResponse().setBody("""{"access_token":"first-token-1","expires_in":7200}""")); s.enqueue(MockResponse().setBody("""{"username":"me"}"""))
+            mgr.completeSignIn("implicit-tok", 600, device); assertTrue(mgr.isSignedIn())
+            assertEquals("first-token-1", mgr.validAccessToken()); assertEquals("login + validation only", 2, s.requestCount)
             now = 7_200_000L - 30_000 // inside the 60 s margin -> refresh
             s.enqueue(MockResponse().setBody("""{"access_token":"second-token-2","expires_in":7200}"""))
             assertEquals("second-token-2", mgr.validAccessToken())
-            val refresh = s.takeRequest().let { s.takeRequest() }; assertEquals("/v1/oauth/mobile/refresh", refresh.path)
+            val refresh = s.takeRequest().let { s.takeRequest().let { _ -> s.takeRequest() } }; assertEquals("/v1/oauth/mobile/refresh", refresh.path)
             assertTrue(refresh.body.readUtf8().contains("device_id=${store.deviceId()}"))
             now += 7_200_000L; s.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"expired"}"""))
             assertNull(mgr.validAccessToken()); assertFalse("a refused refresh signs the user out", mgr.isSignedIn())
@@ -77,6 +77,58 @@ class MyMiniFactoryAuthTest {
         val mgr = MmfAuthManager(store, oauth) { now }; now = 5000
         assertNull(mgr.validAccessToken()); assertTrue("offline must not sign the user out", mgr.isSignedIn())
         mgr.signOut(); assertFalse(mgr.isSignedIn())
-        assertThrows(MmfException.NotConfigured::class.java) { MmfAuthManager(InMemoryMmfTokenStore(), null).completeSignIn("t", device) }
+        assertThrows(MmfException.NotConfigured::class.java) { MmfAuthManager(InMemoryMmfTokenStore(), null).completeSignIn("t", 600, device) }
+    }
+
+    // Seen live: a client that is not a "mobile client" gets HTTP 200 with the body `null` from the mobile-login endpoint.
+    @Test fun aNullMobileLoginFallsBackToTheRedirectTokenAfterConfirmingItWorks() {
+        MockWebServer().use { s ->
+            s.start(); var now = 1_000_000L
+            val oauth = MyMiniFactoryOAuth("K", s.url("/"), s.url("/api/v2/"), clock = { now }, allowInsecureHttpForTests = true)
+            val store = InMemoryMmfTokenStore(); val mgr = MmfAuthManager(store, oauth) { now }
+            s.enqueue(MockResponse().setBody("null")); s.enqueue(MockResponse().setBody("""{"username":"me"}"""))
+            mgr.completeSignIn("implicit-token-abcd", 21600, device)
+            val saved = store.load()!!
+            assertEquals("implicit-token-abcd", saved.accessToken); assertFalse(saved.refreshable); assertEquals(1_000_000L + 21_600_000L, saved.expiresAtMs)
+            assertEquals("/v1/oauth/mobile/login", s.takeRequest().path)
+            val check = s.takeRequest(); assertEquals("/api/v2/user", check.path); assertEquals("Bearer implicit-token-abcd", check.getHeader("Authorization"))
+            assertEquals("implicit-token-abcd", mgr.validAccessToken())
+            // it cannot be refreshed: once expired the user is asked to sign in again, with no network call
+            now += 22_000_000L; val before = s.requestCount
+            assertNull(mgr.validAccessToken()); assertFalse(mgr.isSignedIn()); assertEquals(before, s.requestCount)
+        }
+    }
+
+    @Test fun aTokenMyMiniFactoryDoesNotAcceptIsNeverStored() {
+        MockWebServer().use { s ->
+            s.start()
+            val oauth = MyMiniFactoryOAuth("K", s.url("/"), s.url("/api/v2/"), allowInsecureHttpForTests = true)
+            val store = InMemoryMmfTokenStore(); val mgr = MmfAuthManager(store, oauth)
+            s.enqueue(MockResponse().setBody("null")); s.enqueue(MockResponse().setResponseCode(401))
+            val e = assertThrows(MmfAuthLinks.SignInFailed::class.java) { mgr.completeSignIn("implicit-token-abcd", 600, device) }
+            assertTrue(e.message!!.contains("did not accept")); assertFalse(mgr.isSignedIn())
+            s.enqueue(MockResponse().setBody("null")); s.enqueue(MockResponse().setResponseCode(500))
+            assertTrue(assertThrows(MmfAuthLinks.SignInFailed::class.java) { mgr.completeSignIn("implicit-token-abcd", 600, device) }.message!!.contains("HTTP 500")); assertFalse(mgr.isSignedIn())
+        }
+    }
+
+    @Test fun anExplicitLoginErrorIsStillAFailureNotAFallback() {
+        MockWebServer().use { s ->
+            s.start()
+            val oauth = MyMiniFactoryOAuth("K", s.url("/"), s.url("/api/v2/"), allowInsecureHttpForTests = true)
+            s.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"invalid_token"}"""))
+            assertThrows(MmfAuthLinks.SignInFailed::class.java) { MmfAuthManager(InMemoryMmfTokenStore(), oauth).completeSignIn("t-tttttttt", 600, device) }
+            assertEquals("no fallback validation call was made", 1, s.requestCount)
+        }
+    }
+
+    @Test fun theOneHourOneDayAndOneWeekChoicesAreAllHonouredNotCapped() {
+        val state = "abcdefghijklmnop1234"
+        for (seconds in listOf(3600, 86_400, 604_800)) {
+            val (_, exp) = MmfAuthLinks.parseRedirect("nozzleitall://mmf-auth#access_token=tok-abcdefgh&expires_in=$seconds&state=$state", state)
+            assertEquals(seconds, exp)
+            assertEquals(1_000L + seconds * 1000L, MyMiniFactoryOAuth("K", okhttp3.HttpUrl.Builder().scheme("http").host("x").build(), allowInsecureHttpForTests = true, clock = { 1_000L }).implicitSession("tok-abcdefgh", exp).expiresAtMs)
+        }
+        assertEquals("absurd values are still bounded", MmfAuthLinks.MAX_TOKEN_SECONDS, MmfAuthLinks.parseRedirect("nozzleitall://mmf-auth#access_token=tok-abcdefgh&expires_in=99999999&state=$state", state).second)
     }
 }

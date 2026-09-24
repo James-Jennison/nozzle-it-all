@@ -157,7 +157,8 @@ interface MmfApi {
 // ---- Sign-in (OAuth implicit grant + MyMiniFactory's "mobile login" exchange) ----
 
 /** A signed-in session. [expiresAtMs] is wall-clock milliseconds. */
-data class MmfSession(val accessToken: String, val expiresAtMs: Long) {
+/** [refreshable] is true only for tokens obtained through the mobile-login exchange; a plain implicit-grant token cannot be refreshed. */
+data class MmfSession(val accessToken: String, val expiresAtMs: Long, val refreshable: Boolean = true) {
     fun validAt(nowMs: Long, marginMs: Long = 60_000) = nowMs + marginMs < expiresAtMs
 }
 
@@ -183,6 +184,8 @@ object MmfAuthLinks {
     const val REDIRECT_URI = "https://nozzleitall.com/mmf-auth"
     /** The app's own deep link, opened by the relay page; this is what parseRedirect accepts. */
     const val APP_REDIRECT = "nozzleitall://mmf-auth"
+    /** MyMiniFactory offers 1 hour, 1 day or 1 week at the consent screen; anything up to 8 days is honoured. */
+    const val MAX_TOKEN_SECONDS = 8 * 24 * 3600
 
     fun newState(): String = java.util.UUID.randomUUID().toString().replace("-", "")
 
@@ -192,7 +195,7 @@ object MmfAuthLinks {
         return "$AUTHORIZE_URL?client_id=${enc(clientId)}&redirect_uri=${enc(redirectUri)}&response_type=token&state=${enc(state)}"
     }
 
-    class SignInFailed(message: String) : Exception(message)
+    open class SignInFailed(message: String) : Exception(message)
 
     /** Parses the relayed redirect (`nozzleitall://mmf-auth#access_token=...&expires_in=...&state=...`); rejects a wrong state or a denial. */
     fun parseRedirect(redirect: String, expectedState: String): Pair<String, Int> {
@@ -203,7 +206,7 @@ object MmfAuthLinks {
         if (p["error"] != null) throw SignInFailed(if (p["error"] == "access_denied") "Sign-in was cancelled." else "MyMiniFactory refused the sign-in (${p["error"]!!.take(40)}).")
         if (p["state"] != expectedState) throw SignInFailed("The sign-in response did not match this request (possible forgery).")
         val token = p["access_token"]?.takeIf { it.length in 8..512 && it.all { c -> c.isLetterOrDigit() || c in "-._~+/=" } } ?: throw SignInFailed("MyMiniFactory did not return an access token.")
-        return token to (p["expires_in"]?.toIntOrNull()?.coerceIn(1, 86_400) ?: 600)
+        return token to (p["expires_in"]?.toIntOrNull()?.coerceIn(1, MAX_TOKEN_SECONDS) ?: 600)
     }
 }
 

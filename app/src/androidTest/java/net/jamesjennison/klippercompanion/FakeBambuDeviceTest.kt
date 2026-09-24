@@ -111,4 +111,30 @@ class FakeBambuDeviceTest {
             }
         } finally { service.close() }
     }
+
+    private fun waitForState(service: BambuPrinterService, vararg wanted: String, seconds: Int = 25): String {
+        var last = ""; val end = System.currentTimeMillis() + seconds * 1000L
+        while (System.currentTimeMillis() < end) { last = runCatching { service.snapshot().state }.getOrDefault(""); if (last in wanted) return last; Thread.sleep(1000) }
+        return last
+    }
+
+    @Test fun pauseResumeAndCancelAreObeyedByTheEmulatedPrinter() {
+        opted()
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = File(ctx.cacheDir, "fake-bambu-control.gcode.3mf")
+        java.util.zip.ZipOutputStream(file.outputStream()).use { z -> z.putNextEntry(java.util.zip.ZipEntry("Metadata/plate_1.gcode")); z.write(ByteArray(25_000) { (it % 173).toByte() }); z.closeEntry() }
+        val service = BambuPrinterService(host, serial, code)
+        try {
+            runCatching { service.command(PrinterCommand("Start print", "", bambuPrintRequest = BambuPrintRequest(file))) } // the emulator never acknowledges; see the start test
+            assertEquals("printing", waitForState(service, "printing"))
+            service.command(PrinterCommand("Pause print", "printer/print/pause"))
+            assertEquals("paused", waitForState(service, "paused"))
+            service.command(PrinterCommand("Resume print", "printer/print/resume"))
+            assertEquals("printing", waitForState(service, "printing"))
+            service.command(PrinterCommand("Cancel print", "printer/print/cancel"))
+            // A stopped job is reported by Bambu firmware (and the emulator) as gcode_state FAILED, which the snapshot maps to "error".
+            val after = waitForState(service, "standby", "idle", "cancelled", "complete", "error")
+            assertTrue("printer left the running state after cancel: $after", after in setOf("standby", "idle", "cancelled", "complete", "error"))
+        } finally { service.close(); file.delete() }
+    }
 }

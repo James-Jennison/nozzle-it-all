@@ -87,6 +87,12 @@ object BambuPrintProtocol {
         return JSONObject().put("print", print).toString()
     }
 
+    enum class Control(val wire: String) { PAUSE("pause"), RESUME("resume"), STOP("stop") }
+
+    /** The pause/resume/stop request the printer's MQTT `request` topic takes. */
+    fun buildControlPayload(sequenceId: String, control: Control): String =
+        JSONObject().put("print", JSONObject().put("sequence_id", sequenceId).put("command", control.wire).put("param", "")).toString()
+
     /** Only a matching `project_file` response can resolve a start request. */
     fun acknowledgement(payload: String, expectedSequenceId: String): Acknowledgement {
         val print = runCatching { JSONObject(payload).optJSONObject("print") }.getOrNull()

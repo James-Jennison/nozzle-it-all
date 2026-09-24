@@ -47,7 +47,7 @@ class PrinterCapabilitiesTest {
     @Test fun bambuLabIsCorrectlyRestricted() {
         val caps = capabilitiesFor(PrinterKind.BAMBU_LAB)
         assertEquals(PrinterTransport.BAMBU_MQTT, caps.transport)
-        assertFalse("BambuPrinterService's command() carries no pause/resume/cancel", caps.supportsPauseResumeCancel)
+        assertTrue("BambuPrinterService.command() maps pause/resume/cancel to MQTT control requests", caps.supportsPauseResumeCancel)
         assertTrue("Bambu chamber cam is real", caps.supportsCamera)
         assertFalse("BambuPrinterService implements none of the Klipper reader interfaces", caps.supportsKlipperExtras)
         assertTrue("routes shared .gcode.3mf files to BambuPrintPanel", caps.supportsNativePrintFileFlow)

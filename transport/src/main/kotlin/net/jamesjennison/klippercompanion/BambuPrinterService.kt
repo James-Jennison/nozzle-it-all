@@ -116,8 +116,33 @@ class BambuPrinterService(
 
     override fun command(command: PrinterCommand) {
         val request = command.bambuPrintRequest
-            ?: throw ApiFailure("Unsupported command for a Bambu Lab printer.")
-        startPrint(request)
+        if (request != null) { startPrint(request); return }
+        // The dashboard's pause/resume/cancel buttons carry Moonraker-shaped paths; they mean the same thing on a Bambu.
+        val control = when (command.path) {
+            "printer/print/pause" -> BambuPrintProtocol.Control.PAUSE
+            "printer/print/resume" -> BambuPrintProtocol.Control.RESUME
+            "printer/print/cancel" -> BambuPrintProtocol.Control.STOP
+            else -> throw ApiFailure("Unsupported command for a Bambu Lab printer.")
+        }
+        sendControl(control)
+    }
+
+    /**
+     * Publishes pause/resume/stop and returns once it has been sent. Unlike a print start there is no acknowledgement to wait for here: the
+     * dashboard's next status read is what shows whether the printer obeyed (state becomes paused / printing / idle).
+     */
+    private fun sendControl(control: BambuPrintProtocol.Control) {
+        val payload = BambuPrintProtocol.buildControlPayload(sequence.incrementAndGet().toString(), control)
+        val connection = BambuMqttConnection(object : BambuMqttConnection.Listener {
+            override fun onReport(payload: String) = Unit
+            override fun onStateChange(state: String, message: String?) = Unit
+        })
+        try {
+            await(connection.connect(host, BambuMqttConnection.DEFAULT_PORT, serial, accessCode), CONNECT_TIMEOUT_MS, "Could not reach the printer.")
+            await(connection.publish(payload), CONNECT_TIMEOUT_MS, "Could not send the command to the printer.")
+        } finally {
+            connection.close()
+        }
     }
 
     /**

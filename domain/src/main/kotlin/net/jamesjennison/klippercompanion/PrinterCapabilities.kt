@@ -89,7 +89,7 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
     )
     PrinterKind.BAMBU_LAB -> PrinterCapabilities(
-        transport = PrinterTransport.BAMBU_MQTT, supportsPauseResumeCancel = false, supportsCamera = true,
+        transport = PrinterTransport.BAMBU_MQTT, supportsPauseResumeCancel = true, supportsCamera = true,
         supportsKlipperExtras = false, supportsNativePrintFileFlow = true, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )

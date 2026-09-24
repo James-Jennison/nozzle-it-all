@@ -382,9 +382,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 // labeled Settings - its content is still printer management, "Printers" as a
                 // label read as confusing next to a tab bar that's otherwise about what you do,
                 // not what you're looking at.
-                // Shown order is Settings before Prepare, but each tab keeps its own index (and nav-N test tag).
+                // Settings is shown last, but each tab keeps its own index (and nav-N test tag).
                 listOf(Triple(0, "Home", CompanionSymbol.DASHBOARD), Triple(1, "Control", CompanionSymbol.CONTROL), Triple(2, "Files", CompanionSymbol.FILES),
-                    Triple(4, "Settings", CompanionSymbol.SETTINGS), Triple(3, "Prepare", CompanionSymbol.SLICE), Triple(5, "Discover", CompanionSymbol.DISCOVER)).forEach { (index, title, symbol) ->
+                    Triple(3, "Prepare", CompanionSymbol.SLICE), Triple(5, "Discover", CompanionSymbol.DISCOVER), Triple(4, "Settings", CompanionSymbol.SETTINGS)).forEach { (index, title, symbol) ->
                     NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
                 }
             }

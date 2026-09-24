@@ -55,7 +55,7 @@ object GcodeStatsParser {
     private val flushRegex = Regex("""^;\s*flush_volumes_matrix\s*=\s*(.+)$""")
     private val densityRegex = Regex("""^;\s*filament_density\s*=\s*([\d.]+)""")
 
-    private fun numbers(text: String) = text.split(',').mapNotNull { it.trim().toDoubleOrNull() }
+    private fun numbers(text: String) = text.split(',').map { it.trim().toDoubleOrNull()?.takeIf(Double::isFinite) ?: 0.0 }
 
     fun parse(file: File): GcodeStats {
         var time: String? = null; var weight: Double? = null

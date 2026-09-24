@@ -45,7 +45,13 @@ class SliceService : Service() {
             while (isActive) { delay(1000); manager.notify(ID, notification(SlicingCoordinator.progress().coerceIn(0, 100))) }
         }
     }
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int) = START_NOT_STICKY
+    // Every startForegroundService() must be answered by startForeground(), also when the service is already alive, and start()'s
+    // deferred is completed here so stop() never waits out its timeout for a second slice.
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(ID, notification(SlicingCoordinator.progress().coerceIn(0, 100)))
+        foregrounded?.complete(Unit)
+        return START_NOT_STICKY
+    }
     override fun onDestroy() { scope.cancel(); stopForeground(STOP_FOREGROUND_REMOVE); super.onDestroy() }
     override fun onBind(intent: Intent?): IBinder? = null
 }

@@ -211,7 +211,7 @@ object MmfAuthLinks {
     fun parseRedirect(redirect: String, expectedState: String): Pair<String, Int> {
         val uri = try { java.net.URI(redirect) } catch (e: Exception) { throw SignInFailed("Unreadable sign-in response.") }
         if ("${uri.scheme}://${uri.host}" != APP_REDIRECT) throw SignInFailed("Unexpected sign-in redirect.")
-        fun params(s: String?) = s.orEmpty().split('&').filter { it.contains('=') }.associate { p -> p.substringBefore('=') to java.net.URLDecoder.decode(p.substringAfter('='), "UTF-8") }
+        fun params(s: String?) = s.orEmpty().split('&').filter { it.contains('=') }.associate { p -> p.substringBefore('=') to java.net.URLDecoder.decode(p.substringAfter('=').replace("+", "%2B"), "UTF-8") }
         val p = params(uri.rawFragment) + params(uri.rawQuery)
         if (p["error"] != null) throw SignInFailed(if (p["error"] == "access_denied") "Sign-in was cancelled." else "MyMiniFactory refused the sign-in (${p["error"]!!.take(40)}).")
         if (p["state"] != expectedState) throw SignInFailed("The sign-in response did not match this request (possible forgery).")
@@ -231,7 +231,7 @@ object MmfArchive {
     fun extractModels(zip: java.io.File, dir: java.io.File): List<java.io.File> {
         dir.mkdirs()
         val out = ArrayList<java.io.File>(); var total = 0L; var scanned = 0
-        java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { z ->
+        try { java.util.zip.ZipInputStream(zip.inputStream().buffered()).use { z ->
             while (true) {
                 val entry = z.nextEntry ?: break
                 if (++scanned > MAX_SCANNED_ENTRIES) throw MmfException.UnsafeDownload("That archive has too many entries.")
@@ -256,7 +256,7 @@ object MmfArchive {
                 if (size == 0L) { target.delete(); continue }
                 out += target
             }
-        }
+        } } catch (e: Throwable) { out.forEach { it.delete() }; throw e }
         return out
     }
 }

@@ -29,6 +29,7 @@ namespace {
 std::string jstring_to_string(JNIEnv* env, jstring s) {
     if (s == nullptr) return {};
     const char* chars = env->GetStringUTFChars(s, nullptr);
+    if (chars == nullptr) return {};
     std::string result(chars);
     env->ReleaseStringUTFChars(s, chars);
     return result;

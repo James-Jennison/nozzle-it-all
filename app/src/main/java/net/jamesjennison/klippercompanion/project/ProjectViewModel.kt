@@ -317,6 +317,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
             val parsed = ProjectArchive.read(input, staging)
             val now = System.currentTimeMillis()
             val project = Project(UUID.randomUUID().toString(), parsed.name, now, now)
+            try {
             val plateIds = parsed.plates.sortedBy { it.position }.associate { it.id to UUID.randomUUID().toString() }
             val plates = parsed.plates.sortedBy { it.position }.mapIndexed { i, p -> Plate(plateIds.getValue(p.id), project.id, i, p.name) }
             val objectIds = parsed.objects.associate { it.id to UUID.randomUUID().toString() }
@@ -332,6 +333,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
             if (objects.isNotEmpty()) dao.upsertObjects(objects)
             loadProject(project.id)
             return project
+            } catch (e: Throwable) { ProjectFileStore.deleteProject(context, project.id); throw e }
         } finally { staging.deleteRecursively() }
     }
 

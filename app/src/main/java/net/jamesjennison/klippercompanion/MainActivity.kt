@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
     private var stagedAction by mutableStateOf<String?>(null)
     private fun receiveMmfRedirect(value: Intent?) {
         val d = value?.data ?: return
-        if (d.scheme == "nozzleitall" && d.host == "mmf-auth") MmfRedirects.pending = d.toString()
+        if (d.scheme == "nozzleitall" && d.host == "mmf-auth") { MmfRedirects.pending = d.toString() }
     }
 
     private fun receiveShare(value: Intent?) {
@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onNewIntent(intent:Intent) {super.onNewIntent(intent);setIntent(intent);receiveShare(intent);receiveMmfRedirect(intent)}
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState);receiveShare(intent);receiveMmfRedirect(intent); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+        super.onCreate(savedInstanceState);receiveShare(intent);if (savedInstanceState == null) receiveMmfRedirect(intent); enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         NozzleLog.sink = { level, tag, message -> if (level == 'w') android.util.Log.w(tag, message) else android.util.Log.i(tag, message) }
         setContent {
             val appearancePrefs = remember { getSharedPreferences("appearance", 0) }

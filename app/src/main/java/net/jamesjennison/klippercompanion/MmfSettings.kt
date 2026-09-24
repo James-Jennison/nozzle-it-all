@@ -25,7 +25,7 @@ class MmfSettings(private val prefs: SharedPreferences, private val buildApiKey:
         val expires = prefs.getLong(KEY_EXPIRES, 0L)
         return if (token.isNotBlank() && expires > 0) MmfSession(token, expires, prefs.getBoolean(KEY_REFRESHABLE, true)) else null
     }
-    override fun save(session: MmfSession) { prefs.edit().putString(KEY_TOKEN, session.accessToken).putLong(KEY_EXPIRES, session.expiresAtMs).putBoolean(KEY_REFRESHABLE, session.refreshable).apply() }
+    override fun save(session: MmfSession) { prefs.edit().putString(KEY_TOKEN, session.accessToken).putLong(KEY_EXPIRES, session.expiresAtMs).putBoolean(KEY_REFRESHABLE, session.refreshable).commit() }
     override fun clear() { prefs.edit().remove(KEY_TOKEN).remove(KEY_EXPIRES).apply() }
     override fun deviceId(): String = prefs.getString(KEY_DEVICE, null) ?: java.util.UUID.randomUUID().toString().also { prefs.edit().putString(KEY_DEVICE, it).apply() }
 
@@ -34,7 +34,7 @@ class MmfSettings(private val prefs: SharedPreferences, private val buildApiKey:
     fun saveSignInMessage(message: String?) { prefs.edit().apply { if (message == null) remove(KEY_LAST) else putString(KEY_LAST, message.take(300)) }.apply() }
 
     /** The pending sign-in state (anti-forgery), remembered across the browser round trip. */
-    fun beginSignIn(): String = MmfAuthLinks.newState().also { prefs.edit().putString(KEY_STATE, it).apply() }
+    fun beginSignIn(): String = MmfAuthLinks.newState().also { prefs.edit().putString(KEY_STATE, it).commit() }
     fun pendingState(): String? = prefs.getString(KEY_STATE, null)
     fun endSignIn() { prefs.edit().remove(KEY_STATE).apply() }
 

@@ -27,9 +27,9 @@ object ConfigFile {
     }
     fun validateUserSection(text: String): String {
         require(text.length <= MAX_BYTES) { "Configuration is too large." }
-        require(text.none { it.isISOControl() && it != '\n' && it != '\t' }) { "Remove unsupported control characters." }
+        require(text.none { it.isISOControl() && it != '\n' && it != '\t' && it != '\r' }) { "Remove unsupported control characters." }
         require(!marker.containsMatchIn(text)) { "Do not include the SAVE_CONFIG marker; it is managed automatically." }
-        return text
+        return text.replace("\r\n", "\n").replace('\r', '\n')
     }
     /** Reassembles the full file from a validated, freshly-edited user section and the
      * auto-generated section as most recently read from the printer (never user-edited). */

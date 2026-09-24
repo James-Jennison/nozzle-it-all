@@ -25,7 +25,8 @@ object GcodePreview {
             if(travels.size>=60_000){val retained=travels.filterIndexed{i,_->i%2==0};travels.clear();travels.addAll(retained);travelStride*=2}
         }
         fun segment(ax:Double,ay:Double,bx:Double,by:Double,height:Double) {
-            if(layer<0||abs(height-extrusionZ)>0.001) {require(heights.size<10_000){"Too many extrusion heights for preview."};heights.add(height.toFloat());layer++;extrusionZ=height}
+            // Spiral (vase-mode) output changes Z on almost every move: past the layer budget the rest is drawn into the last layer instead of failing.
+            if((layer<0||abs(height-extrusionZ)>0.001)&&heights.size<10_000) {heights.add(height.toFloat());layer++;extrusionZ=height}
             // A tool change belongs to the layer of the next extrusion (the layer counter advances lazily on Z changes).
             if(pendingTools.isNotEmpty()){pendingTools.forEach{toolChanges.add(ToolChange(layer.coerceAtLeast(0),it))};pendingTools.clear()}
             if(moves++%stride==0L)segments.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer,bytes,tool))

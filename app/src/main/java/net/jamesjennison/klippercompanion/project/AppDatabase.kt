@@ -61,7 +61,7 @@ val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
     override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE projects ADD COLUMN attribution TEXT") }
 }
 
-@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 7, exportSchema = false)
+@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 7, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
 

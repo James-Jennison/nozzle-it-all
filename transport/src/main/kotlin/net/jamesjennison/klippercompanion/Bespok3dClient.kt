@@ -617,7 +617,7 @@ class Bespok3dClient {
       } else {
         connection.inputStream
       }
-      val text = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+      val text = stream?.use { readBounded(it, MAX_RESPONSE_BYTES) }.orEmpty()
       if (status >= HttpURLConnection.HTTP_BAD_REQUEST) {
         throw Bespok3dHttpException(status, "Bespok3d returned HTTP $status")
       }
@@ -713,4 +713,18 @@ class Bespok3dClient {
     const val CATALOG_URL = "https://raw.githubusercontent.com/Bespok3d/main-index/main/index.json"
     const val CATALOG_SIGNATURE_URL = "$CATALOG_URL.sig"
   }
+}
+
+private const val MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+
+private fun readBounded(stream: java.io.InputStream, limit: Int): String {
+  val out = java.io.ByteArrayOutputStream()
+  val buffer = ByteArray(8192)
+  while (true) {
+    val n = stream.read(buffer)
+    if (n < 0) break
+    if (out.size() + n > limit) throw java.io.IOException("Bespok3d response is larger than $limit bytes")
+    out.write(buffer, 0, n)
+  }
+  return out.toString(Charsets.UTF_8.name())
 }

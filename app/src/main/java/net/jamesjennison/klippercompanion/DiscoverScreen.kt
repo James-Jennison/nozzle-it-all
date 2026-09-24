@@ -25,7 +25,11 @@ import net.jamesjennison.klippercompanion.project.ProjectDao
 // strictly (MyMiniFactory.kt); nothing is rendered as HTML.
 
 /** The nozzleitall://mmf-auth sign-in redirect, handed from MainActivity to the Discover screen (consumed once). */
-object MmfRedirects { var pending by mutableStateOf<String?>(null) }
+object MmfRedirects {
+    var pending by mutableStateOf<String?>(null)
+    /** Outlives the Discover screen so leaving the tab mid sign-in cannot cancel it after the token was consumed. */
+    val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+}
 
 private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 
@@ -60,14 +64,33 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
     var accountMessage by remember { mutableStateOf(settings.lastSignInMessage()) }
     val setAccountMessage = { m: String? -> accountMessage = m; settings.saveSignInMessage(m) }
 
+    val searchJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    var exhausted by remember { mutableStateOf(false) }
     fun search(reset: Boolean) {
         val a = api ?: return
-        if (reset) { page = 1; results = emptyList() }
+        searchJob[0]?.cancel()
+        if (reset) { page = 1; results = emptyList(); exhausted = false }
         loading = true; error = null
-        val request = MmfSearch(query, page, 30, sort, remix, commercial, supportFree, price = filterMode.price, fdmOnly = fdmOnly)
-        scope.launch {
-            try { val r = io { a.search(request) }; // Pages can overlap when the catalogue shifts between requests, so repeats are dropped (LazyColumn keys must be unique).
-                results = (if (reset) r.items else results + r.items).distinctBy { it.id }; total = r.totalCount }
+        val startPage = if (reset) 1 else page + 1
+        val startFilters = MmfSearch(query, startPage, 30, sort, remix, commercial, supportFree, price = filterMode.price, fdmOnly = fdmOnly)
+        // A newer search cancels this one, so a slow answer for old filters can never overwrite the current list. Under "FDM only" a page can be
+        // entirely hidden client-side, so up to five further pages are fetched until something visible turns up.
+        searchJob[0] = scope.launch {
+            try {
+                var next = startPage; var fresh = reset; var tries = 0
+                while (true) {
+                    val r = io { a.search(startFilters.copy(page = next)) }
+                    val before = results.size
+                    // Pages can overlap when the catalogue shifts between requests, so repeats are dropped (LazyColumn keys must be unique).
+                    results = (if (fresh) r.items else results + r.items).distinctBy { it.id }; total = r.totalCount
+                    page = next; fresh = false
+                    if (r.items.isEmpty() || results.size == before) exhausted = true
+                    val visible = results.count { !fdmOnly || !it.mentionsResin() }
+                    if (visible > 0 || exhausted || !fdmOnly || ++tries >= 5 || results.size >= total) break
+                    next += 1
+                }
+            }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: MmfException) { error = e.message } catch (e: Exception) { error = "Search failed: ${e.message}" }
             loading = false
         }
@@ -80,19 +103,21 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
     LaunchedEffect(signInRedirect) {
         val redirect = signInRedirect ?: return@LaunchedEffect
         val state = settings.pendingState()
+        android.util.Log.i("MmfSignIn", "redirect received: token=${redirect.contains("access_token=")} error=${redirect.contains("error=")} state=${state != null} len=${redirect.length}")
         onRedirectConsumed()
         // Run the sign-in in the screen's own scope, NOT in this effect: consuming the redirect changes this effect's key, and
         // that restart would cancel the sign-in right after the token was saved, leaving the screen saying "sign in".
-        scope.launch {
+        if (state == null) return@LaunchedEffect
+        MmfRedirects.scope.launch {
             try {
-                if (state == null) throw MmfAuthLinks.SignInFailed("No sign-in was in progress.")
                 val (token, expiresIn) = MmfAuthLinks.parseRedirect(redirect, state)
                 val device = MmfDeviceInfo(settings.deviceId(), android.os.Build.MANUFACTURER, android.os.Build.MODEL, java.util.Locale.getDefault().toLanguageTag(), "NozzleItAll/${BuildConfig.VERSION_NAME}")
                 io { (auth ?: throw MmfException.NotConfigured()).completeSignIn(token, expiresIn, device) }
+                android.util.Log.i("MmfSignIn", "completed; saved session present=${settings.load() != null} signedIn=${auth?.isSignedIn()}")
                 setAccountMessage("Signed in to MyMiniFactory.")
-            } catch (e: MmfAuthLinks.SignInFailed) { setAccountMessage(e.message) } catch (e: MmfException) { setAccountMessage(e.message) }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: MmfAuthLinks.SignInFailed) { setAccountMessage(e.message) } catch (e: MmfException) { setAccountMessage(e.message) }
             catch (e: Exception) { setAccountMessage("Sign-in failed: ${e.message ?: e.javaClass.simpleName}") }
-            finally { settings.endSignIn(); signedIn = auth?.isSignedIn() == true }
+            finally { android.util.Log.i("MmfSignIn", "finished; message=$accountMessage"); settings.endSignIn(); signedIn = auth?.isSignedIn() == true }
         }
     }
 
@@ -132,7 +157,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
                 if (!loading && error == null && filterMode.apply(results).none { !fdmOnly || !it.mentionsResin() }) Text(if (results.isEmpty()) "No models found." else "No models found.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("mmf-empty"))
                 LazyColumn(Modifier.weight(1f).testTag("mmf-results"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(filterMode.apply(results).filter { !fdmOnly || !it.mentionsResin() }, key = { it.id }) { o -> ResultCard(o) { selected = o } }
-                    if (results.isNotEmpty() && results.size < total) item { OutlinedButton({ page += 1; search(false) }, enabled = !loading, modifier = Modifier.fillMaxWidth().testTag("mmf-more")) { Text(if (loading) "Loading…" else "Load more (${results.size} of $total)") } }
+                    if (results.isNotEmpty() && results.size < total && !exhausted) item { OutlinedButton({ search(false) }, enabled = !loading, modifier = Modifier.fillMaxWidth().testTag("mmf-more")) { Text(if (loading) "Loading…" else "Load more (${results.size} of $total)") } }
                 }
                 if (fdmOnly) Text("FDM only: models their designers tagged FDM, minus any that mention resin, SLA, DLP or pre-supported. Untagged models are not included.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("mmf-fdm-note"))
                 Text("Models and images are provided by MyMiniFactory. Searches are sent to MyMiniFactory; nothing else leaves your device.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

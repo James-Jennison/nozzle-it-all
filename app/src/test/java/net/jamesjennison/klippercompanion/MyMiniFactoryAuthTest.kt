@@ -140,4 +140,9 @@ class MyMiniFactoryAuthTest {
         store.save(MmfSession("mobile-token-1", 1000, refreshable = true)); assertTrue("a refreshable session renews on demand", mgr.isSignedIn())
         store.clear(); assertNull(mgr.sessionExpiresAtMs()); assertFalse(mgr.isSignedIn())
     }
+
+    @Test fun aPlusInATokenSurvivesRedirectDecodingAndAQueryFormWorks() {
+        val (t, e) = MmfAuthLinks.parseRedirect("nozzleitall://mmf-auth?access_token=ab%2Bcd+ef12345&expires_in=3600&state=S", "S")
+        assertEquals("ab+cd+ef12345", t); assertEquals(3600, e)
+    }
 }

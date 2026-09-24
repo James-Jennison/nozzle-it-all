@@ -190,7 +190,7 @@ jobs:
             echo "$NOZZLE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
             echo "NOZZLE_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           else
-            echo "::warning::No signing key configured - the release APK will be unsigned."
+            echo "::error::No signing key configured - refusing to build and attest an unsigned release."; exit 1
           fi
       - name: Build release APK + SBOM
         run: ./gradlew assembleRelease generateSbom --no-daemon
@@ -212,3 +212,6 @@ jobs:
           name: release
           path: release-artifacts/
           retention-days: 90
+      - name: Remove signing key
+        if: always()
+        run: shred -u "$RUNNER_TEMP/release.jks" 2>/dev/null || rm -f "$RUNNER_TEMP/release.jks"

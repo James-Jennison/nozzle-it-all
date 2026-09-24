@@ -168,7 +168,12 @@ class ToolpathGLRenderer : GLSurfaceView.Renderer {
     }
 }
 
+/** A new toolpath gets a fresh GL surface and renderer: the surface factory only runs once and would otherwise keep drawing the old renderer. */
 @Composable fun SlicedPreview(toolpath: Toolpath, modifier: Modifier = Modifier, materialColorHex: String? = null, toolColorHexes: List<String> = emptyList(), toolLabels: List<String> = emptyList()) {
+    key(System.identityHashCode(toolpath)) { SlicedPreviewBody(toolpath, modifier, materialColorHex, toolColorHexes, toolLabels) }
+}
+
+@Composable private fun SlicedPreviewBody(toolpath: Toolpath, modifier: Modifier, materialColorHex: String?, toolColorHexes: List<String>, toolLabels: List<String>) {
     var glView by remember(toolpath) { mutableStateOf<GLSurfaceView?>(null) }
     val renderer = remember(toolpath) { ToolpathGLRenderer() }
     var layer by remember(toolpath) { mutableIntStateOf(toolpath.heights.lastIndex.coerceAtLeast(0)) }

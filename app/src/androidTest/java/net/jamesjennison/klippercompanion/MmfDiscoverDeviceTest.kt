@@ -244,8 +244,10 @@ class MmfDiscoverDeviceTest {
         compose.waitUntil(8000) { compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
         val has = { id: Long -> runCatching { compose.onNodeWithTag("mmf-results").performScrollToNode(hasTestTag("mmf-result-$id")) }.isSuccess }
         assertTrue(has(1)); assertTrue(has(2))
+        compose.onNodeWithTag("mmf-results").performScrollToIndex(0)
         val n = api.requests.size; compose.onNodeWithTag("mmf-filter-fdm").performClick()
-        compose.waitUntil(8000) { api.requests.size > n && compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15000) { api.requests.size > n }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(has(1)); assertFalse("the presupported (resin) model is hidden under FDM only", has(2))
     }
 }

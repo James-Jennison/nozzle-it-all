@@ -265,6 +265,7 @@ class PrinterModel(
             disconnect()
             _state.value = _state.value.copy(address = "")
         }
+        _state.value.profiles.firstOrNull { it.address == address && it.kind == PrinterKind.BAMBU_LAB }?.serial?.takeIf { it.isNotBlank() }?.let { BambuCertPins.store.forget(it) }
         val printers = _state.value.savedPrinters - address
         val profiles=_state.value.profiles.filter { it.address!=address }
         _state.value = _state.value.copy(savedPrinters = printers,profiles=profiles);persist()

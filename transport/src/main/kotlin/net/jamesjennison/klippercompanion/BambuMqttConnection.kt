@@ -270,6 +270,9 @@ class BambuMqttConnection(private val listener: Listener) {
             if (cursor is CertificateException && cursor.message?.contains(SERIAL_MISMATCH) == true) {
                 return BambuConnectException("wrong-serial", cursor.message ?: SERIAL_MISMATCH, error)
             }
+            if (cursor is CertificateException && cursor.message?.contains(BAMBU_CERT_CHANGED) == true) {
+                return BambuConnectException("certificate-changed", cursor.message ?: BAMBU_CERT_CHANGED, error)
+            }
             cursor = cursor.cause
         }
 

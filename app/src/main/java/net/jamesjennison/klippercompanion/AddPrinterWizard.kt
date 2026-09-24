@@ -182,6 +182,8 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 val normalized = try { normalizedAddress(address, kind) } catch(e: IllegalArgumentException) { typeError = "Enter a valid printer address."; return@Button }
                 if(normalized in existingAddresses) { typeError = "That printer address is already saved."; return@Button }
                 normalizedAddressResult = normalized
+                // Adding a printer is a fresh trust decision: an old pin (say from an abandoned attempt, or a printer that was reset) must not block it.
+                if(kind == PrinterKind.BAMBU_LAB && serial.isNotBlank()) BambuCertPins.store.forget(serial.trim())
                 step = WizardStep.SLICING_PROFILE
             }, enabled = address.isNotBlank(), modifier = Modifier.testTag("wizard-next-1")) { Text("Next") }
             WizardStep.SLICING_PROFILE -> Button({ step = if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) WizardStep.FIRMWARE_CONFIRM else WizardStep.CONNECTIVITY_TEST }, modifier = Modifier.testTag("wizard-next-2")) { Text("Next") }

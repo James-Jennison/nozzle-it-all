@@ -29,6 +29,32 @@ import javax.net.ssl.X509TrustManager
 /** Marker text the connection layer looks for when classifying handshake failures. */
 const val BAMBU_SERIAL_MISMATCH = "serial number does not match"
 
+/** Marker text for a printer whose certificate is not the one first trusted for its serial number. */
+const val BAMBU_CERT_CHANGED = "certificate has changed"
+
+/**
+ * Remembers, per printer serial number, the SHA-256 of the certificate first seen for it (trust on first use). The serial in the certificate's
+ * CN is printed on the printer, so on its own it does not stop a device that copies it; the pin makes any later connection to a different
+ * certificate fail until the owner forgets and re-adds the printer.
+ */
+interface BambuPinStore {
+    fun get(serial: String): String?
+    fun put(serial: String, sha256: String)
+    fun forget(serial: String)
+}
+
+class InMemoryBambuPinStore : BambuPinStore {
+    private val pins = java.util.concurrent.ConcurrentHashMap<String, String>()
+    override fun get(serial: String) = pins[serial.uppercase()]
+    override fun put(serial: String, sha256: String) { pins[serial.uppercase()] = sha256 }
+    override fun forget(serial: String) { pins.remove(serial.uppercase()) }
+}
+
+object BambuCertPins {
+    @Volatile var store: BambuPinStore = InMemoryBambuPinStore()
+    fun fingerprint(leaf: X509Certificate): String = java.security.MessageDigest.getInstance("SHA-256").digest(leaf.encoded).joinToString("") { "%02x".format(it) }
+}
+
 class SerialPinningTrustManagerFactory(expectedSerial: String) : TrustManagerFactory(
     object : TrustManagerFactorySpi() {
         override fun engineInit(keyStore: KeyStore?) = Unit
@@ -56,6 +82,16 @@ class SerialPinningTrustManager(private val expectedSerial: String) : X509TrustM
             throw CertificateException(
                 "This printer's $BAMBU_SERIAL_MISMATCH " +
                     "(expected $expectedSerial, got ${commonName ?: "nothing"})"
+            )
+        }
+
+        val fingerprint = BambuCertPins.fingerprint(leaf)
+        val pinned = BambuCertPins.store.get(expectedSerial)
+        when {
+            pinned == null -> BambuCertPins.store.put(expectedSerial, fingerprint)
+            !pinned.equals(fingerprint, ignoreCase = true) -> throw CertificateException(
+                "This printer's $BAMBU_CERT_CHANGED since it was first trusted. If you replaced or reset the printer, forget it and add it again; " +
+                    "otherwise something else on the network is answering as this printer."
             )
         }
     }

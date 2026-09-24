@@ -19,6 +19,8 @@ class FakeBambuDeviceTest {
     private val host get() = args.getString("fakebambu_host").orEmpty()
     private val serial get() = args.getString("fakebambu_serial").orEmpty()
     private val code get() = args.getString("fakebambu_code").orEmpty()
+    // Every run trusts the emulator afresh (it makes a new certificate at each start); the pin tests below opt out of this.
+    @org.junit.Before fun freshTrust() { if(args.getString("fakebambu_keep_pin") != "true") BambuCertPins.store.forget(serial) }
     private fun opted() = assumeTrue("no fakebambu_host", host.isNotBlank() && serial.isNotBlank() && code.isNotBlank())
 
     @Test fun theScannerFindsTheEmulatedPrinterBySsdpAndReadsItsSerial() {
@@ -94,5 +96,19 @@ class FakeBambuDeviceTest {
         compose.waitUntil(60_000) { runCatching { compose.onNodeWithTag("wizard-finish").assertIsEnabled() }.isSuccess }
         compose.onNodeWithTag("wizard-finish").performClick()
         assertEquals(PrinterKind.BAMBU_LAB, committed?.kind); assertEquals(serial, committed?.serial); assertEquals(SlicingPrinterModel.BAMBU_GENERIC, committed?.slicingModel)
+    }
+
+    // Two-step, run by hand around an emulator restart: -e fakebambu_keep_pin true -e fakebambu_step pin, restart the emulator, then -e fakebambu_step changed.
+    @Test fun theFirstCertificateIsPinnedAndAReplacementIsRefused() {
+        opted(); val step = args.getString("fakebambu_step").orEmpty(); assumeTrue("no fakebambu_step", step.isNotBlank() && args.getString("fakebambu_keep_pin") == "true")
+        val service = BambuPrinterService(host, serial, code)
+        try {
+            if(step == "pin") { service.snapshot(); assertNotNull(BambuCertPins.store.get(serial)) }
+            else {
+                val e = try { service.snapshot(); null } catch (ex: Exception) { ex }
+                assertNotNull("a new certificate must not be accepted", e)
+                assertTrue("unexpected failure: ${e!!.message}", e.message.orEmpty().contains(BAMBU_CERT_CHANGED))
+            }
+        } finally { service.close() }
     }
 }

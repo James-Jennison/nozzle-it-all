@@ -331,6 +331,7 @@ class BambuChamberCamera(private val onStopped: (() -> Unit)? = null) {
 
     private fun cameraErrorCode(reason: String): String = when {
         reason.contains(BAMBU_SERIAL_MISMATCH) -> "wrong-serial"
+        reason.contains(BAMBU_CERT_CHANGED) -> "certificate-changed"
         reason.contains("access code") -> "wrong-access-code"
         else -> "camera-failed"
     }

@@ -228,8 +228,7 @@ class MeshGLRenderer : GLSurfaceView.Renderer {
     override fun onDrawFrame(gl: GL10?) {
         pendingMesh?.let { mesh ->
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
-            val buffer = directFloatBuffer(mesh.vertexData)
-            GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, mesh.vertexData.size * 4, buffer, GLES30.GL_STATIC_DRAW)
+            uploadArrayBuffer(mesh.vertexData)
             vertexCount = mesh.vertexData.size / 6
 
             val grid = buildGrid(mesh.center, mesh.radius, mesh.minZ)

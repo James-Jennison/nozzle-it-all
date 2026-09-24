@@ -158,8 +158,7 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
                         PerObjectGLState().also { it.vbo = handles[0] }
                     }
                     GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, state.vbo)
-                    val buffer = directFloatBuffer(obj.geometry.vertexData)
-                    GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, obj.geometry.vertexData.size * 4, buffer, GLES30.GL_STATIC_DRAW)
+                    uploadArrayBuffer(obj.geometry.vertexData)
                     state.vertexCount = obj.geometry.vertexData.size / 6
                     state.uploaded = true
                     perObjectGeometry[obj.id] = obj.geometry
@@ -171,7 +170,7 @@ class ProjectGLRenderer : GLSurfaceView.Renderer {
                     if (vbos.isNotEmpty()) GLES30.glGenBuffers(vbos.size, vbos, 0)
                     obj.overlays.forEachIndexed { i, group ->
                         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbos[i])
-                        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, group.vertices.size * 4, directFloatBuffer(group.vertices), GLES30.GL_STATIC_DRAW)
+                        uploadArrayBuffer(group.vertices)
                     }
                     state.overlayVbos = vbos
                     state.overlayCounts = IntArray(obj.overlays.size) { obj.overlays[it].vertices.size / 6 }

@@ -37,3 +37,19 @@ internal fun buildGLProgram(vertexSource: String, fragmentSource: String): Int {
 
 internal fun directFloatBuffer(data: FloatArray) =
     ByteBuffer.allocateDirect(data.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply { put(data); position(0) }
+
+private const val UPLOAD_CHUNK_FLOATS = 262_144 // 1 MB: big enough to be quick, small enough never to be the allocation that fails
+
+/** Uploads [data] to the currently bound GL_ARRAY_BUFFER in small pieces. A single direct buffer for a big mesh is a heap allocation of the same size on ART. */
+internal fun uploadArrayBuffer(data: FloatArray) {
+    android.opengl.GLES30.glBufferData(android.opengl.GLES30.GL_ARRAY_BUFFER, data.size * 4, null, android.opengl.GLES30.GL_STATIC_DRAW)
+    if (data.isEmpty()) return
+    val chunk = ByteBuffer.allocateDirect(minOf(data.size, UPLOAD_CHUNK_FLOATS) * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+    var offset = 0
+    while (offset < data.size) {
+        val n = minOf(UPLOAD_CHUNK_FLOATS, data.size - offset)
+        chunk.clear(); chunk.put(data, offset, n); chunk.position(0)
+        android.opengl.GLES30.glBufferSubData(android.opengl.GLES30.GL_ARRAY_BUFFER, offset * 4, n * 4, chunk)
+        offset += n
+    }
+}

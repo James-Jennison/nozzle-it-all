@@ -12,6 +12,9 @@
 #include <mutex>
 #include <stdexcept>
 #include <unordered_map>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
 
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/AABBMesh.hpp"
@@ -614,13 +617,65 @@ void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform
     slice_model(combined, config, output_gcode_path);
 }
 
+namespace {
+
+// Preview-only simplification by vertex clustering: vertices snap to a g x g x g grid over the bounding box, each cell becomes one vertex
+// (the average of its members), and triangles that collapse are dropped. Slicing always uses the original mesh; this only bounds how much
+// the on-screen preview has to hold (a 1.4M-triangle model needs ~100 MB as interleaved floats, which is more than the app's heap allows).
+indexed_triangle_set cluster_mesh(const indexed_triangle_set& its, const Slic3r::Vec3f& lo, const Slic3r::Vec3f& span, int g) {
+    std::unordered_map<uint64_t, std::pair<Slic3r::Vec3d, int>> cells;
+    std::vector<uint64_t> key_of(its.vertices.size());
+    for (size_t i = 0; i < its.vertices.size(); ++i) {
+        const Slic3r::Vec3f& v = its.vertices[i];
+        auto cell = [&](int axis) { return static_cast<uint64_t>(std::min(g - 1, std::max(0, static_cast<int>((v(axis) - lo(axis)) / span(axis) * g)))); };
+        const uint64_t key = cell(0) | (cell(1) << 16) | (cell(2) << 32);
+        key_of[i] = key;
+        auto& entry = cells[key];
+        entry.first += v.cast<double>(); entry.second += 1;
+    }
+    indexed_triangle_set out;
+    std::unordered_map<uint64_t, int> index_of;
+    out.vertices.reserve(cells.size());
+    for (const auto& [key, entry] : cells) {
+        index_of[key] = static_cast<int>(out.vertices.size());
+        out.vertices.push_back((entry.first / entry.second).cast<float>());
+    }
+    for (const Slic3r::Vec3i32& tri : its.indices) {
+        const int a = index_of[key_of[tri(0)]], b = index_of[key_of[tri(1)]], c = index_of[key_of[tri(2)]];
+        if (a != b && b != c && a != c) out.indices.emplace_back(a, b, c);
+    }
+    return out;
+}
+
+indexed_triangle_set decimate_for_preview(const indexed_triangle_set& its, size_t max_triangles) {
+    if (its.indices.size() <= max_triangles || its.vertices.empty()) return its;
+    Slic3r::Vec3f lo = its.vertices.front(), hi = its.vertices.front();
+    for (const Slic3r::Vec3f& v : its.vertices) { lo = lo.cwiseMin(v); hi = hi.cwiseMax(v); }
+    Slic3r::Vec3f span = (hi - lo).cwiseMax(Slic3r::Vec3f::Constant(1e-6f));
+    // Triangle count grows roughly with g^2 for a surface, so a few multiplicative steps land under the budget.
+    int g = 512;
+    indexed_triangle_set best;
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        indexed_triangle_set candidate = cluster_mesh(its, lo, span, g);
+        const size_t count = candidate.indices.size();
+        if (count <= max_triangles && count > 0) { best = std::move(candidate); if (count * 10 >= max_triangles * 6) break; g = std::min(4096, static_cast<int>(g * std::sqrt(static_cast<double>(max_triangles) / count) * 0.98)); if (g >= 4096) break; continue; }
+        if (count == 0) { g = std::min(4096, g * 2); continue; }
+        g = std::max(8, static_cast<int>(g * std::sqrt(static_cast<double>(max_triangles) / count) * 0.9));
+    }
+    return best.indices.empty() ? its : std::move(best);
+}
+
+constexpr size_t kPreviewTriangleBudget = 250000;
+
+} // namespace
+
 std::vector<float> load_mesh_preview(const std::string& input_model_path) {
     using namespace Slic3r;
 
     DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
     Model model = load_and_place_model(input_model_path, config);
     TriangleMesh mesh = model.mesh();
-    const indexed_triangle_set& its = mesh.its;
+    const indexed_triangle_set its = decimate_for_preview(mesh.its, kPreviewTriangleBudget);
 
     // WO-15 part E: the first object's first instance's own offset - the real pivot
     // load_and_place_model()'s rotate/scale (ModelInstance::set_rotation/set_scaling_factor,

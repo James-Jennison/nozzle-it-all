@@ -240,7 +240,9 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
             // Signed in, the API includes each file's download link; with only the API key it is null.
             val token = io { runCatching { auth?.validAccessToken() }.getOrNull() }
             val d = io { api.objectDetail(summary.id, token) }; detail = d
-            files = d.files.ifEmpty { io { api.objectFiles(summary.id, token) }.items }
+            // The detail's embedded file list can lack download links even when signed in; the files endpoint carries them.
+            files = if (token != null || d.files.isEmpty()) io { api.objectFiles(summary.id, token) }.items.ifEmpty { d.files } else d.files
+            android.util.Log.i("MmfSignIn", "detail ${summary.id}: token=${token != null} files=${files.size} withLink=${files.count { it.downloadUrl != null }}")
         } catch (e: MmfException) { error = e.message } catch (e: Exception) { error = "Could not load this model: ${e.message}" }
     }
     val printable = files.filter { it.isModel || it.isArchive }

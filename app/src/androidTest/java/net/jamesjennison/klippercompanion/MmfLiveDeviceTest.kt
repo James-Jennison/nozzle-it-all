@@ -101,5 +101,17 @@ class MmfLiveDeviceTest {
         assertNull("the API key alone gets no link", without)
         assertNotNull("a signed-in token must yield a download link", withToken)
         assertTrue(withToken!!.startsWith("https://"))
+        android.util.Log.i("MmfLive", "detail-embedded link with token: ${client().objectDetail(26442, token).files.firstOrNull()?.downloadUrl != null}")
+    }
+
+    @Test fun aSignedInSessionReallyDownloadsAFreeModelFile() {
+        val session = MmfSettings(ctx).load()
+        assumeTrue("not signed in to MyMiniFactory on this device", session != null && session.validAt(System.currentTimeMillis(), 0))
+        val file = client().objectFiles(26442, session!!.accessToken).items.first()
+        val target = java.io.File(ctx.cacheDir, "mmf-live-download.stl")
+        try {
+            val bytes = client().download(file, session.accessToken, target) { _, _ -> }
+            assertTrue("a real STL arrived: $bytes bytes", bytes > 100_000 && target.length() == bytes)
+        } finally { target.delete() }
     }
 }

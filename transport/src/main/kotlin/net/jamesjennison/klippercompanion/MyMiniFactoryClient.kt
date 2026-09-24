@@ -79,7 +79,8 @@ class MyMiniFactoryClient(
             for (hop in 0..MAX_REDIRECTS) {
                 val builder = Request.Builder().url(current)
                 // The token only ever goes to MyMiniFactory itself; a CDN or redirect target gets a plain request.
-                if (isMyMiniFactoryHost(current.host)) builder.header("Authorization", "Bearer $accessToken")
+                // Only the first hop carries it: the redirect target is a pre-signed storage URL that answers HTTP 400 to an extra Authorization header.
+                if (hop == 0 && isMyMiniFactoryHost(current.host) && current.queryParameter("X-Amz-Signature") == null) builder.header("Authorization", "Bearer $accessToken")
                 val written = client.newCall(builder.build()).execute().use { r ->
                     when {
                         r.code in 301..308 -> { current = checkedUrl(r.header("Location")?.let { current.resolve(it)?.toString() } ?: throw MmfException.UnsafeDownload("Bad redirect from MyMiniFactory.")); -1L }

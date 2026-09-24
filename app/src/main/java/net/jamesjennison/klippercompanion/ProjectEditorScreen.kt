@@ -846,10 +846,20 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             }
                             1 -> {
                                 Text("Quality", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-                                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     QualityPreset.entries.forEach { preset ->
-                                        FilterChip(quality == preset, { quality = preset }, label = { Text("${preset.label} (${preset.layerHeightMm}mm)", maxLines = 1, softWrap = false) }, modifier = Modifier.testTag("project-quality-${preset.name}"))
+                                        val on = quality == preset
+                                        Surface(
+                                            selected = on, onClick = { quality = preset }, shape = MaterialTheme.shapes.small,
+                                            color = if (on) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                                            modifier = Modifier.weight(1f).testTag("project-quality-${preset.name}"),
+                                        ) {
+                                            Column(Modifier.padding(vertical = 10.dp, horizontal = 6.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text(preset.label, style = MaterialTheme.typography.labelLarge, maxLines = 1, color = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                                Text("${preset.layerHeightMm}mm", style = MaterialTheme.typography.bodySmall, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
                                     }
                                 }
                                 OutlinedTextField(infillText, { infillText = it }, label = { Text("Strength - infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))

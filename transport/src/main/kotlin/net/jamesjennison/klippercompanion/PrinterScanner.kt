@@ -32,7 +32,7 @@ class PrinterScanner(
         val seen = java.util.Collections.synchronizedSet(mutableSetOf<String>())
         val report = { p: DiscoveredPrinter -> if (seen.add(p.address)) onFound(p) }
         val pool = Executors.newFixedThreadPool(48)
-        val ssdp = Thread { runCatching { listenSsdp(cancelled, report) } }.apply { isDaemon = true; start() }
+        val ssdp = Thread { runCatching { listenSsdp(cancelled, hosts, report) } }.apply { isDaemon = true; start() }
         try {
             val jobs = hosts.map { host -> pool.submit { if (!cancelled.get()) probeHost(host)?.let(report) } }
             jobs.forEach { runCatching { it.get(20, TimeUnit.SECONDS) } }
@@ -66,12 +66,16 @@ class PrinterScanner(
         return get("$base/api/version")?.let { PrinterDiscovery.parsePrusaLinkVersion(it, if (port == 80) host else "$host:$port") }
     }
 
-    private fun listenSsdp(cancelled: AtomicBoolean, report: (DiscoveredPrinter) -> Unit) {
-        val sockets = ssdpPorts.mapNotNull { runCatching { DatagramSocket(null).apply { reuseAddress = true; bind(InetSocketAddress(it)); soTimeout = 500 } }.getOrNull() }
+    private fun listenSsdp(cancelled: AtomicBoolean, hosts: List<String>, report: (DiscoveredPrinter) -> Unit) {
+        // Printers announce (NOTIFY) to the SSDP multicast group, which a socket only receives after joining it; a plain bind sees nothing.
+        val group = InetAddress.getByName(ssdpTarget)
+        val sockets = ssdpPorts.mapNotNull { port -> runCatching { java.net.MulticastSocket(null).apply { reuseAddress = true; bind(InetSocketAddress(port)); soTimeout = 300; joinGroup(group) } }.getOrNull() }
+        val sender = runCatching { DatagramSocket().apply { soTimeout = 300; broadcast = true } }.getOrNull()
         val probe = ("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1990\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: urn:bambulab-com:device:3dprinter:1\r\n\r\n").toByteArray()
-        val sender = runCatching { DatagramSocket() }.getOrNull()
         try {
-            ssdpPorts.forEach { port -> runCatching { sender?.send(DatagramPacket(probe, probe.size, InetAddress.getByName(ssdpTarget), port)) } }
+            // Ask everywhere: the multicast group, the subnet broadcast, and each host directly (some printers only answer a direct search).
+            val targets = listOf(ssdpTarget) + hosts
+            ssdpPorts.forEach { port -> targets.forEach { t -> runCatching { sender?.send(DatagramPacket(probe, probe.size, InetAddress.getByName(t), port)) } } }
             val deadline = System.currentTimeMillis() + ssdpWaitMs; val buf = ByteArray(2048)
             while (System.currentTimeMillis() < deadline && !cancelled.get()) {
                 for (s in sockets + listOfNotNull(sender)) {
@@ -79,6 +83,6 @@ class PrinterScanner(
                     try { s.receive(packet); PrinterDiscovery.parseBambuSsdp(String(packet.data, 0, packet.length, Charsets.UTF_8))?.let(report) } catch (_: java.net.SocketTimeoutException) {}
                 }
             }
-        } finally { sockets.forEach { it.close() }; sender?.close() }
+        } finally { sockets.forEach { runCatching { it.leaveGroup(group) }; it.close() }; sender?.close() }
     }
 }

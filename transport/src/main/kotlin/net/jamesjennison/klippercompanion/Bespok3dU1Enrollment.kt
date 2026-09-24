@@ -88,8 +88,8 @@ object Bespok3dU1EnrollmentProtocol {
  * idempotent enrollment recipe. Re-running after a disconnect resumes safely from preflight.
  */
 class Bespok3dU1Enrollment(
-  private val preflight: (String, String) -> Bespok3dU1PreflightResult =
-    { host, password -> Bespok3dU1Preflight().run(host, password) },
+  private val preflight: (String, String, String) -> Bespok3dU1PreflightResult =
+    { host, password, pinned -> Bespok3dU1Preflight().run(host, password, pinned) },
   private val sshFactory: Bespok3dSshFactory =
     Bespok3dSshFactory { host, password, fingerprint ->
       JschBespok3dSsh(host, password, fingerprint)
@@ -101,7 +101,7 @@ class Bespok3dU1Enrollment(
     bootstrap: Bespok3dBootstrapSet,
   ): Bespok3dU1EnrollmentResult {
     validate(config)
-    val checked = step("preflight") { preflight(config.host, config.password) }
+    val checked = step("preflight") { preflight(config.host, config.password, config.sshHostKeySha256) }
     require(checked.sshHostKeySha256 == config.sshHostKeySha256) {
       "U1 SSH host key changed; run preflight again before enrollment"
     }

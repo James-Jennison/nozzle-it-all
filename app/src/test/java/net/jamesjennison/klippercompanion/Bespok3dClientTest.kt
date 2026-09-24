@@ -65,4 +65,8 @@ class Bespok3dClientTest {
     }
     private fun sampleFixturePlugin(id: String, deps: List<String> = emptyList()) =
         Bespok3dPlugin(id, id, "1.0.0", "", "other", "org/repo", deps, emptyList())
+
+    @Test fun pairingRefusesToSendItsSecretTokenWithoutAConfirmedCertificate() {
+        assertThrows(IllegalArgumentException::class.java) { Bespok3dClient().requestAccess("192.168.1.110", "Nozzle It All", "") }
+    }
 }

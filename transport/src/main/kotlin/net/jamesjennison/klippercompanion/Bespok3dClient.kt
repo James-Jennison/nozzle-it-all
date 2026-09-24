@@ -338,11 +338,16 @@ class Bespok3dClient {
     )
   }
 
-  fun requestAccess(host: String, label: String, publicKey: String = ""): Bespok3dAccessRequest {
+  /**
+   * [confirmedCertificatePem] is the certificate [probe] returned and the owner confirmed. The token in the request body is a secret, so the
+   * TLS handshake is pinned to exactly that certificate: an unpinned connection would hand the token to whatever answered.
+   */
+  fun requestAccess(host: String, label: String, confirmedCertificatePem: String, publicKey: String = ""): Bespok3dAccessRequest {
+    require(confirmedCertificatePem.isNotBlank()) { "Probe the printer and confirm its certificate before pairing" }
     val identity = "helix-${UUID.randomUUID()}"
     val token = ByteArray(32).also(SecureRandom()::nextBytes).joinToString("") { "%02x".format(it) }
     val body = Bespok3dProtocol.accessRequestBody(label.trim(), identity, token, publicKey)
-    val response = request(host, "/access/request", "POST", body, null, null)
+    val response = request(host, "/access/request", "POST", body, null, confirmedCertificatePem)
     val returnedPem = Bespok3dProtocol.parseAccessResponse(response.body)
     val returnedCertificate = certificate(returnedPem)
     if (!returnedCertificate.encoded.contentEquals(response.leaf.encoded)) {

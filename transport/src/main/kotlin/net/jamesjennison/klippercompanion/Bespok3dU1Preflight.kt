@@ -102,14 +102,19 @@ object Bespok3dU1PreflightProtocol {
 
 /** Performs only read operations over SSH and Moonraker; it never changes the printer. */
 class Bespok3dU1Preflight {
-  fun run(host: String, password: String): Bespok3dU1PreflightResult {
+  /** The host key the printer offers, read without sending any password. Show it to the owner and pass it to [run] once they trust it. */
+  fun hostKey(host: String): String = fetchSshHostKeyFingerprint(validatedHost(host), SSH_PORT, SSH_USER, TIMEOUT_MS)
+
+  /** [trustedHostKeySha256] is pinned: the password is only ever sent to a host presenting exactly that key. */
+  fun run(host: String, password: String, trustedHostKeySha256: String): Bespok3dU1PreflightResult {
     val cleanHost = validatedHost(host)
     require(password.isNotEmpty()) { "SSH password is required" }
+    require(trustedHostKeySha256.startsWith("SHA256:")) { "Confirm the printer's SSH host key first" }
     val passwordBytes = password.toByteArray(Charsets.UTF_8)
-    val session = com.jcraft.jsch.JSch().getSession(SSH_USER, cleanHost, SSH_PORT)
+    val session = com.jcraft.jsch.JSch().apply { hostKeyRepository = PinnedHostKeyRepository(trustedHostKeySha256) }.getSession(SSH_USER, cleanHost, SSH_PORT)
     try {
       session.setPassword(passwordBytes)
-      session.setConfig("StrictHostKeyChecking", "no")
+      session.setConfig("StrictHostKeyChecking", "yes")
       session.setConfig("PreferredAuthentications", "password,keyboard-interactive")
       session.timeout = TIMEOUT_MS
       session.connect(TIMEOUT_MS)

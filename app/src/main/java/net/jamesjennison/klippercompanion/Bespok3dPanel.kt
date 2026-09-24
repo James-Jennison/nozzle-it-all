@@ -73,6 +73,8 @@ import java.util.concurrent.TimeUnit
     var sshPassword by remember { mutableStateOf("") }
     var label by remember(state.address) { mutableStateOf(state.profiles.firstOrNull { it.address == state.address }?.label.orEmpty().ifBlank { "Nozzle It All" }) }
     var preflightResult by remember { mutableStateOf<Bespok3dU1PreflightResult?>(null) }
+    var offeredHostKey by remember(state.address) { mutableStateOf<String?>(null) }
+    var trustedHostKey by remember(state.address) { mutableStateOf<String?>(null) }
     var enrollPending by remember { mutableStateOf(false) }
     var preparedAt by remember { mutableLongStateOf(0) }
     // ---- paired daemon: status + plugins ----
@@ -92,12 +94,24 @@ import java.util.concurrent.TimeUnit
                 Text("Stock U1 enrollment (SSH)", style = MaterialTheme.typography.labelLarge)
                 OutlinedTextField(sshPassword, { sshPassword = it; invalidate() }, enabled = !busy, label = { Text("root SSH password") }, singleLine = true, modifier = Modifier.testTag("bespok3d-ssh-password"))
                 OutlinedTextField(label, { label = it.take(64); invalidate() }, enabled = !busy, label = { Text("Enrollment label") }, singleLine = true)
+                // The password is only ever sent to a printer whose SSH host key you have confirmed: reading the key sends nothing.
+                OutlinedButton({
+                    val host = Moonraker.parseAddress(state.address).host
+                    trustedHostKey = null
+                    run({ fingerprint: String -> offeredHostKey = fingerprint; notice = "The printer offers SSH host key $fingerprint. Trust it only if you expect this printer." }) { Bespok3dU1EnrollmentService().hostKey(host) }
+                }, enabled = enabled, modifier = Modifier.testTag("bespok3d-read-hostkey")) { Text(if (busy) "Reading…" else "Read SSH host key") }
+                offeredHostKey?.let { offered ->
+                    Text(offered, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("bespok3d-hostkey"))
+                    if (trustedHostKey != offered) OutlinedButton({ trustedHostKey = offered }, enabled = enabled, modifier = Modifier.testTag("bespok3d-trust-hostkey")) { Text("Trust this host key") }
+                    else Text("Host key trusted: the password will only be sent to a printer presenting it.", style = MaterialTheme.typography.bodySmall)
+                }
                 Button({
                     val host = Moonraker.parseAddress(state.address).host
+                    val trusted = trustedHostKey ?: return@Button
                     run({ result: Bespok3dU1PreflightResult -> preflightResult = result; notice = if (result.eligible) "Eligible for enrollment. SSH host key ${result.sshHostKeySha256}." else result.reason ?: "Not eligible." }) {
-                        Bespok3dU1EnrollmentService().preflight(host, sshPassword)
+                        Bespok3dU1EnrollmentService().preflight(host, sshPassword, trusted)
                     }
-                }, enabled = enabled && sshPassword.isNotEmpty(), modifier = Modifier.testTag("bespok3d-preflight")) { Text(if (busy) "Checking…" else "Run SSH preflight") }
+                }, enabled = enabled && sshPassword.isNotEmpty() && trustedHostKey != null, modifier = Modifier.testTag("bespok3d-preflight")) { Text(if (busy) "Checking…" else "Run SSH preflight") }
                 preflightResult?.let { pf ->
                     if (pf.eligible) {
                         Button({ enrollPending = true; preparedAt = System.nanoTime() / 1_000_000 }, enabled = enabled, modifier = Modifier.testTag("bespok3d-review-enroll")) { Text("Review enrollment") }

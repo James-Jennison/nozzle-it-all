@@ -25,7 +25,8 @@ internal class Bespok3dU1EnrollmentService(
     private val preflight: Bespok3dU1Preflight = Bespok3dU1Preflight(),
     private val enrollment: Bespok3dU1Enrollment = Bespok3dU1Enrollment(),
 ) {
-    fun preflight(host: String, password: String): Bespok3dU1PreflightResult = preflight.run(host, password)
+    fun hostKey(host: String): String = preflight.hostKey(host)
+    fun preflight(host: String, password: String, trustedHostKey: String): Bespok3dU1PreflightResult = preflight.run(host, password, trustedHostKey)
     fun enroll(config: Bespok3dU1EnrollmentConfig, bootstrap: Bespok3dBootstrapSet): Bespok3dU1EnrollmentResult =
         enrollment.run(config, bootstrap)
 }

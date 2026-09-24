@@ -90,4 +90,16 @@ class MmfLiveDeviceTest {
     private fun hasTestTagStartingWith(prefix: String) = SemanticsMatcher("test tag starts with $prefix") { n ->
         n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)?.startsWith(prefix) == true
     }
+
+    // Uses the phone's own MyMiniFactory session when there is one (read only); skipped otherwise. Prints no token.
+    @Test fun aSignedInSessionMakesTheApiReturnDownloadLinks() {
+        val session = MmfSettings(ctx).load()
+        assumeTrue("not signed in to MyMiniFactory on this device", session != null && session.validAt(System.currentTimeMillis(), 0))
+        val token = session!!.accessToken
+        val without = client().objectFiles(26442).items.first().downloadUrl
+        val withToken = client().objectFiles(26442, token).items.first().downloadUrl
+        assertNull("the API key alone gets no link", without)
+        assertNotNull("a signed-in token must yield a download link", withToken)
+        assertTrue(withToken!!.startsWith("https://"))
+    }
 }

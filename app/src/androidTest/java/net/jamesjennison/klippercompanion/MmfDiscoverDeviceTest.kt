@@ -39,8 +39,9 @@ class MmfDiscoverDeviceTest {
     private class FakeApi(val objects: List<MmfObject>, val detail: (Long) -> MmfObject = { id -> objects.first { it.id == id } }, val bytesFor: (MmfFile) -> ByteArray = { ByteArray(0) }) : MmfApi {
         val requests = mutableListOf<MmfSearch>(); var failWith: MmfException? = null; var downloads = 0
         override fun search(request: MmfSearch): MmfPage<MmfObject> { failWith?.let { throw it }; requests += request; return MmfPage(objects.size + 5, objects) }
-        override fun objectDetail(id: Long) = detail(id)
-        override fun objectFiles(id: Long) = MmfPage(0, emptyList<MmfFile>())
+        val tokensSeen = mutableListOf<String?>()
+        override fun objectDetail(id: Long, accessToken: String?) = detail(id).also { tokensSeen += accessToken }
+        override fun objectFiles(id: Long, accessToken: String?) = MmfPage(0, emptyList<MmfFile>())
         override fun download(file: MmfFile, accessToken: String, target: File, onProgress: (Long, Long?) -> Unit): Long {
             downloads++; assertEquals("TOKEN-ABC", accessToken); target.writeBytes(bytesFor(file)); return target.length()
         }

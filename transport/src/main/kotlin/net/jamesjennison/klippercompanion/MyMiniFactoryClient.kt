@@ -48,8 +48,8 @@ class MyMiniFactoryClient(
         else -> MmfException.Unavailable(response.code)
     }
 
-    private fun getJson(url: HttpUrl): String = try {
-        client.newCall(Request.Builder().url(url).header("Accept", "application/json").build()).execute().use { r ->
+    private fun getJson(url: HttpUrl, accessToken: String? = null): String = try {
+        client.newCall(Request.Builder().url(url).header("Accept", "application/json").apply { if (!accessToken.isNullOrBlank()) header("Authorization", "Bearer $accessToken") }.build()).execute().use { r ->
             if (!r.isSuccessful) throw failure(r)
             val source = r.body?.source() ?: throw MmfException.Malformed("MyMiniFactory sent an empty response.")
             val buffer = okio.Buffer(); var total = 0L
@@ -68,8 +68,8 @@ class MyMiniFactoryClient(
         return parsed { MmfParser.parseSearch(json) }
     }
 
-    override fun objectDetail(id: Long): MmfObject { require(id > 0); return parsed { MmfParser.parseObject(getJson(url("objects/$id"))) } }
-    override fun objectFiles(id: Long): MmfPage<MmfFile> { require(id > 0); return parsed { MmfParser.parseFiles(getJson(url("objects/$id/files", mapOf("per_page" to "100")))) } }
+    override fun objectDetail(id: Long, accessToken: String?): MmfObject { require(id > 0); return parsed { MmfParser.parseObject(getJson(url("objects/$id"), accessToken)) } }
+    override fun objectFiles(id: Long, accessToken: String?): MmfPage<MmfFile> { require(id > 0); return parsed { MmfParser.parseFiles(getJson(url("objects/$id/files", mapOf("per_page" to "100")), accessToken)) } }
 
     override fun download(file: MmfFile, accessToken: String, target: File, onProgress: (Long, Long?) -> Unit): Long {
         if (accessToken.isBlank()) throw MmfException.Unauthorized(needsSignIn = true)

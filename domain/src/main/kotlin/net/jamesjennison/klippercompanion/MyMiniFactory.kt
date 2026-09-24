@@ -158,8 +158,9 @@ sealed class MmfException(message: String) : Exception(message) {
 /** The Discover screen's view of MyMiniFactory; the real client lives in :transport, tests use fakes. */
 interface MmfApi {
     fun search(request: MmfSearch): MmfPage<MmfObject>
-    fun objectDetail(id: Long): MmfObject
-    fun objectFiles(id: Long): MmfPage<MmfFile>
+    /** [accessToken] (a signed-in user's) makes MyMiniFactory include the files' download links; the API key alone gets `download_url: null`. */
+    fun objectDetail(id: Long, accessToken: String? = null): MmfObject
+    fun objectFiles(id: Long, accessToken: String? = null): MmfPage<MmfFile>
     /** Downloads [file] to [target] (an OAuth [accessToken] is required by the API); returns the bytes written. */
     fun download(file: MmfFile, accessToken: String, target: java.io.File, onProgress: (Long, Long?) -> Unit = { _, _ -> }): Long
 }

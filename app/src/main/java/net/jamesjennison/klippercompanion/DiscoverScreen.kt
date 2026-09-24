@@ -237,8 +237,10 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
 
     LaunchedEffect(summary.id) {
         try {
-            val d = io { api.objectDetail(summary.id) }; detail = d
-            files = d.files.ifEmpty { io { api.objectFiles(summary.id) }.items }
+            // Signed in, the API includes each file's download link; with only the API key it is null.
+            val token = io { runCatching { auth?.validAccessToken() }.getOrNull() }
+            val d = io { api.objectDetail(summary.id, token) }; detail = d
+            files = d.files.ifEmpty { io { api.objectFiles(summary.id, token) }.items }
         } catch (e: MmfException) { error = e.message } catch (e: Exception) { error = "Could not load this model: ${e.message}" }
     }
     val printable = files.filter { it.isModel || it.isArchive }

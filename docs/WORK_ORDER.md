@@ -2431,7 +2431,7 @@ P28/M7 sections for what each one built and its commit hash.)*
       MyMiniFactory's terms allow shipping one shared API key in the app (the user-supplied-key path avoids that). The meaning of the
       `share` license term is an interpretation of the schema's one-line description. Paid ("store") models are marked but
       purchase is not handled; downloading may simply fail for them.
-    - **Owner steps to make it live:** create a client at myminifactory.com/pages/for-developers, register `nozzleitall://mmf-auth` as
+    - **Owner steps to make it live:** create a client at myminifactory.com/pages/for-developers (client key `nozzle_it_all`), register `nozzleitall://mmf-auth` as
       its redirect, then either build with `MMF_API_KEY`/`MMF_CLIENT_KEY` or paste the keys in Discover.
 
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN

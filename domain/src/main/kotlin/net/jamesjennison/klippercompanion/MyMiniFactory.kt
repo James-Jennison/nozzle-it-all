@@ -173,7 +173,10 @@ class InMemoryMmfTokenStore : MmfTokenStore {
 
 object MmfAuthLinks {
     const val AUTHORIZE_URL = "https://auth.myminifactory.com/web/authorize"
-    const val REDIRECT_URI = "nozzleitall://mmf-auth"
+    /** Registered with MyMiniFactory (its form expects an https callback). The page there relays the result to [APP_REDIRECT]. */
+    const val REDIRECT_URI = "https://nozzleitall.com/mmf-auth"
+    /** The app's own deep link, opened by the relay page; this is what parseRedirect accepts. */
+    const val APP_REDIRECT = "nozzleitall://mmf-auth"
 
     fun newState(): String = java.util.UUID.randomUUID().toString().replace("-", "")
 
@@ -185,10 +188,10 @@ object MmfAuthLinks {
 
     class SignInFailed(message: String) : Exception(message)
 
-    /** Parses the redirect (`nozzleitall://mmf-auth#access_token=...&expires_in=...&state=...`); rejects a wrong state or a denial. */
+    /** Parses the relayed redirect (`nozzleitall://mmf-auth#access_token=...&expires_in=...&state=...`); rejects a wrong state or a denial. */
     fun parseRedirect(redirect: String, expectedState: String): Pair<String, Int> {
         val uri = try { java.net.URI(redirect) } catch (e: Exception) { throw SignInFailed("Unreadable sign-in response.") }
-        if ("${uri.scheme}://${uri.host}" != REDIRECT_URI) throw SignInFailed("Unexpected sign-in redirect.")
+        if ("${uri.scheme}://${uri.host}" != APP_REDIRECT) throw SignInFailed("Unexpected sign-in redirect.")
         fun params(s: String?) = s.orEmpty().split('&').filter { it.contains('=') }.associate { p -> p.substringBefore('=') to java.net.URLDecoder.decode(p.substringAfter('='), "UTF-8") }
         val p = params(uri.rawFragment) + params(uri.rawQuery)
         if (p["error"] != null) throw SignInFailed(if (p["error"] == "access_denied") "Sign-in was cancelled." else "MyMiniFactory refused the sign-in (${p["error"]!!.take(40)}).")

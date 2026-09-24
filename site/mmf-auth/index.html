@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>Signing in to Nozzle It All</title>
+<style>body{font:16px system-ui,sans-serif;margin:2rem auto;max-width:28rem;padding:0 1rem;color:#222}a.b{display:inline-block;margin-top:1rem;padding:.7rem 1.2rem;background:#0a8f7a;color:#fff;border-radius:8px;text-decoration:none}</style></head>
+<body>
+<h1>Nozzle It All</h1>
+<p id="msg">Returning you to the app&hellip;</p>
+<a class="b" id="open" href="#">Open Nozzle It All</a>
+<script>
+// MyMiniFactory redirects here with the sign-in result in the URL fragment (or ?error=... on refusal). This page only
+// forwards that string to the app's own deep link; nothing is sent to any server, stored, or logged.
+(function () {
+  var target = "nozzleitall://mmf-auth" + (location.search || "") + (location.hash || "");
+  document.getElementById("open").href = target;
+  if (/access_token=|error=/.test(location.hash + location.search)) { location.replace(target); }
+  else { document.getElementById("msg").textContent = "Nothing to hand back. Start the sign-in from the app."; }
+})();
+</script>
+</body></html>

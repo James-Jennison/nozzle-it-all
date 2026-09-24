@@ -12,7 +12,7 @@ class MyMiniFactoryAuthTest {
         val url = MmfAuthLinks.authorizeUrl("my client", "abcdefghijklmnop1234")
         assertTrue(url.startsWith("https://auth.myminifactory.com/web/authorize?"))
         assertTrue(url.contains("client_id=my+client")); assertTrue(url.contains("response_type=token")); assertTrue(url.contains("state=abcdefghijklmnop1234"))
-        assertTrue(url.contains("redirect_uri=nozzleitall%3A%2F%2Fmmf-auth"))
+        assertTrue(url.contains("redirect_uri=https%3A%2F%2Fnozzleitall.com%2Fmmf-auth"))
         assertThrows(IllegalArgumentException::class.java) { MmfAuthLinks.authorizeUrl("", "abcdefghijklmnop1234") }
         assertThrows(IllegalArgumentException::class.java) { MmfAuthLinks.authorizeUrl("c", "short") }
         assertNotEquals(MmfAuthLinks.newState(), MmfAuthLinks.newState())

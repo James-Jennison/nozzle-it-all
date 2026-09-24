@@ -10,7 +10,7 @@ class SettingsCatalogTest {
         SettingsCatalog.all.forEach { d -> (d.type as? SettingType.Choice)?.let { assertTrue(d.key, it.options.size >= 2) }; assertTrue(d.key, d.help.isNotBlank()) }
     }
     @Test fun tiersDiscloseProgressively() {
-        val basic = SettingsCatalog.visible(SettingTier.BASIC).size; val adv = SettingsCatalog.visible(SettingTier.ADVANCED).size; val exp = SettingsCatalog.visible(SettingTier.EXPERT).size
+        val basic = SettingsCatalog.visible(SettingTier.BASIC).size; val adv = SettingsCatalog.visible(SettingTier.ADVANCED).size; val exp = SettingsCatalog.visible(SettingTier.EXPERT, "", MultiToolFamily.FILAMENT_SWAP).size
         assertTrue(basic in 1 until adv); assertTrue(adv < exp); assertEquals(SettingsCatalog.all.size, exp)
     }
     @Test fun searchMatchesLabelKeyGroupAndHelp() {

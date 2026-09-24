@@ -2373,6 +2373,28 @@ P28/M7 sections for what each one built and its commit hash.)*
       that a real Bambu/U1 session works; regions have no on-screen gizmo (drag to move, +/- buttons to resize, numeric dialog
       for exact values); memory handling cannot shrink native memory mid-slice, it only refuses to start under pressure and
       explains an interrupted slice afterwards; the suite against `releaseSmoke` (238 tests) predates the new keep rules.
+32. **WO-35 - Phase 8 (multicolor / multimaterial) closed, 2026-09-23.**
+    Built on top of WO-25 to WO-29 (tool slots, per-object assignment, real multi-tool slicing). Device-tested on the Razr 2026;
+    full suite green.
+    - **Toolchange visualization:** the G-code preview now tracks `T<n>` commands (`ToolChange`, per-segment `tool`, `toolsUsed`);
+      the sliced preview colours every extrusion by the tool that printed it, with a legend and "N change(s) on this layer".
+    - **Review stats:** toolchange count, per-tool grams, and an estimated purge waste, parsed from the real footer of a two-tool U1
+      slice (`; total filament change`, `; filament used [g]`, `; flush_volumes_matrix`). `GcodeStats` also fixed a latent bug:
+      "filament used [mm]" was read as the first tool only.
+    - **Hardware-family model** (`MultiToolFamily`: single / independent tools / filament swap) and **material compatibility
+      warnings** (`MaterialCompatibility`: PLA with ABS-class, flexible with rigid, nozzle and bed temperature spreads).
+    - **Purge / prime-tower UI - and a real finding:** the engine ignores `enable_prime_tower=1` on the Snapmaker U1 profile (footer
+      stays 0, no tower is generated; verified). Independent-tool machines therefore do not purge in this engine, so the tower and
+      flush settings (`prime_tower_width`, `flush_multiplier`, `flush_into_*`) are only offered for the filament-swap family, the
+      editor says why on a toolchanger, and the review shows an explanation instead of a purge estimate. The filament-swap path
+      (switch, flush settings, estimate, bleed note) is unit-tested only: no bundled filament-swap multi-slot profile exists.
+    - **Per-painted-region material:** a Material paint kind (a tool number per stroke, stored as code 10+tool) replayed natively
+      into `mmu_segmentation_facets`. Device test: one cube assigned to tool 1 prints only `T0` normally; with a tool-2 stroke on its
+      side the G-code gains `T1` and both tools extrude.
+    - **Still not done, and why:** no Prusa XL bundled profile exists (so nothing is verified for XL's own toolchange G-code); no
+      physical multi-tool print was run; Bambu AMS multi-material is not wired (the Bambu bundle path is single-material, and
+      libslic3r's AMS handling is unverified here).
+
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

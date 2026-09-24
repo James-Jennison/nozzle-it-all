@@ -191,7 +191,7 @@ std::vector<PaintStrokeRec> parse_strokes(const std::string& text) {
             s.origin = Slic3r::Vec3d(std::stod(p[1]), std::stod(p[2]), std::stod(p[3]));
             s.dir = Slic3r::Vec3d(std::stod(p[4]), std::stod(p[5]), std::stod(p[6]));
             s.radius = std::stod(p[7]);
-            if (s.kind >= 0 && s.kind <= 3 && s.radius > 0.0 && s.dir.norm() > 1e-9) out.push_back(s);
+            if (((s.kind >= 0 && s.kind <= 3) || (s.kind >= 11 && s.kind <= 26)) && s.radius > 0.0 && s.dir.norm() > 1e-9) out.push_back(s);
         } catch (...) {}
     }
     return out;
@@ -204,25 +204,30 @@ void apply_paint_strokes(Slic3r::ModelObject* object, const std::vector<PaintStr
     AABBMesh aabb(volume->mesh());
     TriangleSelector support_selector(volume->mesh());
     TriangleSelector seam_selector(volume->mesh());
+    TriangleSelector material_selector(volume->mesh());
     Transform3d inv = volume->get_matrix().inverse(); // object frame -> the volume's own mesh frame
-    bool support_painted = false, seam_painted = false;
+    bool support_painted = false, seam_painted = false, material_painted = false;
     for (const PaintStrokeRec& s : strokes) {
         Vec3d local_origin = inv * s.origin;
         Vec3d local_dir = (inv.linear() * s.dir).normalized();
         AABBMesh::hit_result hit = aabb.query_ray_hit(local_origin, local_dir);
         if (!hit.is_hit()) continue;
-        const bool seam = s.kind >= 2;
+        const bool material = s.kind >= 11;
+        const bool seam = !material && s.kind >= 2;
         const bool enforcer = (s.kind % 2) == 0;
         TriangleSelector::ClippingPlane clip;
         std::unique_ptr<TriangleSelector::Cursor> cursor = TriangleSelector::SinglePointCursor::cursor_factory(
             hit.position().cast<float>(), local_origin.cast<float>(), static_cast<float>(s.radius),
             TriangleSelector::CursorType::SPHERE, Transform3d::Identity(), clip);
-        (seam ? seam_selector : support_selector).select_patch(hit.face(), std::move(cursor),
-            enforcer ? EnforcerBlockerType::ENFORCER : EnforcerBlockerType::BLOCKER, Transform3d::Identity(), /*triangle_splitting=*/true);
-        (seam ? seam_painted : support_painted) = true;
+        // Multi-material regions: libslic3r stores the 1-based filament number as the facet state (1 = ENFORCER, 2 = BLOCKER, 3...).
+        const EnforcerBlockerType state = material ? static_cast<EnforcerBlockerType>(s.kind - 10)
+                                                   : (enforcer ? EnforcerBlockerType::ENFORCER : EnforcerBlockerType::BLOCKER);
+        (material ? material_selector : seam ? seam_selector : support_selector).select_patch(hit.face(), std::move(cursor), state, Transform3d::Identity(), /*triangle_splitting=*/true);
+        (material ? material_painted : seam ? seam_painted : support_painted) = true;
     }
     if (support_painted) volume->supported_facets.set(support_selector);
     if (seam_painted) volume->seam_facets.set(seam_selector);
+    if (material_painted) volume->mmu_segmentation_facets.set(material_selector);
 }
 
 void apply_volume_specs(Slic3r::ModelObject* object, const std::string& text) {

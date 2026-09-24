@@ -4,8 +4,10 @@ import java.io.InputStream
 import java.io.InterruptedIOException
 import kotlin.math.*
 
-data class ToolpathSegment(val x1:Float,val y1:Float,val x2:Float,val y2:Float,val layer:Int,val byteEnd:Long=0)
-data class Toolpath(val segments:List<ToolpathSegment>,val heights:List<Float>,val sampled:Boolean,val ignoredMotion:Boolean,val travels:List<ToolpathSegment> = emptyList(),val byteSize:Long=0)
+data class ToolpathSegment(val x1:Float,val y1:Float,val x2:Float,val y2:Float,val layer:Int,val byteEnd:Long=0,val tool:Int=0)
+data class Toolpath(val segments:List<ToolpathSegment>,val heights:List<Float>,val sampled:Boolean,val ignoredMotion:Boolean,val travels:List<ToolpathSegment> = emptyList(),val byteSize:Long=0,val toolChanges:List<ToolChange> = emptyList(),val toolsUsed:Set<Int> = setOf(0))
+/** A tool change seen in the G-code (`T1` etc.): the layer it happened on and the tool selected. */
+data class ToolChange(val layer:Int,val tool:Int)
 /** Approximate XY extrusion geometry, never a G-code executor. IJ arcs use relative centers. */
 object GcodePreview {
     const val MAX_BYTES=256L*1024*1024
@@ -16,7 +18,7 @@ object GcodePreview {
         var bytes=0L;var x=0.0;var y=0.0;var z=0.0;var e=0.0;var xyzAbsolute=true;var eAbsolute=true;var units=1.0
         var offsetX=0.0;var offsetY=0.0;var knownX=false;var knownY=false
         val segments=ArrayList<ToolpathSegment>();val heights=ArrayList<Float>();var layer=-1;var extrusionZ=Double.NaN
-        var stride=1L;var moves=0L;var ignored=false
+        var stride=1L;var moves=0L;var ignored=false;var tool=0;val toolChanges=ArrayList<ToolChange>();val pendingTools=ArrayList<Int>();val toolsUsed=sortedSetOf(0)
         val travels=ArrayList<ToolpathSegment>();var travelStride=1L;var travelMoves=0L
         fun travel(ax:Double,ay:Double,bx:Double,by:Double) {
             if(travelMoves++%travelStride==0L) travels.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer.coerceAtLeast(0),bytes))
@@ -24,7 +26,9 @@ object GcodePreview {
         }
         fun segment(ax:Double,ay:Double,bx:Double,by:Double,height:Double) {
             if(layer<0||abs(height-extrusionZ)>0.001) {require(heights.size<10_000){"Too many extrusion heights for preview."};heights.add(height.toFloat());layer++;extrusionZ=height}
-            if(moves++%stride==0L)segments.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer,bytes))
+            // A tool change belongs to the layer of the next extrusion (the layer counter advances lazily on Z changes).
+            if(pendingTools.isNotEmpty()){pendingTools.forEach{toolChanges.add(ToolChange(layer.coerceAtLeast(0),it))};pendingTools.clear()}
+            if(moves++%stride==0L)segments.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer,bytes,tool))
             if(segments.size>=MAX_SEGMENTS){val retained=segments.filterIndexed{i,_->i%2==0};segments.clear();segments.addAll(retained);stride*=2}
         }
         val line=StringBuilder()
@@ -67,7 +71,8 @@ object GcodePreview {
                     x=nx;y=ny;z=nz;e=ne;if(xyzAbsolute&&v.containsKey("X"))knownX=true;if(xyzAbsolute&&v.containsKey("Y"))knownY=true
                 }
                 "G28"->{knownX=false;knownY=false;offsetX=0.0;offsetY=0.0;ignored=true}
-                else->if(command.startsWith("G")&&command !in setOf("G4","G10","G11"))ignored=true
+                else->if(command.length in 2..3&&command[0]=='T'&&command.drop(1).all(Char::isDigit)){val t=command.drop(1).toInt();if(t!=tool){tool=t;pendingTools.add(t)};toolsUsed.add(t)}
+                else if(command.startsWith("G")&&command !in setOf("G4","G10","G11"))ignored=true
             }
         }
         val buffer=ByteArray(32768)
@@ -75,6 +80,7 @@ object GcodePreview {
             for(i in 0 until count){bytes++;val c=buffer[i].toInt() and 255;require(c!=0){"Binary G-code is unsupported."};if(c==10){if(cancelled())throw InterruptedIOException("Preview cancelled");consume()}else{require(line.length<16_384){"G-code line too long."};line.append(c.toChar())}}
         }
         if(line.isNotEmpty())consume();require(segments.isNotEmpty()){"No supported extrusion paths found."}
-        return Toolpath(segments,heights,stride>1||travelStride>1,ignored,travels,bytes)
+        pendingTools.forEach{toolChanges.add(ToolChange(layer.coerceAtLeast(0),it))}
+        return Toolpath(segments,heights,stride>1||travelStride>1,ignored,travels,bytes,toolChanges,toolsUsed)
     }
 }

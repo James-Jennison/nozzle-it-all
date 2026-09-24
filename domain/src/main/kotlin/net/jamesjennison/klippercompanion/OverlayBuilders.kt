@@ -8,7 +8,7 @@ import kotlin.math.sqrt
 
 // Phase 9d: geometry for the on-model overlays - painted brush dabs and modifier/blocker region outlines. Pure, so
 // it is unit-tested without a GL context; ProjectGLRenderer just uploads and draws the result.
-data class PaintDisc(val kind: PaintKind, val center: FloatArray, val normal: FloatArray, val radius: Float)
+data class PaintDisc(val kind: PaintKind, val center: FloatArray, val normal: FloatArray, val radius: Float, val tool: Int = 0)
 
 object OverlayBuilders {
     private const val DISC_SEGMENTS = 14
@@ -19,7 +19,11 @@ object OverlayBuilders {
         PaintKind.SUPPORT_BLOCKER -> floatArrayOf(0.92f, 0.22f, 0.22f)
         PaintKind.SEAM_ENFORCER -> floatArrayOf(0.20f, 0.80f, 0.32f)
         PaintKind.SEAM_BLOCKER -> floatArrayOf(0.96f, 0.80f, 0.10f)
+        PaintKind.MATERIAL -> floatArrayOf(0.96f, 0.96f, 0.96f)
     }
+    /** Material strokes are drawn in their tool's own colour. */
+    fun paintColor(kind: PaintKind, tool: Int): FloatArray = if (kind == PaintKind.MATERIAL) hexToRgb(DEFAULT_TOOL_COLORS[(tool - 1).coerceAtLeast(0) % DEFAULT_TOOL_COLORS.size]) else paintColor(kind)
+    private fun hexToRgb(hex: String) = floatArrayOf(hex.substring(1, 3).toInt(16) / 255f, hex.substring(3, 5).toInt(16) / 255f, hex.substring(5, 7).toInt(16) / 255f)
     fun volumeColor(kind: VolumeKind): FloatArray = when (kind) {
         VolumeKind.MODIFIER -> floatArrayOf(0.80f, 0.35f, 0.92f)
         VolumeKind.SUPPORT_BLOCKER -> floatArrayOf(0.92f, 0.22f, 0.22f)
@@ -28,7 +32,7 @@ object OverlayBuilders {
 
     /** One triangle-fan disc per dab, grouped by paint kind. */
     fun paintGroups(discs: List<PaintDisc>): List<OverlayGroup> =
-        discs.groupBy { it.kind }.map { (kind, list) ->
+        discs.groupBy { it.kind to it.tool }.map { (key, list) ->
             val out = FloatArray(list.size * DISC_SEGMENTS * 18)
             var o = 0
             for (d in list) {
@@ -50,7 +54,7 @@ object OverlayBuilders {
                     for (p in listOf(floatArrayOf(cx, cy, cz), p0, p1)) { out[o++] = p[0]; out[o++] = p[1]; out[o++] = p[2]; out[o++] = n[0]; out[o++] = n[1]; out[o++] = n[2] }
                 }
             }
-            OverlayGroup(paintColor(kind), out)
+            OverlayGroup(paintColor(key.first, key.second), out)
         }
 
     /** Wireframe (GL_LINES, position + normal) of a region, [center] in the preview frame. */
@@ -97,6 +101,6 @@ object OverlayBuilders {
         val hit = MeshEdit.rayHit(mesh, o, s.dir) ?: return@mapNotNull null
         var n = MeshEdit.triangleNormal(mesh, hit.triangle)
         if (n[0] * s.dir[0] + n[1] * s.dir[1] + n[2] * s.dir[2] > 0f) n = floatArrayOf(-n[0], -n[1], -n[2]) // face the viewer
-        PaintDisc(s.kind, hit.point, n, s.radius)
+        PaintDisc(s.kind, hit.point, n, s.radius, s.tool)
     }
 }

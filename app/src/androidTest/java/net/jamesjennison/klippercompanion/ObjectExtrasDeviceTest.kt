@@ -92,6 +92,30 @@ class ObjectExtrasDeviceTest {
         assertNotEquals("a painted seam must move the seam", plain, seamed)
     }
 
+    @Test fun aMaterialStrokeMakesAPaintedRegionPrintWithAnotherTool() = runBlocking<Unit> {
+        // One cube assigned to tool 1 on the four-tool Snapmaker U1; a tool-2 stroke on its side must add real T1 changes.
+        val file = cube(); val g = MeshLoader.load(file.absolutePath)
+        val pack = slicingProfilePack(SlicingPrinterModel.SNAPMAKER_U1, null)!!
+        val keys = arrayOf("filament_diameter", "filament_colour", "filament_type", "nozzle_temperature", "nozzle_temperature_initial_layer")
+        val values = arrayOf("1.75,1.75,1.75,1.75", "#FF0000;#00FF00;#0000FF;#FFFF00", "PLA;PLA;PLA;PLA", "210,210,210,210", "210,210,210,210")
+        fun sliceU1(paint: String): String {
+            val out = File(ctx.cacheDir, "material_paint.gcode").also { it.delete() }
+            NativeEngine.nativeResetCancel()
+            NativeEngine.nativeSliceMultiObjectEx(arrayOf(file.absolutePath), doubleArrayOf(0.0), doubleArrayOf(0.0), doubleArrayOf(0.0), doubleArrayOf(1.0), intArrayOf(1),
+                out.absolutePath, pack.materialize(ctx).toTypedArray(), keys, values, arrayOf(paint), arrayOf(""))
+            return out.readText()
+        }
+        fun tools(g: String) = Regex("(?m)^T[0-9]+\\s*$").findAll(g).map { it.value.trim() }.toSet()
+        assertEquals("baseline: everything prints on tool 1", setOf("T0"), tools(sliceU1("")))
+        val cy = (g.minY + g.maxY) / 2f; val cz = (g.minZ + g.maxZ) / 2f
+        val stroke = PaintStroke(PaintKind.MATERIAL, g.objectFrame(floatArrayOf(g.minX - 20f, cy, cz)), floatArrayOf(1f, 0f, 0f), 6f, tool = 2)
+        assertNotNull(MeshEdit.rayHit(MeshEdit.fromGeometry(g), floatArrayOf(g.minX - 20f, cy, cz), stroke.dir))
+        val painted = sliceU1(PaintCodec.encode(listOf(stroke)))
+        assertTrue("painted region must print with tool 2, tools used: ${tools(painted)}", "T1" in tools(painted))
+        val perTool = Regex("filament used \\[g] = (.+)").find(painted)!!.groupValues[1].split(',').map { it.trim().toDouble() }
+        assertTrue("both tools extrude: $perTool", perTool[0] > 0.0 && perTool[1] > 0.0)
+    }
+
     @Test fun invalidExtrasAreIgnoredNotFatal() = runBlocking<Unit> {
         val file = cube()
         val gcode = slice(file, emptyMap(), paint = "junk;9,1,2,3,4,5,6,1", volumes = "nonsense:box:0,0,0:1,1,1;modifier:box:0,0,0:0,0,0:")

@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -104,6 +105,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var toolMessage by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var cutDialogFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var paintKind by remember(projectId, newProjectName) { mutableStateOf(PaintKind.SUPPORT_ENFORCER) }
+    var paintTool by remember(projectId, newProjectName) { mutableStateOf(2) }
     var brushRadiusMm by remember(projectId, newProjectName) { mutableStateOf(3f) }
     var lastDab by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
     var regionDialog by remember(projectId, newProjectName) { mutableStateOf<RegionDraft?>(null) }
@@ -332,7 +334,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         lastDab?.let { if (MeshEdit.distance(it, hit.point) < localRadius * 0.5f) return }
         lastDab = hit.point
         val from = floatArrayOf(hit.point[0] - nd[0] * 5f, hit.point[1] - nd[1] * 5f, hit.point[2] - nd[2] * 5f)
-        scope.launch { vm.addPaintStrokes(id, listOf(PaintStroke(paintKind, g.objectFrame(from), nd, localRadius))) }
+        scope.launch { vm.addPaintStrokes(id, listOf(PaintStroke(paintKind, g.objectFrame(from), nd, localRadius, if (paintKind == PaintKind.MATERIAL) paintTool.coerceIn(1, toolCount.coerceAtLeast(1)) else 0))) }
     }
 
     // Drag a region across the selected model: the ray is intersected with the horizontal plane through the region's
@@ -748,7 +750,11 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                 toolMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-tool-message")) }
                                 if (pickMode == PickMode.PAINT) {
                                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-paint-controls")) {
-                                        PaintKind.entries.forEach { k -> FilterChip(paintKind == k, { paintKind = k }, label = { Text(k.label) }, modifier = Modifier.testTag("project-paint-kind-${k.name.lowercase()}")) }
+                                        PaintKind.entries.filter { it != PaintKind.MATERIAL || toolCount > 1 }.forEach { k -> FilterChip(paintKind == k, { paintKind = k }, label = { Text(k.label) }, modifier = Modifier.testTag("project-paint-kind-${k.name.lowercase()}")) }
+                                    }
+                                    if (paintKind == PaintKind.MATERIAL) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-paint-tools")) {
+                                        Text("Print painted areas with:", style = MaterialTheme.typography.bodySmall)
+                                        (1..toolCount).forEach { t -> FilterChip(paintTool == t, { paintTool = t }, label = { Text("T$t") }, modifier = Modifier.testTag("project-paint-tool-$t")) }
                                     }
                                     Text("Brush %.1f mm".format(brushRadiusMm), style = MaterialTheme.typography.bodySmall)
                                     Slider(brushRadiusMm, { brushRadiusMm = it }, valueRange = 1f..15f, modifier = Modifier.testTag("project-paint-radius"))
@@ -814,6 +820,24 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     // already carries its own real material + tool assignment,
                                     // tap "Assign" on a row to change it.
                                     Text("$toolCount real tool slots on ${profile?.label ?: "this printer"} - tap \"Assign\" on an object above to pick its material and tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-multitool-hint"))
+                                    val family = multiToolFamily(profile?.slicingModel, toolCount)
+                                    val assigned = objects.mapNotNull { it.material() }
+                                    val toolWarnings = MaterialCompatibility.warnings(assigned, family)
+                                    val primeTowerOn = advancedOverrides["enable_prime_tower"]?.let { it == "1" }
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-multimaterial")) {
+                                        Text(family.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("project-multimaterial-family"))
+                                        Text(family.explanation, style = MaterialTheme.typography.bodySmall)
+                                        if (family == MultiToolFamily.FILAMENT_SWAP) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Switch(primeTowerOn ?: true, { advancedOverrides = advancedOverrides + ("enable_prime_tower" to if (it) "1" else "0") }, modifier = Modifier.testTag("project-prime-tower"))
+                                                Text(" Prime tower" + if (primeTowerOn == null) " (profile default)" else "", style = MaterialTheme.typography.bodyMedium)
+                                            }
+                                            Text("Flush amount and where to flush: Settings > Multi-material.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        } else {
+                                            Text("No prime tower or flush settings here: this engine does not purge on independent-tool machines (checked on the Snapmaker U1 profile - turning the tower on changes nothing).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-no-purge-note"))
+                                        }
+                                        toolWarnings.forEachIndexed { k, w -> Text("⚠ $w", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-multimaterial-warning-$k")) }
+                                    }
                                 }
                             }
                             1 -> {
@@ -838,7 +862,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
                                     Text("Brim (bed adhesion)")
                                 }
-                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", { advancedOverrides = it })
+                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", multiToolFamily(profile?.slicingModel, toolCount), { advancedOverrides = it })
                                 validationIssues.forEach { issue ->
                                     Text(
                                         issue.message,
@@ -894,7 +918,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                 s.filamentUsedMm?.let { Text("${(it / 1000).let { m -> "%.2f".format(m) }}m") }
                             }
                         }
-                        slicedToolpath?.let { SlicedPreview(it, materialColorHex = currentMaterial?.colorHex) } ?: toolpathError?.let { Text(it, color = MaterialTheme.colorScheme.error) } ?: Text("Building layer preview…")
+                        gcodeStats?.takeIf { (it.toolchanges ?: 0) > 0 || it.toolsUsed.size > 1 }?.let { st ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.testTag("project-slice-multimaterial")) {
+                                Text("Toolchanges: ${st.toolchanges ?: slicedToolpath?.toolChanges?.size ?: 0}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-toolchanges"))
+                                Text(st.toolsUsed.joinToString("  ·  ") { t -> "T${t + 1} ${"%.1f".format(st.perToolGrams.getOrElse(t) { 0.0 })} g" }, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-pertool"))
+                                st.estimatedPurgeGrams()?.takeIf { multiToolFamily(profile?.slicingModel, toolCount) != MultiToolFamily.TOOLCHANGER }?.let { Text("Estimated purge waste: ${"%.1f".format(it)} g (estimate)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-purge")) }
+                                st.purgeNote(multiToolFamily(profile?.slicingModel, toolCount))?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-slice-purge-note")) }
+                            }
+                        }
+                        val toolMaterials = (1..toolCount.coerceAtLeast(1)).map { slot -> objects.firstOrNull { (it.toolSlotIndex ?: 1) == slot }?.material() }
+                        slicedToolpath?.let { SlicedPreview(it, materialColorHex = currentMaterial?.colorHex, toolColorHexes = toolMaterials.mapIndexed { i, m -> toolColorHex(i, m) }, toolLabels = toolMaterials.mapIndexed { i, m -> m?.displayName ?: "Tool ${i + 1}" }) } ?: toolpathError?.let { Text(it, color = MaterialTheme.colorScheme.error) } ?: Text("Building layer preview…")
                     }
                     Button({ stage = ProjectEditorStage.PRINTER_READY }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-review-continue")) { Text("Continue") }
                 }

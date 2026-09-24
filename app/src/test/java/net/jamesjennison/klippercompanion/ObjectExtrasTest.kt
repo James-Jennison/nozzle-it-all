@@ -11,6 +11,16 @@ class ObjectExtrasTest {
         val mixed = PaintCodec.encode(strokes.take(1)) + ";9,1,2,3,4,5,6,1;0,1,2,3,4,5,6,-1;0,NaN,2,3,4,5,6,1;junk;0,1,2"
         assertEquals(1, PaintCodec.decode(mixed).size)
     }
+    @Test fun materialStrokesCarryTheirToolThroughTheCodec() {
+        val strokes = listOf(PaintStroke(PaintKind.MATERIAL, floatArrayOf(1f, 2f, 3f), floatArrayOf(0f, 0f, -1f), 2f, tool = 3), PaintStroke(PaintKind.SUPPORT_BLOCKER, floatArrayOf(0f, 0f, 0f), floatArrayOf(0f, 0f, -1f), 1f))
+        val text = PaintCodec.encode(strokes)
+        assertTrue(text.startsWith("13,")) // 10 + tool 3
+        assertEquals(strokes, PaintCodec.decode(text))
+        assertEquals(3, PaintCodec.decode(text)[0].tool)
+        assertTrue("a bare code 10 has no tool", PaintCodec.decode("10,0,0,0,0,0,-1,1").isEmpty())
+        assertTrue("a tool beyond the maximum is dropped", PaintCodec.decode("${PaintKind.MATERIAL_BASE + PaintKind.MAX_TOOL + 1},0,0,0,0,0,-1,1").isEmpty())
+        assertThrows(IllegalArgumentException::class.java) { PaintStroke(PaintKind.MATERIAL, floatArrayOf(0f, 0f, 0f), floatArrayOf(0f, 0f, -1f), 1f) }
+    }
     @Test fun paintIsBounded() { assertEquals(PaintCodec.MAX_STROKES, PaintCodec.decode(List(PaintCodec.MAX_STROKES + 50) { "0,0,0,0,0,0,-1,1" }.joinToString(";")).size) }
 
     @Test fun volumesRoundTripAndSanitizeModifierOverrides() {

@@ -4,7 +4,9 @@ import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.opengl.Matrix
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,17 +70,19 @@ internal fun parseHexColor(hex: String?): FloatArray? {
     } catch (e: NumberFormatException) { null }
 }
 
-private fun buildLineBuffer(toolpath: Toolpath, uptoLayer: Int, showTravel: Boolean, extrusionColor: FloatArray): FloatArray {
+internal fun buildLineBuffer(toolpath: Toolpath, uptoLayer: Int, showTravel: Boolean, extrusionColor: FloatArray, toolColors: List<FloatArray>? = null): FloatArray {
     val lines = ArrayList<Float>()
-    fun append(segments: List<ToolpathSegment>, color: FloatArray) {
+    fun append(segments: List<ToolpathSegment>, defaultColor: FloatArray, perTool: Boolean = false) {
         for (s in segments) {
             if (s.layer > uptoLayer) continue
+            // Multi-tool prints colour each extrusion by the tool that printed it (travels stay grey).
+            val color = if (perTool && toolColors != null) toolColors.getOrElse(s.tool) { defaultColor } else defaultColor
             val z = toolpath.heights.getOrElse(s.layer) { 0f }
             lines.add(s.x1); lines.add(s.y1); lines.add(z); lines.add(color[0]); lines.add(color[1]); lines.add(color[2])
             lines.add(s.x2); lines.add(s.y2); lines.add(z); lines.add(color[0]); lines.add(color[1]); lines.add(color[2])
         }
     }
-    append(toolpath.segments, extrusionColor)
+    append(toolpath.segments, extrusionColor, perTool = true)
     if (showTravel) append(toolpath.travels, TRAVEL_COLOR)
     return lines.toFloatArray()
 }
@@ -164,12 +168,14 @@ class ToolpathGLRenderer : GLSurfaceView.Renderer {
     }
 }
 
-@Composable fun SlicedPreview(toolpath: Toolpath, modifier: Modifier = Modifier, materialColorHex: String? = null) {
+@Composable fun SlicedPreview(toolpath: Toolpath, modifier: Modifier = Modifier, materialColorHex: String? = null, toolColorHexes: List<String> = emptyList(), toolLabels: List<String> = emptyList()) {
     var glView by remember(toolpath) { mutableStateOf<GLSurfaceView?>(null) }
     val renderer = remember(toolpath) { ToolpathGLRenderer() }
     var layer by remember(toolpath) { mutableIntStateOf(toolpath.heights.lastIndex.coerceAtLeast(0)) }
     var showTravel by remember(toolpath) { mutableStateOf(false) }
     val extrusionColor = remember(materialColorHex) { parseHexColor(materialColorHex) ?: DEFAULT_EXTRUSION_COLOR }
+    val multiTool = toolpath.toolsUsed.size > 1 && toolColorHexes.isNotEmpty()
+    val toolColors = remember(toolColorHexes, multiTool) { if (multiTool) toolColorHexes.mapIndexed { i, h -> parseHexColor(h) ?: parseHexColor(DEFAULT_TOOL_COLORS[i % DEFAULT_TOOL_COLORS.size])!! } else null }
     var minDistance by remember(toolpath) { mutableFloatStateOf(1f) }
     var maxDistance by remember(toolpath) { mutableFloatStateOf(1000f) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -180,8 +186,8 @@ class ToolpathGLRenderer : GLSurfaceView.Renderer {
         minDistance = radius * 1.2f; maxDistance = radius * 8f
         renderer.cameraState = CameraOrbit(45f, 35f, radius * 3f)
     }
-    LaunchedEffect(toolpath, layer, showTravel, extrusionColor) {
-        renderer.pendingLines = buildLineBuffer(toolpath, layer, showTravel, extrusionColor)
+    LaunchedEffect(toolpath, layer, showTravel, extrusionColor, toolColors) {
+        renderer.pendingLines = buildLineBuffer(toolpath, layer, showTravel, extrusionColor, toolColors)
         glView?.requestRender()
     }
 
@@ -200,6 +206,20 @@ class ToolpathGLRenderer : GLSurfaceView.Renderer {
     Column(modifier) {
         Text("Layer ${layer + 1} / ${toolpath.heights.size} · Z ${toolpath.heights.getOrElse(layer) { 0f }} mm", style = MaterialTheme.typography.bodySmall)
         if (toolpath.heights.size > 1) Slider(layer.toFloat(), { layer = it.toInt().coerceIn(toolpath.heights.indices) }, valueRange = 0f..toolpath.heights.lastIndex.toFloat(), modifier = Modifier.testTag("sliced-preview-layer"))
+        if (multiTool) {
+            val here = toolpath.toolChanges.count { it.layer == layer }
+            Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp), modifier = Modifier.testTag("sliced-preview-legend")) {
+                toolpath.toolsUsed.sorted().forEach { t ->
+                    val hex = toolColorHexes.getOrElse(t) { DEFAULT_TOOL_COLORS[t % DEFAULT_TOOL_COLORS.size] }
+                    val c = parseHexColor(hex) ?: DEFAULT_EXTRUSION_COLOR
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Box(Modifier.size(12.dp).background(androidx.compose.ui.graphics.Color(c[0], c[1], c[2])))
+                        Text(" " + toolLabels.getOrElse(t) { "T${t + 1}" }, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Text("$here change(s) on this layer", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("sliced-preview-changes"))
+            }
+        }
         Row { androidx.compose.material3.FilterChip(showTravel, { showTravel = !showTravel }, label = { Text("Travel paths") }, modifier = Modifier.testTag("sliced-preview-travel")) }
         Box {
             AndroidView(

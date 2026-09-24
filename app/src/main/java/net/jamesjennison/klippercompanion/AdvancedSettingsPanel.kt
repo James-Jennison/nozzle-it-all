@@ -22,7 +22,7 @@ class CustomProfileStore(context: Context) {
 
 /** Phase 9a: searchable, tiered advanced controls with saved/inheriting profiles and compare. */
 @Composable
-fun AdvancedSettingsPanel(overrides: Map<String, String>, printerKey: String, onOverridesChange: (Map<String, String>) -> Unit) {
+fun AdvancedSettingsPanel(overrides: Map<String, String>, printerKey: String, family: MultiToolFamily? = null, onOverridesChange: (Map<String, String>) -> Unit) {
     val context = LocalContext.current
     val store = remember { CustomProfileStore(context) }
     var profiles by remember { mutableStateOf(store.all()) }
@@ -36,7 +36,7 @@ fun AdvancedSettingsPanel(overrides: Map<String, String>, printerKey: String, on
             SettingTier.entries.forEach { t -> FilterChip(tier == t, { tier = t }, label = { Text(t.label) }, modifier = Modifier.testTag("advanced-tier-${t.name.lowercase()}")) }
         }
         OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("advanced-search"))
-        val visible = SettingsCatalog.visible(tier, query)
+        val visible = SettingsCatalog.visible(tier, query, family)
         if (visible.isEmpty()) Text("No settings match.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("advanced-empty"))
         visible.groupBy { it.group }.forEach { (group, defs) ->
             Text(group, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)

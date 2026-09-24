@@ -6,13 +6,20 @@ package net.jamesjennison.klippercompanion
 // the object never invalidates it. Editing
 // the mesh itself (mirror, lay flat, cut) does, so those edits clear them.
 enum class PaintKind(val code: Int, val label: String) {
-    SUPPORT_ENFORCER(0, "Add support"), SUPPORT_BLOCKER(1, "Block support"), SEAM_ENFORCER(2, "Seam here"), SEAM_BLOCKER(3, "Avoid seam");
-    companion object { fun fromCode(code: Int) = entries.firstOrNull { it.code == code } }
+    SUPPORT_ENFORCER(0, "Add support"), SUPPORT_BLOCKER(1, "Block support"), SEAM_ENFORCER(2, "Seam here"), SEAM_BLOCKER(3, "Avoid seam"),
+    // Multi-material: paints a region to print with another tool. Stored as 10 + the 1-based tool number.
+    MATERIAL(10, "Material");
+    companion object {
+        const val MATERIAL_BASE = 10
+        const val MAX_TOOL = 16
+        fun fromCode(code: Int) = entries.firstOrNull { it.code == code } ?: if (code in MATERIAL_BASE + 1..MATERIAL_BASE + MAX_TOOL) MATERIAL else null
+    }
 }
 
 /** One brush dab: a ray into the mesh (origin/direction) and a radius in mesh units. */
-data class PaintStroke(val kind: PaintKind, val origin: FloatArray, val dir: FloatArray, val radius: Float) {
-    override fun equals(other: Any?) = other is PaintStroke && kind == other.kind && origin.contentEquals(other.origin) && dir.contentEquals(other.dir) && radius == other.radius
+data class PaintStroke(val kind: PaintKind, val origin: FloatArray, val dir: FloatArray, val radius: Float, val tool: Int = 0) {
+    init { require(kind != PaintKind.MATERIAL || tool in 1..PaintKind.MAX_TOOL) { "A material stroke needs a tool from 1 to ${PaintKind.MAX_TOOL}." } }
+    override fun equals(other: Any?) = other is PaintStroke && kind == other.kind && tool == other.tool && origin.contentEquals(other.origin) && dir.contentEquals(other.dir) && radius == other.radius
     override fun hashCode() = kind.hashCode() * 31 + origin.contentHashCode()
 }
 
@@ -20,17 +27,19 @@ object PaintCodec {
     const val MAX_STROKES = 6000
     // "kind,ox,oy,oz,dx,dy,dz,r;kind,..." - the same text goes to the native engine.
     fun encode(strokes: List<PaintStroke>): String = strokes.joinToString(";") { s ->
-        (listOf(s.kind.code.toString()) + s.origin.map { fmt(it) } + s.dir.map { fmt(it) } + fmt(s.radius)).joinToString(",")
+        (listOf((if (s.kind == PaintKind.MATERIAL) PaintKind.MATERIAL_BASE + s.tool else s.kind.code).toString()) + s.origin.map { fmt(it) } + s.dir.map { fmt(it) } + fmt(s.radius)).joinToString(",")
     }
     fun decode(text: String?): List<PaintStroke> {
         if (text.isNullOrBlank()) return emptyList()
         return text.split(';').take(MAX_STROKES).mapNotNull { rec ->
             val p = rec.split(',')
             if (p.size != 8) return@mapNotNull null
-            val kind = p[0].toIntOrNull()?.let(PaintKind::fromCode) ?: return@mapNotNull null
+            val code = p[0].toIntOrNull() ?: return@mapNotNull null
+            val kind = PaintKind.fromCode(code) ?: return@mapNotNull null
             val f = p.drop(1).map { it.toFloatOrNull()?.takeIf { v -> v.isFinite() } ?: return@mapNotNull null }
             val radius = f[6]; if (radius <= 0f) return@mapNotNull null
-            PaintStroke(kind, floatArrayOf(f[0], f[1], f[2]), floatArrayOf(f[3], f[4], f[5]), radius)
+            if (kind == PaintKind.MATERIAL && code == PaintKind.MATERIAL_BASE) return@mapNotNull null // bare 10 has no tool
+            PaintStroke(kind, floatArrayOf(f[0], f[1], f[2]), floatArrayOf(f[3], f[4], f[5]), radius, if (kind == PaintKind.MATERIAL) code - PaintKind.MATERIAL_BASE else 0)
         }
     }
     private fun fmt(v: Float) = java.lang.Float.toString(v)

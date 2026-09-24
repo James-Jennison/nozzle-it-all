@@ -14,6 +14,13 @@ class OverlayBuildersTest {
         assertTrue(OverlayBuilders.paintGroups(emptyList()).isEmpty())
     }
 
+    @Test fun materialDabsAreGroupedPerToolAndUseTheToolsOwnColour() {
+        val groups = OverlayBuilders.paintGroups(listOf(disc(PaintKind.MATERIAL).copy(tool = 2), disc(PaintKind.MATERIAL).copy(tool = 3), disc(PaintKind.MATERIAL).copy(tool = 2)))
+        assertEquals(2, groups.size)
+        assertFalse(groups[0].color.contentEquals(groups[1].color))
+        assertArrayEquals(OverlayBuilders.paintColor(PaintKind.MATERIAL, 2), groups.first { it.vertices.size == 2 * 14 * 3 * 6 }.color, 1e-6f)
+    }
+
     @Test fun discVerticesLieOnTheSurfacePlaneWithinTheRadius() {
         val n = floatArrayOf(1f, 0f, 0f)
         val g = OverlayBuilders.paintGroups(listOf(disc(PaintKind.SUPPORT_BLOCKER, n))).single()

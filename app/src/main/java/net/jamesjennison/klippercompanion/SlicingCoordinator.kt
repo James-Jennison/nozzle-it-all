@@ -28,6 +28,28 @@ object SlicingCoordinator {
     // The native engine runs one slice at a time (single cancel registration), so slices are serialized.
     private val sliceLock = kotlinx.coroutines.sync.Mutex()
     fun cancel() = NativeEngine.nativeCancelSlice()
+
+    // Memory pressure. A slice killed by Android's low-memory killer cannot be caught in-process, so a marker file is
+    // written for its duration; finding it at the next start means the last slice was interrupted.
+    private fun marker(context: Context) = File(context.filesDir, "slice-in-progress")
+    private fun markStarted(context: Context) { runCatching { marker(context).writeText(System.currentTimeMillis().toString()) } }
+    private fun markFinished(context: Context) { runCatching { marker(context).delete() } }
+    /** True once if the previous slice never finished (process killed, most likely for memory); clears the marker. */
+    fun consumeInterruptedSlice(context: Context): Boolean {
+        val f = marker(context)
+        if (!f.exists()) return false
+        f.delete()
+        runCatching { File(context.cacheDir, "sliced-output").listFiles()?.forEach { if (it.name.endsWith(".tmp") || it.name.endsWith(".gcode.tmp")) it.delete() } }
+        return true
+    }
+    /** Replaceable in tests. The system's own low-memory flag: starting a multi-hundred-MB slice now would likely be killed. */
+    @Volatile var systemLowMemory: (Context) -> Boolean = { c ->
+        android.app.ActivityManager.MemoryInfo().also { (c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(it) }.lowMemory
+    }
+    const val LOW_MEMORY_MESSAGE = "Android is low on memory right now, so slicing would probably be stopped. Close other apps and try again."
+
+    /** Removes every earlier slice result; a multi-plate run calls this once, then keeps each plate's file. */
+    fun clearOutputs(context: Context) { File(context.cacheDir, "sliced-output").listFiles()?.forEach { it.delete() } }
     /** Engine status percent 0-100 for the slice currently (or last) running. */
     fun progress(): Int = NativeEngine.nativeSliceProgress()
     // Builds its own short-lived PrinterService for the live firmware check, the same ad hoc
@@ -69,7 +91,7 @@ object SlicingCoordinator {
     // doc); callers pass null for a Bambu target in that case, which this doesn't itself enforce
     // (ModelViewer/SliceAndPrintPanel already keep Paint mode and target-printer independent, so
     // this is defense-in-depth, not the only guard).
-    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel(); SliceService.start(context.applicationContext); try {
+    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
         when (val resolved = resolveProfilePaths(context, profile)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
@@ -90,7 +112,7 @@ object SlicingCoordinator {
             } catch (e: java.util.concurrent.CancellationException) { SliceOutcome.Cancelled
             } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
         }
-    } finally { SliceService.stop(context.applicationContext) } } }
+    } finally { markFinished(context.applicationContext); SliceService.stop(context.applicationContext) } } }
 
     // Phase 1 (Consumer Slicer Plan §16): the real multi-object counterpart to slice() above -
     // same firmware confirmation/profile-pack resolution (resolveProfilePaths, shared, not a
@@ -121,14 +143,14 @@ object SlicingCoordinator {
     // bundled filament.json base diameter, merged into `overrides`. Left empty (the default, and
     // every caller before this parameter existed), this is the same single-material slice every
     // project already produces - no multi-slot config is generated at all.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { NativeEngine.nativeResetCancel(); SliceService.start(context.applicationContext); try {
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList(), outputTag: String? = null): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
                 val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
-                val output = freshOutputFile(context, "project", bambuBundle = bambuTarget)
+                val output = freshOutputFile(context, if (outputTag != null) "project-$outputTag" else "project", bambuBundle = bambuTarget, keepOthers = outputTag != null)
                 if (bambuTarget) {
                     NativeEngine.nativeSliceMultiObjectBambuBundleEx(
                         objects.map { it.first.absolutePath }.toTypedArray(),
@@ -177,11 +199,12 @@ object SlicingCoordinator {
             } catch (e: java.util.concurrent.CancellationException) { SliceOutcome.Cancelled
             } catch (e: Exception) { SliceOutcome.Failed(e.message ?: "Slicing failed.") }
         }
-    } finally { SliceService.stop(context.applicationContext) } } }
+    } finally { markFinished(context.applicationContext); SliceService.stop(context.applicationContext) } } }
 
-    private fun freshOutputFile(context: Context, baseName: String, bambuBundle: Boolean = false): File {
+    private fun freshOutputFile(context: Context, baseName: String, bambuBundle: Boolean = false, keepOthers: Boolean = false): File {
         val outputDir = File(context.cacheDir, "sliced-output").apply { mkdirs() }
-        outputDir.listFiles()?.forEach { it.delete() }
+        // A multi-plate run keeps every plate's result; only a stale file with this exact name is replaced.
+        outputDir.listFiles()?.forEach { if (!keepOthers || it.name.startsWith(baseName + ".")) it.delete() }
         return File(outputDir, if (bambuBundle) "$baseName.gcode.3mf" else "$baseName.gcode")
     }
 

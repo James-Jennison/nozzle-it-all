@@ -48,3 +48,30 @@
 # RetentionPolicy.CLASS/SOURCE, compile-time-only static-analysis hints with zero runtime
 # behavior, safe to drop entirely. ---
 -dontwarn com.google.errorprone.annotations.**
+
+# --- Reflection-loaded crypto/network stacks (found broken in the shipped build by SelfCheck.kt, not guessed) ---
+# BouncyCastle's providers register algorithms by class NAME strings (e.g. "SHA-512" -> a digest class looked up
+# reflectively), and OpenPGP verification of the signed Bespok3d packages needs them; R8 cannot see those references and
+# stripped them ("no such algorithm: SHA-512 for provider BC"). Kept whole - the standard recipe for BC.
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+# jsch instantiates its ciphers, key exchanges and key-pair generators from a name->class table via Class.forName
+# ("ClassNotFoundException: com.jcraft.jsch.jce.KeyPairGenRSA").
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**
+# HiveMQ's client wires itself with Dagger and Netty's channel/handler classes by name at static-init time.
+-keep class com.hivemq.client.** { *; }
+-keep class io.netty.** { *; }
+-dontwarn com.hivemq.client.**
+# Keeping Netty whole exposes its optional compression/serialization codecs, whose libraries this app does not ship
+# (they are only reached when a channel is configured to use them).
+-dontwarn io.netty.**
+-dontwarn com.aayushatharva.brotli4j.**
+-dontwarn com.github.luben.zstd.**
+-dontwarn com.jcraft.jzlib.**
+-dontwarn com.ning.compress.**
+-dontwarn lzma.sdk.**
+-dontwarn net.jpountz.**
+-dontwarn com.google.protobuf.**
+-dontwarn org.jboss.marshalling.**
+-dontwarn sun.security.x509.**

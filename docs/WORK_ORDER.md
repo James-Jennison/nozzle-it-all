@@ -2359,13 +2359,20 @@ P28/M7 sections for what each one built and its commit hash.)*
     - **9g release engineering**: env-driven signing (no key in the repo), `releaseSmoke` build type, offline CycloneDX SBOM
       (`generateSbom`), engine pin (`engine/ENGINE_PIN.json`, `scripts/engine_pin.py verify`, patch copied into the repo),
       tag-triggered CI release job with build-provenance attestations (docs/RELEASE.md).
-    - **Not verified / not built:** the release CI job has never run; no real signing key exists; the full suite (238) passes against
-      `releaseSmoke`, which keeps the app's own classes and turns obfuscation off (test code needs the real names); the
-      fully obfuscated release APK was only hand-driven through project creation, calibration and an on-device slice (docs/RELEASE.md
-      lists what was not exercised: Bambu MQTT/FTPS, jsch/OpenPGP, Glance widget); nothing was
-      printed on physical hardware; multi-plate "slice all plates" and modifier-region gizmo editing are not built; shape
-      regions are edited numerically, not by dragging.
-
+    - **Follow-up pass (same day, after the owner pointed out Phase 9 was not actually complete):** slice all plates (each
+      plate's result kept, switchable in the review), drag-to-move and grow/shrink for regions, memory-pressure handling
+      (refuse to start while Android reports low memory; detect and explain a slice killed on a previous run), and an in-app
+      **self-check** (Settings > Run self-check) that exercises Room, Tink, OpenPGP, jsch, OkHttp, HiveMQ/Netty, the FTPS client
+      and Glance against loopback/local data. Run against the fully obfuscated release APK it **found three real shipped-build
+      bugs the debug build hid**: BouncyCastle lost its digests (OpenPGP package verification would have failed: "no such
+      algorithm: SHA-512"), jsch lost its key-pair classes, and the HiveMQ/Netty client failed to initialise (Bambu MQTT would
+      not have connected). Fixed with keep rules in `app/proguard-rules.pro`; all 9 checks now pass in the release build. Cost:
+      release APK 77.4 MB -> 85.1 MB.
+    - **Still not verified / not built:** the release CI job has never run and there is no real signing key (owner decision);
+      nothing was printed on physical hardware; the self-check proves the libraries load and fail cleanly on loopback, not
+      that a real Bambu/U1 session works; regions have no on-screen gizmo (drag to move, +/- buttons to resize, numeric dialog
+      for exact values); memory handling cannot shrink native memory mid-slice, it only refuses to start under pressure and
+      explains an interrupted slice afterwards; the suite against `releaseSmoke` (238 tests) predates the new keep rules.
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

@@ -175,6 +175,51 @@ class PlateToolbarDeviceTest {
         assertNull(dbObject(projectId, objectIds[0]).volumesJson)
     }
 
+    @Test fun sliceAllPlatesKeepsEachPlatesOwnResultAndLetsTheOwnerSwitchBetweenThem() {
+        val (projectId, objectIds) = seedProject("SliceAllProject", 2)
+        runBlocking {
+            val vm = ProjectViewModel(context(), AppDatabase.get(context()).projectDao())
+            vm.loadProject(projectId); val second = vm.addPlate(); vm.moveObjectToPlate(objectIds[1], second.id)
+        }
+        openScreen(projectId)
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("project-slice-all").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-slice-all").assertIsEnabled().performClick()
+        compose.waitUntil(120000) { compose.onAllNodesWithTag("project-plate-results").fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithTag("project-slice-error").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithTag("project-slice-error").assertCountEquals(0)
+        val outputs = File(context().cacheDir, "sliced-output").listFiles().orEmpty().map { it.name }.sorted()
+        assertEquals("one result per plate: $outputs", 2, outputs.count { it.startsWith("project-") && it.endsWith(".gcode") })
+        compose.onNodeWithTag("project-plate-result-1").performClick()
+        compose.onNodeWithText("Sliced result").assertExists()
+        compose.onNodeWithTag("project-slice-review-continue").assertExists()
+    }
+
+    @Test fun aRegionCanBeDraggedAcrossTheModelWithOneFinger() {
+        val (projectId, objectIds) = seedProject("RegionDragProject", 1)
+        runBlocking {
+            val vm = ProjectViewModel(context(), AppDatabase.get(context()).projectDao())
+            vm.loadProject(projectId)
+            vm.setVolumes(objectIds[0], listOf(ShapeVolume(VolumeKind.SUPPORT_BLOCKER, VolumeShape.BOX, floatArrayOf(10f, 10f, 10f), floatArrayOf(6f, 6f, 6f))))
+        }
+        openScreen(projectId)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("project-object-${objectIds[0]}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-object-${objectIds[0]}").performScrollTo()
+        compose.onNodeWithTag("project-object-${objectIds[0]}").onChildren().filterToOne(hasText("Select")).performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("Selected").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("project-region-move-0").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-region-grow-0").performScrollTo().performClick()
+        val grown = System.currentTimeMillis() + 8000
+        while (System.currentTimeMillis() < grown && VolumeCodec.decode(dbObject(projectId, objectIds[0]).volumesJson).single().size[0] <= 6.01f) Thread.sleep(200)
+        assertEquals(7.2f, VolumeCodec.decode(dbObject(projectId, objectIds[0]).volumesJson).single().size[0], 0.01f)
+        compose.onNodeWithTag("project-region-move-0").performScrollTo().performClick()
+        compose.onNodeWithTag("project-workspace").performScrollTo().performTouchInput { swipe(Offset(width * 0.45f, height * 0.5f), Offset(width * 0.65f, height * 0.4f), durationMillis = 500) }
+        val start = floatArrayOf(10f, 10f)
+        val deadline = System.currentTimeMillis() + 8000
+        var moved = start
+        while (System.currentTimeMillis() < deadline && moved.contentEquals(start)) { Thread.sleep(200); moved = VolumeCodec.decode(dbObject(projectId, objectIds[0]).volumesJson).single().center.copyOf(2) }
+        assertFalse("expected the drag to move the region", moved.contentEquals(start))
+        assertEquals("the drag moves the region within its horizontal plane only", 10f, VolumeCodec.decode(dbObject(projectId, objectIds[0]).volumesJson).single().center[2], 1e-3f)
+    }
+
     @Test fun undoAndRedoButtonsRestoreARemovedObject() {
         val (projectId, objectIds) = seedProject("UndoProject", 2)
         openScreen(projectId)

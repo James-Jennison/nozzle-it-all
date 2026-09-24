@@ -68,7 +68,7 @@ import java.io.File
  */
 private fun fmtMm(v: Float): String = if (v == v.toLong().toFloat()) v.toLong().toString() else "%.1f".format(v)
 
-private enum class PickMode { FACE, MEASURE, PAINT }
+private enum class PickMode { FACE, MEASURE, PAINT, REGION }
 
 // Editable form state of one modifier/blocker region (all text, validated on save). Positions are mm from the object's centre.
 private data class RegionDraft(
@@ -107,6 +107,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var brushRadiusMm by remember(projectId, newProjectName) { mutableStateOf(3f) }
     var lastDab by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
     var regionDialog by remember(projectId, newProjectName) { mutableStateOf<RegionDraft?>(null) }
+    var movingRegion by remember(projectId, newProjectName) { mutableStateOf<Int?>(null) }
+    var regionGrab by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
     var overlays by remember(projectId, newProjectName) { mutableStateOf<Map<String, List<OverlayGroup>>>(emptyMap()) }
     val overlayCache = remember(projectId, newProjectName) { HashMap<String, Triple<Pair<String?, String?>, MeshGeometry, List<OverlayGroup>>>() }
     val discCache = remember(projectId, newProjectName) { HashMap<String, Pair<MeshGeometry, List<PaintDisc?>>>() }
@@ -133,6 +135,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     val objects by vm.objects.collectAsState()
     val undoState by vm.undoState.collectAsState()
     val plates by vm.plates.collectAsState()
+    val allProjectObjects by vm.allObjects.collectAsState()
     val activePlateId by vm.activePlateId.collectAsState()
     var moveMenuOpen by remember { mutableStateOf(false) }
     var exportMessage by remember { mutableStateOf<String?>(null) }
@@ -252,6 +255,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     }
     var sliceError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var sliced by remember(projectId, newProjectName) { mutableStateOf<File?>(null) }
+    var plateResults by remember(projectId, newProjectName) { mutableStateOf<Map<String, File>>(emptyMap()) }
+    var plateProgressLabel by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var slicedToolpath by remember(projectId, newProjectName) { mutableStateOf<Toolpath?>(null) }
     var toolpathError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var gcodeStats by remember(projectId, newProjectName) { mutableStateOf<GcodeStats?>(null) }
@@ -330,6 +335,24 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         scope.launch { vm.addPaintStrokes(id, listOf(PaintStroke(paintKind, g.objectFrame(from), nd, localRadius))) }
     }
 
+    // Drag a region across the selected model: the ray is intersected with the horizontal plane through the region's
+    // centre (in the object's frame, where a Z rotation and uniform scale keep that plane horizontal), and the grab
+    // point keeps its offset from the centre so the region does not jump under the finger.
+    fun handleRegionDrag(origin: FloatArray, dir: FloatArray, start: Boolean) {
+        val id = selectedId ?: return; val index = movingRegion ?: return
+        val obj = objects.find { it.id == id } ?: return; val g = geometry[id] ?: return
+        val volumes = VolumeCodec.decode(obj.volumesJson); val v = volumes.getOrNull(index) ?: return
+        val (lo, ld) = PlacedFrame(obj.transform(), g.origin).rayToLocal(origin, dir)
+        if (kotlin.math.abs(ld[2]) < 1e-6f) return
+        val zPlane = v.center[2] + g.origin[2]
+        val t = (zPlane - lo[2]) / ld[2]; if (t <= 0f) return
+        val hitX = lo[0] + ld[0] * t - g.origin[0]; val hitY = lo[1] + ld[1] * t - g.origin[1]
+        if (start || regionGrab == null) regionGrab = floatArrayOf(hitX - v.center[0], hitY - v.center[1])
+        val grab = regionGrab ?: return
+        val moved = v.copy(center = floatArrayOf(hitX - grab[0], hitY - grab[1], v.center[2]))
+        scope.launch { vm.setVolumes(id, volumes.mapIndexed { i, x -> if (i == index) moved else x }) }
+    }
+
     fun handleRayTap(origin: FloatArray, dir: FloatArray) {
         val mode = pickMode ?: return
         val hit = pickTriangle(origin, dir)
@@ -340,7 +363,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 pickMode = null; selectedId = obj.id
                 scope.launch { vm.replaceObjectMesh(obj.id, MeshEdit.layOnFace(mesh, MeshEdit.triangleNormal(mesh, h.triangle))); toolMessage = "Laid the tapped face flat on the bed." }
             }
-            PickMode.PAINT -> {}
+            PickMode.PAINT, PickMode.REGION -> {}
             PickMode.MEASURE -> {
                 val world = PlacedFrame(obj.transform(), geometry.getValue(obj.id).origin).toWorld(h.point)
                 val a = measurePointA
@@ -354,56 +377,82 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         }
     }
 
-    fun startSlicing() {
-        val infill = validateInfillPercent(infillText)
-        if (infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; return }
-        // Phase 5 (§16): a genuinely invalid configuration is caught here, before the native
-        // engine ever sees it - a blocking issue (a real machine limit) stops slicing outright;
-        // a non-blocking one (the bundled profile's own declared-but-not-hard-limit range) is
-        // still shown to the owner but doesn't stop them from proceeding.
-        val blockingIssue = validateSliceConfiguration(machineLimits, quality.layerHeightMm, filamentRange, vm.currentMaterial()).firstOrNull { it.blocking }
-        if (blockingIssue != null) { customizeError = blockingIssue.message; return }
-        customizeError = null
-        sliced = null; sliceError = null; stagedFilename = null
-        stage = ProjectEditorStage.SLICING
+    // Slices one plate's objects; shared by "Slice" (the active plate) and "Slice all plates". [tag] keeps the
+    // output next to other plates' results instead of replacing them.
+    suspend fun sliceOnePlate(plateObjects: List<ProjectObject>, tag: String?): SliceOutcome {
+        val infill = validateInfillPercent(infillText) ?: return SliceOutcome.Failed("Enter an infill percentage between 0 and 100.")
+        val target = profile ?: return SliceOutcome.Failed("Select a printer first.")
         val basicSettings = BasicSliceSettings(quality, infill, supportMode, adhesionBrim)
-        // Real geometry-driven decision (AUTO mode only consults this) - true if *any* object on
-        // the plate has a real overhang, not just the selected one, since the whole plate slices
-        // together.
-        val needsSupport = objects.any { obj -> geometry[obj.id]?.let { meshNeedsSupport(it) } == true }
+        // AUTO support consults every object on this plate, since the whole plate slices together.
+        val needsSupport = plateObjects.any { obj -> geometry[obj.id]?.let { meshNeedsSupport(it) } == true }
+        // Kept as triples so a dropped (unparseable-URI) object can never desync the file list from the per-object
+        // tool assignments and extras below.
+        val slicableObjects = plateObjects.mapNotNull { obj -> Uri.parse(obj.sourceFileUri).path?.let { path -> Triple(obj, File(path), obj.transform()) } }
+        val objectsToSlice = slicableObjects.map { (_, file, transform) -> file to transform }
+        val (toolSlotIndices, slotMaterials) = multiToolSliceInputsFor(slicableObjects.map { (obj, _, _) -> obj }, toolCount)
+        // The project's material overrides temperatures on top of (not instead of) the basic settings; skipped for a
+        // multi-tool target, where slotMaterials carries each object's own material.
+        val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
+        val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
+            slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) }, outputTag = tag)
+        if (outcome is SliceOutcome.Success) {
+            // Calibration towers change a machine setting with height: patch the sliced plain G-code (not a Bambu bundle).
+            val cal = CalibrationSpec.decode(project?.calibration)
+            if (cal != null && target.kind != PrinterKind.BAMBU_LAB) withContext(Dispatchers.IO) { Calibration.applyToFile(outcome.gcode, cal) }
+        }
+        return outcome
+    }
+
+    fun validateBeforeSlicing(): Boolean {
+        val infill = validateInfillPercent(infillText)
+        if (infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; return false }
+        // A blocking issue (a real machine limit) stops slicing outright; a non-blocking one is shown but allowed.
+        val blockingIssue = validateSliceConfiguration(machineLimits, quality.layerHeightMm, filamentRange, vm.currentMaterial()).firstOrNull { it.blocking }
+        if (blockingIssue != null) { customizeError = blockingIssue.message; return false }
+        customizeError = null
+        sliced = null; sliceError = null; stagedFilename = null; plateResults = emptyMap()
+        stage = ProjectEditorStage.SLICING
+        return true
+    }
+
+    fun startSlicing() {
+        if (!validateBeforeSlicing()) return
         scope.launch {
             working = true; sliceStageLabel = "Slicing…"
-            val target = profile ?: run { working = false; sliceError = "Select a printer first."; return@launch }
-            // Kept as (ProjectObject, File, ModelTransform) triples, not split into two separately-
-            // filtered lists, so a dropped (unparseable-URI) object can never desync objectsToSlice
-            // from the per-object tool assignments below - both are always built from this same,
-            // already-filtered list.
-            val slicableObjects = objects.mapNotNull { obj -> Uri.parse(obj.sourceFileUri).path?.let { path -> Triple(obj, File(path), obj.transform()) } }
-            val objectsToSlice = slicableObjects.map { (_, file, transform) -> file to transform }
-            // Phase 8 follow-up (§11, §16, WO-28): real per-object tool assignment - see
-            // multiToolSliceInputsFor's own doc comment (ToolSlots.kt) for the real 1-based
-            // convention and slot-material fallback. Pure/extracted so it's directly unit-
-            // testable without a Compose test harness.
-            val (toolSlotIndices, slotMaterials) = multiToolSliceInputsFor(slicableObjects.map { (obj, _, _) -> obj }, toolCount)
-            // Phase 3 (§11): the project's material (if one was picked) overrides the same real
-            // nozzle_temperature/bed-plate-temperature config keys the basic settings already
-            // use this mechanism for - applied on top of, not instead of, layer height/infill/
-            // supports, so picking a material never silently resets the rest of these settings.
-            // Skipped for a multi-tool target: slotMaterials above already carries each object's
-            // own real material into sliceProject's own multi-slot config generation instead.
-            val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
-            when (val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
-                slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) })) {
-                is SliceOutcome.Success -> {
-                    // Calibration towers change a machine setting with height: patch the sliced plain G-code (not a Bambu bundle).
-                    val cal = CalibrationSpec.decode(project?.calibration)
-                    if (cal != null && target.kind != PrinterKind.BAMBU_LAB) withContext(Dispatchers.IO) { Calibration.applyToFile(outcome.gcode, cal) }
-                    sliced = outcome.gcode; working = false
-                }
+            when (val outcome = sliceOnePlate(objects, null)) {
+                is SliceOutcome.Success -> { sliced = outcome.gcode; working = false }
                 is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = outcome.reason }
                 is SliceOutcome.Failed -> { working = false; sliceError = outcome.message }
                 SliceOutcome.Cancelled -> { working = false; stage = ProjectEditorStage.EDIT }
             }
+        }
+    }
+
+    // Slices every plate that has objects, one after another, keeping each plate's result; the review then lets the
+    // owner pick which plate's result to look at and print.
+    fun startSlicingAllPlates() {
+        if (!validateBeforeSlicing()) return
+        val originalPlate = activePlateId
+        scope.launch {
+            working = true; sliceStageLabel = "Slicing…"
+            val results = LinkedHashMap<String, File>()
+            withContext(Dispatchers.IO) { SlicingCoordinator.clearOutputs(context.applicationContext) }
+            val queue = plates.filter { p -> vm.allObjects.value.any { vm.plateIdOf(it) == p.id } }
+            for ((i, plate) in queue.withIndex()) {
+                vm.selectPlate(plate.id)
+                sliceStageLabel = "Slicing…"
+                plateProgressLabel = "${plate.name} (${i + 1}/${queue.size})"
+                when (val outcome = sliceOnePlate(vm.objects.value, plate.id)) {
+                    is SliceOutcome.Success -> results[plate.id] = outcome.gcode
+                    is SliceOutcome.FirmwareBlocked -> { working = false; sliceError = "${plate.name}: ${outcome.reason}"; plateProgressLabel = null; return@launch }
+                    is SliceOutcome.Failed -> { working = false; sliceError = "${plate.name}: ${outcome.message}"; plateProgressLabel = null; return@launch }
+                    SliceOutcome.Cancelled -> { working = false; plateProgressLabel = null; stage = ProjectEditorStage.EDIT; return@launch }
+                }
+            }
+            plateProgressLabel = null
+            originalPlate?.let { vm.selectPlate(it) }
+            plateResults = results
+            sliced = results.values.firstOrNull(); working = false
         }
     }
 
@@ -597,7 +646,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                 collidingIds = collidingIds,
                                                 interactionMode = interactionMode,
                                                 onRayTap = if (pickMode == PickMode.FACE || pickMode == PickMode.MEASURE) { o, d -> handleRayTap(o, d) } else null,
-                                                onRayDrag = if (pickMode == PickMode.PAINT) { o, d, start -> handlePaintDrag(o, d, start) } else null,
+                                                onRayDrag = when (pickMode) { PickMode.PAINT -> { o, d, start -> handlePaintDrag(o, d, start) }; PickMode.REGION -> { o, d, start -> handleRegionDrag(o, d, start) }; else -> null },
                                             )
                                             // WO-30: the selected object's real, current bounding
                                             // box in mm - (max-min) per axis on its loaded
@@ -718,7 +767,18 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                 regionDialog = RegionDraft(i, v.kind, v.shape, fmtMm(v.center[0] - c[0]), fmtMm(v.center[1] - c[1]), fmtMm(v.center[2] - c[2]), fmtMm(v.size[0]), fmtMm(v.size[1]), fmtMm(v.size[2]),
                                                     v.overrides["sparse_infill_density"]?.removeSuffix("%").orEmpty(), v.overrides["wall_loops"].orEmpty())
                                             }, modifier = Modifier.testTag("project-region-edit-$i")) { Text("Edit") }
-                                            TextButton({ scope.launch { vm.setVolumes(id, volumes.filterIndexed { j, _ -> j != i }) } }, modifier = Modifier.testTag("project-region-delete-$i")) { Text("Delete") }
+                                            TextButton({
+                                                regionGrab = null
+                                                if (pickMode == PickMode.REGION && movingRegion == i) { pickMode = null; movingRegion = null; toolMessage = null }
+                                                else { pickMode = PickMode.REGION; movingRegion = i; toolMessage = "Drag on the model to move this region." }
+                                            }, modifier = Modifier.testTag("project-region-move-$i")) { Text(if (pickMode == PickMode.REGION && movingRegion == i) "Done" else "Move") }
+                                            for ((label, factor, tag) in listOf(Triple("−", 1f / 1.2f, "shrink"), Triple("+", 1.2f, "grow"))) {
+                                                TextButton({
+                                                    val resized = v.copy(size = floatArrayOf((v.size[0] * factor).coerceIn(0.5f, 1000f), (v.size[1] * factor).coerceIn(0.5f, 1000f), (v.size[2] * factor).coerceIn(0.5f, 1000f)))
+                                                    scope.launch { vm.setVolumes(id, volumes.mapIndexed { j, x -> if (j == i) resized else x }) }
+                                                }, modifier = Modifier.testTag("project-region-$tag-$i")) { Text(label) }
+                                            }
+                                            TextButton({ if (movingRegion == i) { pickMode = null; movingRegion = null }; scope.launch { vm.setVolumes(id, volumes.filterIndexed { j, _ -> j != i }) } }, modifier = Modifier.testTag("project-region-delete-$i")) { Text("Delete") }
                                         }
                                     }
                                     OutlinedButton({ regionDialog = RegionDraft(-1) }, enabled = g != null && volumes.size < VolumeCodec.MAX_VOLUMES, modifier = Modifier.testTag("project-region-add")) { Text("+ Add region") }
@@ -804,6 +864,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             }
                         }
                     }
+                    if (plates.count { p -> allProjectObjects.any { vm.plateIdOf(it) == p.id } } > 1) OutlinedButton({ startSlicingAllPlates() }, enabled = profile != null && acceptsSlicedGcode && collidingIds.isEmpty(), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("project-slice-all")) { Text("Slice all plates") }
                     Button({ startSlicing() }, enabled = objects.isNotEmpty() && profile != null && collidingIds.isEmpty() && acceptsSlicedGcode && validationIssues.none { it.blocking }, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice")) { Text(if (plates.size > 1) "Slice ${plates.firstOrNull { it.id == activePlateId }?.name ?: "plate"}" else "Slice") }
                 }
                 stage == ProjectEditorStage.SLICING && sliced == null -> {
@@ -811,7 +872,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                         if (working) {
                             if (sliceStageLabel == "Slicing…") {
                                 LinearProgressIndicator(progress = { sliceProgress / 100f }, modifier = Modifier.fillMaxWidth().testTag("project-slice-progress"))
-                                Text("$sliceStageLabel $sliceProgress%")
+                                Text("$sliceStageLabel $sliceProgress%" + (plateProgressLabel?.let { " · $it" } ?: ""), modifier = Modifier.testTag("project-slice-status"))
                                 OutlinedButton({ SlicingCoordinator.cancel() }, modifier = Modifier.testTag("project-slice-cancel")) { Text("Cancel") }
                             } else { CircularProgressIndicator(); Text(sliceStageLabel) }
                         }
@@ -821,6 +882,11 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 stage == ProjectEditorStage.SLICING -> {
                     Column(Modifier.weight(1f).fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Sliced result", style = MaterialTheme.typography.titleSmall)
+                        if (plateResults.size > 1) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-plate-results")) {
+                            plates.filter { it.id in plateResults }.forEachIndexed { i, p ->
+                                FilterChip(sliced == plateResults[p.id], { sliced = plateResults[p.id]; stagedFilename = null }, label = { Text(p.name) }, modifier = Modifier.testTag("project-plate-result-$i"))
+                            }
+                        }
                         gcodeStats?.let { s ->
                             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.testTag("project-slice-stats")) {
                                 s.printTime?.let { Text(it) }

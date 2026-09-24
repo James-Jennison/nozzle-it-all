@@ -43,5 +43,8 @@ attestations. It has not run yet: it needs a tag push and the signing secrets on
   build and driven by hand: launch, Files > Projects, create a calibration project (Room, generated mesh, native mesh load),
   Slice (JNI under obfuscation, cancel/progress code, calibration post-processing: 255 layers, Z 51.0 mm), G-code preview and
   stats. No crash, no UnsatisfiedLinkError / NoSuchMethodError / ClassNotFoundException in logcat.
-- **Not exercised under the shipped minification:** Bambu MQTT/TLS and FTPS (needs a Bambu printer), jsch/BouncyCastle OpenPGP
-  (U1 enrolment), the Glance home-screen widget, and Tink writes beyond the startup read of saved printers.
+- **Self-check on the obfuscated release build** (Settings > Run self-check; loopback/local only): initially 3 of 9 FAILED
+  (BouncyCastle digests, jsch key pairs, HiveMQ/Netty init) - real shipped-build bugs, fixed with keep rules. All 9 pass now
+  (release APK 77.4 -> 85.1 MB). It shows the libraries load and fail cleanly; it does not prove a real Bambu or U1 session works.
+- **Not exercised under the shipped minification:** a real Bambu printer session (MQTT/FTPS) and a real U1 SSH enrolment
+  (need the printers), and a placed Glance widget (the check only asks Glance for its widget list).

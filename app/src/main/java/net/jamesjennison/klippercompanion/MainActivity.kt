@@ -259,6 +259,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // is ever non-null at a time.
     var editingProjectId by remember { mutableStateOf<String?>(null) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    var selfCheckRunning by remember { mutableStateOf(false) }
+    var selfCheckResults by remember { mutableStateOf<List<SelfCheckResult>>(emptyList()) }
+    var interruptedSliceNotice by remember { mutableStateOf(SlicingCoordinator.consumeInterruptedSlice(context.applicationContext)) }
     var calibrationDialog by remember { mutableStateOf(false) }
     var calibrationKind by remember { mutableStateOf(CalibrationKind.TEMPERATURE) }
     var calStart by remember { mutableStateOf("230") }
@@ -400,6 +403,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             if((tab == 0 && !overview) || tab == 4) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
+            if(tab == 4) item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    OutlinedButton({ selfCheckRunning = true; uiScope.launch { selfCheckResults = SelfCheck.run(context); selfCheckRunning = false } }, enabled = !selfCheckRunning, modifier = Modifier.testTag("run-self-check")) { Text(if(selfCheckRunning) "Checking…" else "Run self-check") }
+                    selfCheckResults.forEachIndexed { i, r -> Text((if(r.ok) "PASS  " else "FAIL  ") + r.name + " - " + r.detail, style = MaterialTheme.typography.bodySmall, color = if(r.ok) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error, modifier = Modifier.testTag("self-check-$i")) }
+                }
+            }
             if(tab == 4) item { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilterChip(backgroundAlertsEnabled, {setBackgroundAlertsEnabled(!backgroundAlertsEnabled)}, label={Text("Background print alerts")}, modifier=Modifier.testTag("background-alerts-toggle"))
                 Text("Notifies you when a saved printer finishes, errors or goes offline while the app isn't open. Shows a persistent low-priority notification while active.", style = MaterialTheme.typography.bodySmall)
@@ -785,6 +794,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // real ProjectViewModel.newProject() call happens inside ProjectEditorScreen itself (kept
     // there, not here, so the create-and-persist step and the editor that immediately follows it
     // share one real code path rather than two).
+    if(interruptedSliceNotice) {
+        AlertDialog(onDismissRequest = { interruptedSliceNotice = false }, title = { Text("Slicing was interrupted") },
+            text = { Text("The last slice didn't finish - Android most likely stopped the app to free memory. Your projects are saved. Try fewer or smaller objects, a larger layer height, or close other apps.", modifier = Modifier.testTag("interrupted-slice-text")) },
+            confirmButton = { TextButton({ interruptedSliceNotice = false }, modifier = Modifier.testTag("interrupted-slice-ok")) { Text("OK") } })
+    }
     if(calibrationDialog) {
         val spec = if(calibrationKind == CalibrationKind.TEMPERATURE) {
             val start = calStart.trim().toIntOrNull(); val step = calStep.trim().toIntOrNull(); val sections = calSections.trim().toIntOrNull()

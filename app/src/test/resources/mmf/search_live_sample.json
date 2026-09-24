@@ -1,0 +1,310 @@
+{
+ "total_count": 3821,
+ "items": [
+  {
+   "id": 39132,
+   "url": "https://www.myminifactory.com/object/3d-print-flower-pot-low-poly-39132",
+   "name": "Flower Pot - Low Poly",
+   "visibility": 2,
+   "visibility_name": "public",
+   "listed": true,
+   "status": 2,
+   "status_name": "approved",
+   "description": "Just a simply flower pot in low poly. (Scale at 125% on the photo)  3D printed w",
+   "description_html": "<p>Just a simply flower pot in low poly. (Scale at 125% on the photo)</p>\r\n<p>3D",
+   "printing_details": null,
+   "printing_details_html": null,
+   "featured": false,
+   "support": false,
+   "complexity": 1,
+   "complexity_name": "very easy",
+   "dimensions": "100 x 80mm",
+   "material_quantity": "80",
+   "images": [
+    {
+     "id": 281498,
+     "upload_id": "15a60d95c579af",
+     "is_primary": true,
+     "original": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/low-poly-pot.jpg",
+      "width": null,
+      "height": null
+     },
+     "tiny": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/70X70-low-poly-pot.jpg",
+      "width": 70,
+      "height": 70
+     },
+     "thumbnail": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/230X230-low-poly-pot.jpg",
+      "width": 230,
+      "height": 230
+     },
+     "standard": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/720X720-low-poly-pot.jpg",
+      "width": 720,
+      "height": 720
+     },
+     "large": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/1000X1000-low-poly-pot.jpg",
+      "width": 1000,
+      "height": 1000
+     },
+     "is_print_image_selected": null
+    },
+    {
+     "id": 211783,
+     "upload_id": null,
+     "is_primary": false,
+     "original": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/photo-2.jpg",
+      "width": 0,
+      "height": 0
+     },
+     "tiny": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/70X70-photo-2.jpg",
+      "width": 70,
+      "height": 70
+     },
+     "thumbnail": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/230X230-photo-2.jpg",
+      "width": 230,
+      "height": 230
+     },
+     "standard": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/720X720-photo-2.jpg",
+      "width": 720,
+      "height": 720
+     },
+     "large": {
+      "url": "https://assets.myminifactory.com/object-images/59537811d326a/images/1000X1000-photo-2.jpg",
+      "width": 1000,
+      "height": 1000
+     },
+     "is_print_image_selected": null
+    }
+   ],
+   "views": 131301,
+   "likes": 4093,
+   "published_at": "2017-06-28T14:34:49+00:00",
+   "tags": [
+    "flower",
+    "pot",
+    "lowpoly"
+   ],
+   "licenses": [
+    {
+     "type": "share",
+     "value": true
+    },
+    {
+     "type": "attribute",
+     "value": true
+    },
+    {
+     "type": "mention",
+     "value": true
+    },
+    {
+     "type": "remix",
+     "value": false
+    },
+    {
+     "type": "commercial-use",
+     "value": false
+    },
+    {
+     "type": "exclusivity",
+     "value": true
+    },
+    {
+     "type": "store",
+     "value": false
+    }
+   ],
+   "filters": [
+    "threedViewer"
+   ],
+   "file_mode": 0,
+   "files": {
+    "total_count": 1,
+    "items": [
+     {
+      "id": 146852,
+      "filename": "low-poly-pot-designed-by-additae.stl",
+      "description": "low-poly-pot-designed-by-additae.stl",
+      "status": 2,
+      "status_name": "approved",
+      "size": 11884,
+      "patch_url": "https://www.myminifactory.com/api/v2/files/146852",
+      "thumbnail_url": "https://assets.myminifactory.com/object-images/59537811d326a/images/thumbnail-low-poly-pot-designed-by-additae.png",
+      "download_url": null,
+      "created_at": "2018-01-18T05:28:57+00:00",
+      "viewer_url": "https://www.myminifactory.com/object/viewer/59537811d326a/low-poly-pot-designed-by-additae.stl?embedded=0",
+      "render360_urls": []
+     }
+    ]
+   },
+   "designer": {
+    "id": 177788,
+    "username": "ClementCrd",
+    "name": "Clement C.",
+    "is_admin": false,
+    "is_premium": false,
+    "is_store_manager": false,
+    "isHobbyHunterPicked": false,
+    "profile_url": "https://www.myminifactory.com/users/ClementCrd",
+    "avatar_url": "https://images2.myminifactory.com/insecure/rt:fill-down/w:400/h:400/el:1/plain/https://dl4.myminifactory.com/public-assets/profile-images/e0c3356996cb4073918fc14285eb41110b1387ce.jpg",
+    "avatar_thumbnail_url": "https://images2.myminifactory.com/insecure/rt:fill-down/w:200/h:200/el:1/plain/https://dl4.myminifactory.com/public-assets/profile-images/e0c3356996cb4073918fc14285eb41110b1387ce.jpg",
+    "avatar_small_thumbnail_url": "https://images2.myminifactory.com/insecure/rt:fill-down/w:50/h:50/el:1/plain/https://dl4.myminifactory.com/public-assets/profile-images/e0c3356996cb4073918fc14285eb41110b1387ce.jpg",
+    "cover_url": "https://dl4.myminifactory.com/public-assets/profile-cover/b93c680d79abef3865fc37c49bf3b515625e7610.jpg",
+    "website": "https://www.behance.net/clementcourade",
+    "followings": 411,
+    "followers": 1442,
+    "likes": 14156,
+    "views": 60383,
+    "objects": 38,
+    "total_prints": 3,
+    "total_collections": 0,
+    "printing_since": {
+     "date": "2017-01-01 00:00:00.000000",
+     "timezone_type": 3,
+     "timezone": "UTC"
+    }
+   },
+   "license": "Download - Share - Maintain License - Credit - Noremix - Noncommercial - Exclusive"
+  },
+  {
+   "id": 737813,
+   "url": "https://www.myminifactory.com/object/3d-print-higatsu-oni-boss-presupported-free-737813",
+   "name": "Higatsu, Oni Boss | PRESUPPORTED | Free",
+   "visibility": 2,
+   "visibility_name": "public",
+   "listed": true,
+   "status": 4,
+   "status_name": "deleted",
+   "description": "Free for one week only. Model will vanish at the end of the week.If you like the",
+   "description_html": "<p>Free for one week only. Model will vanish at the end of the week.<br />If you",
+   "printing_details": null,
+   "printing_details_html": null,
+   "featured": false,
+   "support": true,
+   "complexity": null,
+   "complexity_name": null,
+   "dimensions": null,
+   "material_quantity": null,
+   "images": [
+    {
+     "id": 3293435,
+     "upload_id": "695769ae9644e3.99528032",
+     "is_primary": true,
+     "original": {
+      "url": "https://assets.myminifactory.com/object-images/69576899736c05.20777910/images/free mf.png",
+      "width": null,
+      "height": null
+     },
+     "tiny": {
+      "url": "https://assets.myminifactory.com/object-images/69576899736c05.20777910/images/70X70-free mf.png",
+      "width": 70,
+      "height": 70
+     },
+     "thumbnail": {
+      "url": "https://assets.myminifactory.com/object-images/69576899736c05.20777910/images/230X230-free mf.png",
+      "width": 230,
+      "height": 230
+     },
+     "standard": {
+      "url": "https://assets.myminifactory.com/object-images/69576899736c05.20777910/images/720X720-free mf.png",
+      "width": 720,
+      "height": 720
+     },
+     "large": {
+      "url": "https://assets.myminifactory.com/object-images/69576899736c05.20777910/images/1000X1000-free mf.png",
+      "width": 1000,
+      "height": 1000
+     },
+     "is_print_image_selected": false
+    }
+   ],
+   "views": 2410,
+   "likes": 250,
+   "published_at": "2026-01-02T06:54:35+00:00",
+   "tags": [
+    "dragon",
+    "dragons",
+    "dungeons"
+   ],
+   "licenses": [
+    {
+     "type": "share",
+     "value": true
+    },
+    {
+     "type": "attribute",
+     "value": true
+    },
+    {
+     "type": "mention",
+     "value": true
+    },
+    {
+     "type": "remix",
+     "value": true
+    },
+    {
+     "type": "commercial-use",
+     "value": false
+    },
+    {
+     "type": "exclusivity",
+     "value": false
+    },
+    {
+     "type": "store",
+     "value": false
+    }
+   ],
+   "filters": [],
+   "file_mode": 1,
+   "files": {
+    "total_count": 1,
+    "items": [
+     {
+      "id": 488873,
+      "filename": "Higatsu, Oni Boss.zip",
+      "path": "Higatsu, Oni Boss.zip",
+      "size": "222462537",
+      "created_at": "2026-01-02T06:46:06+00:00",
+      "download_url": "https://www.myminifactory.com/download/737813?archive_id=488873"
+     }
+    ]
+   },
+   "designer": {
+    "id": 315220,
+    "username": "DragonTrappersLodge",
+    "name": "The Dragon Trappers Lodge",
+    "is_admin": false,
+    "is_premium": false,
+    "is_store_manager": true,
+    "isHobbyHunterPicked": false,
+    "is_campaign_manager": true,
+    "profile_url": "https://www.myminifactory.com/users/DragonTrappersLodge",
+    "avatar_url": "https://images2.myminifactory.com/insecure/rt:fill-down/w:400/h:400/el:1/plain/https://dl4.myminifactory.com/public-assets/profile-images/678db57e764488befaceb82b5af134824452334f.png",
+    "avatar_thumbnail_url": "https://images2.myminifactory.com/insecure/rt:fill-down/w:200/h:200/el:1/plain/https://dl4.myminifactory.com/public-assets/profile-images/678db57e764488befaceb82b5af134824452334f.png",
+    "avatar_small_thumbnail_url": "https://images2.myminifactory.com/insecure/rt:fill-down/w:50/h:50/el:1/plain/https://dl4.myminifactory.com/public-assets/profile-images/678db57e764488befaceb82b5af134824452334f.png",
+    "cover_url": "https://dl4.myminifactory.com/public-assets/profile-cover/611d1d4f2bbb573a34df6e09ed914303534b5049.jpg",
+    "website": "https://www.patreon.com/dragontrapperslodge/",
+    "followings": 12,
+    "followers": 22540,
+    "likes": 152391,
+    "views": 1329507,
+    "objects": 1557,
+    "total_prints": 0,
+    "total_collections": 30,
+    "total_objects_store": 1532,
+    "printing_since": null
+   },
+   "license": "Creative Commons - Attribution - Noncommercial - ShareAlike"
+  }
+ ]
+}

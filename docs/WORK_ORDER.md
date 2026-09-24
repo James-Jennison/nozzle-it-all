@@ -2425,7 +2425,15 @@ P28/M7 sections for what each one built and its commit hash.)*
       files, forged sign-in state rejected, tab and deep-link routing, manifest scope); all 10 self-checks pass on the obfuscated
       release build. Two real bugs fixed on the way: overlapping result pages crashed the list (now de-duplicated by id), and result
       cards / license lists were not merged for accessibility.
-    - **NOT verified - no live MyMiniFactory call has ever been made** (that needs a developer client only the owner can create):
+    - **Live check done later the same day (owner's API key, client `nozzle_it_all`):** search, sort, remix filter, paging (per_page up
+      to 60), object detail, files, and bad-key (401) / missing-model (404) behaviour all match the docs; `MmfLiveDeviceTest` (6 tests, skipped
+      unless the build has `MMF_API_KEY`) passes against the real service, including the real Discover screen. The real API differs
+      from the OpenAPI file in two ways that were fixed: `files` is an object `{total_count, items}` (not an array), and deleted models
+      still appear in results (dropped). Confirmed: with an API key only ~2% of files carry a `download_url` (20 of 868 sampled) and an
+      unauthenticated download link returns 404, so downloads really do need the OAuth sign-in. `https://nozzleitall.com/mmf-auth` is
+      deployed. **Still unverified: an actual sign-in** (needs the owner's MyMiniFactory login: the authorize endpoint accepts the client and
+      shows its login page, but does not check the redirect address until after login), the mobile-login exchange, and a real file download.
+    - **(Superseded) as first written - no live MyMiniFactory call had been made** (that needs a developer client only the owner can create):
       real response shapes beyond the OpenAPI file, the search query syntax, rate limits, what hosts `download_url` really points
       at, whether the sign-in redirect `nozzleitall://mmf-auth` is accepted (it must be registered on the client), and whether
       MyMiniFactory's terms allow shipping one shared API key in the app (the user-supplied-key path avoids that). The meaning of the

@@ -1,0 +1,82 @@
+package net.jamesjennison.klippercompanion
+
+import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import net.jamesjennison.klippercompanion.project.AppDatabase
+import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+// Talks to the REAL MyMiniFactory API. Runs only when the build was given MMF_API_KEY (gradle property/environment);
+// otherwise every test is skipped, so CI and other machines are unaffected. Never prints the key.
+@RunWith(AndroidJUnit4::class)
+class MmfLiveDeviceTest {
+    @get:Rule val compose = createComposeRule()
+    private val ctx get() = InstrumentationRegistry.getInstrumentation().targetContext
+    @Before fun needsKey() { assumeTrue("no MMF_API_KEY in this build", BuildConfig.MMF_API_KEY.isNotBlank()) }
+    private fun client() = MyMiniFactoryClient(BuildConfig.MMF_API_KEY)
+
+    @Test fun searchReturnsRealParsedModelsWithLicensesImagesAndDesigners() {
+        val page = client().search(MmfSearch("vase", perPage = 20))
+        assertTrue("real catalogue: ${page.totalCount}", page.totalCount > 100); assertTrue(page.items.isNotEmpty())
+        page.items.forEach { o ->
+            assertTrue(o.name.isNotBlank()); assertTrue(o.url!!.startsWith("https://www.myminifactory.com/"))
+            assertTrue("every result has license terms", o.license.terms.isNotEmpty())
+            assertNotNull(o.designer)
+        }
+        assertTrue("most results have a cover image", page.items.count { it.coverThumbnail != null } >= page.items.size / 2)
+        assertTrue("files come with each result", page.items.any { it.files.any { f -> f.isModel } })
+    }
+
+    @Test fun sortFiltersAndPagingChangeTheRealResults() {
+        val popular = client().search(MmfSearch("dragon", perPage = 10, sort = MmfSort.POPULARITY)).items.map { it.id }
+        val newest = client().search(MmfSearch("dragon", perPage = 10, sort = MmfSort.DATE)).items.map { it.id }
+        assertNotEquals("sorting must matter", popular, newest)
+        val page2 = client().search(MmfSearch("dragon", page = 2, perPage = 10, sort = MmfSort.POPULARITY)).items.map { it.id }
+        assertTrue("page 2 continues where page 1 stopped", page2.intersect(popular.toSet()).size < popular.size)
+        val remixable = client().search(MmfSearch("dragon", perPage = 20, remixAllowed = true)).items
+        assertTrue("the remix filter returns only remixable models", remixable.isNotEmpty() && remixable.all { it.license.terms[MmfLicenseTerm.REMIX] == true })
+    }
+
+    @Test fun detailAndFilesEndpointsAgreeWithSearch() {
+        val hit = client().search(MmfSearch("vase", perPage = 5)).items.first { it.files.isNotEmpty() }
+        val detail = client().objectDetail(hit.id)
+        assertEquals(hit.name, detail.name)
+        val files = client().objectFiles(hit.id)
+        assertTrue(files.items.isNotEmpty()); assertEquals(detail.files.map { it.id }.toSet(), files.items.map { it.id }.toSet())
+        assertTrue(detail.attribution().contains(hit.url!!))
+    }
+
+    @Test fun badKeysAndMissingModelsAreReportedInPlainWords() {
+        assertThrows(MmfException.Unauthorized::class.java) { MyMiniFactoryClient("notarealkey0000").search(MmfSearch("a")) }
+        assertThrows(MmfException.NotFound::class.java) { client().objectDetail(999_999_999) }
+    }
+
+    @Test fun downloadingWithoutSignInIsRefusedBeforeAnyNetworkTraffic() {
+        val f = client().search(MmfSearch("vase", perPage = 5)).items.flatMap { it.files }.first { it.isModel }
+        assertThrows(MmfException.Unauthorized::class.java) { client().download(f, "", java.io.File(ctx.cacheDir, "nope.stl")) }
+    }
+
+    @Test fun theDiscoverScreenBrowsesRealModelsAndShowsRealLicenseTerms() {
+        val prefs = ctx.getSharedPreferences("mmf-live-${System.nanoTime()}", 0)
+        val settings = MmfSettings(prefs, buildApiKey = BuildConfig.MMF_API_KEY, buildClientKey = "")
+        compose.setContent { CompanionTheme { DiscoverScreen(settings, AppDatabase.get(ctx).projectDao(), null, {}, {}, {}) } }
+        compose.waitUntil(30000) { compose.onAllNodes(hasTestTagStartingWith("mmf-result-")).fetchSemanticsNodes().isNotEmpty() || compose.onAllNodesWithTag("mmf-error").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithTag("mmf-error").assertCountEquals(0)
+        compose.onAllNodes(hasTestTagStartingWith("mmf-result-")).onFirst().performClick()
+        compose.waitUntil(30000) { compose.onAllNodesWithTag("mmf-detail-title").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mmf-attribution").assertTextContains("on MyMiniFactory - https://www.myminifactory.com/", substring = true)
+        compose.onNodeWithTag("mmf-license").assertExists()
+        compose.onNodeWithTag("mmf-download").assertIsNotEnabled() // signed out
+    }
+
+    private fun hasTestTagStartingWith(prefix: String) = SemanticsMatcher("test tag starts with $prefix") { n ->
+        n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag)?.startsWith(prefix) == true
+    }
+}

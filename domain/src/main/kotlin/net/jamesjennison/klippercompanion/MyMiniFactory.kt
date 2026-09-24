@@ -96,7 +96,13 @@ object MmfParser {
     fun parseObject(o: JSONObject): MmfObject? {
         val id = long(o, "id") ?: return null
         val name = text(o, "name", 200).ifBlank { return null }
-        fun <T> list(key: String, f: (JSONObject) -> T?): List<T> = o.optJSONArray(key)?.let { a -> (0 until a.length().coerceAtMost(MAX_ITEMS)).mapNotNull { a.optJSONObject(it)?.let(f) } } ?: emptyList()
+        // Search results include models the site has since deleted (seen live: the top "dragon" hit); only approved ones are usable.
+        text(o, "status_name", 40).let { if (it.isNotEmpty() && it != "approved") return null }
+        // The live API returns "files" as {"total_count":n,"items":[...]} (the OpenAPI file says array); accept both.
+        fun <T> list(key: String, f: (JSONObject) -> T?): List<T> {
+            val a = o.optJSONArray(key) ?: o.optJSONObject(key)?.optJSONArray("items") ?: return emptyList()
+            return (0 until a.length().coerceAtMost(MAX_ITEMS)).mapNotNull { a.optJSONObject(it)?.let(f) }
+        }
         val tags = o.optJSONArray("tags")?.let { a -> (0 until a.length().coerceAtMost(50)).mapNotNull { a.optString(it, "").let { t -> CONTROL.replace(t, "").trim().take(40).ifEmpty { null } } } } ?: emptyList()
         return MmfObject(id, name, httpsUrl(o, "url"), text(o, "description"), text(o, "printing_details"), parseDesigner(o.optJSONObject("designer")),
             list("images", ::parseImage), list("files", ::parseFile), tags, parseLicense(o), int(o, "likes"), int(o, "views"), text(o, "dimensions", 120),

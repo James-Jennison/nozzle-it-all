@@ -63,4 +63,24 @@ class MyMiniFactoryParserTest {
         val items = (1..500).joinToString(",") { """{"id":$it,"name":"n$it"}""" }
         assertEquals(200, MmfParser.parseSearch("""{"total_count":9999,"items":[$items]}""").items.size)
     }
+
+    // Structure captured from the live API (trimmed text): "files" is an object with items, and deleted models appear in results.
+    @Test fun parsesARealLiveSearchResponse() {
+        val json = javaClass.getResourceAsStream("/mmf/search_live_sample.json")!!.readBytes().decodeToString()
+        val page = MmfParser.parseSearch(json)
+        assertEquals("the deleted model is dropped, the approved one kept", 1, page.items.size)
+        val o = page.items.single()
+        assertTrue(o.files.isNotEmpty()); assertTrue(o.files.first().filename.isNotBlank()); assertTrue(o.files.first().isModel)
+        assertNull("the API omits the download link without OAuth", o.files.first().downloadUrl)
+        assertNotNull(o.coverThumbnail); assertTrue(o.coverThumbnail!!.startsWith("https://"))
+        assertNotNull(o.designer); assertTrue(o.url!!.startsWith("https://www.myminifactory.com/"))
+        assertTrue(o.license.terms.containsKey(MmfLicenseTerm.REMIX)); assertTrue(o.license.statements().isNotEmpty())
+        assertEquals(3821, page.totalCount)
+    }
+
+    @Test fun filesAsAPlainArrayStillWork() {
+        assertEquals(1, MmfParser.parseObject("""{"id":1,"name":"n","files":[{"id":2,"filename":"a.stl"}]}""").files.size)
+        assertEquals(1, MmfParser.parseObject("""{"id":1,"name":"n","files":{"total_count":1,"items":[{"id":2,"filename":"a.stl"}]}}""").files.size)
+        assertTrue("a non-approved model is not shown", MmfParser.parseSearch("""{"total_count":1,"items":[{"id":1,"name":"n","status_name":"pending"}]}""").items.isEmpty())
+    }
 }

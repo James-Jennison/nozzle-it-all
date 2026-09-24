@@ -75,7 +75,7 @@ class PrintMonitorService : Service() {
                 // reassociating on its own within a poll cycle or two must not page the owner
                 // every single time - see ConnectionDebounce's own doc comment.
                 val current = ConnectionDebounce.debounce(raw, previous[profile.address], failures)
-                PrintAlerts.detect(profile.address, profile.label, previous[profile.address], current).forEach(::notifyAlert)
+                PrintAlerts.detect(profile.address, profile.label, previous[profile.address], current, extended = getSharedPreferences("alerts", 0).getBoolean("extended", false)).forEach(::notifyAlert)
                 previous[profile.address] = current
             }
             updateStatusNotification(profiles, previous)

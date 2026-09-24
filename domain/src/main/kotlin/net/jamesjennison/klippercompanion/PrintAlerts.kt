@@ -5,7 +5,7 @@ package net.jamesjennison.klippercompanion
 // should not read as a real disconnect in either the foreground dashboard or a background alert.
 const val CONSECUTIVE_FAILURE_TOLERANCE = 2
 
-enum class AlertKind { COMPLETED, ERROR, CANCELLED, OFFLINE, BACK_ONLINE, PAUSED }
+enum class AlertKind { COMPLETED, ERROR, CANCELLED, OFFLINE, BACK_ONLINE, PAUSED, STARTED, NEARLY_DONE }
 data class PrintAlert(val address: String, val kind: AlertKind, val filename: String = "", val message: String)
 
 /**
@@ -41,7 +41,10 @@ object PrintAlerts {
      * seen this session — a null previous never produces an alert, so the app doesn't spam
      * "back online" or "print finished" the moment it starts up and reads an existing state.
      */
-    fun detect(address: String, label: String, previous: PrinterConnection?, current: PrinterConnection): List<PrintAlert> {
+    /** [extended] adds the optional, chattier alerts: a print starting, and a print passing [NEARLY_DONE_AT] of its progress. */
+    const val NEARLY_DONE_AT = 0.9f
+
+    fun detect(address: String, label: String, previous: PrinterConnection?, current: PrinterConnection, extended: Boolean = false): List<PrintAlert> {
         if (previous == null) return emptyList()
         val alerts = mutableListOf<PrintAlert>()
         if (previous.connected && !current.connected) alerts += PrintAlert(address, AlertKind.OFFLINE, message = "$label went offline.")
@@ -64,6 +67,12 @@ object PrintAlerts {
                 // Cancel notification action (see PrintMonitorService) is actually meaningful.
                 "paused" -> alerts += PrintAlert(address, AlertKind.PAUSED, current.snapshot?.filename.orEmpty(), "$label paused $filename.")
             }
+        }
+        if (extended && current.connected && previous.connected) {
+            val name = current.snapshot?.filename.orEmpty().ifBlank { "a print" }
+            if (curState == "printing" && prevState != "printing" && prevState != "paused") alerts += PrintAlert(address, AlertKind.STARTED, current.snapshot?.filename.orEmpty(), "$label started $name.")
+            val was = previous.snapshot?.progress ?: 0f; val now = current.snapshot?.progress ?: 0f
+            if (curState == "printing" && prevState == "printing" && was < NEARLY_DONE_AT && now >= NEARLY_DONE_AT) alerts += PrintAlert(address, AlertKind.NEARLY_DONE, current.snapshot?.filename.orEmpty(), "$label is nearly done with $name.")
         }
         return alerts
     }

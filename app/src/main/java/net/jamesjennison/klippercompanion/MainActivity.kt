@@ -440,6 +440,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             if(tab == 4) item { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilterChip(backgroundAlertsEnabled, {setBackgroundAlertsEnabled(!backgroundAlertsEnabled)}, label={Text("Background print alerts")}, modifier=Modifier.testTag("background-alerts-toggle"))
                 Text("Notifies you when a saved printer finishes, errors or goes offline while the app isn't open. Shows a persistent low-priority notification while active.", style = MaterialTheme.typography.bodySmall)
+                val alertPrefs = remember { context.getSharedPreferences("alerts", 0) }
+                var extendedAlerts by remember { mutableStateOf(alertPrefs.getBoolean("extended", false)) }
+                FilterChip(extendedAlerts, { extendedAlerts = !extendedAlerts; alertPrefs.edit().putBoolean("extended", extendedAlerts).apply() }, label={Text("Also: print started and nearly done", maxLines = 1)}, modifier=Modifier.testTag("extended-alerts-toggle"))
             } }
             // tab 3 (Prepare) always falls through to its own placeholder below, never this
             // printer-connect prompt, even before any printer is selected.

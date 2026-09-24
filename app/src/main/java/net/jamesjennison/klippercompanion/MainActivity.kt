@@ -744,6 +744,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Text(job.filename,style=MaterialTheme.typography.titleSmall)
                                 Text("${job.status} · ${formatDuration(job.duration)} · ${formatMaterial(job.filamentMm)}")
                                 job.started?.takeIf { it < 253402300799.0 }?.let { Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date((it*1000).toLong()))) }
+                                val again = Reprint.resolve(job.filename, state.catalog.files)
+                                if(again != null) OutlinedButton({pending=Moonraker.start(again) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error"),modifier=Modifier.testTag("reprint:${job.id}")){Text("Reprint",maxLines=1)}
+                                else Text("File no longer on the printer",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                         }
                     } else {

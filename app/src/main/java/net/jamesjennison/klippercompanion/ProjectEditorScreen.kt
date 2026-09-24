@@ -846,9 +846,10 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             }
                             1 -> {
                                 Text("Quality", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     QualityPreset.entries.forEach { preset ->
-                                        FilterChip(quality == preset, { quality = preset }, label = { Text("${preset.label} (${preset.layerHeightMm}mm)") }, modifier = Modifier.testTag("project-quality-${preset.name}"))
+                                        FilterChip(quality == preset, { quality = preset }, label = { Text("${preset.label} (${preset.layerHeightMm}mm)", maxLines = 1, softWrap = false) }, modifier = Modifier.testTag("project-quality-${preset.name}"))
                                     }
                                 }
                                 OutlinedTextField(infillText, { infillText = it }, label = { Text("Strength - infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))

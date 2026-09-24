@@ -125,6 +125,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX, {kind=PrinterKind.SNAPMAKER_U1_PAXX}, label={Text("Snapmaker U1 (PAXX)")})
                         FilterChip(kind==PrinterKind.BAMBU_LAB, {kind=PrinterKind.BAMBU_LAB}, label={Text("Bambu Lab")})
                         FilterChip(kind==PrinterKind.PRUSA_LINK, {kind=PrinterKind.PRUSA_LINK}, label={Text("Prusa Link")}, modifier=Modifier.testTag("wizard-kind-prusa-link"))
+                        FilterChip(kind==PrinterKind.OCTOPRINT, {kind=PrinterKind.OCTOPRINT}, label={Text("OctoPrint")}, modifier=Modifier.testTag("wizard-kind-octoprint"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -133,6 +134,12 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                             visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
                         Text("Serial number and access code both come from the printer's own network settings. LAN mode must be on.", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.OCTOPRINT) {
+                        OutlinedTextField(address, {address=it}, label={Text("OctoPrint address")}, placeholder={Text("octopi.local or 192.168.1.60:5000")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("API key")}, singleLine=true, modifier=Modifier.testTag("wizard-octoprint-key"),
+                            visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+                        Text("Create one in OctoPrint under Settings > Application Keys (or use your user's API key).", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),
@@ -179,7 +186,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
         when(step) {
             WizardStep.TYPE_AND_ADDRESS -> Button({
                 typeError = null
-                val normalized = try { normalizedAddress(address, kind) } catch(e: IllegalArgumentException) { typeError = "Enter a valid printer address."; return@Button }
+                val normalized = try { normalizedInputAddress(address, kind) } catch(e: IllegalArgumentException) { typeError = "Enter a valid printer address."; return@Button }
                 if(normalized in existingAddresses) { typeError = "That printer address is already saved."; return@Button }
                 normalizedAddressResult = normalized
                 // Adding a printer is a fresh trust decision: an old pin (say from an abandoned attempt, or a printer that was reset) must not block it.

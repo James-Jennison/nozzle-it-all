@@ -37,6 +37,13 @@ object PrinterDiscovery {
         return DiscoveredPrinter(address, PrinterKind.PRUSA_LINK, "Prusa printer", SlicingPrinterModel.PRUSA_GENERIC, detail = text.ifBlank { "PrusaLink" }.take(80))
     }
 
+    /** OctoPrint's web page (GET /): the API needs a key, but the login/UI page names itself. */
+    fun parseOctoPrintPage(body: String, address: String): DiscoveredPrinter? {
+        if (!body.contains("OctoPrint", ignoreCase = true)) return null
+        val title = Regex("<title>([^<]{1,80})</title>", RegexOption.IGNORE_CASE).find(body)?.groupValues?.get(1)?.trim().orEmpty()
+        return DiscoveredPrinter(address, PrinterKind.OCTOPRINT, title.ifBlank { "OctoPrint" }.take(80), SlicingPrinterModel.GENERIC_KLIPPER, detail = "OctoPrint - needs an API key")
+    }
+
     /** One Bambu SSDP NOTIFY / search reply (headers `Location`, `USN` = serial, `DevName.bambu.com`, `DevModel.bambu.com`). */
     fun parseBambuSsdp(message: String): DiscoveredPrinter? {
         val headers = message.lineSequence().mapNotNull { line -> line.indexOf(':').takeIf { it > 0 }?.let { line.substring(0, it).trim().lowercase() to line.substring(it + 1).trim() } }.toMap()

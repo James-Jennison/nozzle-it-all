@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -91,6 +91,11 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
     PrinterKind.BAMBU_LAB -> PrinterCapabilities(
         transport = PrinterTransport.BAMBU_MQTT, supportsPauseResumeCancel = true, supportsCamera = true,
         supportsKlipperExtras = false, supportsNativePrintFileFlow = true, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    PrinterKind.OCTOPRINT -> PrinterCapabilities(
+        transport = PrinterTransport.OCTOPRINT, supportsPauseResumeCancel = true, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )
     PrinterKind.PRUSA_LINK -> PrinterCapabilities(

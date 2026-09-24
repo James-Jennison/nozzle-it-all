@@ -36,7 +36,11 @@ fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, ap
 internal fun normalizedAddress(address: String, kind: PrinterKind): String =
     // PRUSA_LINK is plain HTTP on the local network too, same shape as a Moonraker address (just a
     // different API path) - Moonraker.parseAddress's local-network validation applies unchanged.
-    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address) else Moonraker.parseAddress(address).toString()
+    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address) else Moonraker.parseAddress(address).toString() // OCTOPRINT and PRUSA_LINK are plain HTTP on the LAN too
+// What a person types or "Scan network" fills in: a bare "192.168.1.50" or "octopi.local:5000" means plain HTTP on the LAN. Kept apart from
+// normalizedAddress so a stored address without a scheme is still rejected rather than silently turned into a connection target.
+internal fun normalizedInputAddress(address: String, kind: PrinterKind): String =
+    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address) else normalizedAddress(address.trim().let { if("://" in it) it else "http://$it" }, kind)
 // The one place that decides which transport a saved printer actually gets. A BAMBU_LAB profile
 // speaks nothing Moonraker understands (MQTT/FTPS/port-6000 camera); a PRUSA_LINK profile speaks
 // PrusaLink's own digest-authenticated REST API, not Moonraker's JSON-RPC-over-HTTP - both get
@@ -48,6 +52,7 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     // get the same encrypted storage slot rather than a new field.
     PrinterKind.BAMBU_LAB -> BambuPrinterService(bambuHostAddress(address), profile.serial, profile.apiKey)
     PrinterKind.PRUSA_LINK -> PrusaLinkPrinterService(address, profile.apiKey)
+    PrinterKind.OCTOPRINT -> OctoPrintPrinterService(address, profile.apiKey)
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER

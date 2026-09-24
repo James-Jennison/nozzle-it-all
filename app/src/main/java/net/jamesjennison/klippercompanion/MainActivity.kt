@@ -727,6 +727,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("LAN mode limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.")
                     } } }
+                    else if(capabilities.transport == PrinterTransport.OCTOPRINT) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("OctoPrint limitations", style=MaterialTheme.typography.titleSmall)
+                        Text("Here an OctoPrint printer offers live status, temperatures (read-only), starting a print from a sliced file, and pause, resume and cancel. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                    } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")

@@ -4,7 +4,7 @@ import org.json.JSONObject
 import java.util.Locale
 
 // Ordinal-independent persistence: PrinterPreferences stores/reads this by name(), not ordinal.
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK }
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing

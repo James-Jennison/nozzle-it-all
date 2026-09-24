@@ -160,6 +160,10 @@ jobs:
           result=$(echo "$run_json" | jq -r '.run.result')
           echo "$run_json" | jq '{status: .run.status, result: .run.result, counters: .run.counters}'
           if [ "$result" != "PASSED" ]; then
+            # Say WHY: per-device results/messages, and Device Farm's own compatibility verdict for this app on this pool.
+            aws devicefarm list-jobs --arn "$run_arn" | jq '.jobs[] | {name, device: .device.name, os: .device.os, result, message}' || true
+            aws devicefarm get-device-pool-compatibility --device-pool-arn "$DEVICE_POOL_ARN" --app-arn "$app_arn" --test-type INSTRUMENTATION --test "testPackageArn=$test_arn" \
+              | jq '{compatible: [.compatibleDevices[].device.name], incompatible: [.incompatibleDevices[] | {device: .device.name, problems: [.incompatibilityMessages[].message]}]}' || true
             echo "::error::Device Farm run result was $result, not PASSED"
             exit 1
           fi

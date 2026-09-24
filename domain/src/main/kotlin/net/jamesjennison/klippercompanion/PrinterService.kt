@@ -106,4 +106,5 @@ data class BambuPrintRequest(
  * PrusaLinkPrinterService.uploadAndPrint() needs a real, re-readable body for the PUT upload, and
  * a real Content-Length declared up front.
  */
+// Also the request the OctoPrint service takes: both upload a plain G-code file and start it.
 data class PrusaLinkPrintRequest(val file: File, val remoteName: String = file.name)

@@ -26,6 +26,12 @@ class PrinterDiscoveryTest {
         assertNull(PrinterDiscovery.parsePrusaLinkVersion("not json", "x"))
     }
 
+    @Test fun recognisesTheOctoPrintWebPageAndNothingElse() {
+        val p = PrinterDiscovery.parseOctoPrintPage("<html><head><title>OctoPrint Workshop</title></head></html>", "192.168.1.60:5000")!!
+        assertEquals(PrinterKind.OCTOPRINT, p.kind); assertEquals("OctoPrint Workshop", p.name)
+        assertNull(PrinterDiscovery.parseOctoPrintPage("<html><title>Mainsail</title></html>", "x"))
+    }
+
     @Test fun readsABambuSsdpAnnouncementWithItsSerial() {
         val msg = "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1990\r\nCache-Control: max-age=1800\r\nLocation: 192.168.1.77\r\nNT: urn:bambulab-com:device:3dprinter:1\r\nUSN: 01P00A123456789\r\nDevName.bambu.com: Workshop P1S\r\nDevModel.bambu.com: C12\r\nDevConnect.bambu.com: lan\r\n\r\n"
         val b = PrinterDiscovery.parseBambuSsdp(msg)!!
@@ -43,7 +49,7 @@ class PrinterDiscoveryTest {
         val s = server(mapOf("/server/info" to """{"result":{"klippy_connected":true,"klippy_state":"ready","moonraker_version":"v0.9"}}""",
             "/printer/info" to """{"result":{"hostname":"U1","software_version":"1.6.0.267_20260815150420"}}"""))
         try {
-            val scanner = PrinterScanner(moonrakerPorts = listOf(s.port), prusaPorts = emptyList(), ssdpPorts = emptyList(), ssdpWaitMs = 100)
+            val scanner = PrinterScanner(moonrakerPorts = listOf(s.port), prusaPorts = emptyList(), octoPrintPorts = emptyList(), ssdpPorts = emptyList(), ssdpWaitMs = 100)
             val found = mutableListOf<DiscoveredPrinter>()
             scanner.scan(listOf("127.0.0.1", "127.0.0.2"), AtomicBoolean(false)) { found += it }
             val u1 = found.singleOrNull { it.address == "127.0.0.1:${s.port}" }
@@ -55,7 +61,7 @@ class PrinterDiscoveryTest {
         val s = server(mapOf("/server/info" to """{"hello":"world"}"""))
         try {
             val found = mutableListOf<DiscoveredPrinter>()
-            PrinterScanner(moonrakerPorts = listOf(s.port), prusaPorts = emptyList(), ssdpPorts = emptyList(), ssdpWaitMs = 100).scan(listOf("127.0.0.1")) { found += it }
+            PrinterScanner(moonrakerPorts = listOf(s.port), prusaPorts = emptyList(), octoPrintPorts = emptyList(), ssdpPorts = emptyList(), ssdpWaitMs = 100).scan(listOf("127.0.0.1")) { found += it }
             assertTrue(found.isEmpty())
         } finally { s.shutdown() }
     }

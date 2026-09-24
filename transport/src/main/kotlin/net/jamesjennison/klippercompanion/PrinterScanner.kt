@@ -21,6 +21,7 @@ class PrinterScanner(
     private val connectTimeoutMs: Int = 600,
     private val moonrakerPorts: List<Int> = listOf(7125, 80),
     private val prusaPorts: List<Int> = listOf(80),
+    private val octoPrintPorts: List<Int> = listOf(5000, 80),
     private val ssdpPorts: List<Int> = listOf(1990, 2021),
     private val ssdpTarget: String = "239.255.255.250",
     private val ssdpWaitMs: Int = 4000,
@@ -42,6 +43,7 @@ class PrinterScanner(
     internal fun probeHost(host: String): DiscoveredPrinter? {
         for (port in moonrakerPorts) if (open(host, port)) moonraker(host, port)?.let { return it }
         for (port in prusaPorts) if (open(host, port)) prusa(host, port)?.let { return it }
+        for (port in octoPrintPorts) if (open(host, port)) octoPrint(host, port)?.let { return it }
         return null
     }
 
@@ -60,6 +62,15 @@ class PrinterScanner(
         val address = if (port == 80) host else "$host:$port"
         return PrinterDiscovery.classifyMoonraker(info?.optString("hostname").orEmpty(), info?.optString("app").orEmpty(), info?.optString("software_version").orEmpty(), address)
     }
+
+    private fun octoPrint(host: String, port: Int): DiscoveredPrinter? {
+        val base = if (port == 80) "http://$host" else "http://$host:$port"
+        return getText("$base/")?.let { PrinterDiscovery.parseOctoPrintPage(it, if (port == 80) host else "$host:$port") }
+    }
+
+    private fun getText(url: String): String? = try {
+        http.newCall(Request.Builder().url(url).build()).execute().use { r -> if (r.isSuccessful) r.body?.source()?.let { s -> s.request(64 * 1024); s.buffer.clone().readUtf8() } else null }
+    } catch (_: Exception) { null }
 
     private fun prusa(host: String, port: Int): DiscoveredPrinter? {
         val base = if (port == 80) "http://$host" else "http://$host:$port"

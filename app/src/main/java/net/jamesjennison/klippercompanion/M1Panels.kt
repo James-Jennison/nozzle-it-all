@@ -57,6 +57,11 @@ import androidx.compose.ui.unit.dp
                 visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
             Text("Serial number and access code both come from the printer's own network settings. LAN mode must be on.",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.OCTOPRINT) {
+            OutlinedTextField(address,{address=it},label={Text("OctoPrint address")},placeholder={Text("octopi.local or 192.168.1.60:5000")},singleLine=true)
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("API key")},singleLine=true,modifier=Modifier.testTag("octoprint-key"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
         } else if(kind==PrinterKind.PRUSA_LINK) {
             OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
             Text("The address shown on the printer's own screen under Settings > Network, with no http:// prefix.",style=MaterialTheme.typography.bodySmall)
@@ -81,6 +86,7 @@ import androidx.compose.ui.unit.dp
             FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX,{kind=PrinterKind.SNAPMAKER_U1_PAXX},label={Text("Snapmaker U1 (PAXX)")})
             FilterChip(kind==PrinterKind.BAMBU_LAB,{kind=PrinterKind.BAMBU_LAB},label={Text("Bambu Lab")})
             FilterChip(kind==PrinterKind.PRUSA_LINK,{kind=PrinterKind.PRUSA_LINK},label={Text("Prusa Link")},modifier=Modifier.testTag("kind-prusa-link"))
+            FilterChip(kind==PrinterKind.OCTOPRINT,{kind=PrinterKind.OCTOPRINT},label={Text("OctoPrint")},modifier=Modifier.testTag("kind-octoprint"))
         }
         // WO-13: which bundled slicer profile family this printer needs, if any. Deliberately
         // separate from "printer type" above - the U1 and a Centauri Carbon both speak

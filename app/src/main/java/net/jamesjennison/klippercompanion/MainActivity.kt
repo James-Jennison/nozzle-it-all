@@ -18,6 +18,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -163,6 +166,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private enum class BackupStep { NONE, EXPORT_PASSPHRASE, IMPORT_PASSPHRASE }
+
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String? = {_,_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
@@ -269,6 +274,18 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     LaunchedEffect(MmfRedirects.pending) { if (MmfRedirects.pending != null) tab = 5 }
     var selfCheckRunning by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
+    var backupStep by remember { mutableStateOf(BackupStep.NONE) }
+    var backupPassphrase by remember { mutableStateOf("") }
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    var restoreUri by remember { mutableStateOf<Uri?>(null) }
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val pass = backupPassphrase.toCharArray(); backupPassphrase = ""; backupStep = BackupStep.NONE
+        if(uri != null) uiScope.launch {
+            backupMessage = try { withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri)!!.use { it.write(SettingsBackup.encode(state.profiles, pass)) } }; "Saved a backup of ${state.profiles.size} printer(s)." }
+            catch(e: BackupException) { e.message } catch(e: Exception) { "Could not save the backup: ${e.message}" }
+        }
+    }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri != null) { restoreUri = uri; backupStep = BackupStep.IMPORT_PASSPHRASE; backupMessage = null } }
     var selfCheckResults by remember { mutableStateOf<List<SelfCheckResult>>(emptyList()) }
     var interruptedSliceNotice by remember { mutableStateOf(SlicingCoordinator.consumeInterruptedSlice(context.applicationContext)) }
     var calibrationDialog by remember { mutableStateOf(false) }
@@ -424,10 +441,35 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedButton({ selfCheckRunning = true; uiScope.launch { selfCheckResults = SelfCheck.run(context); selfCheckRunning = false } }, enabled = !selfCheckRunning, modifier = Modifier.testTag("run-self-check")) { Text(if(selfCheckRunning) "Checking…" else "Run self-check", maxLines = 1) }
                         OutlinedButton({ creditsOpen = true }, modifier = Modifier.testTag("open-credits")) { Text("Credits", maxLines = 1) }
+                        OutlinedButton({ backupStep = BackupStep.EXPORT_PASSPHRASE; backupMessage = null }, modifier = Modifier.testTag("backup-printers")) { Text("Back up printers", maxLines = 1) }
+                        OutlinedButton({ restorePicker.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("restore-printers")) { Text("Restore printers", maxLines = 1) }
                     }
                     selfCheckResults.forEachIndexed { i, r -> Text((if(r.ok) "PASS  " else "FAIL  ") + r.name + " - " + r.detail, style = MaterialTheme.typography.bodySmall, color = if(r.ok) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error, modifier = Modifier.testTag("self-check-$i")) }
                 }
             }
+            if(backupStep != BackupStep.NONE) item {
+                val exporting = backupStep == BackupStep.EXPORT_PASSPHRASE
+                AlertDialog(onDismissRequest = { backupStep = BackupStep.NONE; backupPassphrase = "" }, modifier = Modifier.testTag("backup-dialog"),
+                    title = { Text(if(exporting) "Back up printers" else "Restore printers") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if(exporting) "The backup includes each printer's API key or access code, so it is encrypted with a passphrase you choose. Keep the passphrase: there is no way to recover a backup without it." else "Enter the passphrase used when the backup was made. Printers already saved here are left as they are.", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(backupPassphrase, { backupPassphrase = it }, label = { Text("Passphrase") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.testTag("backup-passphrase"))
+                    } },
+                    confirmButton = { TextButton({
+                        if(exporting) backupPicker.launch("nozzle-printers.nozzlebackup")
+                        else { val uri = restoreUri; val pass = backupPassphrase.toCharArray(); backupPassphrase = ""; backupStep = BackupStep.NONE
+                            if(uri != null) uiScope.launch {
+                                backupMessage = try {
+                                    val restored = withContext(Dispatchers.IO) { SettingsBackup.decode(context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }, pass) }
+                                    val added = restored.count { addProfile(it) == null }
+                                    "Restored $added printer(s)" + if(added < restored.size) ", skipped ${restored.size - added} already saved." else "."
+                                } catch(e: BackupException) { e.message } catch(e: Exception) { "Could not read the backup: ${e.message}" }
+                            }
+                        }
+                    }, enabled = backupPassphrase.length >= (if(exporting) SettingsBackup.MIN_PASSPHRASE else 1), modifier = Modifier.testTag("backup-continue")) { Text(if(exporting) "Choose where to save" else "Restore") } },
+                    dismissButton = { TextButton({ backupStep = BackupStep.NONE; backupPassphrase = "" }) { Text("Cancel") } })
+            }
+            backupMessage?.let { msg -> if(tab == 4) item { Text(msg, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("backup-message")) } }
             if(creditsOpen) item {
                 AlertDialog(onDismissRequest = { creditsOpen = false }, title = { Text("Credits") }, modifier = Modifier.testTag("credits-dialog"),
                     text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {

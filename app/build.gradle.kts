@@ -1,3 +1,7 @@
+import java.security.MessageDigest
+import java.time.Instant
+import java.util.UUID
+
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
 android {
  namespace = "net.jamesjennison.klippercompanion"
@@ -50,7 +54,37 @@ android {
  // docs/WORK_ORDER.md's WO-31 entry for the full before/after. proguard-rules.pro's own comments
  // justify every rule (the JNI native-bridge keep rule is load-bearing, not boilerplate - see
  // that file).
- buildTypes { release { isMinifyEnabled = true; isShrinkResources = true; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") } }
+ // Phase 9g: release signing comes from the environment or ~/.gradle/gradle.properties - never from this repo.
+ // Set NOZZLE_KEYSTORE (path), NOZZLE_KEYSTORE_PASSWORD, NOZZLE_KEY_ALIAS and NOZZLE_KEY_PASSWORD to sign; without
+ // them assembleRelease still works and produces an unsigned APK (the owner's signing identity is decided outside
+ // this repo, see docs/RELEASE.md).
+ val signingValue = { name: String -> providers.gradleProperty(name).orElse(providers.environmentVariable(name)).orNull }
+ val releaseKeystore = signingValue("NOZZLE_KEYSTORE")
+ signingConfigs {
+  if (releaseKeystore != null) create("release") {
+   storeFile = file(releaseKeystore)
+   storePassword = signingValue("NOZZLE_KEYSTORE_PASSWORD"); keyAlias = signingValue("NOZZLE_KEY_ALIAS"); keyPassword = signingValue("NOZZLE_KEY_PASSWORD")
+  }
+ }
+ if (providers.gradleProperty("nozzleSmoke").isPresent) testBuildType = "releaseSmoke"
+ buildTypes {
+  release {
+   isMinifyEnabled = true; isShrinkResources = true
+   proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+   if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
+  }
+  // Phase 9g: the release recipe (R8 shrinking + obfuscation of every dependency) with the app's own classes and
+  // Kotlin kept, debug-signed, so the whole instrumented suite can run against minified libraries:
+  //   ./gradlew assembleReleaseSmoke assembleAndroidTest -PnozzleSmoke   (-PnozzleSmoke points the androidTest APK at this type)
+  // Never shipped. See proguard-smoke.pro and docs/RELEASE.md.
+  create("releaseSmoke") {
+   initWith(getByName("release"))
+   signingConfig = signingConfigs.getByName("debug")
+   matchingFallbacks += "release"
+   proguardFiles("proguard-smoke.pro")
+   testProguardFiles("proguard-smoke-test.pro")
+  }
+ }
  buildFeatures { compose = true }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
@@ -110,4 +144,46 @@ dependencies {
  androidTestImplementation("androidx.test.ext:junit:1.2.1")
  androidTestImplementation("androidx.room:room-testing:2.8.5")
  debugImplementation("androidx.compose.ui:ui-test-manifest")
+ add("releaseSmokeImplementation", "androidx.compose.ui:ui-test-manifest")
+}
+
+// Phase 9g: CycloneDX 1.5 SBOM of everything that ships - the resolved release runtime dependencies (with SHA-256 of
+// each artifact) plus the pinned native engine and its dependencies from engine/ENGINE_PIN.json. Offline, no plugin.
+tasks.register("generateSbom") {
+ group = "release"; description = "Writes build/sbom/nozzle-it-all.cdx.json"
+ val runtime = configurations.named("releaseRuntimeClasspath")
+ val pinFile = rootProject.file("engine/ENGINE_PIN.json")
+ val out = layout.buildDirectory.file("sbom/nozzle-it-all.cdx.json")
+ inputs.files(runtime); inputs.file(pinFile); outputs.file(out)
+ doLast {
+  fun esc(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
+  fun sha256(f: java.io.File) = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+  val components = sortedMapOf<String, String>()
+  runtime.get().incoming.artifactView { lenient(true) }.artifacts.artifacts.forEach { a ->
+   val id = a.id.componentIdentifier
+   if (id is org.gradle.api.artifacts.component.ModuleComponentIdentifier) {
+    val purl = "pkg:maven/${id.group}/${id.module}@${id.version}"
+    components[purl] = """{"type":"library","group":"${esc(id.group)}","name":"${esc(id.module)}","version":"${esc(id.version)}","purl":"${esc(purl)}","hashes":[{"alg":"SHA-256","content":"${sha256(a.file)}"}]}"""
+   }
+  }
+  val pin = groovy.json.JsonSlurper().parse(pinFile) as Map<*, *>
+  val upstream = pin["upstream"] as Map<*, *>
+  components["pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}"] = """{"type":"library","name":"OrcaSlicer (libslic3r, patched)","version":"${esc(upstream["commit"].toString())}","purl":"pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}],"properties":[{"name":"patch.sha256","value":"${esc((pin["patch"] as Map<*, *>)["sha256"].toString())}"}]}"""
+  (pin["dependencies"] as List<*>).forEach { d ->
+   d as Map<*, *>
+   val n = d["file"].toString()
+   components["pkg:generic/$n"] = """{"type":"library","name":"${esc(n)}","purl":"pkg:generic/${esc(n)}","hashes":[{"alg":"SHA-256","content":"${d["sha256"]}"}],"properties":[{"name":"linked","value":"native (arm64-v8a)"}]}"""
+  }
+  val body = components.values.joinToString(",\n    ")
+  val serial = UUID.nameUUIDFromBytes(body.toByteArray()).toString()
+  val stamp = (System.getenv("SOURCE_DATE_EPOCH")?.toLongOrNull()?.let { Instant.ofEpochSecond(it) } ?: Instant.now()).toString()
+  out.get().asFile.also { it.parentFile.mkdirs() }.writeText("""{
+  "bomFormat": "CycloneDX", "specVersion": "1.5", "serialNumber": "urn:uuid:$serial", "version": 1,
+  "metadata": {"timestamp": "$stamp", "component": {"type": "application", "name": "Nozzle It All", "version": "${android.defaultConfig.versionName}", "purl": "pkg:generic/net.jamesjennison.klippercompanion@${android.defaultConfig.versionName}"}},
+  "components": [
+    $body
+  ]
+}
+""")
+ }
 }

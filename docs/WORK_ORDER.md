@@ -2320,6 +2320,45 @@ P28/M7 sections for what each one built and its commit hash.)*
       eligibility rules).
     - **Not built this entry:** everything above. Docs only; no source,
       build or test changes.
+31. **WO-34 - Phase 9 (advanced slicing) built, 2026-09-23 (commits a08aa2d through the 9g commit).**
+    Owner asked for Phase 9 to be completed; every sub-phase below was built and device-tested on the Razr 2026
+    (ZP22235MHM) with the full suite green after each (204 -> 238 tests, all passing at each commit).
+    - **9f cancel/progress/foreground/memory** (`a08aa2d`, `a66ec82`, `676f2a8`): cooperative cancel of a running slice
+      (`nativeCancelSlice`, `CancellationException`, partial output removed, `SliceOutcome.Cancelled`), polled progress
+      (`nativeSliceProgress`), one slice at a time, editor progress bar + Cancel, `SliceService` foreground service, native
+      out-of-memory reported as an actionable message. A real crash was found and fixed on the way (stopping the service
+      before `startForeground` ran killed the process). Memory-pressure recovery beyond the message is not built.
+    - **9a advanced settings** (`d7b091d`): `SettingsCatalog` of 27 real process keys (tiers Basic/Advanced/Expert,
+      search, validated ranges, help text), saved custom profiles and compare. `SettingsCatalogDeviceTest` slices every
+      catalog value through the real engine; it found and fixed two over-wide ranges (line width, first layer height, both
+      nozzle-relative, documented as assuming a 0.4 mm nozzle). Per-filament/machine vector keys are not in the catalog.
+    - **9S undo** (`1d8daad`): snapshot undo/redo for every project edit (drag coalescing, 50 steps). Removing an object no
+      longer deletes its model file at once (undo needs it, and a duplicate shares the original's file - the old behaviour
+      would have broken the duplicate); unreferenced files are pruned when a project is reopened. **The shared-module
+      extraction half of 9S (`:domain`/`:transport`) is NOT done**; `settings.gradle.kts` still has only `:app`.
+    - **9b multi-plate + export/import** (`95c42c7`): plates table (Room 3->4), plate chips, move object to plate, slice the
+      active plate, `.nozzleproj` zip export/import with zip-slip/size/extension/number validation.
+    - **9c mirror/lay-on-face/auto-orient/measure/cut** (`974eeb9`): edits are baked into a new STL in the project (so preview and
+      slicer agree and undo swaps the file); native capped cut via libslic3r `cut_mesh` (volumes of the halves add up to the
+      original on device). Lay-flat and measure use a tap ray-cast against the real triangles.
+    - **9d painting/modifiers/blockers** (`e64a18c`): support and seam paint strokes plus modifier/support-blocker/enforcer
+      regions, stored per object in a bed-independent object frame (Room 4->5) and replayed natively at slice time. Device
+      tests prove painted enforcers create support where none existed, a blocker removes it, a modifier changes walls, and a
+      seam stroke moves the seam. A real bug was found: the preview loads on a default bed while the slice centres on the
+      printer's bed, so world-frame coordinates were offset (fixed by using the object frame). Painted overlays and region
+      outlines render on the model (screenshot verified).
+    - **9e calibration** (`6447993`): temperature tower, pressure-advance tower (Klipper only), flow cube; G-code post-processing
+      inserts the height-dependent commands; a project flag (Room 5->6) applies it after slicing. Not printed on real hardware.
+    - **9g release engineering**: env-driven signing (no key in the repo), `releaseSmoke` build type, offline CycloneDX SBOM
+      (`generateSbom`), engine pin (`engine/ENGINE_PIN.json`, `scripts/engine_pin.py verify`, patch copied into the repo),
+      tag-triggered CI release job with build-provenance attestations (docs/RELEASE.md).
+    - **Not verified / not built:** the release CI job has never run; no real signing key exists; the full suite (238) passes against
+      `releaseSmoke`, which keeps the app's own classes and turns obfuscation off (test code needs the real names); the
+      fully obfuscated release APK was only hand-driven through project creation, calibration and an on-device slice (docs/RELEASE.md
+      lists what was not exercised: Bambu MQTT/FTPS, jsch/OpenPGP, Glance widget); nothing was
+      printed on physical hardware; multi-plate "slice all plates" and modifier-region gizmo editing are not built; shape
+      regions are edited numerically, not by dragging.
+
 - **LAN/Tailscale automatic URL failover (P16 addendum)** — Helix keeps both a LAN
   and a Tailscale URL per printer and alternates on a 6s connect timeout; our
   profiles are still single fixed addresses. Real resilience gap, not yet scoped.

@@ -30,6 +30,7 @@ name: CI
 on:
   push:
     branches: [codex/android-mvp, main]
+    tags: ['v*']
   pull_request:
     branches: [codex/android-mvp, main]
   workflow_dispatch: {}
@@ -51,6 +52,10 @@ jobs:
             { echo "::error::ORCASLICER_ENGINE_ROOT is missing the patched OrcaSlicer checkout - see app/src/main/cpp/CMakeLists.txt's header comment."; exit 1; }
           test -d "$ORCASLICER_ENGINE_ROOT/deps/install/arm64-v8a" || \
             { echo "::error::ORCASLICER_ENGINE_ROOT is missing prebuilt deps/install/arm64-v8a."; exit 1; }
+
+      # Phase 9g: the engine must be exactly the pinned upstream commit + patch + dependency archives.
+      - name: Verify engine pin
+        run: python3 scripts/engine_pin.py verify --engine-root "$ORCASLICER_ENGINE_ROOT"
 
       - name: Unit tests + lint
         run: ./gradlew testDebugUnitTest lintDebug --no-daemon
@@ -154,3 +159,56 @@ jobs:
             echo "::error::Device Farm run result was $result, not PASSED"
             exit 1
           fi
+
+  # Phase 9g: tagged releases. Builds the minified release APK, signs it when the signing secrets exist (the owner's
+  # identity is not in this repo - docs/RELEASE.md), writes the SBOM, and attaches GitHub build-provenance
+  # attestations to both. Not exercised yet: it needs a tag push and the secrets on the self-hosted runner.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-and-test
+    runs-on: [self-hosted, linux, x64, android-native]
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      ORCASLICER_ENGINE_ROOT: /home/jjennison/orcaslicer-android-engine
+      ANDROID_HOME: /opt/android-sdk
+      ANDROID_SDK_ROOT: /opt/android-sdk
+      NOZZLE_KEYSTORE_B64: ${{ secrets.NOZZLE_KEYSTORE_B64 }}
+      NOZZLE_KEYSTORE_PASSWORD: ${{ secrets.NOZZLE_KEYSTORE_PASSWORD }}
+      NOZZLE_KEY_ALIAS: ${{ secrets.NOZZLE_KEY_ALIAS }}
+      NOZZLE_KEY_PASSWORD: ${{ secrets.NOZZLE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify engine pin
+        run: python3 scripts/engine_pin.py verify --engine-root "$ORCASLICER_ENGINE_ROOT"
+      - name: Decode signing key (if configured)
+        run: |
+          if [ -n "${NOZZLE_KEYSTORE_B64:-}" ]; then
+            echo "$NOZZLE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "NOZZLE_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No signing key configured - the release APK will be unsigned."
+          fi
+      - name: Build release APK + SBOM
+        run: ./gradlew assembleRelease generateSbom --no-daemon
+      - name: Stage release files
+        run: |
+          mkdir -p release-artifacts
+          cp app/build/outputs/apk/release/*.apk release-artifacts/
+          cp app/build/sbom/nozzle-it-all.cdx.json release-artifacts/
+          cp app/build/outputs/mapping/release/mapping.txt release-artifacts/
+          (cd release-artifacts && sha256sum * > SHA256SUMS)
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release-artifacts/*.apk
+            release-artifacts/nozzle-it-all.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release-artifacts/
+          retention-days: 90

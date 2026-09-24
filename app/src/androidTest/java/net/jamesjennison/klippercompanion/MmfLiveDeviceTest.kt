@@ -120,4 +120,11 @@ class MmfLiveDeviceTest {
         val toys = client().search(MmfSearch(perPage = 5, fdmOnly = true, category = MmfCategories.tree.first { it.name == "Toys" }.id))
         assertTrue("Toys is a real, smaller slice: ${toys.totalCount} of $all", toys.items.isNotEmpty() && toys.totalCount in 1 until all)
     }
+
+    @Test fun everyPriceFilterReturnsAPageThatFitsTheResponseLimit() {
+        for (price in MmfPrice.entries) {
+            val page = client().search(MmfSearch("", 1, 15, MmfSort.POPULARITY, price = price, fdmOnly = true))
+            assertTrue("$price returned ${page.items.size} items", page.items.isNotEmpty())
+        }
+    }
 }

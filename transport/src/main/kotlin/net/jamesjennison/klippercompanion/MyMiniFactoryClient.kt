@@ -23,7 +23,7 @@ class MyMiniFactoryClient(
 ) : MmfApi {
     companion object {
         val PRODUCTION_BASE: HttpUrl = "https://www.myminifactory.com/api/v2/".toHttpUrl()
-        const val MAX_JSON_BYTES = 4L * 1024 * 1024
+        const val MAX_JSON_BYTES = 12L * 1024 * 1024
         const val MAX_DOWNLOAD_BYTES = 256L * 1024 * 1024
         private const val MAX_REDIRECTS = 3
         fun isMyMiniFactoryHost(host: String) = host == "myminifactory.com" || host.endsWith(".myminifactory.com")

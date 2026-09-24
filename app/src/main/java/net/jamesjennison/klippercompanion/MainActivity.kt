@@ -18,6 +18,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -266,6 +268,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var importMessage by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(MmfRedirects.pending) { if (MmfRedirects.pending != null) tab = 5 }
     var selfCheckRunning by remember { mutableStateOf(false) }
+    var creditsOpen by remember { mutableStateOf(false) }
     var selfCheckResults by remember { mutableStateOf<List<SelfCheckResult>>(emptyList()) }
     var interruptedSliceNotice by remember { mutableStateOf(SlicingCoordinator.consumeInterruptedSlice(context.applicationContext)) }
     var calibrationDialog by remember { mutableStateOf(false) }
@@ -417,9 +420,21 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             if((tab == 0 && !overview) || tab == 4) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
             if(tab == 4) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    OutlinedButton({ selfCheckRunning = true; uiScope.launch { selfCheckResults = SelfCheck.run(context); selfCheckRunning = false } }, enabled = !selfCheckRunning, modifier = Modifier.testTag("run-self-check")) { Text(if(selfCheckRunning) "Checking…" else "Run self-check") }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton({ selfCheckRunning = true; uiScope.launch { selfCheckResults = SelfCheck.run(context); selfCheckRunning = false } }, enabled = !selfCheckRunning, modifier = Modifier.testTag("run-self-check")) { Text(if(selfCheckRunning) "Checking…" else "Run self-check", maxLines = 1) }
+                        OutlinedButton({ creditsOpen = true }, modifier = Modifier.testTag("open-credits")) { Text("Credits", maxLines = 1) }
+                    }
                     selfCheckResults.forEachIndexed { i, r -> Text((if(r.ok) "PASS  " else "FAIL  ") + r.name + " - " + r.detail, style = MaterialTheme.typography.bodySmall, color = if(r.ok) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error, modifier = Modifier.testTag("self-check-$i")) }
                 }
+            }
+            if(creditsOpen) item {
+                AlertDialog(onDismissRequest = { creditsOpen = false }, title = { Text("Credits") }, modifier = Modifier.testTag("credits-dialog"),
+                    text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Models and images in Discover are provided by MyMiniFactory and the designers who publish them. The designer's credit is saved with every project you start from a model; please respect each model's license when you print, share or sell.", style = MaterialTheme.typography.bodySmall)
+                        Text("Searches are sent to MyMiniFactory. Nothing else leaves your device.", style = MaterialTheme.typography.bodySmall)
+                        Text("On-device slicing uses the OrcaSlicer engine (AGPL-3.0), built with the open-source libraries listed in THIRD_PARTY_NOTICES.", style = MaterialTheme.typography.bodySmall)
+                    } },
+                    confirmButton = { TextButton({ creditsOpen = false }, modifier = Modifier.testTag("credits-close")) { Text("Close") } })
             }
             if(tab == 4) item { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilterChip(backgroundAlertsEnabled, {setBackgroundAlertsEnabled(!backgroundAlertsEnabled)}, label={Text("Background print alerts")}, modifier=Modifier.testTag("background-alerts-toggle"))

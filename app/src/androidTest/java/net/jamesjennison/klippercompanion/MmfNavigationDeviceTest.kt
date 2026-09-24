@@ -27,6 +27,16 @@ class MmfNavigationDeviceTest {
         compose.onAllNodesWithText("Discover").assertCountEquals(2) // the tab label and the screen heading
     }
 
+    @Test fun theCreditsPillInSettingsShowsTheMyMiniFactoryCredit() {
+        compose.onNodeWithTag("nav-4").performClick()
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("open-credits").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("open-credits").performScrollTo().performClick()
+        compose.onNodeWithTag("credits-dialog").assertExists()
+        compose.onNodeWithText("provided by MyMiniFactory", substring = true).assertExists()
+        compose.onNodeWithTag("credits-close").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("credits-dialog").fetchSemanticsNodes().isEmpty() }
+    }
+
     @Test fun theAppHandlesOnlyItsOwnSignInRedirectNotOtherLinks() {
         // The manifest registers nozzleitall://mmf-auth and nothing else, so other links cannot even reach the app.
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext

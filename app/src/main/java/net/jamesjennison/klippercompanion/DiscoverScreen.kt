@@ -56,6 +56,9 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(MmfSort.POPULARITY) }
     var filterMode by remember { mutableStateOf(DiscoverFilter.ALL) }
+    var category by remember { mutableStateOf<Int?>(null) }
+    var filtersOpen by remember { mutableStateOf(false) }
+    var sortOpen by remember { mutableStateOf(false) }
     val fdmOnly = true // Nozzle It All prints on FDM machines only, so resin/SLA models are never shown.
     var remix by remember { mutableStateOf(false) }; var commercial by remember { mutableStateOf(false) }; var supportFree by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf<List<MmfObject>>(emptyList()) }; var total by remember { mutableStateOf(0) }; var page by remember { mutableStateOf(1) }
@@ -72,7 +75,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
         if (reset) { page = 1; results = emptyList(); exhausted = false }
         loading = true; error = null
         val startPage = if (reset) 1 else page + 1
-        val startFilters = MmfSearch(query, startPage, 30, sort, remix, commercial, supportFree, price = filterMode.price, fdmOnly = fdmOnly)
+        val startFilters = MmfSearch(query, startPage, 30, sort, remix, commercial, supportFree, category = category, price = filterMode.price, fdmOnly = fdmOnly)
         // A newer search cancels this one, so a slow answer for old filters can never overwrite the current list. Under "FDM only" a page can be
         // entirely hidden client-side, so up to five further pages are fetched until something visible turns up.
         searchJob[0] = scope.launch {
@@ -134,20 +137,18 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
                     OutlinedTextField(query, { query = it }, label = { Text("Search models") }, singleLine = true, modifier = Modifier.weight(1f).testTag("mmf-search"))
                     Button({ search(true) }, enabled = !loading, modifier = Modifier.testTag("mmf-search-go")) { Text("Search") }
                 }
-                // Three compact, labelled, horizontally scrolling rows keep the results list on screen.
-                Text("Sort", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(MmfSort.entries.toList()) { s -> FilterChip(sort == s, { sort = s; search(true) }, label = { Text(s.label) }, modifier = Modifier.testTag("mmf-sort-${s.code}")) }
+                val activeFilters = listOf(filterMode != DiscoverFilter.ALL, category != null, remix, commercial, supportFree).count { it }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton({ filtersOpen = !filtersOpen }, modifier = Modifier.weight(1f).testTag("mmf-filters-toggle")) { Text("Filters ($activeFilters)", maxLines = 1); Text(if (filtersOpen) " ▴" else " ▾") }
+                    Box(Modifier.weight(1f)) {
+                        OutlinedButton({ sortOpen = true }, modifier = Modifier.fillMaxWidth().testTag("mmf-sort-menu")) { Text("Sort: ${sort.label}", maxLines = 1); Text(" ▾") }
+                        DropdownMenu(sortOpen, { sortOpen = false }) {
+                            MmfSort.entries.forEach { s -> DropdownMenuItem({ Text(s.label) }, { sortOpen = false; if (sort != s) { sort = s; search(true) } }, modifier = Modifier.testTag("mmf-sort-${s.code}")) }
+                        }
+                    }
                 }
-                Text("Show", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(DiscoverFilter.entries.toList()) { f -> FilterChip(filterMode == f, { filterMode = f; search(true) }, label = { Text(f.label) }, modifier = Modifier.testTag("mmf-filter-${f.name.lowercase()}")) }
-                }
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    item { FilterChip(remix, { remix = !remix; search(true) }, label = { Text("Remix OK") }, modifier = Modifier.testTag("mmf-filter-remix")) }
-                    item { FilterChip(commercial, { commercial = !commercial; search(true) }, label = { Text("Commercial OK") }, modifier = Modifier.testTag("mmf-filter-commercial")) }
-                    item { FilterChip(supportFree, { supportFree = !supportFree; search(true) }, label = { Text("No supports") }, modifier = Modifier.testTag("mmf-filter-support")) }
-                }
+                if (filtersOpen) FilterPanel(filterMode, { filterMode = it; search(true) }, category, { category = it; search(true) }, remix, { remix = it; search(true) }, commercial, { commercial = it; search(true) },
+                    supportFree, { supportFree = it; search(true) }, activeFilters > 0) { filterMode = DiscoverFilter.ALL; category = null; remix = false; commercial = false; supportFree = false; search(true) }
                 AccountRow(signedIn, if (signedIn) settings.load()?.takeIf { !it.refreshable }?.expiresAtMs else null, clientKey != null, clientDraft, { clientDraft = it }, accountMessage,
                     onSignIn = { val k = clientKey ?: return@AccountRow; setAccountMessage(null); onStartSignIn(MmfAuthLinks.authorizeUrl(k, settings.beginSignIn())) },
                     onSignOut = { auth?.signOut(); settings.clear(); signedIn = false; setAccountMessage("Signed out.") },
@@ -159,13 +160,44 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
                     items(filterMode.apply(results).filter { !fdmOnly || !it.mentionsResin() }, key = { it.id }) { o -> ResultCard(o) { selected = o } }
                     if (results.isNotEmpty() && results.size < total && !exhausted) item { OutlinedButton({ search(false) }, enabled = !loading, modifier = Modifier.fillMaxWidth().testTag("mmf-more")) { Text(if (loading) "Loading…" else "Load more (${results.size} of $total)") } }
                 }
-                if (fdmOnly) Text("Showing FDM models only: designer-tagged FDM, minus any that mention resin, SLA, DLP or pre-supported. Untagged models are not included.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("mmf-fdm-note"))
-                Text("Models and images are provided by MyMiniFactory. Searches are sent to MyMiniFactory; nothing else leaves your device.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         selected?.let { obj ->
             if (api != null) ModelDetail(obj, api, signedIn, auth, dao, onClose = { selected = null }, onSignIn = { val k = clientKey; if (k != null) onStartSignIn(MmfAuthLinks.authorizeUrl(k, settings.beginSignIn())) },
                 onOpenProject = { selected = null; onOpenProject(it) })
+        }
+    }
+}
+
+@Composable private fun FilterPanel(
+    price: DiscoverFilter, onPrice: (DiscoverFilter) -> Unit, category: Int?, onCategory: (Int?) -> Unit,
+    remix: Boolean, onRemix: (Boolean) -> Unit, commercial: Boolean, onCommercial: (Boolean) -> Unit, supportFree: Boolean, onSupportFree: (Boolean) -> Unit,
+    canClear: Boolean, onClear: () -> Unit,
+) {
+    var categoryOpen by remember { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth().testTag("mmf-filter-panel")) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Price", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                DiscoverFilter.entries.forEach { f ->
+                    Row(Modifier.clickable { onPrice(f) }.testTag("mmf-filter-${f.name.lowercase()}"), verticalAlignment = Alignment.CenterVertically) { RadioButton(price == f, { onPrice(f) }); Text(f.label) }
+                }
+            }
+            Text("Category", style = MaterialTheme.typography.labelLarge)
+            Box {
+                OutlinedButton({ categoryOpen = true }, modifier = Modifier.fillMaxWidth().testTag("mmf-category")) { Text(MmfCategories.find(category)?.name ?: "All categories", maxLines = 1, modifier = Modifier.weight(1f)); Text("▾") }
+                DropdownMenu(categoryOpen, { categoryOpen = false }, modifier = Modifier.heightIn(max = 420.dp)) {
+                    DropdownMenuItem({ Text("All categories") }, { categoryOpen = false; onCategory(null) }, modifier = Modifier.testTag("mmf-category-all"))
+                    MmfCategories.tree.forEach { top ->
+                        DropdownMenuItem({ Text(top.name, style = MaterialTheme.typography.titleSmall) }, { categoryOpen = false; onCategory(top.id) }, modifier = Modifier.testTag("mmf-category-${top.id}"))
+                        top.children.forEach { c -> DropdownMenuItem({ Text("    " + c.name) }, { categoryOpen = false; onCategory(c.id) }, modifier = Modifier.testTag("mmf-category-${c.id}")) }
+                    }
+                }
+            }
+            listOf(Triple("Remix allowed", remix, onRemix), Triple("Commercial use allowed", commercial, onCommercial), Triple("No supports needed", supportFree, onSupportFree)).forEachIndexed { i, (label, on, set) ->
+                Row(Modifier.fillMaxWidth().clickable { set(!on) }.testTag("mmf-filter-" + listOf("remix", "commercial", "support")[i]), verticalAlignment = Alignment.CenterVertically) { Checkbox(on, { set(it) }); Text(label) }
+            }
+            if (canClear) TextButton(onClear, modifier = Modifier.testTag("mmf-filters-clear")) { Text("Clear filters") }
         }
     }
 }
@@ -185,14 +217,14 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
 @Composable private fun AccountRow(signedIn: Boolean, expiresAt: Long?, hasClientKey: Boolean, draft: String, onDraft: (String) -> Unit, message: String?, onSignIn: () -> Unit, onSignOut: () -> Unit, onSaveClient: () -> Unit) {
     Column(Modifier.testTag("mmf-account"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when {
-            signedIn -> Row(verticalAlignment = Alignment.CenterVertically) { Text("Signed in - downloads enabled" + (expiresAt?.let { " until ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(it))}" } ?: ""), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, ); TextButton(onSignOut, modifier = Modifier.testTag("mmf-signout")) { Text("Sign out") } }
+            signedIn -> Row(verticalAlignment = Alignment.CenterVertically) { Text("Signed in" + (expiresAt?.let { " until ${java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(it))}" } ?: ""), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, maxLines = 1); TextButton(onSignOut, modifier = Modifier.testTag("mmf-signout")) { Text("Sign out") } }
             hasClientKey -> Row(verticalAlignment = Alignment.CenterVertically) { Text(if (message != null && message.contains("expired", true)) "Your MyMiniFactory session expired." else "Downloading needs a MyMiniFactory sign-in.", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); OutlinedButton(onSignIn, modifier = Modifier.testTag("mmf-signin")) { Text("Sign in") } }
             else -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(draft, onDraft, label = { Text("Client key (enables sign-in)") }, singleLine = true, modifier = Modifier.weight(1f).testTag("mmf-client-field"))
                 OutlinedButton(onSaveClient, enabled = draft.isNotBlank(), modifier = Modifier.testTag("mmf-client-save")) { Text("Save") }
             }
         }
-        message?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("mmf-account-message")) }
+        message?.takeUnless { signedIn && it.startsWith("Signed in") }?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("mmf-account-message")) }
     }
 }
 

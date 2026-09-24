@@ -114,4 +114,10 @@ class MmfLiveDeviceTest {
             assertTrue("a real STL arrived: $bytes bytes", bytes > 100_000 && target.length() == bytes)
         } finally { target.delete() }
     }
+
+    @Test fun aCategoryFilterNarrowsTheRealCatalogue() {
+        val all = client().search(MmfSearch(perPage = 5, fdmOnly = true)).totalCount
+        val toys = client().search(MmfSearch(perPage = 5, fdmOnly = true, category = MmfCategories.tree.first { it.name == "Toys" }.id))
+        assertTrue("Toys is a real, smaller slice: ${toys.totalCount} of $all", toys.items.isNotEmpty() && toys.totalCount in 1 until all)
+    }
 }

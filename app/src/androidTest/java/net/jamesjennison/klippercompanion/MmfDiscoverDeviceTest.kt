@@ -76,7 +76,8 @@ class MmfDiscoverDeviceTest {
         show(freshSettings(key = "buildkey1234"), api)
         compose.waitUntil(8000) { api.requests.isNotEmpty() }
         compose.onNodeWithTag("mmf-search").performTextInput("dragon head")
-        compose.onNodeWithTag("mmf-sort-date").performClick(); compose.onNodeWithTag("mmf-filter-remix").performClick(); compose.onNodeWithTag("mmf-filter-support").performClick()
+        compose.onNodeWithTag("mmf-sort-menu").performClick(); compose.onNodeWithTag("mmf-sort-date").performClick(); compose.waitUntil(8000) { api.requests.last().sort == MmfSort.DATE }
+        compose.onNodeWithTag("mmf-filters-toggle").performClick(); compose.onNodeWithTag("mmf-filter-remix").performClick(); compose.onNodeWithTag("mmf-filter-support").performClick()
         compose.waitUntil(8000) { api.requests.last().supportFree }
         val r = api.requests.last()
         assertEquals("dragon head", r.query); assertEquals(MmfSort.DATE, r.sort); assertTrue(r.remixAllowed); assertFalse(r.commercialUse); assertEquals(1, r.page)
@@ -177,13 +178,14 @@ class MmfDiscoverDeviceTest {
         val api = FakeApi(listOf(obj(1, "A"), obj(2, "B")))
         show(freshSettings(key = "buildkey1234"), api)
         compose.waitUntil(8000) { api.requests.isNotEmpty() }
+        compose.onNodeWithTag("mmf-filters-toggle").performClick()
         compose.onNodeWithTag("mmf-filter-free").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.FREE }
         compose.onNodeWithTag("mmf-filter-paid").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.PAID }
         compose.onNodeWithTag("mmf-filter-all").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.ANY }
         compose.onAllNodesWithTag("mmf-filter-credit").assertCountEquals(0) // every model asks for credit, so it is not a filter
         compose.onAllNodesWithTag("mmf-filter-fdm").assertCountEquals(0) // FDM is always on, not a filter
         assertTrue(api.requests.all { it.fdmOnly })
-        compose.onNodeWithTag("mmf-fdm-note").assertTextContains("FDM models only", substring = true)
+        compose.onAllNodesWithTag("mmf-fdm-note").assertCountEquals(0) // the disclaimer is gone
     }
 
     // Regression: consuming the redirect used to cancel the in-flight sign-in (the effect's key changed), leaving the token
@@ -197,7 +199,7 @@ class MmfDiscoverDeviceTest {
         var redirect: String? = "nozzleitall://mmf-auth#access_token=tok-abcdefgh&expires_in=604800&state=$state"
         compose.setContent { CompanionTheme { DiscoverScreen(settings, AppDatabase.get(ctx).projectDao(), redirect, { redirect = null }, {}, {}, { FakeApi(emptyList()) }, { slow }) } }
         compose.waitUntil(15000) { compose.onAllNodesWithTag("mmf-signout").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("mmf-account-message").assertTextContains("Signed in", substring = true)
+        compose.onNodeWithText("Signed in until", substring = true).assertExists()
         compose.onAllNodesWithTag("mmf-signin").assertCountEquals(0)
         assertEquals("tok-abcdefgh", settings.load()!!.accessToken); assertNull(settings.pendingState())
     }
@@ -231,7 +233,7 @@ class MmfDiscoverDeviceTest {
         settings.save(MmfSession("live-token-1234", System.currentTimeMillis() + 3 * 86_400_000L, refreshable = false))
         show(settings, FakeApi(emptyList()), auth = { MmfAuthManager(settings, null) })
         compose.waitUntil(8000) { compose.onAllNodesWithTag("mmf-signout").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Signed in - downloads enabled until", substring = true).assertExists()
+        compose.onNodeWithText("Signed in until", substring = true).assertExists()
     }
 
     @Test fun resinLookingModelsAreAlwaysHidden() {

@@ -37,6 +37,8 @@ on:
 
 jobs:
   build-and-test:
+    # A self-hosted runner executes whatever the branch contains, so a pull request from a fork must never run here.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64, android-native]
     timeout-minutes: 60
     env:

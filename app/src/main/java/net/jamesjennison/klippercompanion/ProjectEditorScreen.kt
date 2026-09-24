@@ -522,7 +522,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 // closing the whole screen outright - a real sliced-but-not-yet-started result
                 // shouldn't be one tap from losing the review entirely.
                 IconButton({ if (stage == ProjectEditorStage.EDIT) close() else { if (working && sliceStageLabel == "Slicing…") SlicingCoordinator.cancel(); stage = ProjectEditorStage.EDIT } }, Modifier.testTag("project-editor-close")) {
-                    CompanionIcon(CompanionSymbol.CLOSE)
+                    CompanionIcon(CompanionSymbol.CLOSE, description = if (stage == ProjectEditorStage.EDIT) "Close project" else "Back to editing")
                 }
             }
             when {
@@ -680,12 +680,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                     IconButton({
                                                         val i = if (currentIndex <= 0) workspaceObjects.size - 1 else currentIndex - 1
                                                         selectedId = workspaceObjects[i].projectObject.id
-                                                    }, Modifier.testTag("project-model-prev")) { CompanionIcon(CompanionSymbol.PREV, color = MaterialTheme.colorScheme.onSurface) }
+                                                    }, Modifier.testTag("project-model-prev")) { CompanionIcon(CompanionSymbol.PREV, color = MaterialTheme.colorScheme.onSurface, description = "Previous model") }
                                                     Text("Models ${if (currentIndex >= 0) currentIndex + 1 else 0}/${workspaceObjects.size}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-model-index"))
                                                     IconButton({
                                                         val i = if (currentIndex < 0 || currentIndex >= workspaceObjects.size - 1) 0 else currentIndex + 1
                                                         selectedId = workspaceObjects[i].projectObject.id
-                                                    }, Modifier.testTag("project-model-next")) { CompanionIcon(CompanionSymbol.NEXT, color = MaterialTheme.colorScheme.onSurface) }
+                                                    }, Modifier.testTag("project-model-next")) { CompanionIcon(CompanionSymbol.NEXT, color = MaterialTheme.colorScheme.onSurface, description = "Next model") }
                                                 }
                                             }
                                         }
@@ -1192,7 +1192,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.Transparent, RoundedCornerShape(8.dp))
             .testTag(testTag),
     ) {
-        IconButton(onClick, enabled = enabled) { CompanionIcon(symbol, color = if (active) MaterialTheme.colorScheme.primary else color) }
+        IconButton(onClick, enabled = enabled) { CompanionIcon(symbol, color = if (active) MaterialTheme.colorScheme.primary else color, description = label) }
         Text(label, style = MaterialTheme.typography.labelSmall, color = if (active) MaterialTheme.colorScheme.primary else color)
     }
 }

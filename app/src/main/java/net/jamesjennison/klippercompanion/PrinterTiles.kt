@@ -82,11 +82,11 @@ fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> U
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                CompanionIcon(CompanionSymbol.NOZZLE, Modifier.size(16.dp), color = MaterialTheme.colorScheme.tertiary)
+                                CompanionIcon(CompanionSymbol.NOZZLE, Modifier.size(16.dp), color = MaterialTheme.colorScheme.tertiary, description = "Nozzle temperature")
                                 Text(temperature(snapshot?.nozzle), style = MaterialTheme.typography.bodySmall)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                CompanionIcon(CompanionSymbol.BED, Modifier.size(16.dp), color = MaterialTheme.colorScheme.primary)
+                                CompanionIcon(CompanionSymbol.BED, Modifier.size(16.dp), color = MaterialTheme.colorScheme.primary, description = "Bed temperature")
                                 Text(temperature(snapshot?.bed), style = MaterialTheme.typography.bodySmall)
                             }
                         }

@@ -166,6 +166,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private const val MAX_CONTENT_WIDTH_DP = 720
+
 private enum class BackupStep { NONE, EXPORT_PASSPHRASE, IMPORT_PASSPHRASE }
 
 @Composable
@@ -406,6 +408,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
         }) { padding ->
+        // On a tablet or unfolded screen the single column would stretch edge to edge; keep it a readable width, centred.
+        val wideGutter = (((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - MAX_CONTENT_WIDTH_DP).coerceAtLeast(0)) / 2 + 16).dp
         if (expandedCamera) {
             Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.Center) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -415,12 +419,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 CameraContent(state)
             }
         } else if (tab == 5) {
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = wideGutter - 16.dp)) {
                 DiscoverScreen(settings = remember { MmfSettings(context.applicationContext) }, dao = projectDb.projectDao(), signInRedirect = MmfRedirects.pending, onRedirectConsumed = { MmfRedirects.pending = null },
                     onStartSignIn = { url -> runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) } },
                     onOpenProject = { id -> editingProjectId = id })
             }
-        } else LazyColumn(state = listState, modifier = Modifier.testTag("screen-list").fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
+        } else LazyColumn(state = listState, modifier = Modifier.testTag("screen-list").fillMaxSize().padding(padding).padding(horizontal = wideGutter), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
             // The title block (app icon/name + tab subtitle) and its trailing Manage-printers
             // button were redundant everywhere: the bottom nav already labels every tab
             // (including a direct one-tap Settings entry), and a printer's detail view already

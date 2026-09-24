@@ -46,7 +46,7 @@ import java.util.Locale
             readings?.forEach { toolhead ->
                 Row(Modifier.fillMaxWidth().testTag("toolhead-${toolhead.name}"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        CompanionIcon(CompanionSymbol.NOZZLE, Modifier.size(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        CompanionIcon(CompanionSymbol.NOZZLE, Modifier.size(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, description = "Toolhead")
                         Text(toolhead.name)
                     }
                     Text("${temperature(toolhead.temperature)} / target ${temperature(toolhead.target)}")

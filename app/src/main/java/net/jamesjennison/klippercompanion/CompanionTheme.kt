@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -134,8 +136,9 @@ private fun kilnTypography(): Typography {
 enum class CompanionSymbol { DASHBOARD, CONTROL, FILES, PRINTER, CAMERA, EXPAND, CLOSE, NOZZLE, BED, SLICE, SETTINGS, DUPLICATE, HIDE, RESET, LAYOUT, PREV, NEXT, MOVE, ROTATE, UNDO, REDO, FLAT, ORIENT, MIRROR, MEASURE, CUT, PAINT, DISCOVER }
 
 /** Original outlined symbols; parent controls provide accessible text labels. */
-@Composable fun CompanionIcon(symbol: CompanionSymbol, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Canvas(modifier.size(24.dp)) {
+/** [description] is read by screen readers; leave it null only where the icon sits beside text that already says the same thing. */
+@Composable fun CompanionIcon(symbol: CompanionSymbol, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant, description: String? = null) {
+    Canvas((if (description != null) modifier.semantics { contentDescription = description } else modifier).size(24.dp)) {
         val u = size.minDimension / 24f
         val stroke = Stroke(1.7f * u, cap = StrokeCap.Round)
         fun line(x: Float, y: Float, x2: Float, y2: Float) = drawLine(color, Offset(x*u,y*u), Offset(x2*u,y2*u), strokeWidth=1.7f*u, cap=StrokeCap.Round)

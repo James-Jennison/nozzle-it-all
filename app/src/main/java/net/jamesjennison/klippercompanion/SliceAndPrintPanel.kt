@@ -241,7 +241,7 @@ import java.io.File
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                IconButton({ if(!working) close() }, Modifier.testTag("slicer-close")) { CompanionIcon(CompanionSymbol.CLOSE) }
+                IconButton({ if(!working) close() }, Modifier.testTag("slicer-close")) { CompanionIcon(CompanionSymbol.CLOSE, description = "Close") }
             }
             when {
                 customizing -> {

@@ -75,7 +75,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
         if (reset) { page = 1; results = emptyList(); exhausted = false }
         loading = true; error = null
         val startPage = if (reset) 1 else page + 1
-        val startFilters = MmfSearch(query, startPage, 15, sort, remix, commercial, supportFree, category = category, price = filterMode.price, fdmOnly = fdmOnly)
+        val startFilters = MmfSearch(query, startPage, 24, sort, remix, commercial, supportFree, category = category, price = filterMode.price, fdmOnly = fdmOnly)
         // A newer search cancels this one, so a slow answer for old filters can never overwrite the current list. Under "FDM only" a page can be
         // entirely hidden client-side, so up to five further pages are fetched until something visible turns up.
         searchJob[0] = scope.launch {

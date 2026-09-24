@@ -31,7 +31,7 @@ class MmfLiveDeviceTest {
             assertNotNull(o.designer)
         }
         assertTrue("most results have a cover image", page.items.count { it.coverThumbnail != null } >= page.items.size / 2)
-        assertTrue("files come with each result", page.items.any { it.files.any { f -> f.isModel } })
+        // The list is the "light" response: files are fetched per model when its page opens.
     }
 
     @Test fun sortFiltersAndPagingChangeTheRealResults() {
@@ -56,7 +56,7 @@ class MmfLiveDeviceTest {
     }
 
     @Test fun detailAndFilesEndpointsAgreeWithSearch() {
-        val hit = client().search(MmfSearch("vase", perPage = 5)).items.first { it.files.isNotEmpty() }
+        val hit = client().search(MmfSearch("vase", perPage = 5)).items.first()
         val detail = client().objectDetail(hit.id)
         assertEquals(hit.name, detail.name)
         val files = client().objectFiles(hit.id)
@@ -70,7 +70,7 @@ class MmfLiveDeviceTest {
     }
 
     @Test fun downloadingWithoutSignInIsRefusedBeforeAnyNetworkTraffic() {
-        val f = client().search(MmfSearch("vase", perPage = 5)).items.flatMap { it.files }.first { it.isModel }
+        val f = client().search(MmfSearch("vase", perPage = 5)).items.map { it.id }.firstNotNullOf { id -> client().objectFiles(id).items.firstOrNull { it.isModel } }
         assertThrows(MmfException.Unauthorized::class.java) { client().download(f, "", java.io.File(ctx.cacheDir, "nope.stl")) }
     }
 
@@ -126,5 +126,14 @@ class MmfLiveDeviceTest {
             val page = client().search(MmfSearch("", 1, 15, MmfSort.POPULARITY, price = price, fdmOnly = true))
             assertTrue("$price returned ${page.items.size} items", page.items.isNotEmpty())
         }
+    }
+
+    @Test fun aSearchPageIsSmallAndFast() {
+        val t0 = System.nanoTime()
+        val page = client().search(MmfSearch("", 1, 24, MmfSort.POPULARITY, price = MmfPrice.FREE, fdmOnly = true))
+        val ms = (System.nanoTime() - t0) / 1_000_000
+        assertTrue("got ${page.items.size} items", page.items.size >= 10)
+        assertTrue("took $ms ms", ms < 15_000)
+        android.util.Log.i("MmfLive", "24-item light page in $ms ms")
     }
 }

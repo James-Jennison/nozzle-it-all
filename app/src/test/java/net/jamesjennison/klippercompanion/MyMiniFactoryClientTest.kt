@@ -101,4 +101,9 @@ class MyMiniFactoryClientTest {
         s.enqueue(MockResponse().setBody("")); assertThrows(MmfException.Malformed::class.java) { c.download(file(s.url("/f").toString()), "T", t) }
         assertFalse(t.exists()); assertFalse(File(t.path + ".part").exists())
     }
+
+    @Test fun searchAsksForTheLightResponseBecauseTheFullOneCarriesMegabytesOfPerModelPrintHistory() = withServer { s, c ->
+        s.enqueue(MockResponse().setBody(page)); c.search(MmfSearch("x"))
+        assertEquals("1", s.takeRequest().requestUrl!!.queryParameter("light"))
+    }
 }

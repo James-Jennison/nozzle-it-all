@@ -41,8 +41,12 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("mode", choices=["update", "verify"])
     ap.add_argument("--engine-root", default=os.environ.get("ORCASLICER_ENGINE_ROOT", "/mnt/faststorage/orcaslicer-android-engine"))
     ap.add_argument("--allow-missing-deps", action="store_true",
-                    help="verify only: when deps/src is absent (a runner that has prebuilt deps but not their source archives), check the upstream commit and patch and warn that the archives were not checked")
+                    help="verify only: tolerate an engine copy that cannot be fully checked (no deps/src archives: commit and patch are still checked; not a git checkout: nothing can be), printing a loud warning instead of failing")
     a = ap.parse_args()
+    if not os.path.isdir(os.path.join(a.engine_root, "orcaslicer", ".git")):
+        if a.mode == "verify" and a.allow_missing_deps:
+            print(f"WARNING: {a.engine_root}/orcaslicer is not a git checkout, so the engine could NOT be verified against the pin at all (commit, patch and archives all unchecked)", file=sys.stderr); return 0
+        print(f"ENGINE PIN: {a.engine_root}/orcaslicer is not a git checkout, so the pin cannot be checked", file=sys.stderr); return 1
     live = snapshot(a.engine_root)
     if live["dependencies"] is None and (a.mode == "update" or not a.allow_missing_deps):
         print(f"ENGINE PIN: {a.engine_root}/deps/src is missing, so the dependency archives cannot be checked (pass --allow-missing-deps to verify only the commit and patch)", file=sys.stderr); return 1

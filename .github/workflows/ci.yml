@@ -57,8 +57,8 @@ jobs:
 
       # Phase 9g: the engine must be exactly the pinned upstream commit + patch + dependency archives.
       - name: Verify engine pin
-        # The runner's engine has prebuilt deps/install but not the deps/src archives, so the archive hashes cannot be checked here;
-        # the upstream commit and the patch still are (and a full check runs wherever deps/src exists).
+        # The runner's engine is a plain copy (no .git, no deps/src archives), so the pin cannot be verified there yet: this step
+        # warns loudly instead of failing. Give the runner a real checkout plus deps/src and drop the flag to enforce it.
         run: python3 scripts/engine_pin.py verify --allow-missing-deps --engine-root "$ORCASLICER_ENGINE_ROOT"
 
       - name: Unit tests + lint

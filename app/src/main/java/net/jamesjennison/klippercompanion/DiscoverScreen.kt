@@ -98,6 +98,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
     LaunchedEffect(api) { if (api != null && results.isEmpty()) search(true) }
 
     // A stored session that has since expired is cleared and explained, so the screen never claims a dead login.
+    LaunchedEffect(auth) { val st = settings.load(); android.util.Log.i("MmfSignIn", "discover opened: stored session=${st != null} refreshable=${st?.refreshable} expiresInMin=${st?.let { (it.expiresAtMs - System.currentTimeMillis()) / 60000 }} auth=${auth != null}") }
     LaunchedEffect(auth) { if (settings.load() != null && auth != null && !auth.isSignedIn()) { settings.clear(); signedIn = false; setAccountMessage("Your MyMiniFactory session expired - sign in again.") } }
 
     LaunchedEffect(signInRedirect) {
@@ -113,7 +114,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
                 val (token, expiresIn) = MmfAuthLinks.parseRedirect(redirect, state)
                 val device = MmfDeviceInfo(settings.deviceId(), android.os.Build.MANUFACTURER, android.os.Build.MODEL, java.util.Locale.getDefault().toLanguageTag(), "NozzleItAll/${BuildConfig.VERSION_NAME}")
                 io { (auth ?: throw MmfException.NotConfigured()).completeSignIn(token, expiresIn, device) }
-                android.util.Log.i("MmfSignIn", "completed; saved session present=${settings.load() != null} signedIn=${auth?.isSignedIn()}")
+                android.util.Log.i("MmfSignIn", "completed; expiresIn=${settings.load()?.let { (it.expiresAtMs - System.currentTimeMillis()) / 60000 }}min saved session present=${settings.load() != null} signedIn=${auth?.isSignedIn()}")
                 setAccountMessage("Signed in to MyMiniFactory.")
             } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: MmfAuthLinks.SignInFailed) { setAccountMessage(e.message) } catch (e: MmfException) { setAccountMessage(e.message) }
             catch (e: Exception) { setAccountMessage("Sign-in failed: ${e.message ?: e.javaClass.simpleName}") }

@@ -266,7 +266,7 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
             printable.forEach { f ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("mmf-file-${f.id}")) {
                     Checkbox(f.id in chosen, { on -> picked = if (on) chosen + f.id else chosen - f.id })
-                    Text("${f.filename}" + (f.sizeBytes?.let { "  ·  ${formatBytes(it)}" } ?: ""), style = MaterialTheme.typography.bodySmall)
+                    Text("${f.filename}" + (f.sizeBytes?.let { "  ·  ${formatBytes(it)}" } ?: ""), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("mmf-detail-error")) }

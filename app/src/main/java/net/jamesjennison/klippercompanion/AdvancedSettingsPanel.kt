@@ -32,7 +32,7 @@ fun AdvancedSettingsPanel(overrides: Map<String, String>, printerKey: String, fa
     var compareWith by remember { mutableStateOf<CustomProfile?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("advanced-settings")) {
         Text("Advanced settings", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             SettingTier.entries.forEach { t -> FilterChip(tier == t, { tier = t }, label = { Text(t.label) }, modifier = Modifier.testTag("advanced-tier-${t.name.lowercase()}")) }
         }
         OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("advanced-search"))
@@ -49,12 +49,14 @@ fun AdvancedSettingsPanel(overrides: Map<String, String>, printerKey: String, fa
             Button({ store.save(CustomProfile(profileName.trim(), printerKey, overrides)); profileName = ""; profiles = store.all() }, enabled = profileName.isNotBlank() && overrides.isNotEmpty(), modifier = Modifier.testTag("advanced-profile-save")) { Text("Save") }
         }
         profiles.forEach { p ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("${p.name} (${p.overrides.size})", modifier = Modifier.weight(1f))
+            Column {
+                Text("${p.name} (${p.overrides.size})", maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton({ onOverridesChange(p.overrides) }, modifier = Modifier.testTag("advanced-profile-apply-${p.name}")) { Text("Apply") }
                 TextButton({ compareWith = if (compareWith == p) null else p }, modifier = Modifier.testTag("advanced-profile-compare-${p.name}")) { Text("Compare") }
                 TextButton({ store.delete(p.name); profiles = store.all(); if (compareWith == p) compareWith = null }) { Text("Delete") }
             }
+                }
         }
         compareWith?.let { other ->
             val diff = compareOverrides(overrides, other.overrides)

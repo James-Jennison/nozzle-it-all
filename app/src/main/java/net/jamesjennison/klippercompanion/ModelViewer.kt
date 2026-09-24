@@ -641,7 +641,7 @@ internal fun computeOutOfBounds(geometry: MeshGeometry, transform: ModelTransfor
                 loadError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("model-viewer-error")) }
             }
             if (paintState != null || transformState != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FilterChip(mode == ViewerMode.SELECT, { mode = ViewerMode.SELECT }, label = { Text("Select") }, modifier = Modifier.testTag("paint-mode-select"))
                     if (transformState != null) {
                         FilterChip(
@@ -674,7 +674,7 @@ internal fun computeOutOfBounds(geometry: MeshGeometry, transform: ModelTransfor
                     )
                 }
                 if (paintMode) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(itemVerticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(enforcerMode, { enforcerMode = true }, label = { Text("Add support") }, modifier = Modifier.testTag("paint-enforcer"))
                         FilterChip(!enforcerMode, { enforcerMode = false }, label = { Text("Remove support") }, modifier = Modifier.testTag("paint-blocker"))
                     }

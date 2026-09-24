@@ -44,7 +44,7 @@ import kotlinx.coroutines.*
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Printer: ${state.address}")
             Text("Choose speed or flow, review the exact M220/M221 command, then confirm. Only idle-printer changes are supported here.")
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FilterChip(kind == "speed", { kind = "speed"; invalidate() }, enabled = !busy, label = { Text("Speed factor") }, modifier = Modifier.testTag("speedflow-speed"))
                 FilterChip(kind == "flow", { kind = "flow"; invalidate() }, enabled = !busy, label = { Text("Flow (extrude) factor") }, modifier = Modifier.testTag("speedflow-flow"))
             }

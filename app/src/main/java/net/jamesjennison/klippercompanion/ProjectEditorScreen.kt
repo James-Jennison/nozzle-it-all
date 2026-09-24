@@ -1116,7 +1116,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Tool slot", style = MaterialTheme.typography.labelMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         (1..toolCount).forEach { slot ->
                             FilterChip(pendingToolSlot == slot, { pendingToolSlot = slot }, label = { Text("Tool $slot") }, modifier = Modifier.testTag("project-object-tool-$slot"))
                         }
@@ -1161,7 +1161,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(Uri.parse(obj.sourceFileUri).lastPathSegment ?: obj.id, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), color = if (hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                Text(Uri.parse(obj.sourceFileUri).lastPathSegment ?: obj.id, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f), color = if (hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
                 if (onToggleHidden != null) TextButton(onToggleHidden, modifier = Modifier.testTag("project-object-toggle-hidden-${obj.id}")) { Text(if (hidden) "Show" else "Hide") }
                 TextButton(onClick) { Text(if (selected) "Selected" else "Select") }
             }

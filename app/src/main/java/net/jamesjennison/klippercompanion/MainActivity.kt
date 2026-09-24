@@ -703,10 +703,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     }
                     if(showProjects) {
                         item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button({ newProjectNameDraft = "" }, modifier = Modifier.testTag("new-project")) { Text("New project") }
-                                OutlinedButton({ importProject.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("import-project")) { Text("Import project") }
-                                OutlinedButton({ calibrationDialog = true }, modifier = Modifier.testTag("new-calibration")) { Text("Calibration") }
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Button({ newProjectNameDraft = "" }, modifier = Modifier.testTag("new-project")) { Text("New project", maxLines = 1) }
+                                OutlinedButton({ importProject.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("import-project")) { Text("Import project", maxLines = 1) }
+                                OutlinedButton({ calibrationDialog = true }, modifier = Modifier.testTag("new-calibration")) { Text("Calibration", maxLines = 1) }
                             }
                             importMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("import-project-message")) }
                         }

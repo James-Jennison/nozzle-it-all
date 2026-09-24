@@ -10,8 +10,9 @@ object LocalNetwork {
     /** Every other host on the phone's /24 (or the smaller subnet it is in), or empty when not on a private LAN. */
     fun scanHosts(context: Context): List<String> {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return emptyList()
-        val link = cm.getLinkProperties(cm.activeNetwork ?: return emptyList()) ?: return emptyList()
-        val addr = link.linkAddresses.firstOrNull { it.address is Inet4Address && it.address.isSiteLocalAddress } ?: return emptyList()
+        // The active network is often a VPN (Tailscale) or cellular; the LAN is whichever connected network holds a private IPv4 address.
+        val addr = cm.allNetworks.asSequence().mapNotNull { cm.getLinkProperties(it) }
+            .flatMap { it.linkAddresses.asSequence() }.firstOrNull { it.address is Inet4Address && it.address.isSiteLocalAddress } ?: return emptyList()
         return hostsIn(addr.address.address, addr.prefixLength)
     }
 

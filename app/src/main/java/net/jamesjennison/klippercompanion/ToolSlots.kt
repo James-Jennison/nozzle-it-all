@@ -27,8 +27,11 @@ data class ToolSlot(val index: Int, val capability: ToolCapability)
 // testable-without-a-device convention.
 internal fun parseToolCount(machineJson: String): Int {
     val obj = org.json.JSONObject(machineJson)
-    val colors = obj.optJSONArray("extruder_colour")
-    return colors?.length()?.takeIf { it > 0 } ?: 1
+    val colors = obj.optJSONArray("extruder_colour")?.length() ?: 0
+    // The Prusa XL 5T profile declares a single extruder_colour but five nozzle_diameter entries - the larger of the
+    // two arrays is the machine's real extruder count.
+    val nozzles = obj.optJSONArray("nozzle_diameter")?.length() ?: 0
+    return maxOf(colors, nozzles).takeIf { it > 0 } ?: 1
 }
 
 internal fun SlicingProfilePack.readToolCount(context: Context): Int =

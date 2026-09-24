@@ -9,6 +9,12 @@ import java.io.File
 // machine.json/filament.json (not synthetic fixtures for the parse step, the same discipline
 // BedShapeTest already uses for printable_area).
 class SliceValidationTest {
+    @Test fun machineLimitsAcceptBothArrayAndPlainStringForms() {
+        assertEquals(MachineLimits(0.07, 0.3), parseMachineLimits("""{"min_layer_height":["0.07"],"max_layer_height":["0.3"]}"""))
+        assertEquals(MachineLimits(0.07, 0.3), parseMachineLimits("""{"min_layer_height":"0.07","max_layer_height":"0.3"}"""))
+        assertEquals(MachineLimits(null, null), parseMachineLimits("""{}"""))
+    }
+
     @Test fun everyBundledMachineJsonParsesToRealLayerHeightLimits() {
         val root = File("src/main/assets/slicer_profiles")
         val machineFiles = root.listFiles()?.mapNotNull { dir -> File(dir, "machine.json").takeIf { it.exists() } }.orEmpty()

@@ -128,4 +128,15 @@ class MultiMaterialDeviceTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("project-paint-kind-support_enforcer").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithTag("project-paint-kind-material").assertCountEquals(0)
     }
+
+    @Test fun aPrusaXlOverPrusaLinkIsAFiveToolIndependentToolMachineInTheEditor() {
+        val projectId = seed("MMXl")
+        val address = "http://xl-mm.local/"
+        val state = ScreenState(address = address, connected = true, profiles = listOf(PrinterProfile(address, "XL", kind = PrinterKind.PRUSA_LINK, slicingModel = SlicingPrinterModel.PRUSA_XL_5T)))
+        compose.setContent { CompanionTheme { ProjectEditorScreen(projectId, null, state, { _, _ -> }, {}) } }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("project-multimaterial-family").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("project-multimaterial-family").assertTextContains("Independent tools")
+        compose.onNodeWithText("5 real tool slots", substring = true).assertExists()
+        compose.onAllNodesWithTag("project-prime-tower").assertCountEquals(0)
+    }
 }

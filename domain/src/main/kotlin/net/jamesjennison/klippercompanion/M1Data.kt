@@ -9,7 +9,7 @@ enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LI
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing
 // profile declared for this printer yet"; also ordinal-independent persistence, by name().
-enum class SlicingPrinterModel { SNAPMAKER_U1, ELEGOO_CENTAURI_CARBON, BAMBU_GENERIC, PRUSA_GENERIC, GENERIC_KLIPPER }
+enum class SlicingPrinterModel { SNAPMAKER_U1, ELEGOO_CENTAURI_CARBON, BAMBU_GENERIC, PRUSA_GENERIC, GENERIC_KLIPPER, PRUSA_XL_5T }
 // serial identifies a BAMBU_LAB printer to its own MQTT/FTPS/camera transports and is unused by
 // every other kind. It is not a credential (apiKey is), so it persists alongside name/cameraId.
 // slicingModel/declaredFirmwareVersion are WO-13's firmware-identity fields: slicingModel picks

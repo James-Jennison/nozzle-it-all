@@ -21,6 +21,7 @@ internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: Co
     SlicingPrinterModel.BAMBU_GENERIC -> SlicingProfilePack("slicer_profiles/bambu_generic")
     SlicingPrinterModel.PRUSA_GENERIC -> SlicingProfilePack("slicer_profiles/prusa_generic")
     SlicingPrinterModel.GENERIC_KLIPPER -> SlicingProfilePack("slicer_profiles/generic_klipper")
+    SlicingPrinterModel.PRUSA_XL_5T -> SlicingProfilePack("slicer_profiles/prusa_xl_5t")
     SlicingPrinterModel.ELEGOO_CENTAURI_CARBON ->
         if (cosmosGeneration == CosmosProfileGeneration.CURRENT) SlicingProfilePack("slicer_profiles/elegoo_centauri_carbon_cosmos", CosmosProfileGeneration.CURRENT)
         else null

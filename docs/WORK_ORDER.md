@@ -2391,7 +2391,15 @@ P28/M7 sections for what each one built and its commit hash.)*
     - **Per-painted-region material:** a Material paint kind (a tool number per stroke, stored as code 10+tool) replayed natively
       into `mmu_segmentation_facets`. Device test: one cube assigned to tool 1 prints only `T0` normally; with a tool-2 stroke on its
       side the G-code gains `T1` and both tools extrude.
-    - **Still not done, and why:** no Prusa XL bundled profile exists (so nothing is verified for XL's own toolchange G-code); no
+    - **Prusa XL 5T pack added (same day, after the owner asked why it was missing):** `slicer_profiles/prusa_xl_5t` (Prusa XL 5T 0.4
+      nozzle / 0.20mm Speed @Prusa XL 5T 0.4 / Generic PLA @Prusa XL 5T), flattened by the new `scripts/flatten_orca_profile.py`, selectable
+      as "Prusa XL (5 tools)" in the printer wizard and settings. Device-tested: 5 tools, 360 mm bed, a plain slice, and a two-tool slice
+      whose G-code changes tools 100 times with both tools extruding. Three real problems found and fixed on the way: the profile's
+      `extruder_colour` has one entry but `nozzle_diameter` has five (tool count now takes the larger); the profile ships no 5x5
+      flush matrix, so a 5-slot slice failed validation (`MultiToolFilamentConfig` now always generates a square matrix for the real
+      slot count); upstream declares `min_layer_height` as a plain string here, not an array (parser accepts both). Like the U1, the
+      engine forces the prime tower off although the XL process profile enables it. Not checked against a physical XL.
+    - **Still not done, and why:** nothing is verified against a physical XL or U1; no
       physical multi-tool print was run; Bambu AMS multi-material is not wired (the Bambu bundle path is single-material, and
       libslic3r's AMS handling is unverified here).
 

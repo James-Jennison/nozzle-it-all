@@ -14,6 +14,7 @@ plain `ConfigBase::load()` calls with no inherits resolution of its own (see
 | `snapmaker_u1` | Snapmaker U1 (0.4 nozzle) | 0.20 Standard @Snapmaker U1 (0.4 nozzle) | Snapmaker PLA @U1 |
 | `bambu_generic` | Bambu Lab A1 0.4 nozzle | 0.20mm Standard @BBL A1 | Bambu PLA Basic @BBL A1 |
 | `prusa_generic` | Prusa MK4 0.4 nozzle | 0.20mm Standard @MK4 | Generic PLA @Prusa MK4 |
+| `prusa_xl_5t` | Prusa XL 5T 0.4 nozzle (five toolheads; `nozzle_diameter` has 5 entries) | 0.20mm Speed @Prusa XL 5T 0.4 (Prusa's own standard-quality XL profile) | Generic PLA @Prusa XL 5T |
 | `generic_klipper` | MyKlipper 0.4 nozzle (OrcaSlicer's own generic-Klipper template, vendor "Custom") | 0.20mm Standard @MyKlipper | Generic PLA @System |
 | `elegoo_centauri_carbon_cosmos` | Elegoo Centauri Carbon 0.4 nozzle **+ the COSMOS G-code overlay below** | 0.20mm Standard @Elegoo CC 0.4 nozzle | Elegoo PLA @ECC |
 
@@ -60,3 +61,6 @@ elsewhere - see `docs/WORK_ORDER.md`'s WO-9). `generic_klipper` and
 through this app's own pipeline yet either (only the machine-chain resolution itself
 was checked, not an actual slice) - see WO-13's own status for what's confirmed vs.
 still open.
+
+
+`prusa_xl_5t` was flattened with `scripts/flatten_orca_profile.py` (the same child-over-parent resolution, now scripted) from the vendored engine's `resources/profiles/Prusa`. It has not been checked against a physical XL.

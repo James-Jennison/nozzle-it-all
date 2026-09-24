@@ -15,6 +15,9 @@ package net.jamesjennison.klippercompanion
 // bounds - so an unmentioned key safely and correctly falls back to slot 1's own bundled value
 // for every other slot, with no need to replicate it here.
 object MultiToolFilamentConfig {
+    const val FLUSH_BETWEEN_TOOLS_MM3 = 84
+    const val FLUSH_UNLOAD_LOAD_MM3 = 140
+
     // slots: index i is real tool slot (i+1) - a null entry means "no material assigned to this
     // slot", which falls back to `fallback` (typically the printer's own bundled default
     // material) so every slot still has a real, valid identity even when a project has only
@@ -35,6 +38,13 @@ object MultiToolFilamentConfig {
         val defaultNozzleC = fallback.tempNozzleC ?: 210
         overrides["nozzle_temperature"] = resolved.joinToString(",") { (it.tempNozzleC ?: defaultNozzleC).toString() }
         overrides["nozzle_temperature_initial_layer"] = resolved.joinToString(",") { (it.tempNozzleC ?: defaultNozzleC).toString() }
+        // libslic3r's Print::validate() rejects a slice whose flush matrix is not N x N for N filaments ("Flush volumes
+        // matrix do not match to the correct size!"). The Snapmaker U1 profile ships a 4x4 one; the Prusa XL 5T profile
+        // ships none for five tools, so it is always generated here for the real slot count: 0 on the diagonal and
+        // [flushVolumeMm3] between different tools (the U1 profile's own value), plus the per-filament unload/load pair.
+        val n = resolved.size
+        overrides["flush_volumes_matrix"] = (0 until n * n).joinToString(",") { if (it / n == it % n) "0" else FLUSH_BETWEEN_TOOLS_MM3.toString() }
+        overrides["flush_volumes_vector"] = List(n * 2) { FLUSH_UNLOAD_LOAD_MM3.toString() }.joinToString(",")
         return overrides
     }
 

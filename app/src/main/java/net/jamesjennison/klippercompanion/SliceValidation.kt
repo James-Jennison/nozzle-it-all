@@ -70,7 +70,9 @@ fun validateSliceConfiguration(
 // printable_area parsing already handles - first element only, real per-printer data.
 internal fun parseMachineLimits(machineJson: String): MachineLimits {
     val obj = JSONObject(machineJson)
-    fun firstDouble(key: String): Double? = obj.optJSONArray(key)?.takeIf { it.length() > 0 }?.optString(0)?.toDoubleOrNull()
+    // Upstream Prusa XL profiles declare these as plain strings ("0.07"), every other bundled profile as one-element
+    // arrays; the engine accepts both, so this does too.
+    fun firstDouble(key: String): Double? = obj.optJSONArray(key)?.takeIf { it.length() > 0 }?.optString(0)?.toDoubleOrNull() ?: obj.optString(key, "").toDoubleOrNull()
     return MachineLimits(firstDouble("min_layer_height"), firstDouble("max_layer_height"))
 }
 

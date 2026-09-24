@@ -76,4 +76,31 @@ class SlicingProfilePacksDeviceTest {
         val gcode = sliceCube(SlicingPrinterModel.PRUSA_GENERIC)
         assertTrue(gcode.contains("G1"))
     }
+
+    // The Prusa XL 5T pack (flattened by scripts/flatten_orca_profile.py): five toolheads on a 360 mm bed.
+    @Test fun prusaXl5tProfileSlicesRealGcodeAndIsAFiveToolMachineOnA360mmBed() {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        assertEquals(5, toolCountFor(SlicingPrinterModel.PRUSA_XL_5T, null, appContext))
+        val bed = bedShapeFor(SlicingPrinterModel.PRUSA_XL_5T, null, appContext)!!.points
+        assertEquals(360f, bed.maxOf { it.first }); assertEquals(360f, bed.maxOf { it.second })
+        assertTrue(sliceCube(SlicingPrinterModel.PRUSA_XL_5T).contains("G1"))
+    }
+
+    @Test fun aTwoToolPrusaXlSliceChangesToolsAndBothToolsExtrude() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        fun cube(name: String) = File(appContext.cacheDir, name).also { f -> testContext.assets.open("cube.stl").use { it.copyTo(f.outputStream()) } }
+        val a = cube("xl-a.stl"); val b = cube("xl-b.stl"); val out = File(appContext.cacheDir, "xl-two-tool.gcode").also { it.delete() }
+        val pack = slicingProfilePack(SlicingPrinterModel.PRUSA_XL_5T, null)!!
+        val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }; val petg = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-petg" }
+        val overrides = MultiToolFilamentConfig.overridesFor(1.75, listOf(pla, petg, pla, pla, pla), pla)
+        NativeEngine.nativeSliceMultiObject(arrayOf(a.absolutePath, b.absolutePath), doubleArrayOf(-30.0, 30.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 1.0), intArrayOf(1, 2),
+            out.absolutePath, pack.materialize(appContext).toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+        val toolpath = out.inputStream().buffered().use { GcodePreview.parse(it) }
+        assertTrue("tool 2 (T1) must appear in the XL's own toolchange G-code, tools: ${toolpath.toolsUsed}", 1 in toolpath.toolsUsed)
+        assertTrue(toolpath.toolChanges.size > 10)
+        val stats = GcodeStatsParser.parse(out)
+        assertTrue("both tools extrude: ${stats.perToolGrams}", stats.toolsUsed.containsAll(listOf(0, 1)))
+        assertEquals("the engine keeps the prime tower off on independent-tool machines, even though the XL process profile enables it", false, stats.primeTower)
+    }
 }

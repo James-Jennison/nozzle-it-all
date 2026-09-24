@@ -93,6 +93,7 @@ import androidx.compose.ui.unit.dp
             FilterChip(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON,{slicingModel=SlicingPrinterModel.ELEGOO_CENTAURI_CARBON},label={Text("Elegoo Centauri Carbon")},modifier=Modifier.testTag("slicing-model-centauri-carbon"))
             FilterChip(slicingModel==SlicingPrinterModel.BAMBU_GENERIC,{slicingModel=SlicingPrinterModel.BAMBU_GENERIC},label={Text("Bambu Lab")})
             FilterChip(slicingModel==SlicingPrinterModel.PRUSA_GENERIC,{slicingModel=SlicingPrinterModel.PRUSA_GENERIC},label={Text("Prusa")})
+            FilterChip(slicingModel==SlicingPrinterModel.PRUSA_XL_5T, {slicingModel=SlicingPrinterModel.PRUSA_XL_5T}, label={Text("Prusa XL (5 tools)")}, modifier=Modifier.testTag("slicing-model-prusa-xl"))
             FilterChip(slicingModel==SlicingPrinterModel.GENERIC_KLIPPER,{slicingModel=SlicingPrinterModel.GENERIC_KLIPPER},label={Text("Generic Klipper")})
         }
         // COSMOS's real hard-e-stop risk (FirmwareIdentity.kt) is why this is a live read, not a

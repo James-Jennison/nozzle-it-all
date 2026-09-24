@@ -120,6 +120,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, {slicingModel=SlicingPrinterModel.ELEGOO_CENTAURI_CARBON}, label={Text("Elegoo Centauri Carbon")}, modifier=Modifier.testTag("wizard-slicing-centauri-carbon"))
                         FilterChip(slicingModel==SlicingPrinterModel.BAMBU_GENERIC, {slicingModel=SlicingPrinterModel.BAMBU_GENERIC}, label={Text("Bambu Lab")})
                         FilterChip(slicingModel==SlicingPrinterModel.PRUSA_GENERIC, {slicingModel=SlicingPrinterModel.PRUSA_GENERIC}, label={Text("Prusa")})
+                        FilterChip(slicingModel==SlicingPrinterModel.PRUSA_XL_5T, {slicingModel=SlicingPrinterModel.PRUSA_XL_5T}, label={Text("Prusa XL (5 tools)")}, modifier=Modifier.testTag("slicing-model-prusa-xl"))
                         FilterChip(slicingModel==SlicingPrinterModel.GENERIC_KLIPPER, {slicingModel=SlicingPrinterModel.GENERIC_KLIPPER}, label={Text("Generic Klipper")})
                     }
                 }

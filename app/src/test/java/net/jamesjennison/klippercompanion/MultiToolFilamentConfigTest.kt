@@ -43,4 +43,15 @@ class MultiToolFilamentConfigTest {
         val overrides = MultiToolFilamentConfig.overridesFor(2.0, listOf(pla, pla), pla)
         assertEquals("2,2", overrides.getValue("filament_diameter"))
     }
+
+    @Test fun flushMatrixIsAlwaysSquareForTheRealSlotCountWithAZeroDiagonal() {
+        val pla = BUNDLED_MATERIAL_PROFILES.first()
+        for (n in listOf(2, 4, 5)) {
+            val o = MultiToolFilamentConfig.overridesFor(1.75, List(n) { pla }, pla)
+            val matrix = o.getValue("flush_volumes_matrix").split(',').map { it.toInt() }
+            assertEquals(n * n, matrix.size)
+            for (i in 0 until n) for (j in 0 until n) assertEquals(if (i == j) 0 else MultiToolFilamentConfig.FLUSH_BETWEEN_TOOLS_MM3, matrix[i * n + j])
+            assertEquals(n * 2, o.getValue("flush_volumes_vector").split(',').size)
+        }
+    }
 }

@@ -43,6 +43,10 @@ on:
         description: "Reuse this existing Device Farm app upload instead of uploading the built APK (blank = upload). For isolating signing problems."
         required: false
         default: ""
+      test_filter:
+        description: "Device Farm instrumentation filter (e.g. a fully qualified test class) to run only part of the suite (blank = everything)."
+        required: false
+        default: ""
       test_upload_arn:
         description: "Reuse this existing Device Farm test-package upload instead of uploading the built one (blank = upload)."
         required: false
@@ -119,6 +123,7 @@ jobs:
       PROJECT_ARN: "arn:aws:devicefarm:us-west-2:000000000000:project:1aced661-0a79-4dc0-b5bb-8ab8372a3970"
       APP_UPLOAD_ARN: ${{ inputs.app_upload_arn }}
       TEST_UPLOAD_ARN: ${{ inputs.test_upload_arn }}
+      TEST_FILTER: ${{ inputs.test_filter }}
       DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || 'arn:aws:devicefarm:us-west-2:000000000000:devicepool:1aced661-0a79-4dc0-b5bb-8ab8372a3970/f6f8c8e4-3714-4474-9b57-84c1e87ad2f9' }}
     steps:
       - uses: actions/download-artifact@v4
@@ -164,7 +169,7 @@ jobs:
             --app-arn "$app_arn" \
             --device-pool-arn "$DEVICE_POOL_ARN" \
             --name "ci-${GITHUB_SHA::7}" \
-            --test "type=INSTRUMENTATION,testPackageArn=$test_arn")
+            --test "type=INSTRUMENTATION,testPackageArn=$test_arn${TEST_FILTER:+,filter=$TEST_FILTER}")
           run_arn=$(echo "$run_json" | jq -r '.run.arn')
           echo "Device Farm run: https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/$(basename "$PROJECT_ARN")/runs/$(basename "$run_arn")"
 

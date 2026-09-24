@@ -2450,3 +2450,8 @@ P28/M7 sections for what each one built and its commit hash.)*
 - **The four 2026-09-16 reference-pass ideas** — community model import, mid-print
   object exclusion, solo phone-initiated slicing, input-shaper/resonance
   calibration. Listed for visibility only; none has a backlog ID yet.
+
+## WO-37: Printer discovery and Bambu emulator checks (2026-09-24)
+- **Scan network** (Add printer wizard): `PrinterScanner` sweeps the phone's private /24 for Moonraker (`/server/info`) and PrusaLink (`/api/version`) by their real replies, classifies the Snapmaker U1 and Centauri Carbon from `printer/info`, and listens for Bambu SSDP announcements (joins the multicast group, also probes each host directly), which carry the serial. Verified live on the real U1 and CC1 (`PrinterScanDeviceTest`, opt-in `-e approved_scan true`).
+- **fakebambu** (github.com/jc21/fakebambu, no licence file: run only as an external test tool, never copied or shipped) built from source in Docker and run on the dev machine. `FakeBambuDeviceTest` (opt-in `-e fakebambu_host/serial/code`) passes: SSDP discovery with serial, MQTT status, wrong-code failure, FTPS upload with size check, wizard scan-to-finish. Emulator gaps, not client bugs: its TLS certificate CN is the device name (run it with `-name <serial>` to match real printers), and it never sends the explicit `project_file` `result: success` acknowledgement, so the print-start test asserts the client reaches the acknowledgement wait. **The acknowledgement path is still unverified against a real Bambu printer.**
+- Found and fixed by it: the scanner never received Bambu announcements because it did not join the SSDP multicast group.

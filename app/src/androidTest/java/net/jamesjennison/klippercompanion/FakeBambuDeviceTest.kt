@@ -1,8 +1,12 @@
 package net.jamesjennison.klippercompanion
 
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
+import org.junit.Rule
 import org.junit.Test
 import java.io.File
 
@@ -10,6 +14,7 @@ import java.io.File
 // independent implementation of the protocol; it does not prove behaviour on a real Bambu printer. Opt in with:
 //   -e fakebambu_host <ip> -e fakebambu_serial <serial> -e fakebambu_code <access code>
 class FakeBambuDeviceTest {
+    @get:Rule val compose = createComposeRule()
     private val args get() = InstrumentationRegistry.getArguments()
     private val host get() = args.getString("fakebambu_host").orEmpty()
     private val serial get() = args.getString("fakebambu_serial").orEmpty()
@@ -73,5 +78,21 @@ class FakeBambuDeviceTest {
         } catch (e: ApiFailure) {
             assertTrue("failed after the upload and publish, at the acknowledgement: ${e.message}", e.message.orEmpty().contains("did not acknowledge"))
         } finally { service.close(); file.delete() }
+    }
+
+    @Test fun theWizardScansFindsTheBambuFillsItsSerialAndCompletesWithTheAccessCode() {
+        opted()
+        var committed: PrinterProfile? = null
+        compose.setContent { CompanionTheme { AddPrinterWizard(existingAddresses = emptyList(), addProfile = { committed = it; null }, openPrinter = {}, close = {}) } }
+        compose.onNodeWithTag("wizard-scan").performClick()
+        compose.waitUntil(60_000) { compose.onAllNodes(SemanticsMatcher("found bambu") { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.TestTag) == "wizard-found-$host" }).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("wizard-found-$host").performClick()
+        compose.onNodeWithTag("wizard-bambu-serial").assertTextContains(serial)
+        compose.onNodeWithTag("wizard-bambu-access-code").performTextInput(code)
+        compose.onNodeWithTag("wizard-next-1").performClick()
+        compose.onNodeWithTag("wizard-next-2").performClick()
+        compose.waitUntil(60_000) { runCatching { compose.onNodeWithTag("wizard-finish").assertIsEnabled() }.isSuccess }
+        compose.onNodeWithTag("wizard-finish").performClick()
+        assertEquals(PrinterKind.BAMBU_LAB, committed?.kind); assertEquals(serial, committed?.serial); assertEquals(SlicingPrinterModel.BAMBU_GENERIC, committed?.slicingModel)
     }
 }

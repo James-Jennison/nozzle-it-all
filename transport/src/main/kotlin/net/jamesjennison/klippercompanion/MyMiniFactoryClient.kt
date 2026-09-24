@@ -64,7 +64,7 @@ class MyMiniFactoryClient(
         val flag = { on: Boolean -> if (on) "1" else null }
         val json = getJson(url("search", mapOf(
             "q" to request.query.trim().take(200), "page" to request.page.coerceIn(1, 1000).toString(), "per_page" to request.perPage.coerceIn(1, 60).toString(),
-            "sort" to request.sort.code, "cat" to request.category?.toString(), "remix" to flag(request.remixAllowed), "commercial_use" to flag(request.commercialUse), "support" to flag(request.supportFree))))
+            "sort" to request.sort.code, "cat" to request.category?.toString(), "remix" to flag(request.remixAllowed), "commercial_use" to flag(request.commercialUse), "support" to flag(request.supportFree), "store" to request.price.apiValue, "tech" to if (request.fdmOnly) "FDM" else null)))
         return parsed { MmfParser.parseSearch(json) }
     }
 

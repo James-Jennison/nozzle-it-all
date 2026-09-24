@@ -25,6 +25,18 @@ class MyMiniFactoryClientTest {
         assertNull("unset filters are omitted", req.queryParameter("commercial_use"))
     }
 
+    @Test fun freeAndPaidMapToTheStoreParameterAndAnyOmitsIt() = withServer { s, c ->
+        for ((price, expected) in listOf(MmfPrice.FREE to "0", MmfPrice.PAID to "1", MmfPrice.ANY to null)) {
+            s.enqueue(MockResponse().setBody(page)); c.search(MmfSearch("x", price = price))
+            assertEquals(price.name, expected, s.takeRequest().requestUrl!!.queryParameter("store"))
+        }
+    }
+
+    @Test fun fdmOnlyMapsToTechFdmAndIsOmittedOtherwise() = withServer { s, c ->
+        s.enqueue(MockResponse().setBody(page)); c.search(MmfSearch("x", fdmOnly = true)); assertEquals("FDM", s.takeRequest().requestUrl!!.queryParameter("tech"))
+        s.enqueue(MockResponse().setBody(page)); c.search(MmfSearch("x")); assertNull(s.takeRequest().requestUrl!!.queryParameter("tech"))
+    }
+
     @Test fun paginationIsClampedToWhatTheApiAccepts() = withServer { s, c ->
         s.enqueue(MockResponse().setBody(page)); c.search(MmfSearch(page = 99999, perPage = 500))
         val q = s.takeRequest().requestUrl!!; assertEquals("1000", q.queryParameter("page")); assertEquals("60", q.queryParameter("per_page"))

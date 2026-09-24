@@ -64,7 +64,7 @@ class MmfDiscoverDeviceTest {
         show(freshSettings(), api)
         compose.onNodeWithTag("mmf-key-field").performTextInput("abcdefgh1234"); compose.onNodeWithTag("mmf-key-save").performClick()
         compose.waitUntil(8000) { compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("mmf-result-1").assertTextContains("Dragon", substring = true).assertTextContains("Remix OK", substring = true).assertTextContains("Credit required", substring = true)
+        compose.onNodeWithTag("mmf-result-1").assertTextContains("Dragon", substring = true).assertTextContains("Remix OK", substring = true)
         compose.onNodeWithTag("mmf-result-1").assert(hasText("Commercial OK", substring = true).not())
         compose.onNodeWithTag("mmf-result-2").assertTextContains("Paid", substring = true)
         compose.onNodeWithTag("mmf-result-1").assertTextContains("by Alice A", substring = true)
@@ -170,5 +170,82 @@ class MmfDiscoverDeviceTest {
         compose.setContent { CompanionTheme { ProjectEditorScreen(projectId, null, state, { _, _ -> }, {}) } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("project-attribution").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("project-attribution").assertTextContains("by Alice A on MyMiniFactory", substring = true)
+    }
+
+    @Test fun freeAndPaidFiltersAskTheApiAndFdmOnlyIsExplained() {
+        val api = FakeApi(listOf(obj(1, "A"), obj(2, "B")))
+        show(freshSettings(key = "buildkey1234"), api)
+        compose.waitUntil(8000) { api.requests.isNotEmpty() }
+        compose.onNodeWithTag("mmf-filter-free").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.FREE }
+        compose.onNodeWithTag("mmf-filter-paid").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.PAID }
+        compose.onNodeWithTag("mmf-filter-all").performClick(); compose.waitUntil(8000) { api.requests.last().price == MmfPrice.ANY }
+        compose.onAllNodesWithTag("mmf-filter-credit").assertCountEquals(0) // every model asks for credit, so it is not a filter
+        compose.onAllNodesWithTag("mmf-fdm-note").assertCountEquals(0)
+        compose.onNodeWithTag("mmf-filter-fdm").performClick()
+        compose.waitUntil(8000) { api.requests.last().fdmOnly }
+        compose.onNodeWithTag("mmf-fdm-note").assertTextContains("tagged FDM", substring = true)
+        val n = api.requests.size; compose.onNodeWithTag("mmf-filter-fdm").performClick()
+        compose.waitUntil(8000) { api.requests.size > n && !api.requests.last().fdmOnly }
+        compose.onAllNodesWithTag("mmf-fdm-note").assertCountEquals(0)
+    }
+
+    // Regression: consuming the redirect used to cancel the in-flight sign-in (the effect's key changed), leaving the token
+    // saved but the screen still saying "Sign in".
+    @Test fun aSlowSignInFinishesAndTheScreenSwitchesToSignedIn() {
+        val settings = freshSettings(key = "buildkey1234", client = "clientkey1234"); val state = settings.beginSignIn()
+        val slow = object : MmfAuthManager(settings, null) {
+            override fun completeSignIn(implicitToken: String, expiresInSeconds: Int, device: MmfDeviceInfo) { Thread.sleep(1500); settings.save(MmfSession(implicitToken, System.currentTimeMillis() + 3_600_000, false)) }
+            override fun isSignedIn() = settings.load() != null
+        }
+        var redirect: String? = "nozzleitall://mmf-auth#access_token=tok-abcdefgh&expires_in=604800&state=$state"
+        compose.setContent { CompanionTheme { DiscoverScreen(settings, AppDatabase.get(ctx).projectDao(), redirect, { redirect = null }, {}, {}, { FakeApi(emptyList()) }, { slow }) } }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("mmf-signout").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mmf-account-message").assertTextContains("Signed in", substring = true)
+        compose.onAllNodesWithTag("mmf-signin").assertCountEquals(0)
+        assertEquals("tok-abcdefgh", settings.load()!!.accessToken); assertNull(settings.pendingState())
+    }
+
+    // Persistence through the REAL encrypted store (a separate file, so the owner's own session is never touched):
+    // a new MmfSettings over the same file is what an app restart sees.
+    @Test fun aSignInSurvivesTheAppRestartingThroughTheEncryptedStore() {
+        val file = "mmf-persistence-test-${System.nanoTime()}"
+        try {
+            val first = MmfSettings(CredentialStore.open(ctx, file), "", "")
+            first.save(MmfSession("persisted-token-1", System.currentTimeMillis() + 3_600_000, refreshable = false)); first.saveSignInMessage("Signed in to MyMiniFactory.")
+            val restarted = MmfSettings(CredentialStore.open(ctx, file), "", "")
+            val s = restarted.load()!!
+            assertEquals("persisted-token-1", s.accessToken); assertFalse(s.refreshable); assertTrue(s.expiresAtMs > System.currentTimeMillis())
+            assertEquals("Signed in to MyMiniFactory.", restarted.lastSignInMessage())
+            assertEquals(first.deviceId(), restarted.deviceId())
+        } finally { ctx.deleteSharedPreferences(file) }
+    }
+
+    @Test fun anExpiredStoredSessionIsClearedAndExplainedNotShownAsSignedIn() {
+        val settings = freshSettings(key = "buildkey1234", client = "clientkey1234")
+        settings.save(MmfSession("old-token-1234", System.currentTimeMillis() - 1000, refreshable = false))
+        show(settings, FakeApi(emptyList()), auth = { MmfAuthManager(settings, null) })
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("mmf-account-message").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mmf-account-message").assertTextContains("expired", substring = true)
+        compose.onNodeWithTag("mmf-signin").assertExists(); assertNull(settings.load())
+    }
+
+    @Test fun theSignedInRowShowsWhenTheSessionEnds() {
+        val settings = freshSettings(key = "buildkey1234", client = "clientkey1234")
+        settings.save(MmfSession("live-token-1234", System.currentTimeMillis() + 3 * 86_400_000L, refreshable = false))
+        show(settings, FakeApi(emptyList()), auth = { MmfAuthManager(settings, null) })
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("mmf-signout").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Signed in - downloads enabled until", substring = true).assertExists()
+    }
+
+    @Test fun fdmOnlyAlsoHidesModelsThatMentionResin() {
+        val fdm = obj(1, "Plain vase"); val resin = obj(2, "Bust | PRESUPPORTED | Free")
+        val api = FakeApi(listOf(fdm, resin))
+        show(freshSettings(key = "buildkey1234"), api)
+        compose.waitUntil(8000) { compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
+        val has = { id: Long -> runCatching { compose.onNodeWithTag("mmf-results").performScrollToNode(hasTestTag("mmf-result-$id")) }.isSuccess }
+        assertTrue(has(1)); assertTrue(has(2))
+        val n = api.requests.size; compose.onNodeWithTag("mmf-filter-fdm").performClick()
+        compose.waitUntil(8000) { api.requests.size > n && compose.onAllNodesWithTag("mmf-result-1").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(has(1)); assertFalse("the presupported (resin) model is hidden under FDM only", has(2))
     }
 }

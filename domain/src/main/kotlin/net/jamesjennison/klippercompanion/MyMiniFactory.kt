@@ -44,10 +44,14 @@ data class MmfObject(
     val likes: Int, val views: Int, val dimensions: String, val complexity: Int?, val publishedAt: String?, val featured: Boolean,
     val archiveDownloadUrl: String?,
 ) {
+    /** True when the name or tags point at resin printing (resin, SLA, DLP, MSLA, LCD, pre-supported): hidden by "FDM only" even if also tagged FDM. */
+    fun mentionsResin(): Boolean = RESIN_WORDS.containsMatchIn(name) || tags.any { RESIN_WORDS.containsMatchIn(it) }
     val coverThumbnail get() = (images.firstOrNull { it.primary } ?: images.firstOrNull())?.let { it.thumbnailUrl ?: it.standardUrl }
     /** The attribution line to show and to store with a project: designer, source and link, per MyMiniFactory's guidelines. */
     fun attribution(): String = "\"$name\" by ${designer?.name?.ifBlank { null } ?: designer?.username ?: "an unknown designer"} on MyMiniFactory" + (url?.let { " - $it" } ?: "")
 }
+
+private val RESIN_WORDS = Regex("\\b(resin|sla|dlp|msla|lcd|pre-?supported)\\b", RegexOption.IGNORE_CASE)
 
 data class MmfPage<T>(val totalCount: Int, val items: List<T>)
 
@@ -128,9 +132,15 @@ object MmfParser {
 
 enum class MmfSort(val code: String, val label: String) { POPULARITY("popularity", "Popular"), DATE("date", "Newest"), VISITS("visits", "Most viewed") }
 
+/** Price filter, mapped to the API's `store` parameter (0 = no store license = free, 1 = paid store license). */
+enum class MmfPrice(val apiValue: String?, val label: String) { ANY(null, "All"), FREE("0", "Free"), PAID("1", "Paid") }
+
 data class MmfSearch(
     val query: String = "", val page: Int = 1, val perPage: Int = 30, val sort: MmfSort = MmfSort.POPULARITY,
     val remixAllowed: Boolean = false, val commercialUse: Boolean = false, val supportFree: Boolean = false, val category: Int? = null,
+    val price: MmfPrice = MmfPrice.ANY,
+    /** Only models the designer tagged FDM (the API's `tech=FDM`); untagged models are not matched. */
+    val fdmOnly: Boolean = false,
 )
 
 /** Failures the UI can explain in plain words. */

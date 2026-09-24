@@ -18,7 +18,7 @@ class MmfSettings(private val prefs: SharedPreferences, private val buildApiKey:
 
     fun saveApiKey(key: String) { prefs.edit().putString(KEY_API, sanitizeKey(key)).apply() }
     fun saveClientKey(key: String) { prefs.edit().putString(KEY_CLIENT, sanitizeKey(key)).apply() }
-    fun clearCredentials() { prefs.edit().remove(KEY_API).remove(KEY_CLIENT).remove(KEY_TOKEN).remove(KEY_EXPIRES).apply() }
+    fun clearCredentials() { prefs.edit().remove(KEY_API).remove(KEY_CLIENT).remove(KEY_TOKEN).remove(KEY_EXPIRES).remove(KEY_LAST).apply() }
 
     override fun load(): MmfSession? {
         val token = prefs.getString(KEY_TOKEN, null) ?: return null
@@ -29,6 +29,10 @@ class MmfSettings(private val prefs: SharedPreferences, private val buildApiKey:
     override fun clear() { prefs.edit().remove(KEY_TOKEN).remove(KEY_EXPIRES).apply() }
     override fun deviceId(): String = prefs.getString(KEY_DEVICE, null) ?: java.util.UUID.randomUUID().toString().also { prefs.edit().putString(KEY_DEVICE, it).apply() }
 
+    /** The outcome of the last sign-in attempt, kept so it survives the app being killed while the browser was open. */
+    fun lastSignInMessage(): String? = prefs.getString(KEY_LAST, null)
+    fun saveSignInMessage(message: String?) { prefs.edit().apply { if (message == null) remove(KEY_LAST) else putString(KEY_LAST, message.take(300)) }.apply() }
+
     /** The pending sign-in state (anti-forgery), remembered across the browser round trip. */
     fun beginSignIn(): String = MmfAuthLinks.newState().also { prefs.edit().putString(KEY_STATE, it).apply() }
     fun pendingState(): String? = prefs.getString(KEY_STATE, null)
@@ -36,7 +40,7 @@ class MmfSettings(private val prefs: SharedPreferences, private val buildApiKey:
 
     companion object {
         private const val KEY_API = "mmf.apiKey"; private const val KEY_CLIENT = "mmf.clientKey"; private const val KEY_TOKEN = "mmf.token"
-        private const val KEY_EXPIRES = "mmf.expires"; private const val KEY_DEVICE = "mmf.deviceId"; private const val KEY_STATE = "mmf.state"; private const val KEY_REFRESHABLE = "mmf.refreshable"
+        private const val KEY_EXPIRES = "mmf.expires"; private const val KEY_DEVICE = "mmf.deviceId"; private const val KEY_STATE = "mmf.state"; private const val KEY_REFRESHABLE = "mmf.refreshable"; private const val KEY_LAST = "mmf.lastSignIn"
         /** Keys are pasted by hand: trim whitespace and refuse anything that could not be a key. */
         fun sanitizeKey(raw: String): String = raw.trim().takeIf { it.length in 8..256 && it.all { c -> c.isLetterOrDigit() || c in "-_." } } ?: throw IllegalArgumentException("That does not look like a MyMiniFactory key.")
         fun isPlausibleKey(raw: String) = runCatching { sanitizeKey(raw) }.isSuccess

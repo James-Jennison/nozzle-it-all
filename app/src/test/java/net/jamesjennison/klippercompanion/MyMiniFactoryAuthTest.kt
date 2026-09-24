@@ -131,4 +131,13 @@ class MyMiniFactoryAuthTest {
         }
         assertEquals("absurd values are still bounded", MmfAuthLinks.MAX_TOKEN_SECONDS, MmfAuthLinks.parseRedirect("nozzleitall://mmf-auth#access_token=tok-abcdefgh&expires_in=99999999&state=$state", state).second)
     }
+
+    @Test fun anExpiredImplicitSessionIsNotSignedInButARefreshableOneIs() {
+        var now = 0L; val store = InMemoryMmfTokenStore(); val mgr = MmfAuthManager(store, null) { now }
+        store.save(MmfSession("implicit-token-1", 1000, refreshable = false)); now = 500
+        assertTrue(mgr.isSignedIn()); assertEquals(1000L, mgr.sessionExpiresAtMs())
+        now = 1500; assertFalse("an expired one-time token is not a login", mgr.isSignedIn())
+        store.save(MmfSession("mobile-token-1", 1000, refreshable = true)); assertTrue("a refreshable session renews on demand", mgr.isSignedIn())
+        store.clear(); assertNull(mgr.sessionExpiresAtMs()); assertFalse(mgr.isSignedIn())
+    }
 }

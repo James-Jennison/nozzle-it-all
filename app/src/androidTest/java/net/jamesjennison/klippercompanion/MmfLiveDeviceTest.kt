@@ -44,6 +44,17 @@ class MmfLiveDeviceTest {
         assertTrue("the remix filter returns only remixable models", remixable.isNotEmpty() && remixable.all { it.license.terms[MmfLicenseTerm.REMIX] == true })
     }
 
+    @Test fun theFreePaidAndFdmFiltersNarrowTheRealCatalogue() {
+        val all = client().search(MmfSearch("vase", perPage = 20)).totalCount
+        val free = client().search(MmfSearch("vase", perPage = 20, price = MmfPrice.FREE))
+        val paid = client().search(MmfSearch("vase", perPage = 20, price = MmfPrice.PAID))
+        assertTrue("free and paid both narrow the catalogue", free.totalCount < all && paid.totalCount < all)
+        assertTrue(free.items.isNotEmpty() && free.items.all { it.license.terms[MmfLicenseTerm.STORE] == false })
+        assertTrue(paid.items.isNotEmpty() && paid.items.all { it.license.terms[MmfLicenseTerm.STORE] == true })
+        val fdm = client().search(MmfSearch("vase", perPage = 20, fdmOnly = true))
+        assertTrue("FDM-tagged models are a subset", fdm.items.isNotEmpty() && fdm.totalCount < all)
+    }
+
     @Test fun detailAndFilesEndpointsAgreeWithSearch() {
         val hit = client().search(MmfSearch("vase", perPage = 5)).items.first { it.files.isNotEmpty() }
         val detail = client().objectDetail(hit.id)

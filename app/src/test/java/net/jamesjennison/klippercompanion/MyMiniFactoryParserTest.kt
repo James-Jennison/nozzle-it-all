@@ -83,4 +83,17 @@ class MyMiniFactoryParserTest {
         assertEquals(1, MmfParser.parseObject("""{"id":1,"name":"n","files":{"total_count":1,"items":[{"id":2,"filename":"a.stl"}]}}""").files.size)
         assertTrue("a non-approved model is not shown", MmfParser.parseSearch("""{"total_count":1,"items":[{"id":1,"name":"n","status_name":"pending"}]}""").items.isEmpty())
     }
+
+    @Test fun theListingFilterIsAPriceFilterOnly() {
+        assertEquals(listOf("All", "Free", "Paid"), DiscoverFilter.entries.map { it.label })
+        assertEquals(MmfPrice.FREE, DiscoverFilter.FREE.price); assertEquals(MmfPrice.PAID, DiscoverFilter.PAID.price); assertEquals(MmfPrice.ANY, DiscoverFilter.ALL.price)
+    }
+
+    @Test fun resinLookingModelsAreRecognisedFromNameOrTags() {
+        fun o(name: String, tags: String = "[]") = MmfParser.parseObject("""{"id":1,"name":"$name","tags":$tags}""")
+        assertTrue(o("Dragon | PRESUPPORTED | Free").mentionsResin()); assertTrue(o("Pre-Supported bust").mentionsResin()); assertTrue(o("Bust", """["SLA","fantasy"]""").mentionsResin())
+        assertTrue(o("Mini for Resin printers").mentionsResin()); assertTrue(o("Bust", """["mSLA"]""").mentionsResin()); assertTrue(o("Bust", """["DLP"]""").mentionsResin())
+        assertFalse(o("Vase - low poly", """["vase","home"]""").mentionsResin())
+        assertFalse("substrings inside other words do not count", o("Slate coaster", """["translation","fslash"]""").mentionsResin())
+    }
 }

@@ -360,13 +360,13 @@ arrange and slicing from that screen are still open).
 | On-device real slicing | **Complete for all 4 vendor integrations (WO-22/WO-23: Bambu Lab produces and uploads a real .gcode.3mf bundle on-device, single- and multi-object; Prusa Link uploads+prints real plain .gcode via its own real endpoint, resolved against the printer's actual writable storage - Phase 6 closed 2026-09-22)** | cloud-assisted | n/a (profile-driven) | cloud | app-side | n/a | app-side | **P0 (keep, extend)** |
 | Move/rotate/scale | **Complete** | yes | limited | yes | yes | limited | yes | **P0 (multi-object)** |
 | Multi-object plate/arrange | **Complete (WO-17: add/duplicate/remove/rename/delete/placement, real auto-arrange and collision detection, slices and prints the whole plate - Phase 1 closed 2026-09-23)** | yes | yes | yes | yes | limited | yes | **P0** |
-| Multi-plate | **Missing** | yes | yes | limited | no | no | no | **P1** |
+| Multi-plate | **Complete (Phase 9b, WO-34: plates, undo/redo, project export/import)** | yes | yes | limited | no | no | no | **P1** |
 | Support painting | **Complete** | yes | limited | limited | limited | no | yes | **P0 (keep)** |
 | Build-volume bounds check | **Complete** | yes | yes | yes | yes | yes | yes | **P0 (keep, extend for multi-object)** |
 | Basic/advanced slicing tiers | **Basic complete (WO-20: quality preset/strength/supports/brim, real geometry-driven support defaulting - Phase 4 closed 2026-09-23); advanced tier still not built** | yes | n/a | yes | yes | n/a | yes | **P0 basic / P2 advanced** |
 | Sliced 3D preview + stats | **Complete (WO-21: per-material toolpath coloring, real slice-time validation - Phase 5 closed 2026-09-23)** | yes | yes | yes | yes | limited | yes | **P0 (keep, extend per-material)** |
 | Printer capability abstraction | **Complete (WO-18: `PrinterCapabilities`, every UI kind-branch migrated - Phase 2 closed 2026-09-23)** | n/a | yes | yes | yes | yes | yes | **P0** |
-| Printer discovery (LAN/QR) | **Missing** | yes | yes | yes | yes | yes | yes | **P1** |
+| Printer discovery (LAN/QR) | **LAN scan built (WO-37: Moonraker/U1/Centauri Carbon/PrusaLink sweep + Bambu SSDP with serial, wizard "Scan network"); QR pairing still missing** | yes | yes | yes | yes | yes | yes | **P1** |
 | Jog / manual move | **Complete for Klipper/Snapmaker (WO-24: real G91/G1/G90 + G28 homing, JogPanel.kt - Phase 7 closed 2026-09-22); Bambu/Prusa Link genuinely have no equivalent transport/endpoint** | yes | yes | yes | yes | yes | yes | **P1** |
 | Bed-leveling trigger | **Complete for Klipper/Snapmaker (WO-24: real BED_MESH_CALIBRATE, gated on the printer's own live bed_mesh detection)** | yes | yes | yes | yes | yes | yes | **P1** |
 | Material profile model | **Complete (WO-19: `MaterialProfile`, single-material-per-project - Phase 3 closed 2026-09-23)** | yes | yes | yes | yes | yes | yes | **P0** |
@@ -377,12 +377,12 @@ arrange and slicing from that screen are still open).
 | Camera live view | **Complete (2 protocols)** | yes | yes | yes | yes | yes | yes | **P0 (keep)** |
 | Timelapse trigger | **Complete for Klipper/Snapmaker (WO-24: real POST /machine/timelapse/render trigger)** | yes | yes | yes | limited | no | limited | **P1** |
 | AI failure detection | **Missing** | no | limited | yes | limited | no | no | **P2, capability-gated, honest-or-absent** |
-| Notifications (typed) | **Partial (6 of ~9 types)** | yes | yes | yes | yes | yes | yes | **P0/P1** |
-| Print history w/ reprint | **Backend-only (no reprint)** | yes | yes | yes | yes | yes | yes | **P1** |
+| Notifications (typed) | **Partial (8 types: completed, error, cancelled, offline, back online, paused, plus opt-in started and nearly-done; no filament-runout or heater-fault data source)** | yes | yes | yes | yes | yes | yes | **P0/P1** |
+| Print history w/ reprint | **Complete for Klipper/Snapmaker (Reprint button when the G-code is still on the printer)** | yes | yes | yes | yes | yes | yes | **P1** |
 | Project persistence | **Complete (WO-17: Room-backed, survives process death, rename/delete from the project list - Phase 1 closed 2026-09-23)** | yes | yes | yes | yes | yes | yes | **P0** |
 | Multi-printer dashboard | **Complete (flat list)** | n/a | yes | yes | limited | limited | limited | **P0 (keep)** |
 | Account/cloud sync | **Missing (by design)** | yes | yes | yes | yes | yes | yes | **P1 — owner-approved 2026-09-22 (Phase 11)** |
-| Model discover/marketplace | **Missing** | yes | yes | yes | limited | limited | yes | **P3, owner-gated** |
+| Model discover/marketplace | **Complete for MyMiniFactory (WO-36: search, filters, license display, download-to-project, sign-in); other sources not built** | yes | yes | yes | limited | limited | yes | **P3, owner-gated** |
 | STEP import | **Missing** | no | no | no | no | no | no | **Not planned** |
 
 ---
@@ -643,3 +643,11 @@ STEP import, cloud/hybrid slicing as a default path, AI failure detection until 
 ---
 
 *End of planning document. No code was written or modified as part of producing this plan.*
+
+
+---
+
+## Addendum 2026-09-24: corrections and what was built since the table above was written
+- **Place-on-face** rotation exists (Prepare > Lay flat: pick a face, plus auto-orient); the old note that only Z rotation is supported is stale.
+- **Built:** Discover redesign (compact filters, category filter, light API responses), OOM-safe preview for huge models, Bambu pause/resume/cancel over MQTT, Bambu certificate pinning (trust on first use), Bespok3d/U1 password and token only sent to a confirmed host key / certificate, encrypted printer backup and restore, accessibility descriptions for icon-only controls, wide-screen layout width cap.
+- **Still open:** Bambu AMS multi-material and lighting/speed/temperature controls (protocol reconstructed from community sources; no real printer to verify), OctoPrint, seam/fuzzy-skin/variable-layer dedicated UI (reachable through Expert settings search), toolchange/purge visualisation, QR pairing, localisation (all strings hard-coded), first-run onboarding, account/cross-device sync (Phase 11), AI failure detection, Wear OS, web and desktop targets, AGPL source-offer screen and dependency licence texts, release signing and store material.

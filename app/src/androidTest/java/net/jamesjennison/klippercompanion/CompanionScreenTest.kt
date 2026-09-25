@@ -65,7 +65,11 @@ class CompanionScreenTest {
         compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("saved-forget:$first").performScrollTo().performClick()
         assertEquals(first, forgotten)
-        compose.onNodeWithTag("saved-connect:$second").performScrollTo().performClick()
+        // Semantic click: on a short screen (Galaxy S25) the forget tap re-lays out the list and a
+        // coordinate tap on the row below could land on a moving/overlapped target.
+        compose.waitForIdle()
+        compose.onNodeWithTag("saved-connect:$second").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.waitForIdle()
         assertEquals(second, connected)
     }
     @Test fun compactLargeTextKeepsConfirmationAndNavigationReachable() {

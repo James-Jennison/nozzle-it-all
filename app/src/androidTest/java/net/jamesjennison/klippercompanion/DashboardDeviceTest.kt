@@ -22,10 +22,10 @@ class DashboardDeviceTest {
  @Test fun hiddenCardsKeepConnectionAndCommandFeedback() {
   compose.setContent {CompanionTheme(dark=false,accent="Blue") {CompanionScreen(ScreenState(address="http://fixture.local/",savedPrinters=listOf("http://fixture.local/"),commandNotice="Fixture command result"),{},{},{},{_,_->},appearance=DashboardOptions(hidden=DashboardOptions.cards.toSet()))}}
   compose.openFixtureDashboard(connected=false)
-  compose.onNodeWithText("OFFLINE").assertIsDisplayed()
+  compose.onNodeWithText("OFFLINE").performScrollTo().assertIsDisplayed()
   compose.onNodeWithTag("command-notice").assertIsDisplayed()
   compose.onNodeWithText("Camera").assertDoesNotExist()
-  compose.onNodeWithTag("customize-dashboard").assertIsDisplayed()
+  compose.onNodeWithTag("customize-dashboard").performScrollTo().assertIsDisplayed()
  }
  @Test fun editorChangesThemeAndPersistsRoundTrip() {
   var result=DashboardOptions()

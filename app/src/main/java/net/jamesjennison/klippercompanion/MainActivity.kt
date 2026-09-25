@@ -157,10 +157,17 @@ class MainActivity : ComponentActivity() {
                     model.foreground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
+                // First-run welcome: only for a brand-new install (no printers yet); finishing or skipping it is remembered forever.
+                var onboardingDone by remember { mutableStateOf(OnboardingPrefs.isDone(this@MainActivity)) }
+                var addPrinterNow by remember { mutableStateOf(!OnboardingPrefs.wizardSuppressed(this@MainActivity)) }
+                if (!onboardingDone && state.profiles.isEmpty() && state.address.isBlank()) {
+                    OnboardingScreen { addPrinter -> OnboardingPrefs.markDone(this@MainActivity, addPrinter); addPrinterNow = addPrinter; onboardingDone = true }
+                } else {
                 CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
                     backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop,
                     stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, addProfile=model::addProfile,
-                    dismissCommandNotice=model::dismissCommandNotice)
+                    dismissCommandNotice=model::dismissCommandNotice, autoOpenWizard=addPrinterNow)
+                }
             }
         }
     }
@@ -174,7 +181,7 @@ private enum class BackupStep { NONE, EXPORT_PASSPHRASE, IMPORT_PASSPHRASE }
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String? = {_,_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
     backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null, addProfile:(PrinterProfile)->String?={null},
-    stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={}, dismissCommandNotice:()->Unit={},
+    stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={}, dismissCommandNotice:()->Unit={}, autoOpenWizard:Boolean=true,
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
     configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
@@ -343,7 +350,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // again, isn't forced back in against their will.
     var autoOpenedWizard by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.profiles.isEmpty(), state.address.isBlank()) {
-        if (state.profiles.isEmpty() && state.address.isBlank() && !autoOpenedWizard) { addingPrinter = true; autoOpenedWizard = true }
+        if (autoOpenWizard && state.profiles.isEmpty() && state.address.isBlank() && !autoOpenedWizard) { addingPrinter = true; autoOpenedWizard = true }
     }
     var fileQuery by rememberSaveable(state.address) { mutableStateOf("") }
     var folder by rememberSaveable(state.address) { mutableStateOf("") }

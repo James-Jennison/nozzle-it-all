@@ -13,7 +13,7 @@ android {
   // needs iconv(), only __INTRODUCED_IN(28) in Bionic, and every other engine dependency is
   // fine as low as 21 - so 28 is Boost.Locale's floor, not an arbitrary choice, and it narrows
   // this app's supported devices to Android 9+ (2018). See docs/WORK_ORDER.md's WO-13 entry.
-  applicationId = "net.jamesjennison.klippercompanion"; minSdk = 28; targetSdk = 36; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  applicationId = "net.jamesjennison.klippercompanion"; minSdk = 28; targetSdk = 36; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "net.jamesjennison.klippercompanion.NozzleTestRunner"
   // arm64-v8a only, matching every physical device this app has ever been verified on (Razr
   // 2023) and the only ABI the vendored slicing engine's dependencies were built for. NDK
   // 27.1.12297006 (pinned below) matches what that engine was built and verified with.

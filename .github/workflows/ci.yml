@@ -104,6 +104,22 @@ jobs:
           mkdir -p apk-artifacts
           cp app/build/outputs/apk/debug/app-debug.apk apk-artifacts/
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk apk-artifacts/
+          # Device Farm rejects (at re-signing) this test package when it runs unfiltered, but accepts it when the run names its test classes,
+          # so the default run names them all: every test class in the build (the LAN-only ones are excluded from it by -PdeviceFarmTests).
+          python3 - <<'PYEOF'
+          import re, pathlib
+          skip = {"ActiveToolDeviceTest", "AddPrinterWizardDeviceTest", "FakeBambuDeviceTest", "LiveFileHardwareTest", "LivePreviewHardwareTest",
+                  "LivePrinterReadOnlyTest", "MmfLiveDeviceTest", "OctoPrintDeviceTest", "PrinterScanDeviceTest", "SshHostKeyPinDeviceTest"}
+          root = pathlib.Path("app/src/androidTest/java")
+          names = []
+          for f in sorted(root.rglob("*.kt")):
+              text = f.read_text()
+              pkg = re.search(r"^package\s+([\w.]+)", text, re.M).group(1)
+              for cls in re.findall(r"^(?:internal\s+|private\s+|public\s+)?class\s+(\w+)", text, re.M):
+                  if cls not in skip and "@Test" in text: names.append(pkg + "." + cls)
+          pathlib.Path("apk-artifacts/test-classes.txt").write_text(",".join(sorted(set(names))))
+          print(len(set(names)), "test classes")
+          PYEOF
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -166,7 +182,8 @@ jobs:
           echo "app upload: $app_arn"; echo "test upload: $test_arn"
 
           # JSON, not the CLI shorthand: a filter naming several classes contains commas, which the shorthand would split.
-          test_json=$(jq -cn --arg arn "$test_arn" --arg f "${TEST_FILTER:-}" '{type: "INSTRUMENTATION", testPackageArn: $arn} + (if $f == "" then {} else {filter: $f} end)')
+          filter="${TEST_FILTER:-$(cat apks/test-classes.txt 2>/dev/null || true)}"
+          test_json=$(jq -cn --arg arn "$test_arn" --arg f "$filter" '{type: "INSTRUMENTATION", testPackageArn: $arn} + (if $f == "" then {} else {filter: $f} end)')
           run_json=$(aws devicefarm schedule-run \
             --project-arn "$PROJECT_ARN" \
             --app-arn "$app_arn" \

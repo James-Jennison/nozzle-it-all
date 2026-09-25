@@ -150,7 +150,6 @@ dependencies {
  androidTestImplementation("androidx.compose.ui:ui-test-junit4")
  androidTestImplementation("androidx.test:runner:1.6.2")
  androidTestImplementation("androidx.test.ext:junit:1.2.1")
- androidTestImplementation("androidx.room:room-testing:2.8.5")
  debugImplementation("androidx.compose.ui:ui-test-manifest")
  add("releaseSmokeImplementation", "androidx.compose.ui:ui-test-manifest")
 }
@@ -193,5 +192,15 @@ tasks.register("generateSbom") {
   ]
 }
 """)
+ }
+}
+
+// AWS Device Farm rejects (at its own re-signing step) an instrumented test package above roughly 3.7-4.0 MB of code. These files skip
+// themselves entirely without printer/LAN/API-key arguments, so they do nothing on Device Farm; -PdeviceFarmTests leaves them out of that build.
+if (providers.gradleProperty("deviceFarmTests").isPresent) {
+ val lanOnlyTests = listOf("ActiveToolDeviceTest", "AddPrinterWizardDeviceTest", "FakeBambuDeviceTest", "LiveFileHardwareTest", "LivePreviewHardwareTest",
+  "LivePrinterReadOnlyTest", "MmfLiveDeviceTest", "OctoPrintDeviceTest", "PrinterScanDeviceTest", "SshHostKeyPinDeviceTest").map { "**/$it.kt" }
+ tasks.matching { it.name.contains("AndroidTest") && it.name.startsWith("compile") }.configureEach {
+  if (this is org.gradle.api.tasks.util.PatternFilterable) exclude(lanOnlyTests)
  }
 }

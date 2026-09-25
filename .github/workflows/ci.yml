@@ -82,7 +82,8 @@ jobs:
         run: ./gradlew testDebugUnitTest lintDebug :domain:check :transport:check --no-daemon
 
       - name: Assemble debug (native build, arm64-v8a)
-        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon
+        # -PdeviceFarmTests leaves out the LAN/printer-only tests: Device Farm rejects (at re-signing) a test package with too much code.
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon -PdeviceFarmTests
 
       - name: Upload lint/test reports
         if: always()

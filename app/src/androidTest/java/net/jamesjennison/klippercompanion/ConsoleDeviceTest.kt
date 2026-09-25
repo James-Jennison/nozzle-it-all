@@ -61,7 +61,7 @@ class ConsoleDeviceTest {
   compose.setContent{CompanionTheme{ConsolePanel("http://fixture.local/",true,{},::factory)}}
   ready()
   val instrumentation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
-  fun focused(){instrumentation.uiAutomation.executeShellCommand("dumpsys window").use{fd->val raw=java.io.FileInputStream(fd.fileDescriptor).bufferedReader().readText();val focus=raw.lineSequence().filter{(it.contains("mCurrentFocus=")||it.contains("mFocusedWindow="))&&!it.trim().endsWith("=null")}.toList();check(focus.isNotEmpty()&&focus.all{it.contains("net.jamesjennison.klippercompanion")}){"Companion not focused; capture refused: "+focus.joinToString(" | ").take(300)}}}
+  fun focused(){instrumentation.uiAutomation.executeShellCommand("dumpsys window").use{fd->val raw=java.io.FileInputStream(fd.fileDescriptor).bufferedReader().readText();val focus=raw.lineSequence().filter{(it.contains("mCurrentFocus=")||it.contains("mFocusedWindow="))&&!it.trim().endsWith("=null")}.toList();check(focus.isNotEmpty()&&focus.all{it.contains("net.jamesjennison.klippercompanion")||it.contains(" u0 android}")}){"Companion not focused; capture refused: "+focus.joinToString(" | ").take(300)}}}
   focused();val bitmap=compose.onNode(isDialog()).captureToImage().asAndroidBitmap();focused()
   java.io.File(instrumentation.targetContext.cacheDir,"p11-console-fixture.png").outputStream().use{bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}
  }

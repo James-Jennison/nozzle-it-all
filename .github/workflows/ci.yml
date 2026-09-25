@@ -165,12 +165,14 @@ jobs:
           [ -n "$test_arn" ] || test_arn=$(upload_and_wait apks/app-debug-androidTest.apk INSTRUMENTATION_TEST_PACKAGE)
           echo "app upload: $app_arn"; echo "test upload: $test_arn"
 
+          # JSON, not the CLI shorthand: a filter naming several classes contains commas, which the shorthand would split.
+          test_json=$(jq -cn --arg arn "$test_arn" --arg f "${TEST_FILTER:-}" '{type: "INSTRUMENTATION", testPackageArn: $arn} + (if $f == "" then {} else {filter: $f} end)')
           run_json=$(aws devicefarm schedule-run \
             --project-arn "$PROJECT_ARN" \
             --app-arn "$app_arn" \
             --device-pool-arn "$DEVICE_POOL_ARN" \
             --name "ci-${GITHUB_SHA::7}" \
-            --test "type=INSTRUMENTATION,testPackageArn=$test_arn${TEST_FILTER:+,filter=$TEST_FILTER}")
+            --test "$test_json")
           run_arn=$(echo "$run_json" | jq -r '.run.arn')
           echo "Device Farm run: https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/$(basename "$PROJECT_ARN")/runs/$(basename "$run_arn")"
 

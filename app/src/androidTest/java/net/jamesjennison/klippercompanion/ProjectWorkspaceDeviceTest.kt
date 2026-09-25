@@ -72,15 +72,16 @@ class ProjectWorkspaceDeviceTest {
         // regions, and pickObject (the real ray/bounding-sphere test) correctly distinguishes
         // them - not that any particular fraction maps to any particular object, which is an
         // implementation detail of this specific camera framing.
-        // Sweep the width instead of two hand-tuned fractions: those were found on one phone's aspect
+        // Sweep the plate (a grid of taps) instead of two hand-tuned fractions: those were found on one phone's aspect
         // ratio and miss on a tablet (Pixel Tablet). Each object must be reachable by some tap.
         val hit = mutableSetOf<String>()
-        for (i in 1..19) {
+        for (row in listOf(0.3f, 0.4f, 0.5f, 0.6f, 0.7f)) for (i in 1..19) {
             selectedId = null
             compose.waitForIdle()
-            compose.onNodeWithTag("project-workspace").performTouchInput { click(Offset(width * i / 20f, height * 0.5f)) }
+            compose.onNodeWithTag("project-workspace").performTouchInput { click(Offset(width * i / 20f, height * row)) }
             compose.waitForIdle()
             selectedId?.let { hit += it }
+            if (hit.size == 2) break
         }
         assertEquals(setOf("left", "right"), hit)
     }

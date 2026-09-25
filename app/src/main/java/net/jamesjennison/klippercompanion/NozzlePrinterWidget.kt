@@ -47,7 +47,7 @@ import kotlinx.coroutines.withContext
 // for "cool/idle" everywhere else. Bed temperature now renders in neutral WidgetText instead.
 private val WidgetBackground = Color(0xFF0E1113)
 private val WidgetCard = Color(0xFF14161A)
-private val WidgetTeal = Color(0xFF5EEAD4)
+private val WidgetTeal = Color(0xFFA78BFA) // brand violet (name kept to keep the diff small)
 private val WidgetEmber = Color(0xFFFB923C)
 private val WidgetError = Color(0xFFFB7185) // matches CompanionTheme's error color
 private val WidgetPaused = Color(0xFFFBBF24)

@@ -54,7 +54,7 @@ val PlexMono = FontFamily(
     Font(R.font.ibm_plex_mono_semibold, FontWeight.SemiBold),
 )
 
-@Composable fun CompanionTheme(dark: Boolean = true, accent: String = "Mint", content: @Composable () -> Unit) {
+@Composable fun CompanionTheme(dark: Boolean = true, accent: String = "Violet", content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = (if (dark) darkColorScheme(
             primary = Color(0xFF5EEAD4), onPrimary = Color(0xFF04201B),
@@ -77,6 +77,9 @@ val PlexMono = FontFamily(
             surfaceVariant=Color(0xFFDDE5EA), onSurfaceVariant=Color(0xFF3E4D57)
         )).let { scheme ->
             val primary = when(accent) {
+                // Brand violet (#8B5CF6) fails AA as text on the dark surface (4.48:1), so dark mode uses the lighter #A78BFA (6.97:1) and
+                // light mode the deeper #6D28D9 (white on it: 7.1:1). The raw brand violet is for fills (launcher icon, marketing).
+                "Violet" -> if(dark) Color(0xFFA78BFA) else Color(0xFF6D28D9)
                 "Blue" -> if(dark) Color(0xFFA8C8FF) else Color(0xFF245B9D)
                 "Lavender" -> if(dark) Color(0xFFD3BFFF) else Color(0xFF69429A)
                 else -> if(dark) Color(0xFF5EEAD4) else Color(0xFF006B58)

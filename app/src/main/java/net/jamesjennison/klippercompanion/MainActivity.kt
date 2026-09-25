@@ -444,7 +444,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedButton({ selfCheckRunning = true; uiScope.launch { selfCheckResults = SelfCheck.run(context); selfCheckRunning = false } }, enabled = !selfCheckRunning, modifier = Modifier.testTag("run-self-check")) { Text(if(selfCheckRunning) "Checking…" else "Run self-check", maxLines = 1) }
-                        OutlinedButton({ creditsOpen = true }, modifier = Modifier.testTag("open-credits")) { Text("Credits", maxLines = 1) }
+                        OutlinedButton({ creditsOpen = true }, modifier = Modifier.testTag("open-credits")) { Text("About & credits", maxLines = 1) }
                         OutlinedButton({ backupStep = BackupStep.EXPORT_PASSPHRASE; backupMessage = null }, modifier = Modifier.testTag("backup-printers")) { Text("Back up printers", maxLines = 1) }
                         OutlinedButton({ restorePicker.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("restore-printers")) { Text("Restore printers", maxLines = 1) }
                     }
@@ -475,11 +475,17 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             }
             backupMessage?.let { msg -> if(tab == 4) item { Text(msg, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("backup-message")) } }
             if(creditsOpen) item {
-                AlertDialog(onDismissRequest = { creditsOpen = false }, title = { Text("Credits") }, modifier = Modifier.testTag("credits-dialog"),
+                AlertDialog(onDismissRequest = { creditsOpen = false }, title = { Text("About & credits") }, modifier = Modifier.testTag("credits-dialog"),
                     text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Models and images in Discover are provided by MyMiniFactory and the designers who publish them. The designer's credit is saved with every project you start from a model; please respect each model's license when you print, share or sell.", style = MaterialTheme.typography.bodySmall)
                         Text("Searches are sent to MyMiniFactory. Nothing else leaves your device.", style = MaterialTheme.typography.bodySmall)
-                        Text("On-device slicing uses the OrcaSlicer engine (AGPL-3.0), built with the open-source libraries listed in THIRD_PARTY_NOTICES.", style = MaterialTheme.typography.bodySmall)
+                        Text("Open source", style = MaterialTheme.typography.titleSmall)
+                        Text(OpenSourceNotice.statement, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("source-offer-statement"))
+                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                        OpenSourceNotice.links.forEachIndexed { i, (label, url) ->
+                            TextButton({ runCatching { uriHandler.openUri(url) } }, modifier = Modifier.testTag("source-link-$i")) { Text(label, style = MaterialTheme.typography.bodySmall) }
+                        }
+                        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.testTag("about-version"))
                     } },
                     confirmButton = { TextButton({ creditsOpen = false }, modifier = Modifier.testTag("credits-close")) { Text("Close") } })
             }

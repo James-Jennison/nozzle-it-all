@@ -104,21 +104,30 @@ jobs:
           mkdir -p apk-artifacts
           cp app/build/outputs/apk/debug/app-debug.apk apk-artifacts/
           cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk apk-artifacts/
-          # Device Farm rejects (at re-signing) this test package when it runs unfiltered, but accepts it when the run names its test classes,
-          # so the default run names them all: every test class in the build (the LAN-only ones are excluded from it by -PdeviceFarmTests).
+          # Device Farm rejects (at re-signing) a run of this test package once it holds a few hundred tests (the 144-test package of Sept 22 signed;
+          # the 308-test one does not, filtered or not), but accepts smaller runs. So the suite is split into balanced shards, each its own run.
           python3 - <<'PYEOF'
           import re, pathlib
           skip = {"ActiveToolDeviceTest", "AddPrinterWizardDeviceTest", "FakeBambuDeviceTest", "LiveFileHardwareTest", "LivePreviewHardwareTest",
                   "LivePrinterReadOnlyTest", "MmfLiveDeviceTest", "OctoPrintDeviceTest", "PrinterScanDeviceTest", "SshHostKeyPinDeviceTest"}
           root = pathlib.Path("app/src/androidTest/java")
-          names = []
+          weight = {}
           for f in sorted(root.rglob("*.kt")):
               text = f.read_text()
               pkg = re.search(r"^package\s+([\w.]+)", text, re.M).group(1)
-              for cls in re.findall(r"^(?:internal\s+|private\s+|public\s+)?class\s+(\w+)", text, re.M):
-                  if cls not in skip and "@Test" in text: names.append(pkg + "." + cls)
-          pathlib.Path("apk-artifacts/test-classes.txt").write_text(",".join(sorted(set(names))))
-          print(len(set(names)), "test classes")
+              classes = re.findall(r"^(?:internal\s+|private\s+|public\s+)?class\s+(\w+)", text, re.M)
+              if "@Test" in text and len(classes) == 1 and classes[0] not in skip:
+                  weight[pkg + "." + classes[0]] = text.count("@Test")
+              elif "@Test" in text:
+                  for cls in classes:
+                      if cls not in skip: weight[pkg + "." + cls] = max(1, text.count("@Test") // len(classes))
+          shards = [[] for _ in range(4)]
+          load = [0] * 4
+          for name, w in sorted(weight.items(), key=lambda kv: -kv[1]):
+              i = load.index(min(load)); shards[i].append(name); load[i] += w
+          for i, names in enumerate(shards, 1):
+              pathlib.Path(f"apk-artifacts/test-shard-{i}.txt").write_text(",".join(sorted(names)))
+          print(sum(load), "tests in", len(weight), "classes; shard loads", load)
           PYEOF
 
       - name: Upload debug APK
@@ -181,35 +190,39 @@ jobs:
           [ -n "$test_arn" ] || test_arn=$(upload_and_wait apks/app-debug-androidTest.apk INSTRUMENTATION_TEST_PACKAGE)
           echo "app upload: $app_arn"; echo "test upload: $test_arn"
 
-          # JSON, not the CLI shorthand: a filter naming several classes contains commas, which the shorthand would split.
-          filter="${TEST_FILTER:-$(cat apks/test-classes.txt 2>/dev/null || true)}"
-          test_json=$(jq -cn --arg arn "$test_arn" --arg f "$filter" '{type: "INSTRUMENTATION", testPackageArn: $arn} + (if $f == "" then {} else {filter: $f} end)')
-          run_json=$(aws devicefarm schedule-run \
-            --project-arn "$PROJECT_ARN" \
-            --app-arn "$app_arn" \
-            --device-pool-arn "$DEVICE_POOL_ARN" \
-            --name "ci-${GITHUB_SHA::7}" \
-            --test "$test_json")
-          run_arn=$(echo "$run_json" | jq -r '.run.arn')
-          echo "Device Farm run: https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/$(basename "$PROJECT_ARN")/runs/$(basename "$run_arn")"
-
-          for _ in $(seq 1 90); do
-            run_status=$(aws devicefarm get-run --arn "$run_arn" | jq -r '.run.status')
-            if [ "$run_status" = "COMPLETED" ]; then break; fi
-            sleep 20
+          # One run per shard (or the single hand-typed filter). Every shard runs even if an earlier one fails; the job fails at the end.
+          filters=()
+          if [ -n "${TEST_FILTER:-}" ]; then filters+=("$TEST_FILTER")
+          else for f in apks/test-shard-*.txt; do filters+=("$(cat "$f")"); done; fi
+          overall=0; n=0
+          for filter in "${filters[@]}"; do
+            n=$((n+1))
+            # JSON, not the CLI shorthand: a filter naming several classes contains commas, which the shorthand would split.
+            test_json=$(jq -cn --arg arn "$test_arn" --arg f "$filter" '{type: "INSTRUMENTATION", testPackageArn: $arn} + (if $f == "" then {} else {filter: $f} end)')
+            run_json=$(aws devicefarm schedule-run \
+              --project-arn "$PROJECT_ARN" \
+              --app-arn "$app_arn" \
+              --device-pool-arn "$DEVICE_POOL_ARN" \
+              --name "ci-${GITHUB_SHA::7}-shard${n}of${#filters[@]}" \
+              --test "$test_json")
+            run_arn=$(echo "$run_json" | jq -r '.run.arn')
+            echo "Device Farm run (shard $n of ${#filters[@]}): https://us-west-2.console.aws.amazon.com/devicefarm/home?region=us-west-2#/mobile/projects/$(basename "$PROJECT_ARN")/runs/$(basename "$run_arn")"
+            for _ in $(seq 1 90); do
+              run_status=$(aws devicefarm get-run --arn "$run_arn" | jq -r '.run.status')
+              if [ "$run_status" = "COMPLETED" ]; then break; fi
+              sleep 20
+            done
+            run_json=$(aws devicefarm get-run --arn "$run_arn")
+            result=$(echo "$run_json" | jq -r '.run.result')
+            echo "shard $n: $(echo "$run_json" | jq -c '{status: .run.status, result: .run.result, counters: .run.counters, deviceMinutes: .run.deviceMinutes}')"
+            if [ "$result" != "PASSED" ]; then
+              # Say WHY. The CI user may not be allowed ListJobs, so print what GetRun itself returns (message, device selection, billing).
+              echo "$run_json" | jq '{message: .run.message, deviceSelectionResult: .run.deviceSelectionResult, billingMethod: .run.billingMethod, totalJobs: .run.totalJobs, completedJobs: .run.completedJobs}' || true
+              echo "::error::Device Farm shard $n result was $result, not PASSED"
+              overall=1
+            fi
           done
-
-          run_json=$(aws devicefarm get-run --arn "$run_arn")
-          result=$(echo "$run_json" | jq -r '.run.result')
-          echo "$run_json" | jq '{status: .run.status, result: .run.result, counters: .run.counters}'
-          if [ "$result" != "PASSED" ]; then
-            # Say WHY. The CI user may not be allowed ListJobs, so print everything GetRun itself returns (message, device selection, billing).
-            echo "$run_json" | jq '{message: .run.message, deviceSelectionResult: .run.deviceSelectionResult, billingMethod: .run.billingMethod, deviceMinutes: .run.deviceMinutes, totalJobs: .run.totalJobs, completedJobs: .run.completedJobs, started: .run.started, stopped: .run.stopped}' || true
-            aws devicefarm get-device-pool-compatibility --device-pool-arn "$DEVICE_POOL_ARN" --app-arn "$app_arn" --test-type INSTRUMENTATION --test "type=INSTRUMENTATION,testPackageArn=$test_arn" \
-              | jq '{compatible: [.compatibleDevices[].device.name], incompatible: [.incompatibleDevices[] | {device: .device.name, problems: [.incompatibilityMessages[].message]}]}' || true
-            echo "::error::Device Farm run result was $result, not PASSED"
-            exit 1
-          fi
+          exit $overall
 
   # Phase 9g: tagged releases. Builds the minified release APK, signs it when the signing secrets exist (the owner's
   # identity is not in this repo - docs/RELEASE.md), writes the SBOM, and attaches GitHub build-provenance

@@ -23,7 +23,10 @@ class AutoConnectDeviceTest {
         compose.onNodeWithTag("saved-status:$first").performScrollTo().assertTextEquals("Connected • standby")
         compose.onNodeWithTag("saved-status:$second").performScrollTo().assertTextContains("Unavailable", substring=true)
         assertEquals("", selected)
-        compose.onNodeWithTag("saved-connect:$second").performScrollTo().performClick()
+        compose.waitForIdle()
+        // Semantic click: the coordinate tap is unreliable on the Galaxy S25 (see CompanionScreenTest).
+        compose.onNodeWithTag("saved-connect:$second").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.waitForIdle()
         assertEquals(second, selected)
     }
 }

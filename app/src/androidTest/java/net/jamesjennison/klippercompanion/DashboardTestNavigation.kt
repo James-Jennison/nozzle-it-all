@@ -18,6 +18,10 @@ fun ComposeContentTestRule.openFixtureDashboard(address: String = "http://fixtur
         val tag = "saved-connect:$address"
         onNodeWithTag("nav-4").performClick()
         onNodeWithTag("screen-list").performScrollToNode(hasTestTag(tag))
-        onNodeWithTag(tag).performClick()
+        waitForIdle()
+        // Semantic click: on the Galaxy S25 the coordinate tap after the scroll never registered,
+        // so the detail view never opened (the next assertion found no OFFLINE label).
+        onNodeWithTag(tag).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        waitForIdle()
     }
 }

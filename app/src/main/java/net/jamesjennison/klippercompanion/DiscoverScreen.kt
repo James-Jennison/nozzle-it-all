@@ -156,8 +156,12 @@ private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { bl
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("mmf-error")) }
                 if (loading && results.isEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("mmf-loading"))
                 if (!loading && error == null && filterMode.apply(results).none { !fdmOnly || !it.mentionsResin() }) Text(if (results.isEmpty()) "No models found." else "No models found.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("mmf-empty"))
-                LazyColumn(Modifier.weight(1f).testTag("mmf-results"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(filterMode.apply(results).filter { !fdmOnly || !it.mentionsResin() }, key = { it.id }) { o -> ResultCard(o) { selected = o } }
+                // Snapshot once per (results, filters), and only compose the lazy list while it has content: emptying
+                // it in the same frame it is measured throws IndexOutOfBounds inside Compose's lazy layout (seen on
+                // Android 17 when a filter change resets the results).
+                val shown = remember(results, filterMode, fdmOnly) { filterMode.apply(results).filter { !fdmOnly || !it.mentionsResin() } }
+                if (results.isNotEmpty()) LazyColumn(Modifier.weight(1f).testTag("mmf-results"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(shown, key = { it.id }) { o -> ResultCard(o) { selected = o } }
                     if (results.isNotEmpty() && results.size < total && !exhausted) item { OutlinedButton({ search(false) }, enabled = !loading, modifier = Modifier.fillMaxWidth().testTag("mmf-more")) { Text(if (loading) "Loading…" else "Load more (${results.size} of $total)") } }
                 }
             }

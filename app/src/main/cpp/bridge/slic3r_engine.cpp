@@ -274,6 +274,15 @@ void apply_object_extras(Slic3r::ModelObject* object, const ObjectExtras& extras
 }
 
 
+// PrintObject::m_id (the "id:" in GCode.cpp's "; printing object <name> id:<id>" labels) is only ever
+// assigned by the upstream GUI; nothing in the headless engine initializes it, so it holds whatever the
+// freshly allocated PrintObject's heap memory happened to contain - identical stale values for two
+// objects once earlier slices in the same process have churned the heap. Give every object a real unique id.
+void assign_print_object_ids(Slic3r::Print& print) {
+    size_t next_id = 1;
+    for (Slic3r::PrintObject* object : print.objects_mutable()) object->set_id(next_id++);
+}
+
 // The actual process/export tail, shared by slice_file() (fresh load from disk) and
 // slice_paint_session() (an already-loaded, possibly support-painted in-memory model) - both end
 // the same way, just start from a different Model.
@@ -293,6 +302,7 @@ void slice_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, const
         print.auto_assign_extruders(object);
     }
     print.apply(model, config);
+    assign_print_object_ids(print);
 
     StringObjectException validation_error = print.validate();
     if (!validation_error.string.empty()) {
@@ -323,6 +333,7 @@ void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, cons
         print.auto_assign_extruders(object);
     }
     print.apply(model, config);
+    assign_print_object_ids(print);
 
     StringObjectException validation_error = print.validate();
     if (!validation_error.string.empty()) {

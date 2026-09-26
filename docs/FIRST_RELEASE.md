@@ -14,7 +14,7 @@ The steps used (kept for a rebuild or rotation):
 4. Enrol in **Play App Signing** when you create the app (recommended): Google holds the real signing key, this key is only the *upload* key, and a lost upload key can be reset through Play support. If you distribute the APK directly, that same key signs the GitHub APK, so users of the APK and of Play get differently signed builds (they cannot update across each other); that is normal.
 
 ## 2. Play Console (OWNER)
-- Developer account and identity verification. **CHECK** the current testing rule for new personal accounts (a closed test with a minimum number of testers for a minimum number of days was required before production at last check).
+- Developer account: `owner@example.invalid` (owner). Complete identity verification if Play still asks. **CHECK** the current testing rule for new personal accounts (a closed test with a minimum number of testers for a minimum number of days was required before production at last check).
 - Create the app, upload the AAB to **internal testing** first, fill in the store listing from `docs/STORE_LISTING.md`, the Data safety form, the content rating and the foreground-service declaration.
 
 ## 3. Cut a release

@@ -150,6 +150,8 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-west-2
+      # Registers the account number as a secret so GitHub masks it anywhere it is printed (the ARNs below contain it and this repo is public).
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       PROJECT_ARN: ${{ vars.DEVICE_FARM_PROJECT_ARN }}
       APP_UPLOAD_ARN: ${{ inputs.app_upload_arn }}
       TEST_UPLOAD_ARN: ${{ inputs.test_upload_arn }}

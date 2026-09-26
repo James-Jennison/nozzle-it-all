@@ -1,0 +1,39 @@
+---
+title: The Nozzle It All web app (planned) | Nozzle It All
+description: The web app is planned, not released. Here is how it is designed to work: a browser interface for an engine you run yourself, with no Nozzle account and no cloud.
+path: /platforms/web/
+nav: platforms
+---
+<div class="wrap prose">
+ <p class="eyebrow"><a href="/platforms/">Platforms</a> / Web app</p>
+ <h1>The web app {{status:web}}</h1>
+ <p class="lead">The web app is planned. It does not exist yet, so there is nothing to open or install. This page explains how it is designed, so you know what to expect.</p>
+
+ <div class="callout"><p><strong>No Nozzle account. No Nozzle cloud.</strong> The web app is an interface. The slicing and the printer connections happen in an engine that you run.</p></div>
+
+ <h2>How it is designed to work</h2>
+ <p>The web app is a progressive web app: a page you can install from the browser. It talks to a <strong>Nozzle Engine Service</strong>, which does the heavy lifting. You get one in either of two ways:</p>
+ <ul>
+  <li>the <strong>Linux desktop app</strong> (planned first), which runs the engine on your own computer, or</li>
+  <li>a <strong>self-hosted engine service</strong> you run on your own machine or server, as a container or a system service.</li>
+ </ul>
+ <p>We do not run a shared service for other people, and the plan does not include one.</p>
+
+ <h2>What needs the engine</h2>
+ <p>These all need the engine service, because a web page cannot do them on its own:</p>
+ <ul>
+  <li>slicing a model into G-code,</li>
+  <li>connecting to Bambu Lab and PrusaLink printers,</li>
+  <li>camera streams,</li>
+  <li>finding printers on your network.</li>
+ </ul>
+
+ <h2>What works without it</h2>
+ <p>With no engine reachable, the web app is limited to opening, editing and preparing projects, and to projects it has cached for offline use. It cannot slice or reach a printer by itself.</p>
+
+ <h2>Why a web page cannot reach your printers directly</h2>
+ <p>Most printers on a home network speak plain HTTP or other local protocols. A web page served over HTTPS is blocked by browsers from calling them (mixed-content rules), browsers are also tightening access to devices on your local network, and some printers, such as Bambu Lab, use protocols a browser cannot use at all. The engine service sits between the two. That is a browser limit, and it is the main reason the web app is built this way.</p>
+
+ <h2>Status</h2>
+ <p>The web app comes after the Linux desktop app and before the Windows desktop app. When it exists, it will be at its own address and this page will say so, with a real link. Until then, follow progress on <a href="{{github}}">GitHub</a>.</p>
+</div>

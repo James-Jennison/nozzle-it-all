@@ -78,6 +78,10 @@ jobs:
         # warns loudly instead of failing. Give the runner a real checkout plus deps/src and drop the flag to enforce it.
         run: python3 scripts/engine_pin.py verify --allow-missing-deps --engine-root "$ORCASLICER_ENGINE_ROOT"
 
+      # The static website (site/) is generated from site-src/; fail if they drift or a release-state rule is broken.
+      - name: Check website build
+        run: python3 scripts/build_site.py --check
+
       - name: Unit tests + lint
         run: ./gradlew testDebugUnitTest lintDebug :domain:check :transport:check --no-daemon
 

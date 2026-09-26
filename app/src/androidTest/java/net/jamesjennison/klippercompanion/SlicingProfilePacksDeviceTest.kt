@@ -73,6 +73,25 @@ class SlicingProfilePacksDeviceTest {
         }
         assertTrue("models that failed to slice:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
+    // Custom machine (bed, origin, start/end G-code): a real slice through the real engine must use them.
+    @Test fun customMachineBedAndGcodeReachTheRealEngine() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val input = File(appContext.cacheDir, "cube.stl"); testContext.assets.open("cube.stl").use { it.copyTo(input.outputStream()) }
+        for ((centre, label) in listOf(false to "corner", true to "centre")) {
+            val custom = CustomMachine(180.0, 160.0, 150.0, originAtCenter = centre, startGcode = "MY_CUSTOM_START_MARKER_$label\nG90\nG92 E0", endGcode = "MY_CUSTOM_END_MARKER_$label")
+            val pack = slicingProfilePack(SlicingPrinterModel.GENERIC_KLIPPER, null, custom)!!
+            val shape = pack.readBedShape(appContext)
+            assertEquals("the bed the app reads is the custom one ($label)", if (centre) -90f else 0f, shape.points.minOf { it.first }, 0f)
+            assertEquals(150f, shape.heightMm, 0f)
+            val output = File(appContext.cacheDir, "custom_machine_$label.gcode"); output.delete()
+            NativeEngine.nativeSliceFile(input.absolutePath, output.absolutePath, pack.materialize(appContext).toTypedArray(), emptyArray(), emptyArray(), 0.0, 0.0, 0.0, 1.0)
+            val gcode = output.readText()
+            assertTrue("custom start G-code is in the output ($label)", gcode.contains("MY_CUSTOM_START_MARKER_$label"))
+            assertTrue("custom end G-code is in the output ($label)", gcode.contains("MY_CUSTOM_END_MARKER_$label"))
+            assertFalse("the profile's own START_PRINT must be gone ($label)", gcode.contains("START_PRINT EXTRUDER_TEMP"))
+        }
+    }
     @Test fun snapmakerU1ProfileSlicesRealGcode() {
         val gcode = sliceCube(SlicingPrinterModel.SNAPMAKER_U1)
         assertTrue(gcode.contains("G1"))

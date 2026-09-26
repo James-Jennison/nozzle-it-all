@@ -129,6 +129,15 @@ class PrinterModel(
         monitorSavedPrinters()
         return null
     }
+    /** Stores or clears a printer's custom machine (bed, origin, height, start/end G-code). Saved with the profile. */
+    fun setCustomMachine(address: String, custom: CustomMachine?) {
+        val current = _state.value
+        if (current.profiles.none { it.address == address }) return
+        val profiles = current.profiles.map { if (it.address == address) it.copy(customMachine = custom) else it }
+        _state.value = current.copy(profiles = profiles)
+        persist()
+    }
+
     // WO-13: a live-only read, deliberately separate from updateProfile - never guesses or
     // defaults a firmware declaration, only ever records what a real printer just reported (see
     // FirmwareIdentity.kt's own header comment on why a stale/cached value is unsafe here).

@@ -13,7 +13,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String?, detectFirmware: ((String, (Result<FirmwareIdentity>)->Unit)->Unit)? = null) {
+@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String?, detectFirmware: ((String, (Result<FirmwareIdentity>)->Unit)->Unit)? = null, setCustomMachine: (String, CustomMachine?) -> Unit = { _, _ -> }) {
     var name by remember(profile) { mutableStateOf(profile.name) }
     var address by remember(profile) { mutableStateOf(profile.address) }
     // For a BAMBU_LAB profile this same field holds the access code from the printer's own screen -
@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
     var serial by remember(profile) { mutableStateOf(profile.serial) }
     var kind by remember(profile) { mutableStateOf(profile.kind) }
     var slicingModel by remember(profile) { mutableStateOf(profile.slicingModel) }
+    var customMachine by remember(profile) { mutableStateOf(profile.customMachine) }
+    var customMachineError by remember(profile) { mutableStateOf<String?>(null) }
     var showKey by remember(profile) { mutableStateOf(false) }
     var showRemoteHelp by remember(profile) { mutableStateOf(false) }
     var error by remember(profile) { mutableStateOf<String?>(null) }
@@ -95,6 +97,7 @@ import androidx.compose.ui.unit.dp
         Text("Slicing profile",style=MaterialTheme.typography.labelLarge)
         Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.",style=MaterialTheme.typography.bodySmall)
         SlicingModelPicker(slicingModel) { slicingModel = it }
+        CustomMachineEditor(slicingModel, profile.customMachine) { value, problem -> customMachine = value; customMachineError = problem }
         // COSMOS's real hard-e-stop risk (FirmwareIdentity.kt) is why this is a live read, not a
         // typed field: only ever set by detectFirmware actually reaching the printer, never guessed.
         if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null) {
@@ -111,7 +114,7 @@ import androidx.compose.ui.unit.dp
         }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         Text("Changing the address disconnects the active printer.")
-    } },confirmButton={TextButton({error=save(profile.address,address,name,apiKey,kind,serial,slicingModel);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
+    } },confirmButton={TextButton({setCustomMachine(profile.address,customMachine.takeIf { slicingModel!=SlicingPrinterModel.ELEGOO_CENTAURI_CARBON });error=save(profile.address,address,name,apiKey,kind,serial,slicingModel);if(error==null) close()},enabled=address.isNotBlank() && customMachineError==null) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
 }
 @Composable fun FileDetails(state: ScreenState) {
     if(state.fileLoading) LinearProgressIndicator(Modifier.fillMaxWidth())

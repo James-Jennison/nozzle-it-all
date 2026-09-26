@@ -37,6 +37,8 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
     var serial by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(PrinterKind.GENERIC_KLIPPER) }
     var slicingModel by remember { mutableStateOf<SlicingPrinterModel?>(null) }
+    var customMachine by remember { mutableStateOf<CustomMachine?>(null) }
+    var customMachineError by remember { mutableStateOf<String?>(null) }
     var showKey by remember { mutableStateOf(false) }
     var typeError by remember { mutableStateOf<String?>(null) }
     var normalizedAddressResult by remember { mutableStateOf("") }
@@ -49,7 +51,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
     var finishError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    fun draftProfile() = PrinterProfile(normalizedAddressResult, name.trim().take(80), false, "", apiKey.trim().take(200), kind, serial.trim().take(40), slicingModel, declaredFirmwareVersion)
+    fun draftProfile() = PrinterProfile(normalizedAddressResult, name.trim().take(80), false, "", apiKey.trim().take(200), kind, serial.trim().take(40), slicingModel, declaredFirmwareVersion, customMachine.takeIf { slicingModel != SlicingPrinterModel.ELEGOO_CENTAURI_CARBON })
 
     var scanning by remember { mutableStateOf(false) }
     var scanNote by remember { mutableStateOf("") }
@@ -159,6 +161,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                     Text("Step 2 of 4: slicing profile", style = MaterialTheme.typography.labelLarge)
                     Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.", style=MaterialTheme.typography.bodySmall)
                     SlicingModelPicker(slicingModel) { slicingModel = it }
+                    CustomMachineEditor(slicingModel, customMachine) { value, problem -> customMachine = value; customMachineError = problem }
                 }
                 WizardStep.FIRMWARE_CONFIRM -> {
                     Text("Step 3 of 4: firmware confirmation", style = MaterialTheme.typography.labelLarge)
@@ -186,7 +189,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 if(kind == PrinterKind.BAMBU_LAB && serial.isNotBlank()) BambuCertPins.store.forget(serial.trim())
                 step = WizardStep.SLICING_PROFILE
             }, enabled = address.isNotBlank(), modifier = Modifier.testTag("wizard-next-1")) { Text("Next") }
-            WizardStep.SLICING_PROFILE -> Button({ step = if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) WizardStep.FIRMWARE_CONFIRM else WizardStep.CONNECTIVITY_TEST }, modifier = Modifier.testTag("wizard-next-2")) { Text("Next") }
+            WizardStep.SLICING_PROFILE -> Button({ step = if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) WizardStep.FIRMWARE_CONFIRM else WizardStep.CONNECTIVITY_TEST }, enabled = customMachineError == null, modifier = Modifier.testTag("wizard-next-2")) { Text("Next") }
             WizardStep.FIRMWARE_CONFIRM -> Button({ step = WizardStep.CONNECTIVITY_TEST }, enabled = !detecting, modifier = Modifier.testTag("wizard-next-3")) { Text(if(declaredFirmwareVersion.isNotBlank()) "Next" else "Skip for now") }
             WizardStep.CONNECTIVITY_TEST -> Button({
                 finishError = addProfile(draftProfile())

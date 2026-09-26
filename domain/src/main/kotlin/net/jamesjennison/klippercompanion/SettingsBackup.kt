@@ -51,13 +51,13 @@ object SettingsBackup {
         SecretKeySpec(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(PBEKeySpec(passphrase, salt, iterations, 256)).encoded, "AES")
 
     private fun toJson(p: PrinterProfile) = JSONObject().put("address", p.address).put("name", p.name).put("favorite", p.favorite).put("cameraId", p.cameraId).put("apiKey", p.apiKey)
-        .put("kind", p.kind.name).put("serial", p.serial).put("slicingModel", p.slicingModel?.name ?: "").put("firmware", p.declaredFirmwareVersion)
+        .put("kind", p.kind.name).put("serial", p.serial).put("slicingModel", p.slicingModel?.name ?: "").put("firmware", p.declaredFirmwareVersion).apply { p.customMachine?.let { put("customMachine", it.toJson()) } }
 
     private fun fromJson(o: JSONObject?): PrinterProfile? {
         o ?: return null
         val address = o.optString("address").trim().take(300).ifBlank { return null }
         return PrinterProfile(address, o.optString("name").take(80), o.optBoolean("favorite"), o.optString("cameraId").take(80), o.optString("apiKey").take(200),
             runCatching { PrinterKind.valueOf(o.optString("kind")) }.getOrDefault(PrinterKind.GENERIC_KLIPPER), o.optString("serial").take(40),
-            o.optString("slicingModel").takeIf { it.isNotBlank() }?.let { runCatching { SlicingPrinterModel.valueOf(it) }.getOrNull() }, o.optString("firmware").take(80))
+            o.optString("slicingModel").takeIf { it.isNotBlank() }?.let { runCatching { SlicingPrinterModel.valueOf(it) }.getOrNull() }, o.optString("firmware").take(80), CustomMachine.fromJson(o.optJSONObject("customMachine")))
     }
 }

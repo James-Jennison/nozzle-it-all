@@ -84,13 +84,13 @@ internal fun parseFilamentTemperatureRange(filamentJson: String): FilamentTemper
 }
 
 internal fun SlicingProfilePack.readMachineLimits(context: Context): MachineLimits =
-    parseMachineLimits(context.assets.open(machinePath).use { it.reader().readText() })
+    parseMachineLimits(machineText(context))
 
 internal fun SlicingProfilePack.readFilamentTemperatureRange(context: Context): FilamentTemperatureRange =
     parseFilamentTemperatureRange(context.assets.open(filamentPath).use { it.reader().readText() })
 
-internal fun machineLimitsFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context): MachineLimits? =
-    slicingProfilePack(model, cosmosGeneration)?.readMachineLimits(context)
+internal fun machineLimitsFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context, custom: CustomMachine? = null): MachineLimits? =
+    slicingProfilePack(model, cosmosGeneration, custom)?.readMachineLimits(context)
 
 internal fun filamentTemperatureRangeFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context): FilamentTemperatureRange? =
     slicingProfilePack(model, cosmosGeneration)?.readFilamentTemperatureRange(context)

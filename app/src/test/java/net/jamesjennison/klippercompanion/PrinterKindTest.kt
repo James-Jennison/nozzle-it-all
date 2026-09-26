@@ -43,6 +43,16 @@ class PrinterKindTest {
         val loaded = PrinterPreferences.profiles(prefs, secrets)
         assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, loaded.single().kind)
     }
+    private val voronMachine = CustomMachine(300.0, 300.0, 280.0, startGcode = "PRINT_START", endGcode = "PRINT_END")
+    @Test fun aSavedPrinterKeepsItsCustomMachineAcrossSaveAndLoad() {
+        val prefs = InMemoryPrefs(); val secrets = InMemoryPrefs()
+        val custom = PrinterProfile("http://voron.local/", "Voron", kind = PrinterKind.GENERIC_KLIPPER, slicingModel = SlicingPrinterModel.GENERIC_KLIPPER, customMachine = voronMachine)
+        val plain = PrinterProfile("http://other.local/", "Other")
+        PrinterPreferences.saveProfiles(prefs, secrets, custom.address, listOf(custom, plain))
+        val loaded = PrinterPreferences.profiles(prefs, secrets).associateBy { it.name }
+        assertEquals(voronMachine, loaded.getValue("Voron").customMachine); assertNull(loaded.getValue("Other").customMachine)
+    }
+
     @Test fun stockU1KindRoundTripsAndPaxxStaysDistinct() {
         val prefs = InMemoryPrefs()
         val secrets = InMemoryPrefs()

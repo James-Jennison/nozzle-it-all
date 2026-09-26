@@ -105,13 +105,13 @@ import java.io.File
     // selection, so only the layer-height check applies here (the temperature-range check needs
     // a MaterialProfile, which ProjectEditorScreen's multi-object flow is the one that has).
     var machineLimits by remember(uri) { mutableStateOf<MachineLimits?>(null) }
-    LaunchedEffect(profile?.slicingModel) {
+    LaunchedEffect(profile?.slicingModel, profile?.customMachine) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         bedShape = try {
-            withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
         } catch (e: Exception) { null }
         machineLimits = try {
-            withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
         } catch (e: Exception) { null }
     }
     // Owned here, not by ModelViewer (which only lives during the "customizing" step and would

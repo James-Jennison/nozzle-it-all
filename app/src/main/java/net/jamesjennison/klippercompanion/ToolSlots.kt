@@ -35,13 +35,13 @@ internal fun parseToolCount(machineJson: String): Int {
 }
 
 internal fun SlicingProfilePack.readToolCount(context: Context): Int =
-    parseToolCount(context.assets.open(machinePath).use { it.reader().readText() })
+    parseToolCount(machineText(context))
 
 // Returns null exactly when slicingProfilePack() itself would (no bundled pack for this
 // model/firmware-generation combination) - mirrors bedShapeFor's own convention, not a separate
 // error shape.
-internal fun toolCountFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context): Int? =
-    slicingProfilePack(model, cosmosGeneration)?.readToolCount(context)
+internal fun toolCountFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context, custom: CustomMachine? = null): Int? =
+    slicingProfilePack(model, cosmosGeneration, custom)?.readToolCount(context)
 
 // A single-extruder machine's one real slot is never AMS/toolchanger-shaped - real signal, not
 // invented. A multi-slot machine could in principle be either INDEPENDENT_TOOL (a real physical

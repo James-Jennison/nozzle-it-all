@@ -50,6 +50,20 @@ P28/M7 sections for what each one built and its commit hash.)*
 
 ## Next — one specific owner action unblocks each of these
 
+1. **WO-44 — Custom machine settings for printers no bundled profile matches (2026-09-26).**
+   Found while writing the hardware testing guide: testers who build their own printers cannot slice correctly, because
+   the app had no way to set a bed size, origin or start/end G-code (the slicer's Printer tab is a read-only summary).
+   `CustomMachine` (domain) holds width, depth, height, corner/centre origin and optional start/end G-code, validated
+   (bed 50-1000 mm, height 20-1000 mm, G-code <= 4000 chars, no control characters). `applyCustomMachine` patches a *copy*
+   of the profile's machine.json (`printable_area`, `printable_height`, `machine_start_gcode`/`machine_end_gcode`; exclusion
+   zones reset to Orca's "0x0"); the bundled asset is never edited and the nozzle stays 0.4 mm. Stored on
+   `PrinterProfile.customMachine` (preferences and the encrypted backup), edited by `CustomMachineEditor` in Edit printer
+   and the Add printer wizard (prefilled from the bundled profile), and applied everywhere a pack is read: slicing,
+   bed shape in the editor and preview, layer limits, tool count. Never offered for the COSMOS Centauri Carbon.
+   Unit tests (`CustomMachineTest`, 16 cases) cover validation, both origins, untouched-everything-else, backup and
+   preferences round trips. `customMachineBedAndGcodeReachTheRealEngine` in `SlicingProfilePacksDeviceTest` slices with
+   custom G-code through the real engine for both origins (Device Farm result recorded below when run). Not done: nozzle
+   diameter, and per-printer custom process defaults.
 1. **WO-43 — Bundle the whole OrcaSlicer 0.4 mm printer library; searchable model picker (2026-09-26).**
    Requested for testers who own many models, then widened to a comprehensive list. `scripts/bundle_vendor_profiles.py`
    flattens 371 more models across 60 vendors (Bambu, Prusa, Creality, Anycubic, Qidi, Sovol, Voron, Ratrig, Artillery,

@@ -34,7 +34,7 @@ internal fun parseBedShape(machineJson: String): BedShape {
 }
 
 internal fun SlicingProfilePack.readBedShape(context: Context): BedShape =
-    parseBedShape(context.assets.open(machinePath).use { it.reader().readText() })
+    parseBedShape(machineText(context))
 
 // A real (if v1-bounded) test: every corner of the model's own axis-aligned XY footprint must
 // land inside the bed polygon. Not a full silhouette-vs-polygon boolean (an irregular/diagonal

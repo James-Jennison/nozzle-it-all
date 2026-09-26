@@ -252,7 +252,7 @@ object SlicingCoordinator {
             // is the one actually trusted for which profile pack gets selected.
             live?.let { cosmosRequiresCurrentProfile(it.version) }?.let { if (it) CosmosProfileGeneration.CURRENT else CosmosProfileGeneration.LEGACY }
         } else null
-        val pack = slicingProfilePack(model, cosmosGeneration)
+        val pack = slicingProfilePack(model, cosmosGeneration, profile.customMachine)
             ?: return ProfileResolution.Blocked(SliceOutcome.Failed("No bundled slicer profile exists yet for this printer's confirmed firmware."))
         return ProfileResolution.Ready(pack.materialize(context))
     }

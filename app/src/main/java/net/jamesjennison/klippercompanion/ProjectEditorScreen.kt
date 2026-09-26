@@ -224,13 +224,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // printer keeps exactly today's single-material-per-project UX unchanged, not a hidden
     // no-op control (§20).
     var toolCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
-    LaunchedEffect(profile?.slicingModel) {
+    LaunchedEffect(profile?.slicingModel, profile?.customMachine) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         try {
-            bedShape = withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
-            machineLimits = withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            bedShape = withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
+            machineLimits = withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
             filamentRange = withContext(Dispatchers.IO) { filamentTemperatureRangeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
-            toolCount = withContext(Dispatchers.IO) { toolCountFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) } ?: 1
+            toolCount = withContext(Dispatchers.IO) { toolCountFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) } ?: 1
         } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1 }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }

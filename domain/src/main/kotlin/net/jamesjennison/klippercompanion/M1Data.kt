@@ -20,7 +20,7 @@ enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LI
 // alone for the actual go/no-go decision (FirmwareIdentity.kt's checkCentauriCarbonFirmwareMatch
 // takes a live reading), but it drives the UI ("this printer was last confirmed as COSMOS
 // 26.08.0 - revalidate?") and lets profile selection happen before a printer is even reachable.
-data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER, val serial: String = "", val slicingModel: SlicingPrinterModel? = null, val declaredFirmwareVersion: String = "") {
+data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER, val serial: String = "", val slicingModel: SlicingPrinterModel? = null, val declaredFirmwareVersion: String = "", val customMachine: CustomMachine? = null) {
     val label: String get() = name.ifBlank { address }
     // Null for every slicingModel except ELEGOO_CENTAURI_CARBON, and null there too until a firmware
     // version has actually been confirmed (declaredFirmwareVersion blank, or unparseable - see

@@ -18,6 +18,7 @@ Deploying is done by the owner. Nothing in this repository holds server credenti
 ## After
 - [ ] Load `/`, `/platforms/`, `/platforms/web/`, `/printers/`, `/docs/`, `/privacy/`, `/open-source/`, `/support/`, and a bad URL (expect the 404 page), over HTTPS.
 - [ ] **Test MyMiniFactory sign-in end to end from the Android app** (the `/mmf-auth` relay must still hand the token back to the app).
+- [ ] **Check which cookies Cloudflare actually sets** (browser dev tools, Application, Cookies). The privacy policy says none are set by our pages and that Cloudflare may set a strictly necessary security cookie. Adjust the wording if it sets more.
 - [ ] Check the pages on a real phone at 360 px width and with the system font size at maximum.
 - [ ] Confirm the response headers (securityheaders.com or `curl -I`).
 

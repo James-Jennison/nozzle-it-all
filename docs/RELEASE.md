@@ -1,5 +1,8 @@
 # Release engineering (Phase 9g)
 
+## Package name
+The Play/installed identity (`applicationId`) is `com.nozzleitall.app` (changed 2026-09-25 from `net.jamesjennison.klippercompanion` before the first upload; it can never change after the first Play upload). The Kotlin `namespace` is still `net.jamesjennison.klippercompanion`, so source paths and test class names are unchanged.
+
 ## Signing
 The release APK is signed only when these are set (environment or `~/.gradle/gradle.properties`; never committed):
 `NOZZLE_KEYSTORE` (path), `NOZZLE_KEYSTORE_PASSWORD`, `NOZZLE_KEY_ALIAS`, `NOZZLE_KEY_PASSWORD`.
@@ -16,7 +19,7 @@ but keeps the app's own classes and Kotlin (`app/proguard-smoke.pro`, `app/progu
 ./gradlew assembleReleaseSmoke assembleAndroidTest -PnozzleSmoke
 adb install -r app/build/outputs/apk/releaseSmoke/app-releaseSmoke.apk
 adb install -r app/build/outputs/apk/androidTest/releaseSmoke/app-releaseSmoke-androidTest.apk
-adb shell am instrument -w net.jamesjennison.klippercompanion.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w com.nozzleitall.app.test/net.jamesjennison.klippercompanion.NozzleTestRunner
 ```
 Reinstall the debug APKs afterwards (`assembleDebug assembleDebugAndroidTest`, then `adb install -r`). Never `adb uninstall`:
 it deletes the saved printers.

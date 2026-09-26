@@ -15,6 +15,13 @@ class SliceValidationTest {
         assertEquals(MachineLimits(null, null), parseMachineLimits("""{}"""))
     }
 
+    @Test fun limitsAcceptEveryFormVendorsWriteThem() {
+        assertEquals(MachineLimits(0.08, 0.3), parseMachineLimits("""{"min_layer_height":"0.08,0.08","max_layer_height":"0.3,0.3"}"""))
+        assertEquals(MachineLimits(0.07, 0.28), parseMachineLimits("""{"min_layer_height":["0.07"],"max_layer_height":["0.28"]}"""))
+        assertEquals(MachineLimits(0.07, 0.28), parseMachineLimits("""{"min_layer_height":"0.07","max_layer_height":"0.28"}"""))
+        assertEquals(FilamentTemperatureRange(190, 240), parseFilamentTemperatureRange("""{"nozzle_temperature_range_low":"190,190","nozzle_temperature_range_high":["240"]}"""))
+    }
+
     @Test fun everyBundledMachineJsonParsesToRealLayerHeightLimits() {
         val root = File("src/main/assets/slicer_profiles")
         val machineFiles = root.listFiles()?.mapNotNull { dir -> File(dir, "machine.json").takeIf { it.exists() } }.orEmpty()

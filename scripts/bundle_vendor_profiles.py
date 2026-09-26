@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bundle OrcaSlicer's own Bambu Lab and Prusa profiles for every 0.4 mm model, and generate the Kotlin model catalog.
+"""Bundle OrcaSlicer's own printer profiles for every vendor's 0.4 mm models, and generate the Kotlin model catalog.
 
 Each model gets a flattened machine/process/filament pack under app/src/main/assets/slicer_profiles/<dir>/ (same
 flattening as flatten_orca_profile.py - the JNI bridge has no `inherits` resolution). The catalog
@@ -63,10 +63,10 @@ BAMBU_LABELS = {  # machine model name -> (id, label)
 def slug(model_id): return model_id.lower()
 
 
-def write_pack(by_name, out_dir, machine, process, filament):
+def write_pack(by_name, out_dir, machine, process, filament, filament_index=None):
     os.makedirs(out_dir, exist_ok=True)
     for kind, name in (("machine", machine), ("process", process), ("filament", filament)):
-        flat = flatten(kind, name, by_name)
+        flat = flatten(kind, name, filament_index if (kind == "filament" and filament_index is not None) else by_name)
         flat["name"] = name
         with open(os.path.join(out_dir, f"{kind}.json"), "w") as f:
             json.dump(flat, f, indent=4); f.write("\n")
@@ -86,44 +86,146 @@ def pick_bambu(by_name, machine):
     return proc, fil
 
 
+SKIP_VENDORS = {"Custom"}  # OrcaSlicer's placeholder vendor; the generic Klipper pack already covers it
+# Machines handled elsewhere (hand-made or earlier packs) that must not be regenerated under another id.
+LEGACY_MACHINES = {
+    "Snapmaker U1 (0.4 nozzle)", "Elegoo Centauri Carbon 0.4 nozzle",  # Elegoo CC: stock-firmware profile is the wrong one (COSMOS pack)
+    "Bambu Lab A1 0.4 nozzle", "Prusa MK4 0.4 nozzle", "Prusa XL 5T 0.4 nozzle",
+}
+VENDOR_KEYS = {"BBL": ("BAMBU", "Bambu Lab"), "Prusa": ("PRUSA", "Prusa"), "Snapmaker": ("SNAPMAKER", "Snapmaker"), "Elegoo": ("ELEGOO", "Elegoo")}
+import re
+_NOZ = re.compile(r"0\.4 nozzle\)?$")
+
+
+def ident(text): return re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9]+", "_", text)).strip("_").upper()
+
+
+def vendor_key(vendor): return VENDOR_KEYS.get(vendor, (ident(vendor), vendor))
+
+
+def first(v):
+    if isinstance(v, list): v = v[0] if v else None
+    return v.split(";")[0].strip() if isinstance(v, str) and v.strip() else None
+
+
+def resolve_process(by_name, name, m):
+    dp = first(m.get("default_print_profile"))
+    if dp and ("process", dp) in by_name: return dp
+    model = m.get("printer_model") or ""
+    cands = []
+    for (k, n) in by_name:
+        if k != "process" or not n or n.startswith("fdm_"): continue
+        try: f = flatten("process", n, by_name)
+        except SystemExit: continue
+        if str(f.get("layer_height")) not in ("0.2", "0.20"): continue
+        compat = f.get("compatible_printers") or []
+        if name in compat or (not compat and model and model in n): cands.append(n)
+    if not cands: return None
+    pref = lambda n: (0 if "Standard" in n else 1 if any(w in n for w in ("Normal", "Optimal", "Quality", "Balanced")) else 2, len(n), n)
+    return sorted(cands, key=pref)[0]
+
+
+FALLBACK_FILAMENT = "Generic PLA @System"
+LIBRARY_INDEX = {}  # OrcaSlicer's own filament library, filled in main(); the fallback filament always comes from here
+
+
+def has_temp_range(by_name, name):
+    try: f = flatten("filament", name, by_name)
+    except SystemExit: return False
+    return bool(f.get("nozzle_temperature_range_low")) and bool(f.get("nozzle_temperature_range_high"))
+
+
+def resolve_filament(by_name, name, m, vendor):
+    df = first(m.get("default_filament_profile"))
+    if df and ("filament", df) in by_name and has_temp_range(by_name, df): return df  # a vendor filament with no temperature range cannot be validated
+    cands = []
+    for (k, n) in by_name:
+        if k != "filament" or not n or "PLA" not in n or f"@{vendor}" in n[:0]: continue
+        try: f = flatten("filament", n, by_name)
+        except SystemExit: continue
+        if name in (f.get("compatible_printers") or []): cands.append(n)
+    cands = [c for c in cands if has_temp_range(by_name, c)]
+    if cands: return sorted(cands, key=lambda n: (0 if "Generic" in n else 1 if "Basic" in n else 2, len(n), n))[0]
+    return FALLBACK_FILAMENT if has_temp_range(LIBRARY_INDEX, FALLBACK_FILAMENT) else None
+
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--profiles", required=True); a = ap.parse_args()
-    entries = list(EXISTING); report = []
-    bbl = index(a.profiles, "BBL")
+    entries = list(EXISTING); report = []; skipped = []
+    LIBRARY_INDEX.update(index(a.profiles, "OrcaFilamentLibrary"))
+    used_ids = {e[0] for e in entries}; used_labels = {(e[2], e[1]) for e in entries}
+    # 1) the curated Bambu/Prusa picks made earlier keep their ids and hand-checked process/filament choices.
+    bbl = index(a.profiles, "BBL"); prusa = index(a.profiles, "Prusa"); curated = set()
     for full in sorted(n for (k, n) in bbl if k == "machine" and n and n.startswith("Bambu Lab") and n.endswith("0.4 nozzle")):
         model = full[: -len(" 0.4 nozzle")]
-        if model == "Bambu Lab A1": continue  # already bundled as BAMBU_GENERIC
-        if model not in BAMBU_LABELS: raise SystemExit(f"unlisted Bambu model {model}: add it to BAMBU_LABELS")
-        mid, label = BAMBU_LABELS[model]
-        proc, fil = pick_bambu(bbl, full)
-        if not proc or not fil: raise SystemExit(f"no compatible process/filament for {full}: {proc} {fil}")
+        if model == "Bambu Lab A1": continue
+        mid, label = BAMBU_LABELS[model]; proc, fil = pick_bambu(bbl, full)
+        if not proc or not fil: raise SystemExit(f"no compatible process/filament for {full}")
         write_pack(bbl, os.path.join(OUT, slug(mid)), full, proc, fil)
-        entries.append((mid, label, "BAMBU", slug(mid), False)); report.append((label, full, proc, fil))
-    prusa = index(a.profiles, "Prusa")
+        entries.append((mid, label, "BAMBU", slug(mid), False)); used_ids.add(mid); used_labels.add(("BAMBU", label)); curated.add(full)
     for mid, label, machine, proc, fil in PRUSA:
         write_pack(prusa, os.path.join(OUT, slug(mid)), machine, proc, fil)
-        entries.append((mid, label, "PRUSA", slug(mid), False)); report.append((label, machine, proc, fil))
+        entries.append((mid, label, "PRUSA", slug(mid), False)); used_ids.add(mid); used_labels.add(("PRUSA", label)); curated.add(machine)
+    # 2) every other vendor: one pack per 0.4 mm machine model, defaults from the machine itself, then heuristics.
+    for vendor in sorted(d for d in os.listdir(a.profiles) if os.path.isdir(os.path.join(a.profiles, d)) and d not in SKIP_VENDORS):
+        mdir = os.path.join(a.profiles, vendor, "machine")
+        if not os.path.isdir(mdir): continue
+        vkey, vlabel = vendor_key(vendor)
+        if vkey in ("BAMBU", "PRUSA"): continue  # done above
+        by_name = None
+        for f in sorted(os.listdir(mdir)):
+            if not f.endswith(".json"): continue
+            try: raw = json.load(open(os.path.join(mdir, f)))
+            except Exception: continue
+            name = raw.get("name") or ""
+            if not raw.get("printer_model") or not (_NOZ.search(name) or raw.get("printer_variant") == "0.4"): continue
+            if name in LEGACY_MACHINES or name in curated: continue
+            if by_name is None: by_name = index(a.profiles, vendor)
+            try: m = flatten("machine", name, by_name)
+            except SystemExit as e: skipped.append((vendor, name, f"machine: {e}")); continue
+            if not (m.get("printable_area") and m.get("machine_start_gcode") is not None): skipped.append((vendor, name, "no bed/start gcode")); continue
+            proc = resolve_process(by_name, name, m)
+            if not proc: skipped.append((vendor, name, "no 0.20 mm process found")); continue
+            fil = resolve_filament(by_name, name, m, vendor)
+            if not fil: skipped.append((vendor, name, "no filament found")); continue
+            model = raw["printer_model"].strip()
+            label = model if vlabel.lower() in model.lower() else f"{vlabel} {model}"
+            mid = f"{vkey}_{ident(model.replace(vlabel, ''))}".strip("_") if vlabel.lower() in model.lower() else f"{vkey}_{ident(model)}"
+            base = mid; n = 2
+            while mid in used_ids: mid = f"{base}_{n}"; n += 1
+            if (vkey, label) in used_labels: label = f"{label} ({name.replace(' 0.4 nozzle', '')})"
+            try: write_pack(by_name, os.path.join(OUT, slug(mid)), name, proc, fil, LIBRARY_INDEX if fil == FALLBACK_FILAMENT else None)
+            except SystemExit as e: skipped.append((vendor, name, f"pack: {e}")); continue
+            entries.append((mid, label, vkey, slug(mid), False)); used_ids.add(mid); used_labels.add((vkey, label))
+            report.append((label, name, proc, fil))
     for r in report: print(" | ".join(r))
-    order = {"SNAPMAKER": 0, "ELEGOO": 1, "BAMBU": 2, "PRUSA": 3, "GENERIC": 4}
+    print(f"\nSKIPPED {len(skipped)}:")
+    for sk in skipped: print("  ", " | ".join(sk))
+    vendors = sorted({e[2] for e in entries} - {"SNAPMAKER", "ELEGOO", "BAMBU", "PRUSA", "GENERIC"})
+    labels = {vendor_key(v)[0]: vendor_key(v)[1] for v in os.listdir(a.profiles) if os.path.isdir(os.path.join(a.profiles, v))}
+    labels.update({"SNAPMAKER": "Snapmaker", "ELEGOO": "Elegoo", "BAMBU": "Bambu Lab", "PRUSA": "Prusa", "GENERIC": "Generic"})
+    order_keys = ["SNAPMAKER", "ELEGOO", "BAMBU", "PRUSA"] + vendors + ["GENERIC"]
     ids = [e[0] for e in entries]
-    assert len(set(ids)) == len(ids)
+    assert len(set(ids)) == len(ids), "duplicate model ids"
+    vlines = ", ".join(f'{k}("{labels[k]}")' for k in order_keys)
     lines = [
         "package net.jamesjennison.klippercompanion", "",
         "// GENERATED by scripts/bundle_vendor_profiles.py - do not edit by hand; rerun the script.",
         "// One entry per bundled OrcaSlicer profile pack (app/src/main/assets/slicer_profiles/<assetDir>). The enum is persisted by",
         "// name(), so existing names are never renamed or removed; new models are only ever appended.",
         "enum class SlicingPrinterModel { " + ", ".join(ids) + " }", "",
-        "enum class SlicingVendor(val label: String) { SNAPMAKER(\"Snapmaker\"), ELEGOO(\"Elegoo\"), BAMBU(\"Bambu Lab\"), PRUSA(\"Prusa\"), GENERIC(\"Generic\") }", "",
+        "enum class SlicingVendor(val label: String) { " + vlines + " }", "",
         "/** verifiedOnHardware: this pack has produced a real print on a real printer of this model; everything else is profile-only. */",
         "data class SlicingModelInfo(val model: SlicingPrinterModel, val label: String, val vendor: SlicingVendor, val assetDir: String, val verifiedOnHardware: Boolean)", "",
         "object SlicingModelCatalog {", "    val all: List<SlicingModelInfo> = listOf(",
     ]
-    for mid, label, vendor, d, ver in sorted(entries, key=lambda e: (order[e[2]], e[1])):
+    rank = {k: i for i, k in enumerate(order_keys)}
+    for mid, label, vendor, d, ver in sorted(entries, key=lambda e: (rank[e[2]], e[1].lower())):
         lines.append(f'        SlicingModelInfo(SlicingPrinterModel.{mid}, "{label}", SlicingVendor.{vendor}, "{d}", {str(ver).lower()}),')
     lines += ["    )", "    private val byModel = all.associateBy { it.model }",
               "    fun info(model: SlicingPrinterModel): SlicingModelInfo = byModel.getValue(model)", "}", ""]
     open(CATALOG, "w").write("\n".join(lines))
-    print(f"\n{len(entries)} models in catalog; wrote {CATALOG}")
+    print(f"\n{len(entries)} models across {len(order_keys)} vendors; wrote {CATALOG}")
 
 
 if __name__ == "__main__":

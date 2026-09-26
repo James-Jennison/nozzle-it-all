@@ -10,10 +10,14 @@ enum class MultiToolFamily(val label: String, val explanation: String) {
     FILAMENT_SWAP("Filament swap, one nozzle", "One nozzle is fed from several spools (AMS-style). Every change flushes the old colour out, so purge waste is high and a prime tower is normally required."),
 }
 
+// Machines with independent tool heads (each tool has its own nozzle). Every other multi-material printer in the catalog
+// (Bambu AMS, Creality CFS, Anycubic ACE, ...) feeds one nozzle from several spools.
+private val INDEPENDENT_TOOL_MODELS = setOf(SlicingPrinterModel.SNAPMAKER_U1, SlicingPrinterModel.PRUSA_XL_5T, SlicingPrinterModel.PRUSA_XL)
+
 fun multiToolFamily(model: SlicingPrinterModel?, toolCount: Int): MultiToolFamily = when {
     toolCount <= 1 -> MultiToolFamily.SINGLE
-    model != null && SlicingModelCatalog.info(model).vendor == SlicingVendor.BAMBU -> MultiToolFamily.FILAMENT_SWAP // every Bambu model: AMS-style swap (H2 dual-nozzle models are unverified)
-    else -> MultiToolFamily.TOOLCHANGER // Snapmaker U1, Prusa XL: the only multi-tool machines this app targets besides Bambu
+    model == null || model in INDEPENDENT_TOOL_MODELS -> MultiToolFamily.TOOLCHANGER // unknown printer: the previous default
+    else -> MultiToolFamily.FILAMENT_SWAP
 }
 
 object MaterialCompatibility {

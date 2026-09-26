@@ -50,17 +50,23 @@ P28/M7 sections for what each one built and its commit hash.)*
 
 ## Next — one specific owner action unblocks each of these
 
-1. **WO-43 — Bundle the Bambu Lab and Prusa profile libraries; searchable model picker (2026-09-26).**
-   Requested for a group of testers who own many models. `scripts/bundle_vendor_profiles.py` flattens OrcaSlicer's own
-   0.4 mm profile for 13 more Bambu models and 8 more Prusa models and generates `SlicingModelCatalog.kt`
-   (the `SlicingPrinterModel` enum plus one catalog row per model: label, vendor, asset dir, verified flag). The old
-   chip rows in Add printer and Edit printer are replaced by `SlicingModelPicker` (search box, grouped by vendor,
-   "not yet confirmed" note for unverified models). Existing enum names and packs are untouched, so saved printers keep
-   their profile. New unit tests (`SlicingModelCatalogTest`) check enum/catalog/asset consistency and caught a real
-   tag collision (Prusa XL vs XL 5T). `everyBundledCatalogModelSlicesRealGcode` in `SlicingProfilePacksDeviceTest`
-   slices a cube with every pack through the real engine: **needs a Device Farm run (minutes estimate first).** Not
-   done: preselecting the model from the printer (Bambu SSDP `DevModel` codes must come from real reports - the
-   hardware testing guide asks testers for them); control and file-send for the newer Bambu models remain untested.
+1. **WO-43 — Bundle the whole OrcaSlicer 0.4 mm printer library; searchable model picker (2026-09-26).**
+   Requested for testers who own many models, then widened to a comprehensive list. `scripts/bundle_vendor_profiles.py`
+   flattens 371 more models across 60 vendors (Bambu, Prusa, Creality, Anycubic, Qidi, Sovol, Voron, Ratrig, Artillery,
+   Flashforge, ...) and generates `SlicingModelCatalog.kt` (the `SlicingPrinterModel` enum, `SlicingVendor`, one catalog
+   row per model). 377 models total, 9 MB of JSON (compresses well in the APK). The chip rows in Add printer and Edit
+   printer are replaced by `SlicingModelPicker` (search, collapsible vendor sections, "not yet confirmed" note).
+   Existing enum names and packs are untouched, so saved printers keep their profile. Slicing works for every model;
+   **sending only works over the four protocols the app speaks** (Moonraker, OctoPrint, PrusaLink, Bambu LAN).
+   Real fixes the wider library forced: `parseMachineLimits`/`parseFilamentTemperatureRange` now accept the string
+   forms some vendors write ("0.08,0.08"); the generator never uses a filament without a temperature range;
+   `multiToolFamily` treats only Snapmaker U1 and Prusa XL as independent-tool machines (any other multi-material
+   printer is a filament swap; a Prusa MK4 + MMU was wrongly a toolchanger). `SlicingModelCatalogTest` plus the
+   updated `MultiMaterialTest`/`SliceValidationTest` cover it (619 unit tests, 0 failures; lint clean; androidTest
+   compiles). `everyBundledCatalogModelSlicesRealGcode` in `SlicingProfilePacksDeviceTest` slices a cube with every
+   pack through the real engine: **needs a Device Farm run (estimate and approval first).** Not done: preselecting
+   the model from the printer (Bambu SSDP `DevModel` codes must come from real reports), and control/file-send for
+   the newer Bambu models remain untested.
 1. **WO-42 — Split Snapmaker U1 into stock and PAXX printer types (2026-09-26).**
    `PrinterKind.SNAPMAKER_U1` (stock: Bespok3d, no multiACE, reported unverified) and
    `SNAPMAKER_U1_PAXX` (multiACE, no Bespok3d). Saved PAXX printers are unaffected (kind is stored

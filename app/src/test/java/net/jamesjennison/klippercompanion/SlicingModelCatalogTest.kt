@@ -27,12 +27,12 @@ class SlicingModelCatalogTest {
             val dir = File(assets, info.assetDir)
             assertTrue("${info.label}: missing pack ${info.assetDir}", dir.isDirectory)
             val machine = JSONObject(File(dir, "machine.json").readText())
-            assertTrue("${info.label}: machine has a bed", machine.has("printable_area") && machine.optJSONArray("printable_area")!!.length() >= 3)
+            assertTrue("${info.label}: machine has a bed the app can parse", parseBedShape(machine.toString()).points.size >= 3)
             assertTrue("${info.label}: machine has a start gcode", machine.optString("machine_start_gcode").isNotBlank())
             assertFalse("${info.label}: machine must be flattened (no inherits)", machine.has("inherits"))
             val process = JSONObject(File(dir, "process.json").readText()); assertFalse(info.label, process.has("inherits"))
             val filament = JSONObject(File(dir, "filament.json").readText()); assertFalse(info.label, filament.has("inherits"))
-            assertTrue("${info.label}: filament is PLA", filament.optJSONArray("filament_type")?.optString(0) == "PLA")
+            assertTrue("${info.label}: filament has a type", filament.optJSONArray("filament_type")?.optString(0).orEmpty().isNotBlank())
         }
     }
 
@@ -49,6 +49,29 @@ class SlicingModelCatalogTest {
             .forEach { assertTrue("$it is bundled", it in labels) }
         assertTrue(SlicingModelCatalog.all.count { it.vendor == SlicingVendor.BAMBU } >= 14)
         assertTrue(SlicingModelCatalog.all.count { it.vendor == SlicingVendor.PRUSA } >= 10)
+    }
+
+    @Test fun theWholeVendorLibraryIsBundled() {
+        assertTrue("expected 350+ models, got ${SlicingModelCatalog.all.size}", SlicingModelCatalog.all.size >= 350)
+        assertTrue(SlicingVendor.values().size >= 55)
+        fun n(v: SlicingVendor) = SlicingModelCatalog.all.count { it.vendor == v }
+        assertTrue("Creality ${n(SlicingVendor.CREALITY)}", n(SlicingVendor.CREALITY) >= 40)
+        assertTrue(n(SlicingVendor.ANYCUBIC) >= 15); assertTrue(n(SlicingVendor.QIDI) >= 10)
+        assertTrue(n(SlicingVendor.SOVOL) >= 10); assertTrue(n(SlicingVendor.VORON) >= 5); assertTrue(n(SlicingVendor.ARTILLERY) >= 8)
+        assertTrue("every vendor has at least one model", SlicingVendor.values().all { v -> n(v) > 0 })
+    }
+
+    @Test fun labelsAreUniqueWithinAVendorSoThePickerIsUnambiguous() {
+        SlicingModelCatalog.all.groupBy { it.vendor to it.label }.filterValues { it.size > 1 }.let { assertTrue("duplicate labels: ${it.keys}", it.isEmpty()) }
+    }
+
+    @Test fun groupingKeepsVendorOrderAndHidesEmptyVendors() {
+        val all = groupedSlicingModels("")
+        assertEquals(SlicingModelCatalog.all.size, all.sumOf { it.second.size })
+        assertEquals("Snapmaker", all.first().first.label)
+        val prusa = groupedSlicingModels("mk4s")
+        assertTrue(prusa.all { (_, rows) -> rows.isNotEmpty() }); assertTrue(prusa.any { it.first == SlicingVendor.PRUSA })
+        assertTrue(groupedSlicingModels("zzzz-none").isEmpty())
     }
 
     @Test fun everyBambuModelIsAFilamentSwapMachine() {

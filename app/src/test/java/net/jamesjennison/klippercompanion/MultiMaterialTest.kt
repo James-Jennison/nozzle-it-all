@@ -11,7 +11,10 @@ class MultiMaterialTest {
     @Test fun familyFollowsTheMachineNotJustTheToolCount() {
         assertEquals(MultiToolFamily.SINGLE, multiToolFamily(SlicingPrinterModel.SNAPMAKER_U1, 1))
         assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(SlicingPrinterModel.SNAPMAKER_U1, 4))
-        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(SlicingPrinterModel.PRUSA_GENERIC, 5))
+        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(SlicingPrinterModel.PRUSA_XL_5T, 5))
+        // A single-nozzle Prusa (MK4 + MMU) feeds one nozzle from several spools, so it is a filament swap, not tools.
+        assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(SlicingPrinterModel.PRUSA_GENERIC, 5))
+        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(null, 3)) // unknown printer keeps the previous default
         assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(SlicingPrinterModel.BAMBU_GENERIC, 4))
     }
 

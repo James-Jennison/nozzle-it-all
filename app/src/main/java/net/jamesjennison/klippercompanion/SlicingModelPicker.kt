@@ -8,6 +8,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,31 +26,45 @@ internal fun slicingModelTag(model: SlicingPrinterModel): String = when (model) 
     else -> "slicing-model-" + model.name.lowercase().replace('_', '-')
 }
 
-/** Models whose label matches [query] (case-insensitive, blank = all), in catalog order. */
+internal fun slicingVendorTag(vendor: SlicingVendor): String = "slicing-vendor-" + vendor.name.lowercase().replace('_', '-')
+
+/** Models whose label or vendor matches [query] (case-insensitive, blank = all), in catalog order. */
 internal fun matchingSlicingModels(query: String): List<SlicingModelInfo> {
     val q = query.trim()
     return if (q.isEmpty()) SlicingModelCatalog.all else SlicingModelCatalog.all.filter { it.label.contains(q, ignoreCase = true) || it.vendor.label.contains(q, ignoreCase = true) }
 }
 
+/** The matches grouped by vendor, vendors in catalog order, empty vendors left out. */
+internal fun groupedSlicingModels(query: String): List<Pair<SlicingVendor, List<SlicingModelInfo>>> {
+    val byVendor = matchingSlicingModels(query).groupBy { it.vendor }
+    return SlicingVendor.values().mapNotNull { v -> byVendor[v]?.let { v to it } }
+}
+
 /**
- * Which bundled OrcaSlicer profile to slice with: a searchable list grouped by vendor. Every entry except a few is
+ * Which bundled OrcaSlicer profile to slice with. About 380 models across 60 vendors are bundled, so vendors are
+ * collapsed sections (a search opens every match, and the selected model's vendor stays open). Almost every entry is
  * "profile only" (never run on that model), and the selected entry says so.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SlicingModelPicker(selected: SlicingPrinterModel?, onSelect: (SlicingPrinterModel?) -> Unit) {
     var query by remember { mutableStateOf("") }
-    val shown = matchingSlicingModels(query)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    var expanded by remember { mutableStateOf(emptySet<SlicingVendor>()) }
+    val groups = groupedSlicingModels(query)
+    val searching = query.isNotBlank()
+    val selectedVendor = selected?.let { SlicingModelCatalog.info(it).vendor }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         OutlinedTextField(
             query, { query = it.take(40) }, label = { Text("Search printer models") }, singleLine = true,
             modifier = Modifier.fillMaxWidth().testTag("slicing-model-search"),
         )
         FilterChip(selected == null, { onSelect(null) }, label = { Text("None") }, modifier = Modifier.testTag("slicing-model-none"))
-        SlicingVendor.values().forEach { vendor ->
-            val rows = shown.filter { it.vendor == vendor }
-            if (rows.isNotEmpty()) {
-                Text(vendor.label, style = MaterialTheme.typography.labelMedium)
+        groups.forEach { (vendor, rows) ->
+            val open = searching || vendor in expanded || vendor == selectedVendor
+            TextButton({ expanded = if (vendor in expanded) expanded - vendor else expanded + vendor }, modifier = Modifier.testTag(slicingVendorTag(vendor))) {
+                Text("${vendor.label} (${rows.size}) ${if (open) "\u25BE" else "\u25B8"}", style = MaterialTheme.typography.labelLarge)
+            }
+            if (open) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     rows.forEach { info ->
                         FilterChip(selected == info.model, { onSelect(info.model) }, label = { Text(info.label) }, modifier = Modifier.testTag(slicingModelTag(info.model)))
@@ -57,7 +72,7 @@ fun SlicingModelPicker(selected: SlicingPrinterModel?, onSelect: (SlicingPrinter
                 }
             }
         }
-        if (shown.isEmpty()) Text("No printer model matches \"$query\".", style = MaterialTheme.typography.bodySmall)
+        if (groups.isEmpty()) Text("No printer model matches \"$query\".", style = MaterialTheme.typography.bodySmall)
         selected?.let {
             val info = SlicingModelCatalog.info(it)
             Text(

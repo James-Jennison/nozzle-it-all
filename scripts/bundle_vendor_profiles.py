@@ -293,6 +293,10 @@ def main():
     for d in sorted(os.listdir(OUT)):
         if os.path.isdir(os.path.join(OUT, d)) and d not in keep:
             shutil.rmtree(os.path.join(OUT, d)); print("removed stale pack", d)
+    site = {}
+    for mid, label, vendor, d, ver in sorted(entries, key=lambda e: (rank[e[2]], e[1].lower())):
+        site.setdefault(labels[vendor], []).append({"label": label, "verified": ver})
+    json.dump({"vendors": [{"name": v, "models": m} for v, m in site.items()]}, open(os.path.join(ROOT, "site-src", "printer_models.json"), "w"), indent=1)
     open(CATALOG, "w").write("\n".join(lines))
     print(f"\n{len(entries)} models across {len(order_keys)} vendors; wrote {CATALOG}")
 

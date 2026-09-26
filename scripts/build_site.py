@@ -56,10 +56,24 @@ def parse_page(path):
         if k not in meta: fail(f"{path.name}: front matter needs {k}")
     return meta, m.group(2)
 
+def model_catalog():
+    """The slicing-profile catalog (site-src/printer_models.json, written by scripts/bundle_vendor_profiles.py) as collapsible vendor sections."""
+    import html as h
+    data = json.loads((SRC / "printer_models.json").read_text())
+    total = sum(len(v["models"]) for v in data["vendors"])
+    jump = " &middot; ".join(f'<a href="#v-{re.sub(r"[^a-z0-9]+", "-", v["name"].lower()).strip("-")}">{h.escape(v["name"])} ({len(v["models"])})</a>' for v in data["vendors"])
+    out = [f'<p><strong>{total} models from {len(data["vendors"])} makers.</strong></p>', f'<p class="fine">{jump}</p>']
+    for v in data["vendors"]:
+        anchor = re.sub(r"[^a-z0-9]+", "-", v["name"].lower()).strip("-")
+        items = "".join(f'<li>{h.escape(m["label"])}{" <span class=\"badge verified\">Verified on hardware</span>" if m["verified"] else ""}</li>' for m in v["models"])
+        out.append(f'<details id="v-{anchor}"><summary>{h.escape(v["name"])} ({len(v["models"])})</summary><ul>{items}</ul></details>')
+    return "\n".join(out)
+
+
 def render(r, meta, body, base):
     def sub(text):
         text = text.replace("{{github}}", r["github"]).replace("{{email}}", r["support_email"]).replace("{{updated}}", r["updated"])
-        text = text.replace("{{primary_cta}}", primary_cta(r)).replace("{{platform_cards}}", platform_cards(r))
+        text = text.replace("{{primary_cta}}", primary_cta(r)).replace("{{platform_cards}}", platform_cards(r)).replace("{{model_catalog}}", model_catalog() if "{{model_catalog}}" in text else "")
         text = re.sub(r"\{\{status:(\w+)\}\}", lambda m: badge(r, m.group(1)), text)
         return text
     page = base.replace("{{content}}", body)

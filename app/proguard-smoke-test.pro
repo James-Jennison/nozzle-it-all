@@ -4,6 +4,7 @@
 -dontwarn kotlinx.serialization.**
 -dontwarn org.checkerframework.**
 -dontwarn javax.annotation.**
+-dontwarn androidx.concurrent.futures.**   # androidx.test.core 1.7 (Espresso 3.7.0) references an optional class in a screenshot helper
 -keep class androidx.test.** { *; }
 -keep class org.junit.** { *; }
 -keep class junit.** { *; }

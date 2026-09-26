@@ -51,8 +51,13 @@ P28/M7 sections for what each one built and its commit hash.)*
 ## Next — one specific owner action unblocks each of these
 
 1. **WO-4 — Device-verify Bespok3d enrollment + remote screen (M8b).** Code and
-   unit tests are done. Blocked only on the owner's own Snapmaker U1/PAXX SSH
-   access code — once supplied, this is a verification pass, not new development.
+   unit tests are done. **Blocked by design on the owner's printer (2026-09-26):**
+   Bespok3d targets *stock* Snapmaker U1 firmware ("no flashing"), and the
+   enrollment preflight (`Bespok3dU1Preflight`) refuses extended/PAXX firmware; the
+   owner's U1 runs PAXX, so the daemon (port 4269) is not there and enrollment is
+   rejected. Earlier text assumed PAXX worked; it does not. Verification needs a
+   stock-firmware U1, or upstream confirmation that PAXX is supported (ask
+   Bespok3d/adapters and the paxx12 project). Do not bypass the preflight.
 2. **WO-5 — Device-verify the timelapse gallery (M8d).** Code and tests are done.
    Needs a live pass on the Razr against a printer that actually has
    moonraker-timelapse clips recorded.

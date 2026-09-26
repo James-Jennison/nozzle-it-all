@@ -29,7 +29,8 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Snapmaker U1/PAXX only (PrinterKind.SNAPMAKER_U1_PAXX): pairs with the printer's Bespok3d
+ * Stock Snapmaker U1 firmware only (shown for PrinterKind.SNAPMAKER_U1_PAXX, but PAXX/extended
+ * firmware is refused by the enrollment preflight - see Bespok3dU1Preflight): pairs with the printer's Bespok3d
  * daemon, browses/installs its signed plugin catalog, and mirrors the printer's own touchscreen
  * once HelixScreen is installed. Follows HeaterPanel.kt's fetch -> review -> confirm shape:
  * every mutating action (SSH enrollment, plugin install) requires a fresh review before it can be
@@ -84,10 +85,11 @@ import java.util.concurrent.TimeUnit
     var installPending by remember { mutableStateOf(false) }
     val enabled = foreground && !busy
     val screenAvailable = state.catalog.cameras.any { it.isBespok3dScreen() }
-    AlertDialog(onDismissRequest = close, title = { Text("Bespok3d (Snapmaker U1/PAXX)") }, confirmButton = { TextButton(close) { Text("Close") } }, text = {
+    AlertDialog(onDismissRequest = close, title = { Text("Bespok3d (stock Snapmaker U1 firmware)") }, confirmButton = { TextButton(close) { Text("Close") } }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Printer: ${state.address}")
             if (connection == null) {
+                Text("Bespok3d works only with stock Snapmaker U1 firmware. It is not available on PAXX / extended firmware: enrollment is refused there, and a probe that cannot connect on such a printer is expected.")
                 Text("Pairs this app with the Bespok3d daemon running on the printer. Enrolling a stock U1 installs the daemon over SSH first - this changes the printer's filesystem.")
                 Button({ run({ result: Bespok3dProbe -> probe = result; notice = "Bespok3d ${result.version} detected." }) { reader.bespok3dProbe() } }, enabled = enabled, modifier = Modifier.testTag("bespok3d-probe")) { Text(if (busy) "Checking…" else "Probe daemon") }
                 probe?.let { p -> Text("Daemon ${p.version} · fingerprint ${p.certificateSha256}", style = MaterialTheme.typography.bodySmall) }

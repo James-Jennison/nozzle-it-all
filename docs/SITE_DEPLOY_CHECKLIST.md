@@ -1,6 +1,6 @@
 # Website deploy checklist (nozzleitall.com)
 
-Deploying is done by the owner. Nothing in this repository holds server credentials, and the site build never writes to `site/mmf-auth/`.
+Deploying is done with `scripts/deploy_site.sh` (Claude, authorised by the owner 2026-09-26; first deploy done). Nothing in this repository holds server credentials, and the site build never writes to `site/mmf-auth/`.
 
 ## Before you deploy
 - [ ] **Read every page in the preview** (`.claude/launch.json` → `website-preview`, port 8766). Confirm the copy says only what is true today: Android is *active* (not on Google Play); Linux desktop, Web and Windows desktop are *planned*; iOS and macOS are *deferred*.

@@ -18,6 +18,17 @@ The steps used (kept for a rebuild or rotation):
 - Developer account: `owner@example.invalid` (owner). Complete identity verification if Play still asks. **CHECK** the current testing rule for new personal accounts (a closed test with a minimum number of testers for a minimum number of days was required before production at last check).
 - Create the app, upload the AAB to **internal testing** first, fill in the store listing from `docs/STORE_LISTING.md`, the Data safety form, the content rating and the foreground-service declaration.
 
+### Play Console declarations (done 2026-09-26, drafts; none sent for review)
+| Declaration | Answer | Note |
+|---|---|---|
+| Ads / Advertising ID | No ads; advertising ID not used | |
+| Financial / Government / Health | None / No / None | |
+| Sign in details (app access) | "No part is restricted" | The "Yes" path forced a claim that the sign-in details give full access to all features, which is untrue (printer control needs a printer). The printer requirement is stated in the listing; if a reviewer asks, send a short screen recording. |
+| Target audience | 18 and over | |
+| Content rating (IARC) | Completed; results in the Teen / 16 / 12+ range | Answered honestly that the Discover catalog (MyMiniFactory, unfiltered search) can contain violence (incl. gory), sexual material/nudity (not pornographic), and drug references; no user-to-user sharing, no purchases. Revisit if a "hide mature content" filter is added to Discover; re-submit the questionnaire then. |
+| Data safety | Collects/shares **In-app search history** (to MyMiniFactory, HTTPS, app functionality, optional, not ephemeral); no accounts created in-app; accounts are MyMiniFactory's (created on their site) | Conservative reading of Play's definitions (data sent to a third party counts as collected). Get it reviewed before production. |
+| Privacy policy | **PENDING**: the URL must be live: deploy the website first | `https://nozzleitall.com/privacy/` |
+
 ## 3. Cut a release
 1. Make sure `main` is green in CI and the website preview is right. Decide the version, for example `0.1.0`.
 2. `git tag v0.1.0 && git push github v0.1.0` (version name comes from the tag, version code from the commit count).

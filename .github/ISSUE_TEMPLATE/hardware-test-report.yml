@@ -1,0 +1,88 @@
+name: Hardware test report
+description: Tell us how Nozzle It All worked on your printer. One report per printer.
+title: "Hardware test: <printer make and model>"
+labels: ["hardware-test"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing. Please follow the guide first: https://nozzleitall.com/testing/hardware/
+        **Do not post serial numbers, access codes, passwords or API keys, and blur them in any screenshot.** This form is public.
+  - type: input
+    id: app_version
+    attributes:
+      label: App version
+      description: Settings, then "About & credits".
+      placeholder: "0.1.0"
+    validations: {required: true}
+  - type: input
+    id: phone
+    attributes:
+      label: Phone and Android version
+      placeholder: "Pixel 8, Android 15"
+    validations: {required: true}
+  - type: input
+    id: printer
+    attributes:
+      label: Printer make and model
+      placeholder: "Bambu Lab P1S, or Prusa MK4S, or a custom Klipper build"
+    validations: {required: true}
+  - type: input
+    id: firmware
+    attributes:
+      label: Printer firmware and version
+      placeholder: "Bambu 01.08.02.00, PrusaLink 1.x, Klipper + Moonraker, Snapmaker U1 stock 1.x"
+    validations: {required: true}
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How the phone reached the printer
+      options: ["Same home network (LAN)", "Tailscale or other VPN", "Other"]
+    validations: {required: true}
+  - type: dropdown
+    id: tier1
+    attributes:
+      label: "Tier 1: connect and read status (no printer movement)"
+      options: ["Pass", "Partly (details below)", "Fail (details below)", "Did not try"]
+    validations: {required: true}
+  - type: dropdown
+    id: tier2
+    attributes:
+      label: "Tier 2: slice the test cube on the phone"
+      options: ["Pass", "Partly (details below)", "Fail (details below)", "Did not try"]
+    validations: {required: true}
+  - type: dropdown
+    id: tier3a
+    attributes:
+      label: "Tier 3a: send the sliced file to the printer"
+      options: ["Pass", "Partly (details below)", "Fail (details below)", "Did not try"]
+    validations: {required: true}
+  - type: dropdown
+    id: tier3b
+    attributes:
+      label: "Tier 3b: start the print, then pause, resume and cancel it (attended)"
+      options: ["Pass", "Partly (details below)", "Fail (details below)", "Did not try"]
+    validations: {required: true}
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened
+      description: For anything not a clean pass, say what you did, what you expected, and what you saw. Error text helps. Did the printed cube come out right?
+    validations: {required: true}
+  - type: input
+    id: devmodel
+    attributes:
+      label: "Bambu only: the model string the app found (optional)"
+      description: Shown next to the printer when you scan the network, in brackets. Helps us preselect the model automatically.
+  - type: textarea
+    id: printer_specific
+    attributes:
+      label: "Printer-specific checks (Bambu, PrusaLink, custom Klipper, stock U1)"
+      description: Your results for the checks in the guide's section for your printer type.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have not included a serial number, access code, password or API key, in text or screenshots.
+          required: true

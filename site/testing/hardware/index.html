@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test on your own printer | Nozzle It All</title>
+<meta name="description" content="A step-by-step guide to testing the Nozzle It All Android app on your own printer, and how to report what you find.">
+<meta name="theme-color" content="#0D1114">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<link rel="preload" href="/assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css?v=9605fa89">
+<meta property="og:title" content="Test on your own printer | Nozzle It All">
+<meta property="og:description" content="A step-by-step guide to testing the Nozzle It All Android app on your own printer, and how to report what you find.">
+<meta property="og:type" content="website">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+ <div class="wrap bar">
+  <a class="brand" href="/" aria-label="Nozzle It All, home"><img src="/assets/mark.svg" alt="" width="28" height="29"><span>Nozzle It All</span></a>
+  <nav aria-label="Main">
+   <a href="/platforms/">Platforms</a>
+   <a href="/printers/" aria-current="page">Printers</a>
+   <a href="/docs/">Docs</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+  </nav>
+ </div>
+</header>
+<main id="main">
+<div class="wrap prose">
+ <h1>Test on your own printer</h1>
+ <p class="lead">This guide is for people helping us test the Android app on real printers. Most printer types here have never been tried on a real machine, so what you find is exactly what we need. Work through the tiers in order and stop whenever you like.</p>
+
+ <div class="callout"><p><strong>Please read this first.</strong> The Bambu Lab, PrusaLink and Snapmaker U1 (stock firmware) support was built from the makers' published documentation and tested only against emulators. It may misbehave on a real printer. So: stay at the printer for anything that moves it, use the small test print below, know where your printer's own stop or power switch is, and do not test while a print you care about is running. You are always free to stop after any tier.</p></div>
+
+ <h2>What you need</h2>
+ <ul>
+  <li>An Android phone with the app installed from the closed test. If you have not joined yet, see <a href="/testing/">Test the Android app</a>.</li>
+  <li>Your printer, on the same network as the phone (or reachable over Tailscale).</li>
+  <li>The printer's details, kept to yourself: for <strong>Bambu Lab</strong>, LAN mode turned on plus the serial number and access code; for <strong>PrusaLink</strong>, the PrusaLink password; for <strong>Klipper</strong>, the printer's address (and API key if Moonraker asks for one).</li>
+  <li>The <a href="/assets/test-cube-20mm.stl" download>20 mm test cube</a> (a plain cube, about 10 to 15 minutes to print). Save it on your phone.</li>
+  <li>A little of your usual PLA.</li>
+ </ul>
+
+ <h2>Tier 0: set up</h2>
+ <ol>
+  <li>Open the app. Go to <strong>Settings</strong> and tap <strong>Run self-check</strong>. Every line should pass. If any fails, note which.</li>
+  <li>In Settings, open <strong>About &amp; credits</strong> and note the version number.</li>
+ </ol>
+
+ <h2>Tier 1: connect and read status (nothing moves)</h2>
+ <ol>
+  <li>In Settings, tap <strong>Add printer</strong>. Either use <strong>Scan network</strong>, or choose your printer type and type the address. Pick the type that matches your printer: Bambu Lab, Prusa Link, Generic Klipper, Snapmaker U1 (stock) or Snapmaker U1 (PAXX).</li>
+  <li>The app should connect. On Home, check the printer state, the temperatures and (when a print runs) the progress agree with the printer's own screen.</li>
+  <li>If your printer has a camera and the app offers one, check that the picture loads.</li>
+  <li><strong>Reconnect:</strong> turn the phone's Wi-Fi off for about ten seconds, then on. The app should reconnect without you re-entering anything.</li>
+  <li>Optional: in Settings turn on <strong>Background print alerts</strong> and check the ongoing notification appears.</li>
+ </ol>
+
+ <h2>Tier 2: slice the test cube (nothing moves)</h2>
+ <ol>
+  <li>Edit the printer (or use the wizard's slicing step) and choose your model in <strong>Slicing profile</strong>. Use the search box. The <a href="/printers/models/">full list</a> is long; pick your exact model. If it is not there, choose the closest one and tell us.</li>
+  <li>Open <strong>Prepare</strong>, tap <strong>Add models</strong> and pick the test cube.</li>
+  <li>Tap <strong>Slice</strong>. It should finish in well under a minute.</li>
+  <li>Look at the result: the cube should sit inside a bed of the right size and shape, and the print time and filament weight should look plausible for a small cube. If the bed looks wrong for your machine, stop here and tell us. Do not print.</li>
+ </ol>
+
+ <h2>Tier 3: send the file, then print (stay at the printer)</h2>
+ <p>Only continue if Tier 2 looked right.</p>
+ <ol>
+  <li><strong>3a, send the file.</strong> Tap <strong>Continue</strong> on the result, confirm <strong>Printer is ready</strong> (the bed is clear), and let the app send the file. Check the file now shows in the printer's own file list or screen. The print has <em>not</em> started. You can stop here.</li>
+  <li><strong>3b, start the print.</strong> When you are ready and standing by the printer, tap <strong>Start print</strong> and confirm. Watch the first layer all the way. It should heat, home, and print a cube.</li>
+  <li>While it runs: <strong>Pause</strong>, wait for the printer to actually stop, then <strong>Resume</strong>, then <strong>Cancel</strong>. After each, check the printer did what the app said. After cancelling, the heaters should turn off and the printer return to idle.</li>
+  <li>Did the cube come out right? Was it the right size (20 mm)?</li>
+ </ol>
+
+ <h2>Extra checks for your printer type</h2>
+ <h3>Bambu Lab (LAN mode)</h3>
+ <ul>
+  <li>Setup needs LAN mode, the serial number and the access code. Tell us if anything about setup was unclear or failed.</li>
+  <li>The first connection saves the printer's certificate. If the app ever warns the certificate changed, note when.</li>
+  <li>Newer models (P2S, H2D, H2S and other H2 models): please do Tier 1 and report <em>before</em> going further, because control on these is the least certain. The app may connect and read status but fail on controls or on sending the file. That is a useful result.</li>
+  <li>When you scan the network, the model text the app shows next to your printer (in brackets) helps us preselect the right profile in future. Please include it in your report.</li>
+ </ul>
+ <h3>PrusaLink</h3>
+ <ul>
+  <li>Setup uses your PrusaLink password. Note your printer model and the PrusaLink or firmware version.</li>
+  <li>The app has no camera for PrusaLink printers, so skip that item.</li>
+  <li>Check the file lands in the storage you expect (for example USB or the SD card).</li>
+ </ul>
+ <h3>Custom-built Klipper printers</h3>
+ <ul>
+  <li>Choose <strong>Generic Klipper</strong> and do Tier 1 and the controls: connecting, status, temperatures, files, macros, jog, pause, resume and cancel. Klipper is the best-tested path, and your reports here are very useful.</li>
+  <li><strong>The app cannot yet set a custom bed size, bed shape or start and end G-code.</strong> On-phone slicing uses a fixed generic profile: a 250 &times; 250 mm bed with the origin at a corner, a start sequence that calls <code>START_PRINT EXTRUDER_TEMP=&hellip; BED_TEMP=&hellip;</code>, and no other custom macros. Only do Tier 2 and Tier 3 with it if that happens to match your machine. If the bed in the preview does not match your printer, or your start macro has another name, stop before printing.</li>
+  <li>Please tell us your bed size, whether the origin is at a corner or the centre, and what your start and end macros are called. That decides how we build custom-machine settings.</li>
+ </ul>
+ <h3>Snapmaker U1 on stock firmware</h3>
+ <ul>
+  <li>Choose <strong>Snapmaker U1 (stock)</strong>. On the Control tab, <strong>Bespok3d / remote screen</strong> should appear.</li>
+  <li>Tapping <strong>Probe daemon</strong> only reads and changes nothing. It fails if the Bespok3d daemon is not installed, which is normal on a stock U1.</li>
+  <li><strong>Advanced, optional:</strong> the enrollment step installs software on the printer over SSH. It has never been run on real hardware. Only try it if you are comfortable recovering a printer, the printer is idle, and you have noted your firmware version first. Tell us before you do it if you can.</li>
+  <li>This does not apply to PAXX (extended) firmware, where Bespok3d is not supported.</li>
+ </ul>
+
+ <h2>Tell us what happened</h2>
+ <p>Please send one report per printer, using either:</p>
+ <ul>
+  <li><a href="https://github.com/James-Jennison/nozzle-it-all/issues/new?template=hardware-test-report.yml">the report form on GitHub</a> (needs a free GitHub account), or</li>
+  <li>an email to <a href="mailto:support@nozzleitall.com?subject=Hardware%20test%20report">support@nozzleitall.com</a> with the same details: app version, phone and Android version, printer make, model and firmware, how you connected, how each tier went, and what you saw where it did not go well.</li>
+ </ul>
+ <div class="callout"><p><strong>Never post or send a serial number, access code, password or API key.</strong> The report form is public. Blur them in screenshots. We will never ask for them.</p></div>
+
+ <h2>What we do with your report</h2>
+ <p>A printer type is marked "Verified on hardware" on the <a href="/printers/">Supported printers</a> page only after at least two independent reports of it working, on different setups. Reports of problems are just as valuable: they are how we fix them. Thank you.</p>
+ <p class="fine">Not sure about a step, or something does not match what you see? Email <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a> and we will fix the guide.</p>
+</div>
+
+</main>
+<footer class="site-footer">
+ <div class="wrap">
+  <nav aria-label="Footer">
+   <a href="/printers/">Printers</a>
+   <a href="/docs/">Docs</a>
+   <a href="/privacy/">Privacy</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+   <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>
+  </nav>
+  <p>Nozzle It All is free software under the GNU AGPL-3.0-or-later. No accounts, no analytics.</p>
+  <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, MyMiniFactory and OrcaSlicer are names or trademarks of their respective owners. Mentioning them does not imply endorsement by or affiliation with them.</p>
+ </div>
+</footer>
+</body>
+</html>

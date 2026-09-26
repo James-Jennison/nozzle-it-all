@@ -14,3 +14,5 @@ The Android launcher icon is `app/src/main/res/drawable/ic_launcher*.xml` (adapt
 Splash: `res/drawable/splash_icon.xml` (violet mark) on `#0D1114` via `Theme.NozzleItAll` (Android 12+ system splash; older versions show the dark window background). Lovart's splash PNG is a static mockup and is not used.
 
 Not used from the second Lovart export: the Play feature graphic, GitHub social preview and the three screenshot frames. They show an invented UI (iPhone frame, a Model/Slice/Send tab bar, a Home/Projects/Settings/More nav) that does not match the real app, so they must not be used as store screenshots or feature art. Store screenshots should be real captures of the app.
+
+Provenance: generated in Lovart.ai (2026-09-25) with the "GPT Image 2.5 Flare" model, per the owner. Commercial use is governed by Lovart's Terms of Service (last updated 2026-07-09 per the owner's research) and the underlying model's own license; keep dated copies of both with your records. Similarity/trademark searches (reverse image search, USPTO and other registries) are still the owner's responsibility before a public release.

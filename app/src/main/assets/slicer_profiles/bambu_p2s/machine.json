@@ -298,5 +298,6 @@
         "30"
     ],
     "extruder_clearance_radius": "72",
-    "fan_direction": "right"
+    "fan_direction": "right",
+    "before_layer_change_gcode": "G92 E0"
 }

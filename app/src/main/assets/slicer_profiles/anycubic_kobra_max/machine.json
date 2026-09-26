@@ -128,7 +128,7 @@
     ],
     "single_extruder_multi_material": "1",
     "change_filament_gcode": "M600",
-    "before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;G92 E0.0\n;[layer_z]\n\n",
+    "before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;G92 E0.0\n;[layer_z]\nG92 E0",
     "layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
     "machine_pause_gcode": "M601",
     "wipe": [

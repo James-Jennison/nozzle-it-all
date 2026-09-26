@@ -65,3 +65,11 @@ still open.
 
 
 `prusa_xl_5t` was flattened with `scripts/flatten_orca_profile.py` (the same child-over-parent resolution, now scripted) from the vendored engine's `resources/profiles/Prusa`. It has not been checked against a physical XL.
+
+## Generator repairs to vendor profiles (2026-09-26)
+
+`scripts/bundle_vendor_profiles.py` makes two small, documented changes so OrcaSlicer's own validation accepts a vendor
+profile in the headless engine: (1) for Marlin-flavoured machines using relative extrusion it appends a real `G92 E0` line
+to `before_layer_change_gcode` when neither layer hook has one (Bambu's own profiles rely on the GUI knowing they are
+Bambu printers); (2) for machines with several bed plate types it sets `curr_bed_type` to a plate the filament supports
+when Orca's default ("Cool Plate") is zeroed by that filament. Nothing else in a vendor profile is edited.

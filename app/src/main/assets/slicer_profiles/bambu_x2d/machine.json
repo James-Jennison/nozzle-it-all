@@ -425,5 +425,6 @@
     "extruder_height_gap": "7",
     "fan_direction": "both",
     "group_algo_with_time": "1",
-    "print_in_clockwise": "1"
+    "print_in_clockwise": "1",
+    "before_layer_change_gcode": "G92 E0"
 }

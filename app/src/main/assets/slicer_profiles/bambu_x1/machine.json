@@ -297,5 +297,6 @@
     "machine_pause_gcode": "M400 U1",
     "setting_id": "GM003",
     "printer_model": "Bambu Lab X1",
-    "fan_direction": "left"
+    "fan_direction": "left",
+    "before_layer_change_gcode": "G92 E0"
 }

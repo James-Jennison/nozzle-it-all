@@ -11,7 +11,7 @@ model, so the picker, the pack lookup and the tests all read one list.
 Existing packs (Snapmaker U1, Elegoo Centauri Carbon COSMOS, generic Klipper, Bambu A1, Prusa MK4, Prusa XL 5T) are
 kept as they are and only listed in the catalog. Everything else here is unverified on hardware; the catalog says so.
 """
-import argparse, json, os, sys
+import argparse, json, os, re, sys
 sys.path.insert(0, os.path.dirname(__file__))
 from flatten_orca_profile import index, flatten  # noqa: E402
 
@@ -63,11 +63,56 @@ BAMBU_LABELS = {  # machine model name -> (id, label)
 def slug(model_id): return model_id.lower()
 
 
+# Orca bed type name -> the filament key holding that plate's bed temperature (0 = the filament does not support the plate).
+BED_TYPES = [("Cool Plate", "cool_plate_temp"), ("Engineering Plate", "eng_plate_temp"), ("High Temp Plate", "hot_plate_temp"),
+             ("Textured PEI Plate", "textured_plate_temp"), ("Textured Cool Plate", "textured_cool_plate_temp"), ("Supertack Plate", "supertack_plate_temp")]
+BED_PREFERENCE = ["Textured PEI Plate", "Engineering Plate", "High Temp Plate", "Cool Plate", "Textured Cool Plate", "Supertack Plate"]
+
+
+def first_temp(v):
+    if isinstance(v, list): v = v[0] if v else 0
+    try: return int(float(str(v).split(",")[0]))
+    except ValueError: return 0
+
+
+G92_E0 = re.compile(r"^[ \t]*G92[ \t]*E(0(\.0*)?|\.0+)[ \t]*(;.*)?$", re.M)  # OrcaSlicer's own regex_g92e0_correct (Print.cpp): a real, uncommented line
+
+
+def as_text(v): return "\n".join(map(str, v)) if isinstance(v, list) else (v or "")
+
+
+def fix_layer_reset(machine):
+    """OrcaSlicer's own validation demands "G92 E0" at each layer change for Marlin-flavoured, non-Bambu printers using
+    relative extrusion (its GUI marks Bambu printers via the preset bundle, which our headless bridge lacks). Bambu's
+    own profiles omit it, so add the reset (harmless: zeroing the extruder position in relative mode) where missing."""
+    if machine.get("gcode_flavor") not in ("marlin", "marlin2") or str(machine.get("use_relative_e_distances", "1")) == "0": return False
+    before, layer = as_text(machine.get("before_layer_change_gcode")), as_text(machine.get("layer_change_gcode"))
+    if G92_E0.search(before) or G92_E0.search(layer): return False
+    machine["before_layer_change_gcode"] = (before.rstrip("\n") + "\n" if before.strip() else "") + "G92 E0"
+    return True
+
+
+def fix_bed_type(machine, process, filament):
+    """Multi-bed-type machines are validated against the filament's temperature for the selected plate; Orca defaults to
+    'Cool Plate', which some filaments zero out. Pick a plate the filament supports (only touches machines that need it)."""
+    if str(machine.get("support_multi_bed_types", "0")) != "1": return None
+    current = process.get("curr_bed_type") or machine.get("curr_bed_type") or "Cool Plate"
+    temps = {n: first_temp(filament.get(k)) for n, k in BED_TYPES}
+    if temps.get(current, 0) > 0: return None
+    for n in BED_PREFERENCE:
+        if temps.get(n, 0) > 0:
+            process["curr_bed_type"] = n; return n
+    return None
+
+
 def write_pack(by_name, out_dir, machine, process, filament, filament_index=None):
     os.makedirs(out_dir, exist_ok=True)
+    flats = {}
     for kind, name in (("machine", machine), ("process", process), ("filament", filament)):
         flat = flatten(kind, name, filament_index if (kind == "filament" and filament_index is not None) else by_name)
-        flat["name"] = name
+        flat["name"] = name; flats[kind] = flat
+    fix_layer_reset(flats["machine"]); fix_bed_type(flats["machine"], flats["process"], flats["filament"])
+    for kind, flat in flats.items():
         with open(os.path.join(out_dir, f"{kind}.json"), "w") as f:
             json.dump(flat, f, indent=4); f.write("\n")
 

@@ -67,6 +67,12 @@ P28/M7 sections for what each one built and its commit hash.)*
    pack through the real engine: **needs a Device Farm run (estimate and approval first).** Not done: preselecting
    the model from the printer (Bambu SSDP `DevModel` codes must come from real reports), and control/file-send for
    the newer Bambu models remain untested.
+   **First real-device run (Pixel 9a, Android 15, 2.08 device-minutes, 2026-09-26):** 354 of 371 new profiles sliced;
+   17 were rejected by OrcaSlicer's own validation. 16 (13 Bambu models, Anycubic Kobra Max/Plus and Vyper) lacked a real
+   uncommented `G92 E0` at layer change, which Orca requires for Marlin-flavoured non-Bambu printers using relative
+   extrusion (Orca's GUI marks Bambu printers via its preset bundle, which our headless bridge lacks); one (Creality
+   Sermoon M300) defaulted to a bed plate its filament zeroes out. The generator now adds the reset where missing and
+   picks a supported plate; `SlicingModelCatalogTest` enforces both rules on every pack.
 1. **WO-42 — Split Snapmaker U1 into stock and PAXX printer types (2026-09-26).**
    `PrinterKind.SNAPMAKER_U1` (stock: Bespok3d, no multiACE, reported unverified) and
    `SNAPMAKER_U1_PAXX` (multiACE, no Bespok3d). Saved PAXX printers are unaffected (kind is stored

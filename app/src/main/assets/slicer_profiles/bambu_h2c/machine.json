@@ -426,5 +426,6 @@
         "1",
         "6"
     ],
-    "fan_direction": "left"
+    "fan_direction": "left",
+    "before_layer_change_gcode": "G92 E0"
 }

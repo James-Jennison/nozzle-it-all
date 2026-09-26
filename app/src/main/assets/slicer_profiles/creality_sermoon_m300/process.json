@@ -265,5 +265,6 @@
     "wipe_tower_cone_angle": "0",
     "wipe_tower_extra_spacing": "100%",
     "wipe_tower_rotation_angle": "0",
-    "wiping_volumes_extruders": "70,70,70,70,70,70,70,70,70,70"
+    "wiping_volumes_extruders": "70,70,70,70,70,70,70,70,70,70",
+    "curr_bed_type": "Textured PEI Plate"
 }

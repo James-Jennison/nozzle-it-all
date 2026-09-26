@@ -243,5 +243,6 @@
     "machine_max_printed_mass": "2000",
     "deretract_speed_extruder_change": [
         "30"
-    ]
+    ],
+    "before_layer_change_gcode": "G92 E0"
 }

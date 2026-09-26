@@ -294,5 +294,6 @@
     "layer_change_gcode": "; layer num/total_layer_count: {layer_num+1}/[total_layer_count]\n; update layer progress\nM73 L{layer_num+1}\nM991 S0 P{layer_num} ;notify layer change",
     "machine_pause_gcode": "M400 U1",
     "setting_id": "GM013",
-    "printer_model": "Bambu Lab P1P"
+    "printer_model": "Bambu Lab P1P",
+    "before_layer_change_gcode": "G92 E0"
 }

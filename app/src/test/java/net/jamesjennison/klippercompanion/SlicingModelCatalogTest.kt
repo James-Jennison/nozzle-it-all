@@ -98,4 +98,35 @@ class SlicingModelCatalogTest {
         }
         assertNull("COSMOS still needs a live firmware generation", slicingProfilePack(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, null))
     }
+
+    // Found by the first real-device slicing run of the full library (2026-09-26): OrcaSlicer's own validation rejected 16
+    // packs (Bambu models and three Anycubic) that lacked a real "G92 E0" line and one Creality pack whose default plate its
+    // filament does not support. The generator now repairs both; these keep every pack honest.
+    private fun text(v: Any?): String = if (v is org.json.JSONArray) (0 until v.length()).joinToString("\n") { v.getString(it) } else v?.toString().orEmpty()
+
+    @Test fun marlinPacksWithRelativeExtrusionResetTheExtruderEachLayer() {
+        val g92 = Regex("""^[ \t]*G92[ \t]*E(0(\.0*)?|\.0+)[ \t]*(;.*)?$""", RegexOption.MULTILINE) // OrcaSlicer's own regex_g92e0_correct
+        SlicingModelCatalog.all.forEach { info ->
+            val machine = JSONObject(File(File(assets, info.assetDir), "machine.json").readText())
+            val marlin = machine.optString("gcode_flavor") in setOf("marlin", "marlin2")
+            if (marlin && machine.optString("use_relative_e_distances", "1") != "0") {
+                assertTrue("${info.label}: needs a real G92 E0 line at layer change", g92.containsMatchIn(text(machine.opt("before_layer_change_gcode"))) || g92.containsMatchIn(text(machine.opt("layer_change_gcode"))))
+            }
+        }
+    }
+
+    @Test fun multiBedTypeMachinesSelectAPlateTheirFilamentSupports() {
+        val plateKeys = mapOf("Cool Plate" to "cool_plate_temp", "Engineering Plate" to "eng_plate_temp", "High Temp Plate" to "hot_plate_temp",
+            "Textured PEI Plate" to "textured_plate_temp", "Textured Cool Plate" to "textured_cool_plate_temp", "Supertack Plate" to "supertack_plate_temp")
+        SlicingModelCatalog.all.forEach { info ->
+            val dir = File(assets, info.assetDir)
+            val machine = JSONObject(File(dir, "machine.json").readText())
+            if (machine.optString("support_multi_bed_types") != "1") return@forEach
+            val process = JSONObject(File(dir, "process.json").readText()); val filament = JSONObject(File(dir, "filament.json").readText())
+            val plate = process.optString("curr_bed_type").ifBlank { machine.optString("curr_bed_type").ifBlank { "Cool Plate" } }
+            val key = plateKeys.getValue(plate) // vendors write a temperature as an array or as a plain string
+            val temp = (filament.optJSONArray(key)?.optString(0) ?: filament.optString(key)).substringBefore(',').toDoubleOrNull() ?: 0.0
+            assertTrue("${info.label}: filament does not support the selected plate $plate", temp > 0)
+        }
+    }
 }

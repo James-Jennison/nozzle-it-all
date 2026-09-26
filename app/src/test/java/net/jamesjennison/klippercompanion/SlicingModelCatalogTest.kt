@@ -47,7 +47,7 @@ class SlicingModelCatalogTest {
         val labels = SlicingModelCatalog.all.map { it.label }
         listOf("Bambu Lab P1S", "Bambu Lab X1 Carbon", "Bambu Lab A1 mini", "Bambu Lab P2S", "Bambu Lab H2D", "Bambu Lab H2S", "Prusa MK4S", "Prusa CORE One", "Prusa MINI / MINI+", "Prusa XL (single tool)")
             .forEach { assertTrue("$it is bundled", it in labels) }
-        assertTrue(SlicingModelCatalog.all.count { it.vendor == SlicingVendor.BAMBU } >= 14)
+        assertTrue(SlicingModelCatalog.all.count { it.vendor == SlicingVendor.BAMBU } >= 13) // A2L is left out: the engine cannot slice its templates
         assertTrue(SlicingModelCatalog.all.count { it.vendor == SlicingVendor.PRUSA } >= 10)
     }
 

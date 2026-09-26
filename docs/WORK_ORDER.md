@@ -72,7 +72,11 @@ P28/M7 sections for what each one built and its commit hash.)*
    uncommented `G92 E0` at layer change, which Orca requires for Marlin-flavoured non-Bambu printers using relative
    extrusion (Orca's GUI marks Bambu printers via its preset bundle, which our headless bridge lacks); one (Creality
    Sermoon M300) defaulted to a bed plate its filament zeroes out. The generator now adds the reset where missing and
-   picks a supported plate; `SlicingModelCatalogTest` enforces both rules on every pack.
+   picks a supported plate; `SlicingModelCatalogTest` enforces both rules on every pack. A second device run then
+   passed all but one: **Bambu Lab A2L** uses G-code template variables this engine build does not define
+   (`bed_heat_stable_wait_flag`, `hotend_heating_rate`, `temperature_vitrification`, ...) and fails with "Failed to
+   generate G-code for invalid custom G-code", so it is excluded (`ENGINE_INCOMPATIBLE` in the generator) until the
+   engine is updated. The catalog is 376 models.
 1. **WO-42 — Split Snapmaker U1 into stock and PAXX printer types (2026-09-26).**
    `PrinterKind.SNAPMAKER_U1` (stock: Bespok3d, no multiACE, reported unverified) and
    `SNAPMAKER_U1_PAXX` (multiACE, no Bespok3d). Saved PAXX printers are unaffected (kind is stored

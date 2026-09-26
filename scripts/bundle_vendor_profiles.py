@@ -131,6 +131,11 @@ def pick_bambu(by_name, machine):
     return proc, fil
 
 
+# Models whose profile the bundled engine cannot slice (found by a real-device run). Left out until the engine is updated.
+ENGINE_INCOMPATIBLE = {
+    "Bambu Lab A2L 0.4 nozzle": "its G-code templates use variables this engine build does not define (bed_heat_stable_wait_flag, "
+                                "hotend_heating_rate, temperature_vitrification, ...): 'Failed to generate G-code for invalid custom G-code'",
+}
 SKIP_VENDORS = {"Custom"}  # OrcaSlicer's placeholder vendor; the generic Klipper pack already covers it
 # Machines handled elsewhere (hand-made or earlier packs) that must not be regenerated under another id.
 LEGACY_MACHINES = {
@@ -204,6 +209,7 @@ def main():
     for full in sorted(n for (k, n) in bbl if k == "machine" and n and n.startswith("Bambu Lab") and n.endswith("0.4 nozzle")):
         model = full[: -len(" 0.4 nozzle")]
         if model == "Bambu Lab A1": continue
+        if full in ENGINE_INCOMPATIBLE: skipped.append(("BBL", full, "engine: " + ENGINE_INCOMPATIBLE[full])); continue
         mid, label = BAMBU_LABELS[model]; proc, fil = pick_bambu(bbl, full)
         if not proc or not fil: raise SystemExit(f"no compatible process/filament for {full}")
         write_pack(bbl, os.path.join(OUT, slug(mid)), full, proc, fil)
@@ -269,6 +275,11 @@ def main():
         lines.append(f'        SlicingModelInfo(SlicingPrinterModel.{mid}, "{label}", SlicingVendor.{vendor}, "{d}", {str(ver).lower()}),')
     lines += ["    )", "    private val byModel = all.associateBy { it.model }",
               "    fun info(model: SlicingPrinterModel): SlicingModelInfo = byModel.getValue(model)", "}", ""]
+    import shutil
+    keep = {e[3] for e in entries}
+    for d in sorted(os.listdir(OUT)):
+        if os.path.isdir(os.path.join(OUT, d)) and d not in keep:
+            shutil.rmtree(os.path.join(OUT, d)); print("removed stale pack", d)
     open(CATALOG, "w").write("\n".join(lines))
     print(f"\n{len(entries)} models across {len(order_keys)} vendors; wrote {CATALOG}")
 

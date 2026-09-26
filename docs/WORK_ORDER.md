@@ -50,6 +50,17 @@ P28/M7 sections for what each one built and its commit hash.)*
 
 ## Next — one specific owner action unblocks each of these
 
+1. **WO-43 — Bundle the Bambu Lab and Prusa profile libraries; searchable model picker (2026-09-26).**
+   Requested for a group of testers who own many models. `scripts/bundle_vendor_profiles.py` flattens OrcaSlicer's own
+   0.4 mm profile for 13 more Bambu models and 8 more Prusa models and generates `SlicingModelCatalog.kt`
+   (the `SlicingPrinterModel` enum plus one catalog row per model: label, vendor, asset dir, verified flag). The old
+   chip rows in Add printer and Edit printer are replaced by `SlicingModelPicker` (search box, grouped by vendor,
+   "not yet confirmed" note for unverified models). Existing enum names and packs are untouched, so saved printers keep
+   their profile. New unit tests (`SlicingModelCatalogTest`) check enum/catalog/asset consistency and caught a real
+   tag collision (Prusa XL vs XL 5T). `everyBundledCatalogModelSlicesRealGcode` in `SlicingProfilePacksDeviceTest`
+   slices a cube with every pack through the real engine: **needs a Device Farm run (minutes estimate first).** Not
+   done: preselecting the model from the printer (Bambu SSDP `DevModel` codes must come from real reports - the
+   hardware testing guide asks testers for them); control and file-send for the newer Bambu models remain untested.
 1. **WO-42 — Split Snapmaker U1 into stock and PAXX printer types (2026-09-26).**
    `PrinterKind.SNAPMAKER_U1` (stock: Bespok3d, no multiACE, reported unverified) and
    `SNAPMAKER_U1_PAXX` (multiACE, no Bespok3d). Saved PAXX printers are unaffected (kind is stored

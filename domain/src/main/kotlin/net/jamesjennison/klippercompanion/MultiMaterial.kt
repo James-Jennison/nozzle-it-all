@@ -12,7 +12,7 @@ enum class MultiToolFamily(val label: String, val explanation: String) {
 
 fun multiToolFamily(model: SlicingPrinterModel?, toolCount: Int): MultiToolFamily = when {
     toolCount <= 1 -> MultiToolFamily.SINGLE
-    model == SlicingPrinterModel.BAMBU_GENERIC -> MultiToolFamily.FILAMENT_SWAP
+    model != null && SlicingModelCatalog.info(model).vendor == SlicingVendor.BAMBU -> MultiToolFamily.FILAMENT_SWAP // every Bambu model: AMS-style swap (H2 dual-nozzle models are unverified)
     else -> MultiToolFamily.TOOLCHANGER // Snapmaker U1, Prusa XL: the only multi-tool machines this app targets besides Bambu
 }
 

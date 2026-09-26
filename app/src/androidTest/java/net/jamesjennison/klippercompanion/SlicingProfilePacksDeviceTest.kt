@@ -60,6 +60,19 @@ class SlicingProfilePacksDeviceTest {
         val toolpath = output.inputStream().buffered().use { GcodePreview.parse(it) }
         assertTrue("expected real extrusion segments", toolpath.segments.isNotEmpty())
     }
+    // Every model in the generated catalog (scripts/bundle_vendor_profiles.py) must load and slice through the real engine;
+    // a pack that fails is reported by name so one bad Bambu/Prusa profile is easy to find. COSMOS needs a firmware
+    // generation and has its own tests above.
+    @Test fun everyBundledCatalogModelSlicesRealGcode() {
+        val failures = mutableListOf<String>()
+        SlicingModelCatalog.all.filter { it.model != SlicingPrinterModel.ELEGOO_CENTAURI_CARBON }.forEach { info ->
+            try {
+                val gcode = sliceCube(info.model)
+                if (!gcode.contains("G1")) failures += "${info.label}: no G1 moves in output"
+            } catch (t: Throwable) { failures += "${info.label}: ${t.javaClass.simpleName}: ${t.message}" }
+        }
+        assertTrue("models that failed to slice:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
     @Test fun snapmakerU1ProfileSlicesRealGcode() {
         val gcode = sliceCube(SlicingPrinterModel.SNAPMAKER_U1)
         assertTrue(gcode.contains("G1"))

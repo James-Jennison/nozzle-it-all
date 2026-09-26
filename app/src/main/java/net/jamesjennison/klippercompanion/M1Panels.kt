@@ -94,15 +94,7 @@ import androidx.compose.ui.unit.dp
         // Moonraker-shaped Klipper (same kind), but need different slicer profiles.
         Text("Slicing profile",style=MaterialTheme.typography.labelLarge)
         Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.",style=MaterialTheme.typography.bodySmall)
-        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            FilterChip(slicingModel==null,{slicingModel=null},label={Text("None")})
-            FilterChip(slicingModel==SlicingPrinterModel.SNAPMAKER_U1,{slicingModel=SlicingPrinterModel.SNAPMAKER_U1},label={Text("Snapmaker U1")})
-            FilterChip(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON,{slicingModel=SlicingPrinterModel.ELEGOO_CENTAURI_CARBON},label={Text("Elegoo Centauri Carbon")},modifier=Modifier.testTag("slicing-model-centauri-carbon"))
-            FilterChip(slicingModel==SlicingPrinterModel.BAMBU_GENERIC,{slicingModel=SlicingPrinterModel.BAMBU_GENERIC},label={Text("Bambu Lab")})
-            FilterChip(slicingModel==SlicingPrinterModel.PRUSA_GENERIC,{slicingModel=SlicingPrinterModel.PRUSA_GENERIC},label={Text("Prusa")})
-            FilterChip(slicingModel==SlicingPrinterModel.PRUSA_XL_5T, {slicingModel=SlicingPrinterModel.PRUSA_XL_5T}, label={Text("Prusa XL (5 tools)")}, modifier=Modifier.testTag("slicing-model-prusa-xl"))
-            FilterChip(slicingModel==SlicingPrinterModel.GENERIC_KLIPPER,{slicingModel=SlicingPrinterModel.GENERIC_KLIPPER},label={Text("Generic Klipper")})
-        }
+        SlicingModelPicker(slicingModel) { slicingModel = it }
         // COSMOS's real hard-e-stop risk (FirmwareIdentity.kt) is why this is a live read, not a
         // typed field: only ever set by detectFirmware actually reaching the printer, never guessed.
         if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null) {

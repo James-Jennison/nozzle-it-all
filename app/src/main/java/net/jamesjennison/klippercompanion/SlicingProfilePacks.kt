@@ -17,14 +17,11 @@ internal data class SlicingProfilePack(val assetDir: String, val cosmosGeneratio
 // gap") - a printer whose live firmware resolves to LEGACY has no pack to select at all, which
 // callers must treat as unslicable for that printer, not silently fall back to CURRENT.
 internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?): SlicingProfilePack? = when (model) {
-    SlicingPrinterModel.SNAPMAKER_U1 -> SlicingProfilePack("slicer_profiles/snapmaker_u1")
-    SlicingPrinterModel.BAMBU_GENERIC -> SlicingProfilePack("slicer_profiles/bambu_generic")
-    SlicingPrinterModel.PRUSA_GENERIC -> SlicingProfilePack("slicer_profiles/prusa_generic")
-    SlicingPrinterModel.GENERIC_KLIPPER -> SlicingProfilePack("slicer_profiles/generic_klipper")
-    SlicingPrinterModel.PRUSA_XL_5T -> SlicingProfilePack("slicer_profiles/prusa_xl_5t")
     SlicingPrinterModel.ELEGOO_CENTAURI_CARBON ->
         if (cosmosGeneration == CosmosProfileGeneration.CURRENT) SlicingProfilePack("slicer_profiles/elegoo_centauri_carbon_cosmos", CosmosProfileGeneration.CURRENT)
         else null
+    // Every other model is one row of the generated catalog (scripts/bundle_vendor_profiles.py).
+    else -> SlicingProfilePack("slicer_profiles/${SlicingModelCatalog.info(model).assetDir}")
 }
 
 // Copies a pack's three asset files into real filesystem files under cacheDir - the native

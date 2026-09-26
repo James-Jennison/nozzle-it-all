@@ -2,7 +2,11 @@
 
 The pipeline is ready: pushing a tag `vX.Y.Z` runs the `release` job, which builds the minified, signed APK **and the Play bundle (AAB)**, writes the SBOM and checksums, attests provenance, and creates a **draft** GitHub Release (nothing is public until you press Publish). It has never run: the first tag is the first real test.
 
-## 1. Signing key (OWNER; I do not create, hold or see it)
+## 1. Signing key (DONE 2026-09-25)
+**Status:** the upload key was generated on 2026-09-25 (RSA 4096, PKCS12, alias `nozzle`, valid to 2056-09-17, `CN=Nozzle It All, O=James Jennison`) and stored at `/run/media/jjennison/DATA/Nozzle It All/nozzle-upload.jks` with its passwords in `nozzle-upload-credentials.txt` next to it (both mode 0600, never committed, never printed). The four GitHub secrets below are set. Certificate SHA-256 fingerprint (public): `D3:9C:C8:7E:BD:D7:79:13:99:EF:9B:E5:55:12:2A:7A:8D:09:E8:D4:4F:2A:00:E8:EA:AD:06:12:DF:6F:BC:85`. Keystore file SHA-256: `39455270a1390eecbb99fd751eefc16aba6362a606c68df8380d56c7f9219a4f`.
+**GitHub secrets cannot be read back, so that folder is the only source. Make a second copy elsewhere (password manager plus another drive) and move the passwords into the password manager.**
+
+The steps used (kept for a rebuild or rotation):
 1. Generate one upload key on a machine you trust:
    `keytool -genkeypair -v -keystore nozzle-upload.jks -alias nozzle -keyalg RSA -keysize 4096 -validity 10950`
 2. Back it up in two places you control (for example a password manager attachment and an encrypted drive). Write down the alias and both passwords.

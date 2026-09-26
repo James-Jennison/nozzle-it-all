@@ -17,5 +17,5 @@ Store screenshots and site imagery must be real captures of the app, never mocku
 * Pages are clean URLs (`/platforms/`), so the server must serve `index.html` for directories and `404.html` for missing files.
 
 ## Still to write
-Printers (verified-on-hardware vs built-from-vendor-docs matrix), Docs (getting started, Engine Service self-hosting), Security page (currently a section of Support), changelog (GitHub Releases for now).
+Engine Service self-hosting docs (when it exists), Security page (currently a section of Support), changelog (GitHub Releases for now).
 Open items for the owner: enable GitHub private vulnerability reporting; register a separate MyMiniFactory redirect for the web app origin before it launches; have the privacy policy reviewed before a store release.

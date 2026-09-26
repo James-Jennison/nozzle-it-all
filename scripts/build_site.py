@@ -11,7 +11,7 @@ Rules enforced here (the build fails, it does not warn):
   * The brand violet #8B5CF6 is not used for text (fails AA on the dark background).
   * Every internal link resolves to a built page or asset; no {{placeholder}} is left over.
 """
-import html, json, re, shutil, sys, tempfile, filecmp
+import hashlib, html, json, re, shutil, sys, tempfile, filecmp
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,6 +63,8 @@ def render(r, meta, body, base):
         text = re.sub(r"\{\{status:(\w+)\}\}", lambda m: badge(r, m.group(1)), text)
         return text
     page = base.replace("{{content}}", body)
+    css_v = hashlib.sha256((SRC / "assets" / "site.css").read_bytes()).hexdigest()[:8]  # cache-bust: Cloudflare/browsers keep the old CSS otherwise
+    page = page.replace('/assets/site.css"', f'/assets/site.css?v={css_v}"')
     page = re.sub(r"\{\{cur:([\w-]+)\}\}", lambda m: ' aria-current="page"' if meta.get("nav") == m.group(1) else "", page)
     page = page.replace("{{title}}", html.escape(meta["title"])).replace("{{description}}", html.escape(meta["description"], quote=True))
     return sub(page)

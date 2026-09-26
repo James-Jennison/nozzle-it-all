@@ -19,7 +19,8 @@ a:hover{text-decoration-thickness:2px}
 .prose{max-width:720px}
 .skip{position:absolute;left:-999px;top:0;background:var(--accent);color:var(--on-accent);padding:.6em 1em;z-index:10}
 .skip:focus{left:8px;top:8px}
-.site-header{border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:5}
+.site-header{border-bottom:1px solid var(--line);background:var(--bg)}
+@media (min-width:820px){.site-header{position:sticky;top:0;z-index:5}}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:60px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font:700 1.15rem "Space Grotesk",sans-serif}
 .site-header nav{display:flex;gap:4px;flex-wrap:wrap}
@@ -58,3 +59,10 @@ code{font:.92em ui-monospace,"IBM Plex Mono",monospace;background:var(--surface2
 @media (min-width:820px){.hero{grid-template-columns:1.25fr .75fr;align-items:center}}
 .hero-mark{justify-self:center;width:min(240px,55vw);height:auto;filter:drop-shadow(0 0 40px color-mix(in srgb,var(--fill) 45%,transparent))}
 @media (prefers-reduced-motion:no-preference){.btn{transition:filter .15s}}
+@media (max-width:700px){
+ table.stack thead{position:absolute;left:-9999px}
+ table.stack,table.stack tbody,table.stack tr,table.stack th,table.stack td{display:block;width:100%}
+ table.stack tr{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+ table.stack th,table.stack td{border:0;padding:.25em 0}
+ table.stack th[scope=row]{font:600 1.1rem "Space Grotesk",sans-serif;color:var(--text)}
+}

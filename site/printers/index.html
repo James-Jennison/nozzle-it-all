@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supported printers | Nozzle It All</title>
+<meta name="description" content="Which printers Nozzle It All works with, and how sure we are: verified on real hardware, or built from the vendor&#x27;s published protocol and not yet tested on a real printer.">
+<meta name="theme-color" content="#0D1114">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<link rel="preload" href="/assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css?v=9605fa89">
+<meta property="og:title" content="Supported printers | Nozzle It All">
+<meta property="og:description" content="Which printers Nozzle It All works with, and how sure we are: verified on real hardware, or built from the vendor&#x27;s published protocol and not yet tested on a real printer.">
+<meta property="og:type" content="website">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+ <div class="wrap bar">
+  <a class="brand" href="/" aria-label="Nozzle It All, home"><img src="/assets/mark.svg" alt="" width="28" height="29"><span>Nozzle It All</span></a>
+  <nav aria-label="Main">
+   <a href="/platforms/">Platforms</a>
+   <a href="/printers/" aria-current="page">Printers</a>
+   <a href="/docs/">Docs</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+  </nav>
+ </div>
+</header>
+<main id="main">
+<div class="wrap prose">
+ <h1>Supported printers</h1>
+ <p class="lead">Nozzle It All connects to the printers you own over your own network. We are honest about how sure we are, so every printer type below is one of two things:</p>
+ <p><span class="badge verified">Verified on hardware</span> we have run it on a real printer of this kind.<br>
+ <span class="badge docs">Built from vendor docs</span> written against the vendor's published protocol and tested against an emulator or test server, but <strong>not yet on a real printer</strong>. It may work well, and it may not. If you try one, please <a href="/support/">tell us what happened</a>.</p>
+
+ <div class="tablewrap"><table class="stack">
+  <thead><tr><th scope="col">Printer or firmware</th><th scope="col">Status</th><th scope="col">What it does</th></tr></thead>
+  <tbody>
+   <tr><th scope="row">Klipper with Moonraker</th><td><span class="badge verified">Verified on hardware</span></td>
+    <td>Status, temperatures, progress, start, pause and cancel, file browser, macros, camera, jog, bed levelling, timelapse and filament load and unload, each shown only if the printer reports it. Sliced files can be sent to it.</td></tr>
+   <tr><th scope="row">Snapmaker U1 (PAXX firmware)</th><td><span class="badge verified">Verified on hardware</span></td>
+    <td>Everything above, plus its multi-tool features. A bundled slicing profile is included.</td></tr>
+   <tr><th scope="row">Elegoo Centauri Carbon running OpenCentauri</th><td><span class="badge verified">Verified on hardware</span></td>
+    <td>Works as a Klipper-style printer with a bundled slicing profile. You confirm the firmware version once, because slicing with the wrong profile can stop a print on some firmware.</td></tr>
+   <tr><th scope="row">Bambu Lab (LAN mode)</th><td><span class="badge docs">Built from vendor docs</span></td>
+    <td>Status, pause, resume and stop, sending a sliced file, and the chamber camera, over the printer's local network. Needs LAN mode, the printer's serial number and access code. The app remembers each printer's certificate the first time it connects and warns you if it later changes. Tested against an emulator only.</td></tr>
+   <tr><th scope="row">OctoPrint</th><td><span class="badge docs">Built from vendor docs</span></td>
+    <td>Status, temperatures, progress, start, pause and cancel, and sending a sliced file, using an API key. Tested against a real OctoPrint server, but not with a physical printer attached. No camera.</td></tr>
+   <tr><th scope="row">PrusaLink</th><td><span class="badge docs">Built from vendor docs</span></td>
+    <td>Status, progress and controls, using the PrusaLink password. No camera. A bundled Prusa slicing profile exists, also untested on a real printer.</td></tr>
+  </tbody>
+ </table></div>
+
+ <h2>Something not on the list?</h2>
+ <p>If your printer runs Klipper with Moonraker, it will very likely work as "Klipper with Moonraker" even if the model is not named here. Tell us what you find at <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a>, or <a href="https://github.com/James-Jennison/nozzle-it-all/issues">open an issue</a>.</p>
+ <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, Elegoo and OpenCentauri are names or trademarks of their owners. They are used here only to say what Nozzle It All works with, and do not imply endorsement or affiliation.</p>
+</div>
+
+</main>
+<footer class="site-footer">
+ <div class="wrap">
+  <nav aria-label="Footer">
+   <a href="/printers/">Printers</a>
+   <a href="/docs/">Docs</a>
+   <a href="/privacy/">Privacy</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+   <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>
+  </nav>
+  <p>Nozzle It All is free software under the GNU AGPL-3.0-or-later. No accounts, no analytics.</p>
+  <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, MyMiniFactory and OrcaSlicer are names or trademarks of their respective owners. Mentioning them does not imply endorsement by or affiliation with them.</p>
+ </div>
+</footer>
+</body>
+</html>

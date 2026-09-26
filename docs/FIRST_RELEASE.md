@@ -14,6 +14,7 @@ The steps used (kept for a rebuild or rotation):
 4. Enrol in **Play App Signing** when you create the app (recommended): Google holds the real signing key, this key is only the *upload* key, and a lost upload key can be reset through Play support. If you distribute the APK directly, that same key signs the GitHub APK, so users of the APK and of Play get differently signed builds (they cannot update across each other); that is normal.
 
 ## 2. Play Console (OWNER)
+**Status 2026-09-25:** the app record exists: "Nozzle It All", package `com.nozzleitall.app`, app ID `4975542357521366304`, free, en-US, created by the owner (who ticked the Developer Program Policies and US export law declarations). Play's dashboard says: finish setup, **run a closed test, then apply for production access** (the closed-test requirement does apply to this app). Console: https://play.google.com/console/u/0/developers/7054634954390925321/app/4975542357521366304/app-dashboard
 - Developer account: `owner@example.invalid` (owner). Complete identity verification if Play still asks. **CHECK** the current testing rule for new personal accounts (a closed test with a minimum number of testers for a minimum number of days was required before production at last check).
 - Create the app, upload the AAB to **internal testing** first, fill in the store listing from `docs/STORE_LISTING.md`, the Data safety form, the content rating and the foreground-service declaration.
 

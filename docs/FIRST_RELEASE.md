@@ -15,7 +15,7 @@ The steps used (kept for a rebuild or rotation):
 
 ## 2. Play Console (OWNER)
 **Status 2026-09-25:** the app record exists: "Nozzle It All", package `com.nozzleitall.app`, app ID `4975542357521366304`, free, en-US, created by the owner (who ticked the Developer Program Policies and US export law declarations). Play's dashboard says: finish setup, **run a closed test, then apply for production access** (the closed-test requirement does apply to this app). Console: https://play.google.com/console/u/0/developers/7054634954390925321/app/4975542357521366304/app-dashboard
-- Developer account: `owner@example.invalid` (owner). Complete identity verification if Play still asks. **CHECK** the current testing rule for new personal accounts (a closed test with a minimum number of testers for a minimum number of days was required before production at last check).
+- Developer account: the owner's Google account. Complete identity verification if Play still asks. **CHECK** the current testing rule for new personal accounts (a closed test with a minimum number of testers for a minimum number of days was required before production at last check).
 - Create the app, upload the AAB to **internal testing** first, fill in the store listing from `docs/STORE_LISTING.md`, the Data safety form, the content rating and the foreground-service declaration.
 
 ### Play Console declarations (done 2026-09-26, drafts; none sent for review)

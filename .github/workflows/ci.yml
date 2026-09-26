@@ -150,11 +150,11 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-west-2
-      PROJECT_ARN: "arn:aws:devicefarm:us-west-2:000000000000:project:1aced661-0a79-4dc0-b5bb-8ab8372a3970"
+      PROJECT_ARN: ${{ vars.DEVICE_FARM_PROJECT_ARN }}
       APP_UPLOAD_ARN: ${{ inputs.app_upload_arn }}
       TEST_UPLOAD_ARN: ${{ inputs.test_upload_arn }}
       TEST_FILTER: ${{ inputs.test_filter }}
-      DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || 'arn:aws:devicefarm:us-west-2:000000000000:devicepool:1aced661-0a79-4dc0-b5bb-8ab8372a3970/f6f8c8e4-3714-4474-9b57-84c1e87ad2f9' }}
+      DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || vars.DEVICE_FARM_POOL_ARN }}
     steps:
       - uses: actions/download-artifact@v4
         with:

@@ -8,7 +8,6 @@ Deploying is done by the owner. Nothing in this repository holds server credenti
 - [ ] `python3 scripts/build_site.py --check` passes (CI runs the same).
 - [ ] `support@nozzleitall.com` receives mail (send a test).
 - [ ] GitHub links resolve and the repository is public (`github.com/James-Jennison/nozzle-it-all`); source-offer and licence links work.
-- [ ] Decide the Lovart licence/trademark checks are done (see `brand/README.md`) before promoting the brand publicly.
 
 ## Deploy
 1. Back up the current web root on `web-vm-admin`, especially `mmf-auth/`.

@@ -129,4 +129,15 @@ class SlicingModelCatalogTest {
             assertTrue("${info.label}: filament does not support the selected plate $plate", temp > 0)
         }
     }
+
+    @Test fun absoluteExtrusionPacksDoNotResetTheExtruderPosition() {
+        // The opposite rule (Orca rejects "G92 E0" in the layer hooks when extrusion is absolute; Dremel 3D40/3D45 carried one).
+        val g92 = Regex("""^[ \t]*G92[ \t]*E(0(\.0*)?|\.0+)[ \t]*(;.*)?$""", RegexOption.MULTILINE)
+        SlicingModelCatalog.all.forEach { info ->
+            val machine = JSONObject(File(File(assets, info.assetDir), "machine.json").readText())
+            if (machine.optString("use_relative_e_distances", "1") == "0") {
+                assertFalse("${info.label}: absolute extrusion must not contain a G92 E0 line", g92.containsMatchIn(text(machine.opt("before_layer_change_gcode"))) || g92.containsMatchIn(text(machine.opt("layer_change_gcode"))))
+            }
+        }
+    }
 }

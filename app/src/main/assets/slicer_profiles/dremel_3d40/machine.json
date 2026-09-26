@@ -130,7 +130,7 @@
     "z_hop_types": [
         "Normal Lift"
     ],
-    "before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n",
+    "before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\n\n",
     "default_print_profile": ".20mm Standard @Dremel 3D40 0.4",
     "machine_start_gcode": "G90\nG28\nM132 X Y Z A\nG1 Z100 F3300\nG1 X-110.5 Y-74 F6000\nM6 T0\nM907 X100 Y100 Z60 A100\nG1 Z0.6 F3300\nG4 P2000\nM108 T0",
     "machine_end_gcode": "M104 S0\nM140 S0\nG92 E1\nG1 E-1 F300\nG162 Z F600\nG162 X Y F2000\nM84",

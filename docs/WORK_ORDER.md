@@ -76,7 +76,10 @@ P28/M7 sections for what each one built and its commit hash.)*
    passed all but one: **Bambu Lab A2L** uses G-code template variables this engine build does not define
    (`bed_heat_stable_wait_flag`, `hotend_heating_rate`, `temperature_vitrification`, ...) and fails with "Failed to
    generate G-code for invalid custom G-code", so it is excluded (`ENGINE_INCOMPATIBLE` in the generator) until the
-   engine is updated. The catalog is 376 models.
+   engine is updated. The catalog is 376 models. (Correction to the count above: my first read of the failure list stopped
+   at a blank line inside one error message, so the run rejected more than the 17 it showed - the two Dremel models
+   below were hidden behind it.) Third run: Dremel 3D40/3D45 set absolute extrusion yet carry a `G92 E0` line, which
+   Orca forbids in that mode; the generator drops it (`fix_absolute_reset`) and a unit test enforces the rule.
 1. **WO-42 — Split Snapmaker U1 into stock and PAXX printer types (2026-09-26).**
    `PrinterKind.SNAPMAKER_U1` (stock: Bespok3d, no multiACE, reported unverified) and
    `SNAPMAKER_U1_PAXX` (multiACE, no Bespok3d). Saved PAXX printers are unaffected (kind is stored

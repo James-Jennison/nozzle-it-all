@@ -81,6 +81,19 @@ G92_E0 = re.compile(r"^[ \t]*G92[ \t]*E(0(\.0*)?|\.0+)[ \t]*(;.*)?$", re.M)  # O
 def as_text(v): return "\n".join(map(str, v)) if isinstance(v, list) else (v or "")
 
 
+def fix_absolute_reset(machine):
+    """The opposite rule: with absolute extrusion (use_relative_e_distances = 0) OrcaSlicer rejects a real "G92 E0" line in
+    the layer hooks (some vendor profiles, e.g. Dremel 3D40/3D45, carry one anyway). Absolute mode is the profile's intent,
+    so drop those lines rather than switching the extrusion mode."""
+    if str(machine.get("use_relative_e_distances", "1")) != "0": return False
+    changed = False
+    for key in ("before_layer_change_gcode", "layer_change_gcode"):
+        text = as_text(machine.get(key))
+        if G92_E0.search(text):
+            machine[key] = G92_E0.sub("", text).replace("\n\n\n", "\n\n"); changed = True
+    return changed
+
+
 def fix_layer_reset(machine):
     """OrcaSlicer's own validation demands "G92 E0" at each layer change for Marlin-flavoured, non-Bambu printers using
     relative extrusion (its GUI marks Bambu printers via the preset bundle, which our headless bridge lacks). Bambu's
@@ -111,7 +124,7 @@ def write_pack(by_name, out_dir, machine, process, filament, filament_index=None
     for kind, name in (("machine", machine), ("process", process), ("filament", filament)):
         flat = flatten(kind, name, filament_index if (kind == "filament" and filament_index is not None) else by_name)
         flat["name"] = name; flats[kind] = flat
-    fix_layer_reset(flats["machine"]); fix_bed_type(flats["machine"], flats["process"], flats["filament"])
+    fix_layer_reset(flats["machine"]); fix_absolute_reset(flats["machine"]); fix_bed_type(flats["machine"], flats["process"], flats["filament"])
     for kind, flat in flats.items():
         with open(os.path.join(out_dir, f"{kind}.json"), "w") as f:
             json.dump(flat, f, indent=4); f.write("\n")

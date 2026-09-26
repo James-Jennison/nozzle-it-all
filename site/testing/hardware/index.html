@@ -34,6 +34,8 @@
  <h1>Test on your own printer</h1>
  <p class="lead">This guide is for people helping us test the Android app on real printers. Most printer types here have never been tried on a real machine, so what you find is exactly what we need. Work through the tiers in order and stop whenever you like.</p>
 
+ <div class="callout"><p><strong>This guide is for app version 0.1.1 or newer.</strong> Open Settings, then About &amp; credits, and check the version. If you have 0.1.0, wait for the update from Google Play before you start (it installs automatically); the steps below use features that 0.1.0 does not have.</p></div>
+
  <div class="callout"><p><strong>Please read this first.</strong> The Bambu Lab, PrusaLink and Snapmaker U1 (stock firmware) support was built from the makers' published documentation and tested only against emulators. It may misbehave on a real printer. So: stay at the printer for anything that moves it, use the small test print below, know where your printer's own stop or power switch is, and do not test while a print you care about is running. You are always free to stop after any tier.</p></div>
 
  <h2>What you need</h2>
@@ -62,7 +64,7 @@
 
  <h2>Tier 2: slice the test cube (nothing moves)</h2>
  <ol>
-  <li>Edit the printer (or use the wizard's slicing step) and choose your model in <strong>Slicing profile</strong>. Use the search box. The <a href="/printers/models/">full list</a> is long; pick your exact model. If it is not there, choose the closest one and tell us.</li>
+  <li>Edit the printer (or use the wizard's slicing step) and choose your model in <strong>Slicing profile</strong>. Use the search box. The <a href="/printers/models/">full list</a> is long; pick your exact model. If it is not there, choose the closest one and tell us. For a machine of your own, see the custom-built Klipper section below.</li>
   <li>Open <strong>Prepare</strong>, tap <strong>Add models</strong> and pick the test cube.</li>
   <li>Tap <strong>Slice</strong>. It should finish in well under a minute.</li>
   <li>Look at the result: the cube should sit inside a bed of the right size and shape, and the print time and filament weight should look plausible for a small cube. If the bed looks wrong for your machine, stop here and tell us. Do not print.</li>
@@ -94,8 +96,9 @@
  <h3>Custom-built Klipper printers</h3>
  <ul>
   <li>Choose <strong>Generic Klipper</strong> and do Tier 1 and the controls: connecting, status, temperatures, files, macros, jog, pause, resume and cancel. Klipper is the best-tested path, and your reports here are very useful.</li>
-  <li><strong>The app cannot yet set a custom bed size, bed shape or start and end G-code.</strong> On-phone slicing uses a fixed generic profile: a 250 &times; 250 mm bed with the origin at a corner, a start sequence that calls <code>START_PRINT EXTRUDER_TEMP=&hellip; BED_TEMP=&hellip;</code>, and no other custom macros. Only do Tier 2 and Tier 3 with it if that happens to match your machine. If the bed in the preview does not match your printer, or your start macro has another name, stop before printing.</li>
-  <li>Please tell us your bed size, whether the origin is at a corner or the centre, and what your start and end macros are called. That decides how we build custom-machine settings.</li>
+  <li><strong>Set up your own machine before slicing.</strong> The generic profile is a 250 &times; 250 mm bed with the origin at a corner and a start sequence that calls <code>START_PRINT EXTRUDER_TEMP=&hellip; BED_TEMP=&hellip;</code>. If that is not your printer, edit the printer, choose <strong>Generic Klipper</strong> as the slicing profile, and turn on <strong>Custom machine</strong>. Enter your bed width, depth and height, say whether the origin is at a corner or the centre, and put your own start and end G-code in the boxes (for example your <code>PRINT_START</code> and <code>PRINT_END</code> macros; slicer placeholders such as <code>[nozzle_temperature_initial_layer]</code> work). The nozzle stays 0.4 mm for now.</li>
+  <li>In Tier 2, check the bed in the preview matches your printer before you send anything. If your printer needs settings the custom machine cannot express (a different nozzle size, an odd bed shape), tell us and stop before printing.</li>
+  <li>Please tell us how it went and what was missing: nozzle size, bed shape, anything else your printer needs. That decides what we add next.</li>
  </ul>
  <h3>Snapmaker U1 on stock firmware</h3>
  <ul>

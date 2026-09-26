@@ -62,7 +62,7 @@ P28/M7 sections for what each one built and its commit hash.)*
    bed shape in the editor and preview, layer limits, tool count. Never offered for the COSMOS Centauri Carbon.
    Unit tests (`CustomMachineTest`, 16 cases) cover validation, both origins, untouched-everything-else, backup and
    preferences round trips. `customMachineBedAndGcodeReachTheRealEngine` in `SlicingProfilePacksDeviceTest` slices with
-   custom G-code through the real engine for both origins (Device Farm result recorded below when run). Not done: nozzle
+   custom G-code through the real engine for both origins Passed on a Pixel 9a (12 of 12, 2.25 device-minutes). Not done: nozzle
    diameter, and per-printer custom process defaults.
 1. **WO-43 — Bundle the whole OrcaSlicer 0.4 mm printer library; searchable model picker (2026-09-26).**
    Requested for testers who own many models, then widened to a comprehensive list. `scripts/bundle_vendor_profiles.py`

@@ -28,12 +28,29 @@ class PrinterCapabilitiesTest {
         assertTrue(caps.supportsFilamentLoadUnload)
     }
 
+    @Test fun stockSnapmakerU1GetsBespok3dButNotMultiAce() {
+        val caps = capabilitiesFor(PrinterKind.SNAPMAKER_U1)
+        assertEquals(PrinterTransport.MOONRAKER, caps.transport)
+        assertTrue(caps.supportsKlipperExtras)
+        assertTrue("stock firmware is Bespok3d's target", caps.hasBespok3d)
+        assertFalse("multiACE is a PAXX add-on", caps.hasMultiAce)
+        assertFalse("not yet run on a stock-firmware U1", caps.verifiedOnRealHardware)
+        assertTrue(caps.supportsJog)
+        assertTrue(caps.supportsBedLevelingTrigger)
+        assertTrue(caps.supportsTimelapseTrigger)
+        assertTrue(caps.supportsFilamentLoadUnload)
+    }
+
+    @Test fun bespok3dAndMultiAceNeverAppearTogether() {
+        PrinterKind.values().forEach { k -> val c = capabilitiesFor(k); assertFalse("$k", c.hasBespok3d && c.hasMultiAce) }
+    }
+
     @Test fun snapmakerU1PaxxGetsMoonrakerPlusVendorAddOns() {
         val caps = capabilitiesFor(PrinterKind.SNAPMAKER_U1_PAXX)
         assertEquals(PrinterTransport.MOONRAKER, caps.transport)
         assertTrue(caps.supportsKlipperExtras)
-        assertTrue("expected PAXX vendor add-ons", caps.hasBespok3d)
-        assertTrue("expected PAXX vendor add-ons", caps.hasMultiAce)
+        assertFalse("PAXX/extended firmware must not offer Bespok3d (its preflight refuses it)", caps.hasBespok3d)
+        assertTrue("expected PAXX vendor add-on", caps.hasMultiAce)
         assertTrue(caps.verifiedOnRealHardware)
         assertTrue(caps.supportsJog)
         assertTrue(caps.supportsBedLevelingTrigger)
@@ -96,6 +113,7 @@ class PrinterCapabilitiesTest {
     @Test fun unverifiedOnRealHardwareRoutesThroughCapabilities() {
         assertFalse(PrinterKind.GENERIC_KLIPPER.unverifiedOnRealHardware)
         assertFalse(PrinterKind.SNAPMAKER_U1_PAXX.unverifiedOnRealHardware)
+        assertTrue(PrinterKind.SNAPMAKER_U1.unverifiedOnRealHardware)
         assertTrue(PrinterKind.BAMBU_LAB.unverifiedOnRealHardware)
         assertTrue(PrinterKind.PRUSA_LINK.unverifiedOnRealHardware)
     }

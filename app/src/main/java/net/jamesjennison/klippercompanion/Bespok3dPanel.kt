@@ -29,8 +29,8 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Stock Snapmaker U1 firmware only (shown for PrinterKind.SNAPMAKER_U1_PAXX, but PAXX/extended
- * firmware is refused by the enrollment preflight - see Bespok3dU1Preflight): pairs with the printer's Bespok3d
+ * Stock Snapmaker U1 firmware only (PrinterKind.SNAPMAKER_U1; PAXX/extended firmware is refused by the
+ * enrollment preflight - see Bespok3dU1Preflight): pairs with the printer's Bespok3d
  * daemon, browses/installs its signed plugin catalog, and mirrors the printer's own touchscreen
  * once HelixScreen is installed. Follows HeaterPanel.kt's fetch -> review -> confirm shape:
  * every mutating action (SSH enrollment, plugin install) requires a fresh review before it can be

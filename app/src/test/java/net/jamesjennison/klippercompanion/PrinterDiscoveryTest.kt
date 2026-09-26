@@ -13,7 +13,7 @@ class PrinterDiscoveryTest {
         val cc1 = PrinterDiscovery.classifyMoonraker("CC1", "OpenCentauri Cosmos", "Release - 26.08.0", "192.168.1.114")
         assertEquals(PrinterKind.GENERIC_KLIPPER, cc1.kind); assertEquals(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, cc1.slicingModel); assertEquals("CC1", cc1.name)
         val u1 = PrinterDiscovery.classifyMoonraker("U1", "", "1.6.0.267_20260815150420", "192.168.1.110")
-        assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, u1.kind); assertEquals(SlicingPrinterModel.SNAPMAKER_U1, u1.slicingModel)
+        assertEquals(PrinterKind.SNAPMAKER_U1, u1.kind); assertEquals(SlicingPrinterModel.SNAPMAKER_U1, u1.slicingModel)
         val generic = PrinterDiscovery.classifyMoonraker("voron", "Klipper", "v0.12.0-123", "10.0.0.7")
         assertEquals(PrinterKind.GENERIC_KLIPPER, generic.kind); assertEquals(SlicingPrinterModel.GENERIC_KLIPPER, generic.slicingModel)
         assertEquals("a blank hostname falls back to the address", "10.0.0.7", PrinterDiscovery.classifyMoonraker("", "", "", "10.0.0.7").name)
@@ -53,7 +53,7 @@ class PrinterDiscoveryTest {
             val found = mutableListOf<DiscoveredPrinter>()
             scanner.scan(listOf("127.0.0.1", "127.0.0.2"), AtomicBoolean(false)) { found += it }
             val u1 = found.singleOrNull { it.address == "127.0.0.1:${s.port}" }
-            assertNotNull("the mock printer is found: $found", u1); assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, u1!!.kind)
+            assertNotNull("the mock printer is found: $found", u1); assertEquals(PrinterKind.SNAPMAKER_U1, u1!!.kind)
         } finally { s.shutdown() }
     }
 

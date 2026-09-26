@@ -3,7 +3,7 @@ package net.jamesjennison.klippercompanion
 import android.content.SharedPreferences
 import org.json.JSONObject
 
-// Bespok3d bridge (stock Snapmaker U1 firmware only; shown for PrinterKind.SNAPMAKER_U1_PAXX, PAXX/extended firmware is refused): status/plugin-catalog
+// Bespok3d bridge (stock Snapmaker U1 firmware only; PrinterKind.SNAPMAKER_U1; the PAXX kind does not show it, and PAXX/extended firmware is refused by the preflight): status/plugin-catalog
 // reads and plugin installs against the paired Bespok3d daemon running on the printer itself
 // (`Bespok3dClient.kt`, ported from Helix). Mirrors HeaterReader/FanReader: a small reader
 // interface with default-throwing methods on PrinterService, implemented by Moonraker using the

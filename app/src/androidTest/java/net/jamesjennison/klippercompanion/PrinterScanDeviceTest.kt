@@ -23,7 +23,7 @@ class PrinterScanDeviceTest {
         PrinterScanner().scan(hosts) { found += it }
         val u1 = found.firstOrNull { it.address.startsWith("192.168.1.110") }; val cc1 = found.firstOrNull { it.address.startsWith("192.168.1.114") }
         assertNotNull("U1 found in $found", u1); assertNotNull("CC1 found in $found", cc1)
-        assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, u1!!.kind); assertEquals(SlicingPrinterModel.SNAPMAKER_U1, u1.slicingModel)
+        assertEquals(PrinterKind.SNAPMAKER_U1, u1!!.kind)  // discovery cannot tell stock from PAXX; defaults to stock; assertEquals(SlicingPrinterModel.SNAPMAKER_U1, u1.slicingModel)
         assertEquals(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, cc1!!.slicingModel)
     }
 

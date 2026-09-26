@@ -4,7 +4,8 @@ import org.json.JSONObject
 import java.util.Locale
 
 // Ordinal-independent persistence: PrinterPreferences stores/reads this by name(), not ordinal.
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT }
+// SNAPMAKER_U1 = stock firmware (Bespok3d-capable); SNAPMAKER_U1_PAXX = PAXX/extended firmware (multiACE, no Bespok3d).
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1 }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing

@@ -82,10 +82,20 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = true,
         supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
     )
+    // PAXX/extended firmware: multiACE, but NO Bespok3d - Bespok3d targets stock firmware and the
+    // enrollment preflight refuses extended firmware (verified against the owner's PAXX U1).
     PrinterKind.SNAPMAKER_U1_PAXX -> PrinterCapabilities(
         transport = PrinterTransport.MOONRAKER, supportsPauseResumeCancel = true, supportsCamera = true,
         supportsKlipperExtras = true, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
-        hasBespok3d = true, hasMultiAce = true, verifiedOnRealHardware = true,
+        hasBespok3d = false, hasMultiAce = true, verifiedOnRealHardware = true,
+        supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
+    )
+    // Stock firmware: Bespok3d, no multiACE (a PAXX add-on). Same Moonraker feature set, but it has not been
+    // run on a stock-firmware U1 (the owner's is PAXX), so it is honestly reported as unverified.
+    PrinterKind.SNAPMAKER_U1 -> PrinterCapabilities(
+        transport = PrinterTransport.MOONRAKER, supportsPauseResumeCancel = true, supportsCamera = true,
+        supportsKlipperExtras = true, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = true, hasMultiAce = false, verifiedOnRealHardware = false,
         supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
     )
     PrinterKind.BAMBU_LAB -> PrinterCapabilities(

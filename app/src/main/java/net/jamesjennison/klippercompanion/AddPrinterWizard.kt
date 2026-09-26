@@ -122,7 +122,8 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                     OutlinedTextField(name, { name = it.take(80) }, label = { Text("Printer name") }, singleLine = true)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(kind==PrinterKind.GENERIC_KLIPPER, {kind=PrinterKind.GENERIC_KLIPPER}, label={Text("Generic Klipper")})
-                        FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX, {kind=PrinterKind.SNAPMAKER_U1_PAXX}, label={Text("Snapmaker U1 (PAXX)")})
+                        FilterChip(kind==PrinterKind.SNAPMAKER_U1, {kind=PrinterKind.SNAPMAKER_U1}, label={Text("Snapmaker U1 (stock)")}, modifier=Modifier.testTag("wizard-kind-u1-stock"))
+                        FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX, {kind=PrinterKind.SNAPMAKER_U1_PAXX}, label={Text("Snapmaker U1 (PAXX)")}, modifier=Modifier.testTag("wizard-kind-u1-paxx"))
                         FilterChip(kind==PrinterKind.BAMBU_LAB, {kind=PrinterKind.BAMBU_LAB}, label={Text("Bambu Lab")})
                         FilterChip(kind==PrinterKind.PRUSA_LINK, {kind=PrinterKind.PRUSA_LINK}, label={Text("Prusa Link")}, modifier=Modifier.testTag("wizard-kind-prusa-link"))
                         FilterChip(kind==PrinterKind.OCTOPRINT, {kind=PrinterKind.OCTOPRINT}, label={Text("OctoPrint")}, modifier=Modifier.testTag("wizard-kind-octoprint"))

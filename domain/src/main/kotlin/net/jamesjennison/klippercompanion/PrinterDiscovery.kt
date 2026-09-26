@@ -24,7 +24,8 @@ object PrinterDiscovery {
             app.contains("cosmos", ignoreCase = true) || app.contains("opencentauri", ignoreCase = true) ->
                 DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, detail = "Elegoo Centauri Carbon ($softwareVersion)")
             U1_VERSION.matches(softwareVersion.trim()) ->
-                DiscoveredPrinter(address, PrinterKind.SNAPMAKER_U1_PAXX, name, SlicingPrinterModel.SNAPMAKER_U1, detail = "Snapmaker U1 ($softwareVersion)")
+                // Moonraker cannot tell stock from PAXX/extended firmware, so default to stock (the common case); a PAXX owner switches the type.
+                DiscoveredPrinter(address, PrinterKind.SNAPMAKER_U1, name, SlicingPrinterModel.SNAPMAKER_U1, detail = "Snapmaker U1 ($softwareVersion)")
             else -> DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.GENERIC_KLIPPER, detail = "Klipper / Moonraker" + softwareVersion.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty())
         }
     }

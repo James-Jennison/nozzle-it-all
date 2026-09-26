@@ -56,7 +56,7 @@ interface PrinterService {
     // WO-13: read live before ever using a Centauri-Carbon/COSMOS-specific slicer profile - see
     // FirmwareIdentity.kt's own header comment on why a cached/stale value is not safe here.
     fun firmwareIdentity(): FirmwareIdentity = throw ApiFailure("Firmware identity unavailable.")
-    // Snapmaker U1/PAXX only (PrinterKind.SNAPMAKER_U1_PAXX); see Bespok3d.kt.
+    // Stock Snapmaker U1 firmware only (PrinterKind.SNAPMAKER_U1); see Bespok3d.kt.
     fun bespok3dProbe(): Bespok3dProbe = throw ApiFailure("Bespok3d bridge unavailable.")
     fun bespok3dStatus(connection: Bespok3dConnection): Bespok3dStatus? = throw ApiFailure("Bespok3d bridge unavailable.")
     fun bespok3dPlugins(connection: Bespok3dConnection): Bespok3dPluginCatalog = throw ApiFailure("Bespok3d bridge unavailable.")

@@ -43,6 +43,16 @@ class PrinterKindTest {
         val loaded = PrinterPreferences.profiles(prefs, secrets)
         assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, loaded.single().kind)
     }
+    @Test fun stockU1KindRoundTripsAndPaxxStaysDistinct() {
+        val prefs = InMemoryPrefs()
+        val secrets = InMemoryPrefs()
+        val stock = PrinterProfile("http://stock.local/", "Stock", kind = PrinterKind.SNAPMAKER_U1)
+        val paxx = PrinterProfile("http://paxx.local/", "Paxx", kind = PrinterKind.SNAPMAKER_U1_PAXX)
+        PrinterPreferences.saveProfiles(prefs, secrets, stock.address, listOf(stock, paxx))
+        val loaded = PrinterPreferences.profiles(prefs, secrets).associate { it.address to it.kind }
+        assertEquals(PrinterKind.SNAPMAKER_U1, loaded["http://stock.local/"])
+        assertEquals("an existing saved PAXX printer must stay PAXX", PrinterKind.SNAPMAKER_U1_PAXX, loaded["http://paxx.local/"])
+    }
     @Test fun bambuProfileRoundTripsItsBareHostSerialAndAccessCode() {
         val prefs = InMemoryPrefs()
         val secrets = InMemoryPrefs()

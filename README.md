@@ -18,7 +18,7 @@ superseded by `CONSUMER_SLICER_PLAN.md` for the areas it covers.
 ## What's real today
 
 - **Printer control**: connect to Klipper/Moonraker, Bambu Lab (LAN MQTT/FTPS), Prusa Link, and
-  Snapmaker U1/PAXX printers. Monitor state/temperatures, continuous WebRTC camera video, browse
+  Snapmaker U1 printers (stock or PAXX firmware). Monitor state/temperatures, continuous WebRTC camera video, browse
   G-code files, run macros, start/pause/resume/cancel with explicit confirmation. Saved printer
   profiles with one active printer at a time. Klipper/Snapmaker targets also get real jog
   movement, a bed-leveling trigger, a timelapse-render trigger, and filament load/unload, each
@@ -46,7 +46,7 @@ plate at once on-device with the same review-then-confirm pipeline (sliced 3D pr
 printer-ready confirmation, upload, explicit Start print) the single-object share-intent flow
 above already uses. (The Prepare tab itself now opens this same multi-object project editor
 directly, not the single-object flow — see WO-30.) This closes Phase 1 of the roadmap. A single `PrinterCapabilities` object
-(one per vendor: Klipper/Moonraker, Snapmaker U1/PAXX, Bambu Lab, Prusa Link) now drives every
+(one per printer type: Klipper/Moonraker, Snapmaker U1 stock, Snapmaker U1 PAXX, Bambu Lab, Prusa Link) now drives every
 control-visibility decision in the app, replacing the printer-kind conditionals that used to be
 scattered across the UI — closing Phase 2. A project now picks a material (four bundled
 presets, or a real spool read live from Spoolman — its actual configured nozzle/bed temperatures,

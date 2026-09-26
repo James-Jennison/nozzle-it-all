@@ -50,6 +50,14 @@ P28/M7 sections for what each one built and its commit hash.)*
 
 ## Next — one specific owner action unblocks each of these
 
+1. **WO-42 — Split Snapmaker U1 into stock and PAXX printer types (2026-09-26).**
+   `PrinterKind.SNAPMAKER_U1` (stock: Bespok3d, no multiACE, reported unverified) and
+   `SNAPMAKER_U1_PAXX` (multiACE, no Bespok3d). Saved PAXX printers are unaffected (kind is stored
+   by name). Network discovery now defaults a U1 to stock because Moonraker cannot tell the two
+   apart; a PAXX owner switches the type. Chips added to Add printer and Edit printer; unit tests
+   (607 total, 0 failures), lint and the androidTest compile pass. **Not yet run on a device:** the
+   two new/updated Compose tests in `PrinterCapabilitiesDeviceTest` and `PrinterScanDeviceTest`
+   need a Device Farm or connected run (state the minutes and get approval first).
 1. **WO-4 — Device-verify Bespok3d enrollment + remote screen (M8b).** Code and
    unit tests are done. **Blocked by design on the owner's printer (2026-09-26):**
    Bespok3d targets *stock* Snapmaker U1 firmware ("no flashing"), and the

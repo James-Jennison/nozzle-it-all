@@ -250,6 +250,11 @@ private fun MaterialsSection(state: AppState) {
             }
         }
         editingSlot?.let { id -> slots.firstOrNull { it.slot == id }?.let { SlotEditor(p, it, library, fromPrinter) { editingSlot = null } } }
+        // Flushing volumes between the slots (Snapmaker Orca's button, shown whenever there is more than one filament).
+        var flushing by remember { mutableStateOf(false) }
+        if (slots.size > 1) NzButton(if (p.editedFlush() == null) "Flushing volumes" else "Flushing volumes (edited)", { flushing = true },
+            kind = ButtonKind.QUIET, testTag = "flushing-volumes")
+        if (flushing) FlushVolumesWindow(p) { flushing = false }
         // Painted models: which slot prints each of the model's own colours.
         p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
         // Full Spectrum (Snapmaker Orca's colour mixing), wherever the printer or profile offers it.

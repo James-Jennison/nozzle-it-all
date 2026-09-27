@@ -5,6 +5,7 @@ import { IDENTITY, Mesh, ModelObject, Project3mf, readProject, Transform, writeP
 import { MaterialSlot, ProjectManifest, newManifest } from '../project/manifest';
 import { meshBounds, readModelFile, writeStl } from '../project/mesh';
 import { GUIDED_PRESETS, gcodeStats, GcodeStats, multiToolOverrides } from '../project/slicing';
+import { flushSetup } from '../project/flush';
 import { SlicingEngine } from '../engine/client';
 import { ProjectStore, StoredProjectInfo, download } from '../storage/projects';
 import { parseGcode, Preview } from './gcode';
@@ -209,9 +210,14 @@ export async function slice() {
   const usedSlots = Math.max(...s.items.map((i) => i.slot));
   const slots = s.slots.slice(0, Math.max(usedSlots, 1));
   const presetOverrides = GUIDED_PRESETS.find((p) => p.id === s.preset)?.overrides ?? {};
-  const overrides = { ...presetOverrides, sparse_infill_density: `${s.infill}%`, enable_support: s.supports ? '1' : '0', ...(slots.length > 1 ? multiToolOverrides(1.75, slots) : {}), ...s.advanced };
   store.set({ slice: { kind: 'running', percent: 0, stage: 'Starting the engine' } });
   const files = profileFiles ?? await loadProfile(s.profile.id);
+  // Flushing volumes are worked out the printer's own slicer's way, with its nozzle volume and support filaments (flush.ts).
+  const parse = (t: string) => { try { return JSON.parse(t) as Record<string, unknown>; } catch { return undefined; } };
+  const filament = parse(files.filament);
+  const flush = flushSetup(parse(files.machine), slots.map(() => filament));
+  const overrides = { ...presetOverrides, sparse_infill_density: `${s.infill}%`, enable_support: s.supports ? '1' : '0',
+    ...(slots.length > 1 ? multiToolOverrides(1.75, slots, 210, flush) : {}), ...s.advanced };
   const out = await engine.slice({
     profiles: [{ name: 'machine.json', json: files.machine }, { name: 'process.json', json: files.process }, { name: 'filament.json', json: files.filament }],
     overrides,

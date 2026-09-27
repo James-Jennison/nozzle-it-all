@@ -21,6 +21,8 @@ dependencies {
   .forEach { runtimeOnly(project(":adapter-$it")) }
  testImplementation(project(":adapter-paxx"))
  implementation(project(":project-format"))
+ // Pure JVM rules shared with Android (flushing volumes).
+ implementation(project(":domain"))
  implementation(compose.desktop.currentOs)
  implementation(compose.foundation)
  implementation(compose.ui)

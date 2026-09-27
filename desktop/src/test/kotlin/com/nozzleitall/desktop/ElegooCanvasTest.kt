@@ -43,12 +43,19 @@ class ElegooCanvasTest {
         assertTrue("M6211 tool changes: ${changes.size}", changes.size > 10)
         assertEquals(setOf("0", "1", "2", "3"), changes.map { it.groupValues[1] }.toSet())
         // The first is the prime tower's priming change to the filament already loaded (nothing to purge, as in ElegooSlicer);
-        // every real change purges the flush volume at ElegooSlicer's flush multiplier 1 (84 mm³ of 1.75 mm filament).
+        // every real change purges its colour pair's flushing volume (FlushVolumes, the matrix in the header) at ElegooSlicer's
+        // flush multiplier 1, as a length of 1.75 mm filament.
         assertEquals(start.groupValues[1], changes.first().groupValues[1])
-        val flush = 84.0 / (Math.PI / 4 * 1.75 * 1.75)
+        val matrix = Regex("^; flush_volumes_matrix = (.*)$", RegexOption.MULTILINE).find(g)!!.groupValues[1].split(',').map { it.trim().toDouble() }
+        val multiplier = Regex("^; flush_multiplier = (.*)$", RegexOption.MULTILINE).find(g)!!.groupValues[1].trim().toDouble()
+        assertEquals(1.0, multiplier, 1e-9)
+        assertTrue("colour-based volumes differ between pairs: $matrix", matrix.filter { it > 0 }.toSet().size > 1)
         changes.forEachIndexed { i, c ->
             assertEquals("M6211 and T name the same slot", c.groupValues[1], c.groupValues[3])
-            if (i > 0) assertEquals("purge length: ${c.value}", flush, c.groupValues[2].toDouble(), 0.01)
+            if (i > 0) {
+                val from = changes[i - 1].groupValues[1].toInt(); val to = c.groupValues[1].toInt()
+                assertEquals("purge length $from -> $to: ${c.value}", matrix[from * 4 + to] * multiplier / (Math.PI / 4 * 1.75 * 1.75), c.groupValues[2].toDouble(), 0.01)
+            }
         }
         assertEquals("every change is Elegoo's block", changes.size, Regex("^;==========${tag}_CHANGE_FILAMENT_GCODE(_CCB)?==========", RegexOption.MULTILINE).findAll(g).count())
         assertTrue("ElegooSlicer's start G-code", g.contains(";===== ${tag}_START_GCODE"))

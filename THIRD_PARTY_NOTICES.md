@@ -201,6 +201,16 @@ Generic filament presets) are flattened from **ElegooSlicer**
 Copyright Elegoo and the OrcaSlicer/Bambu Studio/PrusaSlicer authors; see `PROVENANCE.md`
 and `docs/upstream/PROVENANCE.md` for the settings pinned to match ElegooSlicer.
 
+## Flushing volumes (OrcaSlicer, ElegooSlicer and Snapmaker Orca code and data)
+
+`:domain` `FlushVolumes` and the Web App's `web/src/project/flush.ts` port the flushing-volume calculations of Snapmaker
+Orca (`FlushVolCalc.cpp`), **OrcaSlicer** (github.com/OrcaSlicer/OrcaSlicer, `824b216f`: `FlushVolCalc.cpp`,
+`FlushVolPredictor.cpp`) and **ElegooSlicer** (github.com/ELEGOO-3D/ElegooSlicer, `2d507e39a9`: `FlushVolumeRules.cpp`,
+`StandardColorMatcher.cpp`), all AGPL-3.0. `domain/src/main/resources/flush/` bundles OrcaSlicer's measured-flush data
+(`resources/flush/flush_data_*.txt`) and ElegooSlicer's per-printer rules
+(`resources/profiles/Elegoo/flush/flush_volumes.json`) unchanged. Copyright the OrcaSlicer, Bambu Studio and Elegoo
+authors; see `docs/upstream/PROVENANCE.md` P-0015.
+
 ## elegoo-link and SDCP (Elegoo printer protocols)
 
 The Elegoo printer adapter (`adapter-elegoo/`: Centauri Carbon over SDCP, Centauri
@@ -213,7 +223,8 @@ method numbers, status meanings, upload procedures and discovery messages were
 re-implemented in Kotlin from its `src/lan/` sources; no C++ was copied. Each source
 file in `adapter-elegoo/` names the upstream files it follows. Changes from upstream:
 LAN only (the cloud half of elegoo-link is not used), no automatic retries, bounded
-replies, and a minimal MQTT client in place of Eclipse Paho.
+replies, and a minimal MQTT client in place of Eclipse Paho. The desktop app and the
+Android app both ship this module (Android uses it for its Elegoo printer connection).
 
 The SDCP V3.0.0 protocol description
 (github.com/cbd-tech/SDCP-Smart-Device-Control-Protocol-V3.0.0, checkout `f977215761`,

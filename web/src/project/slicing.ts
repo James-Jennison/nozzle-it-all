@@ -2,18 +2,18 @@
 // Port of domain/.../MultiToolFilamentConfig.kt (Android) with the same keys and values; schemas/fixtures/multitool.json
 // is checked by both the Kotlin and TypeScript tests.
 import presets from '../../../schemas/slicing/guided-presets.json';
+import { FlushSetup, flushMatrix } from './flush';
 
 export interface GuidedPreset { id: string; label: string; detail: string; overrides: Record<string, string> }
 export const GUIDED_PRESETS: GuidedPreset[] = presets.presets;
 
 export interface SlotMaterial { type?: string; colorHex?: string; nozzleC?: number }
 
-export const FLUSH_BETWEEN_TOOLS_MM3 = 84;
 export const FLUSH_UNLOAD_LOAD_MM3 = 140;
 
 const mm = (v: number) => (Number.isInteger(v) ? String(v) : String(v));
 
-export function multiToolOverrides(baseFilamentDiameterMm: number, slots: SlotMaterial[], fallbackNozzleC = 210): Record<string, string> {
+export function multiToolOverrides(baseFilamentDiameterMm: number, slots: SlotMaterial[], fallbackNozzleC = 210, flush?: FlushSetup): Record<string, string> {
   if (slots.length === 0) throw new Error('At least one tool slot is required.');
   const n = slots.length;
   const o: Record<string, string> = {};
@@ -22,7 +22,8 @@ export function multiToolOverrides(baseFilamentDiameterMm: number, slots: SlotMa
   o.filament_type = slots.map((s) => s.type || 'PLA').join(';');
   o.nozzle_temperature = slots.map((s) => String(s.nozzleC ?? fallbackNozzleC)).join(',');
   o.nozzle_temperature_initial_layer = slots.map((s) => String(s.nozzleC ?? fallbackNozzleC)).join(',');
-  o.flush_volumes_matrix = Array.from({ length: n * n }, (_, i) => (Math.floor(i / n) === i % n ? '0' : String(FLUSH_BETWEEN_TOOLS_MM3))).join(',');
+  // Worked out from the slot colours as the printer's own slicer does (flush.ts).
+  o.flush_volumes_matrix = flushMatrix(slots.map((s) => s.colorHex || '#FFFFFF'), flush?.minimum, flush?.support, flush?.method, flush?.dataset, flush?.printer).join(',');
   o.flush_volumes_vector = Array.from({ length: n * 2 }, () => String(FLUSH_UNLOAD_LOAD_MM3)).join(',');
   return o;
 }

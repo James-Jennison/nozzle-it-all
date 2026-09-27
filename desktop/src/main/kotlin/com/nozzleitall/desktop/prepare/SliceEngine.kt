@@ -1,10 +1,13 @@
 package com.nozzleitall.desktop.prepare
 
+import net.jamesjennison.klippercompanion.FlushVolumes
 import com.nozzleitall.project.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /** Guided print settings. Each maps to explicit engine keys so the same choice slices the same way on every platform. */
 enum class QualityPreset(val label: String, val detail: String, val overrides: Map<String, String>) {
@@ -24,6 +27,8 @@ data class SliceRequest(
     val extraOverrides: Map<String, String> = emptyMap(),
     /** Whether [preset]'s layer height applies (false when the printer's own process preset is in use). */
     val applyPreset: Boolean = true,
+    /** The user's own flushing-volume matrix over every material slot (row = from), or null to work it out from the colours. */
+    val flushMatrix: List<Int>? = null,
     /** PrusaSlicer ColorMix virtual extruders (its sidecar JSON), or null. */
     val virtualExtruders: String? = null,
 )
@@ -92,7 +97,6 @@ class SliceEngine(private val binary: File, private val workDir: File) {
         fun locateEngine(env: Map<String, String> = System.getenv()): File? = locateNative(env)
 
 
-        const val FLUSH_BETWEEN_TOOLS_MM3 = 84
         const val FLUSH_UNLOAD_LOAD_MM3 = 140
 
         /**
@@ -100,7 +104,7 @@ class SliceEngine(private val binary: File, private val workDir: File) {
          * and Android's MultiToolFilamentConfig; schemas/fixtures/multitool.json pins the expected output.
          */
         fun multiToolOverrides(baseFilamentDiameterMm: Double, slots: List<ProjectManifest.MaterialSlot>, nozzleC: (ProjectManifest.MaterialSlot) -> Int? = { null },
-                               fallbackNozzleC: Int = 210): Map<String, String> {
+                               fallbackNozzleC: Int = 210, flush: FlushVolumes.Setup = FlushVolumes.Setup()): Map<String, String> {
             require(slots.isNotEmpty()) { "At least one tool slot is required." }
             val n = slots.size
             fun num(v: Double) = if (v == Math.floor(v) && !v.isInfinite()) v.toLong().toString() else v.toString()
@@ -110,9 +114,18 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 "filament_type" to slots.joinToString(";") { it.type?.takeIf(String::isNotBlank) ?: "PLA" },
                 "nozzle_temperature" to slots.joinToString(",") { (nozzleC(it) ?: fallbackNozzleC).toString() },
                 "nozzle_temperature_initial_layer" to slots.joinToString(",") { (nozzleC(it) ?: fallbackNozzleC).toString() },
-                "flush_volumes_matrix" to (0 until n * n).joinToString(",") { i -> if (i / n == i % n) "0" else FLUSH_BETWEEN_TOOLS_MM3.toString() },
+                // Worked out from the slot colours as the printer's own slicer does (FlushVolumes); a matrix the user edited overrides it.
+                "flush_volumes_matrix" to flush.matrix(slots.map { it.colorHex?.takeIf(String::isNotBlank) ?: "#FFFFFF" }).joinToString(","),
                 "flush_volumes_vector" to (0 until n * 2).joinToString(",") { FLUSH_UNLOAD_LOAD_MM3.toString() },
             )
+        }
+
+        /** The flushing-volume calculation for this printer and these slots' filament profiles (FlushVolumes.setup). */
+        fun flushSetup(profileDir: File, slots: List<ProjectManifest.MaterialSlot>): FlushVolumes.Setup {
+            fun json(f: File) = runCatching { JSONObject(f.readText()) }.getOrNull()
+            val base = json(File(profileDir, "filament.json"))
+            val filaments = slots.map { s -> s.filamentProfile?.let { FilamentLibrary.profileJson(FilamentLibrary.keyForDir(profileDir.name), it) } ?: base }
+            return FlushVolumes.setup(json(File(profileDir, "machine.json")), filaments)
         }
 
         /** The printable area's width and depth from machine.json, as the Web App's bedOf() reads it. */
@@ -161,8 +174,13 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             if (req.applyPreset) overrides += req.preset.overrides
             overrides["sparse_infill_density"] = "${req.infillPercent.coerceIn(0, 100)}%"
             overrides["enable_support"] = if (req.supports) "1" else "0"
-            if (slots.size > 1) overrides += multiToolOverrides(1.75, slots, ::slotNozzleC)
+            if (slots.size > 1) {
+                overrides += multiToolOverrides(1.75, slots, ::slotNozzleC, flush = flushSetup(req.profileDir, slots))
+            }
             overrides += req.extraOverrides
+            // The user's matrix covers every slot; the engine gets the slots in use (the first n), so its top-left n x n.
+            req.flushMatrix?.let { m -> val all = sqrt(m.size.toDouble()).roundToInt(); val n = slots.size
+                if (n > 1 && all * all == m.size && n <= all) overrides["flush_volumes_matrix"] = (0 until n * n).joinToString(",") { i -> m[(i / n) * all + i % n].toString() } }
             overrides.forEach { (k, v) ->
                 require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
                 lines += "set\t$k\t$v"

@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
+import net.jamesjennison.klippercompanion.FlushVolumes
 import androidx.compose.runtime.*
 import com.nozzleitall.desktop.AppState
 import com.nozzleitall.desktop.PrinterEntry
@@ -11,6 +12,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import kotlin.math.*
+
+/** The engine key the user's own flushing-volume matrix is kept under in the project's settings. */
+private const val FLUSH_KEY = "flush_volumes_matrix"
 
 /**
  * An object on the plate. [slot] is what it prints with where it isn't painted. A painted model keeps the file's own
@@ -194,6 +198,43 @@ class PrepareState(private val app: AppState) {
     /** The engine's profile folder: the family's machine and process when the printer has a library, else its pack. */
     fun profileDir(): File = library()?.let { lib -> lib.materialize(app.paths.cache, lib.machineFor(nozzle), processId) }
         ?: ProfileCatalog.materialize(app.paths.cache, profileId)
+
+    // --- Flushing volumes (Snapmaker Orca's Flushing volumes dialog, FlushVolumes). Worked out from the slot colours unless the
+    // user edited the matrix; an edited matrix is kept with the project's settings, and a slot whose colour changes later is
+    // worked out again (its row and column), as upstream does.
+    private var flushColours: List<String>? = null
+
+    private fun slotColours() = materials().map { it.colorHex?.takeIf(String::isNotBlank) ?: "#FFFFFF" }
+    fun flushSetup() = SliceEngine.flushSetup(profileDir(), materials())
+
+    fun autoFlush(): List<Int> = flushSetup().matrix(slotColours())
+
+    /** The user's matrix (row = from slot, column = to), or null when it is worked out from the colours. */
+    fun editedFlush(): List<Int>? {
+        val colours = slotColours(); val n = colours.size
+        val saved = overrides[FLUSH_KEY]?.split(',')?.mapNotNull { it.trim().toDoubleOrNull()?.toInt() }?.takeIf { it.size == n * n } ?: return null
+        val before = flushColours ?: return saved
+        val changedSlots = colours.indices.filter { before.getOrNull(it) != colours[it] }
+        if (changedSlots.isEmpty()) return saved
+        val setup = flushSetup()
+        return changedSlots.fold(saved) { m, i -> setup.recalcSlot(m, i, colours) }
+    }
+
+    fun flushMatrix(): List<Int> = editedFlush() ?: autoFlush()
+
+    fun setFlush(matrix: List<Int>?) {
+        if (matrix == null) overrides.remove(FLUSH_KEY) else overrides[FLUSH_KEY] = matrix.joinToString(",")
+        flushColours = if (matrix == null) null else slotColours()
+        changed()
+    }
+
+    /** The engine multiplies every flushing volume by this (Snapmaker Orca: 0-3). */
+    fun flushMultiplier(): Float = (overrides["flush_multiplier"] ?: runCatching { JSONObject(File(profileDir(), "process.json").readText()).optString("flush_multiplier") }.getOrNull())
+        ?.toFloatOrNull() ?: FlushVolumes.ENGINE_DEFAULT_MULTIPLIER
+
+    fun setFlushMultiplier(v: Float) {
+        overrides["flush_multiplier"] = "%.2f".format(java.util.Locale.ROOT, v.coerceIn(FlushVolumes.MIN_MULTIPLIER, FlushVolumes.MAX_MULTIPLIER)); changed()
+    }
 
     // --- Colour mixing (Snapmaker Full Spectrum). The mixes are Snapmaker's own mixed_filament_definitions string; the
     // engine (Snapmaker Orca's MixedFilamentManager) turns it into rows with virtual slot numbers after the physical ones.
@@ -492,7 +533,8 @@ class PrepareState(private val app: AppState) {
         if (items.isEmpty()) { slice = SliceState.Failed("Add a model to the plate first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
         val e = SliceEngine(bin, app.paths.slices).also { engine = it }
-        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, extraOverrides = printerOverrides() + overrides.toMap() +
+        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, flushMatrix = editedFlush(),
+            extraOverrides = printerOverrides() + (overrides.toMap() - FLUSH_KEY) +
             (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
             virtualExtruders = colorMix.takeIf { it.isNotEmpty() }?.let { PrusaColorMix.sidecar(materials().map { m -> m.colorHex ?: "#FFFFFF" }, it.toList()) })
         slice = SliceState.Running(0f, "Starting")

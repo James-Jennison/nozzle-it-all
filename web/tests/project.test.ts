@@ -5,6 +5,7 @@ import { readProject, writeProject, Project3mf, readEntries } from '../src/proje
 import { newManifest, IncompatibleProjectError, ProjectFormatError, ARCHIVE_PATH, serializeManifest } from '../src/project/manifest';
 import { readStl, writeStl } from '../src/project/mesh';
 import { multiToolOverrides, GUIDED_PRESETS, gcodeStats } from '../src/project/slicing';
+import { flushVolume, flushMatrix, methodFor, minimumFlushVolumes, MIN_FROM_SUPPORT, TO_SUPPORT } from '../src/project/flush';
 
 const FIX = new URL('../../schemas/fixtures/', import.meta.url);
 
@@ -106,5 +107,33 @@ describe('cross-platform fixtures', () => {
     expect(s.seconds).toBe(947); expect(s.grams).toBeCloseTo(4.44); expect(s.layers).toBe(100);
     // A total, when present, wins over the per-filament sum.
     expect(gcodeStats('; filament used [g] = 3.70, 3.66\n; total filament used [g] = 7.36\n').grams).toBe(7.36);
+  });
+});
+
+describe("flushing volumes (each printer's own slicer)", () => {
+  const g = JSON.parse(readFileSync(new URL('flush-volumes.json', FIX), 'utf8'));
+  it('matches Snapmaker Orca on every golden pair', () => {
+    const wrong = (g.pairs as [string, string, number, number][]).filter(([a, b, m, v]) => flushVolume(a, b, m) !== v);
+    expect(wrong.slice(0, 5)).toEqual([]);
+    expect(g.pairs.length).toBeGreaterThan(6000);
+  });
+  it('matches OrcaSlicer (measured flushes) and ElegooSlicer (per-printer overrides) on every golden pair', () => {
+    for (const [key, method] of [['orca', 'orca'], ['elegoo', 'elegoo']] as const) {
+      const rows = g[key] as [string, string, number, number, string, number][];
+      const wrong = rows.filter(([a, b, m, ds, printer, v]) => flushVolume(a, b, m, method, ds, printer || undefined) !== v);
+      expect({ key, wrong: wrong.slice(0, 5) }).toEqual({ key, wrong: [] });
+    }
+    expect(flushVolume('#000000', '#FFFFFF', 107, 'elegoo', 0, 'Elegoo Centauri Carbon 2 0.4 nozzle')).toBe(900);
+  });
+  it('picks the method by printer and follows the support filament rules', () => {
+    expect(['Snapmaker U1', 'Elegoo Centauri Carbon 2', 'Bambu Lab P1S'].map((m) => methodFor({ printer_model: m }))).toEqual(['snapmaker', 'elegoo', 'orca']);
+    for (const method of ['snapmaker', 'orca'] as const) {
+      const m = flushMatrix(['#000000', '#FFFFFF', '#FF0000'], [0, 0, 0], [false, false, true], method);
+      expect([m[2], m[5]]).toEqual([TO_SUPPORT, TO_SUPPORT]);
+      expect(Math.min(m[6], m[7])).toBeGreaterThanOrEqual(MIN_FROM_SUPPORT[method]);
+    }
+    const machine = { nozzle_volume: '107', enable_long_retraction_when_cut: '2', long_retractions_when_cut: ['1'], retraction_distances_when_cut: ['18'] };
+    expect(minimumFlushVolumes(machine, [{ filament_long_retractions_when_cut: ['0'] }, { filament_long_retractions_when_cut: ['nil'] }]))
+      .toEqual([107, Math.trunc(107 - Math.PI * 1.75 * 1.75 / 4 * 18)]);
   });
 });

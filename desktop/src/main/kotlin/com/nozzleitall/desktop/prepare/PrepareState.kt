@@ -204,6 +204,29 @@ class PrepareState(private val app: AppState) {
         changed()
     }
 
+    // --- Printer card: bed type and each nozzle's flow (Snapmaker Orca's rules, PrinterSetup).
+    /** The chosen bed type (curr_bed_type), or null for the printer's own default. */
+    var bedType by mutableStateOf<String?>(null)
+    /** Each nozzle's flow type ("standard" / "high_flow"); missing entries are standard. */
+    val nozzleFlows = mutableStateListOf<String>()
+
+    private var machineCache: Pair<String, JSONObject>? = null
+    fun machineJson(): JSONObject = machineCache?.takeIf { it.first == profileId }?.second
+        ?: runCatching { JSONObject(File(profileDir(), "machine.json").readText()) }.getOrDefault(JSONObject()).also { machineCache = profileId to it }
+    fun beds(): PrinterSetup.Beds = PrinterSetup.beds(machineJson())
+    /** The bed type slicing uses: the choice when it's valid for this printer, else the printer's default. */
+    fun effectiveBedType(): String { val b = beds(); return bedType?.takeIf { b.enabled && b.choices.any { c -> c.value == it } } ?: b.default }
+
+    /** Printer settings the card controls, as engine keys: the bed type, and nozzle flows where high flow exists. */
+    fun printerOverrides(): Map<String, String> = buildMap {
+        put("curr_bed_type", effectiveBedType())
+        val m = machineJson()
+        if (PrinterSetup.supportsHighFlow(m)) {
+            val n = PrinterSetup.nozzles(m).size
+            put("nozzle_volume_type", List(n) { nozzleFlows.getOrElse(it) { "standard" } }.joinToString(","))
+        }
+    }
+
     /** Colour-mixing features on offer: the connected printer's own report, else what the chosen profile offers. */
     fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions?.let { com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(it, materials().size) }
         ?: profile?.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools) } ?: emptySet()
@@ -279,6 +302,7 @@ class PrepareState(private val app: AppState) {
     }
 
     fun newProject() {
+        bedType = null; nozzleFlows.clear()
         overrides.clear(); mixDefinitions = ""; mixes.clear(); mixProblem = null; headProfiles.clear(); colorMix.clear()
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         slice = SliceState.Idle; showPreview = false; nextId = 1
@@ -298,7 +322,10 @@ class PrepareState(private val app: AppState) {
             ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" }
             // Everything else the project changed (from any platform) shows up in All settings.
             ov[FullSpectrum.DEFINITIONS_KEY]?.let { mixDefinitions = it }
-            ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && k != FullSpectrum.DEFINITIONS_KEY && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
+            ov["curr_bed_type"]?.let { bedType = it }
+            ov["nozzle_volume_type"]?.let { v -> nozzleFlows.clear(); nozzleFlows.addAll(v.split(',').map { it.trim() }) }
+            ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && k != FullSpectrum.DEFINITIONS_KEY && k != "curr_bed_type" &&
+                k != "nozzle_volume_type" && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
         }
         p.manifest?.printer?.profileId?.takeIf { ProfileCatalog.byId(it) != null }?.let { profileId = it }
         // The project's slots: what a printer doesn't report comes back as saved (colour, material, filament profile).
@@ -410,7 +437,7 @@ class PrepareState(private val app: AppState) {
                     base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(preset.name.lowercase(), mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + preset.overrides + overrides +
-                    (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
+                    (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()) + printerOverrides(),
                     base.settings.unknown))
         }
         // PrusaSlicer's ColorMix sidecar is written from the current virtual extruders (and dropped when there are none).
@@ -433,7 +460,7 @@ class PrepareState(private val app: AppState) {
         if (items.isEmpty()) { slice = SliceState.Failed("Add a model to the plate first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
         val e = SliceEngine(bin, app.paths.slices).also { engine = it }
-        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), extraOverrides = overrides.toMap() +
+        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), extraOverrides = printerOverrides() + overrides.toMap() +
             (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
             virtualExtruders = colorMix.takeIf { it.isNotEmpty() }?.let { PrusaColorMix.sidecar(materials().map { m -> m.colorHex ?: "#FFFFFF" }, it.toList()) })
         slice = SliceState.Running(0f, "Starting")

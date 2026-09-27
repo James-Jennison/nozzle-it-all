@@ -172,6 +172,46 @@ private fun StepPrinter(state: AppState) {
             Txt("${ProfileCatalog.all.size} printer profiles. A profile means Nozzle can slice for that printer; it doesn't mean the printer has been tested.",
                 Nz.type.bodySmall, c.textMuted)
         }
+        PrinterSetupRows(p)
+    }
+}
+
+/**
+ * Bed type and the nozzles, as Snapmaker Orca's printer card shows them: the bed types this printer offers (fixed at its
+ * default when it offers no choice), then one tab per nozzle with its diameter and flow (Standard, or High Flow where the
+ * printer has high-flow nozzles).
+ */
+@Composable
+private fun PrinterSetupRows(p: PrepareState) {
+    val c = Nz.colors
+    val beds = remember(p.profileId) { p.beds() }
+    val machine = remember(p.profileId) { p.machineJson() }
+    val nozzles = remember(p.profileId) { PrinterSetup.nozzles(machine) }
+    val highFlow = remember(p.profileId) { PrinterSetup.supportsHighFlow(machine) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Txt("Bed type", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(72.dp))
+        if (beds.enabled) com.nozzleitall.desktop.settings.DenseSelect("Bed type", beds.choices.map { com.nozzleitall.desktop.settings.Choice(it.value, it.label) },
+            p.effectiveBedType(), Modifier.weight(1f)) { v -> p.bedType = v; p.changed() }
+        else Txt(beds.choices.firstOrNull { it.value == beds.default }?.label ?: beds.default, Nz.type.bodySmall, modifier = Modifier.weight(1f))
+    }
+    var tab by remember(p.profileId) { mutableStateOf(0) }
+    if (nozzles.size > 1) Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        nozzles.indices.forEach { i ->
+            val on = tab == i
+            Txt("Nozzle ${i + 1}", Nz.type.label, if (on) c.accent else c.textMuted, modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                .background(if (on) c.accent.copy(alpha = 0.14f) else Color.Transparent).clickable { tab = i }.padding(horizontal = 8.dp, vertical = 4.dp))
+        }
+    }
+    val i = tab.coerceIn(0, nozzles.lastIndex)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Txt(if (nozzles.size > 1) "Diameter" else "Nozzle", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(72.dp))
+        Txt("${nozzles[i]} mm", Nz.type.bodySmall, modifier = Modifier.weight(1f))
+        Txt("Flow", Nz.type.bodySmall, c.textMuted)
+        if (highFlow) com.nozzleitall.desktop.settings.DenseSelect("Nozzle ${i + 1} flow",
+            listOf(com.nozzleitall.desktop.settings.Choice("standard", "Standard"), com.nozzleitall.desktop.settings.Choice("high_flow", "High Flow")),
+            p.nozzleFlows.getOrElse(i) { "standard" }, Modifier.width(130.dp)) { v ->
+            while (p.nozzleFlows.size <= i) p.nozzleFlows.add("standard"); p.nozzleFlows[i] = v; p.changed() }
+        else Txt("Standard", Nz.type.bodySmall, modifier = Modifier.width(130.dp))
     }
 }
 

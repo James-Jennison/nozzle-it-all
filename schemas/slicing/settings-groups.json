@@ -36,7 +36,10 @@
     "extruder_max_nozzle_count",
     "support_fast_purge_mode",
     "machine_prepare_compensation_time",
-    "default_nozzle_volume_type"
+    "default_nozzle_volume_type",
+    "process_flow_support",
+    "filament_flow_support",
+    "printer_flow_support"
   ],
   "groups": [
     {
@@ -269,7 +272,12 @@
         "preheat_time",
         "preheat_steps",
         "enable_mixed_color_sublayer",
-        "mmu_segmented_region_.*"
+        "mmu_segmented_region_.*",
+        "dithering_local_z_mode",
+        "dithering_local_z_whole_objects",
+        "dithering_local_z_infill",
+        "local_z_wipe_tower_purge_lines",
+        "delta_temperature"
       ]
     },
     {
@@ -311,7 +319,8 @@
         "default_filament_colour",
         "required_nozzle_HRC",
         "pellet_flow_coefficient",
-        "temperature_vitrification"
+        "temperature_vitrification",
+        "filament_is_high_temperature"
       ]
     },
     {
@@ -380,7 +389,9 @@
       "summary": "Loading, unloading, ramming and purging when this material is swapped.",
       "keys": [
         "filament_(loading|unloading|toolchange|cooling|stamping|ramming|multitool|flush|change_length|prime_volume|pre_cooling|minimal_purge|tower_).*",
-        "filament_ironing_.*"
+        "filament_ironing_.*",
+        "filament_flush_temp",
+        "filament_flush_volumetric_speed"
       ]
     },
     {
@@ -485,7 +496,12 @@
         "purge_in_prime_tower",
         "enable_filament_ramming",
         "tool_change_on_wipe_tower",
-        "wait_for_temp_on_wipe_tower"
+        "wait_for_temp_on_wipe_tower",
+        "tool_change_temprature_wait",
+        "z_hop_when_prime",
+        "ramming_line_width_ratio",
+        "enable_change_pressure_when_wiping",
+        "ramming_pressure_advance_value"
       ]
     },
     {

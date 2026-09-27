@@ -22,7 +22,7 @@ class SettingsCatalogTest {
             .map { it.getString("scope") + ":" + it.getString("key") }
         assertTrue("settings with no group: $lost", lost.isEmpty())
         assertEquals("each setting appears once", grouped.size, catalog.groups.sumOf { it.settings.size })
-        assertTrue(catalog.all.size > 700)
+        assertTrue(catalog.all.size > 500) // 567 on the Snapmaker Orca base (engine/snapmaker/ENGINE_PIN.json)
     }
 
     @Test fun everyGroupIsInExactlyOneTabOfItsScope() {
@@ -105,5 +105,16 @@ class SettingsReachTheEngineTest {
         assertTrue("wall loops applied", Regex("; wall_loops = 4\\b").containsMatchIn(g))
         assertTrue("seam applied", g.contains("; seam_position = back"))
         assertTrue("material start G-code emitted verbatim", g.contains("; NOZZLE-MARKER \"quoted\"; semi"))
+    }
+}
+
+/** Printers the desktop engine can't slice yet can't be chosen (engine/snapmaker/unsupported-profiles.json). */
+class UnsupportedProfilesTest {
+    @org.junit.Test fun newestBambuMachinesAreHiddenAndEverythingElseIsListed() {
+        val hidden = setOf("bambu_h2c", "bambu_h2d", "bambu_h2d_pro", "bambu_h2s", "bambu_p2s", "bambu_x2d")
+        assertEquals(hidden, ProfileCatalog.unsupported.keys)
+        assertTrue(ProfileCatalog.all.none { it.id in hidden })
+        assertNotNull(ProfileCatalog.byId("bambu_x1_carbon"))
+        assertEquals(370, ProfileCatalog.all.size)
     }
 }

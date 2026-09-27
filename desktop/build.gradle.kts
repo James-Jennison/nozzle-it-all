@@ -33,6 +33,8 @@ dependencies {
 // One source for printer profiles: the flattened OrcaSlicer profiles Android already bundles (scripts/flatten_orca_profile.py).
 tasks.named<ProcessResources>("processResources") {
  from(rootProject.file("app/src/main/assets/slicer_profiles")) { into("profiles"); exclude("PROVENANCE.md") }
+ // Profiles the desktop engine (Snapmaker Orca base) can't slice yet; the catalog leaves them out.
+ from(rootProject.file("engine/snapmaker/unsupported-profiles.json")) { into("profiles") }
  // Every engine setting (exported from the engine itself) and Nozzle's own grouping of them.
  from(rootProject.file("schemas/slicing")) { into("settings"); include("settings-schema.json", "settings-groups.json") }
 }
@@ -40,9 +42,9 @@ tasks.named<ProcessResources>("processResources") {
 val nozzleVersion = providers.gradleProperty("nozzleDesktopVersion").orElse("0.1.0")
 
 // The native slicing engine (engine/native: the same patched OrcaSlicer source and shared bridge as Android and the Web
-// App). -PnozzleEngine=/path/to/nozzle-engine; defaults to engine/native/scripts/build_engine.sh's output. When the file
+// App). -PnozzleEngine=/path/to/nozzle-engine; defaults to engine/native/scripts/build_engine_snapmaker.sh's output. When the file
 // exists it is bundled into the Linux distribution's app resources, where SliceEngine.locateNative() looks first.
-val nozzleEngine = providers.gradleProperty("nozzleEngine").orElse("/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine")
+val nozzleEngine = providers.gradleProperty("nozzleEngine").orElse("/mnt/faststorage/build-work/nozzle-native-sm/dist/nozzle-engine")
 val engineResources = layout.buildDirectory.dir("engine-resources")
 val prepareEngineResources = tasks.register<Sync>("prepareEngineResources") {
  from(nozzleEngine.map { path -> files(path).filter { it.isFile } }) {

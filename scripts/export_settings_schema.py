@@ -5,10 +5,11 @@ committed file differs from the engine's output."""
 import json, os, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'schemas/slicing/settings-schema.json')
-engine = os.environ.get('NOZZLE_ENGINE', '/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine')
+engine = os.environ.get('NOZZLE_ENGINE', '/mnt/faststorage/build-work/nozzle-native-sm/dist/nozzle-engine')
 raw = json.loads(subprocess.run([engine, '--schema'], check=True, capture_output=True, text=True).stdout)
-pin = json.load(open(os.path.join(ROOT, 'engine/ENGINE_PIN.json')))
-raw['source'] = {'engine': 'libslic3r (OrcaSlicer)', 'commit': pin['upstream']['commit'], 'licence': 'AGPL-3.0'}
+# The desktop engine is Snapmaker Orca's libslic3r plus Nozzle's patch (engine/snapmaker/ENGINE_PIN.json).
+pin = json.load(open(os.path.join(ROOT, 'engine/snapmaker/ENGINE_PIN.json')))
+raw['source'] = {'engine': 'libslic3r (Snapmaker Orca)', 'commit': pin['base']['commit'], 'patch_sha256': pin['patch']['sha256'], 'licence': 'AGPL-3.0'}
 text = json.dumps(raw, indent=1, ensure_ascii=False) + '\n'
 if '--check' in sys.argv:
     same = os.path.exists(OUT) and open(OUT, encoding='utf8').read() == text

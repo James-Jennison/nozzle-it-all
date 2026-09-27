@@ -29,7 +29,7 @@ The survey behind this list, with sources and engine support per feature, is
 
 | Area | Features | Status |
 |---|---|---|
-| Settings | Every engine setting, searchable, in Nozzle's own groups, generated from the engine's own metadata (`nozzle-engine --schema` → schemas/slicing/settings-schema.json, grouped by settings-groups.json) | **Done**: All settings panel, 626 settings in 28 groups, saved per project, proven to reach the engine |
+| Settings | Every engine setting, searchable, in Nozzle's own groups, generated from the engine's own metadata (`nozzle-engine --schema` → schemas/slicing/settings-schema.json, grouped by settings-groups.json) | **Done**: every setting in dense tabs (567 on the Snapmaker Orca engine base, in 28 groups), saved per project, proven to reach the engine |
 | Engine input | Whole-project slice request (the 3MF with parts, per-object settings, modifiers, paint, height ranges, layer-height profile) | Next: everything below depends on it |
 | Objects | Per-object and per-part settings, modifiers, negative volumes, multi-part objects, split | Planned |
 | Plate | Multi-plate, auto-orient / lay flat, engine arrange, mesh repair report, measure, cut, text/SVG emboss | Planned |

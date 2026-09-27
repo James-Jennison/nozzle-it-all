@@ -1,0 +1,284 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index fc74d22..f4824b3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -136,7 +136,8 @@ set(OPENVDB_FIND_MODULE_PATH "" CACHE PATH "Path to OpenVDB installation's find
+ 
+ set(SLIC3R_GTK "2" CACHE STRING "GTK version to use with wxWidgets on Linux")
+ 
+-set(IS_CROSS_COMPILE FALSE)
++# Nozzle headless engine: seeded from CMake's own cross-compiling flag (true for Android/NDK and Emscripten builds).
++set(IS_CROSS_COMPILE ${CMAKE_CROSSCOMPILING})
+ 
+ option (COLORED_OUTPUT "Always produce ANSI-colored output (GNU/Clang only)." OFF)
+ if (${COLORED_OUTPUT})
+@@ -571,7 +572,11 @@ find_package(TBB REQUIRED)
+ # add_definitions(-DTBB_USE_CAPTURED_EXCEPTION=0)
+ 
+ find_package(OpenSSL REQUIRED)
+-find_package(CURL REQUIRED)
++# Nozzle headless engine: CURL is used only by the GUI and ORCA_TOOLS, never by libslic3r. Headless builds (Android,
++# browser, desktop CLI) get an empty libcurl target so nothing else changes.
++if (SLIC3R_GUI OR ORCA_TOOLS)
++    find_package(CURL REQUIRED)
++endif ()
+ if (SLIC3R_SENTRY)
+     find_package(Sentry QUIET)
+     if (NOT Sentry_FOUND)
+@@ -584,7 +589,9 @@ find_package(Freetype REQUIRED)
+ 
+ 
+ add_library(libcurl INTERFACE)
+-target_link_libraries(libcurl INTERFACE CURL::libcurl)
++if (TARGET CURL::libcurl)
++    target_link_libraries(libcurl INTERFACE CURL::libcurl)
++endif ()
+ 
+ find_package(ZLIB REQUIRED)
+ target_link_libraries(libcurl INTERFACE ZLIB::ZLIB)
+@@ -673,6 +680,8 @@ endif ()
+ find_package(PNG REQUIRED)
+ 
+ set(OpenGL_GL_PREFERENCE "LEGACY")
++# Nozzle headless engine: OpenGL, GLEW and glfw are GUI-only (libslic3r never uses them).
++if (SLIC3R_GUI)
+ if (APPLE)
+     # AGL was removed from the macOS 26 SDK. CMake 3.28 FindOpenGL still treats AGL as GLU.
+     set(OPENGL_glu_LIBRARY "" CACHE FILEPATH "Do not link AGL (removed in macOS 26 SDK)")
+@@ -690,6 +699,7 @@ endif()
+ find_package(GLEW REQUIRED)
+ 
+ find_package(glfw3 REQUIRED)
++endif () # SLIC3R_GUI (OpenGL, GLEW, glfw)
+ 
+ # Find the Cereal serialization library
+ find_package(cereal REQUIRED)
+@@ -747,7 +757,10 @@ find_package(NLopt 1.4 REQUIRED)
+ 
+ if(SLIC3R_STATIC)
+     set(OPENVDB_USE_STATIC_LIBS ON)
+-    set(USE_BLOSC TRUE)
++    # Nozzle headless engine: the Android and browser OpenVDB builds skip Blosc.
++    if (NOT ANDROID AND NOT EMSCRIPTEN)
++        set(USE_BLOSC TRUE)
++    endif ()
+ endif ()
+ 
+ find_package(OpenVDB 5.0 COMPONENTS openvdb)
+@@ -900,6 +913,10 @@ else()
+     add_subdirectory(deps_src)
+ endif()
+ add_subdirectory(src)
++# Nozzle headless engine: the shared bridge (Android JNI, desktop CLI, browser) builds against the libslic3r target here.
++if (DEFINED ANDROID_JNI_BRIDGE_DIR)
++    add_subdirectory("${ANDROID_JNI_BRIDGE_DIR}" "${CMAKE_BINARY_DIR}/android_jni")
++endif ()
+ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Snapmaker_Orca_app_gui)
+ 
+ add_dependencies(gettext_make_pot hintsToPot)
+diff --git a/src/libslic3r/CMakeLists.txt b/src/libslic3r/CMakeLists.txt
+index 1421844..72f7a4f 100644
+--- a/src/libslic3r/CMakeLists.txt
++++ b/src/libslic3r/CMakeLists.txt
+@@ -602,7 +602,7 @@ else()
+     # Link freetype for OCCT dependency (CAD operations need font rendering)
+     target_link_libraries(libslic3r PRIVATE ${FREETYPE_LIBRARIES})
+     target_link_libraries(libslic3r PRIVATE OpenSSL::Crypto)
+-    if (NOT APPLE)
++    if (NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
+         target_link_libraries(libslic3r PRIVATE fontconfig)
+     endif()
+ endif()
+diff --git a/src/libslic3r/Config.hpp b/src/libslic3r/Config.hpp
+index cc2d686..879325f 100644
+--- a/src/libslic3r/Config.hpp
++++ b/src/libslic3r/Config.hpp
+@@ -1663,7 +1663,8 @@ class ConfigOptionEnumsGenericTempl : public ConfigOptionInts
+ public:
+     ConfigOptionEnumsGenericTempl(const t_config_enum_values *keys_map = nullptr) : keys_map(keys_map) {}
+     explicit ConfigOptionEnumsGenericTempl(const t_config_enum_values *keys_map, size_t size, int value) : ConfigOptionInts(size, value), keys_map(keys_map) {}
+-    explicit ConfigOptionEnumsGenericTempl(std::initializer_list<int> il) : ConfigOptionInts(std::move(il)), keys_map(keys_map) {}
++    // Nozzle (from upstream OrcaSlicer): no self-initialisation of keys_map, which read an indeterminate pointer.
++    explicit ConfigOptionEnumsGenericTempl(std::initializer_list<int> il) : ConfigOptionInts(std::move(il)) {}
+     explicit ConfigOptionEnumsGenericTempl(const std::vector<int> &vec) : ConfigOptionInts(vec) {}
+     explicit ConfigOptionEnumsGenericTempl(std::vector<int> &&vec) : ConfigOptionInts(std::move(vec)) {}
+ 
+@@ -1687,7 +1688,12 @@ public:
+         if (rhs->type() != this->type())
+             throw ConfigurationError("ConfigOptionEnumGeneric: Assigning an incompatible type");
+         // rhs could be of the following type: ConfigOptionEnumsGeneric
+-        this->values = dynamic_cast<const ConfigOptionEnumsGenericTempl *>(rhs)->values;
++        auto rhs_enums = dynamic_cast<const ConfigOptionEnumsGenericTempl *>(rhs);
++        this->values = rhs_enums->values;
++        // Nozzle (from upstream OrcaSlicer): options embedded in a StaticPrintConfig are constructed without a keys_map;
++        // adopt the source's so a later serialize() emits names instead of empty tokens.
++        if (this->keys_map == nullptr)
++            this->keys_map = rhs_enums->keys_map;
+     }
+ 
+     std::string serialize() const override
+@@ -1746,7 +1752,7 @@ private:
+             else
+                 throw ConfigurationError("Serializing NaN");
+         }
+-        else {
++        else if (this->keys_map != nullptr) { // Nozzle (from upstream OrcaSlicer)
+             for (const auto& kvp : *this->keys_map)
+                 if (kvp.second == v)
+                     ss << kvp.first;
+diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
+index cebb7f5..70ecbd0 100644
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -85,6 +85,23 @@ using namespace std::literals::string_view_literals;
+ 
+ namespace Slic3r {
+ 
++// Nozzle (from upstream OrcaSlicer): flush_volumetric_speeds / flush_temperatures, one per filament. A 0 (or unset)
++// flush speed falls back to the filament's max volumetric speed, and a 0 flush temperature to the top of its
++// recommended nozzle range. Upstream's fast-purge temperature (prime_volume_mode) isn't in this engine.
++static void nozzle_flush_values(const PrintConfig& c, std::vector<double>& speeds, std::vector<int>& temps)
++{
++    const size_t n = c.filament_max_volumetric_speed.values.size();
++    speeds.assign(n, 0.); temps.assign(n, 0);
++    for (size_t i = 0; i < n; ++i) {
++        double s = i < c.filament_flush_volumetric_speed.values.size() ? c.filament_flush_volumetric_speed.values[i] : 0.;
++        if (std::isnan(s) || s <= 0.) s = c.filament_max_volumetric_speed.get_at(i);
++        int t = i < c.filament_flush_temp.values.size() ? c.filament_flush_temp.values[i] : 0;
++        if (t == ConfigOptionIntsNullable::nil_value() || t <= 0) t = c.nozzle_temperature_range_high.get_at(i);
++        speeds[i] = s; temps[i] = t;
++    }
++}
++
++
+ //! macro used to mark string used at localization,
+ //! return same string
+ #define L(s) (s)
+@@ -576,6 +593,12 @@ std::string WipeTowerIntegration::append_tcr(GCode& gcodegen, const WipeTower::T
+             config.set_key_value("travel_point_3_y", new ConfigOptionFloat(float(travel_point_3.y())));
+ 
+             config.set_key_value("flush_length", new ConfigOptionFloat(purge_length));
++            { // Nozzle (from upstream OrcaSlicer)
++                std::vector<double> flush_speeds; std::vector<int> flush_temps;
++                nozzle_flush_values(gcodegen.config(), flush_speeds, flush_temps);
++                config.set_key_value("flush_volumetric_speeds", new ConfigOptionFloats(flush_speeds));
++                config.set_key_value("flush_temperatures", new ConfigOptionInts(flush_temps));
++            }
+ 
+             int   flush_count = std::min(g_max_flush_count, (int) std::round(purge_volume / g_purge_volume_one_time));
+             float flush_unit  = purge_length / flush_count;
+@@ -2501,6 +2524,8 @@ void GCode::_do_export(Print& print, GCodeOutputStream& file, ThumbnailsGenerato
+     // BBS
+     this->placeholder_parser().set("initial_no_support_tool", initial_non_support_extruder_id);
+     this->placeholder_parser().set("initial_no_support_extruder", initial_non_support_extruder_id);
++    // Nozzle (from upstream OrcaSlicer): the filament-named spelling newer Bambu start G-code uses.
++    this->placeholder_parser().set("initial_no_support_filament_id", (int) initial_non_support_extruder_id);
+     this->placeholder_parser().set("current_extruder", initial_extruder_id);
+     // Orca: set the key for compatibilty
+     this->placeholder_parser().set("retraction_distance_when_cut", m_config.retraction_distances_when_cut.get_at(initial_extruder_id));
+@@ -2602,6 +2627,14 @@ void GCode::_do_export(Print& print, GCodeOutputStream& file, ThumbnailsGenerato
+             this->placeholder_parser().set("in_head_wrap_detect_zone", !intersection_pl(project_polys, {head_wrap_detect_zone}).empty());
+         }
+ 
++        { // Nozzle (from upstream OrcaSlicer): the height of the tallest object, rounded up.
++            coordf_t max_print_z = 0;
++            for (auto& obj : print.objects())
++                if (!obj->layers().empty())
++                    max_print_z = std::max(max_print_z, (*std::max_element(obj->layers().begin(), obj->layers().end(), [](Layer* a, Layer* b) { return a->print_z < b->print_z; }))->print_z);
++            this->placeholder_parser().set("max_print_z", new ConfigOptionInt(std::ceil(max_print_z)));
++        }
++
+         BoundingBoxf mesh_bbox(m_config.bed_mesh_min, m_config.bed_mesh_max);
+         auto         mesh_margin = m_config.adaptive_bed_mesh_margin.value;
+         mesh_bbox.min            = mesh_bbox.min.cwiseMax((bbox.min.array() - mesh_margin).matrix());
+@@ -2672,6 +2705,17 @@ void GCode::_do_export(Print& print, GCodeOutputStream& file, ThumbnailsGenerato
+         this->placeholder_parser().set("bed_temperature_initial_layer_vector", new ConfigOptionString());
+         this->placeholder_parser().set("chamber_temperature", new ConfigOptionInts(m_config.chamber_temperature));
+         this->placeholder_parser().set("overall_chamber_temperature", new ConfigOptionInt(max_chamber_temp));
++        { // Nozzle (from upstream OrcaSlicer): variables newer Bambu start G-code reads.
++            int min_temperature_vitrification = std::numeric_limits<int>::max();
++            for (const unsigned int extruder_id : print.extruders())
++                min_temperature_vitrification = std::min(min_temperature_vitrification, m_config.temperature_vitrification.get_at(extruder_id));
++            if (min_temperature_vitrification == std::numeric_limits<int>::max()) min_temperature_vitrification = 0;
++            this->placeholder_parser().set("min_vitrification_temperature", new ConfigOptionInt(min_temperature_vitrification));
++            std::vector<double> flush_speeds; std::vector<int> flush_temps;
++            nozzle_flush_values(m_config, flush_speeds, flush_temps);
++            this->placeholder_parser().set("flush_volumetric_speeds", new ConfigOptionFloats(flush_speeds));
++            this->placeholder_parser().set("flush_temperatures", new ConfigOptionInts(flush_temps));
++        }
+ 
+         // SoftFever: support variables `first_layer_temperature` and `first_layer_bed_temperature`
+         this->placeholder_parser().set("first_layer_bed_temperature", new ConfigOptionInts(*first_bed_temp_opt));
+@@ -8732,6 +8776,12 @@ std::string GCode::set_extruder(unsigned int extruder_id, double print_z, bool b
+     dyn_config.set_key_value("travel_point_3_y", new ConfigOptionFloat(float(travel_point_3.y())));
+ 
+     dyn_config.set_key_value("flush_length", new ConfigOptionFloat(wipe_length));
++    { // Nozzle (from upstream OrcaSlicer)
++        std::vector<double> flush_speeds; std::vector<int> flush_temps;
++        nozzle_flush_values(m_config, flush_speeds, flush_temps);
++        dyn_config.set_key_value("flush_volumetric_speeds", new ConfigOptionFloats(flush_speeds));
++        dyn_config.set_key_value("flush_temperatures", new ConfigOptionInts(flush_temps));
++    }
+ 
+     int   flush_count = std::min(g_max_flush_count, (int) std::round(wipe_volume / g_purge_volume_one_time));
+     float flush_unit  = wipe_length / flush_count;
+diff --git a/src/libslic3r/Preset.cpp b/src/libslic3r/Preset.cpp
+index 53f1f45..70a91ee 100644
+--- a/src/libslic3r/Preset.cpp
++++ b/src/libslic3r/Preset.cpp
+@@ -992,7 +992,7 @@ static std::vector<std::string> s_Preset_print_options {
+ 
+ static std::vector<std::string> s_Preset_filament_options {
+     /*"filament_colour", */ "default_filament_colour","required_nozzle_HRC","filament_diameter", "pellet_flow_coefficient", "filament_type", "filament_soluble", "filament_is_support",
+-    "filament_max_volumetric_speed",
++    "filament_max_volumetric_speed", "filament_flush_volumetric_speed", "filament_flush_temp",
+     "filament_flow_ratio", "filament_density", "filament_cost", "filament_minimal_purge_on_wipe_tower",
+     "nozzle_temperature", "nozzle_temperature_initial_layer",
+     // BBS
+diff --git a/src/libslic3r/PrintConfig.cpp b/src/libslic3r/PrintConfig.cpp
+index 794761e..70f445d 100644
+--- a/src/libslic3r/PrintConfig.cpp
++++ b/src/libslic3r/PrintConfig.cpp
+@@ -2116,6 +2116,28 @@ void PrintConfigDef::init_fff_params()
+     def->mode    = comDevelop;
+     def->set_default_value(new ConfigOptionInts{0});
+ 
++    // Nozzle (from upstream OrcaSlicer): per-filament flush temperature and volumetric speed, read by newer Bambu
++    // printer G-code through flush_temperatures / flush_volumetric_speeds (GCode.cpp).
++    def = this->add("filament_flush_temp", coInts);
++    def->label = L("Flush temperature");
++    def->tooltip = L("Temperature when flushing filament. 0 indicates the upper bound of the recommended nozzle temperature range.");
++    def->mode = comAdvanced;
++    def->nullable = true;
++    def->min = 0;
++    def->max = max_temp;
++    def->sidetext = L(u8"\u2103" /* °C */);
++    def->set_default_value(new ConfigOptionIntsNullable{0});
++
++    def = this->add("filament_flush_volumetric_speed", coFloats);
++    def->label = L("Flush volumetric speed");
++    def->tooltip = L("Volumetric speed when flushing filament. 0 indicates the max volumetric speed.");
++    def->mode = comAdvanced;
++    def->nullable = true;
++    def->min = 0;
++    def->max = 200;
++    def->sidetext = L(u8"mm³/s");
++    def->set_default_value(new ConfigOptionFloatsNullable{ 0 });
++
+     def = this->add("filament_max_volumetric_speed", coFloats);
+     def->label = L("Max volumetric speed");
+     def->tooltip = L("This setting stands for how much volume of filament can be melted and extruded per second. "
+diff --git a/src/libslic3r/PrintConfig.hpp b/src/libslic3r/PrintConfig.hpp
+index 889a56b..0f2f1fc 100644
+--- a/src/libslic3r/PrintConfig.hpp
++++ b/src/libslic3r/PrintConfig.hpp
+@@ -1235,6 +1235,9 @@ PRINT_CONFIG_CLASS_DEFINE(
+     ((ConfigOptionInts,                temperature_vitrification))  //BBS
+     ((ConfigOptionBools,               filament_is_high_temperature))
+     ((ConfigOptionFloats,              filament_max_volumetric_speed))
++    // Nozzle (from upstream OrcaSlicer)
++    ((ConfigOptionFloatsNullable,      filament_flush_volumetric_speed))
++    ((ConfigOptionIntsNullable,        filament_flush_temp))
+     ((ConfigOptionInts,                required_nozzle_HRC))
+     // BBS
+     ((ConfigOptionBool,                scan_first_layer))

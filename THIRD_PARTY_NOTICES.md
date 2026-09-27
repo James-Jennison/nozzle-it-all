@@ -68,6 +68,15 @@ of the Bespok3d Organisation, which is not a legal entity; copyright is held by
 its individual authors. This app is not affiliated with or endorsed by
 Bespok3d.
 
+## Snapmaker Orca (desktop slicing engine)
+
+Since 2026-09-27 the desktop slicing engine (`nozzle-engine`, shipped with Nozzle It All for Linux) is built from
+Snapmaker Orca (github.com/Snapmaker/OrcaSlicer, a fork of OrcaSlicer, AGPL-3.0) at commit
+`cbf7bbb0b323b76a9a6dbc203d94ae6c9e8b2294`, with Nozzle's patch `engine/snapmaker/nozzle-engine.patch` (headless
+build, fixes ported from upstream OrcaSlicer, and upstream's per-filament flush settings). The pin is
+`engine/snapmaker/ENGINE_PIN.json`; `engine/native/scripts/build_engine_snapmaker.sh` rebuilds it from that commit.
+Android and the Web App still use the upstream OrcaSlicer engine described below until they move too.
+
 ## OrcaSlicer (on-device slicing, WO-13, in progress)
 
 The on-device slicing engine (not yet feature-complete — see

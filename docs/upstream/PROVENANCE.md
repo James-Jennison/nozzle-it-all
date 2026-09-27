@@ -89,3 +89,33 @@ interchange).
 - **Known divergence:** the wrap-round and not adopting the file's colours, above (physical slots can't be added).
 - **Touches:** shared UI, PAXX.
 
+## P-0007 — the shared engine moves onto Snapmaker Orca (desktop first)
+
+- **Upstream:** Snapmaker Orca `cbf7bbb0b3` (github.com/Snapmaker/OrcaSlicer), with fixes and features ported from
+  upstream OrcaSlicer `824b216f` (the previous engine pin). AGPL-3.0.
+- **Decision:** owner, 2026-09-27: move the shared engine onto Snapmaker Orca's libslic3r so Full Spectrum mixing is
+  exactly Snapmaker's (its mixing is ~14k lines on an older OrcaSlicer base and can't be ported as a patch).
+- **Imported:** Snapmaker Orca's libslic3r as it is, plus `engine/snapmaker/nozzle-engine.patch`:
+  - headless build (no CURL/OpenGL/GLEW/glfw without the GUI; bridge hook; Android/browser conditions);
+  - upstream's fix for `ConfigOptionEnumsGenericTempl` (no self-initialised `keys_map`, adopt it on `set()`, guard
+    `serialize()`); Snapmaker's copy crashed writing the config into G-code;
+  - upstream's `filament_flush_temp` / `filament_flush_volumetric_speed` settings and the `flush_temperatures`,
+    `flush_volumetric_speeds`, `min_vitrification_temperature`, `max_print_z` and `initial_no_support_filament_id`
+    G-code variables (owner-approved), so Bambu A1/P1/X1-family start G-code runs.
+- **Adaptations in Nozzle's bridge (work on both bases):** per-feature filament keys set by whichever names the engine
+  defines; a 0 in `wall_/sparse_infill_/solid_infill_filament` is treated as unset; `export_gcode` always gets a result
+  object; `nozzle-engine` keeps stdout clean during libslic3r's static initialisation; the desktop CLI links the deps
+  prefix's libjpeg ahead of OpenCV's copy.
+- **Subsystem / platforms:** slicing. Desktop now (`engine/native/scripts/build_engine_snapmaker.sh`); Android and the
+  Web App still on upstream OrcaSlicer `824b216f` until moved.
+- **Test evidence:** the full desktop suite (34 tests, including a painted multicolour slice) on the pinned build; 370
+  of 376 bundled printer profiles slice a test cube.
+- **Known divergence:**
+  - 567 engine settings instead of 723: Snapmaker's base predates about 177 of upstream's; 24 are Snapmaker-only
+    (including Local-Z mixing), grouped in `settings-groups.json`.
+  - Six newest Bambu printers (H2C, H2D, H2D Pro, H2S, P2S, X2D) are hidden on the desktop
+    (`engine/snapmaker/unsupported-profiles.json`): they need upstream's multi-nozzle system (`filament_map`, nozzle
+    groups, chamber hold). Owner decision: hide until ported and tested on a real machine, no stand-in values.
+  - Upstream's fast-purge flush temperature (`filament_flush_temp_fast`, `prime_volume_mode`) isn't ported.
+- **Touches:** slicing, packaging, PAXX (U1 prints), Bambu profiles.
+

@@ -18,12 +18,21 @@ object ProfileCatalog {
     val all: List<PrinterProfileInfo> by lazy {
         val text = ProfileCatalog::class.java.getResourceAsStream("/profiles/index.json")?.readBytes()?.decodeToString() ?: return@lazy emptyList()
         val a = JSONObject(text).getJSONArray("profiles")
-        (0 until a.length()).map { a.getJSONObject(it) }.map { p ->
+        (0 until a.length()).map { a.getJSONObject(it) }.filter { it.getString("id") !in unsupported }.map { p ->
             val bed = p.getJSONArray("bed")
             PrinterProfileInfo(p.getString("id"), p.optString("vendor"), p.optString("model"), p.optString("name"), bed.getDouble(0).toFloat(), bed.getDouble(1).toFloat(),
                 p.optDouble("height", 250.0).toFloat(), p.optInt("tools", 1), p.optJSONArray("outputs")?.let { o -> (0 until o.length()).map { o.getString(it) } } ?: listOf("gcode"),
                 p.optString("family", "export-only"))
         }
+    }
+
+    /**
+     * Profiles this app's engine can't slice yet (engine/snapmaker/unsupported-profiles.json), with the reason. They are
+     * left out of [all], so they can't be picked; a project saved with one falls back to the default profile.
+     */
+    val unsupported: Map<String, String> by lazy {
+        val text = ProfileCatalog::class.java.getResourceAsStream("/profiles/unsupported-profiles.json")?.readBytes()?.decodeToString() ?: return@lazy emptyMap()
+        JSONObject(text).optJSONObject("profiles")?.let { o -> o.keySet().associateWith { o.getString(it) } } ?: emptyMap()
     }
 
     fun byId(id: String?): PrinterProfileInfo? = all.firstOrNull { it.id == id }

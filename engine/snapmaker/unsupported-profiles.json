@@ -1,0 +1,11 @@
+{
+  "why": "Printer profiles the Snapmaker Orca-based engine can't slice yet. Their start G-code needs upstream OrcaSlicer's multi-nozzle system (filament_map, nozzle groups, chamber hold), which Snapmaker Orca's engine doesn't have. Owner decision 2026-09-27: hidden until that system is ported and tested on a real machine, never filled with single-nozzle stand-ins. See docs/upstream/PROVENANCE.md P-0007.",
+  "profiles": {
+    "bambu_h2c": "nozzle_diameter_at_nozzle_id / initial_nozzle_id (nozzle groups)",
+    "bambu_h2d": "nozzle_diameter compared as one value (dual-nozzle groups)",
+    "bambu_h2d_pro": "nozzle_diameter compared as one value (dual-nozzle groups)",
+    "bambu_h2s": "nozzle_diameter compared as one value (nozzle groups)",
+    "bambu_p2s": "hold_chamber_temp_for_flat_print (chamber hold)",
+    "bambu_x2d": "filament_map (filament-to-extruder map)"
+  }
+}

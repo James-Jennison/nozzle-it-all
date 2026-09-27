@@ -115,6 +115,8 @@ private object BcBambuFtpsSessionFactory : BambuFtpsSessionFactory {
 
 private class ApacheBambuFtpsSession(expectedSerial: String) : BambuFtpsSession {
     private val client = SessionResumingFtpsClient(sslContext(expectedSerial)).apply {
+        // The printer's identity is its serial and pinned certificate, checked again once the session is up.
+        hostnameVerifier = BambuHostnameVerifier(expectedSerial)
         setEnabledProtocols(arrayOf("TLSv1.2"))
         setIpAddressFromPasvResponse(false)
         setRemoteVerificationEnabled(false)

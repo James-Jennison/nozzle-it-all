@@ -94,6 +94,19 @@ void run_cancellable(Slic3r::Print& print, const std::string& partial_output, Fn
 // Snapmaker Orca's engine (and the settings it defines, wall_filament / sparse_infill_filament / solid_infill_filament,
 // default 1) takes 0 as a filament index, which leaves the walls without a nozzle and crashes Arachne. A 0 is treated
 // as unset, so the engine's own default applies. (Support filaments keep 0: there it is the engine's own "current".)
+// A Bambu Lab printer profile gets Bambu's G-code layout (labels, wipe tower, tool order), as the slicer's own CLI decides
+// it: printer_model starting "Bambu Lab" (Snapmaker Orca's Snapmaker_Orca.cpp, upstream OrcaSlicer's CLI likewise).
+// Snapmaker Orca leaves the flag uninitialised headless (the engine patch makes it false), so it is set here; on the
+// upstream engine (Android, Web) the flag keeps its default until those platforms move to this engine too.
+void mark_bambu_printer(Slic3r::Print& print, const Slic3r::DynamicPrintConfig& config) {
+#if __has_include("libslic3r/Feature/FullSpectrum/VirtualExtruder.hpp")
+    const Slic3r::ConfigOptionString* model = config.option<Slic3r::ConfigOptionString>("printer_model");
+    print.is_BBL_printer() = model != nullptr && model->value.compare(0, 9, "Bambu Lab") == 0;
+#else
+    (void) print; (void) config;
+#endif
+}
+
 void drop_unset_feature_filaments(Slic3r::DynamicPrintConfig& profile) {
     for (const char* key : {"wall_filament", "sparse_infill_filament", "solid_infill_filament"})
         if (const Slic3r::ConfigOption* opt = profile.option(key); opt != nullptr && opt->getInt() == 0)
@@ -316,6 +329,7 @@ void slice_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, const
     for (ModelObject* object : model.objects) {
         print.auto_assign_extruders(object);
     }
+    mark_bambu_printer(print, config);
     print.apply(model, config);
     assign_print_object_ids(print);
 
@@ -351,6 +365,7 @@ void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, cons
     for (ModelObject* object : model.objects) {
         print.auto_assign_extruders(object);
     }
+    mark_bambu_printer(print, config);
     print.apply(model, config);
     assign_print_object_ids(print);
 

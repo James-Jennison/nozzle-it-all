@@ -87,7 +87,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
         )),
         AppMenu("Edit", Key.E, listOf(
             MenuAction("Duplicate", ctrl(Key.D, "D"), enabled = p.selected != null) { p.duplicateSelected() },
-            MenuAction("Delete", enabled = p.selected != null) { p.removeSelected() },
+            MenuAction("Delete", Shortcut(Key.Delete, text = "Delete"), enabled = p.selected != null) { p.removeSelected() },
             MenuAction("Arrange plate", ctrl(Key.A, "A", shift = true), enabled = p.items.isNotEmpty()) { if (!p.arrange()) p.notice = "Not everything fits on the plate." },
             null,
             MenuAction("All settings…", ctrl(Key.Period, ".")) { p.showAllSettings = true; state.destination = Destination.PREPARE },
@@ -104,10 +104,14 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
     )
 }
 
-/** Runs the enabled menu item whose shortcut [e] is; true if one matched. All shortcuts use Ctrl, so typing is never taken. */
-fun handleMenuShortcut(menus: List<AppMenu>, e: androidx.compose.ui.input.key.KeyEvent): Boolean {
+/**
+ * Runs the enabled menu item whose shortcut [e] is; true if one matched. [plain] selects which shortcuts to try: Ctrl
+ * shortcuts are checked before anything else sees the key (typing never uses Ctrl), plain keys like Delete only after
+ * the focused control has had its chance, so Delete in a text field edits the text instead of deleting an object.
+ */
+fun handleMenuShortcut(menus: List<AppMenu>, e: androidx.compose.ui.input.key.KeyEvent, plain: Boolean = false): Boolean {
     if (e.type != KeyEventType.KeyDown) return false
-    val item = menus.flatMap { it.items }.filterNotNull().firstOrNull { it.shortcut?.matches(e) == true } ?: return false
+    val item = menus.flatMap { it.items }.filterNotNull().firstOrNull { it.shortcut?.matches(e) == true && it.shortcut.ctrl != plain } ?: return false
     if (item.enabled) item.run()
     return true
 }

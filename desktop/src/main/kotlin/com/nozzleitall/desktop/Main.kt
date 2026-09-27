@@ -95,7 +95,9 @@ private fun runApp(open: List<File>) = application {
             val menus = appMenus(state, quit)
             if (e.type == KeyEventType.KeyDown && e.isAltPressed && !e.isCtrlPressed) menus.indexOfFirst { it.mnemonic == e.key }.takeIf { it >= 0 }?.let { state.openMenu = it; true } ?: false
             else handleMenuShortcut(menus, e)
-        }) {
+        },
+        // Keys no focused control used (a text field keeps its Delete): plain shortcuts such as Delete for the selected object.
+        onKeyEvent = { e -> handleMenuShortcut(appMenus(state, quit), e, plain = true) }) {
         window.minimumSize = java.awt.Dimension(960, 640)
         NozzleTheme(state.fleet.settings.value.theme) {
             Column(Modifier.fillMaxSize()) {

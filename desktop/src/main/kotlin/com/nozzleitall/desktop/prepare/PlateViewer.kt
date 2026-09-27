@@ -20,11 +20,52 @@ class ViewCamera { var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(
 
 class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean)
 
-/** Reduces very large meshes for display only (slicing always uses the full mesh). */
-fun displayTriangles(mesh: Mesh, budget: Int = 120_000): IntArray {
-    if (mesh.triangleCount <= budget) return IntArray(mesh.triangleCount) { it }
-    val step = mesh.triangleCount.toDouble() / budget
-    return IntArray(budget) { (it * step).toInt() }
+/** A mesh ready to draw: possibly simplified, with smooth normals, and the original's bounds (so placement never shifts). */
+class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray) { val tris = IntArray(mesh.triangleCount) { it } }
+
+private val displayCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Mesh, DisplayMesh>())
+
+/** The display version of [mesh], computed once per mesh. Slicing always uses the full mesh. */
+fun displayMesh(mesh: Mesh, budget: Int = 150_000): DisplayMesh = displayCache.getOrPut(mesh) {
+    val m = simplifyForDisplay(mesh, budget)
+    DisplayMesh(m, vertexNormals(m, IntArray(m.triangleCount) { it }), mesh.bounds())
+}
+
+/**
+ * Vertex clustering: points that fall in the same small grid cell merge into one, and triangles that collapse are
+ * dropped. The shell stays closed (unlike skipping triangles, which leaves holes), just with less detail. The cell size
+ * shrinks until the result fits [budget] triangles.
+ */
+fun simplifyForDisplay(mesh: Mesh, budget: Int): Mesh {
+    if (mesh.triangleCount <= budget) return mesh
+    val v = mesh.vertices; val t = mesh.triangles
+    val b = mesh.bounds()
+    val extent = maxOf(b[3] - b[0], b[4] - b[1], b[5] - b[2]).coerceAtLeast(1e-3f)
+    var resolution = 512
+    var best: Mesh = mesh
+    repeat(8) {
+        val cell = extent / resolution
+        val index = HashMap<Long, Int>(mesh.vertexCount / 2)
+        val sums = ArrayList<Float>(); val counts = ArrayList<Int>()
+        val remap = IntArray(mesh.vertexCount)
+        for (i in 0 until mesh.vertexCount) {
+            val ix = ((v[i * 3] - b[0]) / cell).toLong(); val iy = ((v[i * 3 + 1] - b[1]) / cell).toLong(); val iz = ((v[i * 3 + 2] - b[2]) / cell).toLong()
+            val key = (ix shl 42) or (iy shl 21) or iz
+            val id = index.getOrPut(key) { sums.add(0f); sums.add(0f); sums.add(0f); counts.add(0); counts.size - 1 }
+            sums[id * 3] += v[i * 3]; sums[id * 3 + 1] += v[i * 3 + 1]; sums[id * 3 + 2] += v[i * 3 + 2]; counts[id] = counts[id] + 1
+            remap[i] = id
+        }
+        val tris = ArrayList<Int>(t.size)
+        for (k in 0 until mesh.triangleCount) {
+            val a = remap[t[k * 3]]; val bb = remap[t[k * 3 + 1]]; val c = remap[t[k * 3 + 2]]
+            if (a != bb && bb != c && a != c) { tris += a; tris += bb; tris += c }
+        }
+        val verts = FloatArray(counts.size * 3) { sums[it] / counts[it / 3] }
+        best = Mesh(verts, tris.toIntArray())
+        if (best.triangleCount <= budget) return best
+        resolution = (resolution * 0.75).toInt().coerceAtLeast(16)
+    }
+    return best
 }
 
 private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Float, val cy: Float) {
@@ -52,7 +93,7 @@ private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Flo
 @Composable
 fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: ViewCamera, bedColor: Color, lineColor: Color, modifier: Modifier = Modifier,
                 preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), onSelect: (Int?) -> Unit = {}) {
-    val prepared = remember(objects) { objects.map { o -> val tris = displayTriangles(o.mesh); Triple(o, tris, vertexNormals(o.mesh, tris)) } }
+    val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh) } }
     Canvas(modifier.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag to orbit, scroll to zoom." }
         .pointerInput(camera) { awaitPointerEventScope {
             // Left-drag orbits; right-drag or Shift+drag pans.
@@ -75,8 +116,8 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         drawBed(proj, bedW, bedD, bedColor, lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor)
         else {
-            prepared.forEach { (o, tris, _) -> drawShadow(proj, o, tris) }
-            prepared.forEach { (o, tris, normals) -> drawObject(proj, o, tris, normals) }
+            prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
+            prepared.forEach { (o, d) -> drawObject(proj, o, d) }
         }
     }
 }
@@ -121,9 +162,9 @@ private fun displayBase(c: Color): Color {
 }
 
 /** A soft shadow straight down onto the bed, drawn as one translucent layer so overlaps don't darken. */
-private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, tris: IntArray) {
-    val v = o.mesh.vertices; val t = o.mesh.triangles
-    val b = o.mesh.bounds(); val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2
+private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh) {
+    val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris
+    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2
     val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
     val step = max(1, tris.size / 20_000); val tmp = FloatArray(3)
     val positions = ArrayList<Offset>(tris.size / step * 3 + 3)
@@ -144,9 +185,9 @@ private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, tris: IntArray
     }
 }
 
-private fun DrawScope.drawObject(proj: Projector, o: PlateObject, tris: IntArray, normals: FloatArray) {
-    val v = o.mesh.vertices; val t = o.mesh.triangles
-    val b = o.mesh.bounds(); val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val minZ = b[2]
+private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh) {
+    val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris; val normals = d.normals
+    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val minZ = b[2]
     val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
     val n = tris.size
     val screen = FloatArray(n * 9); val depth = FloatArray(n); val cornerColor = IntArray(n * 3)

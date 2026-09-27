@@ -212,9 +212,8 @@ interchange).
 - **Known divergence / not yet done:**
   - The Android engine has not sliced on a device yet (only host builds and unit tests were run); slice a cube on a
     phone before a release. `-PnozzleEngine=upstream` is the way back.
-  - CI (`.github/workflows/ci.yml`) sets `ORCASLICER_ENGINE_ROOT` to the upstream root on its runner, so CI still builds
-    the upstream engine until the runner has the Snapmaker root (its SBOM would then name the wrong base; set
-    `NOZZLE_ENGINE=upstream` there or move the runner).
+  - CI (`.github/workflows/ci.yml`) builds this engine too since 2026-09-27: `engine/snapmaker/android/ci_engine_root.sh`
+    fetches the pinned commit and GMP archive on the runner and prepares the root, checking every pinned hash.
   - Everything listed under P-0007's divergences applies to Android and the Web App too.
 - **Touches:** slicing, Android packaging, Web App engine, Bambu profiles.
 
@@ -235,4 +234,24 @@ interchange).
   - Printers without a profile family keep Nozzle's guided Draft/Standard/Fine layer heights until their families are
     bundled from their own slicers.
 - **Touches:** PAXX (U1), slicing, shared UI.
+
+## P-0012 — filament-changer lanes over Moonraker (ported)
+
+- **Upstream:** OrcaSlicer `824b216f`, `src/slic3r/Utils/MoonrakerPrinterAgent.cpp` (`fetch_filament_info`,
+  `fetch_moonraker_filament_data`, `fetch_hh_filament_info`). AGPL-3.0. Payload shape checked against
+  AFC-Klipper-Add-On `484a09b` (`extras/AFC_lane.py` `send_lane_data`), the commit OpenCentauri COSMOS ships for CANVAS.
+- **Imported:** Klipper printers other than the U1 report their filament changer's lanes as material slots: Moonraker's
+  `lane_data` database namespace first (AFC, including the Elegoo CANVAS on COSMOS as lanes `CANVAS_1`–`CANVAS_4`), then
+  Happy Hare's `mmu` object. A lane's slot is the tool it is mapped to, so Prepare's colour matching lines up with the
+  file's `T` numbers. Desktop (`adapter-paxx` `FilamentLanes.kt`) and Web App (`web/src/printers/paxx.ts`).
+- **Test evidence:** FilamentLanesTest (6, including a fake COSMOS Moonraker), web `printers.test.ts` lane tests.
+- **Known divergence:**
+  - Upstream fetches lanes only when the user syncs filaments; Nozzle reads them with each status reading, and asks for a
+    missing `lane_data` namespace at most once a minute.
+  - The printer has one nozzle; its temperature is shown on the lane feeding it (AFC `current_load`, Happy Hare `tool`),
+    else on the first lane. Upstream has no equivalent (it fills Bambu-style AMS trays).
+  - Upstream maps a lane's material to a filament preset id; Nozzle picks the slot's filament profile by type with its
+    own matcher, as for every other printer.
+  - Not on Android yet (its Moonraker client has its own U1-shaped material model). Not verified against a real CANVAS.
+- **Touches:** Klipper printers (COSMOS, AFC, Happy Hare), Prepare material slots.
 

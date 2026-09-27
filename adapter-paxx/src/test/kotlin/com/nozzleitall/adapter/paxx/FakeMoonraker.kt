@@ -18,6 +18,8 @@ class FakeMoonraker(var paxx: Boolean = true) : AutoCloseable {
     var dropUpload = false
     var macros = listOf("LOAD_FILAMENT", "UNLOAD_FILAMENT", "PRINT_START")
     val uploaded = mutableMapOf<String, Int>()
+    /** Moonraker's lane_data database namespace (AFC's lanes); null when it doesn't exist. */
+    var laneData: JSONObject? = null
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
     val address get() = "http://127.0.0.1:${server.address.port}"
 
@@ -68,6 +70,8 @@ class FakeMoonraker(var paxx: Boolean = true) : AutoCloseable {
             if (paxx) put(JSONObject().put("name", "case").put("stream_url", "/webcam/webrtc").put("snapshot_url", "/webcam/snapshot.jpg").put("service", "webrtc-camerastreamer"))
             put(JSONObject().put("name", "gui").put("stream_url", "/screen/").put("snapshot_url", ""))
         }))
+        "/server/database/item" -> laneData?.takeIf { q["namespace"] == "lane_data" }?.let { ok(JSONObject().put("namespace", "lane_data").put("value", it)) }
+            ?: (404 to """{"error":{"code":404,"message":"Namespace '${q["namespace"]}' not found"}}""")
         "/webcam/snapshot.jpg" -> 200 to "JPEGDATA"
         "/printer/gcode/script" -> gcodeReply(q["script"] ?: "")
         "/printer/print/pause", "/printer/print/resume", "/printer/print/cancel", "/printer/print/start" -> ok("ok")

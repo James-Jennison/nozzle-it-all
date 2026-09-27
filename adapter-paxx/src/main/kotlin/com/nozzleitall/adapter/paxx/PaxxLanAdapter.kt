@@ -83,13 +83,34 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
             val klippy = server.optString("klippy_state", "")
             PrinterStatus(PrinterState.fromRaw(klippy.ifBlank { "startup" }).takeIf { it == PrinterState.ERROR } ?: PrinterState.STARTING, route,
                 message = "Klipper is ${klippy.ifBlank { "not connected" }}.")
-        } else U1Protocol.parseStatus(m.get("printer/objects/query", U1Protocol.statusQuery) as JSONObject, route)
+        } else {
+            val result = m.get("printer/objects/query", U1Protocol.statusQuery) as JSONObject
+            val parsed = U1Protocol.parseStatus(result, route)
+            val objects = result.optJSONObject("status")
+            if (objects?.has("print_task_config") == true) parsed else withLanes(parsed, objects)
+        }
     } catch (e: PrinterRejected) {
         PrinterStatus(PrinterState.ERROR, route, message = e.message)
     } catch (e: IOException) {
         PrinterStatus(PrinterState.OFFLINE, route, message = e.message ?: "The printer did not answer.")
     } catch (e: org.json.JSONException) {
         PrinterStatus(PrinterState.UNKNOWN, route, message = "The printer's reply was incomplete.")
+    }
+
+    // Moonraker's lane_data namespace, as upstream reads it (FilamentLanes). Most printers have no filament changer, so a
+    // missing namespace is only asked about again after a minute.
+    private var lanesMissingSince = 0L
+
+    private fun withLanes(status: PrinterStatus, objects: JSONObject?): PrinterStatus {
+        val now = System.currentTimeMillis()
+        val fromDb = if (now - lanesMissingSince < 60_000) null else try {
+            FilamentLanes.fromLaneData(m.get("server/database/item", mapOf("namespace" to "lane_data")) as? JSONObject)
+        } catch (e: IOException) { null } catch (e: org.json.JSONException) { null }
+        if (fromDb == null) lanesMissingSince = now
+        val mmu = objects?.optJSONObject("mmu")
+        val lanes = fromDb ?: FilamentLanes.fromHappyHare(mmu) ?: return status
+        return FilamentLanes.apply(status, lanes, objects?.optJSONObject("AFC")?.optString("current_load")?.takeIf { it.isNotBlank() && it != "null" },
+            (mmu?.opt("tool") as? Number)?.toInt()?.takeIf { it >= 0 })
     }
 
     override fun cameras(): List<CameraEndpoint> = U1Protocol.cameras((m.get("server/webcams/list") as JSONObject).getJSONArray("webcams"))

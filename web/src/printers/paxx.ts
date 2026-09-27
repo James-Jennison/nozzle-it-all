@@ -9,6 +9,8 @@ export const STATUS_QUERY: Record<string, string> = {
   heater_bed: 'temperature,target', extruder: 'temperature,target,nozzle_diameter', extruder1: 'temperature,target,nozzle_diameter',
   extruder2: 'temperature,target,nozzle_diameter', extruder3: 'temperature,target,nozzle_diameter',
   print_task_config: 'filament_exist,filament_vendor,filament_type,filament_sub_type,filament_color_rgba,filament_official',
+  // Filament changers on other Klipper printers (lanes below): AFC's lane in the toolhead, Happy Hare's gates.
+  AFC: 'current_load', mmu: 'num_gates,gate_status,gate_material,gate_color,gate_temperature,tool',
 };
 
 export function mapState(webhooks?: string, print?: string): PrinterState {
@@ -61,6 +63,54 @@ export function parseStatus(result: J, route: Route, observedAt = Date.now()): P
   const message = (state === 'error' || state === 'starting' ? status.webhooks?.state_message || stats?.message : stats?.message) || undefined;
   return { state, route, job, bed: status.heater_bed ? { current: num(status.heater_bed, 'temperature'), target: num(status.heater_bed, 'target') } : undefined,
     toolheads: heads, message, observedAt, extensions: cfg ? { [FULL_SPECTRUM]: toExtension(fullSpectrum(heads, true)) } : {} };
+}
+
+// Filament-changer lanes (AFC units such as the Elegoo CANVAS on COSMOS; Happy Hare MMUs) as material slots. Port of
+// adapter-paxx/.../FilamentLanes.kt, itself ported from OrcaSlicer's MoonrakerPrinterAgent: Moonraker's lane_data
+// namespace first, then Happy Hare's mmu object. A lane's slot is the tool it is mapped to ("0" is T0).
+export interface Lane { tool: number; material: string; colorHex?: string; nozzleTemp?: number; name?: string }
+const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+
+export function lanesFromLaneData(result: J | undefined): Lane[] | undefined {
+  const value = result?.value;
+  if (!value || typeof value !== 'object') return undefined;
+  const seen = new Set<number>();
+  const lanes = Object.keys(value).sort().flatMap((key): Lane[] => {
+    const l = value[key];
+    if (!l || typeof l !== 'object' || typeof l.lane !== 'string' || !/^\s*\d+\s*$/.test(l.lane)) return [];
+    const tool = parseInt(l.lane, 10);
+    if (seen.has(tool)) return [];
+    seen.add(tool);
+    return [{ tool, material: text(l.material), colorHex: normalizeColor(text(l.color)), nozzleTemp: typeof l.nozzle_temp === 'number' && l.nozzle_temp > 0 ? l.nozzle_temp : undefined, name: key }];
+  });
+  return lanes.length ? lanes : undefined;
+}
+
+export function lanesFromHappyHare(mmu: J | undefined): Lane[] | undefined {
+  const gates = typeof mmu?.num_gates === 'number' ? mmu.num_gates : 0;
+  if (gates <= 0 || ![mmu!.gate_status, mmu!.gate_material, mmu!.gate_color, mmu!.gate_temperature].every(Array.isArray)) return undefined;
+  const lanes: Lane[] = [];
+  for (let g = 0; g < Math.min(gates, 64); g++) {
+    if (!(typeof mmu!.gate_status[g] === 'number' && mmu!.gate_status[g] > 0)) continue;
+    const type = text(mmu!.gate_material[g]);
+    if (!type) continue;
+    const t = mmu!.gate_temperature[g];
+    lanes.push({ tool: g, material: type, colorHex: normalizeColor(text(mmu!.gate_color[g])), nozzleTemp: typeof t === 'number' && t > 0 ? t : undefined });
+  }
+  return lanes.length ? lanes : undefined;
+}
+
+/** [status] with one slot per lane; the single nozzle's reading goes on the lane feeding it (else the first lane). */
+export function applyLanes(status: PrinterStatus, lanes: Lane[], currentLane?: string, currentTool?: number): PrinterStatus {
+  const nozzle = status.toolheads.find((h) => h.active) ?? status.toolheads[0];
+  const sorted = [...lanes].sort((a, b) => a.tool - b.tool);
+  const feeding = sorted.find((l) => currentLane !== undefined && l.name === currentLane) ?? sorted.find((l) => l.tool === currentTool);
+  const withTemps = feeding ?? sorted[0];
+  return { ...status, toolheads: sorted.map((l) => {
+    const here = l === withTemps, loaded = l.material !== '';
+    return { index: l.tool, nozzle: here ? nozzle?.nozzle : undefined, target: here ? nozzle?.target : undefined, diameter: nozzle?.diameter, loaded,
+      material: loaded ? { type: l.material.toUpperCase(), colorHex: l.colorHex, fromTag: false } : undefined, active: l === feeding };
+  }) };
 }
 
 export interface Camera { name: string; liveUrl?: string; snapshotUrl?: string }
@@ -149,11 +199,27 @@ export class MoonrakerClient {
         return { state: info?.klippy_state === 'shutdown' || info?.klippy_state === 'error' ? 'error' : 'starting', route: this.route, toolheads: [],
           extensions: {}, message: `The printer's firmware is ${info?.klippy_state || 'not connected'}.`, observedAt: Date.now() };
       const q = new URLSearchParams(); for (const [k, v] of Object.entries(STATUS_QUERY)) q.set(k, v);
-      return parseStatus(await this.call('printer/objects/query', {}, Object.fromEntries(q)), this.route);
+      const result = await this.call('printer/objects/query', {}, Object.fromEntries(q));
+      const parsed = parseStatus(result, this.route);
+      return result?.status?.print_task_config ? parsed : await this.withLanes(parsed, result?.status);
     } catch (e) {
       return { state: (e as { rejected?: boolean }).rejected ? 'error' : 'offline', route: this.route, toolheads: [], extensions: {},
         message: explainFetchFailure(this.p, e), observedAt: Date.now() };
     }
+  }
+
+  // Most printers have no filament changer, so a missing lane_data namespace is only asked about again after a minute.
+  private lanesMissingSince = 0;
+  private async withLanes(status: PrinterStatus, objects: J | undefined): Promise<PrinterStatus> {
+    let fromDb: Lane[] | undefined;
+    if (Date.now() - this.lanesMissingSince >= 60_000) {
+      try { fromDb = lanesFromLaneData(await this.call('server/database/item', {}, { namespace: 'lane_data' })); } catch { /* no lane data */ }
+      if (!fromDb) this.lanesMissingSince = Date.now();
+    }
+    const lanes = fromDb ?? lanesFromHappyHare(objects?.mmu);
+    if (!lanes) return status;
+    const current = objects?.AFC?.current_load;
+    return applyLanes(status, lanes, typeof current === 'string' && current ? current : undefined, typeof objects?.mmu?.tool === 'number' && objects.mmu.tool >= 0 ? objects.mmu.tool : undefined);
   }
 
   async upload(name: string, bytes: Uint8Array, onProgress?: (f: number) => void): Promise<{ ok: true; path: string } | { ok: false; interrupted: boolean; reason: string }> {

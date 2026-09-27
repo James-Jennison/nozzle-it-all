@@ -28,6 +28,8 @@ object U1Protocol {
         "extruder" to "temperature,target,nozzle_diameter", "extruder1" to "temperature,target,nozzle_diameter",
         "extruder2" to "temperature,target,nozzle_diameter", "extruder3" to "temperature,target,nozzle_diameter",
         "print_task_config" to "filament_exist,filament_vendor,filament_type,filament_sub_type,filament_color_rgba,filament_official",
+        // Filament changers on other Klipper printers (FilamentLanes): AFC's lane in the toolhead, Happy Hare's gates.
+        "AFC" to "current_load", "mmu" to FilamentLanes.MMU_FIELDS,
     )
 
     fun mapState(webhooksState: String?, printState: String?): PrinterState = when {

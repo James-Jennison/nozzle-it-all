@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { ActionGuard, commandFor, mapState, parseStatus } from '../src/printers/paxx';
+import { ActionGuard, applyLanes, commandFor, lanesFromHappyHare, lanesFromLaneData, mapState, parseStatus } from '../src/printers/paxx';
 import { Action, FULL_SPECTRUM, KNOWN_FAMILIES, Outcome, PrinterStatus, familyLabel, fullSpectrumOf, migratePrinter, readCapabilities, routeFor } from '../src/printers/model';
 
 // The same recorded U1 status the Kotlin PAXX adapter is tested with.
@@ -71,5 +71,35 @@ describe('cameras', () => {
       { name: 'webcam', liveUrl: 'http://192.168.1.113/webcam/?action=stream', snapshotUrl: 'http://192.168.1.113/webcam/?action=snapshot' },
       { name: 'still', snapshotUrl: 'http://192.168.1.113/snap.jpg' },
     ]);
+  });
+});
+
+describe('filament-changer lanes (AFC, Happy Hare)', () => {
+  // As AFC_lane.py send_lane_data writes each lane (AFC 484a09b, the commit COSMOS ships); same data as FilamentLanesTest.kt.
+  const lane = (tool: string, color: string, material: string, nozzle: unknown = 220) =>
+    ({ color, material, bed_temp: 60, nozzle_temp: nozzle, scan_time: '', td: '', lane: tool, extruder_index: 0, spool_id: null, weight: 1000 });
+  const canvas = { CANVAS_1: lane('0', '#FF0000', 'PLA'), CANVAS_2: lane('1', '00ff00', 'PETG', 240), CANVAS_3: lane('2', '', '', ''), CANVAS_4: lane('3', '#0000FFFF', 'pla') };
+
+  it('reads AFC lanes as slots by tool', () => {
+    const lanes = lanesFromLaneData({ value: canvas })!;
+    expect(lanes.map((l) => l.tool)).toEqual([0, 1, 2, 3]);
+    expect(lanes.map((l) => l.colorHex)).toEqual(['#FF0000', '#00FF00', undefined, '#0000FF']);
+    expect(lanes[1].nozzleTemp).toBe(240);
+    expect(lanesFromLaneData({ value: { a: lane('', '#FF0000', 'PLA'), b: { ...lane('1', '#00FF00', 'PLA'), lane: 1 } } })).toBeUndefined();
+  });
+
+  it('reads Happy Hare gates', () => {
+    const mmu = { num_gates: 4, gate_status: [1, 0, 2, -1], gate_material: ['PLA', 'PLA', 'ABS', 'PLA'], gate_color: ['ff8800', '000000', '#123456', 'ffffff'], gate_temperature: [210, 200, 250, 200] };
+    expect(lanesFromHappyHare(mmu)!.map((l) => [l.tool, l.colorHex])).toEqual([[0, '#FF8800'], [2, '#123456']]);
+    expect(lanesFromHappyHare({})).toBeUndefined();
+  });
+
+  it('puts the one nozzle on the feeding lane', () => {
+    const base = { state: 'ready' as const, route: 'lan' as const, toolheads: [{ index: 0, nozzle: 215, target: 220, diameter: 0.4, loaded: false, active: true }], extensions: {}, observedAt: 1 };
+    const s = applyLanes(base, lanesFromLaneData({ value: canvas })!, 'CANVAS_2');
+    expect(s.toolheads.map((h) => h.nozzle)).toEqual([undefined, 215, undefined, undefined]);
+    expect(s.toolheads.map((h) => h.active)).toEqual([false, true, false, false]);
+    expect(s.toolheads[1].material).toEqual({ type: 'PETG', colorHex: '#00FF00', fromTag: false });
+    expect(s.toolheads[2].material).toBeUndefined();
   });
 });

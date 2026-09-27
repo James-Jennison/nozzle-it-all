@@ -56,6 +56,5 @@ class SliceEngineTest {
         val env = mapOf("NOZZLE_HOME" to Files.createTempDirectory("home").toFile().absolutePath, "NOZZLE_ENGINE" to "/nonexistent")
         val found = SliceEngine.locateNative(env) { k -> if (k == "compose.application.resources.dir") resources.absolutePath else null }
         assertEquals(true, found != null && found.canExecute() && found.readText() == bundled.readText())
-        assertEquals(true, SliceEngine.isNative(found!!))
     }
 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import java.io.File
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,8 +25,6 @@ import com.nozzleitall.desktop.projects.ProjectLibrary
 import com.nozzleitall.desktop.projects.ProjectsScreen
 import com.nozzleitall.desktop.screens.*
 import com.nozzleitall.desktop.ui.*
-import com.nozzleitall.desktop.workspace.AdvancedWorkspace
-import com.nozzleitall.desktop.workspace.WorkspaceScreen
 import com.nozzleitall.printer.Glossary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +38,6 @@ enum class Destination(val label: String, val icon: NzIcon, val key: Key) {
     MONITOR("Print & Monitor", NzIcon.MONITOR, Key.Four),
     MATERIALS("Materials & Toolheads", NzIcon.MATERIALS, Key.Five),
     SPECTRUM("Full Spectrum", NzIcon.SPECTRUM, Key.Six),
-    WORKSPACE("Advanced Workspace", NzIcon.WORKSPACE, Key.Seven),
     SETTINGS("Settings", NzIcon.SETTINGS, Key.Comma),
 }
 
@@ -47,12 +45,14 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
     val fleet = Fleet(paths, scope, log = { System.err.println(it) })
     val library = ProjectLibrary(paths)
     val prepare = PrepareState(this)
-    val workspace = AdvancedWorkspace(paths)
     /** Off unless the user turns it on in Settings: lets Nozzle It All Web on this computer reach these printers. */
     val connector = com.nozzleitall.desktop.connector.LocalConnector(fleet, java.io.File(paths.config, "connector-tokens.json"))
     var destination by mutableStateOf(Destination.FLEET)
     var selectedPrinter by mutableStateOf<String?>(null)
     val version: String = System.getProperty("nozzle.version") ?: "0.1.0-dev"
+    var showAbout by mutableStateOf(false)
+    /** An action waiting for "discard unsaved changes?" to be answered. */
+    var pendingDiscard by mutableStateOf<(() -> Unit)?>(null)
 
     fun openPrinter(id: String) { selectedPrinter = id; destination = Destination.MONITOR }
 }
@@ -72,20 +72,52 @@ private fun setLinuxWindowClass() {
     }
 }
 
-fun main() { setLinuxWindowClass(); runApp() }
+/**
+ * The menu bar and file dialogs are Swing's. FlatLaf, coloured from the design tokens, makes them match the app instead
+ * of Swing's default light grey. Must run before any window is created.
+ */
+private fun styleMenus() {
+    val t = com.nozzleitall.design.NozzleTokens.darkPalette
+    fun hex(c: androidx.compose.ui.graphics.Color) = "#%02X%02X%02X".format((c.red * 255).toInt(), (c.green * 255).toInt(), (c.blue * 255).toInt())
+    com.formdev.flatlaf.FlatLaf.setGlobalExtraDefaults(mapOf(
+        "@background" to hex(t.surface), "@foreground" to hex(t.text), "@accentColor" to hex(t.accent),
+        "@selectionBackground" to hex(t.surfaceRaised), "@selectionForeground" to hex(t.text), "@disabledForeground" to hex(t.textMuted),
+        "MenuBar.background" to hex(t.surface), "MenuBar.borderColor" to hex(t.line), "PopupMenu.borderColor" to hex(t.line),
+        "Separator.foreground" to hex(t.line), "MenuItem.acceleratorForeground" to hex(t.textMuted)))
+    runCatching { com.formdev.flatlaf.FlatDarkLaf.setup() }.onFailure { System.err.println("menu look and feel: $it") }
+    System.err.println("look and feel: " + javax.swing.UIManager.getLookAndFeel()?.name)
+}
 
-private fun runApp() = application {
+/** Files opened with Nozzle It All (from the file manager or the command line): a 3MF opens as a project, models are added. */
+fun main(args: Array<String>) { setLinuxWindowClass(); styleMenus(); runApp(args.map(::File).filter { it.isFile }) }
+
+private fun runApp(open: List<File>) = application {
     val paths = remember { AppPaths.resolve().ensure() }
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     val state = remember { AppState(paths, scope) }
-    Window(onCloseRequest = { state.connector.stop(); state.fleet.shutdown(); exitApplication() }, title = Glossary.PRODUCT_FAMILY,
+    LaunchedEffect(Unit) {
+        if (open.isEmpty()) return@LaunchedEffect
+        val (projects, models) = open.partition { it.extension.equals("3mf", true) && open.size == 1 }
+        runCatching { projects.firstOrNull()?.let(state.prepare::open); models.forEach(state.prepare::importModel) }.onFailure { state.prepare.notice = it.message }
+        state.destination = Destination.PREPARE
+    }
+    val quit = { state.connector.stop(); state.fleet.shutdown(); exitApplication() }
+    Window(onCloseRequest = quit, title = Glossary.PRODUCT_FAMILY,
         icon = painterResource("brand/mark-violet.svg"), state = rememberWindowState(size = DpSize(1360.dp, 860.dp)),
         onPreviewKeyEvent = { e ->
             // Ctrl+1..7 and Ctrl+, move between places, like other desktop apps; plain keys stay with text fields.
             if (e.type == KeyEventType.KeyDown && e.isCtrlPressed) Destination.entries.firstOrNull { it.key == e.key }?.let { state.destination = it; true } ?: false else false
         }) {
         window.minimumSize = java.awt.Dimension(960, 640)
-        NozzleTheme(state.fleet.settings.value.theme) { App(state) }
+        AppMenuBar(state, onQuit = quit)
+        NozzleTheme(state.fleet.settings.value.theme) {
+            App(state)
+            if (state.showAbout) AboutWindow(state) { state.showAbout = false }
+            state.pendingDiscard?.let { action ->
+                ConfirmDialog("Discard unsaved changes?", "${state.prepare.name} has changes that aren't saved.", "Discard changes", destructive = true,
+                    onConfirm = { state.pendingDiscard = null; action() }, onDismiss = { state.pendingDiscard = null })
+            }
+        }
     }
 }
 
@@ -102,7 +134,6 @@ fun App(state: AppState) {
                 Destination.MONITOR -> MonitorScreen(state)
                 Destination.MATERIALS -> MaterialsScreen(state)
                 Destination.SPECTRUM -> FullSpectrumScreen(state)
-                Destination.WORKSPACE -> WorkspaceScreen(state)
                 Destination.SETTINGS -> SettingsScreen(state)
             }
         }
@@ -118,12 +149,10 @@ private fun NavigationRail(state: AppState) {
         Spacer(Modifier.height(14.dp))
         // Places appear when some printer can use them: Full Spectrum only if a printer reports that extension.
         val spectrum = state.fleet.printers.values.any { it.capabilities.value?.vendorExtensions?.contains(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM) == true }
-        Destination.entries.filter { it != Destination.WORKSPACE && it != Destination.SETTINGS && (it != Destination.SPECTRUM || spectrum) }.forEach { RailItem(it, state) }
+        Destination.entries.filter { it != Destination.SETTINGS && (it != Destination.SPECTRUM || spectrum) }.forEach { RailItem(it, state) }
         Spacer(Modifier.weight(1f))
-        // The specialist workspace sits apart from everyday places, behind a divider, so entering it is a deliberate choice.
         Box(Modifier.width(48.dp).height(1.dp).background(c.line))
         Spacer(Modifier.height(6.dp))
-        RailItem(Destination.WORKSPACE, state)
         RailItem(Destination.SETTINGS, state)
     }
 }

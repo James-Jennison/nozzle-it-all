@@ -37,7 +37,7 @@ sealed class SliceState {
     object Cancelled : SliceState()
 }
 
-/** Everything the Prepare workflow edits. Saved as a canonical 3MF + manifest, so Android, Web and the Advanced Workspace open it. */
+/** Everything the Prepare workflow edits. Saved as a canonical 3MF + manifest, so Android and the Web App open it. */
 class PrepareState(private val app: AppState) {
     val items = mutableStateListOf<PrepItem>()
     var selected by mutableStateOf<Int?>(null)
@@ -53,6 +53,9 @@ class PrepareState(private val app: AppState) {
     var preset by mutableStateOf(QualityPreset.STANDARD)
     var supports by mutableStateOf(false)
     var infill by mutableStateOf(15)
+    /** Settings changed in All settings, in the engine's serialized form; applied after the preset and quick controls. */
+    val overrides = androidx.compose.runtime.mutableStateMapOf<String, String>()
+    var showAllSettings by mutableStateOf(false)
     var slice by mutableStateOf<SliceState>(SliceState.Idle)
     var previewLayer by mutableStateOf(0)
     var showPreview by mutableStateOf(false)
@@ -90,6 +93,7 @@ class PrepareState(private val app: AppState) {
     fun profileDir(): File = ProfileCatalog.materialize(app.paths.cache, profileId)
 
     fun newProject() {
+        overrides.clear()
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         slice = SliceState.Idle; showPreview = false; nextId = 1
     }
@@ -102,7 +106,11 @@ class PrepareState(private val app: AppState) {
         val slots = p.manifest?.plates?.flatMap { it.objects }?.associate { it.objectId to (it.materialSlot ?: 1) } ?: emptyMap()
         p.objects.forEach { o -> addFromPlacement(o, slots[o.id] ?: 1) }
         p.manifest?.settings?.preset?.let { key -> QualityPreset.entries.firstOrNull { it.name.equals(key, true) }?.let { preset = it } }
-        p.manifest?.settings?.overrides?.let { ov -> ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" } }
+        p.manifest?.settings?.overrides?.let { ov ->
+            ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" }
+            // Everything else the project changed (from any platform) shows up in All settings.
+            ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
+        }
         p.manifest?.printer?.profileId?.takeIf { ProfileCatalog.byId(it) != null }?.let { profileId = it }
         p.manifest?.printer?.printerId?.takeIf { it in app.fleet.printers }?.let { printerId = it }
         notice = p.manifestProblem
@@ -166,7 +174,7 @@ class PrepareState(private val app: AppState) {
                 plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot) },
                     base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
                 materials = materials(),
-                settings = ProjectManifest.SettingsChoice(preset.name.lowercase(), mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + preset.overrides,
+                settings = ProjectManifest.SettingsChoice(preset.name.lowercase(), mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + preset.overrides + overrides,
                     base.settings.unknown))
         }
         return Project3mf(items.map { ModelObject(it.id, it.name, it.mesh, it.placement()) }, metadata + ("Title" to name) + ("Application" to "Nozzle It All ${app.version}"),
@@ -185,8 +193,8 @@ class PrepareState(private val app: AppState) {
         val bin = SliceEngine.locateEngine() ?: run { slice = SliceState.Failed("The slicing engine isn't installed with this copy of Nozzle It All. Reinstall the Desktop package."); return }
         if (items.isEmpty()) { slice = SliceState.Failed("Add a model to the plate first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
-        val e = SliceEngine(bin, app.paths.workspaceProfile, app.paths.slices).also { engine = it }
-        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials())
+        val e = SliceEngine(bin, app.paths.slices).also { engine = it }
+        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), extraOverrides = overrides.toMap())
         slice = SliceState.Running(0f, "Starting")
         scope.launch {
             val outcome = withContext(Dispatchers.IO) { e.slice(req) { p, s -> slice = SliceState.Running(p, s) } }

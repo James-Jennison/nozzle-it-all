@@ -7,7 +7,6 @@ export const glossary = {
     "android": "Nozzle It All for Android",
     "web": "Nozzle It All Web",
     "website": "nozzleitall.com",
-    "advanced-workspace": "Advanced Workspace",
     "capitalization": "Always 'Nozzle It All' (three capitals, no hyphens). Short form in tight UI: 'Nozzle'. Never 'NIA', 'Nozzleitall' or 'Nozzle-It-All'."
   },
   "terms": {

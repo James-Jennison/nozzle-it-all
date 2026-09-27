@@ -26,6 +26,8 @@ dependencies {
  implementation(compose.ui)
  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
  implementation("org.json:json:20240303")
+ // Swing look and feel for the native menu bar and file dialogs, themed with the design tokens (Apache-2.0).
+ implementation("com.formdev:flatlaf:3.6.1")
  testImplementation("junit:junit:4.13.2")
  testImplementation(compose.desktop.uiTestJUnit4)
 }
@@ -33,6 +35,8 @@ dependencies {
 // One source for printer profiles: the flattened OrcaSlicer profiles Android already bundles (scripts/flatten_orca_profile.py).
 tasks.named<ProcessResources>("processResources") {
  from(rootProject.file("app/src/main/assets/slicer_profiles")) { into("profiles"); exclude("PROVENANCE.md") }
+ // Every engine setting (exported from the engine itself) and Nozzle's own grouping of them.
+ from(rootProject.file("schemas/slicing")) { into("settings"); include("settings-schema.json", "settings-groups.json") }
 }
 
 val nozzleVersion = providers.gradleProperty("nozzleDesktopVersion").orElse("0.1.0")

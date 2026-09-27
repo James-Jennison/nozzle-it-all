@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Dual-upstream intake for the Advanced Workspace (docs/upstream/UPSTREAM_INTAKE.md).
+"""Dual-upstream intake: which upstream OrcaSlicer / Snapmaker Orca changes to bring into Nozzle's engine, and which Orca
+features to rebuild in Prepare (docs/upstream/UPSTREAM_INTAKE.md). The separate Advanced Workspace app is retired.
 
 Tracks two upstreams separately in the Snapmaker Orca repository:
   snapmaker  = remote "origin"   (github.com/Snapmaker/OrcaSlicer, main)   U1/Stock baseline, used only where needed
@@ -43,7 +44,7 @@ RULES = [
      ["src/libslic3r/"], []),
     ("profiles", "Printer/filament profiles: candidate; Android and Web bundle flattened copies",
      ["resources/profiles/"], []),
-    ("workspace-ui", "Orca GUI: candidate for the Advanced Workspace only; never Nozzle's primary interface",
+    ("workspace-ui", "Orca GUI: reference for features to rebuild in Prepare; its code is never used",
      ["src/slic3r/GUI/"], []),
     ("packaging", "Build/packaging: review against Nozzle identity and the NOZZLE_* options",
      ["CMakeLists.txt", "cmake/", "deps/", "scripts/", ".github/", "src/dev-utils/"], []),
@@ -51,7 +52,7 @@ RULES = [
     ("other", "Unclassified: review by hand", [], []),
 ]
 ACTION = {"stock-only": "quarantine", "paxx-relevant": "review", "slicing": "candidate", "profiles": "candidate",
-          "workspace-ui": "candidate", "packaging": "review", "tests": "candidate", "other": "review"}
+          "workspace-ui": "reference", "packaging": "review", "tests": "candidate", "other": "review"}
 
 
 def git(repo, *args, check=True):

@@ -51,14 +51,14 @@ fun SettingsScreen(state: AppState) {
         Card(Modifier.fillMaxWidth()) {
             Txt("Your data", Nz.type.title)
             Txt(Glossary.explanations.getValue("cloud"), Nz.type.body, c.textMuted)
-            listOf("Settings and printers" to state.paths.config, "Projects" to state.paths.projects, "Advanced Workspace data" to state.paths.workspaceProfile, "Logs" to state.paths.logs)
+            listOf("Settings and printers" to state.paths.config, "Projects" to state.paths.projects, "Logs" to state.paths.logs)
                 .forEach { (label, dir) -> Row { Txt(label, Nz.type.body, modifier = Modifier.width(220.dp)); Txt(dir.absolutePath, Nz.type.metricSmall, c.textMuted) } }
             Txt("Nozzle It All keeps its own folders and never reads or changes OrcaSlicer or Snapmaker Orca settings.", Nz.type.bodySmall, c.textMuted)
         }
         Card(Modifier.fillMaxWidth()) {
             Txt("About", Nz.type.title)
             Txt("${Glossary.PRODUCT_DESKTOP} ${state.version}", Nz.type.body)
-            Txt("Free software under the GNU AGPL 3.0 or later. The Advanced Workspace and slicing engine are built from OrcaSlicer and Snapmaker Orca (AGPL-3.0), " +
+            Txt("Free software under the GNU AGPL 3.0 or later. Its slicing engine is derived from OrcaSlicer (AGPL-3.0), " +
                 "which build on PrusaSlicer and Bambu Studio. Nozzle It All is not affiliated with Snapmaker, OrcaSlicer, Prusa Research or Bambu Lab.", Nz.type.bodySmall, c.textMuted)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NzButton("Source code", { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI("https://github.com/James-Jennison/nozzle-it-all")) } }, kind = ButtonKind.QUIET)

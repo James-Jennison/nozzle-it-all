@@ -11,7 +11,6 @@ object Glossary {
     const val PRODUCT_ANDROID = "Nozzle It All for Android"
     const val PRODUCT_WEB = "Nozzle It All Web"
     const val PRODUCT_WEBSITE = "nozzleitall.com"
-    const val PRODUCT_ADVANCEDWORKSPACE = "Advanced Workspace"
     const val PRODUCT_CAPITALIZATION = "Always 'Nozzle It All' (three capitals, no hyphens). Short form in tight UI: 'Nozzle'. Never 'NIA', 'Nozzleitall' or 'Nozzle-It-All'."
     val terms: Map<String, Term> = listOf(
         Term("state.offline", "Offline", "Nozzle can't reach the printer right now.", "", "", false),

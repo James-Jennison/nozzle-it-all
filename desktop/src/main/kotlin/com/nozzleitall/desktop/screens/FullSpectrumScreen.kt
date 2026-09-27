@@ -20,7 +20,7 @@ import com.nozzleitall.printer.ext.fullSpectrum
 
 /**
  * Full Spectrum: shows which colours the loaded toolheads can make together, from the printer's own report. Mixing
- * settings for a project are applied in the Advanced Workspace; this screen is where you see what's possible first.
+ * settings for a project will be applied in Prepare; this screen is where you see what's possible first.
  */
 @Composable
 fun FullSpectrumScreen(state: AppState) {
@@ -61,11 +61,10 @@ fun FullSpectrumScreen(state: AppState) {
         }
         Card(Modifier.fillMaxWidth()) {
             Txt("Use it in a project", Nz.type.title)
-            Txt("Assign colours in Prepare, then open the project in the Advanced Workspace to set mixing ratios and gradients. Your project comes back to Nozzle when you save.",
+            Txt("Assign colours to your models in Prepare. Setting mixing ratios and gradients in Prepare is coming next.",
                 Nz.type.body, c.textMuted)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 NzButton("Go to Prepare", { state.destination = Destination.PREPARE }, kind = ButtonKind.SECONDARY, icon = NzIcon.PREPARE)
-                NzButton("Advanced Workspace", { state.destination = Destination.WORKSPACE }, kind = ButtonKind.QUIET, icon = NzIcon.WORKSPACE)
             }
         }
     }

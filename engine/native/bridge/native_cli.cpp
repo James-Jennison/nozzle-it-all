@@ -4,6 +4,7 @@
 //
 //   nozzle-engine <request.txt>      slice; prints "progress <0-100>" lines on stdout, exits 0 on success
 //   nozzle-engine --version
+//   nozzle-engine --schema           every print/filament/printer setting libslic3r defines, as JSON on stdout
 //
 // The request file uses the Web App's line format (one field per line, tab-separated):
 //   out\t<gcode path>
@@ -17,7 +18,11 @@
 // Everything is local; nothing here performs network I/O.
 #include "slic3r_engine.hpp"
 
+#include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/Preset.hpp>
+
 #include <atomic>
+#include <cfloat>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -80,13 +85,91 @@ void on_signal(int) { g_cancel = true; }
 
 } // namespace
 
+namespace {
+std::string json_string(const std::string& s) {
+    std::string o = "\"";
+    for (unsigned char c : s) {
+        switch (c) {
+            case '"': o += "\\\""; break;
+            case '\\': o += "\\\\"; break;
+            case '\n': o += "\\n"; break;
+            case '\r': o += "\\r"; break;
+            case '\t': o += "\\t"; break;
+            default:
+                if (c < 0x20) { char b[8]; std::snprintf(b, sizeof b, "\\u%04x", c); o += b; } else o += char(c);
+        }
+    }
+    return o + "\"";
+}
+
+const char* type_name(Slic3r::ConfigOptionType t) {
+    using namespace Slic3r;
+    switch (t) {
+        case coFloat: return "float"; case coFloats: return "floats"; case coInt: return "int"; case coInts: return "ints";
+        case coString: return "string"; case coStrings: return "strings"; case coPercent: return "percent"; case coPercents: return "percents";
+        case coFloatOrPercent: return "float_or_percent"; case coFloatsOrPercents: return "floats_or_percents";
+        case coPoint: return "point"; case coPoints: return "points"; case coPoint3: return "point3";
+        case coBool: return "bool"; case coBools: return "bools"; case coEnum: return "enum"; case coEnums: return "enums";
+        default: return "other";
+    }
+}
+
+/**
+ * The settings schema: for every option a preset can carry, its scope (process, filament, printer), type, labels, category,
+ * help text, units, limits, detail level, choices and default, straight from libslic3r's PrintConfigDef. Nozzle generates
+ * its settings screens from this instead of copying any slicer's UI.
+ */
+int dump_schema() {
+    using namespace Slic3r;
+    const std::pair<const char*, const std::vector<std::string>*> scopes[] = {
+        {"process", &Preset::print_options()}, {"filament", &Preset::filament_options()}, {"printer", &Preset::printer_options()}};
+    const char* modes[] = {"simple", "advanced", "expert", "develop"};
+    std::cout << "{\"schema\":\"nozzle.settings\",\"version\":1,\"options\":[";
+    bool first = true;
+    for (const auto& [scope, keys] : scopes) {
+        for (const std::string& key : *keys) {
+            const ConfigOptionDef* d = print_config_def.get(key);
+            if (d == nullptr) continue;
+            std::cout << (first ? "\n" : ",\n") << "{\"key\":" << json_string(key) << ",\"scope\":\"" << scope << "\",\"type\":\"" << type_name(d->type) << "\"";
+            first = false;
+            if (!d->label.empty()) std::cout << ",\"label\":" << json_string(d->label);
+            if (!d->full_label.empty() && d->full_label != d->label) std::cout << ",\"fullLabel\":" << json_string(d->full_label);
+            if (!d->category.empty()) std::cout << ",\"category\":" << json_string(d->category);
+            if (!d->tooltip.empty()) std::cout << ",\"tooltip\":" << json_string(d->tooltip);
+            if (!d->sidetext.empty()) std::cout << ",\"units\":" << json_string(d->sidetext);
+            if (d->min > -FLT_MAX) std::cout << ",\"min\":" << d->min;
+            if (d->max < FLT_MAX) std::cout << ",\"max\":" << d->max;
+            if (!d->ratio_over.empty()) std::cout << ",\"ratioOver\":" << json_string(d->ratio_over);
+            int m = int(d->mode); std::cout << ",\"mode\":\"" << (m >= 0 && m < 4 ? modes[m] : "develop") << "\"";
+            if (d->readonly) std::cout << ",\"readonly\":true";
+            if (d->multiline) std::cout << ",\"multiline\":true";
+            if (d->is_code) std::cout << ",\"code\":true";
+            if (d->nullable) std::cout << ",\"nullable\":true";
+            if (!d->enum_values.empty()) {
+                std::cout << ",\"choices\":[";
+                for (size_t i = 0; i < d->enum_values.size(); ++i)
+                    std::cout << (i ? "," : "") << "{\"value\":" << json_string(d->enum_values[i]) << ",\"label\":"
+                              << json_string(i < d->enum_labels.size() ? d->enum_labels[i] : d->enum_values[i]) << "}";
+                std::cout << "]";
+                if (d->gui_type == ConfigOptionDef::GUIType::f_enum_open || d->gui_type == ConfigOptionDef::GUIType::i_enum_open) std::cout << ",\"openChoices\":true";
+            }
+            if (d->default_value) std::cout << ",\"default\":" << json_string(d->default_value->serialize());
+            std::cout << "}";
+        }
+    }
+    std::cout << "\n]}" << std::endl;
+    return 0;
+}
+} // namespace
+
 int main(int argc, char** argv) {
+    if (argc == 2 && std::string(argv[1]) == "--schema") return dump_schema();
     if (argc == 2 && std::string(argv[1]) == "--version") {
         std::cout << "nozzle-engine 1 (libslic3r, shared Android pipeline, native)" << std::endl;
         return 0;
     }
     if (argc != 2) {
-        std::cerr << "usage: nozzle-engine <request.txt> | --version" << std::endl;
+        std::cerr << "usage: nozzle-engine <request.txt> | --version | --schema" << std::endl;
         return 2;
     }
     Request req;

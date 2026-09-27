@@ -38,13 +38,8 @@ sealed class SliceOutcome {
  * the same shared bridge (app/src/main/cpp/bridge) that Android and the Web App use, built by engine/native. It takes the
  * Web App's request format (profiles, overrides, objects relative to the bed centre), so a plate slices identically on
  * all three platforms.
- *
- * Fallback only: when nozzle-engine is missing, [binary] is the Advanced Workspace's own CLI (the Snapmaker Orca fork),
- * driven with --load-settings/--slice and its data folder set to Nozzle's (never ~/.config/OrcaSlicer or
- * Snapmaker_Orca). That fork predates the bundled profiles' source and cannot slice some of them (for example
- * bambu_generic's start G-code), so it is kept only so an install without the native engine can still slice.
  */
-class SliceEngine(private val binary: File, private val engineDataDir: File, private val workDir: File) {
+class SliceEngine(private val binary: File, private val workDir: File) {
     @Volatile private var running: Process? = null
     @Volatile private var cancelled = false
 
@@ -52,16 +47,6 @@ class SliceEngine(private val binary: File, private val engineDataDir: File, pri
         const val NATIVE_ENGINE_NAME = "nozzle-engine"
         /** Where engine/native/scripts/build_engine.sh puts the binary on a development machine. */
         const val NATIVE_BUILD_OUTPUT = "/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine"
-
-        /** The Advanced Workspace binary (the Orca fork): the GUI workspace, and the slicing fallback. */
-        fun locate(env: Map<String, String> = System.getenv()): File? {
-            env["NOZZLE_WORKSPACE_BIN"]?.let { File(it) }?.takeIf { it.canExecute() }?.let { return it }
-            val install = System.getProperty("compose.application.resources.dir")?.let { File(it).parentFile?.parentFile }
-            return listOfNotNull(install?.let { File(it, "lib/advanced-workspace/bin/nozzle-advanced-workspace") },
-                File("/opt/nozzle-it-all/lib/advanced-workspace/bin/nozzle-advanced-workspace"),
-                // The separately installed nozzle-advanced-workspace package (scripts/package_linux.sh).
-                File("/opt/nozzle-advanced-workspace/bin/nozzle-advanced-workspace")).firstOrNull { it.canExecute() }
-        }
 
         /**
          * The native engine: next to the app (the packaged resources directory, where build.gradle.kts bundles it), then
@@ -99,20 +84,9 @@ class SliceEngine(private val binary: File, private val engineDataDir: File, pri
             }.getOrNull()
         }
 
-        /** The engine Prepare slices with: the native engine, or the Orca-fork CLI only if the native engine is missing. */
-        fun locateEngine(env: Map<String, String> = System.getenv()): File? = locateNative(env) ?: locate(env)
+        /** The engine Prepare slices with. */
+        fun locateEngine(env: Map<String, String> = System.getenv()): File? = locateNative(env)
 
-        fun isNative(f: File) = f.name.startsWith(NATIVE_ENGINE_NAME)
-
-        /** Orca's per-object settings file: the material slot ("extruder") for each object, keyed by the 3MF object id. */
-        fun modelSettings(project: Project3mf, slots: Map<Int, Int>): String = buildString {
-            append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n")
-            project.objects.forEach { o ->
-                append("  <object id=\"${o.id}\">\n    <metadata key=\"name\" value=\"${o.name.replace("\"", "'")}\"/>\n")
-                append("    <metadata key=\"extruder\" value=\"${slots[o.id] ?: 1}\"/>\n  </object>\n")
-            }
-            append("</config>\n")
-        }
 
         const val FLUSH_BETWEEN_TOOLS_MM3 = 84
         const val FLUSH_UNLOAD_LOAD_MM3 = 140
@@ -229,8 +203,9 @@ class SliceEngine(private val binary: File, private val engineDataDir: File, pri
 
     fun slice(req: SliceRequest, onProgress: (Float, String) -> Unit): SliceOutcome {
         cancelled = false
-        val native = if (isNative(binary)) binary.takeIf { it.canExecute() } ?: locateNative() else locateNative()
-        return if (native != null) sliceNative(native, req, onProgress) else sliceWithWorkspaceCli(req, onProgress)
+        val engine = binary.takeIf { it.canExecute() } ?: locateNative()
+            ?: return SliceOutcome.Failed("The slicing engine isn't installed with this copy of Nozzle It All. Reinstall the package.", "")
+        return sliceNative(engine, req, onProgress)
     }
 
     private val nativeStages = listOf(0 to "Preparing the plate", 10 to "Slicing layers", 40 to "Generating walls and infill", 70 to "Generating supports and paths", 90 to "Writing instructions")
@@ -263,56 +238,4 @@ class SliceEngine(private val binary: File, private val engineDataDir: File, pri
     }
 
     /** Fallback only (nozzle-engine missing): the Orca-fork CLI, fed a 3MF with per-object slots. */
-    private fun sliceWithWorkspaceCli(req: SliceRequest, onProgress: (Float, String) -> Unit): SliceOutcome {
-        val job = File(workDir, "slice-${System.currentTimeMillis()}").apply { mkdirs() }
-        val out = File(job, "out").apply { mkdirs() }
-        onProgress(0.02f, "Preparing the plate")
-        // Guided choices become an explicit process profile copy; the user's own profile files are never modified.
-        val process = JSONObject(File(req.profileDir, "process.json").readText())
-        (req.preset.overrides + mapOf("sparse_infill_density" to "${req.infillPercent.coerceIn(0, 100)}%", "enable_support" to if (req.supports) "1" else "0") + req.extraOverrides)
-            .forEach { (k, v) -> process.put(k, v) }
-        File(job, "process.json").writeText(process.toString())
-        val baseFilament = JSONObject(File(req.profileDir, "filament.json").readText())
-        val slots = req.materials.ifEmpty { listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")) }
-        val filamentFiles = slots.sortedBy { it.slot }.map { m ->
-            val f = JSONObject(baseFilament.toString())
-            m.colorHex?.let { f.put("default_filament_colour", JSONArray().put(it)); f.put("filament_colour", JSONArray().put(it)) }
-            m.type?.let { f.put("filament_type", JSONArray().put(it)) }
-            File(job, "filament-${m.slot}.json").apply { writeText(f.toString()) }
-        }
-        val objectSlots = req.project.manifest?.plates?.flatMap { it.objects }?.associate { it.objectId to (it.materialSlot ?: 1) } ?: emptyMap()
-        val input = File(job, "plate.3mf")
-        input.writeBytes(ThreeMf.write(req.project.copy(passthrough = req.project.passthrough + ("Metadata/model_settings.config" to modelSettings(req.project, objectSlots).toByteArray()))))
-        val cmd = listOf(binary.absolutePath, "--datadir", engineDataDir.absolutePath,
-            "--load-settings", "${File(req.profileDir, "machine.json").absolutePath};${File(job, "process.json").absolutePath}",
-            "--load-filaments", filamentFiles.joinToString(";") { it.absolutePath },
-            "--slice", "0", "--outputdir", out.absolutePath, input.absolutePath)
-        val log = File(job, "engine.log")
-        val pb = ProcessBuilder(cmd).directory(job).redirectErrorStream(true).redirectOutput(log)
-        pb.environment().apply { remove("DISPLAY"); remove("WAYLAND_DISPLAY") }
-        val p = pb.start(); running = p
-        val stages = listOf("Initializing" to "Loading the engine", "load_from" to "Reading the plate", "arrange" to "Placing objects",
-            "slicing" to "Slicing layers", "generating" to "Generating supports and paths", "export" to "Writing instructions")
-        var progress = 0.05f
-        while (!p.waitFor(250, TimeUnit.MILLISECONDS)) {
-            val tail = runCatching { log.readText().takeLast(4000).lowercase() }.getOrDefault("")
-            val stage = stages.indexOfLast { tail.contains(it.first.lowercase()) }
-            val target = if (stage < 0) 0.1f else 0.1f + 0.8f * (stage + 1) / stages.size
-            progress = maxOf(progress, minOf(target, progress + 0.02f))
-            onProgress(progress, if (stage < 0) "Loading the engine" else stages[stage].second)
-        }
-        running = null
-        val exit = p.exitValue()
-        val text = runCatching { log.readText() }.getOrDefault("")
-        if (cancelled) return SliceOutcome.Cancelled
-        val result = runCatching { JSONObject(File(out, "result.json").readText()) }.getOrNull()
-        val gcode = out.listFiles { f -> f.name.endsWith(".gcode") }?.firstOrNull()
-        if (exit != 0 || gcode == null || result?.optInt("return_code", -1) != 0) {
-            val reason = result?.optString("error_string")?.takeIf { it.isNotBlank() && it != "Success." } ?: "The engine stopped (code $exit)."
-            return SliceOutcome.Failed(reason, text.takeLast(8000))
-        }
-        onProgress(1f, "Done")
-        val warnings = result.optJSONArray("sliced_plates")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("warning_message")?.takeIf(String::isNotBlank) } } ?: emptyList()
-        return SliceOutcome.Done(gcode, parseStats(gcode), warnings)
-    }
 }

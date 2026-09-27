@@ -16,13 +16,11 @@ class AppPaths(val config: File, val data: File, val cache: File) {
     val secrets get() = File(config, "printer-secrets.json")
     val settings get() = File(config, "settings.json")
     val projects get() = File(data, "projects")
-    val workspaceSessions get() = File(data, "workspace-sessions")
-    val workspaceProfile get() = File(data, "advanced-workspace")
     val logs get() = File(cache, "logs")
     val slices get() = File(cache, "slices")
 
     fun ensure(): AppPaths {
-        listOf(config, data, cache, projects, workspaceSessions, workspaceProfile, logs, slices).forEach { it.mkdirs() }
+        listOf(config, data, cache, projects, logs, slices).forEach { it.mkdirs() }
         runCatching { Files.setPosixFilePermissions(config.toPath(), PosixFilePermissions.fromString("rwx------")) }
         return this
     }

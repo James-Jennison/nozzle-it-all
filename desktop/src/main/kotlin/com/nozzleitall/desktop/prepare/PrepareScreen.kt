@@ -52,9 +52,6 @@ fun PrepareScreen(state: AppState) {
             NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } },
                 icon = NzIcon.IMPORT, testTag = "add-model")
             NzButton("Save", { runCatching { p.save() }.onFailure { p.notice = "Couldn't save: ${it.message}" } }, kind = ButtonKind.PRIMARY, enabled = p.items.isNotEmpty(), testTag = "save-project")
-            NzButton("Open in Advanced Workspace", {
-                runCatching { p.save() }.onSuccess { state.destination = Destination.WORKSPACE }.onFailure { p.notice = "Save the project before opening it in the Advanced Workspace: ${it.message}" }
-            }, kind = ButtonKind.QUIET, icon = NzIcon.WORKSPACE, enabled = p.items.isNotEmpty())
         }
         p.notice?.let { Banner(it, BannerKind.WARNING, "Dismiss" to { p.notice = null }) }
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -89,8 +86,12 @@ fun PrepareScreen(state: AppState) {
                     }
                 }
             }
-            // Guided steps.
-            Column(Modifier.width(400.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // Guided steps, or every setting when All settings is open (the plate stays in view either way).
+            if (p.showAllSettings) {
+                val profileValues = remember(p.profileId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir()) }
+                com.nozzleitall.desktop.settings.AllSettingsPanel(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p.overrides,
+                    onChanged = { p.changed() }, onClose = { p.showAllSettings = false }, modifier = Modifier.width(640.dp))
+            } else Column(Modifier.width(400.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 StepPrinter(state)
                 StepObjects(state)
                 StepSettings(state)
@@ -202,7 +203,10 @@ private fun StepSettings(state: AppState) {
             Txt("Infill", Nz.type.body, modifier = Modifier.width(60.dp))
             listOf(10, 15, 25, 40).forEach { v -> NzButton("$v%", { p.infill = v; p.changed() }, kind = if (p.infill == v) ButtonKind.PRIMARY else ButtonKind.SECONDARY) }
         }
-        Txt("Need more control? Open the project in the Advanced Workspace.", Nz.type.bodySmall, c.textMuted)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NzButton("All settings", { p.showAllSettings = true }, kind = ButtonKind.SECONDARY, icon = NzIcon.SETTINGS, testTag = "all-settings")
+            if (p.overrides.isNotEmpty()) Txt("${p.overrides.size} changed", Nz.type.bodySmall, c.accent)
+        }
     }
 }
 

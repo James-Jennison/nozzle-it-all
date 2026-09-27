@@ -93,7 +93,7 @@ class MultiVendorAcceptanceTest {
      * native nozzle-engine (the Web App and Android engine source) when built; the Orca-fork CLI is only a fallback.
      */
     @Test fun representativeProfilesSliceWithNoPrinterConnected() {
-        val bin = SliceEngine.locateEngine() ?: File("/mnt/faststorage/Snapmaker-Orca/builds/hybrid-orca-cache/src/Release/snapmaker-orca").takeIf { it.canExecute() }
+        val bin = SliceEngine.locateEngine()
         assumeTrue("slicing engine binary available", bin != null)
         val p = paths()
         val cube = MeshIO.readStl(File(root, "site-src/assets/test-cube-20mm.stl").readBytes())
@@ -103,7 +103,7 @@ class MultiVendorAcceptanceTest {
             val obj = ModelObject(1, "cube", cube, Transform.translate(prof.bedW / 2.0 - 10, prof.bedD / 2.0 - 10, 0.0))
             val manifest = ProjectManifest("p-$id", 1, id, ProjectManifest.Producer("t", "desktop", "t"), ProjectManifest.Producer("t", "desktop", "t"), 1,
                 ProjectManifest.PrinterTarget(prof.model, profileId = id), listOf(ProjectManifest.PlateEntry(1, "Plate 1", listOf(ProjectManifest.ObjectEntry(1, "cube", 1)))))
-            val out = SliceEngine(bin!!, File(p.data, "engine"), p.slices).slice(SliceRequest(Project3mf(listOf(obj), emptyMap(), manifest), ProfileCatalog.materialize(p.cache, id),
+            val out = SliceEngine(bin!!, p.slices).slice(SliceRequest(Project3mf(listOf(obj), emptyMap(), manifest), ProfileCatalog.materialize(p.cache, id),
                 QualityPreset.STANDARD, false, 15, listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")))) { _, _ -> }
             assertTrue("$id: $out", out is SliceOutcome.Done)
             val stats = (out as SliceOutcome.Done).stats

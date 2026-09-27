@@ -4,16 +4,13 @@
 #                                   shared slicing engine (engine/native)
 #   nozzle-stock-u1-adapter         the optional Stock U1 adapter, installed separately with its own minimal Java
 #                                   runtime; Desktop finds it at /opt/nozzle-stock-u1-adapter
-#   nozzle-advanced-workspace       the Orca-derived Advanced Workspace (only when --workspace <install dir> is given)
-# Run through heavy-build:  heavy-build -- scripts/package_linux.sh [--workspace DIR] [--engine FILE]
+# Run through heavy-build:  heavy-build -- scripts/package_linux.sh [--engine FILE]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/dist/linux"
 ENGINE="${NOZZLE_ENGINE:-/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine}"
-WORKSPACE=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --workspace) WORKSPACE="$2"; shift 2 ;;
     --engine) ENGINE="$2"; shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
@@ -84,36 +81,6 @@ Description: Optional Snapmaker U1 stock-firmware support for Nozzle It All
 EOF
 fakeroot dpkg-deb --build "$PKG" "$OUT/nozzle-stock-u1-adapter_${VERSION}-1_amd64.deb" >/dev/null
 
-if [ -n "$WORKSPACE" ]; then
-  echo "== Advanced Workspace"
-  PKG="$STAGE/workspace"
-  mkdir -p "$PKG/DEBIAN" "$PKG/opt/nozzle-advanced-workspace"
-  cp -a "$WORKSPACE"/. "$PKG/opt/nozzle-advanced-workspace/"
-  # Its own launcher (hidden from menus; Desktop opens it) so docks match the window class and show its icon.
-  install -Dm644 "$WORKSPACE/resources/applications/com.nozzleitall.AdvancedWorkspace.desktop" "$PKG/usr/share/applications/com.nozzleitall.AdvancedWorkspace.desktop"
-  sed -i -e 's#^Exec=.*#Exec=/opt/nozzle-advanced-workspace/bin/nozzle-advanced-workspace %U#' -e '$a NoDisplay=true' "$PKG/usr/share/applications/com.nozzleitall.AdvancedWorkspace.desktop"
-  for size in 16 32 48 64 128 256 512; do
-    install -Dm644 "$WORKSPACE/resources/images/nozzle-advanced-workspace_${size}px.png" "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/com.nozzleitall.AdvancedWorkspace.png"
-  done
-  install -Dm644 "$WORKSPACE/resources/images/nozzle-advanced-workspace.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/com.nozzleitall.AdvancedWorkspace.svg"
-  printf '#!/bin/sh\nset -e\n' > "$PKG/DEBIAN/postinst"; cat "$STAGE/refresh" >> "$PKG/DEBIAN/postinst"; echo "exit 0" >> "$PKG/DEBIAN/postinst"
-  cp "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/postrm"; chmod 755 "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/postrm"
-  WS_BIN="$(cd "$PKG/opt/nozzle-advanced-workspace" && find . -type f -name nozzle-advanced-workspace -perm -u+x | head -1)"
-  [ -n "$WS_BIN" ] || { echo "no nozzle-advanced-workspace executable under $WORKSPACE" >&2; exit 1; }
-  cat > "$PKG/DEBIAN/control" <<EOF
-Package: nozzle-advanced-workspace
-Version: $VERSION-1
-Architecture: amd64
-Maintainer: support@nozzleitall.com
-Depends: nozzle-it-all, libgtk-3-0t64 | libgtk-3-0, libwebkit2gtk-4.1-0, libgl1
-Section: graphics
-Priority: optional
-Description: Nozzle It All Advanced Workspace
- The full slicer workspace for Nozzle It All, derived from OrcaSlicer. Opened from Nozzle It All for
- Desktop; keeps its own settings and never changes OrcaSlicer's or Snapmaker Orca's.
-EOF
-  fakeroot dpkg-deb --build "$PKG" "$OUT/nozzle-advanced-workspace_${VERSION}-1_amd64.deb" >/dev/null
-fi
 
 echo "== Provenance"
 (cd "$OUT" && sha256sum -- *.deb > SHA256SUMS)
@@ -125,11 +92,6 @@ echo "== Provenance"
   echo "stock adapter runtime modules: $MODULES"
   echo "slicing engine: $ENGINE sha256 $(sha256sum "$ENGINE" | cut -d' ' -f1)"
   [ -f "$ROOT/engine/native/PROVENANCE.txt" ] && sed 's/^/  /' "$ROOT/engine/native/PROVENANCE.txt"
-  if [ -n "$WORKSPACE" ]; then
-    WS_SRC="${NOZZLE_WORKSPACE_SRC:-/mnt/faststorage/Snapmaker-Orca/nozzle-advanced-workspace}"
-    echo "advanced workspace: $WORKSPACE, binary sha256 $(sha256sum "$WORKSPACE/bin/nozzle-advanced-workspace" | cut -d' ' -f1)"
-    [ -d "$WS_SRC" ] && echo "  source: $(git -C "$WS_SRC" rev-parse --abbrev-ref HEAD) $(git -C "$WS_SRC" rev-parse HEAD); built with NOZZLE_BRANDING=ON NOZZLE_STOCK_U1=OFF"
-  fi
   echo "adapters in nozzle-it-all: $(dpkg-deb -c "$OUT"/nozzle-it-all_*_amd64.deb | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
   echo; cat "$OUT/SHA256SUMS"
 } > "$OUT/PROVENANCE.txt"

@@ -2343,6 +2343,24 @@
    "family": "export-only"
   },
   {
+   "id": "elegoo_centauri_carbon_cosmos_afc",
+   "vendor": "Elegoo",
+   "model": "Elegoo Centauri Carbon",
+   "name": "Elegoo Centauri Carbon 0.4 nozzle - COSMOS AFC (CANVAS)",
+   "bed": [
+    256.0,
+    256.0
+   ],
+   "height": 256.0,
+   "tools": 4,
+   "nozzle": 0.4,
+   "gcodeFlavor": "klipper",
+   "outputs": [
+    "gcode"
+   ],
+   "family": "export-only"
+  },
+  {
    "id": "eryone_thinker_x400",
    "vendor": "Thinker",
    "model": "Thinker X400",

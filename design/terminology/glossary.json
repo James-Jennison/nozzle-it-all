@@ -1,0 +1,80 @@
+{
+  "$description": "Nozzle It All shared terminology. Every user-facing name for a shared concept lives here and is generated into each platform (scripts/generate_design_tokens.py). Enum glossaryId values in printer-api must exist here (GlossaryConsistencyTest).",
+  "version": "1.0.0",
+  "product": {
+    "family": "Nozzle It All",
+    "desktop": "Nozzle It All for Desktop",
+    "android": "Nozzle It All for Android",
+    "web": "Nozzle It All Web",
+    "website": "nozzleitall.com",
+    "advanced-workspace": "Advanced Workspace",
+    "capitalization": "Always 'Nozzle It All' (three capitals, no hyphens). Short form in tight UI: 'Nozzle'. Never 'NIA', 'Nozzleitall' or 'Nozzle-It-All'."
+  },
+  "terms": {
+    "state.offline":    { "label": "Offline", "description": "Nozzle can't reach the printer right now." },
+    "state.connecting": { "label": "Connecting", "description": "Nozzle is reaching the printer." },
+    "state.starting":   { "label": "Starting up", "description": "The printer is reachable but its firmware isn't ready yet." },
+    "state.ready":      { "label": "Ready", "description": "Idle and ready for a job." },
+    "state.printing":   { "label": "Printing", "description": "A job is running." },
+    "state.paused":     { "label": "Paused", "description": "The job is paused and can be resumed." },
+    "state.finished":   { "label": "Finished", "description": "The last job completed. Ready for the next one." },
+    "state.cancelled":  { "label": "Cancelled", "description": "The last job was cancelled. Ready for the next one." },
+    "state.error":      { "label": "Needs attention", "description": "The printer reported a problem. Check it before printing." },
+    "state.unknown":    { "label": "Unknown", "description": "The printer answered, but Nozzle couldn't understand it. Nothing is assumed." },
+
+    "route.lan":             { "label": "Local network", "description": "Connected directly on your home or workshop network." },
+    "route.private-network": { "label": "Private network", "description": "Connected through your own private network, such as Tailscale. Nozzle doesn't relay this traffic." },
+    "route.vendor-cloud":    { "label": "Snapmaker cloud", "description": "Used only by the optional Stock U1 support." },
+
+    "firmware.paxx":     { "label": "PAXX", "description": "Snapmaker U1 running PAXX firmware in LAN mode. Works fully offline with no account." },
+    "firmware.stock-u1": { "label": "Stock U1", "description": "Snapmaker U1 on Snapmaker's own firmware. Needs the optional Stock U1 support." },
+    "firmware.klipper":  { "label": "Klipper", "description": "Another Klipper printer on your network." },
+
+    "action.start":         { "label": "Start print", "confirm": "Start printing" },
+    "action.pause":         { "label": "Pause", "confirm": "Pause print" },
+    "action.resume":        { "label": "Resume", "confirm": "Resume print" },
+    "action.cancel":        { "label": "Cancel print", "confirm": "Cancel print", "destructive": true },
+    "action.heat":          { "label": "Set temperature", "confirm": "Heat" },
+    "action.home":          { "label": "Home axes", "confirm": "Home" },
+    "action.move":          { "label": "Move", "confirm": "Move" },
+    "action.load":          { "label": "Load material", "confirm": "Load" },
+    "action.unload":        { "label": "Unload material", "confirm": "Unload" },
+    "action.edit-material": { "label": "Set material", "confirm": "Save to printer" },
+    "action.toolchange":    { "label": "Change toolhead", "confirm": "Change toolhead" },
+
+    "concept.printer":      { "label": "Printer", "plural": "Printers" },
+    "concept.project":      { "label": "Project", "plural": "Projects", "description": "Models, plates, printer, materials and settings, saved together." },
+    "concept.plate":        { "label": "Plate", "plural": "Plates", "description": "One build plate's worth of objects." },
+    "concept.model":        { "label": "Model", "plural": "Models" },
+    "concept.job":          { "label": "Job", "plural": "Jobs", "description": "A sliced plate sent to a printer." },
+    "concept.material":     { "label": "Material", "plural": "Materials", "description": "Filament: type, colour and brand. Never 'filament profile' in everyday UI." },
+    "concept.toolhead":     { "label": "Toolhead", "plural": "Toolheads", "description": "Numbered from 1 in the UI." },
+    "concept.full-spectrum":{ "label": "Full Spectrum", "description": "Mixes the colours loaded in a U1's toolheads to print more colours than you have toolheads." },
+    "concept.camera":       { "label": "Camera", "plural": "Cameras" },
+    "concept.slice":        { "label": "Slice", "description": "Turn a plate into instructions the printer can run." },
+    "concept.preview":      { "label": "Preview" },
+    "concept.profile":      { "label": "Print settings", "description": "The saved settings a slice uses. Say 'settings'; avoid 'process preset'." },
+
+    "outcome.accepted": { "label": "Sent", "description": "The printer accepted the command." },
+    "outcome.rejected": { "label": "Not sent", "description": "Nothing changed on the printer." },
+    "outcome.unknown":  { "label": "Result unknown", "description": "The printer didn't confirm. Nozzle checks the printer before letting you try again." }
+  },
+  "explanations": {
+    "paxx": "PAXX is the recommended way to use a Snapmaker U1 with Nozzle It All. Everything works on your own network: no Snapmaker account, no cloud and no internet connection needed.",
+    "stock-u1": "Printers on Snapmaker's own firmware are supported through optional Stock U1 support. It's only installed and started if you add a Stock U1, and it can use your Snapmaker account for features that stock firmware only offers through Snapmaker's cloud. If it stops working, your PAXX printers aren't affected.",
+    "remote-access": "To reach your printer away from home, connect your computer or phone to your own private network, such as Tailscale, and add the printer by its private-network address. Nozzle It All connects to that address directly; it never relays printer traffic through its own servers.",
+    "cloud": "Nozzle It All doesn't need an account or a Nozzle cloud service. Your models, projects and printer details stay on your device.",
+    "flutter": "Some Stock U1 features come from Snapmaker's own components, which are only loaded if you turn on Stock U1 support.",
+    "web-local": "Nozzle It All Web slices in your browser. Your models aren't uploaded anywhere."
+  },
+  "tone": [
+    "Say what happened and what to do next, in that order.",
+    "Plain words over jargon; name the printer, the file and the toolhead.",
+    "Never blame the user. Never say something worked unless it was confirmed.",
+    "Sentence case for all UI text. No exclamation marks in errors."
+  ],
+  "internal-words": {
+    "$description": "Words that describe implementation, not the user's task. They may appear in diagnostics, logs and advanced settings, never in everyday UI copy.",
+    "words": ["Moonraker", "Klippy", "Flutter", "WebAssembly", "WASM", "IPC", "adapter", "MQTT", "JSON", "gcode_macro", "print_task_config", "Snapmaker Orca", "OrcaSlicer"]
+  }
+}

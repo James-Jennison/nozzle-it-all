@@ -1,0 +1,109 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Nozzle It All design tokens: the single source of truth for Desktop, Android, the Web App and the public website. Edit this file, then run `python3 scripts/generate_design_tokens.py`. Never edit a generated file by hand; `--check` fails CI when one is stale or when a text colour misses its contrast target.",
+  "meta": {
+    "version": "1.0.0",
+    "family": "Nozzle It All"
+  },
+  "brand": {
+    "violet": { "$type": "color", "$value": "#8B5CF6", "$description": "The Infill mark and decorative fills only. 4.48:1 on dark background: never text." },
+    "violet-text-dark": { "$type": "color", "$value": "#A78BFA" },
+    "violet-text-light": { "$type": "color", "$value": "#6D28D9" },
+    "print-orange": { "$type": "color", "$value": "#F2754E", "$description": "Heat, the nozzle, live printing energy. Decorative or large text on dark." },
+    "charcoal": { "$type": "color", "$value": "#0D1114" }
+  },
+  "color": {
+    "dark": {
+      "background": { "$type": "color", "$value": "#0D1114" },
+      "surface": { "$type": "color", "$value": "#14191D" },
+      "surface-raised": { "$type": "color", "$value": "#1E2429" },
+      "surface-sunken": { "$type": "color", "$value": "#0A0D0F" },
+      "line": { "$type": "color", "$value": "#2A3138" },
+      "line-strong": { "$type": "color", "$value": "#4A545B" },
+      "text": { "$type": "color", "$value": "#EEF2F4", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 7.0 } },
+      "text-muted": { "$type": "color", "$value": "#9AA5AA", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 4.5 } },
+      "accent": { "$type": "color", "$value": "#A78BFA", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 4.5 } },
+      "on-accent": { "$type": "color", "$value": "#0D1114", "contrast": { "on": ["accent"], "min": 4.5 } },
+      "heat": { "$type": "color", "$value": "#F2754E", "contrast": { "on": ["background", "surface"], "min": 4.5 } },
+      "focus": { "$type": "color", "$value": "#C4B5FD", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 3.0 } },
+      "danger": { "$type": "color", "$value": "#FB7185", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 4.5 } },
+      "on-danger": { "$type": "color", "$value": "#0D1114", "contrast": { "on": ["danger"], "min": 4.5 } }
+    },
+    "light": {
+      "background": { "$type": "color", "$value": "#F6F7F9" },
+      "surface": { "$type": "color", "$value": "#FFFFFF" },
+      "surface-raised": { "$type": "color", "$value": "#EEF1F3" },
+      "surface-sunken": { "$type": "color", "$value": "#E6EAED" },
+      "line": { "$type": "color", "$value": "#D5DBDE" },
+      "line-strong": { "$type": "color", "$value": "#9AA5AA" },
+      "text": { "$type": "color", "$value": "#0D1114", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 7.0 } },
+      "text-muted": { "$type": "color", "$value": "#4F5A61", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 4.5 } },
+      "accent": { "$type": "color", "$value": "#6D28D9", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 4.5 } },
+      "on-accent": { "$type": "color", "$value": "#FFFFFF", "contrast": { "on": ["accent"], "min": 4.5 } },
+      "heat": { "$type": "color", "$value": "#C2410C", "contrast": { "on": ["background", "surface"], "min": 4.5 } },
+      "focus": { "$type": "color", "$value": "#6D28D9", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 3.0 } },
+      "danger": { "$type": "color", "$value": "#BE123C", "contrast": { "on": ["background", "surface", "surface-raised"], "min": 4.5 } },
+      "on-danger": { "$type": "color", "$value": "#FFFFFF", "contrast": { "on": ["danger"], "min": 4.5 } }
+    }
+  },
+  "status": {
+    "$description": "One colour per shared printer state (design/terminology/glossary.json). Colour is never the only signal: every state also has a label and an icon shape.",
+    "dark": {
+      "offline":    { "$type": "color", "$value": "#9AA5AA", "icon": "ring-dashed" },
+      "connecting": { "$type": "color", "$value": "#93C5FD", "icon": "ring-spin" },
+      "starting":   { "$type": "color", "$value": "#93C5FD", "icon": "ring-spin" },
+      "ready":      { "$type": "color", "$value": "#5EEAD4", "icon": "dot" },
+      "printing":   { "$type": "color", "$value": "#A78BFA", "icon": "nozzle" },
+      "paused":     { "$type": "color", "$value": "#FBBF24", "icon": "pause" },
+      "finished":   { "$type": "color", "$value": "#86EFAC", "icon": "check" },
+      "cancelled":  { "$type": "color", "$value": "#9AA5AA", "icon": "stop" },
+      "error":      { "$type": "color", "$value": "#FB7185", "icon": "alert" },
+      "unknown":    { "$type": "color", "$value": "#FCD34D", "icon": "question" }
+    },
+    "light": {
+      "offline":    { "$type": "color", "$value": "#4F5A61", "icon": "ring-dashed" },
+      "connecting": { "$type": "color", "$value": "#1D4ED8", "icon": "ring-spin" },
+      "starting":   { "$type": "color", "$value": "#1D4ED8", "icon": "ring-spin" },
+      "ready":      { "$type": "color", "$value": "#0F766E", "icon": "dot" },
+      "printing":   { "$type": "color", "$value": "#6D28D9", "icon": "nozzle" },
+      "paused":     { "$type": "color", "$value": "#92400E", "icon": "pause" },
+      "finished":   { "$type": "color", "$value": "#166534", "icon": "check" },
+      "cancelled":  { "$type": "color", "$value": "#4F5A61", "icon": "stop" },
+      "error":      { "$type": "color", "$value": "#BE123C", "icon": "alert" },
+      "unknown":    { "$type": "color", "$value": "#854D0E", "icon": "question" }
+    },
+    "contrast": { "on": ["background", "surface", "surface-raised"], "min": 4.5 }
+  },
+  "font": {
+    "display": { "$type": "fontFamily", "$value": ["Space Grotesk", "IBM Plex Sans", "system-ui", "sans-serif"] },
+    "body":    { "$type": "fontFamily", "$value": ["IBM Plex Sans", "system-ui", "sans-serif"] },
+    "mono":    { "$type": "fontFamily", "$value": ["IBM Plex Mono", "ui-monospace", "monospace"], "$description": "Numbers that update live: temperatures, progress, times. Stable width stops readouts jumping." }
+  },
+  "type": {
+    "$description": "Sizes in px at 100% text scale (dp on Android, sp for text). Every platform must honour the user's text-size setting.",
+    "display":  { "size": 32, "line": 40, "weight": 700, "family": "display", "tracking": -0.01 },
+    "headline": { "size": 24, "line": 32, "weight": 700, "family": "display", "tracking": -0.01 },
+    "title":    { "size": 18, "line": 26, "weight": 600, "family": "display", "tracking": 0 },
+    "body":     { "size": 15, "line": 22, "weight": 400, "family": "body", "tracking": 0 },
+    "body-small": { "size": 13, "line": 18, "weight": 400, "family": "body", "tracking": 0 },
+    "label":    { "size": 13, "line": 16, "weight": 600, "family": "body", "tracking": 0.02 },
+    "metric":   { "size": 22, "line": 28, "weight": 500, "family": "mono", "tracking": 0 },
+    "metric-small": { "size": 14, "line": 18, "weight": 500, "family": "mono", "tracking": 0 }
+  },
+  "space": { "$description": "4 px base, 8 px rhythm.", "0": 0, "1": 4, "2": 8, "3": 12, "4": 16, "5": 20, "6": 24, "8": 32, "10": 40, "12": 48, "16": 64 },
+  "radius": { "chip": 999, "small": 8, "control": 12, "card": 16, "panel": 20 },
+  "border": { "hairline": 1, "focus": 3, "selected": 2 },
+  "elevation": {
+    "$description": "Nozzle separates layers with surface tone and a hairline, not heavy shadows. Shadows are reserved for things floating over content.",
+    "flat": { "tone": "surface", "shadow": "none" },
+    "raised": { "tone": "surface-raised", "shadow": "none" },
+    "floating": { "tone": "surface-raised", "shadow": "0 12px 32px rgba(0,0,0,0.35)" }
+  },
+  "size": { "touch-target": 48, "desktop-target": 32, "icon": 20, "icon-large": 28, "rail-width": 88, "content-max": 1280 },
+  "motion": {
+    "$description": "Motion explains a change of place or state; nothing moves for decoration. Honour reduced-motion settings everywhere.",
+    "quick": { "duration": 120, "easing": "cubic-bezier(0.2, 0, 0, 1)" },
+    "standard": { "duration": 200, "easing": "cubic-bezier(0.2, 0, 0, 1)" },
+    "emphasis": { "duration": 320, "easing": "cubic-bezier(0.05, 0.7, 0.1, 1)" }
+  }
+}

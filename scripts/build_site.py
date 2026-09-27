@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "site-src"
 OUT = ROOT / "site"
-STATES = {"active": "Active", "released": "Available", "planned": "Planned", "deferred": "Deferred"}
+STATES = {"active": "Active", "released": "Available", "development": "In development", "planned": "Planned", "deferred": "Deferred"}
 
 def fail(msg): print("BUILD FAILED:", msg, file=sys.stderr); sys.exit(1)
 

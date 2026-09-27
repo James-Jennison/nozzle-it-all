@@ -1,14 +1,50 @@
 {
-  "_comment": "Single source of truth for what the site may claim. States: active, released, planned, deferred. A 'released' platform must have a url; the build refuses to render a launch/download button otherwise.",
+  "_comment": "Single source of truth for what the site may claim. States: active, released, development (built and being tested, not available to download or open), planned, deferred. A 'released' platform must have a url; the build refuses to render a launch/download button otherwise.",
   "updated": "2026-09-26",
   "github": "https://github.com/James-Jennison/nozzle-it-all",
   "support_email": "support@nozzleitall.com",
   "platforms": {
-    "android":    { "name": "Android",          "state": "active",   "order": 1, "url": null, "summary": "In invite-only closed testing on Google Play. Not yet publicly available." },
-    "linux":      { "name": "Linux desktop",    "state": "planned",  "order": 2, "url": null, "summary": "Planned. First after Android." },
-    "web":        { "name": "Web app",          "state": "planned",  "order": 3, "url": null, "summary": "Planned. Follows the Linux desktop app." },
-    "windows":    { "name": "Windows desktop",  "state": "planned",  "order": 4, "url": null, "summary": "Planned. Follows the web app." },
-    "ios":        { "name": "iOS",              "state": "deferred", "order": 5, "url": null, "summary": "Deferred. Not currently planned." },
-    "macos":      { "name": "macOS",            "state": "deferred", "order": 6, "url": null, "summary": "Deferred. Not currently planned." }
+    "android": {
+      "name": "Android",
+      "state": "active",
+      "order": 1,
+      "url": null,
+      "summary": "In invite-only closed testing on Google Play. Not yet publicly available."
+    },
+    "linux": {
+      "name": "Linux desktop",
+      "state": "development",
+      "order": 2,
+      "url": null,
+      "summary": "Nozzle It All for Desktop on Linux is built and being tested. Not yet available to download."
+    },
+    "web": {
+      "name": "Web app",
+      "state": "development",
+      "order": 3,
+      "url": null,
+      "summary": "Nozzle It All Web, the full app in your browser, is built and being tested. Not yet available to open."
+    },
+    "windows": {
+      "name": "Windows desktop",
+      "state": "planned",
+      "order": 4,
+      "url": null,
+      "summary": "Planned after Linux. The Desktop app is being built so the same app can be packaged for Windows."
+    },
+    "ios": {
+      "name": "iOS",
+      "state": "deferred",
+      "order": 5,
+      "url": null,
+      "summary": "Deferred. Not currently planned."
+    },
+    "macos": {
+      "name": "macOS",
+      "state": "deferred",
+      "order": 6,
+      "url": null,
+      "summary": "Deferred. Not currently planned."
+    }
   }
 }

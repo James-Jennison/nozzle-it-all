@@ -6,3 +6,4 @@ local.properties
 artifacts/
 *.jks
 *.keystore
+dist/

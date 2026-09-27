@@ -72,8 +72,9 @@ fun PrepareScreen(state: AppState) {
                 val slots = p.materials()
                 val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
                 val objects = p.items.map { item ->
-                    val paintColors = if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> slotColors.getOrNull(item.slotFor(n) - 1) }
-                    PlateObject(item.id, item.name, item.mesh, slotColors.getOrElse(item.slot - 1) { c.accent }, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors)
+                    // A slot is a loaded filament or a Full Spectrum mix (drawn in its blended colour).
+                    val paintColors = if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
+                    PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors)
                 }
                 val (bw, bd) = p.bed
                 Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(20.dp))) {
@@ -194,53 +195,9 @@ private fun MaterialsSection(state: AppState) {
         }
         // Painted models: which slot prints each of the model's own colours.
         p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
-        // Full Spectrum: a printer that reports it can mix loaded colours in thin alternating layers gets the mixes its slots make.
-        val mixes = p.printer()?.capabilities?.value?.vendorExtensions?.contains(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM) == true
-        if (mixes && slots.size >= 2) ColourMixing(slots)
+        // Full Spectrum (Snapmaker Orca's colour mixing), wherever the printer or profile offers it.
+        if (com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM in p.features() && slots.size >= 2) ColourMixingSection(p)
     }
-}
-
-/**
- * Full Spectrum's mixes: every pair of loaded colours at three ratios, blended in linear light (closer to how thin
- * alternating layers read than mixing sRGB values). Previews are approximate.
- */
-@Composable
-private fun ColourMixing(slots: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>) {
-    val c = Nz.colors
-    var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = if (open) "Hide colour mixing" else "Show colour mixing") { open = !open },
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Txt(if (open) "▾" else "▸", Nz.type.label, c.textMuted)
-        Txt("Colour mixing", Nz.type.label, c.text)
-        Txt("Full Spectrum", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
-    }
-    if (!open) return
-    Txt("Two loaded colours alternated in thin layers read as a blend. Previews are approximate: results depend on the material, layer height and light.",
-        Nz.type.bodySmall, c.textMuted)
-    val palette = slots.map { it.slot to (parseHex(it.colorHex) ?: c.surfaceSunken) }
-    val pairs = palette.indices.flatMap { a -> (a + 1 until palette.size).map { b -> a to b } }
-    pairs.chunked(2).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            row.forEach { (a, b) ->
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Txt("${palette[a].first}+${palette[b].first}", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(30.dp))
-                    listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { t ->
-                        Box(Modifier.weight(1f).height(18.dp).clip(RoundedCornerShape(3.dp)).background(mixLinear(palette[a].second, palette[b].second, t))
-                            .semantics { contentDescription = "About ${((1 - t) * 100).toInt()} percent slot ${palette[a].first}, ${(t * 100).toInt()} percent slot ${palette[b].first}" })
-                    }
-                }
-            }
-            if (row.size == 1) Spacer(Modifier.weight(1f))
-        }
-    }
-}
-
-/** Mixes in linear light, which is closer to how thin alternating layers read than mixing sRGB values directly. */
-fun mixLinear(a: Color, b: Color, t: Float): Color {
-    fun lin(v: Float) = if (v <= 0.04045f) v / 12.92f else Math.pow(((v + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
-    fun srgb(v: Float) = if (v <= 0.0031308f) v * 12.92f else (1.055f * Math.pow(v.toDouble(), 1 / 2.4) - 0.055f).toFloat()
-    fun m(x: Float, y: Float) = srgb(lin(x) * (1 - t) + lin(y) * t).coerceIn(0f, 1f)
-    return Color(m(a.red, b.red), m(a.green, b.green), m(a.blue, b.blue))
 }
 
 @Composable
@@ -251,12 +208,13 @@ private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzle
         Txt("Match", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Match the model's colours to the nearest loaded filament") {
             p.matchByColour(item) }.padding(4.dp))
     }
-    val choices = slots.map { s -> com.nozzleitall.desktop.settings.Choice(s.slot.toString(), "${s.slot} · ${listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "?" }}") }
+    // Loaded filaments, then any Full Spectrum mixes: a model colour can print as either.
+    val choices = p.allSlots().map { (id, label) -> com.nozzleitall.desktop.settings.Choice(id.toString(), "$id · $label") }
     Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.size(16.dp))
         Txt("Rest of the model", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
         Txt("→", Nz.type.bodySmall, c.textMuted)
-        Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(parseHex(slots.getOrNull(item.slot - 1)?.colorHex) ?: c.accent))
+        Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(parseHex(p.slotHex(item.slot)) ?: c.accent))
         com.nozzleitall.desktop.settings.DenseSelect("Slot for the rest of the model", choices, item.slot.toString(), Modifier.width(140.dp)) { v -> v.toIntOrNull()?.let { item.slot = it; p.changed() } }
     }
     item.painted.forEach { n ->
@@ -266,7 +224,7 @@ private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzle
             Txt(src?.name?.substringBefore(" @") ?: src?.type ?: "Colour $n", Nz.type.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
             Txt("→", Nz.type.bodySmall, c.textMuted)
             val slot = item.slotFor(n)
-            Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(parseHex(slots.getOrNull(slot - 1)?.colorHex) ?: c.accent))
+            Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(parseHex(p.slotHex(slot)) ?: c.accent))
             com.nozzleitall.desktop.settings.DenseSelect("Slot for colour $n", choices, slot.toString(), Modifier.width(140.dp)) { v -> v.toIntOrNull()?.let { p.setPaintSlot(item, n, it) } }
         }
     }
@@ -285,7 +243,7 @@ private fun StepObjects(state: AppState) {
             Row(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else Color.Transparent)
                 .selectable(sel, role = Role.Button) { p.selected = if (sel) null else item.id }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(parseHex(slots.getOrNull(item.slot - 1)?.colorHex) ?: c.accent))
+                Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(parseHex(p.slotHex(item.slot)) ?: c.accent))
                 Txt(item.name, Nz.type.bodySmall, if (sel) c.accent else c.text, modifier = Modifier.weight(1f), maxLines = 1)
                 Txt("${"%.0f".format(item.footprintW)}×${"%.0f".format(item.footprintD)}×${"%.0f".format(item.height)} mm", Nz.type.bodySmall, c.textMuted)
             }

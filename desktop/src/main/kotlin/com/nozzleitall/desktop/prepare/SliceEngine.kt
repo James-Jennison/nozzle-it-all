@@ -144,7 +144,9 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             val paint = req.project.objects.associate { o -> o.id to (if (o.mesh.isPainted) paintInSlots(o.mesh, entries[o.id]?.paintSlots.orEmpty(), objectSlots[o.id] ?: 1) else null) }
             val usedSlots = req.project.objects.maxOfOrNull { o -> maxOf(objectSlots[o.id] ?: 1, paint[o.id]?.second ?: 1) } ?: 1
             val materials = req.materials.sortedBy { it.slot }.ifEmpty { listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")) }
-            val slots = materials.take(maxOf(usedSlots, 1))
+            // Full Spectrum mixes name physical slots by number, so with any mixes every loaded slot is passed to the engine.
+            val mixing = !req.extraOverrides[FullSpectrum.DEFINITIONS_KEY].isNullOrBlank()
+            val slots = if (mixing) materials else materials.take(maxOf(usedSlots, 1))
             val overrides = LinkedHashMap<String, String>()
             overrides += req.preset.overrides
             overrides["sparse_infill_density"] = "${req.infillPercent.coerceIn(0, 100)}%"

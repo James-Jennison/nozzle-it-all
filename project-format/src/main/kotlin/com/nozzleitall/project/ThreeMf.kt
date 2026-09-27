@@ -317,7 +317,9 @@ object ThreeMf {
             val ini = String(bytes, Charsets.UTF_8).lines().mapNotNull { l -> l.removePrefix(";").split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0].trim() to it[1].trim() } }.toMap()
             val colours = ini["filament_colour"]?.split(';').orEmpty(); val types = ini["filament_type"]?.split(';').orEmpty()
             val names = ini["filament_settings_id"]?.split(';')?.map { it.trim('"') }.orEmpty()
-            return colours.indices.map { i -> SourceFilament(i + 1, colours[i].takeIf { hex(it) }, types.getOrNull(i)?.ifBlank { null }, names.getOrNull(i)?.ifBlank { null }) }
+            // No colours from a PrusaSlicer file: Snapmaker Orca loads its geometry only and keeps the user's own filaments
+            // (Plater::load_files, "load geometry data only"); MMU projects often carry one placeholder colour for all.
+            return colours.indices.map { i -> SourceFilament(i + 1, null, types.getOrNull(i)?.ifBlank { null }, names.getOrNull(i)?.ifBlank { null }) }
         }
         return emptyList()
     }

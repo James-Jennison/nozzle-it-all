@@ -144,8 +144,59 @@ class PrepareState(private val app: AppState) {
 
     fun profileDir(): File = ProfileCatalog.materialize(app.paths.cache, profileId)
 
+    // --- Colour mixing (Snapmaker Full Spectrum). The mixes are Snapmaker's own mixed_filament_definitions string; the
+    // engine (Snapmaker Orca's MixedFilamentManager) turns it into rows with virtual slot numbers after the physical ones.
+    var mixDefinitions by mutableStateOf("")
+    val mixes = mutableStateListOf<FullSpectrum.Mix>()
+    var mixProblem by mutableStateOf<String?>(null)
+
+    /** Colour-mixing features on offer: the connected printer's own report, else what the chosen profile offers. */
+    fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions
+        ?: profile?.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools) } ?: emptySet()
+
+    fun physicalColours(): List<String> = materials().map { it.colorHex ?: "#FFFFFF" }
+
+    /** The colour of slot [id]: a loaded filament, or a mix's blended display colour. */
+    fun slotHex(id: Int): String? = materials().firstOrNull { it.slot == id }?.colorHex ?: mixes.firstOrNull { it.id == id }?.displayHex
+
+    /** Every slot a model can print with: the loaded filaments, then the mixes. */
+    fun allSlots(): List<Pair<Int, String>> = materials().map { it.slot to listOfNotNull(it.vendor, it.type).joinToString(" ").ifBlank { "Filament" } } +
+        mixes.filter { it.enabled }.map { it.id to it.label }
+
+    private fun setMixes(m: FullSpectrum.Mixes) { mixDefinitions = m.definitions; mixes.clear(); mixes.addAll(m.rows); mixProblem = null }
+
+    /** Re-reads the mixes for the current slots (their colours and numbers follow the loaded filaments). */
+    fun refreshMixes(scope: kotlinx.coroutines.CoroutineScope) {
+        val defs = mixDefinitions; val physical = physicalColours()
+        if (defs.isBlank()) { mixes.clear(); return }
+        scope.launch { runCatching { withContext(Dispatchers.IO) { FullSpectrum.display(physical, defs) } }
+            .onSuccess { setMixes(it) }.onFailure { mixProblem = it.message } }
+    }
+
+    fun editMixes(scope: kotlinx.coroutines.CoroutineScope, op: (List<String>, String) -> FullSpectrum.Mixes) {
+        val defs = mixDefinitions; val physical = physicalColours()
+        scope.launch { runCatching { withContext(Dispatchers.IO) { op(physical, defs) } }
+            .onSuccess { setMixes(it); changed() }.onFailure { mixProblem = it.message } }
+    }
+
+    /** Applies a Color Mixing Match to [item]: its colours print in the matched slots or new mixes. */
+    fun applyMatch(item: PrepItem, result: FullSpectrum.MatchResult, scope: kotlinx.coroutines.CoroutineScope) {
+        mixDefinitions = result.definitions
+        // Auto mode matched against Snapmaker's recommended filaments: with no printer reporting what's loaded, the slots
+        // become those filaments (as Snapmaker Orca's apply step sets them); a connected printer's slots are what's loaded.
+        if (printer()?.status?.value?.toolheads.isNullOrEmpty()) result.palette.forEach { (slot, hex) ->
+            val i = manualSlots.indexOfFirst { it.slot == slot }
+            if (i >= 0) manualSlots[i] = manualSlots[i].copy(type = "PLA", colorHex = hex)
+        }
+        result.results.forEach { m -> m.sourceIds.forEach { n ->
+            if (n == item.ownFilament) item.slot = m.slot
+            if (n >= 1) { while (item.paintSlots.size < n) item.paintSlots.add(item.slot); item.paintSlots[n - 1] = m.slot }
+        } }
+        changed(); refreshMixes(scope)
+    }
+
     fun newProject() {
-        overrides.clear()
+        overrides.clear(); mixDefinitions = ""; mixes.clear(); mixProblem = null
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         slice = SliceState.Idle; showPreview = false; nextId = 1
     }
@@ -161,7 +212,8 @@ class PrepareState(private val app: AppState) {
         p.manifest?.settings?.overrides?.let { ov ->
             ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" }
             // Everything else the project changed (from any platform) shows up in All settings.
-            ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
+            ov[FullSpectrum.DEFINITIONS_KEY]?.let { mixDefinitions = it }
+            ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && k != FullSpectrum.DEFINITIONS_KEY && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
         }
         p.manifest?.printer?.profileId?.takeIf { ProfileCatalog.byId(it) != null }?.let { profileId = it }
         p.manifest?.printer?.printerId?.takeIf { it in app.fleet.printers }?.let { printerId = it }
@@ -255,7 +307,8 @@ class PrepareState(private val app: AppState) {
                 plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList()) },
                     base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
                 materials = materials(),
-                settings = ProjectManifest.SettingsChoice(preset.name.lowercase(), mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + preset.overrides + overrides,
+                settings = ProjectManifest.SettingsChoice(preset.name.lowercase(), mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + preset.overrides + overrides +
+                    (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
                     base.settings.unknown))
         }
         return Project3mf(items.map { ModelObject(it.id, it.name, it.mesh, it.placement()) }, metadata + ("Title" to name) + ("Application" to "Nozzle It All ${app.version}"),
@@ -275,7 +328,8 @@ class PrepareState(private val app: AppState) {
         if (items.isEmpty()) { slice = SliceState.Failed("Add a model to the plate first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
         val e = SliceEngine(bin, app.paths.slices).also { engine = it }
-        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), extraOverrides = overrides.toMap())
+        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), extraOverrides = overrides.toMap() +
+            (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()))
         slice = SliceState.Running(0f, "Starting")
         scope.launch {
             val outcome = withContext(Dispatchers.IO) { e.slice(req) { p, s -> slice = SliceState.Running(p, s) } }

@@ -35,6 +35,8 @@ tasks.named<ProcessResources>("processResources") {
  from(rootProject.file("app/src/main/assets/slicer_profiles")) { into("profiles"); exclude("PROVENANCE.md") }
  // Profiles the desktop engine (Snapmaker Orca base) can't slice yet; the catalog leaves them out.
  from(rootProject.file("engine/snapmaker/unsupported-profiles.json")) { into("profiles") }
+ // Snapmaker Orca's filament colour library (Full Spectrum's recommended palette), from the pinned commit.
+ from(rootProject.file("engine/snapmaker/resources/filaments_colours.json")) { into("fullspectrum") }
  // Every engine setting (exported from the engine itself) and Nozzle's own grouping of them.
  from(rootProject.file("schemas/slicing")) { into("settings"); include("settings-schema.json", "settings-groups.json") }
 }

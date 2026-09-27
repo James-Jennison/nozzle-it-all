@@ -5,6 +5,10 @@
 //   nozzle-engine <request.txt>      slice; prints "progress <0-100>" lines on stdout, exits 0 on success
 //   nozzle-engine --version
 //   nozzle-engine --schema           every print/filament/printer setting libslic3r defines, as JSON on stdout
+//   nozzle-engine --full-spectrum <request.json>
+//                                    Full Spectrum colour mixing (Snapmaker Orca's Color Mixing list and Color Mixing
+//                                    Match, see full_spectrum.cpp): one JSON response on stdout; exit 0 success,
+//                                    1 the operation failed, 2 bad request (response {"error": "..."})
 //
 // The request file uses the Web App's line format (one field per line, tab-separated):
 //   out\t<gcode path>
@@ -17,6 +21,7 @@
 // Exit codes: 0 success, 1 slice failed (message on stderr), 2 bad usage/request, 3 cancelled (SIGINT/SIGTERM).
 // Everything is local; nothing here performs network I/O.
 #include "slic3r_engine.hpp"
+#include "full_spectrum.hpp"
 
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/Preset.hpp>
@@ -209,8 +214,23 @@ int main(int argc, char** argv) {
         std::cout << "nozzle-engine 1 (libslic3r, shared Android pipeline, native)" << std::endl;
         return 0;
     }
+    if (argc == 3 && std::string(argv[1]) == "--full-spectrum") {
+        std::string request, response;
+        int code = 2;
+        std::ifstream f(argv[2], std::ios::binary);
+        if (f) {
+            std::stringstream ss; ss << f.rdbuf();
+            request = ss.str();
+            code = nozzle_fs::run_full_spectrum(request, response);
+        } else {
+            response = "{\"error\":" + json_string(std::string("Cannot read request file ") + argv[2]) + "}";
+        }
+        restore_stdout();
+        std::cout << response << std::endl;
+        return code;
+    }
     if (argc != 2) {
-        std::cerr << "usage: nozzle-engine <request.txt> | --version | --schema" << std::endl;
+        std::cerr << "usage: nozzle-engine <request.txt> | --version | --schema | --full-spectrum <request.json>" << std::endl;
         return 2;
     }
     Request req;

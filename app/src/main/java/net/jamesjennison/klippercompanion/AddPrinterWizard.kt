@@ -99,7 +99,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 Result.success(snapshot)
             } catch (e: Exception) { Result.failure(e) }
             testing = false
-            result.onSuccess { testPassed = true; testNote = "Connected. ${it.displayState.replaceFirstChar { c -> c.titlecase() }}." }
+            result.onSuccess { testPassed = true; testNote = "Connected. ${familyStateLabel(it.state)}." }
             result.onFailure { testPassed = false; testNote = it.message ?: "Could not connect." }
         }
     }

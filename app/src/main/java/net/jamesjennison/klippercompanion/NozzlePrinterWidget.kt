@@ -155,7 +155,7 @@ private fun PrinterRow(context: Context, status: WidgetPrinterStatus) {
         Row(GlanceModifier.fillMaxWidth()) {
             Text(status.profile.label, style = TextStyle(color = ColorProvider(WidgetText), fontWeight = FontWeight.Bold))
         }
-        Text(if (status.ready) status.displayState.replaceFirstChar { it.titlecase() } else "Offline", style = TextStyle(color = ColorProvider(stateColor)))
+        Text(familyStateLabel(status.displayState, status.ready), style = TextStyle(color = ColorProvider(stateColor)))
         if (printing) {
             Text(status.activeFilename, style = TextStyle(color = ColorProvider(WidgetDim)))
             Spacer(GlanceModifier.height(4.dp))

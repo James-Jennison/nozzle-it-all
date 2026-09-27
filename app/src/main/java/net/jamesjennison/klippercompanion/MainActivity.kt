@@ -524,7 +524,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 val connection = state.printerConnections[saved] ?: if (saved == state.address) PrinterConnection(state.connected,
                                     if(state.connected) state.snapshot?.state.orEmpty() else state.message)
                                     else null
-                                Text(connection?.let { "${if(it.connected) "Connected" else "Offline"} • ${it.state}" }
+                                Text(connection?.let { familyStateLabel(it.state, it.connected) }
                                     ?: "Monitoring paused", style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.testTag("saved-status:$saved"))
                                 if(profile.favorite) Text("Favorite", style = MaterialTheme.typography.bodyLarge)
@@ -593,7 +593,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Box(Modifier.size(8.dp).background(heroDot, CircleShape))
-                                        Text((state.snapshot?.displayState ?: "awaiting printer").uppercase(), style = MaterialTheme.typography.labelMedium, color = heroDot)
+                                        Text(familyStateLabel(state.snapshot?.state ?: "awaiting printer").uppercase(), style = MaterialTheme.typography.labelMedium, color = heroDot)
                                     }
                                     val remaining = estimatedRemaining(state.snapshot,state.activeMetadata)
                                     if(remaining!=null) Text("${formatDuration(remaining)} left" + (estimatedFinishClockTime(remaining)?.let { " · Done at $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = PlexMono)

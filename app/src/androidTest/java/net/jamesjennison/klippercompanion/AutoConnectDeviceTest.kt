@@ -20,8 +20,8 @@ class AutoConnectDeviceTest {
                 {selected=it}, {}, {}, {_,_->error("Must not dispatch")})
         } }
         compose.onNodeWithTag("nav-4").performClick()
-        compose.onNodeWithTag("saved-status:$first").performScrollTo().assertTextEquals("Connected • standby")
-        compose.onNodeWithTag("saved-status:$second").performScrollTo().assertTextContains("Unavailable", substring=true)
+        compose.onNodeWithTag("saved-status:$first").performScrollTo().assertTextEquals("Ready")
+        compose.onNodeWithTag("saved-status:$second").performScrollTo().assertTextContains("Offline", substring=true) // the shared glossary word for a printer Nozzle can't reach
         assertEquals("", selected)
         compose.waitForIdle()
         // Semantic click: the coordinate tap is unreliable on the Galaxy S25 (see CompanionScreenTest).

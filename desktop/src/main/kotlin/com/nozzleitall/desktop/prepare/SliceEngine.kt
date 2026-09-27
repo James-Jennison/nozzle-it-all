@@ -58,7 +58,9 @@ class SliceEngine(private val binary: File, private val engineDataDir: File, pri
             env["NOZZLE_WORKSPACE_BIN"]?.let { File(it) }?.takeIf { it.canExecute() }?.let { return it }
             val install = System.getProperty("compose.application.resources.dir")?.let { File(it).parentFile?.parentFile }
             return listOfNotNull(install?.let { File(it, "lib/advanced-workspace/bin/nozzle-advanced-workspace") },
-                File("/opt/nozzle-it-all/lib/advanced-workspace/bin/nozzle-advanced-workspace")).firstOrNull { it.canExecute() }
+                File("/opt/nozzle-it-all/lib/advanced-workspace/bin/nozzle-advanced-workspace"),
+                // The separately installed nozzle-advanced-workspace package (scripts/package_linux.sh).
+                File("/opt/nozzle-advanced-workspace/bin/nozzle-advanced-workspace")).firstOrNull { it.canExecute() }
         }
 
         /**

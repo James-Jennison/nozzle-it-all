@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { FULL_SPECTRUM, KNOWN_FAMILIES, familyLabel, migratePrinter, readCapabilities, NO_CAPABILITIES } from '../src/printers/model';
 import { parseStatus } from '../src/printers/paxx';
 import { bedOf, loadProfile, searchProfiles, ProfileIndex } from '../src/project/profiles';
@@ -42,6 +42,9 @@ describe('profiles (slicing needs no connection)', () => {
     expect(index.source.commit).toMatch(/^[0-9a-f]{40}$/);
     expect(index.source.licence).toContain('AGPL');
     expect(index.profiles.length).toBeGreaterThan(100);
+  });
+  it('ships only profile files in every profile folder (no stray slicer output)', () => {
+    for (const p of index.profiles) expect(readdirSync(new URL(`app/src/main/assets/slicer_profiles/${p.id}/`, root)).sort(), p.id).toEqual(['filament.json', 'machine.json', 'process.json']);
   });
   it('finds profiles from several makers', () => {
     expect(searchProfiles(index.profiles, 'prusa mk4').length).toBeGreaterThan(0);

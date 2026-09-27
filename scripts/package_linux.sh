@@ -90,7 +90,11 @@ echo "== Provenance"
   echo "stock adapter runtime modules: $MODULES"
   echo "slicing engine: $ENGINE sha256 $(sha256sum "$ENGINE" | cut -d' ' -f1)"
   [ -f "$ROOT/engine/native/PROVENANCE.txt" ] && sed 's/^/  /' "$ROOT/engine/native/PROVENANCE.txt"
-  [ -n "$WORKSPACE" ] && echo "advanced workspace: $WORKSPACE"
+  if [ -n "$WORKSPACE" ]; then
+    WS_SRC="${NOZZLE_WORKSPACE_SRC:-/mnt/faststorage/Snapmaker-Orca/nozzle-advanced-workspace}"
+    echo "advanced workspace: $WORKSPACE, binary sha256 $(sha256sum "$WORKSPACE/bin/nozzle-advanced-workspace" | cut -d' ' -f1)"
+    [ -d "$WS_SRC" ] && echo "  source: $(git -C "$WS_SRC" rev-parse --abbrev-ref HEAD) $(git -C "$WS_SRC" rev-parse HEAD); built with NOZZLE_BRANDING=ON NOZZLE_STOCK_U1=OFF"
+  fi
   echo "adapters in nozzle-it-all: $(dpkg-deb -c "$OUT"/nozzle-it-all_*_amd64.deb | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
   echo; cat "$OUT/SHA256SUMS"
 } > "$OUT/PROVENANCE.txt"

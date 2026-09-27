@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package com.nozzleitall.desktop.screens
 
 import androidx.compose.foundation.*
@@ -182,7 +183,7 @@ fun ControlsPanel(entry: PrinterEntry, status: PrinterStatus, caps: Capabilities
         fun offer(a: PrinterAction) = !blocked && status.state in a.allowedStates
         // Each control appears only if this printer's adapter reports it; nothing here depends on the printer's make.
         if (!caps.anyControl) Txt("${entry.config.identity.displayName} can be monitored from Nozzle It All but not controlled.", Nz.type.body, c.textMuted)
-        if (caps.pausePrint || caps.resumePrint || caps.cancelPrint) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (caps.pausePrint || caps.resumePrint || caps.cancelPrint) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (caps.pausePrint) NzButton("Pause", { flow.request(PrinterAction.Pause) }, icon = NzIcon.PAUSE, enabled = offer(PrinterAction.Pause))
             if (caps.resumePrint) NzButton("Resume", { flow.request(PrinterAction.Resume) }, icon = NzIcon.PLAY, enabled = offer(PrinterAction.Resume))
             if (caps.cancelPrint) NzButton("Cancel print", { flow.request(PrinterAction.Cancel) }, kind = ButtonKind.DANGER, icon = NzIcon.STOP, enabled = offer(PrinterAction.Cancel))
@@ -191,18 +192,19 @@ fun ControlsPanel(entry: PrinterEntry, status: PrinterStatus, caps: Capabilities
             var nozzle by remember { mutableStateOf("") }
             var bed by remember { mutableStateOf("") }
             val active = status.toolheads.firstOrNull { it.active }?.index ?: 0
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.Bottom) {
                 Field("Toolhead ${active + 1} °C", nozzle, { nozzle = it.filter(Char::isDigit).take(3) }, Modifier.width(120.dp), placeholder = "210")
                 NzButton("Heat", { nozzle.toIntOrNull()?.let { flow.request(PrinterAction.SetNozzleTemperature(active, it)) } }, icon = NzIcon.HEAT, enabled = !blocked && nozzle.isNotBlank())
                 Field("Bed °C", bed, { bed = it.filter(Char::isDigit).take(3) }, Modifier.width(100.dp), placeholder = "60")
                 NzButton("Heat", { bed.toIntOrNull()?.let { flow.request(PrinterAction.SetBedTemperature(it)) } }, icon = NzIcon.HEAT, enabled = !blocked && bed.isNotBlank())
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 NzButton("Toolhead ${active + 1} heater off", { flow.request(PrinterAction.SetNozzleTemperature(active, 0)) }, kind = ButtonKind.QUIET, enabled = !blocked)
                 NzButton("Bed heater off", { flow.request(PrinterAction.SetBedTemperature(0)) }, kind = ButtonKind.QUIET, enabled = !blocked)
             }
         }
-        if (caps.motion) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Wraps onto more lines in a narrow window rather than squeezing buttons.
+        if (caps.motion) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             NzButton("Home", { flow.request(PrinterAction.HomeAll) }, icon = NzIcon.HOME, enabled = offer(PrinterAction.HomeAll))
             listOf('X' to 10.0, 'X' to -10.0, 'Y' to 10.0, 'Y' to -10.0, 'Z' to 1.0, 'Z' to -1.0).forEach { (axis, mm) ->
                 val a = PrinterAction.Jog(axis, mm)

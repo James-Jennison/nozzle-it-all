@@ -79,19 +79,32 @@ class MoonrakerLan(address: String, private val apiKey: String = "", eventListen
     fun gcode(script: String): Any = post("printer/gcode/script", mapOf("script" to script))
 
     fun bytes(pathOrUrl: String, max: Int): ByteArray {
-        val target = base.resolve(pathOrUrl) ?: throw IOException("Invalid address.")
-        if (target.host != base.host) throw IOException("Camera must be on the printer's own host.")
-        client.newCall(Request.Builder().url(target).build()).execute().use { r ->
+        cameraResponse(client, pathOrUrl).use { r ->
             if (!r.isSuccessful) throw IOException("Camera unavailable (HTTP ${r.code}).")
             return readBody(r, max)
         }
     }
 
+    /**
+     * A camera request. Printers often redirect /webcam/ to their camera server on another port (mjpeg-streamer on :8080);
+     * redirects are followed by hand, at most three, and only to the printer's own host over http or https.
+     */
+    private fun cameraResponse(http: OkHttpClient, pathOrUrl: String): okhttp3.Response {
+        var target = base.resolve(pathOrUrl) ?: throw IOException("Invalid address.")
+        repeat(4) {
+            if (target.host != base.host) throw IOException("Camera must be on the printer's own host.")
+            val r = http.newCall(Request.Builder().url(target).build()).execute()
+            if (!r.isRedirect) return r
+            val next = r.header("Location")?.let { target.resolve(it) }
+            r.close()
+            target = next?.takeIf { it.scheme == "http" || it.scheme == "https" } ?: throw IOException("The camera redirected somewhere Nozzle It All won't follow.")
+        }
+        throw IOException("The camera redirected too many times.")
+    }
+
     /** Opens a live MJPEG stream on the printer's own host. Closing the returned stream ends the request. */
     fun stream(pathOrUrl: String): java.io.InputStream {
-        val target = base.resolve(pathOrUrl) ?: throw IOException("Invalid address.")
-        if (target.host != base.host) throw IOException("Camera must be on the printer's own host.")
-        val r = streamClient.newCall(Request.Builder().url(target).build()).execute()
+        val r = cameraResponse(streamClient, pathOrUrl)
         if (!r.isSuccessful) { r.close(); throw IOException("Camera stream unavailable (HTTP ${r.code}).") }
         val type = r.header("Content-Type").orEmpty()
         if (!type.startsWith("multipart/", ignoreCase = true)) { r.close(); throw IOException("The camera didn't answer with a video stream.") }

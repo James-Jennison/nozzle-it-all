@@ -86,6 +86,15 @@ class PaxxLanAdapterTest {
         }
     }
 
+    @Test fun cameraRedirectsAreFollowedOnlyOnThePrinter() = FakeMoonraker().use { fake ->
+        PaxxLanAdapter().open(config(fake.address)).use { s ->
+            val cam = CameraEndpoint("w", "webcam", CameraKind.MJPEG_STREAM, "${fake.address}/webcam/redirected", liveUrl = "${fake.address}/webcam/redirected")
+            assertNotNull(s.liveStream(cam).use { MjpegReader(it).next() })
+            val evil = cam.copy(liveUrl = "${fake.address}/webcam/offhost")
+            assertTrue(runCatching { s.liveStream(evil).close() }.exceptionOrNull()?.message.orEmpty().contains("own host"))
+        }
+    }
+
     @Test fun mjpegStreamerCamerasAreLiveToo() {
         val cams = U1Protocol.cameras(org.json.JSONArray().put(JSONObject().put("name", "webcam").put("service", "mjpegstreamer-adaptive")
             .put("stream_url", "/webcam/?action=stream").put("snapshot_url", "/webcam/?action=snapshot")))

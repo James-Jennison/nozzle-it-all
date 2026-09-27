@@ -27,6 +27,10 @@ class FakeMoonraker(var paxx: Boolean = true) : AutoCloseable {
                 val (k, v) = (p.split('=', limit = 2) + "").take(2); URLDecoder.decode(k, "UTF-8") to URLDecoder.decode(v, "UTF-8") } ?: emptyMap()
             val path = ex.requestURI.path
             if (path == "/server/files/upload" && dropUpload) { ex.requestBody.readNBytes(1024); ex.close(); return@createContext }
+            if (path == "/webcam/redirected" || path == "/webcam/offhost") { // like mjpeg-streamer behind /webcam/ on :8080
+                ex.responseHeaders.add("Location", if (path == "/webcam/offhost") "http://example.invalid/steal" else "/webcam/stream.mjpg")
+                ex.sendResponseHeaders(302, -1); ex.close(); return@createContext
+            }
             if (path == "/webcam/stream.mjpg") { // camera-streamer's MJPEG: two frames, one with Content-Length and one without
                 calls += Call(ex.requestMethod, path, q, "")
                 ex.responseHeaders.add("Content-Type", "multipart/x-mixed-replace; boundary=frame")

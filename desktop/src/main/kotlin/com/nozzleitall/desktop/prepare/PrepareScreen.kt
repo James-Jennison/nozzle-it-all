@@ -248,8 +248,8 @@ private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzle
     val c = Nz.colors
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Txt("Colours in ${item.name}", Nz.type.label, c.text, modifier = Modifier.weight(1f), maxLines = 1)
-        Txt("Match", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Match colours to the loaded filament") {
-            p.matchColours(item, null); p.changed() }.padding(4.dp))
+        Txt("Match", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Match the model's colours to the nearest loaded filament") {
+            p.matchByColour(item) }.padding(4.dp))
     }
     val choices = slots.map { s -> com.nozzleitall.desktop.settings.Choice(s.slot.toString(), "${s.slot} · ${listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "?" }}") }
     Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

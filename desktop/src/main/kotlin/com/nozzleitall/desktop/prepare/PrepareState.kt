@@ -22,6 +22,8 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     var name by mutableStateOf(name); var x by mutableStateOf(x); var y by mutableStateOf(y)
     var rotZ by mutableStateOf(rotZ); var scale by mutableStateOf(scale); var slot by mutableStateOf(slot)
     val paintSlots = androidx.compose.runtime.mutableStateListOf<Int>().apply { addAll(paintSlots) }
+    /** The file's filament for unpainted areas, when the file said (a model from another slicer). */
+    var ownFilament: Int? = null
     /** The file's filament numbers this model's paint uses, in order. */
     val painted: List<Int> by lazy { MeshIO.paintedFilaments(mesh) }
     /** The slot the file's filament [n] prints with. */
@@ -191,12 +193,22 @@ class PrepareState(private val app: AppState) {
         if (name == "Untitled project") name = f.nameWithoutExtension
     }
 
-    /** Matches the file's filaments to the loaded slots by colour and material; the object's own filament sets its slot. */
-    fun matchColours(item: PrepItem, own: Int?) {
-        val count = maxOf(item.painted.maxOrNull() ?: 0, own ?: 0, item.sources.size)
-        val matched = MeshIO.matchSlots(count, item.sources, materials())
-        item.paintSlots.clear(); item.paintSlots.addAll(matched)
-        own?.let { f -> matched.getOrNull(f - 1)?.let { item.slot = it } }
+    /**
+     * Gives the file's filaments slots the way Snapmaker Orca opens a file: filament N in slot N (wrapping when the file
+     * has more filaments than the printer has slots). The object's own filament sets its slot.
+     */
+    fun matchColours(item: PrepItem, own: Int? = item.ownFilament) {
+        item.ownFilament = own
+        assign(item, FilamentSync.byNumber(filamentCount(item), materials()))
+    }
+
+    /** "Match": each of the file's filaments to the nearest loaded colour, same material first (Snapmaker Orca's filament sync). */
+    fun matchByColour(item: PrepItem) = assign(item, FilamentSync.byColour(filamentCount(item), item.sources, materials())).also { changed() }
+
+    private fun filamentCount(item: PrepItem) = maxOf(item.painted.maxOrNull() ?: 0, item.ownFilament ?: 0, item.sources.size)
+    private fun assign(item: PrepItem, slots: List<Int>) {
+        item.paintSlots.clear(); item.paintSlots.addAll(slots)
+        item.ownFilament?.let { f -> slots.getOrNull(f - 1)?.let { item.slot = it } }
     }
 
     /** Sets which slot the file's filament [n] of [item] prints with. */

@@ -54,3 +54,38 @@ interchange).
   instead, inside the optional Stock helper only (`stock-u1-adapter/.../SnapmakerAccount.kt`).
 - **Test evidence:** `StockU1AdapterTest` against a local stand-in. Live service: UNVERIFIED.
 - **Touches:** Stock U1 only.
+
+## P-0005 — colour paint encoding (ported)
+
+- **Upstream:** OrcaSlicer 824b216f (the engine pin), `src/libslic3r/TriangleSelector.cpp` (`deserialize`,
+  `perform_split`) and `Model.cpp` (`FacetsAnnotation::set_triangle_from_string`). AGPL-3.0.
+- **Imported:** the per-triangle `paint_color` encoding (hex nibbles read last to first; split codes, special side,
+  children last-first; leaf states with the 0b11 escape) and the exact child geometry of 1-, 2- and 3-side splits.
+- **Adaptations:** re-implemented in Kotlin (`project-format/.../Paint.kt`); PrusaSlicer's `slic3rpe:mmu_segmentation`
+  is read with the same decoder. Per-part filaments from `model_settings.config` / `Slic3r_PE_model.config` are folded
+  into the paint on read, so a Nozzle project carries colour in its geometry alone. Slicing hands the engine a 3MF so
+  libslic3r's own importer reads the paint.
+- **Subsystem / platforms:** project format and Prepare, Desktop.
+- **Test evidence:** `PaintTest` (real Bambu Studio strings round-trip; leaves cover the triangle), `PaintedSliceTest`
+  (painted faces print in the mapped slot), the FLEXI PANGOLIN file sliced to 77 tool changes on three toolheads.
+- **Known divergence:** the saved project doesn't keep Bambu's `model_settings.config` (its part filaments are in the
+  paint instead), so another slicer sees one part per object.
+- **Touches:** project interchange, slicing, shared UI.
+
+## P-0006 — filament-to-slot assignment and colour match (ported)
+
+- **Upstream:** Snapmaker Orca, `/mnt/faststorage/Snapmaker-Orca/OrcaSlicer` at `cbf7bbb0b3`:
+  `src/slic3r/GUI/filamentsync/FilamentSyncAlgorithm.cpp` (`compute_direct_override`, `compute_color_match`,
+  `rgb_to_lab`) and `src/slic3r/Utils/ColorSpaceConvert.cpp` (`DeltaE00`); behaviour on open from
+  `Plater::load_files`. AGPL-3.0.
+- **Imported:** opening a file never matches by colour: file filament N uses slot N. Matching by colour is the
+  explicit "Match" action: sRGB → linear → XYZ (D65) → CIELAB, CIEDE2000 distance, same material type first, each
+  filament independently, ties to the lowest slot. `DeltaE00` is ported as written, including its hue averaging.
+- **Adaptations:** Kotlin (`desktop/.../prepare/FilamentSync.kt`). Nozzle's slots are the printer's physical toolheads,
+  so where Snapmaker Orca would add filament slots for a file with more filaments than loaded (or adopt the file's
+  colours), Nozzle wraps filament N round the loaded slots and leaves the loaded colours as they are.
+- **Subsystem / platforms:** Prepare, Desktop.
+- **Test evidence:** `FilamentSyncTest`.
+- **Known divergence:** the wrap-round and not adopting the file's colours, above (physical slots can't be added).
+- **Touches:** shared UI, PAXX.
+

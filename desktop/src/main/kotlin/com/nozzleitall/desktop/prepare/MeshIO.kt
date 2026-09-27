@@ -58,25 +58,6 @@ object MeshIO {
         return out.toList()
     }
 
-    /**
-     * The slot each of the file's filaments 1..[count] prints with: the loaded slot nearest in colour, preferring the same
-     * material type. Without the file's colours, filament N goes to slot N (wrapping when the printer has fewer).
-     */
-    fun matchSlots(count: Int, sources: List<SourceFilament>, slots: List<ProjectManifest.MaterialSlot>): List<Int> {
-        if (slots.isEmpty()) return List(count) { 1 }
-        fun rgb(h: String?) = h?.removePrefix("#")?.take(6)?.toIntOrNull(16)?.let { floatArrayOf((it shr 16 and 255) / 255f, (it shr 8 and 255) / 255f, (it and 255) / 255f) }
-        return List(count) { i ->
-            val src = sources.firstOrNull { it.index == i + 1 }
-            val want = rgb(src?.colorHex) ?: return@List slots[i % slots.size].slot
-            slots.minByOrNull { s ->
-                val have = rgb(s.colorHex) ?: floatArrayOf(0.5f, 0.5f, 0.5f)
-                // Weighted RGB distance (closer to how different colours look), plus a nudge towards the same material.
-                val dr = want[0] - have[0]; val dg = want[1] - have[1]; val db = want[2] - have[2]
-                2 * dr * dr + 4 * dg * dg + 3 * db * db + if (src?.type != null && !src.type.equals(s.type, true)) 0.15f else 0f
-            }!!.slot
-        }
-    }
-
     fun readStl(bytes: ByteArray): Mesh {
         if (bytes.size >= 84) {
             val count = ByteBuffer.wrap(bytes, 80, 4).order(ByteOrder.LITTLE_ENDIAN).int.toLong() and 0xffffffffL

@@ -8,6 +8,20 @@ from OrcaSlicer, Bambu Studio, PrusaSlicer and Cura. Upstream names appear only 
 The Orca-derived "Advanced Workspace" program is retired: no navigation entry, no bridge, no package. Its branch
 (`nozzle/advanced-workspace`) stays in a private repository for reference only.
 
+## Reusing upstream (owner rule, 2026-09-27)
+
+1. **Reuse, don't reinvent.** When Snapmaker Orca, OrcaSlicer or PrusaSlicer already has a feature, port its code and
+   behaviour (engine changes included) instead of designing Nozzle's own logic. All three are AGPL-3.0, like Nozzle;
+   credit goes in THIRD_PARTY_NOTICES.md.
+2. **Their behaviour, Nozzle's look.** What a feature does comes from upstream; how it looks is Nozzle's own, and
+   upstream names appear only in credits and licence text.
+3. **When upstreams disagree, follow the printer's own slicer.** Snapmaker Orca's behaviour for Snapmaker printers,
+   PrusaSlicer's for Prusa printers, upstream OrcaSlicer for everything else. Vendor features (Full Spectrum, Prusa's
+   colour mixing) appear only for that vendor's printers, decided by capabilities, never vendor names in screens.
+4. **Every departure is recorded.** Each port gets a [provenance entry](../upstream/PROVENANCE.md); anything that
+   differs from upstream goes under its "Known divergence", with the reason, so a difference is never mistaken for a
+   bug or the other way round.
+
 ## What Prepare must cover (the Orca workspace's feature set)
 
 The survey behind this list, with sources and engine support per feature, is

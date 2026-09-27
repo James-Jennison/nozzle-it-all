@@ -1,9 +1,8 @@
 name: CI
 
 # Phase 0 (Consumer Slicer Plan §16): the app's own JVM/Kotlin gate (lint, unit tests, an
-# assembled debug build) plus the real native slicing-engine build (WO-13's
-# ORCASLICER_ENGINE_ROOT dependency, which has no public/portable source - see
-# app/src/main/cpp/CMakeLists.txt's own header comment). Runs on a self-hosted runner
+# assembled debug build) plus the real native slicing-engine build (the Snapmaker-based engine,
+# engine/snapmaker/android/ci_engine_root.sh, over the runner's prebuilt NDK dependency prefix). Runs on a self-hosted runner
 # (gthost-build01) with that dependency pre-provisioned, per the owner's decision (§22 open
 # question 5) - a hosted GitHub runner cannot build this target at all.
 #
@@ -59,24 +58,19 @@ jobs:
     runs-on: [self-hosted, linux, x64, android-native]
     timeout-minutes: 60
     env:
-      ORCASLICER_ENGINE_ROOT: /home/jjennison/orcaslicer-android-engine
+      ANDROID_DEPS_PREFIX: /home/jjennison/orcaslicer-android-engine/deps/install/arm64-v8a
+      NOZZLE_ENGINE_CACHE: /home/jjennison/nozzle-engine-ci
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify native engine dependency is present
+      # The engine is Snapmaker Orca's libslic3r at the pinned commit + Nozzle's patches (engine/snapmaker/ENGINE_PIN.json,
+      # docs/upstream/PROVENANCE.md P-0010), checked against the pinned hashes and prepared in a cache that survives runs.
+      - name: Prepare slicing engine (pinned)
         run: |
-          test -f "$ORCASLICER_ENGINE_ROOT/orcaslicer/CMakeLists.txt" || \
-            { echo "::error::ORCASLICER_ENGINE_ROOT is missing the patched OrcaSlicer checkout - see app/src/main/cpp/CMakeLists.txt's header comment."; exit 1; }
-          test -d "$ORCASLICER_ENGINE_ROOT/deps/install/arm64-v8a" || \
-            { echo "::error::ORCASLICER_ENGINE_ROOT is missing prebuilt deps/install/arm64-v8a."; exit 1; }
-
-      # Phase 9g: the engine must be exactly the pinned upstream commit + patch + dependency archives.
-      - name: Verify engine pin
-        # The runner's engine is a plain copy (no .git, no deps/src archives), so the pin cannot be verified there yet: this step
-        # warns loudly instead of failing. Give the runner a real checkout plus deps/src and drop the flag to enforce it.
-        run: python3 scripts/engine_pin.py verify --allow-missing-deps --engine-root "$ORCASLICER_ENGINE_ROOT"
+          root="$(engine/snapmaker/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
+          echo "ORCASLICER_ENGINE_ROOT=${root##*$'\n'}" >> "$GITHUB_ENV"
 
       # The static website (site/) is generated from site-src/; fail if they drift or a release-state rule is broken.
       - name: Check website build
@@ -243,7 +237,8 @@ jobs:
       id-token: write
       attestations: write
     env:
-      ORCASLICER_ENGINE_ROOT: /home/jjennison/orcaslicer-android-engine
+      ANDROID_DEPS_PREFIX: /home/jjennison/orcaslicer-android-engine/deps/install/arm64-v8a
+      NOZZLE_ENGINE_CACHE: /home/jjennison/nozzle-engine-ci
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
       NOZZLE_KEYSTORE_B64: ${{ secrets.NOZZLE_KEYSTORE_B64 }}
@@ -254,8 +249,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # versionCode is the commit count, so it only ever goes up
-      - name: Verify engine pin
-        run: python3 scripts/engine_pin.py verify --engine-root "$ORCASLICER_ENGINE_ROOT"
+      - name: Prepare slicing engine (pinned)
+        run: |
+          root="$(engine/snapmaker/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
+          echo "ORCASLICER_ENGINE_ROOT=${root##*$'\n'}" >> "$GITHUB_ENV"
       - name: Decode signing key (if configured)
         run: |
           if [ -n "${NOZZLE_KEYSTORE_B64:-}" ]; then

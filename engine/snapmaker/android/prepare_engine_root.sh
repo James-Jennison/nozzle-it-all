@@ -10,6 +10,8 @@
 #                                  all work with the Snapmaker base), plus the one dependency that had to change: GMP
 #                                  6.2.1 rebuilt with its C++ classes (gmpxx.h, libgmpxx.a), because the Snapmaker base's
 #                                  bundled libigl uses mpq_class. Same GMP source, same NDK, same configure otherwise.
+# Overridable: SNAPMAKER_ORCA (a checkout holding the pinned commit), NOZZLE_ANDROID_SM_ROOT, ANDROID_DEPS_PREFIX, GMP_ARCHIVE,
+# ANDROID_NDK_ROOT. CI (.github/workflows/ci.yml) sets them all, fetching the pinned commit and the GMP archive itself.
 # Then build the app with it:   heavy-gradle -PnozzleEngine=snapmaker :app:assembleDebug
 #   (or ORCASLICER_ENGINE_ROOT=$ROOT). The Snapmaker checkout and the android engine project are only read.
 set -euo pipefail
@@ -24,6 +26,9 @@ ROOT="${NOZZLE_ANDROID_SM_ROOT:-/mnt/faststorage/build-work/nozzle-android-sm}"
 ANDROID_DEPS="${ANDROID_DEPS_PREFIX:-/mnt/faststorage/orcaslicer-android-engine/deps/install/arm64-v8a}"
 # Addenda: the libc++ fix shared with the browser engine, then the Android-only ones (engine/snapmaker/android/*.patch).
 shopt -s nullglob; ADDENDA=("$NOZZLE_ROOT/engine/snapmaker/libcxx-includes.patch" "$NOZZLE_ROOT"/engine/snapmaker/android/*.patch)
+for p in "${ADDENDA[@]}"; do
+  [ "$(sha256sum "$p" | cut -d' ' -f1)" = "$(pin "[\"addenda\"][\"${p#$NOZZLE_ROOT/}\"][\"sha256\"]")" ] || { echo "$p does not match the pinned hash"; exit 1; }
+done
 
 # Stamp = patch hash + addenda hashes, so an edited patch re-exports the source.
 STAMP="$(cat "$PATCH" "${ADDENDA[@]}" | sha256sum | cut -d' ' -f1) $COMMIT"
@@ -42,7 +47,9 @@ DEPS="$ROOT/deps/install/arm64-v8a"
 if [ ! -d "$DEPS" ]; then mkdir -p "$DEPS"; cp -as "$ANDROID_DEPS/." "$DEPS/"; fi
 if [ ! -f "$DEPS/include/gmpxx.h" ]; then
   NDK="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/27.1.12297006}"; TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
-  GMP_ARCHIVE="$(dirname "$(dirname "$ANDROID_DEPS")")/src/gmp-6.2.1.tar.xz"
+  GMP_ARCHIVE="${GMP_ARCHIVE:-$(dirname "$(dirname "$ANDROID_DEPS")")/src/gmp-6.2.1.tar.xz}"
+  GMP_SHA="$(python3 -c 'import json,sys;print(next(d["sha256"] for d in json.load(open(sys.argv[1]))["dependencies"] if d["file"]=="gmp-6.2.1.tar.xz"))' "$NOZZLE_ROOT/engine/ENGINE_PIN.json")"
+  [ "$(sha256sum "$GMP_ARCHIVE" | cut -d' ' -f1)" = "$GMP_SHA" ] || { echo "$GMP_ARCHIVE does not match the pinned GMP hash"; exit 1; }
   B="$ROOT/deps/build/gmp"; STAGE="$ROOT/deps/build/gmp-stage"; rm -rf "$B" "$STAGE"; mkdir -p "$B"
   tar -C "$ROOT/deps/build" -xf "$GMP_ARCHIVE" && rm -rf "$ROOT/deps/build/gmp-src" && mv "$ROOT/deps/build/gmp-6.2.1" "$ROOT/deps/build/gmp-src"
   # As orcaslicer-android-engine/scripts/build_gmp.sh, plus --enable-cxx.

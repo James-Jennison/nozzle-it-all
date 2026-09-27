@@ -115,6 +115,6 @@ class UnsupportedProfilesTest {
         assertEquals(hidden, ProfileCatalog.unsupported.keys)
         assertTrue(ProfileCatalog.all.none { it.id in hidden })
         assertNotNull(ProfileCatalog.byId("bambu_x1_carbon"))
-        assertEquals(371, ProfileCatalog.all.size) // 376 bundled + COSMOS AFC, minus the 6 hidden
+        assertEquals(373, ProfileCatalog.all.size) // 376 bundled + COSMOS AFC + Elegoo CC and CC2 (CANVAS), minus the 6 hidden
     }
 }

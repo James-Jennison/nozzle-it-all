@@ -192,6 +192,15 @@ docs and from their own `github.com/OpenCentauri/cosmos`) - the actual fix for t
 real hard-emergency-stop risk this whole firmware-identity feature exists to guard
 against. See `PROVENANCE.md` for the full transcription and attribution detail.
 
+The Elegoo Centauri Carbon and Centauri Carbon 2 stock-firmware (CANVAS) packs
+(`elegoo_centauri_carbon_canvas`, `elegoo_centauri_carbon_2_canvas`) and their profile
+families under `engine/snapmaker/library/` (nozzle sizes, process presets, Elegoo and
+Generic filament presets) are flattened from **ElegooSlicer**
+(github.com/ELEGOO-3D/ElegooSlicer, Elegoo's fork of OrcaSlicer, AGPL-3.0;
+`resources/profiles/Elegoo`, checkout `2d507e39a9`) by `scripts/bundle_elegoo_canvas.sh`.
+Copyright Elegoo and the OrcaSlicer/Bambu Studio/PrusaSlicer authors; see `PROVENANCE.md`
+and `docs/upstream/PROVENANCE.md` for the settings pinned to match ElegooSlicer.
+
 ## Fonts
 
 The app's typography (`res/font/`) bundles three typefaces from Google Fonts'

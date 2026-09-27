@@ -1,0 +1,586 @@
+{
+ "vendor": "Elegoo",
+ "source": "Elegoo profiles from ElegooSlicer (github.com/ELEGOO-3D/ElegooSlicer 2d507e39a9, AGPL-3.0); see docs/upstream/PROVENANCE.md (Elegoo stock-firmware CANVAS profiles)",
+ "machines": [
+  {
+   "id": "elegoo_centauri_carbon_0_2_nozzle",
+   "name": "Elegoo Centauri Carbon 0.2 nozzle",
+   "nozzle": "0.2",
+   "default_process": "0_10mm_standard_elegoo_cc_0_2_nozzle",
+   "default_filament": "elegoo_pla_ecc",
+   "processes": [
+    "0_08mm_optimal_elegoo_cc_0_2_nozzle",
+    "0_10mm_standard_elegoo_cc_0_2_nozzle",
+    "0_12mm_draft_elegoo_cc_0_2_nozzle",
+    "0_14mm_extra_draft_elegoo_cc_0_2_nozzle"
+   ],
+   "filaments": [
+    "elegoo_abs_ecc",
+    "elegoo_asa_ecc",
+    "elegoo_paht_cf_ecc",
+    "elegoo_pc_ecc",
+    "elegoo_pc_fr_ecc",
+    "elegoo_petg_ecc",
+    "elegoo_petg_pro_ecc",
+    "elegoo_petg_translucent_ecc",
+    "elegoo_petg_cf_ecc",
+    "elegoo_petg_gf_ecc",
+    "elegoo_pla_ecc",
+    "elegoo_pla_basic_ecc",
+    "elegoo_pla_galaxy_ecc",
+    "elegoo_pla_marble_ecc",
+    "elegoo_pla_matte_ecc",
+    "elegoo_pla_pro_ecc",
+    "elegoo_pla_silk_ecc",
+    "elegoo_pla_sparkle_ecc",
+    "elegoo_pla_wood_ecc",
+    "elegoo_pla_plus_ecc",
+    "elegoo_pla_cf_ecc",
+    "elegoo_rapid_petg_ecc",
+    "elegoo_rapid_pla_plus_ecc",
+    "elegoo_rapid_tpu_95a_ecc",
+    "elegoo_tpu_95a_ecc"
+   ]
+  },
+  {
+   "id": "elegoo_centauri_carbon_0_4_nozzle",
+   "name": "Elegoo Centauri Carbon 0.4 nozzle",
+   "nozzle": "0.4",
+   "default_process": "0_20mm_standard_elegoo_cc_0_4_nozzle",
+   "default_filament": "elegoo_pla_ecc",
+   "processes": [
+    "0_12mm_fine_elegoo_cc_0_4_nozzle",
+    "0_16mm_optimal_elegoo_cc_0_4_nozzle",
+    "0_20mm_standard_elegoo_cc_0_4_nozzle",
+    "0_20mm_strength_elegoo_cc_0_4_nozzle",
+    "0_24mm_draft_elegoo_cc_0_4_nozzle",
+    "0_28mm_extra_draft_elegoo_cc_0_4_nozzle"
+   ],
+   "filaments": [
+    "elegoo_abs_ecc",
+    "elegoo_asa_ecc",
+    "elegoo_paht_cf_ecc",
+    "elegoo_pc_ecc",
+    "elegoo_pc_fr_ecc",
+    "elegoo_petg_ecc",
+    "elegoo_petg_pro_ecc",
+    "elegoo_petg_translucent_ecc",
+    "elegoo_petg_cf_ecc",
+    "elegoo_petg_gf_ecc",
+    "elegoo_pla_ecc",
+    "elegoo_pla_basic_ecc",
+    "elegoo_pla_galaxy_ecc",
+    "elegoo_pla_marble_ecc",
+    "elegoo_pla_matte_ecc",
+    "elegoo_pla_pro_ecc",
+    "elegoo_pla_silk_ecc",
+    "elegoo_pla_sparkle_ecc",
+    "elegoo_pla_wood_ecc",
+    "elegoo_pla_plus_ecc",
+    "elegoo_pla_cf_ecc",
+    "elegoo_rapid_petg_ecc",
+    "elegoo_rapid_pla_plus_ecc",
+    "elegoo_rapid_tpu_95a_ecc",
+    "elegoo_tpu_95a_ecc",
+    "generic_abs_elegoo_centauri",
+    "generic_abs_cf_elegoo_centauri",
+    "generic_asa_cf_elegoo_centauri",
+    "generic_pa_elegoo",
+    "generic_pa6_cf_elegoo",
+    "generic_pc_elegoo",
+    "generic_pc_cf_elegoo",
+    "generic_pet_elegoo_centauri",
+    "generic_pet_cf_elegoo_centauri",
+    "generic_petg_cf_elegoo_centauri",
+    "generic_pla_elegoo_centauri"
+   ]
+  },
+  {
+   "id": "elegoo_centauri_carbon_0_6_nozzle",
+   "name": "Elegoo Centauri Carbon 0.6 nozzle",
+   "nozzle": "0.6",
+   "default_process": "0_30mm_standard_elegoo_cc_0_6_nozzle",
+   "default_filament": "elegoo_pla_ecc",
+   "processes": [
+    "0_18mm_fine_elegoo_cc_0_6_nozzle",
+    "0_24mm_optimal_elegoo_cc_0_6_nozzle",
+    "0_30mm_standard_elegoo_cc_0_6_nozzle",
+    "0_30mm_strength_elegoo_cc_0_6_nozzle",
+    "0_36mm_draft_elegoo_cc_0_6_nozzle",
+    "0_42mm_extra_draft_elegoo_cc_0_6_nozzle"
+   ],
+   "filaments": [
+    "elegoo_abs_ecc",
+    "elegoo_asa_ecc",
+    "elegoo_paht_cf_ecc",
+    "elegoo_pc_ecc",
+    "elegoo_pc_fr_ecc",
+    "elegoo_petg_ecc",
+    "elegoo_petg_pro_ecc",
+    "elegoo_petg_translucent_ecc",
+    "elegoo_petg_cf_ecc",
+    "elegoo_petg_gf_ecc",
+    "elegoo_pla_ecc",
+    "elegoo_pla_basic_ecc",
+    "elegoo_pla_galaxy_ecc",
+    "elegoo_pla_marble_ecc",
+    "elegoo_pla_matte_ecc",
+    "elegoo_pla_pro_ecc",
+    "elegoo_pla_silk_ecc",
+    "elegoo_pla_sparkle_ecc",
+    "elegoo_pla_wood_ecc",
+    "elegoo_pla_plus_ecc",
+    "elegoo_pla_cf_ecc",
+    "elegoo_rapid_petg_ecc",
+    "elegoo_rapid_pla_plus_ecc",
+    "elegoo_rapid_tpu_95a_ecc",
+    "elegoo_tpu_95a_ecc",
+    "generic_abs_elegoo_centauri",
+    "generic_abs_cf_elegoo_centauri",
+    "generic_asa_cf_elegoo_centauri",
+    "generic_pa_elegoo",
+    "generic_pa6_cf_elegoo",
+    "generic_pc_elegoo",
+    "generic_pc_cf_elegoo",
+    "generic_pet_elegoo_centauri",
+    "generic_pet_cf_elegoo_centauri",
+    "generic_petg_cf_elegoo_centauri",
+    "generic_pla_elegoo_centauri"
+   ]
+  },
+  {
+   "id": "elegoo_centauri_carbon_0_8_nozzle",
+   "name": "Elegoo Centauri Carbon 0.8 nozzle",
+   "nozzle": "0.8",
+   "default_process": "0_40mm_standard_elegoo_cc_0_8_nozzle",
+   "default_filament": "elegoo_pla_ecc",
+   "processes": [
+    "0_16mm_extra_fine_elegoo_cc_0_8_nozzle",
+    "0_24mm_fine_elegoo_cc_0_8_nozzle",
+    "0_32mm_optimal_elegoo_cc_0_8_nozzle",
+    "0_40mm_standard_elegoo_cc_0_8_nozzle",
+    "0_48mm_draft_elegoo_cc_0_8_nozzle"
+   ],
+   "filaments": [
+    "elegoo_abs_ecc",
+    "elegoo_asa_ecc",
+    "elegoo_paht_cf_ecc",
+    "elegoo_pc_ecc",
+    "elegoo_pc_fr_ecc",
+    "elegoo_petg_ecc",
+    "elegoo_petg_pro_ecc",
+    "elegoo_petg_translucent_ecc",
+    "elegoo_petg_cf_ecc",
+    "elegoo_petg_gf_ecc",
+    "elegoo_pla_ecc",
+    "elegoo_pla_basic_ecc",
+    "elegoo_pla_galaxy_ecc",
+    "elegoo_pla_marble_ecc",
+    "elegoo_pla_matte_ecc",
+    "elegoo_pla_pro_ecc",
+    "elegoo_pla_silk_ecc",
+    "elegoo_pla_sparkle_ecc",
+    "elegoo_pla_wood_ecc",
+    "elegoo_pla_plus_ecc",
+    "elegoo_pla_cf_ecc",
+    "elegoo_rapid_petg_ecc",
+    "elegoo_rapid_pla_plus_ecc",
+    "elegoo_rapid_tpu_95a_ecc",
+    "elegoo_tpu_95a_ecc",
+    "generic_abs_elegoo_centauri",
+    "generic_abs_cf_elegoo_centauri",
+    "generic_asa_cf_elegoo_centauri",
+    "generic_pa_elegoo",
+    "generic_pa6_cf_elegoo",
+    "generic_pc_elegoo",
+    "generic_pc_cf_elegoo",
+    "generic_pet_elegoo_centauri",
+    "generic_pet_cf_elegoo_centauri",
+    "generic_petg_cf_elegoo_centauri",
+    "generic_pla_elegoo_centauri"
+   ]
+  }
+ ],
+ "processes": [
+  {
+   "id": "0_08mm_optimal_elegoo_cc_0_2_nozzle",
+   "name": "0.08mm Optimal @Elegoo CC 0.2 nozzle",
+   "label": "0.08mm Optimal",
+   "layer_height": "0.08"
+  },
+  {
+   "id": "0_10mm_standard_elegoo_cc_0_2_nozzle",
+   "name": "0.10mm Standard @Elegoo CC 0.2 nozzle",
+   "label": "0.10mm Standard",
+   "layer_height": "0.1"
+  },
+  {
+   "id": "0_12mm_draft_elegoo_cc_0_2_nozzle",
+   "name": "0.12mm Draft @Elegoo CC 0.2 nozzle",
+   "label": "0.12mm Draft",
+   "layer_height": "0.12"
+  },
+  {
+   "id": "0_14mm_extra_draft_elegoo_cc_0_2_nozzle",
+   "name": "0.14mm Extra Draft @Elegoo CC 0.2 nozzle",
+   "label": "0.14mm Extra Draft",
+   "layer_height": "0.14"
+  },
+  {
+   "id": "0_12mm_fine_elegoo_cc_0_4_nozzle",
+   "name": "0.12mm Fine @Elegoo CC 0.4 nozzle",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12"
+  },
+  {
+   "id": "0_16mm_optimal_elegoo_cc_0_4_nozzle",
+   "name": "0.16mm Optimal @Elegoo CC 0.4 nozzle",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16"
+  },
+  {
+   "id": "0_20mm_standard_elegoo_cc_0_4_nozzle",
+   "name": "0.20mm Standard @Elegoo CC 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2"
+  },
+  {
+   "id": "0_20mm_strength_elegoo_cc_0_4_nozzle",
+   "name": "0.20mm Strength @Elegoo CC 0.4 nozzle",
+   "label": "0.20mm Strength",
+   "layer_height": "0.2"
+  },
+  {
+   "id": "0_24mm_draft_elegoo_cc_0_4_nozzle",
+   "name": "0.24mm Draft @Elegoo CC 0.4 nozzle",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24"
+  },
+  {
+   "id": "0_28mm_extra_draft_elegoo_cc_0_4_nozzle",
+   "name": "0.28mm Extra Draft @Elegoo CC 0.4 nozzle",
+   "label": "0.28mm Extra Draft",
+   "layer_height": "0.28"
+  },
+  {
+   "id": "0_18mm_fine_elegoo_cc_0_6_nozzle",
+   "name": "0.18mm Fine @Elegoo CC 0.6 nozzle",
+   "label": "0.18mm Fine",
+   "layer_height": "0.18"
+  },
+  {
+   "id": "0_24mm_optimal_elegoo_cc_0_6_nozzle",
+   "name": "0.24mm Optimal @Elegoo CC 0.6 nozzle",
+   "label": "0.24mm Optimal",
+   "layer_height": "0.24"
+  },
+  {
+   "id": "0_30mm_standard_elegoo_cc_0_6_nozzle",
+   "name": "0.30mm Standard @Elegoo CC 0.6 nozzle",
+   "label": "0.30mm Standard",
+   "layer_height": "0.3"
+  },
+  {
+   "id": "0_30mm_strength_elegoo_cc_0_6_nozzle",
+   "name": "0.30mm Strength @Elegoo CC 0.6 nozzle",
+   "label": "0.30mm Strength",
+   "layer_height": "0.3"
+  },
+  {
+   "id": "0_36mm_draft_elegoo_cc_0_6_nozzle",
+   "name": "0.36mm Draft @Elegoo CC 0.6 nozzle",
+   "label": "0.36mm Draft",
+   "layer_height": "0.36"
+  },
+  {
+   "id": "0_42mm_extra_draft_elegoo_cc_0_6_nozzle",
+   "name": "0.42mm Extra Draft @Elegoo CC 0.6 nozzle",
+   "label": "0.42mm Extra Draft",
+   "layer_height": "0.42"
+  },
+  {
+   "id": "0_16mm_extra_fine_elegoo_cc_0_8_nozzle",
+   "name": "0.16mm Extra Fine @Elegoo CC 0.8 nozzle",
+   "label": "0.16mm Extra Fine",
+   "layer_height": "0.16"
+  },
+  {
+   "id": "0_24mm_fine_elegoo_cc_0_8_nozzle",
+   "name": "0.24mm Fine @Elegoo CC 0.8 nozzle",
+   "label": "0.24mm Fine",
+   "layer_height": "0.24"
+  },
+  {
+   "id": "0_32mm_optimal_elegoo_cc_0_8_nozzle",
+   "name": "0.32mm Optimal @Elegoo CC 0.8 nozzle",
+   "label": "0.32mm Optimal",
+   "layer_height": "0.32"
+  },
+  {
+   "id": "0_40mm_standard_elegoo_cc_0_8_nozzle",
+   "name": "0.40mm Standard @Elegoo CC 0.8 nozzle",
+   "label": "0.40mm Standard",
+   "layer_height": "0.4"
+  },
+  {
+   "id": "0_48mm_draft_elegoo_cc_0_8_nozzle",
+   "name": "0.48mm Draft @Elegoo CC 0.8 nozzle",
+   "label": "0.48mm Draft",
+   "layer_height": "0.48"
+  }
+ ],
+ "filaments": [
+  {
+   "id": "elegoo_abs_ecc",
+   "name": "Elegoo ABS @ECC",
+   "vendor": "Elegoo",
+   "type": "ABS",
+   "family": "Elegoo ABS @ECC"
+  },
+  {
+   "id": "elegoo_asa_ecc",
+   "name": "Elegoo ASA @ECC",
+   "vendor": "Elegoo",
+   "type": "ASA",
+   "family": "Elegoo ASA @ECC"
+  },
+  {
+   "id": "elegoo_paht_cf_ecc",
+   "name": "Elegoo PAHT-CF @ECC",
+   "vendor": "Elegoo",
+   "type": "PA",
+   "family": "Elegoo PAHT-CF @ECC"
+  },
+  {
+   "id": "elegoo_pc_ecc",
+   "name": "Elegoo PC @ECC",
+   "vendor": "Elegoo",
+   "type": "PC",
+   "family": "Elegoo PC @ECC"
+  },
+  {
+   "id": "elegoo_pc_fr_ecc",
+   "name": "Elegoo PC-FR @ECC",
+   "vendor": "Elegoo",
+   "type": "PC",
+   "family": "Elegoo PC-FR @ECC"
+  },
+  {
+   "id": "elegoo_petg_ecc",
+   "name": "Elegoo PETG @ECC",
+   "vendor": "Elegoo",
+   "type": "PETG",
+   "family": "Elegoo PETG @ECC"
+  },
+  {
+   "id": "elegoo_petg_pro_ecc",
+   "name": "Elegoo PETG PRO @ECC",
+   "vendor": "Elegoo",
+   "type": "PETG",
+   "family": "Elegoo PETG PRO @ECC"
+  },
+  {
+   "id": "elegoo_petg_translucent_ecc",
+   "name": "Elegoo PETG Translucent @ECC",
+   "vendor": "Elegoo",
+   "type": "PETG",
+   "family": "Elegoo PETG Translucent @ECC"
+  },
+  {
+   "id": "elegoo_petg_cf_ecc",
+   "name": "Elegoo PETG-CF @ECC",
+   "vendor": "Elegoo",
+   "type": "PETG",
+   "family": "Elegoo PETG-CF @ECC"
+  },
+  {
+   "id": "elegoo_petg_gf_ecc",
+   "name": "Elegoo PETG-GF @ECC",
+   "vendor": "Elegoo",
+   "type": "PETG",
+   "family": "Elegoo PETG-GF @ECC"
+  },
+  {
+   "id": "elegoo_pla_ecc",
+   "name": "Elegoo PLA @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA @ECC"
+  },
+  {
+   "id": "elegoo_pla_basic_ecc",
+   "name": "Elegoo PLA Basic @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA Basic @ECC"
+  },
+  {
+   "id": "elegoo_pla_galaxy_ecc",
+   "name": "Elegoo PLA Galaxy @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA Galaxy @ECC"
+  },
+  {
+   "id": "elegoo_pla_marble_ecc",
+   "name": "Elegoo PLA Marble @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA Marble @ECC"
+  },
+  {
+   "id": "elegoo_pla_matte_ecc",
+   "name": "Elegoo PLA Matte @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA Matte @ECC"
+  },
+  {
+   "id": "elegoo_pla_pro_ecc",
+   "name": "Elegoo PLA PRO @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA PRO @ECC"
+  },
+  {
+   "id": "elegoo_pla_silk_ecc",
+   "name": "Elegoo PLA Silk @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA Silk @ECC"
+  },
+  {
+   "id": "elegoo_pla_sparkle_ecc",
+   "name": "Elegoo PLA Sparkle @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA Sparkle @ECC"
+  },
+  {
+   "id": "elegoo_pla_wood_ecc",
+   "name": "Elegoo PLA Wood @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA Wood @ECC"
+  },
+  {
+   "id": "elegoo_pla_plus_ecc",
+   "name": "Elegoo PLA+ @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA+ @ECC"
+  },
+  {
+   "id": "elegoo_pla_cf_ecc",
+   "name": "Elegoo PLA-CF @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo PLA-CF @ECC"
+  },
+  {
+   "id": "elegoo_rapid_petg_ecc",
+   "name": "Elegoo Rapid PETG @ECC",
+   "vendor": "Elegoo",
+   "type": "PETG",
+   "family": "Elegoo Rapid PETG @ECC"
+  },
+  {
+   "id": "elegoo_rapid_pla_plus_ecc",
+   "name": "Elegoo Rapid PLA+ @ECC",
+   "vendor": "Elegoo",
+   "type": "PLA",
+   "family": "Elegoo Rapid PLA+ @ECC"
+  },
+  {
+   "id": "elegoo_rapid_tpu_95a_ecc",
+   "name": "Elegoo Rapid TPU 95A @ECC",
+   "vendor": "Elegoo",
+   "type": "TPU",
+   "family": "Elegoo Rapid TPU 95A @ECC"
+  },
+  {
+   "id": "elegoo_tpu_95a_ecc",
+   "name": "Elegoo TPU 95A @ECC",
+   "vendor": "Elegoo",
+   "type": "TPU",
+   "family": "Elegoo TPU 95A @ECC"
+  },
+  {
+   "id": "generic_abs_elegoo_centauri",
+   "name": "Generic ABS @Elegoo Centauri",
+   "vendor": "Generic",
+   "type": "ABS",
+   "family": "Generic ABS @Elegoo Centauri"
+  },
+  {
+   "id": "generic_abs_cf_elegoo_centauri",
+   "name": "Generic ABS-CF @Elegoo Centauri",
+   "vendor": "Generic",
+   "type": "ABS-CF",
+   "family": "Generic ABS-CF @Elegoo Centauri"
+  },
+  {
+   "id": "generic_asa_cf_elegoo_centauri",
+   "name": "Generic ASA-CF @Elegoo Centauri",
+   "vendor": "Generic",
+   "type": "ASA-CF",
+   "family": "Generic ASA-CF @Elegoo Centauri"
+  },
+  {
+   "id": "generic_pa_elegoo",
+   "name": "Generic PA @Elegoo",
+   "vendor": "Generic",
+   "type": "PA",
+   "family": "Generic PA @Elegoo"
+  },
+  {
+   "id": "generic_pa6_cf_elegoo",
+   "name": "Generic PA6-CF @Elegoo",
+   "vendor": "Generic",
+   "type": "PA6-CF",
+   "family": "Generic PA6-CF @Elegoo"
+  },
+  {
+   "id": "generic_pc_elegoo",
+   "name": "Generic PC @Elegoo",
+   "vendor": "Generic",
+   "type": "PC",
+   "family": "Generic PC @Elegoo"
+  },
+  {
+   "id": "generic_pc_cf_elegoo",
+   "name": "Generic PC-CF @Elegoo",
+   "vendor": "Generic",
+   "type": "PC-CF",
+   "family": "Generic PC-CF @Elegoo"
+  },
+  {
+   "id": "generic_pet_elegoo_centauri",
+   "name": "Generic PET @Elegoo Centauri",
+   "vendor": "Generic",
+   "type": "PET",
+   "family": "Generic PET @Elegoo Centauri"
+  },
+  {
+   "id": "generic_pet_cf_elegoo_centauri",
+   "name": "Generic PET-CF @Elegoo Centauri",
+   "vendor": "Generic",
+   "type": "PET-CF",
+   "family": "Generic PET-CF @Elegoo Centauri"
+  },
+  {
+   "id": "generic_petg_cf_elegoo_centauri",
+   "name": "Generic PETG-CF @Elegoo Centauri",
+   "vendor": "Generic",
+   "type": "PETG-CF",
+   "family": "Generic PETG-CF @Elegoo Centauri"
+  },
+  {
+   "id": "generic_pla_elegoo_centauri",
+   "name": "Generic PLA @Elegoo Centauri",
+   "vendor": "Generic",
+   "type": "PLA",
+   "family": "Generic PLA @Elegoo Centauri"
+  }
+ ]
+}

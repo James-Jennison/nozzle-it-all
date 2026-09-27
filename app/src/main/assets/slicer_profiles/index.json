@@ -2325,6 +2325,42 @@
    "family": "export-only"
   },
   {
+   "id": "elegoo_centauri_carbon_2_canvas",
+   "vendor": "Elegoo",
+   "model": "Elegoo Centauri Carbon 2",
+   "name": "Elegoo Centauri Carbon 2 0.4 nozzle (CANVAS)",
+   "bed": [
+    256.0,
+    256.0
+   ],
+   "height": 256.0,
+   "tools": 4,
+   "nozzle": 0.4,
+   "gcodeFlavor": "klipper",
+   "outputs": [
+    "gcode"
+   ],
+   "family": "export-only"
+  },
+  {
+   "id": "elegoo_centauri_carbon_canvas",
+   "vendor": "Elegoo",
+   "model": "Elegoo Centauri Carbon",
+   "name": "Elegoo Centauri Carbon 0.4 nozzle (CANVAS)",
+   "bed": [
+    256.0,
+    256.0
+   ],
+   "height": 256.0,
+   "tools": 4,
+   "nozzle": 0.4,
+   "gcodeFlavor": "klipper",
+   "outputs": [
+    "gcode"
+   ],
+   "family": "export-only"
+  },
+  {
    "id": "elegoo_centauri_carbon_cosmos",
    "vendor": "Elegoo",
    "model": "Elegoo Centauri Carbon",

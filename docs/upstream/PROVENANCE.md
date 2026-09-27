@@ -255,3 +255,55 @@ interchange).
   - Not on Android yet (its Moonraker client has its own U1-shaped material model). Not verified against a real CANVAS.
 - **Touches:** Klipper printers (COSMOS, AFC, Happy Hare), Prepare material slots.
 
+## P-0013 — Elegoo Centauri Carbon and Centauri Carbon 2 stock-firmware CANVAS profiles (imported)
+
+- **Upstream:** ElegooSlicer (github.com/ELEGOO-3D/ElegooSlicer, Elegoo's OrcaSlicer fork) `2d507e39a9`,
+  `resources/profiles/Elegoo` (bundle version 01.05.03.05): machines "Elegoo Centauri Carbon 0.2/0.4/0.6/0.8 nozzle" and
+  "Elegoo Centauri Carbon 2 0.2/0.4/0.6/0.8 nozzle", the process presets and filament presets marked compatible with
+  them. Defaults compared against its `src/libslic3r/PrintConfig.cpp`, flush logic against `Print.cpp` / `GCode.cpp`.
+  AGPL-3.0. Owner rule: for Elegoo printers follow Elegoo's own slicer.
+- **Imported:** `scripts/bundle_elegoo_canvas.sh` (`flatten_orca_profile.py` / `bundle_printer_library.py` gained
+  `--nested` for ElegooSlicer's sub-folder layout, `--pin` and `--source`; the U1 library regenerates byte-identical).
+  - Packs for every platform: `app/src/main/assets/slicer_profiles/elegoo_centauri_carbon_canvas` ("Elegoo Centauri
+    Carbon 0.4 nozzle (CANVAS)") and `elegoo_centauri_carbon_2_canvas` ("Elegoo Centauri Carbon 2 0.4 nozzle (CANVAS)"),
+    listed in index.json by hand with `tools: 4` (as the COSMOS AFC pack; build_profile_index.py would reset tools to 1).
+    New ids: no stock Centauri Carbon profile was bundled before (the upstream-OrcaSlicer one is deliberately excluded,
+    and the COSMOS ids are unchanged), so no saved profile id moves.
+  - Desktop families: `engine/snapmaker/library/elegoo_centauri_carbon{,_2}_canvas` (4 nozzle sizes, 21 process
+    presets, 36 / 41 Elegoo and Generic filament presets), so Prepare offers ElegooSlicer's nozzles, process presets
+    and a per-slot Elegoo filament preset. (`bundle_printer_library.py`'s ids now spell "+" as "plus": "Elegoo PLA+"
+    had collided with "Elegoo PLA"; no U1 id changes.)
+  - Multi-colour is ElegooSlicer's: each change is `M6211 T[next_extruder] L[flush_length] M.. N.. Q.. R.. S..` then
+    `T[next_extruder]` (the printer swaps and purges; `purge_in_prime_tower 0`, prime tower on), and the start G-code
+    loads the first filament with `M6211 A1 L200 T..`. The engine computes `flush_length` the way ElegooSlicer does
+    for this setup (flush volume x flush multiplier / filament area; the first, priming change to the loaded filament is
+    `L0` in both).
+- **Test evidence (2026-09-27):** ElegooCanvasTest `elegooStockCanvasProfilesSliceFourColoursWithM6211` slices a
+  four-colour cube on each printer twice (the pack, as the Web App does, and the Desktop's 0.4 mm family machine with
+  four different Elegoo PLA presets): about 295 M6211 changes to T0-T3 per slice, each followed by the same T, 34.92 mm purge
+  (84 mm³ x 1), ElegooSlicer's CC/CC2 start and end blocks, Textured PEI bed temperature, no M600, no COSMOS macros.
+  Whole desktop suite 49/49; the Web App engine (`smoke_node.mjs`) slices both packs; vitest 29/29.
+- **Known divergence:**
+  - Pinned where ElegooSlicer's profile leaves a setting unset and its default differs from Snapmaker Orca's (process
+    files only): `flush_multiplier` 1 (Snapmaker Orca 0.3, which would purge 30% of ElegooSlicer's length),
+    `independent_support_layer_height` 1 (0), `slowdown_for_curled_perimeters` 0 (1), `curr_bed_type` Textured PEI
+    Plate (the machines' `default_bed_type 4`, which ElegooSlicer's GUI and the Desktop's printer card select; without
+    it the Web App slices at Cool Plate's 35 °C).
+  - Not pinned (different meaning in the two engines): ElegooSlicer's `wall_direction` default ccw with holes reversed
+    vs Snapmaker Orca's auto; `ironing_angle` 0 relative vs -1; ElegooSlicer's `extruder_clearance_max_radius` 68 is
+    renamed to `extruder_clearance_radius` there but dropped here (65 is used; affects only print-by-object clearance).
+  - Keys this engine does not know, dropped at load: `auto_toolchange_command`, `bed_texture_area`, `support_mms`,
+    `support_wan_network` (ElegooSlicer GUI / network upload only), `overhang_speed_classic`,
+    `tree_support_branch_diameter_double_wall`, `adaptive_layer_height`, `internal_bridge_support_thickness`
+    (ignored or undefined in ElegooSlicer's engine too). `wall_infill_order` and `chamber_temperatures` are converted
+    by both engines' legacy handling. None changes the G-code.
+  - Flush volumes: Nozzle's multi-material recipe uses one flush volume for every colour pair (84 mm³, all platforms);
+    ElegooSlicer computes each pair from the colours and, for the Centauri Carbon 2, overrides some pairs from
+    `flush/flush_volumes.json` (up to 900 mm³ from black to light colours). Purges can be shorter than ElegooSlicer's
+    for dark-to-light changes; not ported.
+  - The Web App and Android use only the 0.4 mm pack; Android doesn't list index.json profiles (as for COSMOS AFC).
+  - For stock firmware only: the Centauri Carbon's start G-code calls `M729`, which e-stops COSMOS 26.07+. No firmware
+    guard ties these ids to stock firmware on the Desktop or Web App.
+  - Not yet printed on a real Centauri Carbon, Centauri Carbon 2 or CANVAS.
+- **Touches:** Elegoo profiles, Prepare (nozzle sizes, process presets, filament presets), shared profile index.
+

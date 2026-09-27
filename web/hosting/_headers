@@ -4,5 +4,6 @@
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: http: https:; connect-src 'self' http: https: ws: wss:; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
-/engine/*
+/assets/*
   Cache-Control: public, max-age=31536000, immutable
+# /engine and /profiles keep their names across releases, so they are revalidated, never cached as immutable.

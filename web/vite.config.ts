@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
-import { cpSync, createReadStream, existsSync, statSync } from 'node:fs';
+import { cpSync, createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { resolve, normalize, sep } from 'node:path';
 
 // Printer profiles are shared with Android and Desktop; the Web App serves the same files under /profiles/ (fetched on
@@ -17,7 +18,16 @@ const profiles = () => ({
       res.setHeader('Content-Type', 'application/json'); createReadStream(file).pipe(res);
     });
   },
-  writeBundle(opts: { dir?: string }) { cpSync(PROFILES, resolve(opts.dir ?? 'dist', 'profiles'), { recursive: true }); },
+  writeBundle(opts: { dir?: string }) {
+    const dir = opts.dir ?? 'dist';
+    cpSync(PROFILES, resolve(dir, 'profiles'), { recursive: true });
+    // The service worker's cache is named after this build's content, so a new release (page, engine or profiles) replaces
+    // the cached copy instead of being hidden behind it.
+    const h = createHash('sha256').update(readFileSync(resolve(dir, 'index.html')));
+    for (const f of ['engine/SHA256SUMS', 'profiles/index.json']) if (existsSync(resolve(dir, f))) h.update(readFileSync(resolve(dir, f)));
+    const sw = resolve(dir, 'sw.js');
+    writeFileSync(sw, readFileSync(sw, 'utf8').replace("'nozzle-web-v1'", `'nozzle-web-${h.digest('hex').slice(0, 12)}'`));
+  },
 });
 
 // The slicing engine uses threads, which browsers only allow on cross-origin isolated pages. The same headers must be

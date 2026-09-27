@@ -203,12 +203,18 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             // A change is a switch to a different tool. The first selection, and start G-code re-selecting the current tool,
             // aren't (same rule as the Web App's gcodeStats in web/src/project/slicing.ts).
             var tool: Int? = null
+            var bambuGrams = false
             // "T1", or with parameters as Prusa's XL writes it ("T1 S1 L0 D0"); comments after ';' are ignored.
             val select = Regex("^T(\\d{1,2})(?:\\s+[A-Z][^;]*)?\\s*(?:;.*)?$")
             gcode.useLines { lines -> lines.forEach { l ->
                 when {
                     l.startsWith("; total layer number:") -> layers = l.substringAfter(':').trim().toIntOrNull()
                     l.startsWith("; total filament used [g] =") -> grams = l.substringAfter('=').trim().toDoubleOrNull()
+                    // Bambu's G-code layout writes per-filament weights without a total (and its time in the header block).
+                    l.startsWith("; filament used [g] =") -> if (grams == null || bambuGrams) { bambuGrams = true
+                        grams = l.substringAfter('=').split(',').mapNotNull { it.trim().toDoubleOrNull() }.sum() }
+                    l.startsWith("; model printing time:") && l.contains("total estimated time:") ->
+                        if (seconds == null) seconds = parseDuration(l.substringAfter("total estimated time:").trim())
                     l.startsWith("; filament used [mm] =") -> mm = l.substringAfter('=').split(',').mapNotNull { it.trim().toDoubleOrNull() }.sum()
                     l.startsWith("; estimated printing time (normal mode) =") -> seconds = parseDuration(l.substringAfter('=').trim())
                     l.startsWith("T") -> select.find(l)?.let { m -> val t = m.groupValues[1].toInt(); if (tool != null && t != tool) tools++; tool = t }

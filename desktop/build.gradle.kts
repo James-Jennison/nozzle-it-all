@@ -14,7 +14,12 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 
 dependencies {
  implementation(project(":printer-api"))
- implementation(project(":adapter-paxx"))
+ // Printer adapters are discovered at run time (ServiceLoader); Desktop's own code never names a vendor. Which adapter
+ // modules ship is a build choice: -PnozzleAdapters=paxx,octoprint,prusa,bambu (PAXX U1, the flagship, is the default
+ // minimum). Building with fewer proves that removing one vendor never breaks another.
+ providers.gradleProperty("nozzleAdapters").orElse("paxx,octoprint,prusa,bambu").get().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+  .forEach { runtimeOnly(project(":adapter-$it")) }
+ testImplementation(project(":adapter-paxx"))
  implementation(project(":project-format"))
  implementation(compose.desktop.currentOs)
  implementation(compose.foundation)
@@ -27,16 +32,32 @@ dependencies {
 
 // One source for printer profiles: the flattened OrcaSlicer profiles Android already bundles (scripts/flatten_orca_profile.py).
 tasks.named<ProcessResources>("processResources") {
- from(rootProject.file("app/src/main/assets/slicer_profiles/snapmaker_u1")) { into("profiles/snapmaker_u1") }
+ from(rootProject.file("app/src/main/assets/slicer_profiles")) { into("profiles"); exclude("PROVENANCE.md") }
 }
 
 val nozzleVersion = providers.gradleProperty("nozzleDesktopVersion").orElse("0.1.0")
+
+// The native slicing engine (engine/native: the same patched OrcaSlicer source and shared bridge as Android and the Web
+// App). -PnozzleEngine=/path/to/nozzle-engine; defaults to engine/native/scripts/build_engine.sh's output. When the file
+// exists it is bundled into the Linux distribution's app resources, where SliceEngine.locateNative() looks first.
+val nozzleEngine = providers.gradleProperty("nozzleEngine").orElse("/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine")
+val engineResources = layout.buildDirectory.dir("engine-resources")
+val prepareEngineResources = tasks.register<Sync>("prepareEngineResources") {
+ from(nozzleEngine.map { path -> files(path).filter { it.isFile } }) {
+  into("linux-x64")
+  rename { "nozzle-engine" }
+  filePermissions { unix("rwxr-xr-x") }
+ }
+ into(engineResources)
+}
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(prepareEngineResources) }
 
 compose.desktop {
  application {
   mainClass = "com.nozzleitall.desktop.MainKt"
   jvmArgs += listOf("-Dnozzle.version=${nozzleVersion.get()}", "-Dsun.java2d.uiScale.enabled=true")
   nativeDistributions {
+   appResourcesRootDir.set(engineResources)
    targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Msi)
    packageName = "nozzle-it-all"
    packageVersion = nozzleVersion.get()
@@ -67,18 +88,23 @@ compose.desktop {
 val verifyPaxxBaseline = tasks.register("verifyPaxxBaseline") {
  val runtime = configurations.named("runtimeClasspath")
  doLast {
-  val banned = listOf("stock-u1-adapter", "paho", "hivemq", "flutter", "firebase", "snapmaker")
+  // Vendor clouds, Flutter and the optional Stock U1 helper must never be part of Desktop. (Local protocol libraries
+  // such as Bambu's LAN MQTT client may be, inside their own adapter module.)
+  val banned = listOf("stock-u1-adapter", "paho", "flutter", "firebase", "snapmaker-cloud")
   val offenders = runtime.get().resolvedConfiguration.resolvedArtifacts.map { it.moduleVersion.id.toString() + " (" + it.file.name + ")" }
    .filter { name -> banned.any { name.contains(it, ignoreCase = true) } }
   if (offenders.isNotEmpty()) throw GradleException("PAXX baseline violated; Desktop's runtime classpath contains: $offenders")
   val sources = fileTree("src/main") { include("**/*.kt") }.files
-  val badImports = sources.filter { f -> f.readLines().any { it.startsWith("import com.nozzleitall.stocku1") } }
-  if (badImports.isNotEmpty()) throw GradleException("Desktop must not import the Stock U1 helper: $badImports")
+  val badImports = sources.filter { f -> f.readLines().any { it.startsWith("import com.nozzleitall.stocku1") || it.startsWith("import com.nozzleitall.adapter.") } }
+  if (badImports.isNotEmpty()) throw GradleException("Desktop must not import adapter modules (they're discovered at run time): $badImports")
  }
 }
 tasks.named("check") { dependsOn(verifyPaxxBaseline) }
 
 tasks.withType<Test>().configureEach {
+ // Tests slice with the native engine when it has been built (SliceEngine.locateNative()).
+ systemProperty("nozzle.engine", nozzleEngine.get())
  // LocalConnectorTest sends a forged Host header to prove the DNS-rebinding check.
  systemProperty("sun.net.http.allowRestrictedHeaders", "true")
+ systemProperty("nozzle.adapters", providers.gradleProperty("nozzleAdapters").orElse("paxx,octoprint,prusa,bambu").get())
 }

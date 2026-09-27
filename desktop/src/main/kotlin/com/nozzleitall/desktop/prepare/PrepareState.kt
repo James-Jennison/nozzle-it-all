@@ -48,6 +48,8 @@ class PrepareState(private val app: AppState) {
     var passthrough: Map<String, ByteArray> = emptyMap()
     var metadata: Map<String, String> = emptyMap()
     var printerId by mutableStateOf<String?>(null)
+    /** The slicing profile. Independent of any printer connection: every bundled profile can be sliced and exported. */
+    var profileId by mutableStateOf(ProfileCatalog.DEFAULT_ID)
     var preset by mutableStateOf(QualityPreset.STANDARD)
     var supports by mutableStateOf(false)
     var infill by mutableStateOf(15)
@@ -62,26 +64,30 @@ class PrepareState(private val app: AppState) {
     private var engine: SliceEngine? = null
     private var nextId = 1
 
-    /** The U1's printable area. Read from the bundled machine profile when present. */
-    val bed: Pair<Float, Float> by lazy {
-        runCatching {
-            val area = JSONObject(File(profileDir(), "machine.json").readText()).getJSONArray("printable_area")
-            val pts = (0 until area.length()).map { area.getString(it).split('x').map(String::toFloat) }
-            (pts.maxOf { it[0] } - pts.minOf { it[0] }) to (pts.maxOf { it[1] } - pts.minOf { it[1] })
-        }.getOrDefault(270f to 270f)
-    }
+    val profile: PrinterProfileInfo? get() = ProfileCatalog.byId(profileId)
+    /** The chosen profile's printable area. */
+    val bed: Pair<Float, Float> get() = profile?.let { it.bedW to it.bedD } ?: (270f to 270f)
 
-    fun printer(): PrinterEntry? = (printerId ?: app.fleet.order.value.firstOrNull())?.let { app.fleet.printers[it] }
+    fun printer(): PrinterEntry? = printerId?.let { app.fleet.printers[it] }
+
+    /** Choosing a saved printer also chooses its slicing profile; choosing "no printer" keeps the profile. */
+    fun choosePrinter(id: String?) {
+        printerId = id
+        app.fleet.printers[id]?.config?.identity?.profileId?.let { profileId = it }
+        changed()
+    }
 
     /** Materials in slot order: the printer's loaded toolheads when it reports them, otherwise the manual slots. */
     fun materials(): List<ProjectManifest.MaterialSlot> {
         val heads = printer()?.status?.value?.toolheads.orEmpty()
         if (heads.isNotEmpty()) return heads.map { t -> ProjectManifest.MaterialSlot(t.index + 1, t.material?.type ?: "PLA", t.material?.vendor, t.material?.subType,
             t.material?.colorHex ?: manualSlots.getOrNull(t.index)?.colorHex, t.index) }
-        return manualSlots.toList()
+        // No printer report: one slot per tool the profile has (a U1 has four, most printers one).
+        val tools = (profile?.tools ?: 1).coerceIn(1, manualSlots.size)
+        return manualSlots.take(tools)
     }
 
-    fun profileDir(): File = ProfileProvisioner.ensure(app.paths.cache, "snapmaker_u1")
+    fun profileDir(): File = ProfileCatalog.materialize(app.paths.cache, profileId)
 
     fun newProject() {
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
@@ -97,6 +103,7 @@ class PrepareState(private val app: AppState) {
         p.objects.forEach { o -> addFromPlacement(o, slots[o.id] ?: 1) }
         p.manifest?.settings?.preset?.let { key -> QualityPreset.entries.firstOrNull { it.name.equals(key, true) }?.let { preset = it } }
         p.manifest?.settings?.overrides?.let { ov -> ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" } }
+        p.manifest?.printer?.profileId?.takeIf { ProfileCatalog.byId(it) != null }?.let { profileId = it }
         p.manifest?.printer?.printerId?.takeIf { it in app.fleet.printers }?.let { printerId = it }
         notice = p.manifestProblem
         dirty = false
@@ -146,15 +153,16 @@ class PrepareState(private val app: AppState) {
     }
 
     fun outOfBounds(): List<PrepItem> { val (bw, bd) = bed
-        return items.filter { it.x - it.footprintW / 2 < 0 || it.y - it.footprintD / 2 < 0 || it.x + it.footprintW / 2 > bw || it.y + it.footprintD / 2 > bd || it.height > 270f } }
+        return items.filter { it.x - it.footprintW / 2 < 0 || it.y - it.footprintD / 2 < 0 || it.x + it.footprintW / 2 > bw || it.y + it.footprintD / 2 > bd || it.height > (profile?.height ?: 250f) } }
 
     fun toProject(): Project3mf {
         val m = (manifest ?: app.library.newManifest(name, app.version)).let { base ->
             val p = printer()
             base.copy(name = name, revision = base.revision + if (dirty || manifest == null) 1 else 0,
                 modifiedBy = ProjectManifest.Producer("Nozzle It All", "desktop", app.version), modifiedAtMillis = System.currentTimeMillis(),
-                printer = ProjectManifest.PrinterTarget(p?.config?.identity?.model ?: "Snapmaker U1", p?.config?.identity?.firmware?.name ?: "PAXX", p?.config?.identity?.id,
-                    unknown = base.printer?.unknown ?: org.json.JSONObject()),
+                printer = ProjectManifest.PrinterTarget(profile?.model ?: p?.config?.identity?.model ?: "Unknown printer", base.printer?.firmware, p?.config?.identity?.id,
+                    unknown = base.printer?.unknown ?: org.json.JSONObject(), profileId = profileId,
+                    family = p?.config?.identity?.family?.id ?: profile?.familyHint),
                 plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot) },
                     base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
                 materials = materials(),
@@ -174,7 +182,7 @@ class PrepareState(private val app: AppState) {
     }
 
     fun slice(scope: kotlinx.coroutines.CoroutineScope) {
-        val bin = SliceEngine.locate() ?: run { slice = SliceState.Failed("The slicing engine isn't installed with this copy of Nozzle It All. Reinstall the Desktop package."); return }
+        val bin = SliceEngine.locateEngine() ?: run { slice = SliceState.Failed("The slicing engine isn't installed with this copy of Nozzle It All. Reinstall the Desktop package."); return }
         if (items.isEmpty()) { slice = SliceState.Failed("Add a model to the plate first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
         val e = SliceEngine(bin, app.paths.workspaceProfile, app.paths.slices).also { engine = it }
@@ -205,15 +213,3 @@ class PrepareState(private val app: AppState) {
     }
 }
 
-/** Copies the bundled printer profiles out of the app's resources so the engine can read them as files. */
-object ProfileProvisioner {
-    fun ensure(cache: File, model: String): File {
-        val dir = File(cache, "profiles/$model").apply { mkdirs() }
-        listOf("machine.json", "process.json", "filament.json").forEach { name ->
-            val target = File(dir, name)
-            val res = ProfileProvisioner::class.java.getResourceAsStream("/profiles/$model/$name") ?: return@forEach
-            res.use { input -> val bytes = input.readBytes(); if (!target.exists() || !target.readBytes().contentEquals(bytes)) target.writeBytes(bytes) }
-        }
-        return dir
-    }
-}

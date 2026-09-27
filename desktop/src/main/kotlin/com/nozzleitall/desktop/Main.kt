@@ -99,7 +99,9 @@ private fun NavigationRail(state: AppState) {
         .semantics { contentDescription = "Main navigation" }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         androidx.compose.foundation.Image(painterResource("brand/mark-violet.svg"), contentDescription = Glossary.PRODUCT_FAMILY, modifier = Modifier.size(36.dp))
         Spacer(Modifier.height(14.dp))
-        Destination.entries.filter { it != Destination.WORKSPACE && it != Destination.SETTINGS }.forEach { RailItem(it, state) }
+        // Places appear when some printer can use them: Full Spectrum only if a printer reports that extension.
+        val spectrum = state.fleet.printers.values.any { it.capabilities.value?.vendorExtensions?.contains(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM) == true }
+        Destination.entries.filter { it != Destination.WORKSPACE && it != Destination.SETTINGS && (it != Destination.SPECTRUM || spectrum) }.forEach { RailItem(it, state) }
         Spacer(Modifier.weight(1f))
         // The specialist workspace sits apart from everyday places, behind a divider, so entering it is a deliberate choice.
         Box(Modifier.width(48.dp).height(1.dp).background(c.line))

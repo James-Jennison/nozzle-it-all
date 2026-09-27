@@ -1,6 +1,6 @@
 package com.nozzleitall.desktop
 
-import com.nozzleitall.printer.FirmwareFamily
+import com.nozzleitall.printer.PrinterFamily
 import com.nozzleitall.printer.PrinterConfig
 import com.nozzleitall.printer.PrinterIdentity
 import org.json.JSONArray
@@ -22,9 +22,9 @@ class PrinterStore(private val paths: AppPaths) {
         val secrets = runCatching { JSONObject(paths.secrets.readText()) }.getOrDefault(JSONObject())
         return (0 until list.length()).mapNotNull { list.optJSONObject(it) }.mapNotNull { o ->
             val id = o.optString("id").ifBlank { return@mapNotNull null }
-            val firmware = FirmwareFamily.entries.firstOrNull { it.name == o.optString("firmware") } ?: FirmwareFamily.PAXX
+            val family = PrinterFamily.parse(o.optString("family").ifBlank { o.optString("firmware") })
             val extras = o.optJSONObject("extras")?.let { e -> e.keySet().associateWith { e.optString(it) } } ?: emptyMap()
-            PrinterConfig(PrinterIdentity(id, o.optString("name"), o.optString("model", "Snapmaker U1"), firmware, o.optString("address")),
+            PrinterConfig(PrinterIdentity(id, o.optString("name"), o.optString("model", "Snapmaker U1"), family, o.optString("address"), o.optString("profileId").ifBlank { null }),
                 o.optString("adapter", "paxx-lan"), secrets.optString(id), extras)
         }
     }
@@ -34,7 +34,8 @@ class PrinterStore(private val paths: AppPaths) {
         val previousById = previous.optJSONArray("printers")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.associateBy { it.optString("id") } } ?: emptyMap()
         val arr = JSONArray(printers.map { p ->
             (previousById[p.identity.id] ?: JSONObject()).put("id", p.identity.id).put("name", p.identity.displayName).put("model", p.identity.model)
-                .put("firmware", p.identity.firmware.name).put("address", p.identity.address).put("adapter", p.adapterId).put("extras", JSONObject(p.extras))
+                .put("family", p.identity.family.id).put("address", p.identity.address).put("adapter", p.adapterId).put("extras", JSONObject(p.extras))
+                .putOpt("profileId", p.identity.profileId).apply { remove("firmware") }
         })
         atomicWrite(paths.printers, previous.put("version", 1).put("printers", arr).toString(2), private = false)
         atomicWrite(paths.secrets, JSONObject(printers.filter { it.secret.isNotBlank() }.associate { it.identity.id to it.secret }).toString(), private = true)

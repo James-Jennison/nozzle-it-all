@@ -103,7 +103,7 @@ class LocalConnector(private val fleet: Fleet, private val tokenFile: File, val 
             !authorized -> reply(ex, 401, JSONObject().put("error", "not paired"))
             path == "/v1/printers" && ex.requestMethod == "GET" -> reply(ex, 200, JSONObject().put("printers", JSONArray(fleet.order.value.mapNotNull { fleet.printers[it] }.map { e ->
                 JSONObject().put("id", e.config.identity.id).put("name", e.config.identity.displayName).put("model", e.config.identity.model)
-                    .put("firmware", e.config.identity.firmware.name).put("address", e.config.identity.address) })))
+                    .put("family", e.config.identity.family.id).put("address", e.config.identity.address).put("profileId", e.config.identity.profileId) })))
             path.startsWith("/v1/printers/") -> printerRoute(ex, path.removePrefix("/v1/printers/").split('/'))
             else -> reply(ex, 404, JSONObject().put("error", "not found"))
         }
@@ -114,6 +114,8 @@ class LocalConnector(private val fleet: Fleet, private val tokenFile: File, val 
         val session = entry.session
         when (parts.getOrNull(1)) {
             "status" -> reply(ex, 200, AdapterProtocol.encode(entry.status.value))
+            // What the printer's adapter supports, so the browser offers only those controls (capability schema 2).
+            "capabilities" -> entry.capabilities.value?.let { reply(ex, 200, AdapterProtocol.encode(it)) } ?: reply(ex, 503, JSONObject().put("error", "not connected yet"))
             "snapshot" -> {
                 val cam = entry.cameras.value.firstOrNull()
                 if (session == null || cam == null) { reply(ex, 404, JSONObject().put("error", "no camera")); return }

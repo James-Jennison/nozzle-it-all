@@ -71,14 +71,14 @@ fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
         .clickable(interaction, null, role = Role.Button, onClickLabel = "Open ${identity.displayName}", onClick = onOpen)
         .semantics(mergeDescendants = true) { contentDescription = "${identity.displayName}, ${status.state.label}" }) {
         // A thin band in the state colour: readable at a distance across a room of printers.
-        Box(Modifier.fillMaxWidth().height(4.dp).background(stateColor))
+        Box(Modifier.fillMaxWidth().height(4.dp).background(if (status.route == ConnectionRoute.NONE) c.line else stateColor))
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Txt(identity.displayName.ifBlank { identity.address }, Nz.type.title, maxLines = 1)
-                    Txt("${identity.model} · ${identity.firmware.label}", Nz.type.bodySmall, c.textMuted)
+                    Txt("${identity.model} · ${identity.family.label}", Nz.type.bodySmall, c.textMuted)
                 }
-                StatusPill(status.state)
+                if (status.route != ConnectionRoute.NONE) StatusPill(status.state)
             }
             val job = status.job
             if (job != null) {

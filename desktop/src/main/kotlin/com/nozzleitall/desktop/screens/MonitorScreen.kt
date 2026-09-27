@@ -105,7 +105,7 @@ fun CameraPanel(entry: PrinterEntry) {
         }
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(c.surfaceSunken), contentAlignment = Alignment.Center) {
             when {
-                camera == null -> Txt(if (entry.capabilities.value?.camera == false) "This printer has no camera Nozzle can show." else "No camera found on this printer.", Nz.type.body, c.textMuted)
+                camera == null -> Txt(if (entry.capabilities.value?.camera == false) "Nozzle It All can't show this printer's camera." else "No camera found on this printer.", Nz.type.body, c.textMuted)
                 image != null -> androidx.compose.foundation.Image(image!!, "Camera view of ${entry.config.identity.displayName}", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                 else -> Txt(problem ?: "Connecting to the camera…", Nz.type.body, c.textMuted)
             }
@@ -154,10 +154,12 @@ fun ControlsPanel(entry: PrinterEntry, status: PrinterStatus, caps: Capabilities
         Txt("Controls", Nz.type.title)
         if (blocked && entry.guard?.needsReconcile == true) Txt("Commands are paused until Nozzle has checked the printer.", Nz.type.bodySmall, Nz.status.paused)
         fun offer(a: PrinterAction) = !blocked && status.state in a.allowedStates
-        if (caps.pauseResumeCancel) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NzButton("Pause", { flow.request(PrinterAction.Pause) }, icon = NzIcon.PAUSE, enabled = offer(PrinterAction.Pause))
-            NzButton("Resume", { flow.request(PrinterAction.Resume) }, icon = NzIcon.PLAY, enabled = offer(PrinterAction.Resume))
-            NzButton("Cancel print", { flow.request(PrinterAction.Cancel) }, kind = ButtonKind.DANGER, icon = NzIcon.STOP, enabled = offer(PrinterAction.Cancel))
+        // Each control appears only if this printer's adapter reports it; nothing here depends on the printer's make.
+        if (!caps.anyControl) Txt("${entry.config.identity.displayName} can be monitored from Nozzle It All but not controlled.", Nz.type.body, c.textMuted)
+        if (caps.pausePrint || caps.resumePrint || caps.cancelPrint) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (caps.pausePrint) NzButton("Pause", { flow.request(PrinterAction.Pause) }, icon = NzIcon.PAUSE, enabled = offer(PrinterAction.Pause))
+            if (caps.resumePrint) NzButton("Resume", { flow.request(PrinterAction.Resume) }, icon = NzIcon.PLAY, enabled = offer(PrinterAction.Resume))
+            if (caps.cancelPrint) NzButton("Cancel print", { flow.request(PrinterAction.Cancel) }, kind = ButtonKind.DANGER, icon = NzIcon.STOP, enabled = offer(PrinterAction.Cancel))
         }
         if (caps.temperatures) {
             var nozzle by remember { mutableStateOf("") }

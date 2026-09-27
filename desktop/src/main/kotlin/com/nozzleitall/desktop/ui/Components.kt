@@ -104,7 +104,8 @@ fun StatusPill(state: PrinterState, modifier: Modifier = Modifier) {
 @Composable
 fun RouteBadge(route: ConnectionRoute) {
     val c = Nz.colors
-    val icon = when (route) { ConnectionRoute.LAN -> NzIcon.NETWORK; ConnectionRoute.PRIVATE_NETWORK -> NzIcon.PRIVATE_NETWORK; ConnectionRoute.VENDOR_CLOUD -> NzIcon.CLOUD }
+    val icon = when (route) { ConnectionRoute.LAN -> NzIcon.NETWORK; ConnectionRoute.PRIVATE_NETWORK -> NzIcon.PRIVATE_NETWORK; ConnectionRoute.VENDOR_CLOUD -> NzIcon.CLOUD
+        ConnectionRoute.NONE -> return } // export-only printers have no connection to show
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Icon(icon, c.textMuted, 14.dp)
         Txt(route.label, Nz.type.bodySmall, c.textMuted)

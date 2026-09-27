@@ -22,12 +22,14 @@ val materialFinishes = listOf("Basic", "Matte", "Silk", "SnapSpeed", "Support", 
 @Composable
 fun MaterialsScreen(state: AppState) {
     Column(Modifier.fillMaxSize().padding(28.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        SectionHeader("Materials & Toolheads", "What's loaded in each toolhead, as the printer reports it.")
+        SectionHeader("Materials & Toolheads", "What's loaded in each toolhead or material slot, as the printer reports it.")
         val entry = PrinterPicker(state) ?: run { NoPrinterYet(state, "what's loaded in each toolhead"); return@Column }
         val status = entry.status.value
         val caps = entry.capabilities.value
         val flow = rememberActionFlow(entry)
         ActionFlowUi(flow, entry)
+        if (caps?.materialState == false && status.toolheads.none { it.material != null }) Banner(
+            "${entry.config.identity.displayName} doesn't report what material is loaded, so Nozzle It All can't show it. Set materials in Prepare instead.", BannerKind.INFO)
         if (status.toolheads.isEmpty()) {
             Card(Modifier.fillMaxWidth()) { EmptyState(NzIcon.TOOLHEAD, "No toolhead information yet",
                 if (status.state == PrinterState.OFFLINE) "${entry.config.identity.displayName} is offline. Toolheads appear once it's connected." else "This printer hasn't reported its toolheads.") }
@@ -66,7 +68,7 @@ private fun ToolheadCard(t: Toolhead, caps: Capabilities?, status: PrinterStatus
         val blocked = flow.busy
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (caps?.materialEdit == true) NzButton("Set material", onEdit, kind = ButtonKind.SECONDARY, enabled = !blocked && status.state in PrinterAction.SetMaterialInfo(t.index, Material()).allowedStates)
-            if (caps?.materials == true) {
+            if (caps?.loadUnload == true) {
                 NzButton("Load", { flow.request(PrinterAction.LoadMaterial(t.index)) }, kind = ButtonKind.QUIET, enabled = !blocked && status.state in PrinterAction.LoadMaterial(0).allowedStates)
                 NzButton("Unload", { flow.request(PrinterAction.UnloadMaterial(t.index)) }, kind = ButtonKind.QUIET, enabled = !blocked && t.loaded && status.state in PrinterAction.UnloadMaterial(0).allowedStates)
             }

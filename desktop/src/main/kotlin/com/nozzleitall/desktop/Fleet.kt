@@ -2,7 +2,6 @@ package com.nozzleitall.desktop
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import com.nozzleitall.adapter.paxx.PaxxLanAdapter
 import com.nozzleitall.printer.*
 import com.nozzleitall.printer.external.AccountAdapter
 import com.nozzleitall.printer.external.ExternalAdapterClient
@@ -42,9 +41,16 @@ class PrinterEntry(val config: PrinterConfig) {
     @Volatile var guard: ActionGuard? = null
 }
 
+const val EXPORT_ONLY = "export-only"
+
 class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, private val log: (String) -> Unit = {}) {
     private val store = PrinterStore(paths)
-    val registry = AdapterRegistry().apply { registerBuiltIn(PaxxLanAdapter()) }
+    /** Built-in adapters are whatever adapter modules this installation ships (ServiceLoader); none is named here. */
+    val registry = AdapterRegistry().apply {
+        java.util.ServiceLoader.load(DeviceAdapterProvider::class.java).forEach { p ->
+            runCatching { registerBuiltIn(p.create()) }.onFailure { log("adapter not loaded: ${it.message}") }
+        }
+    }
     val printers = mutableStateMapOf<String, PrinterEntry>()
     val order = mutableStateOf<List<String>>(emptyList())
     val settings = mutableStateOf(DesktopSettings.load(paths.settings))
@@ -96,6 +102,12 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
     private fun restart(id: String) { printers[id]?.let { pollers.remove(id)?.cancel(); it.session = null; it.guard = null; startPolling(it) } }
 
     private fun startPolling(entry: PrinterEntry) {
+        // An export-only printer is a slicing target with no connection: nothing to poll, nothing to control.
+        if (entry.config.adapterId == EXPORT_ONLY) {
+            entry.capabilities.value = Capabilities.EXPORT_ONLY
+            entry.status.value = PrinterStatus(PrinterState.UNKNOWN, ConnectionRoute.NONE, message = "Nozzle slices for this printer but doesn't connect to it.")
+            return
+        }
         pollers[entry.config.identity.id] = scope.launch(Dispatchers.IO) {
             while (isActive) {
                 if (entry.session == null) {

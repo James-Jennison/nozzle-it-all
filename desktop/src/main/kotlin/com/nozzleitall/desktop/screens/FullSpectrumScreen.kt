@@ -15,6 +15,8 @@ import com.nozzleitall.desktop.AppState
 import com.nozzleitall.desktop.Destination
 import com.nozzleitall.desktop.ui.*
 import com.nozzleitall.printer.Glossary
+import com.nozzleitall.printer.ext.FullSpectrumState
+import com.nozzleitall.printer.ext.fullSpectrum
 
 /**
  * Full Spectrum: shows which colours the loaded toolheads can make together, from the printer's own report. Mixing
@@ -25,9 +27,13 @@ fun FullSpectrumScreen(state: AppState) {
     Column(Modifier.fillMaxSize().padding(28.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         SectionHeader("Full Spectrum", Glossary.term("concept.full-spectrum").description)
         val entry = PrinterPicker(state) ?: run { NoPrinterYet(state, "which colours your toolheads can mix"); return@Column }
-        val fs = entry.status.value.fullSpectrum
         val c = Nz.colors
-        if (!fs.available) Banner(fs.unavailableReason ?: "Full Spectrum isn't available on this printer.", BannerKind.INFO)
+        if (entry.capabilities.value?.fullSpectrum != true) {
+            Banner("Full Spectrum is a Snapmaker U1 feature. ${entry.config.identity.displayName} doesn't offer it.", BannerKind.INFO)
+            return@Column
+        }
+        val fs = FullSpectrumState.from(entry.status.value) ?: FullSpectrumState(false, unavailableReason = "The printer hasn't reported its loaded colours yet.")
+        if (!fs.available) Banner(fs.unavailableReason ?: "Full Spectrum isn't available right now.", BannerKind.INFO)
         val palette = fs.palette.mapNotNull { parseHex(it)?.let { col -> it to col } }
         if (palette.isNotEmpty()) Card(Modifier.fillMaxWidth()) {
             Txt("Loaded colours", Nz.type.title)

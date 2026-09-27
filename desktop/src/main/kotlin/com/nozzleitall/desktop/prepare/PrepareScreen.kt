@@ -113,16 +113,30 @@ private fun Step(number: Int, title: String, content: @Composable ColumnScope.()
 private fun StepPrinter(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
+    var query by remember { mutableStateOf("") }
+    var choosing by remember { mutableStateOf(false) }
     Step(1, "Printer and materials") {
         val ids = state.fleet.order.value
-        if (ids.isEmpty()) Txt("No printer added yet: preparing for a Snapmaker U1. Add a printer to match its loaded materials.", Nz.type.bodySmall, c.textMuted)
-        else Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            ids.forEach { id -> state.fleet.printers[id]?.let { e -> NzButton(e.config.identity.displayName, { p.printerId = id; p.changed() },
-                kind = if ((p.printerId ?: ids.first()) == id) ButtonKind.PRIMARY else ButtonKind.SECONDARY) } }
+        Txt("Printer", Nz.type.label)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NzButton("None (export)", { p.choosePrinter(null) }, kind = if (p.printerId == null) ButtonKind.PRIMARY else ButtonKind.SECONDARY)
+            ids.forEach { id -> state.fleet.printers[id]?.let { e -> NzButton(e.config.identity.displayName, { p.choosePrinter(id) },
+                kind = if (p.printerId == id) ButtonKind.PRIMARY else ButtonKind.SECONDARY) } }
+        }
+        // Slicing needs only a profile. It is independent of the connection, so any printer can be prepared for, offline.
+        Txt("Slicing profile: ${p.profile?.let { "${it.vendor} · ${it.model}" } ?: p.profileId}", Nz.type.body)
+        NzButton(if (choosing) "Done" else "Change profile", { choosing = !choosing }, kind = ButtonKind.QUIET)
+        if (choosing) {
+            Field("Search printer models", query, { query = it }, placeholder = "Snapmaker, Prusa, Bambu, Voron…")
+            ProfileCatalog.search(query).take(10).forEach { pr ->
+                NzButton("${pr.vendor} · ${pr.model}", { p.profileId = pr.id; p.changed(); choosing = false }, kind = if (p.profileId == pr.id) ButtonKind.PRIMARY else ButtonKind.QUIET)
+            }
+            Txt("${ProfileCatalog.all.size} printer profiles from OrcaSlicer's library. A profile means Nozzle can slice for that printer; it doesn't mean the printer has been tested.",
+                Nz.type.bodySmall, c.textMuted)
         }
         val slots = p.materials()
-        val fromPrinter = p.printer()?.status?.value?.toolheads?.isNotEmpty() == true
-        Txt(if (fromPrinter) "Loaded in the printer now:" else "Materials (the printer hasn't reported its toolheads):", Nz.type.bodySmall, c.textMuted)
+        val fromPrinter = p.printer()?.status?.value?.toolheads?.any { it.material != null } == true
+        Txt(if (fromPrinter) "Loaded in the printer now:" else "Materials:", Nz.type.bodySmall, c.textMuted)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             slots.forEach { s -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "Material ${s.slot}: ${s.type} ${s.colorHex}" }) {
                 Box(Modifier.size(34.dp).clip(CircleShape).background(parseHex(s.colorHex) ?: c.surfaceSunken).border(1.dp, c.lineStrong, CircleShape))
@@ -231,31 +245,42 @@ private fun SendPanel(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     val scope = rememberCoroutineScope()
-    val entry = p.printer() ?: run { Txt("Add a printer to send this job, or export the file.", Nz.type.bodySmall, c.textMuted); return }
+    val entry = p.printer() ?: run { Txt("No printer chosen: export the file and send it yourself, or choose a printer in step 1.", Nz.type.bodySmall, c.textMuted); return }
+    val caps = entry.capabilities.value ?: run { Txt("Connecting to ${entry.config.identity.displayName}…", Nz.type.bodySmall, c.textMuted); return }
     val flow = rememberActionFlow(entry)
     var uploaded by remember(p.slice) { mutableStateOf<String?>(null) }
     var problem by remember(p.slice) { mutableStateOf<String?>(null) }
+    val done = p.slice as? SliceState.Done ?: return
     ActionFlowUi(flow, entry)
     problem?.let { Banner(it, BannerKind.WARNING) }
     val status = entry.status.value
-    if (uploaded == null) {
-        p.uploadProgress?.let { ProgressBar(it, label = "Sending to printer") }
-        NzButton("Send to ${entry.config.identity.displayName}", { scope.launch {
-            problem = null
-            when (val r = p.upload(entry)) {
-                is UploadResult.Uploaded -> uploaded = r.remotePath
-                is UploadResult.Interrupted -> problem = "The transfer was interrupted: ${r.reason} The file on the printer may be incomplete. Send it again before printing."
-                is UploadResult.Failed -> problem = r.reason
-            }
-        } }, kind = ButtonKind.PRIMARY, icon = NzIcon.SEND, enabled = p.uploadProgress == null && status.state != PrinterState.OFFLINE, testTag = "send")
-    } else {
-        Banner("Sent to ${entry.config.identity.displayName}. Start printing when the plate is clear.", BannerKind.SUCCESS)
-        val map = p.items.map { it.slot }.distinct().sorted()
-        val toolMap = if (entry.status.value.toolheads.isNotEmpty()) (1..(map.maxOrNull() ?: 1)).map { it - 1 } else emptyList()
-        NzButton("Start print", { flow.request(PrinterAction.StartJob(uploaded!!, toolMap)) }, kind = ButtonKind.PRIMARY, icon = NzIcon.PLAY,
-            enabled = status.state in PrinterAction.StartJob("x").allowedStates && !flow.busy)
-        NzButton("Watch it print", { state.openPrinter(entry.config.identity.id) }, kind = ButtonKind.QUIET, icon = NzIcon.MONITOR)
+    val remoteName = p.name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(60) + ".gcode"
+    when {
+        // Everything below follows what this printer's adapter reports; nothing depends on who made it.
+        "gcode" !in caps.acceptedOutputs -> Banner("${entry.config.identity.displayName} needs a ${caps.acceptedOutputs.joinToString(" or ")} file, which Nozzle It All for Desktop can't make yet. Export the file and use the printer maker's own app to send it.", BannerKind.INFO)
+        caps.uploadJob -> if (uploaded == null) {
+            p.uploadProgress?.let { ProgressBar(it, label = "Sending to printer") }
+            NzButton("Send to ${entry.config.identity.displayName}", { scope.launch {
+                problem = null
+                when (val r = p.upload(entry)) {
+                    is UploadResult.Uploaded -> uploaded = r.remotePath
+                    is UploadResult.Interrupted -> problem = "The transfer was interrupted: ${r.reason} The file on the printer may be incomplete. Send it again before printing."
+                    is UploadResult.Failed -> problem = r.reason
+                }
+            } }, kind = ButtonKind.PRIMARY, icon = NzIcon.SEND, enabled = p.uploadProgress == null && status.state != PrinterState.OFFLINE, testTag = "send")
+        } else {
+            Banner("Sent to ${entry.config.identity.displayName}. Start printing when the plate is clear.", BannerKind.SUCCESS)
+            val toolMap = if (caps.multiMaterial && p.materials().size > 1) p.materials().map { (it.toolhead ?: (it.slot - 1)) } else emptyList()
+            if (caps.startPrint) NzButton("Start print", { flow.request(PrinterAction.StartJob(uploaded!!, toolMap)) }, kind = ButtonKind.PRIMARY, icon = NzIcon.PLAY,
+                enabled = status.state in PrinterAction.StartJob("x").allowedStates && !flow.busy)
+        }
+        // Printers that receive a file and start it in one request: one confirmed action.
+        caps.uploadAndStart -> NzButton("Send and print on ${entry.config.identity.displayName}", {
+            flow.request(PrinterAction.UploadAndStart(done.result.gcode.absolutePath, remoteName))
+        }, kind = ButtonKind.PRIMARY, icon = NzIcon.SEND, enabled = !flow.busy && status.state in PrinterAction.UploadAndStart("", "").allowedStates, testTag = "send")
+        else -> Txt("${entry.config.identity.displayName} can't receive jobs from Nozzle It All. Export the file instead.", Nz.type.bodySmall, c.textMuted)
     }
+    if (caps.anyControl || caps.camera) NzButton("Watch it print", { state.openPrinter(entry.config.identity.id) }, kind = ButtonKind.QUIET, icon = NzIcon.MONITOR)
 }
 
 @Composable

@@ -28,7 +28,7 @@ class DesktopAcceptanceTest {
     @Test fun printerSecretsAreSeparateAndOwnerOnly() {
         val p = paths()
         val store = PrinterStore(p)
-        val cfg = PrinterConfig(PrinterIdentity("a", "Workshop", "Snapmaker U1", FirmwareFamily.PAXX, "http://192.168.1.40"), "paxx-lan", "secret-key")
+        val cfg = PrinterConfig(PrinterIdentity("a", "Workshop", "Snapmaker U1", PrinterFamily.PAXX_U1, "http://192.168.1.40"), "paxx-lan", "secret-key")
         store.save(listOf(cfg))
         assertFalse(p.printers.readText().contains("secret-key"))
         assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(p.secrets.toPath())))
@@ -118,7 +118,7 @@ class DesktopAcceptanceTest {
 
     @Test fun paxxOnlyFleetNeverRegistersOrStartsStockSupport() {
         val p = paths()
-        PrinterStore(p).save(listOf(PrinterConfig(PrinterIdentity("u1", "U1", "Snapmaker U1", FirmwareFamily.PAXX, "http://127.0.0.1:9"), "paxx-lan")))
+        PrinterStore(p).save(listOf(PrinterConfig(PrinterIdentity("u1", "U1", "Snapmaker U1", PrinterFamily.PAXX_U1, "http://127.0.0.1:9"), "paxx-lan")))
         val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default)
         val fleet = Fleet(p, scope)
         assertTrue("Stock support is off by default", !fleet.settings.value.stockU1Enabled)
@@ -132,8 +132,8 @@ class DesktopAcceptanceTest {
         // Stock support "enabled" but its helper points at nothing; a PAXX printer must still be served by the PAXX adapter.
         p.settings.writeText(DesktopSettings(stockU1Enabled = true).toJson().toString())
         PrinterStore(p).save(listOf(
-            PrinterConfig(PrinterIdentity("paxx", "PAXX", "Snapmaker U1", FirmwareFamily.PAXX, "http://127.0.0.1:9"), "paxx-lan"),
-            PrinterConfig(PrinterIdentity("stock", "Stock", "Snapmaker U1", FirmwareFamily.STOCK_U1, "http://127.0.0.1:9"), "stock-u1")))
+            PrinterConfig(PrinterIdentity("paxx", "PAXX", "Snapmaker U1", PrinterFamily.PAXX_U1, "http://127.0.0.1:9"), "paxx-lan"),
+            PrinterConfig(PrinterIdentity("stock", "Stock", "Snapmaker U1", PrinterFamily.STOCK_U1, "http://127.0.0.1:9"), "stock-u1")))
         val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default)
         val fleet = Fleet(p, scope)
         val deadline = System.currentTimeMillis() + 15_000

@@ -39,8 +39,9 @@ Allowed origins (v1.0): `https://app.nozzleitall.com`, `https://nozzleitall.com`
 |---|---|---|
 | `GET /v1/hello` | – | `{"protocol":"nozzle-connector","version":[1,0],"app":"…","paired":bool}` |
 | `POST /v1/pair` `{"code":"123456"}` | – | `{"token":"…"}` or 403 |
-| `GET /v1/printers` | ✓ | `{"printers":[{id,name,model,firmware,address}]}`. No secrets. |
+| `GET /v1/printers` | ✓ | `{"printers":[{id,name,model,family,profileId,address}]}`. No secrets. |
 | `GET /v1/printers/{id}/status` | ✓ | Printer status in the shared model (same encoding as the adapter protocol) |
+| `GET /v1/printers/{id}/capabilities` | ✓ | Capabilities of the printer's adapter (schema 2, snake_case keys). 503 until the printer has connected once. The Web App shows only controls listed here |
 | `GET /v1/printers/{id}/snapshot` | ✓ | JPEG camera still |
 | `POST /v1/printers/{id}/upload?name=nozzle/x.gcode` (body: file bytes) | ✓ | `{"result":"uploaded"\|"interrupted"\|"failed", …}` |
 | `POST /v1/printers/{id}/action` `{"action":{…}}` | ✓ | `{"outcome":"accepted"\|"rejected"\|"unknown","reason":…}` |

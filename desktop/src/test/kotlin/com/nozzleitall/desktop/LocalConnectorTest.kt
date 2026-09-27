@@ -1,6 +1,9 @@
 package com.nozzleitall.desktop
 
 import com.nozzleitall.desktop.connector.LocalConnector
+import com.nozzleitall.printer.PrinterConfig
+import com.nozzleitall.printer.PrinterFamily
+import com.nozzleitall.printer.PrinterIdentity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import org.json.JSONObject
@@ -57,6 +60,30 @@ class LocalConnectorTest {
             assertFalse(File(paths.config, "tokens.json").readText().contains(token))
             conn.forgetAll()
             assertEquals(401, call(port, "/v1/printers", token = token).first)
+        } finally { conn.stop(); fleet.shutdown() }
+    }
+
+    /** The browser learns each printer's family, profile and capabilities, and never a secret. */
+    @Test fun printersCarryFamilyProfileAndCapabilitiesButNoSecrets() {
+        System.setProperty("sun.net.http.allowRestrictedHeaders", "true")
+        val dir = Files.createTempDirectory("conn").toFile()
+        val paths = AppPaths(File(dir, "config"), File(dir, "data"), File(dir, "cache")).ensure()
+        PrinterStore(paths).save(listOf(
+            PrinterConfig(PrinterIdentity("shelf", "Shelf printer", "Voron 2.4", PrinterFamily.EXPORT_ONLY, "", "generic_klipper"), EXPORT_ONLY, secret = "not-for-browsers")))
+        val fleet = Fleet(paths, CoroutineScope(Dispatchers.Default))
+        val port = ServerSocket(0).use { it.localPort }
+        val conn = LocalConnector(fleet, File(paths.config, "tokens.json"), port)
+        conn.start()
+        try {
+            val token = JSONObject(call(port, "/v1/pair", "POST", body = """{"code":"${conn.newPairingCode()}"}""").second).getString("token")
+            val list = call(port, "/v1/printers", token = token).second
+            val p = JSONObject(list).getJSONArray("printers").getJSONObject(0)
+            assertEquals("export-only", p.getString("family")); assertEquals("generic_klipper", p.getString("profileId"))
+            assertFalse(list.contains("not-for-browsers"))
+            val caps = JSONObject(call(port, "/v1/printers/shelf/capabilities", token = token).second)
+            assertEquals(2, caps.getInt("schema"))
+            assertFalse(caps.getBoolean("upload_job")); assertFalse(caps.getBoolean("pause_print"))
+            assertEquals(401, call(port, "/v1/printers/shelf/capabilities").first)
         } finally { conn.stop(); fleet.shutdown() }
     }
 }

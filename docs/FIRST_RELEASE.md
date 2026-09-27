@@ -40,3 +40,11 @@ The steps used (kept for a rebuild or rotation):
 
 ## Not covered
 F-Droid needs a reproducible build from source; the native engine build (a prebuilt dependency set, 57 MB) makes that a separate project.
+
+## 0.1.1 (2026-09-26)
+
+Tag `v0.1.1` (commit `2d3c113`), versionCode 274, signed with the same upload key as 0.1.0. Built locally because the CI release job
+needs the full engine checkout (`scripts/engine_pin.py verify` without `--allow-missing-deps`), which the self-hosted runner's engine
+copy lacks; the pin verifies here. Files: `/run/media/jjennison/DATA/Nozzle It All/releases/0.1.1/` (AAB, APK, mapping.txt, SBOM, SHA256SUMS).
+Uploaded to the closed-testing "Alpha" track by the owner (the AAB is over the 10 MB upload-tool limit); Google approved it the same day.
+Contents: 376 bundled printer profiles with a searchable picker, custom machine settings, stock and PAXX Snapmaker U1 types.

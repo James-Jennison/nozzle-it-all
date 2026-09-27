@@ -1,4 +1,8 @@
-# Upstream intake (Advanced Workspace and engine)
+# Upstream intake (engine)
+
+> **2026-09-27:** the separate Advanced Workspace app is retired; Prepare is Nozzle's workspace, rebuilt in Nozzle's own
+> UI (docs/family/PREPARE_WORKSPACE.md). Intake now feeds the shared engine (engine/ENGINE_PIN.json) and a list of Orca
+> features to rebuild in Prepare. Orca GUI code is reference only. The branch and build notes below are historical.
 
 Nozzle It All builds on two upstreams, tracked separately in `/mnt/faststorage/Snapmaker-Orca/OrcaSlicer`:
 

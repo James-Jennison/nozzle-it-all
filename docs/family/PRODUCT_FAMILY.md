@@ -31,7 +31,7 @@ so the printer's own colours (loaded filament) stand out.
 recur in the family's line icons (Desktop `ui/Icons.kt`), so icons read as Nozzle's without copying any icon set.
 
 **Naming:** always "Nozzle It All". The short form in tight UI is "Nozzle". Product lines are "Nozzle It All for
-Desktop", "Nozzle It All for Android" and "Nozzle It All Web". The specialist editor is the "Advanced Workspace". Never
+Desktop", "Nozzle It All for Android" and "Nozzle It All Web". There is no separate editor: Prepare is the workspace. Never
 "NIA", and never an upstream name (OrcaSlicer, Snapmaker Orca) as our product's name. Upstream names appear only in
 attribution.
 
@@ -67,7 +67,6 @@ Nozzle It All
 │   ├── Print & Monitor   camera, job, temperatures, confirmed controls
 │   ├── Materials & Toolheads
 │   ├── Full Spectrum
-│   ├── Advanced Workspace   (separate, behind a divider; opens the Orca-derived editor as its own window)
 │   └── Settings          appearance, remote access, optional Stock U1, local connector, data, about
 ├── Android  (existing native app; tabs today: Home, Control, Files, Prepare, Discover, Settings)
 │   └── target: Home/Printers, Projects, Prepare, Slice & Preview, Send, Monitor, Materials & Toolheads, Settings
@@ -91,7 +90,7 @@ Nozzle It All
 | 5 | Save, reopen, move between platforms | Projects (3MF + manifest) | .nozzleproj today; 3MF interchange planned (ANDROID_AUDIT §15) | Stored in this browser; export or import 3MF |
 | 6 | Send and start | Upload → Start print (confirm) | Existing send flow | Upload → Start print (confirm), direct or through the connector |
 | 7 | Monitor | Print & Monitor | Home and Control | Printers → printer |
-| 8 | Recover from failure | Unknown outcome → "Check printer" → commands resume; damaged project opens its geometry; workspace conflicts give three choices | Existing no-replay rules | Same guard as Desktop; damaged manifest → geometry opens |
+| 8 | Recover from failure | Unknown outcome → "Check printer" → commands resume; damaged project opens its geometry | Existing no-replay rules | Same guard as Desktop; damaged manifest → geometry opens |
 | 9 | Add a Stock U1 | Detected as Stock → explained → optional support, off by default | Existing Bespok3d flow | Monitoring and sending over the LAN; account features not in the browser |
 | 10 | Stock support fails | Stock printers go Offline with a reason; PAXX printers are unaffected (tested) | n/a | n/a |
 
@@ -122,7 +121,7 @@ Nozzle It All
 
 - **Desktop:**
   - navigation rail, dense side-by-side workbench and keyboard shortcuts (Ctrl+1…7);
-  - the Advanced Workspace for specialist editing;
+  - Prepare as the complete workspace (see "Prepare is the workspace" below);
   - the local connector for the browser.
 - **Android:**
   - touch-first tabs and bottom navigation, 48 dp targets;
@@ -147,9 +146,8 @@ Nozzle is organised around the printers you own and the task in front of you:
   printer, which task".
 - **Materials come from the printer.** Prepare uses what's loaded in the U1's toolheads; it isn't a list of profile
   names.
-- **Settings are guided choices first.** Draft, Standard or Fine, supports, infill. Everything else is behind an explicit
-  "Advanced", and the full engine is in the Advanced Workspace, a deliberately separate window you enter and leave on
-  purpose.
+- **Settings are guided choices first, and everything is one step away.** Draft, Standard or Fine, supports, infill up
+  front; every engine setting is in Prepare's All settings, searchable, in Nozzle's own groups.
 - **Printer-changing actions have one safety model.** Review, confirm, execute once; unknown means check first. This is
   shared across platforms and enforced in shared code, not per screen.
 - **One project file everywhere.** It moves between Desktop, Android, Web and other 3MF slicers without losing
@@ -164,9 +162,6 @@ nozzle-it-all (Desktop, PAXX baseline)                      nozzle-stock-u1-adap
 │   ├── adapter-paxx       LAN Moonraker only                  └── LAN control of stock firmware via shared U1 session
 │   ├── project-format     3MF + manifest
 │   └── connector          127.0.0.1 only, paired              Never linked by the core: Desktop finds and starts it at
-├── Advanced Workspace (Orca-derived, NOZZLE_BRANDING=ON,      run time only when the user enables Stock U1 support.
-│   NOZZLE_STOCK_U1=OFF: no Flutter bundle, no 13619 server,
-│   no cloud login or sync at startup)
 └── U1 printer profiles (flattened, shared with Android)
 
 nozzle-it-all-web (static files served from app.nozzleitall.com with COOP/COEP)
@@ -192,3 +187,14 @@ Mechanical enforcement:
 | Printer profiles (flattened Orca, AGPL) | `app/src/main/assets/slicer_profiles/` | Desktop resources at build time, Web bundle at build time |
 
 Lovart's marketing boards are not used (brand/README.md).
+
+
+## Prepare is the workspace (owner decision, 2026-09-27)
+
+There is no separate workspace application. The Orca workspace's feature set is the basis of Prepare: every setting,
+per-object settings and modifiers, painting (supports, seams, colour), cut, variable layer height, a detailed G-code
+preview, calibration and profile editing. It is rebuilt in Nozzle's own Compose UI on the shared Orca-derived engine,
+and it must look like Nozzle It All, not like an Orca variant. The Orca-derived "Advanced Workspace" program, its bridge
+(docs/protocols/WORKSPACE_BRIDGE.md, retired) and its package are gone; its branch stays in a private repository for
+reference only. Build order and the survey behind it: docs/family/SLICER_FEATURE_SURVEY.md and
+docs/family/PREPARE_WORKSPACE.md.

@@ -21,27 +21,34 @@ data class Choice(val value: String, val label: String)
 data class SettingDef(
     val key: String, val scope: Scope, val type: String, val label: String, val help: String?, val units: String?,
     val min: Double?, val max: Double?, val mode: String, val choices: List<Choice>, val openChoices: Boolean,
-    val default: String?, val multiline: Boolean, val code: Boolean, val readonly: Boolean,
+    val default: String?, val multiline: Boolean, val code: Boolean, val readonly: Boolean, val nullable: Boolean = false,
 ) {
     /** Vector options hold one value per extruder or filament slot; numbers are edited as a comma-separated list. */
     val isList get() = type in LIST_TYPES
     val baseType get() = when (type) { "floats" -> "float"; "ints" -> "int"; "bools" -> "bool"; "strings" -> "string"; "percents" -> "percent"; "enums" -> "enum"; "floats_or_percents" -> "float_or_percent"; else -> type }
 
+    /** A nullable setting left to the printer: "nil" in every entry, or an empty list. */
+    private fun isUnset(v: String) = v.isBlank() || v.split(',').all { it.trim() == "nil" }
+
     /** What a person sees and edits, from the engine's serialized value. Text lists show their first entry. */
-    fun display(serialized: String): String = when (type) {
-        "strings" -> parseStrings(serialized).firstOrNull().orEmpty()
+    fun display(serialized: String): String = when {
+        nullable && isUnset(serialized) -> ""
+        type == "strings" -> parseStrings(serialized).firstOrNull().orEmpty()
         else -> if (isList) serialized.split(',').joinToString(", ") { it.trim() } else serialized
     }
 
     /** The engine's serialized form of what a person typed (the form libslic3r's deserialize accepts). */
-    fun serialize(text: String): String = when (type) {
-        "strings" -> quote(text)
+    fun serialize(text: String): String = when {
+        nullable && text.isBlank() -> "nil"
+        type == "strings" -> quote(text)
         else -> if (isList) text.split(',').joinToString(",") { it.trim() } else text.trim()
     }
 
     /** Null when [text] (as typed) is acceptable, otherwise a short reason. Lists are checked item by item. */
     fun problem(text: String): String? {
         if (baseType == "string" || baseType.startsWith("point")) return null
+        // Blank is valid for a nullable setting (a material's "use the printer's value") and for an empty list.
+        if (text.isBlank() && (nullable || isList)) return null
         val items = if (isList) text.split(',').map { it.trim() } else listOf(text.trim())
         for (v in items) {
             when (baseType) {
@@ -121,7 +128,7 @@ class SettingsCatalog(val all: List<SettingDef>, val groups: List<SettingGroup>,
                     o.optString("tooltip").ifBlank { null }, o.optString("units").ifBlank { null },
                     if (o.has("min")) o.getDouble("min") else null, if (o.has("max")) o.getDouble("max") else null,
                     o.optString("mode", "advanced"), choices, o.optBoolean("openChoices"), if (o.has("default")) o.getString("default") else null,
-                    o.optBoolean("multiline"), o.optBoolean("code"), o.optBoolean("readonly"))
+                    o.optBoolean("multiline"), o.optBoolean("code"), o.optBoolean("readonly"), o.optBoolean("nullable"))
             }.distinctBy { it.scope to it.key } // the engine lists a few printer keys twice
             val hidden = layout.getJSONArray("hidden").strings().map { Regex(it) }
             val rules = layout.getJSONArray("groups").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
@@ -159,14 +166,15 @@ class SettingsCatalog(val all: List<SettingDef>, val groups: List<SettingGroup>,
 /**
  * The values a printer profile gives each setting (its machine, process and filament files), so screens can show what a
  * setting is before it's changed and what "reset" returns to. Orca stores list settings as JSON arrays; they're shown as
- * comma-separated lists.
+ * comma-separated lists. A profile file only lists what it changes; every other setting is the engine's own default,
+ * which the schema carries, so [defaults] fills those in.
  */
-class ProfileValues(private val values: Map<String, String>) {
-    /** The engine's serialized value for [key] in this profile, or null if the profile doesn't set it. */
-    operator fun get(key: String): String? = values[key]
+class ProfileValues(private val values: Map<String, String>, private val defaults: Map<String, String> = emptyMap()) {
+    /** The engine's serialized value for [key] in this profile, else the engine's default, or null if neither is known. */
+    operator fun get(key: String): String? = values[key] ?: defaults[key]
 
     companion object {
-        fun read(profileDir: File): ProfileValues {
+        fun read(profileDir: File, catalog: SettingsCatalog? = null): ProfileValues {
             val out = HashMap<String, String>()
             for (name in listOf("machine.json", "filament.json", "process.json")) {
                 val f = File(profileDir, name); if (!f.isFile) continue
@@ -179,7 +187,7 @@ class ProfileValues(private val values: Map<String, String>) {
                     else -> v.toString()
                 }
             }
-            return ProfileValues(out)
+            return ProfileValues(out, catalog?.all?.mapNotNull { d -> d.default?.let { d.key to it } }?.toMap().orEmpty())
         }
     }
 }

@@ -56,7 +56,7 @@ fun PrepareScreen(state: AppState) {
             StepPrinter(state)
             MaterialsSection(state)
             StepObjects(state)
-            val profileValues = remember(p.profileId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir()) }
+            val profileValues = remember(p.profileId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
             com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
             StepSlice(state)
         }

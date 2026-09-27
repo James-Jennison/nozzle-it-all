@@ -63,6 +63,17 @@ class SettingsCatalogTest {
         v["filament_start_gcode"]?.let { assertFalse(start.display(it).startsWith("\"")) }
         assertTrue(v["nozzle_diameter"]!!.split(',').size == 4) // U1: four toolheads
     }
+
+    /** A profile file lists only what it changes; the rest are engine defaults, so no shown setting may be blank or invalid. */
+    @Test fun everyShownSettingHasAValidValue() {
+        val dir = ProfileCatalog.materialize(Files.createTempDirectory("pv").toFile(), "snapmaker_u1")
+        val v = ProfileValues.read(dir, catalog)
+        val bad = catalog.groups.flatMap { it.settings }.mapNotNull { d ->
+            val value = v[d.key] ?: return@mapNotNull "${d.key}: no value"
+            d.problem(d.display(value))?.let { "${d.key} = '$value': $it" }
+        }
+        assertTrue(bad.joinToString("\n"), bad.isEmpty())
+    }
 }
 
 /** Changes made in All settings reach the engine exactly: a number, a choice, and a per-material G-code text. */

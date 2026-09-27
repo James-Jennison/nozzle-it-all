@@ -143,7 +143,8 @@ private fun DenseControl(s: SettingDef, serialized: String, onSet: (String?) -> 
             var text by remember(s.key, serialized) { mutableStateOf(s.display(serialized)) }
             val problem = s.problem(text)
             TooltipArea(tooltip = { problem?.let { Tip(it) } }, delayMillis = 0) {
-                DenseInput(text, { t -> text = t; if (s.problem(t) == null) onSet(s.serialize(t)) }, s.label, Modifier.width(width), units = s.units, error = problem != null)
+                DenseInput(text, { t -> text = t; if (s.problem(t) == null) onSet(s.serialize(t)) }, s.label, Modifier.width(width), units = s.units, error = problem != null,
+                    placeholder = if (s.nullable) "Printer's" else "")
             }
         }
     }

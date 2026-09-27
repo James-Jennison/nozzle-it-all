@@ -9,6 +9,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/dist/linux"
 ENGINE="${NOZZLE_ENGINE:-/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine}"
+GRADLE=(/bin/bash "$ROOT/gradlew" --no-daemon --max-workers="${HEAVY_BUILD_JOBS:-6}")
 while [ $# -gt 0 ]; do
   case "$1" in
     --engine) ENGINE="$2"; shift 2 ;;
@@ -17,11 +18,11 @@ while [ $# -gt 0 ]; do
 done
 [ -x "$ENGINE" ] || { echo "slicing engine not found at $ENGINE (build it with engine/native/scripts/build_engine.sh)" >&2; exit 1; }
 mkdir -p "$OUT"
-VERSION="$(cd "$ROOT" && ./gradlew -q :desktop:properties --property version 2>/dev/null | awk '/^version:/{print $2}')"
+VERSION="$(cd "$ROOT" && "${GRADLE[@]}" -q :desktop:properties --property version 2>/dev/null | awk '/^version:/{print $2}')"
 [ -n "$VERSION" ] && [ "$VERSION" != "unspecified" ] || VERSION="0.1.0"
 
 echo "== Desktop ($VERSION)"
-(cd "$ROOT" && ./gradlew -q :desktop:packageDeb :stock-u1-adapter:installDist -PnozzleEngine="$ENGINE")
+(cd "$ROOT" && "${GRADLE[@]}" -q :desktop:packageDeb :stock-u1-adapter:installDist -PnozzleEngine="$ENGINE")
 STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 
 # Desktop integration jpackage doesn't do well: its postinst registers a launcher with xdg-desktop-menu, which silently
@@ -88,7 +89,7 @@ echo "== Provenance"
   echo "Nozzle It All Linux packages $VERSION"
   echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -srm)"
   echo "source: $(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet || echo ' (with uncommitted changes)')"
-  echo "java: $(java -version 2>&1 | head -1); gradle: $("$ROOT"/gradlew -q --version 2>/dev/null | awk '/^Gradle/{print $2}')"
+  echo "java: $(java -version 2>&1 | head -1); gradle: $("${GRADLE[@]}" -q --version 2>/dev/null | awk '/^Gradle/{print $2}')"
   echo "stock adapter runtime modules: $MODULES"
   echo "slicing engine: $ENGINE sha256 $(sha256sum "$ENGINE" | cut -d' ' -f1)"
   [ -f "$ROOT/engine/native/PROVENANCE.txt" ] && sed 's/^/  /' "$ROOT/engine/native/PROVENANCE.txt"

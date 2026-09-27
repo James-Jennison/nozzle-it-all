@@ -85,6 +85,16 @@ void run_cancellable(Slic3r::Print& print, const std::string& partial_output, Fn
 }
 
 
+// Upstream OrcaSlicer's profiles write 0 in the per-feature filament settings to mean "the object's own filament".
+// Snapmaker Orca's engine (and the settings it defines, wall_filament / sparse_infill_filament / solid_infill_filament,
+// default 1) takes 0 as a filament index, which leaves the walls without a nozzle and crashes Arachne. A 0 is treated
+// as unset, so the engine's own default applies. (Support filaments keep 0: there it is the engine's own "current".)
+void drop_unset_feature_filaments(Slic3r::DynamicPrintConfig& profile) {
+    for (const char* key : {"wall_filament", "sparse_infill_filament", "solid_infill_filament"})
+        if (const Slic3r::ConfigOption* opt = profile.option(key); opt != nullptr && opt->getInt() == 0)
+            profile.erase(key);
+}
+
 // Shared by slice_file() and load_mesh_preview(): load a model file and place it exactly where
 // slicing will actually place it - real coordinates, not the mesh's own local origin. See
 // slice_file()'s own history for why centering matters (a real off-bed print abort on real
@@ -309,9 +319,12 @@ void slice_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, const
         throw std::runtime_error("Validation failed: " + validation_error.string);
     }
 
+    // A real result object, never nullptr: Snapmaker Orca's Print::export_gcode() writes result->conflict_result
+    // unconditionally. The G-code file written is the same either way.
+    GCodeProcessorResult gcode_result;
     run_cancellable(print, output_gcode_path, [&] {
         print.process();
-        print.export_gcode(output_gcode_path, nullptr, thumbnail_cb);
+        print.export_gcode(output_gcode_path, &gcode_result, thumbnail_cb);
     });
 }
 
@@ -325,7 +338,8 @@ void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, cons
     using namespace Slic3r;
 
     ThumbnailsGeneratorCallback thumbnail_cb = make_thumbnail_callback(model.mesh());
-    ThumbnailsParams thumb_params{Vec2ds{Vec2d(512, 512)}, true, false, false, true, 0, true};
+    // The last field (use_plate_box, upstream Orca only) is left at its default of true, so this compiles on both engine bases.
+    ThumbnailsParams thumb_params{Vec2ds{Vec2d(512, 512)}, true, false, false, true, 0};
     ThumbnailsList thumbnails = thumbnail_cb(thumb_params);
 
     Print print;
@@ -363,7 +377,7 @@ void bundle_model(Slic3r::Model& model, Slic3r::DynamicPrintConfig& config, cons
     std::vector<ThumbnailData*> thumbnail_data_ptrs = {&plate_data.plate_thumbnail};
 
     StoreParams store_params;
-    store_params.path = output_bundle_path;
+    store_params.path = output_bundle_path.c_str(); // const char* on Snapmaker Orca, std::string upstream
     store_params.model = &model;
     store_params.plate_data_list = plate_data_list;
     store_params.project_presets = project_presets;
@@ -429,6 +443,7 @@ void slice_file(const std::string& input_model_path,
     for (const std::string& profile_path : profile_paths) {
         DynamicPrintConfig profile_config;
         profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        drop_unset_feature_filaments(profile_config);
         config.apply(profile_config);
     }
 
@@ -489,6 +504,7 @@ void slice_bambu_bundle(const std::string& input_model_path,
     for (const std::string& profile_path : profile_paths) {
         DynamicPrintConfig profile_config;
         profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        drop_unset_feature_filaments(profile_config);
         config.apply(profile_config);
     }
     for (const auto& [key, value] : config_overrides) {
@@ -527,6 +543,7 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
     for (const std::string& profile_path : profile_paths) {
         DynamicPrintConfig profile_config;
         profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        drop_unset_feature_filaments(profile_config);
         config.apply(profile_config);
     }
     for (const auto& [key, value] : config_overrides) {
@@ -580,6 +597,7 @@ void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform
     for (const std::string& profile_path : profile_paths) {
         DynamicPrintConfig profile_config;
         profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        drop_unset_feature_filaments(profile_config);
         config.apply(profile_config);
     }
     for (const auto& [key, value] : config_overrides) {
@@ -611,10 +629,13 @@ void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform
             // "extruder" (only) to 1 on its clone when the source lacks a real nonzero value;
             // it doesn't touch these keys, so order matters less for them specifically, but
             // matching slice_bambu_bundle's existing convention keeps this one code shape.
+            // Snapmaker Orca names these wall_filament / sparse_infill_filament / solid_infill_filament; upstream Orca
+            // uses the six *_filament_id keys. Whichever this engine defines is set, so the bridge builds on both.
             if (tool_index != 0) {
                 for (const char* key : {"outer_wall_filament_id", "inner_wall_filament_id", "sparse_infill_filament_id",
-                                         "internal_solid_filament_id", "top_surface_filament_id", "bottom_surface_filament_id"}) {
-                    object->config.set(key, tool_index);
+                                         "internal_solid_filament_id", "top_surface_filament_id", "bottom_surface_filament_id",
+                                         "wall_filament", "sparse_infill_filament", "solid_infill_filament"}) {
+                    if (print_config_def.get(key) != nullptr) object->config.set(key, tool_index);
                 }
             }
             combined.add_object(*object);
@@ -863,6 +884,7 @@ void slice_paint_session(PaintSessionHandle handle, const std::string& output_gc
     for (const std::string& profile_path : profile_paths) {
         DynamicPrintConfig profile_config;
         profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        drop_unset_feature_filaments(profile_config);
         s.config.apply(profile_config);
     }
     for (const auto& [key, value] : config_overrides) {

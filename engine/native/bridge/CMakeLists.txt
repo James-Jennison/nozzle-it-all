@@ -19,6 +19,16 @@ target_link_libraries(slic3r_engine PUBLIC libslic3r cereal::cereal nanosvg)
 # nsvg*, and GNU ld only pulls archive members for symbols already undefined when it reaches that archive (Android's
 # and Emscripten's lld linkers do not care about archive order).
 add_executable(nozzle-engine native_cli.cpp ${NOZZLE_SHARED_BRIDGE}/nanosvg_impl.cpp)
+# The prefix's libjpeg is linked whole, first: libslic3r's JPG thumbnails are built against its API (80), and OpenCV's
+# bundled libjpeg-turbo (API 62) would otherwise supply jpeg_* to them ("Wrong JPEG library version: library is 62,
+# caller expects 80"). CMake keeps raw linker flags in place, where a library path would be de-duplicated and moved.
+find_package(JPEG QUIET)
+if (JPEG_FOUND AND JPEG_LIBRARIES AND NOT ANDROID AND NOT EMSCRIPTEN)
+    list(GET JPEG_LIBRARIES 0 NOZZLE_JPEG_ARCHIVE)
+    if (NOZZLE_JPEG_ARCHIVE MATCHES "\\.a$")
+        target_link_libraries(nozzle-engine PRIVATE "-Wl,--whole-archive" "${NOZZLE_JPEG_ARCHIVE}" "-Wl,--no-whole-archive")
+    endif ()
+endif ()
 target_link_libraries(nozzle-engine PRIVATE slic3r_engine)
 # Keep the C++ runtime inside the binary so it runs on desktops older than the build host.
 target_link_options(nozzle-engine PRIVATE -static-libstdc++ -static-libgcc)

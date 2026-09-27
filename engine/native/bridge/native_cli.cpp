@@ -83,6 +83,22 @@ Request parse(const std::string& text) {
 std::atomic<bool> g_cancel{false};
 void on_signal(int) { g_cancel = true; }
 
+// stdout is reserved for this program's own output (progress lines, --schema JSON, --version). libslic3r logs from its
+// static initialisers (Snapmaker Orca's PrintConfig.cpp does), which run before main, so anything written to fd 1 during
+// start-up is sent to stderr: this constructor runs before every default-priority static initialiser, and main takes
+// the real stdout back from g_stdout.
+int g_stdout = -1;
+__attribute__((constructor(101))) void hold_stdout() {
+    std::fflush(stdout);
+    g_stdout = dup(STDOUT_FILENO);
+    if (g_stdout >= 0) dup2(STDERR_FILENO, STDOUT_FILENO);
+}
+// Points fd 1 back at the real stdout (for --schema and --version, which print there directly).
+void restore_stdout() {
+    std::fflush(stdout); std::cout.flush();
+    if (g_stdout >= 0) dup2(g_stdout, STDOUT_FILENO);
+}
+
 } // namespace
 
 namespace {
@@ -112,6 +128,30 @@ const char* type_name(Slic3r::ConfigOptionType t) {
         case coBool: return "bool"; case coBools: return "bools"; case coEnum: return "enum"; case coEnums: return "enums";
         default: return "other";
     }
+}
+
+/**
+ * A default in the engine's serialized form. Lists of choices are spelled out from the definition's own name table:
+ * a ConfigOptionEnumsGeneric built from an initializer list has no usable keys_map in Snapmaker Orca's Config.hpp (its
+ * constructor initialises keys_map from itself), so its serialize() must not be called here.
+ */
+std::string default_text(const Slic3r::ConfigOptionDef& d) {
+    using namespace Slic3r;
+    if (d.type == coEnums) {
+        const auto* opt = dynamic_cast<const ConfigOptionInts*>(d.default_value.get());
+        if (opt == nullptr) return "";
+        std::string out;
+        for (size_t i = 0; i < opt->values.size(); ++i) {
+            const int v = opt->values[i];
+            std::string name;
+            if (d.enum_keys_map != nullptr)
+                for (const auto& [key, value] : *d.enum_keys_map) if (value == v) { name = key; break; }
+            if (name.empty() && v >= 0 && size_t(v) < d.enum_values.size()) name = d.enum_values[v];
+            out += (i ? "," : "") + name;
+        }
+        return out;
+    }
+    return d.default_value->serialize();
 }
 
 /**
@@ -153,7 +193,7 @@ int dump_schema() {
                 std::cout << "]";
                 if (d->gui_type == ConfigOptionDef::GUIType::f_enum_open || d->gui_type == ConfigOptionDef::GUIType::i_enum_open) std::cout << ",\"openChoices\":true";
             }
-            if (d->default_value) std::cout << ",\"default\":" << json_string(d->default_value->serialize());
+            if (d->default_value) std::cout << ",\"default\":" << json_string(default_text(*d));
             std::cout << "}";
         }
     }
@@ -163,8 +203,9 @@ int dump_schema() {
 } // namespace
 
 int main(int argc, char** argv) {
-    if (argc == 2 && std::string(argv[1]) == "--schema") return dump_schema();
+    if (argc == 2 && std::string(argv[1]) == "--schema") { restore_stdout(); return dump_schema(); }
     if (argc == 2 && std::string(argv[1]) == "--version") {
+        restore_stdout();
         std::cout << "nozzle-engine 1 (libslic3r, shared Android pipeline, native)" << std::endl;
         return 0;
     }
@@ -186,7 +227,8 @@ int main(int argc, char** argv) {
     // Keep stdout for progress lines only: the original stdout becomes a private stream, and fd 1 (where libslic3r's
     // log sink writes) is pointed at stderr.
     std::fflush(stdout);
-    int progress_fd = dup(STDOUT_FILENO);
+    // The real stdout, held since start-up (fd 1 already points at stderr).
+    int progress_fd = g_stdout >= 0 ? g_stdout : dup(STDOUT_FILENO);
     FILE* progress = progress_fd >= 0 ? fdopen(progress_fd, "w") : nullptr;
     if (!progress || dup2(STDERR_FILENO, STDOUT_FILENO) < 0) { std::cerr << "Cannot set up the progress stream." << std::endl; return 1; }
     auto report = [progress](int p) { std::fprintf(progress, "progress %d\n", p); std::fflush(progress); };

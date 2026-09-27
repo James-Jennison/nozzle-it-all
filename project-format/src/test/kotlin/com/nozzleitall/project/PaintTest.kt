@@ -22,7 +22,8 @@ class PaintTest {
     }
 
     @Test fun highStatesUseTheEscapeNibbles() {
-        for (state in listOf(0, 1, 2, 3, 17, 18, 32)) assertEquals(Paint.Node.Leaf(state), Paint.decode(Paint.whole(state)))
+        for (state in listOf(0, 1, 2, 3, 17, 18, 32, 33, 64, 255)) assertEquals(Paint.Node.Leaf(state), Paint.decode(Paint.whole(state)))
+        assertEquals("0FFC", Paint.whole(33)) // Snapmaker Orca: a second 0b1111 chunk above 32
         assertEquals("0C", Paint.whole(3))
         assertEquals("0FC", Paint.whole(18))
     }

@@ -7,8 +7,9 @@ package com.nozzleitall.project
  * Ported from libslic3r's TriangleSelector (deserialize, perform_split): a triangle's string is hex digits read last to
  * first, each digit one 4-bit code. A code's low two bits are the number of split sides (0 = a leaf). A split node's high
  * two bits are its special side, and its children (sides + 1 of them) follow depth-first, last child first. A leaf's
- * high two bits are its state; 0b11 means the state is in the next nibble (+3), or, when that nibble is 0b1111, in the
- * one after it (+18). State 0 is "the part's own filament"; state N is filament N (1-based).
+ * high two bits are its state; 0b11 means the state follows as (state - 3) in 4-bit chunks, each 0b1111 chunk adding 15
+ * and continuing (Snapmaker Orca's TriangleSelector, which extends upstream Orca's single escape to states up to 255;
+ * the two agree up to 32). State 0 is "the part's own filament"; state N is filament N (1-based).
  */
 object Paint {
     sealed class Node {
@@ -33,7 +34,7 @@ object Paint {
             val code = next()
             val sides = code and 0b11
             if (sides == 0) {
-                val state = if (code and 0b1100 == 0b1100) next().let { n -> if (n == 0b1111) next() + 18 else n + 3 } else code shr 2
+                val state = if (code and 0b1100 == 0b1100) { var chunks = 0; var n = next(); while (n == 0b1111) { chunks++; n = next() }; n + 15 * chunks + 3 } else code shr 2
                 return Node.Leaf(state)
             }
             // Stored last child first; kept here in the engine's child order.
@@ -49,8 +50,7 @@ object Paint {
             when (n) {
                 is Node.Leaf -> when {
                     n.state < 3 -> nibbles += n.state shl 2
-                    n.state < 18 -> { nibbles += 0b1100; nibbles += n.state - 3 }
-                    else -> { nibbles += 0b1100; nibbles += 0b1111; nibbles += n.state - 18 }
+                    else -> { nibbles += 0b1100; var rest = n.state - 3; while (rest >= 15) { nibbles += 0b1111; rest -= 15 }; nibbles += rest }
                 }
                 is Node.Split -> { nibbles += (n.specialSide shl 2) or n.sides; n.children.asReversed().forEach(::put) }
             }

@@ -63,10 +63,9 @@ Nozzle It All
 ├── Desktop  (Compose Desktop, Linux first; Windows packaging configured)
 │   ├── Printers          fleet; home screen
 │   ├── Projects          3MF library, trash with undo
-│   ├── Prepare           plate, objects and materials, guided settings, slice, preview, send
+│   ├── Prepare           plate, objects, filament (slots, model colours, Full Spectrum colour mixing), every setting, slice, preview, send
 │   ├── Print & Monitor   camera, job, temperatures, confirmed controls
 │   ├── Materials & Toolheads
-│   ├── Full Spectrum
 │   └── Settings          appearance, remote access, optional Stock U1, local connector, data, about
 ├── Android  (existing native app; tabs today: Home, Control, Files, Prepare, Discover, Settings)
 │   └── target: Home/Printers, Projects, Prepare, Slice & Preview, Send, Monitor, Materials & Toolheads, Settings

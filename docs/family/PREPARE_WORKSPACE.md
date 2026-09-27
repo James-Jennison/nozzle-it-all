@@ -22,7 +22,8 @@ The survey behind this list, with sources and engine support per feature, is
 | Painting | Supports, seams, colour; fuzzy skin later | Planned |
 | Layers | Variable layer height, height-range modifiers, per-layer pause and colour change on one Z strip | Planned |
 | Preview | Feature types, speed/flow/temperature/fan colouring, per-layer times, tool changes | Planned |
-| Materials | Mixed filament (Full Spectrum), prime tower, flush volumes (capability-gated) | Planned |
+| Colour | Painted and multi-part 3MFs from Bambu Studio, Orca and PrusaSlicer: paint kept per triangle, shown on the plate, file filaments matched to slots (editable), sliced through libslic3r's own 3MF importer | **Done** |
+| Materials | Full Spectrum colour mixing previews in the Filament card (**done**); mixed filament as a printable slot, prime tower, flush volumes (capability-gated) | Planned |
 | Calibration | Flow, pressure advance, temperature, then retraction and max volumetric speed, each ending by saving into the material profile | Planned |
 | Profiles | User profiles over the shared 376, inheritance, compare, unsaved-changes handling, bundle import/export | Planned |
 | History | Undo/redo with a visible history, autosave and crash recovery | Planned (needed before painting and modifiers) |

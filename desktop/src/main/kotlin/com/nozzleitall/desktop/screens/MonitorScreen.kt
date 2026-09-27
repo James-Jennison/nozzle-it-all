@@ -22,7 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
-/** Picks the printer a screen is about; shared by Monitor, Materials and Full Spectrum. */
+/** Picks the printer a screen is about; shared by Monitor and Materials. */
 @Composable
 fun PrinterPicker(state: AppState): PrinterEntry? {
     val ids = state.fleet.order.value

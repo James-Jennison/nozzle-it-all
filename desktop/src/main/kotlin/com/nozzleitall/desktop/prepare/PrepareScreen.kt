@@ -194,7 +194,53 @@ private fun MaterialsSection(state: AppState) {
         }
         // Painted models: which slot prints each of the model's own colours.
         p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
+        // Full Spectrum: a printer that reports it can mix loaded colours in thin alternating layers gets the mixes its slots make.
+        val mixes = p.printer()?.capabilities?.value?.vendorExtensions?.contains(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM) == true
+        if (mixes && slots.size >= 2) ColourMixing(slots)
     }
+}
+
+/**
+ * Full Spectrum's mixes: every pair of loaded colours at three ratios, blended in linear light (closer to how thin
+ * alternating layers read than mixing sRGB values). Previews are approximate.
+ */
+@Composable
+private fun ColourMixing(slots: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>) {
+    val c = Nz.colors
+    var open by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp).clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = if (open) "Hide colour mixing" else "Show colour mixing") { open = !open },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Txt(if (open) "▾" else "▸", Nz.type.label, c.textMuted)
+        Txt("Colour mixing", Nz.type.label, c.text)
+        Txt("Full Spectrum", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
+    }
+    if (!open) return
+    Txt("Two loaded colours alternated in thin layers read as a blend. Previews are approximate: results depend on the material, layer height and light.",
+        Nz.type.bodySmall, c.textMuted)
+    val palette = slots.map { it.slot to (parseHex(it.colorHex) ?: c.surfaceSunken) }
+    val pairs = palette.indices.flatMap { a -> (a + 1 until palette.size).map { b -> a to b } }
+    pairs.chunked(2).forEach { row ->
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            row.forEach { (a, b) ->
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Txt("${palette[a].first}+${palette[b].first}", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(30.dp))
+                    listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { t ->
+                        Box(Modifier.weight(1f).height(18.dp).clip(RoundedCornerShape(3.dp)).background(mixLinear(palette[a].second, palette[b].second, t))
+                            .semantics { contentDescription = "About ${((1 - t) * 100).toInt()} percent slot ${palette[a].first}, ${(t * 100).toInt()} percent slot ${palette[b].first}" })
+                    }
+                }
+            }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+/** Mixes in linear light, which is closer to how thin alternating layers read than mixing sRGB values directly. */
+fun mixLinear(a: Color, b: Color, t: Float): Color {
+    fun lin(v: Float) = if (v <= 0.04045f) v / 12.92f else Math.pow(((v + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+    fun srgb(v: Float) = if (v <= 0.0031308f) v * 12.92f else (1.055f * Math.pow(v.toDouble(), 1 / 2.4) - 0.055f).toFloat()
+    fun m(x: Float, y: Float) = srgb(lin(x) * (1 - t) + lin(y) * t).coerceIn(0f, 1f)
+    return Color(m(a.red, b.red), m(a.green, b.green), m(a.blue, b.blue))
 }
 
 @Composable

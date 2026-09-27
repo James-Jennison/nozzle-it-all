@@ -26,6 +26,7 @@ class CrossPlatformFixtureTest {
                 .put(JSONObject().put("objectId", 1).put("name", "A").put("materialSlot", 2)).put(JSONObject().put("objectId", 2).put("name", "B").put("materialSlot", 1)))))
             .put("materials", org.json.JSONArray().put(JSONObject().put("slot", 1).put("type", "PLA").put("colorHex", "#BE38F3")).put(JSONObject().put("slot", 2).put("type", "PETG").put("colorHex", "#FFFFFF")))
             .put("settings", JSONObject().put("preset", "standard").put("overrides", JSONObject().put("sparse_infill_density", "20%")))
+            .put("printer", JSONObject().put("model", "Prusa MK4").put("profileId", "prusa_generic").put("family", "prusa"))
             .put("extensions", JSONObject().put("android", JSONObject().put("keep", true)))
             .put("futureTopLevel", JSONObject().put("fromKotlin", true)))
         val project = Project3mf(listOf(ModelObject(1, "A", cube(20f), Transform.translate(100.0, 100.0, 0.0)), ModelObject(2, "B", cube(10f), Transform.translate(150.0, 120.0, 0.0))),
@@ -46,6 +47,9 @@ class CrossPlatformFixtureTest {
         assertEquals(listOf(2, 1), m.plates.single().objects.map { it.materialSlot })
         assertEquals(Transform.translate(150.0, 120.0, 0.0), p.objects[1].placement)
         assertEquals(12, p.objects[0].mesh.triangleCount)
+        // The slicing profile and family travel with the project; addresses and credentials never do.
+        assertEquals("bambu_generic", m.printer!!.profileId)
+        assertEquals("bambu-lab", m.printer!!.family)
         // Unknown data written by the Web App survives a Kotlin read and rewrite.
         val again = ThreeMf.read(ByteArrayInputStream(ThreeMf.write(p))).manifest!!.toJson()
         assertEquals(1, again.getJSONObject("futureTopLevel").getInt("x"))

@@ -31,7 +31,13 @@ data class ProjectManifest(
     val formatMinor: Int = MINOR,
 ) {
     data class Producer(val app: String, val platform: String, val version: String)
-    data class PrinterTarget(val model: String, val firmware: String? = null, val printerId: String? = null, val nozzleDiameters: List<Double> = emptyList(), val unknown: JSONObject = JSONObject())
+    /**
+     * The printer a project is prepared for. [profileId] names the slicing profile (portable across platforms and
+     * independent of any connection); [family] the printer family id ("paxx-u1", "prusa", ...); [printerId] a local saved
+     * printer on the device that wrote it (meaningless elsewhere, kept for that device). Never credentials or addresses.
+     */
+    data class PrinterTarget(val model: String, val firmware: String? = null, val printerId: String? = null, val nozzleDiameters: List<Double> = emptyList(),
+                             val unknown: JSONObject = JSONObject(), val profileId: String? = null, val family: String? = null)
     data class PlateEntry(val index: Int, val name: String = "", val objects: List<ObjectEntry> = emptyList(), val unknown: JSONObject = JSONObject())
     /** [objectId] is the 3MF `<object id>` of a build item on this plate. [materialSlot] is 1-based, like Orca's filament index. */
     data class ObjectEntry(val objectId: Int, val name: String = "", val materialSlot: Int? = null, val unknown: JSONObject = JSONObject())
@@ -72,7 +78,7 @@ data class ProjectManifest(
             val printer = o.optJSONObject("printer")?.let { p ->
                 PrinterTarget(p.optString("model"), p.strOrNull("firmware"), p.strOrNull("printerId"),
                     p.optJSONArray("nozzleDiameters")?.let { a -> (0 until a.length()).map { a.optDouble(it) } } ?: emptyList(),
-                    p.rest("model", "firmware", "printerId", "nozzleDiameters"))
+                    p.rest("model", "firmware", "printerId", "nozzleDiameters", "profileId", "family"), p.strOrNull("profileId"), p.strOrNull("family"))
             }
             val plates = o.optJSONArray("plates")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { p ->
                 PlateEntry(p.optInt("index"), p.optString("name"), p.optJSONArray("objects")?.let { oa -> (0 until oa.length()).mapNotNull { oa.optJSONObject(it) }.map { e ->
@@ -100,6 +106,7 @@ data class ProjectManifest(
             .put("projectId", projectId).put("revision", revision).put("name", name).put("createdBy", producer(createdBy))
             .put("modifiedBy", producer(modifiedBy)).put("modifiedAtMillis", modifiedAtMillis)
         printer?.let { p -> o.put("printer", merge(JSONObject().put("model", p.model).putOpt("firmware", p.firmware).putOpt("printerId", p.printerId)
+            .putOpt("profileId", p.profileId).putOpt("family", p.family)
             .apply { if (p.nozzleDiameters.isNotEmpty()) put("nozzleDiameters", JSONArray(p.nozzleDiameters)) }, p.unknown)) }
         o.put("plates", JSONArray(plates.map { p -> merge(JSONObject().put("index", p.index).put("name", p.name)
             .put("objects", JSONArray(p.objects.map { e -> merge(JSONObject().put("objectId", e.objectId).put("name", e.name).putOpt("materialSlot", e.materialSlot), e.unknown) })), p.unknown) }))

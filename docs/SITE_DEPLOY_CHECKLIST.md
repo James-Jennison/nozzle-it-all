@@ -6,7 +6,7 @@ Deploying is done with `scripts/deploy_site.sh` (Claude, authorised by the owner
 - [ ] **Read every page in the preview** (`.claude/launch.json` → `website-preview`, port 8766). Confirm the copy says only what is true today: Android is *active* (not on Google Play); Linux desktop, Web and Windows desktop are *planned*; iOS and macOS are *deferred*.
 - [ ] **Have the privacy policy reviewed** (it is a draft written from the code). Re-read it if anything about data handling changes.
 - [ ] `python3 scripts/build_site.py --check` passes (CI runs the same).
-- [ ] `support@nozzleitall.com` receives mail (send a test).
+- [x] `support@nozzleitall.com` receives mail. Verified 2026-09-26 with `exim -bt` on mail-vm-admin (mail.jamesjennison.net): it is forwarded to James@jamesjennison.net; `postmaster@` and any unknown address at the domain go to jamesjen@jamesjennison.net. The forwarder lives in Webuzo's store, not /etc/valiases. **Sending as** @nozzleitall.com is blocked (SPF `-all`, DMARC `p=reject`, no DKIM): reply from james@jamesjennison.net, or add SPF and DKIM for the domain in Cloudflare.
 - [ ] GitHub links resolve and the repository is public (`github.com/James-Jennison/nozzle-it-all`); source-offer and licence links work.
 
 ## Deploy

@@ -13,7 +13,8 @@ export const META_MANIFEST_SHA256 = 'nozzle:ManifestSha256';
 type Json = Record<string, unknown>;
 
 export interface Producer { app: string; platform: string; version: string }
-export interface PrinterTarget { model: string; firmware?: string; printerId?: string; nozzleDiameters?: number[]; [k: string]: unknown }
+/** The printer a project is prepared for: slicing profile id (portable), family id, and a device-local saved printer id. Never credentials or addresses. */
+export interface PrinterTarget { model: string; firmware?: string; printerId?: string; profileId?: string; family?: string; nozzleDiameters?: number[]; [k: string]: unknown }
 export interface ObjectEntry { objectId: number; name: string; materialSlot?: number; [k: string]: unknown }
 export interface PlateEntry { index: number; name: string; objects: ObjectEntry[]; [k: string]: unknown }
 export interface MaterialSlot { slot: number; type?: string; vendor?: string; subType?: string; colorHex?: string; toolhead?: number; [k: string]: unknown }

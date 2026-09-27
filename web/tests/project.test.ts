@@ -18,6 +18,7 @@ function sample(): Project3mf {
   m.plates = [{ index: 1, name: 'Plate 1', objects: [{ objectId: 1, name: 'A', materialSlot: 2 }, { objectId: 2, name: 'B', materialSlot: 1 }] }];
   m.materials = [{ slot: 1, type: 'PLA', colorHex: '#BE38F3', toolhead: 0 }, { slot: 2, type: 'PETG', colorHex: '#FFFFFF', toolhead: 1 }];
   m.settings = { preset: 'standard', overrides: { sparse_infill_density: '20%' } };
+  m.printer = { model: 'Bambu Lab A1', profileId: 'bambu_generic', family: 'bambu-lab' };
   (m as Record<string, unknown>).futureTopLevel = { x: 1 };
   m.extensions = { web: { cameraOrbit: 42 } };
   return { objects: [{ id: 1, name: 'A', mesh: cube(), placement: [1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 100, 0] }, { id: 2, name: 'B', mesh: cube(10), placement: [1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 120, 0] }],
@@ -71,6 +72,7 @@ describe('cross-platform fixtures', () => {
     expect(p.objects[1].placement.slice(9)).toEqual([150, 120, 0]);
     expect((p.manifest!.extensions as Record<string, any>).android.keep).toBe(true);
     expect((p.manifest as Record<string, any>).futureTopLevel.fromKotlin).toBe(true);
+    expect(p.manifest!.printer).toMatchObject({ model: 'Prusa MK4', profileId: 'prusa_generic', family: 'prusa' });
     expect(new TextDecoder().decode(p.passthrough['Metadata/project_settings.config'])).toContain('layer_height');
   });
 
@@ -94,7 +96,8 @@ describe('cross-platform fixtures', () => {
   });
 
   it('reads slicing estimates from G-code comments', () => {
-    const s = gcodeStats('; total layer number: 100\n; total filament used [g] = 3.70\n; filament used [mm] = 1239.00\n; estimated printing time (normal mode) = 9m 14s\nT1\nG1 X1\n');
-    expect(s).toEqual({ layers: 100, grams: 3.7, metres: 1.239, seconds: 554, toolChanges: 1 });
+    const s = gcodeStats('; total layer number: 100\n; total filament used [g] = 3.70\n; filament used [mm] = 1239.00\n; estimated printing time (normal mode) = 9m 14s\nT0\nT0\nG1 X1\nT1\nG1 X2\nT0\n');
+    expect(s).toEqual({ layers: 100, grams: 3.7, metres: 1.239, seconds: 554, toolChanges: 2 });
+    expect(gcodeStats('T0\nG1 X1\nT0\n').toolChanges).toBe(0); // one material: no changes
   });
 });

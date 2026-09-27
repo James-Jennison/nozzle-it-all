@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ActionGuard, commandFor, mapState, parseStatus } from '../src/printers/paxx';
-import { Action, Outcome, PrinterStatus, routeFor } from '../src/printers/model';
+import { Action, FULL_SPECTRUM, KNOWN_FAMILIES, Outcome, PrinterStatus, familyLabel, fullSpectrumOf, migratePrinter, readCapabilities, routeFor } from '../src/printers/model';
 
 // The same recorded U1 status the Kotlin PAXX adapter is tested with.
 const fixture = JSON.parse(readFileSync(new URL('../../adapter-paxx/src/test/resources/moonraker/u1_snapshot.json', import.meta.url), 'utf8'));
@@ -14,7 +14,7 @@ describe('PAXX status (web)', () => {
     expect(s.toolheads.length).toBe(4);
     expect(s.toolheads.find((t) => t.active)!.index).toBe(2);
     expect(s.toolheads[0].material).toEqual({ vendor: 'Polymaker', type: 'PLA', subType: 'Basic', colorHex: '#BE38F3', fromTag: true });
-    expect(s.fullSpectrum).toEqual({ available: true, palette: ['#BE38F3', '#E2DEDB', '#DD0000', '#000000'] });
+    expect(fullSpectrumOf(s)).toEqual({ available: true, palette: ['#BE38F3', '#E2DEDB', '#DD0000', '#000000'] });
   });
 
   it('uses the shared state vocabulary', () => {

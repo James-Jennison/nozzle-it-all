@@ -54,8 +54,12 @@ export class SlicingEngine {
   async warmUp(): Promise<string> { return this.start(); }
 
   async slice(job: SliceJob, onProgress: (u: SliceUpdate) => void): Promise<SliceOutcome> {
-    if (this.current) return { kind: 'failed', message: 'A slice is already running.' };
-    try { await this.start(); } catch (e) { return { kind: 'failed', message: (e as Error).message }; }
+    if (this.current || this.starting) return { kind: 'failed', message: 'A slice is already running.' };
+    // Cancel works from the moment Slice is pressed, including while the engine is still loading.
+    this.starting = { cancelled: false };
+    const starting = this.starting;
+    try { await this.start(); } catch (e) { return { kind: 'failed', message: (e as Error).message }; } finally { this.starting = null; }
+    if (starting.cancelled) return { kind: 'cancelled' };
     const id = this.nextId++;
     const transfer = job.objects.map((o) => o.stl.buffer as ArrayBuffer);
     return new Promise((resolve) => {
@@ -63,9 +67,11 @@ export class SlicingEngine {
       this.worker!.postMessage({ type: 'slice', id, job }, transfer);
     });
   }
+  private starting: { cancelled: boolean } | null = null;
 
   /** Asks the engine to stop; terminates the worker if it hasn't stopped within 5 s. Never leaves a half result. */
   cancel() {
+    if (this.starting) { this.starting.cancelled = true; return; }
     const c = this.current;
     if (!c) return;
     this.worker?.postMessage({ type: 'cancel', id: c.id });

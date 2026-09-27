@@ -8,10 +8,8 @@ import { GUIDED_PRESETS, gcodeStats, GcodeStats, multiToolOverrides } from '../p
 import { SlicingEngine } from '../engine/client';
 import { ProjectStore, StoredProjectInfo, download } from '../storage/projects';
 import { parseGcode, Preview } from './gcode';
-import { SavedPrinter } from '../printers/model';
-import machineJson from '../../../app/src/main/assets/slicer_profiles/snapmaker_u1/machine.json?raw';
-import processJson from '../../../app/src/main/assets/slicer_profiles/snapmaker_u1/process.json?raw';
-import filamentJson from '../../../app/src/main/assets/slicer_profiles/snapmaker_u1/filament.json?raw';
+import { SavedPrinter, migratePrinter } from '../printers/model';
+import { DEFAULT_INFO, DEFAULT_PROFILE, ProfileFiles, ProfileInfo, bedOf, loadProfile, profileIndex } from '../project/profiles';
 
 export const APP_VERSION = '0.1.0';
 
@@ -40,6 +38,8 @@ export interface AppModel {
   advanced: Record<string, string>;
   slots: MaterialSlot[];
   printerId: string | null;
+  /** The slicing profile. Independent of any printer connection: every profile can be sliced for. */
+  profile: ProfileInfo;
   slice: SliceState;
   previewLayer: number;
   notice: { text: string; kind: 'info' | 'warning' | 'danger' | 'success' } | null;
@@ -47,25 +47,21 @@ export interface AppModel {
   printers: SavedPrinter[];
 }
 
-const BED = (() => {
-  try {
-    const area: string[] = JSON.parse(machineJson).printable_area;
-    const pts = area.map((s) => s.split('x').map(Number));
-    return { w: Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])), d: Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1])) };
-  } catch { return { w: 270, d: 270 }; }
-})();
-export const bed = BED;
+/** The current profile's bed (millimetres). Updated in place when the profile changes; the plate view re-renders on it. */
+export const bed = { w: 270, d: 270, h: 270 };
+let profileFiles: ProfileFiles | null = null;
 
-export const defaultSlots = (): MaterialSlot[] => [
-  { slot: 1, type: 'PLA', colorHex: '#A78BFA' }, { slot: 2, type: 'PLA', colorHex: '#F2754E' }, { slot: 3, type: 'PLA', colorHex: '#EEF2F4' }, { slot: 4, type: 'PLA', colorHex: '#1E2429' },
-];
+const SLOT_COLOURS = ['#A78BFA', '#F2754E', '#EEF2F4', '#1E2429', '#3FB68B', '#E8B931', '#4A90D9', '#D9468F'];
+/** One material slot per tool of the profile (at least one). */
+export const defaultSlots = (tools = DEFAULT_INFO.tools): MaterialSlot[] =>
+  Array.from({ length: Math.max(1, Math.min(tools, 16)) }, (_, i) => ({ slot: i + 1, type: 'PLA', colorHex: SLOT_COLOURS[i % SLOT_COLOURS.length] }));
 
-function loadPrinters(): SavedPrinter[] { try { return JSON.parse(localStorage.getItem('nozzle.printers') ?? '[]'); } catch { return []; } }
+function loadPrinters(): SavedPrinter[] { try { return (JSON.parse(localStorage.getItem('nozzle.printers') ?? '[]') as SavedPrinter[]).map(migratePrinter); } catch { return []; } }
 export function savePrinters(p: SavedPrinter[]) { try { localStorage.setItem('nozzle.printers', JSON.stringify(p)); } catch { /* storage unavailable */ } }
 
 export const store = new Store<AppModel>({
   route: location.hash.slice(1) || '/', projectId: null, manifest: null, name: 'Untitled project', items: [], selected: null, dirty: false, passthrough: {}, metadata: {},
-  preset: 'standard', supports: false, infill: 15, advanced: {}, slots: defaultSlots(), printerId: null, slice: { kind: 'idle' }, previewLayer: 0, notice: null, projects: [],
+  preset: 'standard', supports: false, infill: 15, advanced: {}, slots: defaultSlots(), printerId: null, profile: DEFAULT_INFO, slice: { kind: 'idle' }, previewLayer: 0, notice: null, projects: [],
   printers: loadPrinters(),
 });
 export const projects = new ProjectStore();
@@ -94,7 +90,7 @@ function fromPlacement(o: ModelObject, slot: number): PlateItem {
 }
 
 export function outOfBounds(items = store.get().items) {
-  return items.filter((it) => { const { w, d, h } = itemBounds(it); return it.x - w / 2 < 0 || it.y - d / 2 < 0 || it.x + w / 2 > bed.w || it.y + d / 2 > bed.d || h > 270; });
+  return items.filter((it) => { const { w, d, h } = itemBounds(it); return it.x - w / 2 < 0 || it.y - d / 2 < 0 || it.x + w / 2 > bed.w || it.y + d / 2 > bed.d || h > bed.h; });
 }
 
 export function arrange() {
@@ -146,7 +142,7 @@ export function toProject(): Project3mf {
   const manifest: ProjectManifest = {
     ...base, name: s.name, revision: base.revision + (s.dirty || !s.manifest ? 1 : 0), modifiedAtMillis: Date.now(),
     modifiedBy: { app: 'Nozzle It All', platform: 'web', version: APP_VERSION },
-    printer: { ...(base.printer ?? {}), model: printer?.model ?? 'Snapmaker U1', firmware: (printer?.firmware ?? 'paxx').toUpperCase().replace('-', '_'), printerId: printer?.id ?? base.printer?.printerId },
+    printer: { ...(base.printer ?? {}), model: s.profile.model, profileId: s.profile.id, family: printer?.family ?? s.profile.family, printerId: printer?.id ?? base.printer?.printerId },
     plates: [{ ...(base.plates[0] ?? {}), index: 1, name: base.plates[0]?.name ?? 'Plate 1', objects: s.items.map((i) => ({ ...(base.plates[0]?.objects.find((o) => o.objectId === i.id) ?? {}), objectId: i.id, name: i.name, materialSlot: i.slot })) }],
     materials: s.slots,
     settings: { ...base.settings, preset: s.preset, overrides: { ...presetOverrides, sparse_infill_density: `${s.infill}%`, enable_support: s.supports ? '1' : '0', ...s.advanced } },
@@ -176,6 +172,28 @@ export function openBytes(bytes: Uint8Array, fallbackName: string) {
     printerId: p.manifest?.printer?.printerId && store.get().printers.some((x) => x.id === p.manifest!.printer!.printerId) ? p.manifest.printer.printerId! : store.get().printerId,
     slice: { kind: 'idle' }, notice: p.manifestProblem ? { text: p.manifestProblem, kind: 'warning' } : null,
   });
+  const wanted = p.manifest?.printer?.profileId;
+  if (wanted && wanted !== store.get().profile.id) void chooseProfile(wanted, { keepSlots: true });
+}
+
+/**
+ * Switches the slicing profile. Loads its files (fetched on demand), resizes the bed and, unless keepSlots, gives one
+ * material slot per tool. A profile that can't be loaded leaves the current one in place and says why.
+ */
+export async function chooseProfile(id: string, opts: { keepSlots?: boolean } = {}): Promise<boolean> {
+  try {
+    const info = id === DEFAULT_PROFILE ? DEFAULT_INFO : (await profileIndex()).profiles.find((p) => p.id === id);
+    if (!info) throw new Error(`This browser doesn't have the printer profile "${id}".`);
+    const files = await loadProfile(id);
+    profileFiles = files;
+    Object.assign(bed, bedOf(files.machine));
+    const s = store.get();
+    store.set({ profile: info, slots: opts.keepSlots ? s.slots : defaultSlots(info.tools), slice: { kind: 'idle' }, dirty: s.dirty || !opts.keepSlots });
+    return true;
+  } catch (e) {
+    notify(`${(e as Error).message} Keeping ${store.get().profile.model}.`, 'warning');
+    return false;
+  }
 }
 
 export async function openStored(id: string) { const s = store.get(); const info = s.projects.find((p) => p.id === id); openBytes(await projects.read(id), info?.name ?? 'Project'); }
@@ -193,8 +211,9 @@ export async function slice() {
   const presetOverrides = GUIDED_PRESETS.find((p) => p.id === s.preset)?.overrides ?? {};
   const overrides = { ...presetOverrides, sparse_infill_density: `${s.infill}%`, enable_support: s.supports ? '1' : '0', ...(slots.length > 1 ? multiToolOverrides(1.75, slots) : {}), ...s.advanced };
   store.set({ slice: { kind: 'running', percent: 0, stage: 'Starting the engine' } });
+  const files = profileFiles ?? await loadProfile(s.profile.id);
   const out = await engine.slice({
-    profiles: [{ name: 'machine.json', json: machineJson }, { name: 'process.json', json: processJson }, { name: 'filament.json', json: filamentJson }],
+    profiles: [{ name: 'machine.json', json: files.machine }, { name: 'process.json', json: files.process }, { name: 'filament.json', json: files.filament }],
     overrides,
     // The engine places each object relative to the bed centre (the same convention as Android's native bridge).
     objects: s.items.map((i) => ({ stl: writeStl(i.mesh), x: i.x - bed.w / 2, y: i.y - bed.d / 2, rotationZ: i.rotZ, scale: i.scale, tool: slots.length > 1 ? i.slot : 0 })),

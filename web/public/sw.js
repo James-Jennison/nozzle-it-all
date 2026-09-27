@@ -17,7 +17,7 @@ self.addEventListener('fetch', (e) => {
       .catch(() => caches.match('/index.html')));
     return;
   }
-  if (/^\/(assets|engine|brand|fonts)\//.test(url.pathname)) { // fingerprinted or versioned: cache first
+  if (/^\/(assets|engine|brand|fonts|profiles)\//.test(url.pathname)) { // fingerprinted or versioned: cache first
     e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((r) => {
       if (r.ok) { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
       return r;

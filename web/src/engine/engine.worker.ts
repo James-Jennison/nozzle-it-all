@@ -29,8 +29,12 @@ async function load(): Promise<EngineModule> {
 const stages: [number, string][] = [[0, 'Preparing the plate'], [10, 'Slicing layers'], [40, 'Generating walls and infill'], [70, 'Generating supports and paths'], [90, 'Writing instructions']];
 const stageFor = (p: number) => stages.filter(([at]) => p >= at).pop()![1];
 
+/** Cancels that arrived before their slice reached the engine (for example while the engine was still loading). */
+const cancelledEarly = new Set<number>();
+
 async function slice(id: number, job: SliceJob) {
   const e = await load();
+  if (cancelledEarly.delete(id)) { post({ type: 'cancelled', id }); return; }
   const dir = `/job-${id}`;
   e.FS.mkdirTree(dir);
   const lines: string[] = [`out\t${dir}/plate.gcode`];
@@ -79,8 +83,8 @@ self.onmessage = async (ev: MessageEvent<ToWorker>) => {
       post({ type: 'ready', protocol: ENGINE_PROTOCOL, engine: v, threads: self.crossOriginIsolated === true });
     } else if (m.type === 'slice') {
       await slice(m.id, m.job).catch((err: Error) => { running = null; post({ type: 'failed', id: m.id, message: err.message }); });
-    } else if (m.type === 'cancel' && running === m.id && engine) {
-      engine._nz_cancel();
+    } else if (m.type === 'cancel') {
+      if (running === m.id && engine) engine._nz_cancel(); else cancelledEarly.add(m.id);
     }
   } catch (err) {
     post({ type: 'fatal', message: (err as Error).message || 'The slicing engine failed to start.' });

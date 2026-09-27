@@ -1,7 +1,7 @@
 // PAXX / U1 over Moonraker, from the browser. Port of adapter-paxx/.../U1Protocol.kt (same fields, same rules, same
 // fixture in its tests). All traffic goes to the printer's own address or the user's local connector; nothing is
 // relayed through Nozzle.
-import { Action, FullSpectrum, Outcome, PrinterState, PrinterStatus, Route, SavedPrinter, Toolhead, routeFor } from './model';
+import { Action, FULL_SPECTRUM, FullSpectrum, Outcome, PrinterState, PrinterStatus, Route, SavedPrinter, Toolhead, routeFor } from './model';
 
 export const PHYSICAL_TOOLHEADS = 4;
 export const STATUS_QUERY: Record<string, string> = {
@@ -36,9 +36,11 @@ export function fullSpectrum(heads: Toolhead[], hasTaskConfig: boolean): FullSpe
   return palette.length >= 2 ? { available: true, palette } : { available: false, palette, reason: 'Load coloured material in at least two toolheads to mix colours.' };
 }
 
+const toExtension = (f: FullSpectrum) => ({ available: f.available, palette: f.palette, ...(f.reason ? { unavailableReason: f.reason } : {}) });
+
 export function parseStatus(result: J, route: Route, observedAt = Date.now()): PrinterStatus {
   const status: J | undefined = result?.status;
-  if (!status) return { state: 'unknown', route, toolheads: [], fullSpectrum: fullSpectrum([], false), message: "The printer's reply had no status.", observedAt };
+  if (!status) return { state: 'unknown', route, toolheads: [], extensions: {}, message: "The printer's reply had no status.", observedAt };
   const state = mapState(status.webhooks?.state, status.print_stats?.state);
   const active: string = status.toolhead?.extruder ?? '';
   const cfg: J | undefined = status.print_task_config;
@@ -58,7 +60,7 @@ export function parseStatus(result: J, route: Route, observedAt = Date.now()): P
     layer: stats.info?.current_layer > 0 ? stats.info.current_layer : undefined, layers: stats.info?.total_layer > 0 ? stats.info.total_layer : undefined } : undefined;
   const message = (state === 'error' || state === 'starting' ? status.webhooks?.state_message || stats?.message : stats?.message) || undefined;
   return { state, route, job, bed: status.heater_bed ? { current: num(status.heater_bed, 'temperature'), target: num(status.heater_bed, 'target') } : undefined,
-    toolheads: heads, fullSpectrum: fullSpectrum(heads, !!cfg), message, observedAt };
+    toolheads: heads, message, observedAt, extensions: cfg ? { [FULL_SPECTRUM]: toExtension(fullSpectrum(heads, true)) } : {} };
 }
 
 export function validateRemotePath(p: string): string {
@@ -128,11 +130,11 @@ export class MoonrakerClient {
       const info = await this.call('server/info', {});
       if (!info?.klippy_connected || info.klippy_state !== 'ready')
         return { state: info?.klippy_state === 'shutdown' || info?.klippy_state === 'error' ? 'error' : 'starting', route: this.route, toolheads: [],
-          fullSpectrum: fullSpectrum([], false), message: `The printer's firmware is ${info?.klippy_state || 'not connected'}.`, observedAt: Date.now() };
+          extensions: {}, message: `The printer's firmware is ${info?.klippy_state || 'not connected'}.`, observedAt: Date.now() };
       const q = new URLSearchParams(); for (const [k, v] of Object.entries(STATUS_QUERY)) q.set(k, v);
       return parseStatus(await this.call('printer/objects/query', {}, Object.fromEntries(q)), this.route);
     } catch (e) {
-      return { state: (e as { rejected?: boolean }).rejected ? 'error' : 'offline', route: this.route, toolheads: [], fullSpectrum: fullSpectrum([], false),
+      return { state: (e as { rejected?: boolean }).rejected ? 'error' : 'offline', route: this.route, toolheads: [], extensions: {},
         message: explainFetchFailure(this.p, e), observedAt: Date.now() };
     }
   }

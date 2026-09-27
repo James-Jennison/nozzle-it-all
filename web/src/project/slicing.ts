@@ -37,12 +37,14 @@ export function parseDuration(s: string): number | undefined {
 
 export function gcodeStats(text: string): GcodeStats {
   const st: GcodeStats = { toolChanges: 0 };
+  // A change is a switch to a different tool. The first selection, and start G-code re-selecting the current tool, aren't.
+  let tool: number | null = null;
   for (const l of text.split('\n')) {
     if (l.startsWith('; total layer number:')) st.layers = Number(l.split(':')[1]);
     else if (l.startsWith('; total filament used [g] =')) st.grams = Number(l.split('=')[1]);
     else if (l.startsWith('; filament used [mm] =')) st.metres = l.split('=')[1].split(',').reduce((a, b) => a + Number(b), 0) / 1000;
     else if (l.startsWith('; estimated printing time (normal mode) =')) st.seconds = parseDuration(l.split('=')[1]);
-    else if (/^T\d{1,2}\s*$/.test(l)) st.toolChanges++;
+    else if (/^T\d{1,2}\s*$/.test(l)) { const t = Number(l.trim().slice(1)); if (tool !== null && t !== tool) st.toolChanges++; tool = t; }
   }
   return st;
 }

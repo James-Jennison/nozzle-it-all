@@ -2,8 +2,7 @@
 // listening on this computer (127.0.0.1) so a secure web page can reach printers the browser itself may not.
 // It is paired with a one-time code shown in Desktop, only answers Nozzle's own web origins, and only talks to
 // printers the user added in Desktop. Nothing is relayed through Nozzle.
-import { Action, Outcome, PrinterStatus, SavedPrinter } from './model';
-import { fullSpectrum } from './paxx';
+import { Action, Capabilities, Outcome, PrinterStatus, Route, SavedPrinter, readCapabilities } from './model';
 
 export const CONNECTOR_URL = 'http://127.0.0.1:47321';
 export const CONNECTOR_PROTOCOL = 'nozzle-connector';
@@ -42,8 +41,8 @@ export const connector = {
   forget() { try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } },
   async printers(): Promise<SavedPrinter[]> {
     const r = await call('/v1/printers'); if (!r.ok) throw new Error('The connector refused the request. Pair this browser again.');
-    return ((await r.json()).printers as { id: string; name: string; model: string; firmware: string; address: string }[]).map((p) => ({
-      id: p.id, name: p.name, model: p.model, firmware: (p.firmware === 'STOCK_U1' ? 'stock-u1' : p.firmware === 'KLIPPER' ? 'klipper' : 'paxx'), address: p.address, via: 'connector' as const }));
+    return ((await r.json()).printers as { id: string; name: string; model: string; family: string; address: string; profileId?: string }[]).map((p) => ({
+      id: p.id, name: p.name, model: p.model, family: p.family, address: p.address, profileId: p.profileId, via: 'connector' as const }));
   },
 };
 
@@ -53,6 +52,10 @@ const STATE_BY_NAME: Record<string, PrinterStatus['state']> = { OFFLINE: 'offlin
 /** Same interface as MoonrakerClient, through the connector. The printer id is Desktop's id for it. */
 export class ConnectorClient {
   constructor(private p: SavedPrinter) {}
+  /** Capabilities as Desktop's adapter for this printer reports them; null until Desktop has connected to it. */
+  async capabilities(): Promise<Capabilities | null> {
+    try { const r = await call(`/v1/printers/${encodeURIComponent(this.p.id)}/capabilities`); return r.ok ? readCapabilities(await r.json()) : null; } catch { return null; }
+  }
   async status(): Promise<PrinterStatus> {
     try {
       const r = await call(`/v1/printers/${encodeURIComponent(this.p.id)}/status`);
@@ -60,13 +63,12 @@ export class ConnectorClient {
       const j = await r.json();
       const heads = (j.toolheads ?? []).map((t: any) => ({ index: t.index, nozzle: t.nozzleTemperature, target: t.nozzleTarget, diameter: t.nozzleDiameterMm, loaded: !!t.loaded, active: !!t.active,
         material: t.material ? { vendor: t.material.vendor, type: t.material.type, subType: t.material.subType, colorHex: t.material.colorHex, fromTag: !!t.material.fromTag } : undefined }));
-      return { state: STATE_BY_NAME[j.state] ?? 'unknown', route: j.route === 'PRIVATE_NETWORK' ? 'private-network' : 'lan',
+      return { state: STATE_BY_NAME[j.state] ?? 'unknown', route: ({ PRIVATE_NETWORK: 'private-network', VENDOR_CLOUD: 'vendor-cloud', NONE: 'none' } as Record<string, Route>)[j.route] ?? 'lan',
         job: j.job ? { fileName: j.job.fileName, fraction: j.job.fraction, elapsed: j.job.elapsedSeconds, layer: j.job.currentLayer, layers: j.job.totalLayers } : undefined,
         bed: j.bed ? { current: j.bed.current, target: j.bed.target } : undefined, toolheads: heads,
-        fullSpectrum: j.fullSpectrum ? { available: !!j.fullSpectrum.available, palette: j.fullSpectrum.palette ?? [], reason: j.fullSpectrum.unavailableReason } : fullSpectrum(heads, false),
-        message: j.message ?? undefined, observedAt: j.observedAtMillis ?? Date.now() };
+        extensions: j.extensions ?? {}, message: j.message ?? undefined, observedAt: j.observedAtMillis ?? Date.now() };
     } catch (e) {
-      return { state: 'offline', route: 'lan', toolheads: [], fullSpectrum: fullSpectrum([], false), message: (e as Error).message || 'The local connector did not answer.', observedAt: Date.now() };
+      return { state: 'offline', route: 'lan', toolheads: [], extensions: {}, message: (e as Error).message || 'The local connector did not answer.', observedAt: Date.now() };
     }
   }
   async upload(name: string, bytes: Uint8Array): Promise<{ ok: true; path: string } | { ok: false; interrupted: boolean; reason: string }> {

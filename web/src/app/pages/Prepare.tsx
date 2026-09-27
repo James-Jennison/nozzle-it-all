@@ -1,12 +1,13 @@
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { useStore } from '../store';
-import { arrange, changed, engine, exportProject, importFiles, itemBounds, navigate, notify, outOfBounds, saveProject, slice, store } from '../state';
+import { arrange, changed, chooseProfile, engine, exportProject, importFiles, itemBounds, navigate, notify, outOfBounds, saveProject, slice, store } from '../state';
 import { Viewer } from '../Viewer';
 import { Banner, Confirm, Field, Notice, Progress, StatusPill, fmtDuration } from '../ui';
 import { GUIDED_PRESETS } from '../../project/slicing';
 import { download } from '../../storage/projects';
 import { usePrinter } from './Printers';
-import { allowedStates, summary } from '../../printers/model';
+import { allowedStates, familyLabel, summary } from '../../printers/model';
+import { ProfileInfo, profileIndex, searchProfiles } from '../../project/profiles';
 import { glossary } from '../../design/glossary';
 
 const steps = [
@@ -43,7 +44,7 @@ export function Prepare() {
       <Notice />
       <div class="split">
         <section aria-label={showPreview ? 'Layer preview' : 'Build plate'}>
-          <Viewer items={s.items} selected={s.selected} colors={colors} preview={showPreview ? done!.preview : undefined} layer={s.previewLayer}
+          <Viewer key={s.profile.id} items={s.items} selected={s.selected} colors={colors} preview={showPreview ? done!.preview : undefined} layer={s.previewLayer}
             onSelect={(id) => store.set({ selected: id })} label={showPreview ? `Layer ${s.previewLayer + 1} of ${done!.preview.layers.length}` : `Build plate with ${s.items.length} objects`} />
           {showPreview && done!.preview.layers.length > 0 && (
             <div class="field" style={{ marginTop: 12 }}>
@@ -118,11 +119,13 @@ function PrinterStep() {
   return (
     <div class="card">
       <h2>Printer and materials</h2>
-      {s.printers.length === 0 ? <p class="muted">No printer added: preparing for a Snapmaker U1. <a href="#/printers">Add a printer</a> to use the materials it has loaded.</p> : (
+      {s.printers.length > 0 && (
         <div class="seg" role="group" aria-label="Printer">
-          {s.printers.map((p) => <button aria-pressed={(s.printerId ?? '') === p.id} onClick={() => changed({ printerId: p.id })}>{p.name}</button>)}
+          <button aria-pressed={!s.printerId} onClick={() => changed({ printerId: null })}>None (export)</button>
+          {s.printers.map((p) => <button aria-pressed={(s.printerId ?? '') === p.id} onClick={() => { changed({ printerId: p.id }); if (p.profileId && p.profileId !== s.profile.id) void chooseProfile(p.profileId); }}>{p.name}</button>)}
         </div>
       )}
+      <ProfilePicker />
       {heads.length > 0 && (
         <div class="btn-row"><button class="btn" onClick={() => changed({ slots: heads.map((h) => ({ slot: h.index + 1, type: h.material?.type ?? 'PLA', vendor: h.material?.vendor, subType: h.material?.subType, colorHex: h.material?.colorHex ?? '#FFFFFF', toolhead: h.index })) })}>
           Use what's loaded in {printer!.saved.name}</button></div>
@@ -212,9 +215,35 @@ function SliceStep() {
   );
 }
 
+/** Slicing needs only a profile. Any of the shared profiles can be chosen, with or without a printer connected. */
+function ProfilePicker() {
+  const s = useStore(store);
+  const [all, setAll] = useState<ProfileInfo[] | null>(null);
+  const [query, setQuery] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { if (open && !all) profileIndex().then((i) => setAll(i.profiles), (e) => setProblem(`The printer list couldn't be loaded (${(e as Error).message}). The Snapmaker U1 profile is always available.`)); }, [open]);
+  const results = all ? searchProfiles(all, query) : [];
+  return (
+    <div>
+      <p><span class="small muted">Slicing for</span> <strong data-testid="profile-name">{s.profile.name}</strong> <span class="small muted">· {s.profile.bed[0]}×{s.profile.bed[1]}×{s.profile.height} mm · {s.profile.tools} {s.profile.tools === 1 ? 'tool' : 'tools'} · {familyLabel(s.profile.family)}</span></p>
+      {!open ? <button class="btn quiet" onClick={() => setOpen(true)} data-testid="change-profile">Change printer profile</button> : <>
+        <Field id="profile-search" label="Find a printer profile" value={query} onInput={setQuery} placeholder="Prusa MK4, Bambu A1, Voron…" />
+        {problem && <Banner kind="warning">{problem}</Banner>}
+        {all && <ul class="list" style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: 280, overflow: 'auto' }} aria-label="Printer profiles">
+          {results.map((p) => <li><button class="btn quiet" style={{ width: '100%', justifyContent: 'flex-start' }} aria-pressed={p.id === s.profile.id}
+            onClick={async () => { if (await chooseProfile(p.id)) setOpen(false); }}>{p.name} <span class="small muted">· {p.vendor}</span></button></li>)}
+          {results.length === 0 && <li class="muted">No profile matches “{query}”.</li>}
+        </ul>}
+        <div class="btn-row"><button class="btn quiet" onClick={() => setOpen(false)}>Done</button></div>
+      </>}
+    </div>
+  );
+}
+
 function SendStep() {
   const s = useStore(store);
-  const printer = usePrinter(s.printerId ?? s.printers[0]?.id ?? null);
+  const printer = usePrinter(s.printerId);
   const done = s.slice.kind === 'done' ? s.slice : null;
   const [uploaded, setUploaded] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -227,7 +256,9 @@ function SendStep() {
     <div class="card">
       <h2>Export or send</h2>
       <div class="btn-row"><button class="btn" onClick={() => download(done.gcode, fileName, 'text/x.gcode')}>Download sliced file</button></div>
-      {!printer ? <p class="muted">Add a printer on the <a href="#/printers">Printers</a> page to send jobs straight to it.</p> : <>
+      {!printer ? <p class="muted">{s.printers.length ? 'No printer chosen: download the file and print it however you like.' : <>Add a printer on the <a href="#/printers">Printers</a> page to send jobs straight to it.</>}</p>
+      : !printer.capabilities.upload_job ? <p class="muted">{printer.saved.name} can't receive jobs from this browser. Download the file, or send it from Nozzle It All for Desktop.</p>
+      : !printer.capabilities.accepted_outputs.includes('gcode') ? <p class="muted">{printer.saved.name} needs a {printer.capabilities.accepted_outputs.join(' or ')} file, which the browser engine doesn't produce yet. Use Nozzle It All for Desktop.</p> : <>
         <h3>Send to {printer.saved.name}</h3>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>{printer.status && <StatusPill state={printer.status.state} />}</div>
         {problem && <Banner kind="warning">{problem}</Banner>}
@@ -240,7 +271,8 @@ function SendStep() {
           }}>{busy ? 'Sending…' : `Send to ${printer.saved.name}`}</button>
         ) : <>
           <Banner kind="success">Sent. Start printing when the plate is clear.</Banner>
-          <button class="btn primary" disabled={!printer.status || !allowedStates.start.includes(printer.status.state)} onClick={() => setConfirming(true)}>Start print</button>
+          {printer.capabilities.start_print ? <button class="btn primary" disabled={!printer.status || !allowedStates.start.includes(printer.status.state)} onClick={() => setConfirming(true)}>Start print</button>
+            : <p class="small muted">Start the print on the printer.</p>}
           <Confirm open={confirming} title={`Start printing on ${printer.saved.name}?`} body={summary(start)} confirmLabel={glossary.terms['action.start'].confirm}
             detail="Nozzle checks the printer is still ready before sending, and never repeats a command on its own."
             onCancel={() => setConfirming(false)} onConfirm={async () => {

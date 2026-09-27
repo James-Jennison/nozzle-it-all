@@ -82,54 +82,8 @@ fun ago(millis: Long): String {
 @Composable
 fun CameraPanel(entry: PrinterEntry) {
     val c = Nz.colors
-    val cams = entry.cameras.value
-    var image by remember(entry) { mutableStateOf<ImageBitmap?>(null) }
-    var problem by remember(entry) { mutableStateOf<String?>(null) }
-    var live by remember(entry) { mutableStateOf(false) }
-    val camera = cams.firstOrNull()
-    // The open stream, so leaving the screen closes it at once (a blocking socket read doesn't notice cancellation).
-    val openStream = remember(entry, camera) { java.util.concurrent.atomic.AtomicReference<java.io.Closeable?>(null) }
-    val ffmpeg = remember { com.nozzleitall.desktop.camera.FfmpegVideo.locate() }
-    DisposableEffect(entry, camera) { onDispose { openStream.getAndSet(null)?.let { runCatching { it.close() } } } }
-    LaunchedEffect(entry, camera) {
-        var videoWorks = true // a video attempt that produced no frame falls back to MJPEG from then on
-        while (isActive && camera != null) {
-            val s = entry.session
-            if (s == null || entry.status.value.state == PrinterState.OFFLINE) { delay(2_000); continue }
-            if (camera.liveUrl != null || (videoWorks && camera.videoUrl != null && ffmpeg != null)) {
-                // Live: the camera's H.264 video when ffmpeg can play it (full frame rate), otherwise its MJPEG stream.
-                // Every frame is decoded as it arrives; on any failure, wait briefly and reconnect.
-                try {
-                    withContext(Dispatchers.IO) {
-                        val video = if (videoWorks && camera.videoUrl != null && ffmpeg != null) runCatching { com.nozzleitall.desktop.camera.FfmpegVideo.start(ffmpeg, s.videoStream(camera)) }.getOrNull() else null
-                        val mjpeg = if (video == null) s.liveStream(camera) else null
-                        val source: java.io.Closeable = video ?: mjpeg!!
-                        source.use {
-                            openStream.set(source)
-                            val frames = mjpeg?.let { MjpegReader(it) }
-                            var shown = 0
-                            while (isActive) {
-                                val frame = (video?.next() ?: frames?.next()) ?: break
-                                shown++
-                                val decoded = runCatching { org.jetbrains.skia.Image.makeFromEncoded(frame).toComposeImageBitmap() }.getOrNull() ?: continue
-                                image = decoded; live = true; problem = null
-                            }
-                            if (video != null && shown == 0 && camera.liveUrl != null) videoWorks = false
-                        }
-                    }
-                } catch (e: Exception) { if (isActive) problem = e.message ?: "Camera unavailable." }
-                finally { openStream.set(null); live = false }
-                delay(2_000)
-            } else {
-                // Only for cameras with no live stream: stills, refreshed often.
-                try {
-                    val bytes = withContext(Dispatchers.IO) { s.snapshot(camera) }
-                    image = org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap(); problem = null
-                } catch (e: Exception) { problem = e.message ?: "Camera unavailable." }
-                delay(if (entry.status.value.state.isActiveJob) 1_000 else 3_000)
-            }
-        }
-    }
+    val cam = com.nozzleitall.desktop.camera.rememberLiveCamera(entry)
+    val camera = cam.camera; val image = cam.image; val problem = cam.problem; val live = cam.live
     Card(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(NzIcon.CAMERA, c.textMuted, 18.dp); Spacer(Modifier.width(8.dp))
@@ -139,7 +93,7 @@ fun CameraPanel(entry: PrinterEntry) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(c.surfaceSunken), contentAlignment = Alignment.Center) {
             when {
                 camera == null -> Txt(if (entry.capabilities.value?.camera == false) "Nozzle It All can't show this printer's camera." else "No camera found on this printer.", Nz.type.body, c.textMuted)
-                image != null -> androidx.compose.foundation.Image(image!!, "Live camera view of ${entry.config.identity.displayName}", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                image != null -> androidx.compose.foundation.Image(image, "Live camera view of ${entry.config.identity.displayName}", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                 else -> Txt(problem ?: "Connecting to the camera…", Nz.type.body, c.textMuted)
             }
         }

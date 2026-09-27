@@ -51,6 +51,8 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
     var selectedPrinter by mutableStateOf<String?>(null)
     val version: String = System.getProperty("nozzle.version") ?: "0.1.0-dev"
     var showAbout by mutableStateOf(false)
+    /** Which menu is open in the menu bar, if any. */
+    var openMenu by mutableStateOf<Int?>(null)
     /** An action waiting for "discard unsaved changes?" to be answered. */
     var pendingDiscard by mutableStateOf<(() -> Unit)?>(null)
 
@@ -72,24 +74,8 @@ private fun setLinuxWindowClass() {
     }
 }
 
-/**
- * The menu bar and file dialogs are Swing's. FlatLaf, coloured from the design tokens, makes them match the app instead
- * of Swing's default light grey. Must run before any window is created.
- */
-private fun styleMenus() {
-    val t = com.nozzleitall.design.NozzleTokens.darkPalette
-    fun hex(c: androidx.compose.ui.graphics.Color) = "#%02X%02X%02X".format((c.red * 255).toInt(), (c.green * 255).toInt(), (c.blue * 255).toInt())
-    com.formdev.flatlaf.FlatLaf.setGlobalExtraDefaults(mapOf(
-        "@background" to hex(t.surface), "@foreground" to hex(t.text), "@accentColor" to hex(t.accent),
-        "@selectionBackground" to hex(t.surfaceRaised), "@selectionForeground" to hex(t.text), "@disabledForeground" to hex(t.textMuted),
-        "MenuBar.background" to hex(t.surface), "MenuBar.borderColor" to hex(t.line), "PopupMenu.borderColor" to hex(t.line),
-        "Separator.foreground" to hex(t.line), "MenuItem.acceleratorForeground" to hex(t.textMuted)))
-    runCatching { com.formdev.flatlaf.FlatDarkLaf.setup() }.onFailure { System.err.println("menu look and feel: $it") }
-    System.err.println("look and feel: " + javax.swing.UIManager.getLookAndFeel()?.name)
-}
-
 /** Files opened with Nozzle It All (from the file manager or the command line): a 3MF opens as a project, models are added. */
-fun main(args: Array<String>) { setLinuxWindowClass(); styleMenus(); runApp(args.map(::File).filter { it.isFile }) }
+fun main(args: Array<String>) { setLinuxWindowClass(); runApp(args.map(::File).filter { it.isFile }) }
 
 private fun runApp(open: List<File>) = application {
     val paths = remember { AppPaths.resolve().ensure() }
@@ -105,13 +91,17 @@ private fun runApp(open: List<File>) = application {
     Window(onCloseRequest = quit, title = Glossary.PRODUCT_FAMILY,
         icon = painterResource("brand/mark-violet.svg"), state = rememberWindowState(size = DpSize(1360.dp, 860.dp)),
         onPreviewKeyEvent = { e ->
-            // Ctrl+1..7 and Ctrl+, move between places, like other desktop apps; plain keys stay with text fields.
-            if (e.type == KeyEventType.KeyDown && e.isCtrlPressed) Destination.entries.firstOrNull { it.key == e.key }?.let { state.destination = it; true } ?: false else false
+            // Menu shortcuts (all with Ctrl, so typing is never taken) and Alt+letter to open a menu.
+            val menus = appMenus(state, quit)
+            if (e.type == KeyEventType.KeyDown && e.isAltPressed && !e.isCtrlPressed) menus.indexOfFirst { it.mnemonic == e.key }.takeIf { it >= 0 }?.let { state.openMenu = it; true } ?: false
+            else handleMenuShortcut(menus, e)
         }) {
         window.minimumSize = java.awt.Dimension(960, 640)
-        AppMenuBar(state, onQuit = quit)
         NozzleTheme(state.fleet.settings.value.theme) {
-            App(state)
+            Column(Modifier.fillMaxSize()) {
+                NozzleMenuBar(appMenus(state, quit), state.openMenu) { state.openMenu = it }
+                App(state)
+            }
             if (state.showAbout) AboutWindow(state) { state.showAbout = false }
             state.pendingDiscard?.let { action ->
                 ConfirmDialog("Discard unsaved changes?", "${state.prepare.name} has changes that aren't saved.", "Discard changes", destructive = true,

@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package com.nozzleitall.desktop.screens
 
 import androidx.compose.foundation.*
@@ -71,11 +72,26 @@ fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
         .semantics(mergeDescendants = true) { contentDescription = "${identity.displayName}, ${status.state.label}" }) {
         // A thin band in the state colour: readable at a distance across a room of printers.
         Box(Modifier.fillMaxWidth().height(4.dp).background(if (status.route == ConnectionRoute.NONE) c.line else stateColor))
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // The live preview, or a quiet placeholder, so every card has the same shape whatever the printer is doing.
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(c.surfaceSunken), contentAlignment = Alignment.Center) {
+            if (entry.capabilities.value?.camera == true && entry.cameras.value.isNotEmpty()) {
+                val cam = com.nozzleitall.desktop.camera.rememberLiveCamera(entry, width = 640)
+                cam.image?.let { androidx.compose.foundation.Image(it, "Live camera view of ${identity.displayName}", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+                    ?: Txt(cam.problem ?: "Connecting to the camera…", Nz.type.bodySmall, c.textMuted)
+                if (cam.live) Pill("Live", c.accent, Modifier.align(Alignment.TopEnd).padding(10.dp).background(c.surface.copy(alpha = 0.7f), RoundedCornerShape(NozzleTokens.Radius.chip)))
+            } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(NzIcon.CAMERA, c.textMuted, 28.dp)
+                Txt(if (status.route == ConnectionRoute.NONE) "Export only" else "No camera", Nz.type.bodySmall, c.textMuted)
+            }
+        }
+        // Fixed height: job details and the idle message take the same space; chips and the footer sit at the bottom.
+        Column(Modifier.padding(18.dp).height(300.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Txt(identity.displayName.ifBlank { identity.address }, Nz.type.title, maxLines = 1)
-                    Txt("${identity.model} · ${identity.family.label}", Nz.type.bodySmall, c.textMuted)
+                    // The family only when it adds something ("Snapmaker U1 (PAXX)" already names the model).
+                    val family = identity.family.label
+                    Txt(if (family.contains(identity.model, ignoreCase = true)) family else "${identity.model} · $family", Nz.type.bodySmall, c.textMuted, maxLines = 1)
                 }
                 if (status.route != ConnectionRoute.NONE) StatusPill(status.state)
             }
@@ -83,14 +99,15 @@ fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
             if (job != null) {
                 Txt(job.fileName, Nz.type.body, maxLines = 1)
                 ProgressBar(job.fraction, stateColor, label = "Print progress")
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Metric("Done", "${(job.fraction * 100).toInt()}%")
                     Metric("Elapsed", formatDuration(job.elapsedSeconds))
-                    job.totalLayers?.let { Metric("Layer", "${job.currentLayer ?: 0} / $it") }
+                    job.totalLayers?.let { Metric("Layer", "${job.currentLayer ?: 0} of $it") }
                 }
             } else {
-                Txt(status.message ?: entry.problem.value ?: status.state.description, Nz.type.body, c.textMuted, maxLines = 2)
+                Txt(status.message ?: entry.problem.value ?: status.state.description, Nz.type.body, c.textMuted, maxLines = 3)
             }
+            Spacer(Modifier.weight(1f))
             if (status.toolheads.isNotEmpty()) ToolheadStrip(status.toolheads)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RouteBadge(status.route)
@@ -105,7 +122,8 @@ fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
 @Composable
 fun ToolheadStrip(heads: List<Toolhead>) {
     val c = Nz.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Wraps onto a second line in a narrow card rather than squeezing a chip.
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         heads.forEach { t ->
             val color = parseHex(t.material?.colorHex)
             val desc = "Toolhead ${t.index + 1}: " + (if (t.loaded) t.material?.label ?: "loaded" else "empty") + if (t.active) ", active" else ""
@@ -114,7 +132,7 @@ fun ToolheadStrip(heads: List<Toolhead>) {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Txt("${t.index + 1}", Nz.type.label, c.textMuted)
                 Box(Modifier.size(14.dp).clip(CircleShape).background(color ?: c.surfaceSunken).border(1.dp, if (t.loaded) c.lineStrong else c.line, CircleShape))
-                Txt(t.material?.type ?: if (t.loaded) "?" else "Empty", Nz.type.bodySmall, if (t.loaded) c.text else c.textMuted)
+                Txt(t.material?.type ?: if (t.loaded) "?" else "Empty", Nz.type.bodySmall, if (t.loaded) c.text else c.textMuted, maxLines = 1)
             }
         }
     }

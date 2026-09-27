@@ -237,6 +237,6 @@ fun SectionHeader(title: String, subtitle: String? = null, trailing: @Composable
 fun Metric(label: String, value: String, modifier: Modifier = Modifier, color: Color = Nz.colors.text) {
     Column(modifier.semantics(mergeDescendants = true) {}) {
         Txt(label, Nz.type.bodySmall, Nz.colors.textMuted)
-        Txt(value, Nz.type.metric, color)
+        Txt(value, Nz.type.metric, color, maxLines = 1)
     }
 }

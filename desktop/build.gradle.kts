@@ -26,8 +26,6 @@ dependencies {
  implementation(compose.ui)
  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
  implementation("org.json:json:20240303")
- // Swing look and feel for the native menu bar and file dialogs, themed with the design tokens (Apache-2.0).
- implementation("com.formdev:flatlaf:3.6.1")
  testImplementation("junit:junit:4.13.2")
  testImplementation(compose.desktop.uiTestJUnit4)
 }

@@ -190,6 +190,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     pandaBreathFactory:(String)->PandaBreathReader={ a -> state.moonrakerFor(a) },
     spoolmanFactory:(String)->SpoolmanReader={ a -> state.moonrakerFor(a) },
     aceFactory:(String)->AceReader={ a -> state.moonrakerFor(a) },
+    filamentSlotsFactory:(String)->FilamentSlotReader={ a -> state.filamentSlotReaderFor(a) },
     tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     // Phase 7 (§16): hoisted up from further below (it's a pure derived value, no side effects)
     // so the panel-open blocks right below can pass real per-printer control-gate flags
@@ -223,6 +224,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(bespok3dOpen) Bespok3dPanel(state,{bespok3dOpen=false})
     var aceOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(aceOpen) AcePanel(state,execute,{aceOpen=false},aceFactory)
+    var filamentSlotsOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(filamentSlotsOpen) FilamentSlotsPanel(state.address,state.connected,{filamentSlotsOpen=false},filamentSlotsFactory)
     var ledOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(ledOpen) LedPanel(state,execute,{ledOpen=false})
     var toolOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -720,6 +723,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")}
                                 OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")}
+                                // Feature-detected like Spoolman: a filament changer's lanes (CANVAS on COSMOS, Box Turtle, Happy Hare).
+                                OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("Filament slots")}
                                 OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")}
                                 OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")}
                                 OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")}
@@ -743,6 +748,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     else if(capabilities.transport == PrinterTransport.OCTOPRINT) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("OctoPrint limitations", style=MaterialTheme.typography.titleSmall)
                         Text("Here an OctoPrint printer offers live status, temperatures (read-only), starting a print from a sliced file, and pause, resume and cancel. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.ELEGOO) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Elegoo printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here an Elegoo Centauri Carbon or Centauri Carbon 2 offers live status and temperatures (read-only), its CANVAS slots, sending and starting a sliced file, and cancel. Pause and resume are offered on the Centauri Carbon only: the Centauri Carbon 2's network protocol has no resume. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("CANVAS slots")}
                     } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)

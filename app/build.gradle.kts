@@ -160,6 +160,8 @@ dependencies {
  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
  testImplementation("org.json:json:20240303")
  testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+ // ElegooPrinterServiceTest builds its fake printer's status with the Elegoo adapter's own parsers (Canvas, Sdcp, Cc2).
+ testImplementation(project(":adapter-elegoo"))
  androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.00"))
  androidTestImplementation("androidx.compose.ui:ui-test-junit4")
  androidTestImplementation("androidx.test:runner:1.6.2")

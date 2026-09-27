@@ -7,7 +7,9 @@ import java.io.File
 // flattened from its real upstream inherits chain - see assets/slicer_profiles/PROVENANCE.md)
 // applies to a given printer. Kept separate from SlicingPrinterModel itself so the mapping from
 // "what kind of printer" to "which asset files" is one obvious place, not scattered.
-internal data class SlicingProfilePack(val assetDir: String, val cosmosGeneration: CosmosProfileGeneration? = null, val custom: CustomMachine? = null) {
+// filamentSlots: the pack's filament slot count when machine.json can't say it (the CANVAS packs: one nozzle fed by four
+// lanes - ElegooProfiles.filamentSlots); null means machine.json's own count (ToolSlots.kt's parseToolCount).
+internal data class SlicingProfilePack(val assetDir: String, val cosmosGeneration: CosmosProfileGeneration? = null, val custom: CustomMachine? = null, val filamentSlots: Int? = null) {
     val machinePath get() = "$assetDir/machine.json"
     /** The machine profile as it will be used: the bundled file, with this printer's custom bed/G-code applied to a copy when set. */
     fun machineText(context: Context): String {
@@ -21,13 +23,18 @@ internal data class SlicingProfilePack(val assetDir: String, val cosmosGeneratio
 // Only CosmosProfileGeneration.CURRENT is bundled right now (see PROVENANCE.md's "Real, flagged
 // gap") - a printer whose live firmware resolves to LEGACY has no pack to select at all, which
 // callers must treat as unslicable for that printer, not silently fall back to CURRENT.
-// custom applies to every model except the COSMOS Centauri Carbon, whose pack is safety-critical and never overridden.
-internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, custom: CustomMachine? = null): SlicingProfilePack? = when (model) {
-    SlicingPrinterModel.ELEGOO_CENTAURI_CARBON ->
-        if (cosmosGeneration == CosmosProfileGeneration.CURRENT) SlicingProfilePack("slicer_profiles/elegoo_centauri_carbon_cosmos", CosmosProfileGeneration.CURRENT)
-        else null
-    // Every other model is one row of the generated catalog (scripts/bundle_vendor_profiles.py).
-    else -> SlicingProfilePack("slicer_profiles/${SlicingModelCatalog.info(model).assetDir}", custom = custom)
+// custom applies to every model except the Elegoo Centauri Carbon packs tied to one firmware (COSMOS, with or without
+// CANVAS, and Elegoo's own firmware - ElegooProfiles.firmwareFor): their start/end G-code is safety-critical and never overridden.
+internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, custom: CustomMachine? = null): SlicingProfilePack? {
+    val dir = "slicer_profiles/${SlicingModelCatalog.info(model).assetDir}"
+    return when (ElegooProfiles.firmwareFor(model)) {
+        ElegooProfileFirmware.COSMOS ->
+            if (cosmosGeneration == CosmosProfileGeneration.CURRENT) SlicingProfilePack(dir, CosmosProfileGeneration.CURRENT, filamentSlots = ElegooProfiles.filamentSlots(model))
+            else null
+        ElegooProfileFirmware.ELEGOO_STOCK -> SlicingProfilePack(dir, filamentSlots = ElegooProfiles.filamentSlots(model))
+        // Every other model is one row of the generated catalog (scripts/bundle_vendor_profiles.py).
+        null -> SlicingProfilePack(dir, custom = custom)
+    }
 }
 
 // Copies a pack's three asset files into real filesystem files under cacheDir - the native

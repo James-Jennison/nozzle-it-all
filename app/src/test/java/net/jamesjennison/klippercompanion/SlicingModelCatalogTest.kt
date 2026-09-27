@@ -108,10 +108,11 @@ class SlicingModelCatalogTest {
     }
 
     @Test fun everyNonCosmosModelResolvesToItsOwnPack() {
-        SlicingPrinterModel.values().filter { it != SlicingPrinterModel.ELEGOO_CENTAURI_CARBON }.forEach {
+        SlicingPrinterModel.values().filter { !ElegooProfiles.isCosmos(it) }.forEach {
             assertEquals("slicer_profiles/${SlicingModelCatalog.info(it).assetDir}", slicingProfilePack(it, null)!!.assetDir)
         }
         assertNull("COSMOS still needs a live firmware generation", slicingProfilePack(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, null))
+        assertNull("so does COSMOS with CANVAS", slicingProfilePack(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS, null))
     }
 
     // Found by the first real-device slicing run of the full library (2026-09-26): OrcaSlicer's own validation rejected 16

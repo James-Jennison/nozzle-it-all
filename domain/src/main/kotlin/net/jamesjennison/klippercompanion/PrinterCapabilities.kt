@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -105,6 +105,14 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
     )
     PrinterKind.OCTOPRINT -> PrinterCapabilities(
         transport = PrinterTransport.OCTOPRINT, supportsPauseResumeCancel = true, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    // Elegoo Centauri Carbon (stock firmware, SDCP) / Centauri Carbon 2 (MQTT) through :adapter-elegoo: status, CANVAS
+    // slots, send-and-start, cancel; pause/resume on the Centauri Carbon only (ElegooPrinterService refuses them on a CC2,
+    // whose LAN protocol has no resume). No camera yet. Built against fakes only.
+    PrinterKind.ELEGOO -> PrinterCapabilities(
+        transport = PrinterTransport.ELEGOO, supportsPauseResumeCancel = true, supportsCamera = false,
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )

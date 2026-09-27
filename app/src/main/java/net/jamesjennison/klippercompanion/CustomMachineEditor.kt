@@ -51,7 +51,7 @@ private fun Double.fieldText(): String = if (this == Math.rint(this)) toLong().t
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun CustomMachineEditor(model: SlicingPrinterModel?, current: CustomMachine?, onChange: (CustomMachine?, String?) -> Unit) {
-    if (model == null || model == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) return
+    if (model == null || ElegooProfiles.firmwareFor(model) != null) return
     val context = LocalContext.current
     val base = remember(model) { defaultCustomMachine(model, context.applicationContext) } ?: return
     val start = current ?: base

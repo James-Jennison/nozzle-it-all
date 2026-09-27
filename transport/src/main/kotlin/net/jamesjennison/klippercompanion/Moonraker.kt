@@ -12,7 +12,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader, PandaBreathReader, SpoolmanReader, AceReader {
+class Moonraker(address: String, rawApiKey: String = "") : PrinterService, ConsoleReader, HeaterReader, FanReader, MeshReader, ToolheadReader, FanReadoutReader, ConfigFileReader, ConfigWriter, SpeedFlowReader, MacroReader, LedReader, TimelapseReader, ToolReader, Bespok3dReader, PandaBreathReader, SpoolmanReader, AceReader, FilamentSlotReader {
     val base: HttpUrl = parseAddress(address)
     override val address: String get() = base.toString()
     private val apiKey = rawApiKey.trim()
@@ -211,6 +211,14 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val result = request("printer/objects/query", mapOf("webhooks" to "state", "print_stats" to "state", "ace" to "")) as? JSONObject
             ?: throw ApiFailure("multiACE status unavailable.")
         return AceControls.parse(result)
+    }
+    // A filament changer's lanes (FilamentLanes, the desktop's and Web App's rules): Moonraker's lane_data database
+    // namespace (AFC - the Elegoo CANVAS on COSMOS), else Happy Hare's mmu object. Read-only. A printer without either
+    // (no such namespace: Moonraker answers 404) reports no slots rather than an error.
+    override fun filamentSlots(): FilamentSlotStatus {
+        val objects = (request("printer/objects/query", mapOf("AFC" to "current_load", "mmu" to FilamentLanes.MMU_FIELDS)) as? JSONObject)?.optJSONObject("status")
+        val laneData = try { request("server/database/item", mapOf("namespace" to "lane_data")) as? JSONObject } catch (e: ApiFailure) { null }
+        return FilamentLanes.read(laneData, objects)
     }
     // Confirmed live against a real Elegoo Centauri Carbon running COSMOS: printer/info's "app"
     // field is "OpenCentauri Cosmos" and "software_version" is e.g. "Release - 26.08.0". A

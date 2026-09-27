@@ -5,6 +5,8 @@ java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaV
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 dependencies {
  api(project(":domain"))
+ // PrinterKind.ELEGOO reuses the desktop's Elegoo sessions (SDCP, the Centauri Carbon 2's MQTT) rather than a second copy.
+ implementation(project(":adapter-elegoo"))
  api("com.squareup.okhttp3:okhttp:4.12.0")
  api("com.github.mwiede:jsch:2.28.6")
  api("org.bouncycastle:bcprov-jdk18on:1.83"); api("org.bouncycastle:bcpg-jdk18on:1.83"); api("org.bouncycastle:bctls-jdk18on:1.83")

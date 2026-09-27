@@ -18,10 +18,13 @@ object PrinterDiscovery {
     // running COSMOS (app "OpenCentauri Cosmos"); see Moonraker.firmwareIdentity.
     private val U1_VERSION = Regex("""^\d+\.\d+\.\d+\.\d+_\d{10,14}$""")
 
-    fun classifyMoonraker(hostname: String, app: String, softwareVersion: String, address: String): DiscoveredPrinter {
+    /** [hasAfc]: Klipper reports an `AFC` object (Armored Turtle's AFC, which drives the Elegoo CANVAS on COSMOS). */
+    fun classifyMoonraker(hostname: String, app: String, softwareVersion: String, address: String, hasAfc: Boolean = false): DiscoveredPrinter {
         val name = hostname.trim().take(80).ifBlank { address }
         return when {
-            app.contains("cosmos", ignoreCase = true) || app.contains("opencentauri", ignoreCase = true) ->
+            isCosmos(app) && hasAfc ->
+                DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS, detail = "Elegoo Centauri Carbon with CANVAS ($softwareVersion)")
+            isCosmos(app) ->
                 DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, detail = "Elegoo Centauri Carbon ($softwareVersion)")
             U1_VERSION.matches(softwareVersion.trim()) ->
                 // Moonraker cannot tell stock from PAXX/extended firmware, so default to stock (the common case); a PAXX owner switches the type.
@@ -29,6 +32,19 @@ object PrinterDiscovery {
             else -> DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.GENERIC_KLIPPER, detail = "Klipper / Moonraker" + softwareVersion.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty())
         }
     }
+
+    fun isCosmos(app: String): Boolean = app.contains("cosmos", ignoreCase = true) || app.contains("opencentauri", ignoreCase = true)
+
+    /** `printer/objects/list`'s result: does Klipper have an `AFC` object? */
+    fun hasAfcObject(objectsList: JSONObject?): Boolean {
+        val objects = objectsList?.optJSONArray("objects") ?: return false
+        return (0 until minOf(objects.length(), 10_000)).any { objects.optString(it) == "AFC" }
+    }
+
+    /** An Elegoo printer that answered Elegoo's own LAN discovery (UDP 3000 "M99999" or UDP 52700 method 7000). */
+    fun elegoo(address: String, name: String, model: String, centauriCarbon2: Boolean, detail: String): DiscoveredPrinter =
+        DiscoveredPrinter(address, PrinterKind.ELEGOO, name.trim().take(80).ifBlank { model.ifBlank { "Elegoo printer" } }.take(80),
+            if (centauriCarbon2) SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS else SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_CANVAS, detail = detail.take(160))
 
     /** PrusaLink's GET /api/version, or null when the reply is not from PrusaLink. */
     fun parsePrusaLinkVersion(body: String, address: String): DiscoveredPrinter? {

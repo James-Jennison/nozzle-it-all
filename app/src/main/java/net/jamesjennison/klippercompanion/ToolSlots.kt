@@ -35,7 +35,12 @@ internal fun parseToolCount(machineJson: String): Int {
 }
 
 internal fun SlicingProfilePack.readToolCount(context: Context): Int =
-    parseToolCount(machineText(context))
+    toolCountOf(machineText(context))
+
+// The pack's real slot count: machine.json's extruder count, or the pack's declared filament slots when larger (CANVAS:
+// one nozzle, four lanes - see SlicingProfilePack.filamentSlots). Pure, so SlicingCoordinator and tests share it.
+internal fun SlicingProfilePack.toolCountOf(machineJson: String): Int =
+    maxOf(parseToolCount(machineJson), filamentSlots ?: 0)
 
 // Returns null exactly when slicingProfilePack() itself would (no bundled pack for this
 // model/firmware-generation combination) - mirrors bedShapeFor's own convention, not a separate

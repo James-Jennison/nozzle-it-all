@@ -463,7 +463,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // G-code (see SlicingCoordinator.sliceProject()'s own branch), and neither Bambu nor Prusa
     // Link need this screen's Moonraker-only LiveFileChanges upload step below.
     val bambuTarget = profile?.kind == PrinterKind.BAMBU_LAB
-    val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT // both take plain G-code uploaded and started in one request
+    val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT || profile?.kind == PrinterKind.ELEGOO // all take plain G-code uploaded and started in one request
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).

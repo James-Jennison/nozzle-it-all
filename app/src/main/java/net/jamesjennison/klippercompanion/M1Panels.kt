@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
     // Still re-triggerable by hand below (the button stays) for the case this fires before the
     // printer is actually reachable, or the owner just wants to re-confirm after a firmware update.
     LaunchedEffect(slicingModel, address) {
-        if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null && !detecting) {
+        if(ElegooProfiles.isCosmos(slicingModel) && detectFirmware!=null && !detecting) {
             detecting=true;detectNote=""
             detectFirmware(profile.address) { result ->
                 detecting=false
@@ -62,6 +62,13 @@ import androidx.compose.ui.unit.dp
         } else if(kind==PrinterKind.OCTOPRINT) {
             OutlinedTextField(address,{address=it},label={Text("OctoPrint address")},placeholder={Text("octopi.local or 192.168.1.60:5000")},singleLine=true)
             OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("API key")},singleLine=true,modifier=Modifier.testTag("octoprint-key"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+        } else if(kind==PrinterKind.ELEGOO) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            Text("The address from the printer's own network settings. A Centauri Carbon needs nothing else.",style=MaterialTheme.typography.bodySmall)
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("Access code (Centauri Carbon 2 only, if you set one)")},singleLine=true,modifier=Modifier.testTag("elegoo-access-code"),
                 visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
         } else if(kind==PrinterKind.PRUSA_LINK) {
@@ -90,6 +97,7 @@ import androidx.compose.ui.unit.dp
             FilterChip(kind==PrinterKind.BAMBU_LAB,{kind=PrinterKind.BAMBU_LAB},label={Text("Bambu Lab")})
             FilterChip(kind==PrinterKind.PRUSA_LINK,{kind=PrinterKind.PRUSA_LINK},label={Text("Prusa Link")},modifier=Modifier.testTag("kind-prusa-link"))
             FilterChip(kind==PrinterKind.OCTOPRINT,{kind=PrinterKind.OCTOPRINT},label={Text("OctoPrint")},modifier=Modifier.testTag("kind-octoprint"))
+            FilterChip(kind==PrinterKind.ELEGOO,{kind=PrinterKind.ELEGOO},label={Text("Elegoo")},modifier=Modifier.testTag("kind-elegoo"))
         }
         // WO-13: which bundled slicer profile family this printer needs, if any. Deliberately
         // separate from "printer type" above - the U1 and a Centauri Carbon both speak
@@ -100,7 +108,8 @@ import androidx.compose.ui.unit.dp
         CustomMachineEditor(slicingModel, profile.customMachine) { value, problem -> customMachine = value; customMachineError = problem }
         // COSMOS's real hard-e-stop risk (FirmwareIdentity.kt) is why this is a live read, not a
         // typed field: only ever set by detectFirmware actually reaching the printer, never guessed.
-        if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null) {
+        ElegooProfiles.connectionProblem(slicingModel,kind)?.let { Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall,modifier=Modifier.testTag("elegoo-profile-problem")) }
+        if(ElegooProfiles.isCosmos(slicingModel) && detectFirmware!=null) {
             Text(if(detectedVersion.isBlank()) "Firmware not yet confirmed - detect it before slicing for this printer." else "Last confirmed firmware: $detectedVersion",style=MaterialTheme.typography.bodySmall)
             TextButton({
                 detecting=true;detectNote=""
@@ -114,7 +123,7 @@ import androidx.compose.ui.unit.dp
         }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         Text("Changing the address disconnects the active printer.")
-    } },confirmButton={TextButton({setCustomMachine(profile.address,customMachine.takeIf { slicingModel!=SlicingPrinterModel.ELEGOO_CENTAURI_CARBON });error=save(profile.address,address,name,apiKey,kind,serial,slicingModel);if(error==null) close()},enabled=address.isNotBlank() && customMachineError==null) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
+    } },confirmButton={TextButton({setCustomMachine(profile.address,customMachine.takeIf { ElegooProfiles.firmwareFor(slicingModel)==null });error=save(profile.address,address,name,apiKey,kind,serial,slicingModel);if(error==null) close()},enabled=address.isNotBlank() && customMachineError==null && ElegooProfiles.connectionProblem(slicingModel,kind)==null) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
 }
 @Composable fun FileDetails(state: ScreenState) {
     if(state.fileLoading) LinearProgressIndicator(Modifier.fillMaxWidth())

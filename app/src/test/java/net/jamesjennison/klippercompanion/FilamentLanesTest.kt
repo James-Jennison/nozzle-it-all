@@ -1,0 +1,114 @@
+package net.jamesjennison.klippercompanion
+
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import org.json.JSONObject
+import org.junit.Assert.*
+import org.junit.Test
+import java.io.File
+
+// Android's port of the desktop's filament-lane rules (adapter-paxx FilamentLanesTest, same data), the Moonraker read,
+// and the Moonraker upload guard against files sliced for Elegoo's stock firmware.
+class FilamentLanesTest {
+    // Shaped exactly as AFC_lane.py send_lane_data writes each lane (AFC 484a09b, the commit COSMOS ships): "lane" is the
+    // mapped tool as a string, cleared lanes have empty strings everywhere.
+    private fun afcLane(tool: String, color: String, material: String, nozzle: Any = 220) = JSONObject().put("color", color).put("material", material)
+        .put("bed_temp", 60).put("nozzle_temp", nozzle).put("scan_time", "").put("td", "").put("lane", tool).put("extruder_index", 0).put("spool_id", JSONObject.NULL).put("weight", 1000)
+
+    private val canvas = JSONObject()
+        .put("CANVAS_1", afcLane("0", "#FF0000", "PLA"))
+        .put("CANVAS_2", afcLane("1", "00ff00", "PETG", 240))
+        .put("CANVAS_3", afcLane("2", "", "", ""))
+        .put("CANVAS_4", afcLane("3", "#0000FFFF", "pla"))
+
+    @Test fun afcLanesBecomeSlotsByTool() {
+        val lanes = FilamentLanes.fromLaneData(JSONObject().put("value", canvas))!!
+        assertEquals(listOf(0, 1, 2, 3), lanes.map { it.tool })
+        assertEquals(listOf("#FF0000", "#00FF00", null, "#0000FF"), lanes.map { it.colorHex })
+        assertEquals(listOf(true, true, false, true), lanes.map { it.loaded })
+        assertEquals(240, lanes[1].nozzleTempC)
+    }
+
+    @Test fun lanesWithoutAToolAreSkippedAsUpstreamDoes() {
+        val v = JSONObject().put("lane1", afcLane("", "#FF0000", "PLA")).put("lane2", JSONObject(afcLane("1", "#00FF00", "PLA").toString()).put("lane", 1))
+        assertNull(FilamentLanes.fromLaneData(JSONObject().put("value", v)))
+        assertNull(FilamentLanes.fromLaneData(JSONObject().put("value", JSONObject())))
+        assertNull(FilamentLanes.fromLaneData(null))
+    }
+
+    @Test fun happyHareGates() {
+        val mmu = JSONObject().put("num_gates", 4).put("gate_status", org.json.JSONArray(listOf(1, 0, 2, -1))).put("gate_material", org.json.JSONArray(listOf("PLA", "PLA", "ABS", "PLA")))
+            .put("gate_color", org.json.JSONArray(listOf("ff8800", "000000", "#123456", "ffffff"))).put("gate_temperature", org.json.JSONArray(listOf(210, 200, 250, 200)))
+        val lanes = FilamentLanes.fromHappyHare(mmu)!!
+        assertEquals(listOf(0, 2), lanes.map { it.tool })
+        assertEquals(listOf("#FF8800", "#123456"), lanes.map { it.colorHex })
+        assertNull(FilamentLanes.fromHappyHare(JSONObject()))
+    }
+
+    @Test fun theFeedingLaneIsMarkedAndTypesReadAsTheDesktopShowsThem() {
+        val lanes = FilamentLanes.fromLaneData(JSONObject().put("value", canvas))!!
+        val s = FilamentLanes.slots(lanes, currentLane = "CANVAS_2")
+        assertEquals(listOf(false, true, false, false), s.map { it.active })
+        assertEquals(listOf("PLA", "PETG", null, "PLA"), s.map { it.material })
+        assertFalse(s[2].loaded)
+        assertEquals(listOf(false, false, true, false), FilamentLanes.slots(lanes, currentTool = 2).map { it.active })
+        assertTrue(FilamentLanes.slots(lanes).none { it.active })
+    }
+
+    private class FakeMoonraker(var laneData: JSONObject?, var objects: JSONObject) : AutoCloseable {
+        val server = MockWebServer()
+        val paths = mutableListOf<String>()
+        init {
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.requestUrl!!.encodedPath; synchronized(paths) { paths += path }
+                    return when (path) {
+                        "/printer/objects/query" -> MockResponse().setBody(JSONObject().put("result", JSONObject().put("eventtime", 1.0).put("status", objects)).toString())
+                        "/server/database/item" -> laneData?.let { MockResponse().setBody(JSONObject().put("result", JSONObject().put("namespace", "lane_data").put("key", JSONObject.NULL).put("value", it)).toString()) }
+                            ?: MockResponse().setResponseCode(404).setBody("""{"error":{"code":404,"message":"Namespace 'lane_data' not found"}}""")
+                        else -> MockResponse().setResponseCode(404)
+                    }
+                }
+            }
+            server.start()
+        }
+        val address get() = server.url("/").toString()
+        override fun close() = server.shutdown()
+    }
+
+    @Test fun moonrakerReadsCanvasLanesOnCosmos() = FakeMoonraker(canvas, JSONObject().put("AFC", JSONObject().put("current_load", "CANVAS_1"))).use { fake ->
+        val s = Moonraker(fake.address).filamentSlots()
+        assertEquals(listOf(0, 1, 2, 3), s.slots.map { it.tool })
+        assertEquals(listOf("#FF0000", "#00FF00", null, "#0000FF"), s.slots.map { it.colorHex })
+        assertTrue(s.slots[0].active)
+        assertTrue(s.source.contains("AFC"))
+        assertEquals(setOf("/printer/objects/query", "/server/database/item"), fake.paths.toSet())
+    }
+
+    @Test fun moonrakerFallsBackToHappyHareAndReportsNothingWithoutAChanger() {
+        val mmu = JSONObject().put("num_gates", 2).put("gate_status", org.json.JSONArray(listOf(1, 1))).put("gate_material", org.json.JSONArray(listOf("PLA", "PETG")))
+            .put("gate_color", org.json.JSONArray(listOf("ff0000", "00ff00"))).put("gate_temperature", org.json.JSONArray(listOf(210, 240))).put("tool", 1)
+        FakeMoonraker(null, JSONObject().put("mmu", mmu)).use { fake ->
+            val s = Moonraker(fake.address).filamentSlots()
+            assertEquals(listOf("PLA", "PETG"), s.slots.map { it.material }); assertTrue(s.slots[1].active)
+        }
+        FakeMoonraker(null, JSONObject()).use { fake -> assertTrue(Moonraker(fake.address).filamentSlots().slots.isEmpty()) }
+    }
+
+    @Test fun moonrakerUploadRefusesAStockElegooFileWithoutSendingAnything() {
+        MockWebServer().use { server ->
+            server.start()
+            val dir = File.createTempFile("live", "").apply { delete(); mkdirs() }
+            try {
+                val stock = File(dir, "cube.gcode").apply { writeText("G28\nM729\nG1 X10\n") }
+                LiveFileChanges(server.url("/").toString(), File(dir, "cache")).use { api ->
+                    try { api.prepare(LiveFileChanges.Operation.UPLOAD, "", "cube.gcode", stock); fail("must refuse") }
+                    catch (e: IllegalArgumentException) { assertTrue(e.message!!, e.message!!.contains("M729")) }
+                }
+                assertEquals("nothing reached the printer", 0, server.requestCount)
+            } finally { dir.deleteRecursively() }
+        }
+    }
+}

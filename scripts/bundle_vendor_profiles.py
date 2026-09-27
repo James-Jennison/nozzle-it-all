@@ -30,6 +30,15 @@ EXISTING = [
     ("PRUSA_XL_5T", "Prusa XL 5T (five tools)", "PRUSA", "prusa_xl_5t", False),
 ]
 
+# Hand-made packs added after the catalog was first generated. Appended to the end of the enum (never reordered), and
+# their folders are kept like EXISTING's: the Elegoo CANVAS packs (P-0011/P-0013 in docs/upstream/PROVENANCE.md). Each is
+# tied to one Elegoo firmware (ElegooProfiles.kt): the COSMOS AFC pack to COSMOS, the other two to Elegoo's own firmware.
+ADDED = [
+    ("ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS", "Elegoo Centauri Carbon + CANVAS (OpenCentauri COSMOS)", "ELEGOO", "elegoo_centauri_carbon_cosmos_afc", False),
+    ("ELEGOO_CENTAURI_CARBON_CANVAS", "Elegoo Centauri Carbon + CANVAS (Elegoo firmware)", "ELEGOO", "elegoo_centauri_carbon_canvas", False),
+    ("ELEGOO_CENTAURI_CARBON_2_CANVAS", "Elegoo Centauri Carbon 2 + CANVAS (Elegoo firmware)", "ELEGOO", "elegoo_centauri_carbon_2_canvas", False),
+]
+
 # Prusa: explicit picks (Orca's names are irregular). (id, label, machine, process, filament)
 PRUSA = [
     ("PRUSA_MK4S", "Prusa MK4S", "Prusa MK4S 0.4 nozzle", "0.20mm SPEED @MK4S 0.4", "Generic PLA @Prusa MK4S"),
@@ -262,6 +271,7 @@ def main():
             except SystemExit as e: skipped.append((vendor, name, f"pack: {e}")); continue
             entries.append((mid, label, vkey, slug(mid), False)); used_ids.add(mid); used_labels.add((vkey, label))
             report.append((label, name, proc, fil))
+    entries += ADDED
     for r in report: print(" | ".join(r))
     print(f"\nSKIPPED {len(skipped)}:")
     for sk in skipped: print("  ", " | ".join(sk))

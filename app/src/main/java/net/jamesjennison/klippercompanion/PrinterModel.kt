@@ -30,6 +30,9 @@ fun ScreenState.kindFor(address: String): PrinterKind = profiles.find { it.addre
 // Klipper-only panels build these; a BAMBU_LAB printer never reaches them because MainActivity
 // hides every control that needs one (BambuPrinterService implements none of the reader interfaces).
 fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
+// Filament slots: an Elegoo printer's CANVAS trays through its own service, every other printer's filament-changer lanes through Moonraker.
+fun ScreenState.filamentSlotReaderFor(address: String): FilamentSlotReader =
+    if(kindFor(address) == PrinterKind.ELEGOO) printerServiceFor(profiles.find { it.address == address }, address) as FilamentSlotReader else moonrakerFor(address)
 // A Bambu profile's address is a bare host - it has no HTTP endpoint for a URL to point at - so it
 // is validated by bambuHostAddress rather than Moonraker.parseAddress. Both throw
 // IllegalArgumentException, so every call site keeps its existing failure handling.
@@ -53,6 +56,9 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     PrinterKind.BAMBU_LAB -> BambuPrinterService(bambuHostAddress(address), profile.serial, profile.apiKey)
     PrinterKind.PRUSA_LINK -> PrusaLinkPrinterService(address, profile.apiKey)
     PrinterKind.OCTOPRINT -> OctoPrintPrinterService(address, profile.apiKey)
+    // The access code is the Centauri Carbon 2's (blank for a Centauri Carbon); the slicing profile says which protocol.
+    PrinterKind.ELEGOO -> ElegooPrinterService(address, profile.apiKey, profile.serial,
+        if (profile.slicingModel == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS) "Elegoo Centauri Carbon 2" else "Elegoo Centauri Carbon")
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
@@ -95,6 +101,7 @@ class PrinterModel(
         if(_state.value.busy) return "Wait for the current command to finish."
         val current = _state.value
         if(current.profiles.any { it.address == profile.address }) return "That printer address is already saved."
+        ElegooProfiles.connectionProblem(profile.slicingModel, profile.kind)?.let { return it }
         val profiles = current.profiles + profile
         _state.value = current.copy(profiles = profiles, savedPrinters = profiles.map { it.address })
         persist(profiles = profiles)
@@ -121,6 +128,7 @@ class PrinterModel(
         // confirmed firmware declaration - WO-13's declaredFirmwareVersion is specifically a
         // confirmation *for a given slicingModel*, not a fact about the printer in isolation.
         val newSlicingModel = slicingModel ?: existing.slicingModel
+        ElegooProfiles.connectionProblem(newSlicingModel, normalizedKind)?.let { _state.value=current.copy(commandNotice=it); return it }
         val declaredFirmwareVersion = if (newSlicingModel != existing.slicingModel) "" else existing.declaredFirmwareVersion
         val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey,kind=normalizedKind,serial=(serial ?: it.serial).trim().take(40),slicingModel=newSlicingModel,declaredFirmwareVersion=declaredFirmwareVersion) else it }
         val selected = if(current.address == oldAddress) normalized else _state.value.address

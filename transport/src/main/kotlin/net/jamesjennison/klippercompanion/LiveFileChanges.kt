@@ -96,6 +96,10 @@ class LiveFileChanges(address:String, private val cache:File,
         val ticket=synchronized(this){check(!closed&&!active);active=true;pending?.local?.delete();pending=null;++epoch}
         var local:File?=null
         try {
+            // A file sliced for Elegoo's stock firmware (M729/M8213) never goes to a Moonraker printer: Klipper lacks both and
+            // COSMOS 26.07+ emergency-stops on them. Checked before anything is sent (ElegooProfiles.stockElegooCommand).
+            if(operation==Operation.UPLOAD && upload!=null && upload.isFile)
+                upload.bufferedReader().useLines { ElegooProfiles.stockElegooCommand(it) }?.let { throw IllegalArgumentException(ElegooProfiles.stockElegooRefusal(it)) }
             val destination=if(operation==Operation.DELETE)FileTransfer.validate(source) else uniqueDestination(requested);ready(if(operation!=Operation.UPLOAD)source else "")
             val list=files();require(operation==Operation.DELETE || destination !in list){"Destination exists. Review again for a new name."}
             val identity=if(operation==Operation.UPLOAD){

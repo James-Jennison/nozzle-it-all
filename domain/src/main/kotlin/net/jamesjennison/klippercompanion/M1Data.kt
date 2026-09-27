@@ -5,7 +5,8 @@ import java.util.Locale
 
 // Ordinal-independent persistence: PrinterPreferences stores/reads this by name(), not ordinal.
 // SNAPMAKER_U1 = stock firmware (Bespok3d-capable); SNAPMAKER_U1_PAXX = PAXX/extended firmware (multiACE, no Bespok3d).
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1 }
+// ELEGOO = an Elegoo Centauri Carbon on Elegoo's own firmware (SDCP) or a Centauri Carbon 2 (MQTT), through :adapter-elegoo.
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing
@@ -22,11 +23,12 @@ enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LI
 // 26.08.0 - revalidate?") and lets profile selection happen before a printer is even reachable.
 data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER, val serial: String = "", val slicingModel: SlicingPrinterModel? = null, val declaredFirmwareVersion: String = "", val customMachine: CustomMachine? = null) {
     val label: String get() = name.ifBlank { address }
-    // Null for every slicingModel except ELEGOO_CENTAURI_CARBON, and null there too until a firmware
+    // Null for every slicingModel except the COSMOS Centauri Carbon profiles (ElegooProfiles.isCosmos: with or without
+    // CANVAS), and null there too until a firmware
     // version has actually been confirmed (declaredFirmwareVersion blank, or unparseable - see
     // FirmwareIdentity.kt) - an unconfirmed/unparseable declaration must never resolve to a generation.
     val declaredCosmosProfileGeneration: CosmosProfileGeneration? get() =
-        if (slicingModel != SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) null
+        if (!ElegooProfiles.isCosmos(slicingModel)) null
         else cosmosRequiresCurrentProfile(declaredFirmwareVersion)?.let { if (it) CosmosProfileGeneration.CURRENT else CosmosProfileGeneration.LEGACY }
 }
 data class FileInfo(val path: String, val size: Long? = null, val modified: Double? = null)

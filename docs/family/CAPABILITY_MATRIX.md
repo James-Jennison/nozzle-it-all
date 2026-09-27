@@ -47,6 +47,11 @@ Elegoo (`elegoo-lan`, added 2026-09-27; hardware status UNVERIFIED, tested again
 | everything else (temperatures, motion, camera, material_edit, load_unload, files, remote_connection, vendor_cloud) | – | – |
 | accepted_outputs | gcode | gcode |
 
+Android (printer type "Elegoo", `PrinterKind.ELEGOO`, added 2026-09-27) reuses these same sessions through
+`ElegooPrinterService`: live status, CANVAS slots (read only), send-and-start with the slots the file selects, and
+pause/resume/cancel within the table above. Same UNVERIFIED status. Android's Klipper printers also show a filament
+changer's lanes (AFC, so CANVAS on COSMOS; Happy Hare) read only under "Filament slots".
+
 Notes:
 
 - **Temperatures** means setting heater targets. Temperature readings are shown whenever a printer's status reports

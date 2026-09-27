@@ -188,7 +188,7 @@ import java.io.File
     // command rather than Moonraker's separate upload-then-start - see the LaunchedEffect below.
     // Unlike Bambu, this app's slicer output for a Prusa Link target is already plain .gcode (no
     // bundle), so the toolpath/stats extraction above only ever branches on bambuTarget.
-    val prusaTarget = profile.kind == PrinterKind.PRUSA_LINK || profile.kind == PrinterKind.OCTOPRINT // both take plain G-code uploaded and started in one request
+    val prusaTarget = profile.kind == PrinterKind.PRUSA_LINK || profile.kind == PrinterKind.OCTOPRINT || profile.kind == PrinterKind.ELEGOO // all take plain G-code uploaded and started in one request
     // Toolpath + stats parsing, both off the main thread the same way slicing itself is
     // dispatched. A parse failure doesn't block printing - the review is a visualization aid,
     // not a correctness gate; the actual G-code was already produced successfully.

@@ -167,7 +167,7 @@ object SlicingCoordinator {
                         // resolved.profilePaths is materialized in SlicingProfilePack.materialize()'s
                         // own fixed order (machine, process, filament) - index 0/2 are the real
                         // machine/filament files this exact slice is about to load.
-                        val realToolCount = parseToolCount(File(resolved.profilePaths[0]).readText())
+                        val realToolCount = resolved.pack.toolCountOf(File(resolved.profilePaths[0]).readText())
                         // A real config inconsistency, not a cosmetic one: filament_diameter's own
                         // array length must match the target's real declared extruder count
                         // (ToolSlots.kt's own parseToolCount) or libslic3r's Print::validate()
@@ -182,7 +182,12 @@ object SlicingCoordinator {
                         val baseDiameter = parseBaseFilamentDiameter(baseFilamentJson)
                         val fallback = slotMaterials.filterNotNull().firstOrNull()
                             ?: BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
-                        overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback)
+                        // Flushing volumes the printer's own slicer's way, with its nozzle volume (FlushVolumes, every slot on the base filament).
+                        val flush = runCatching {
+                            val base = org.json.JSONObject(baseFilamentJson)
+                            FlushVolumes.setup(org.json.JSONObject(File(resolved.profilePaths[0]).readText()), List(slotMaterials.size) { base })
+                        }.getOrDefault(FlushVolumes.Setup())
+                        overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback, flush)
                     }
                     NativeEngine.nativeSliceMultiObjectEx(
                         objects.map { it.first.absolutePath }.toTypedArray(),
@@ -209,7 +214,7 @@ object SlicingCoordinator {
     }
 
     private sealed class ProfileResolution {
-        data class Ready(val profilePaths: List<String>) : ProfileResolution()
+        data class Ready(val profilePaths: List<String>, val pack: SlicingProfilePack) : ProfileResolution()
         data class Blocked(val outcome: SliceOutcome) : ProfileResolution()
     }
 
@@ -219,7 +224,10 @@ object SlicingCoordinator {
     // place, not two that could quietly drift apart.
     private suspend fun resolveProfilePaths(context: Context, profile: PrinterProfile): ProfileResolution {
         val model = profile.slicingModel ?: return ProfileResolution.Blocked(SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first."))
-        val cosmosGeneration = if (model == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) {
+        // A Centauri Carbon profile only ever slices for a printer connected on its own firmware's protocol: an Elegoo-firmware
+        // profile (M729 start G-code) never for a Moonraker/COSMOS printer, a COSMOS profile never for an Elegoo-firmware one.
+        ElegooProfiles.connectionProblem(model, profile.kind)?.let { return ProfileResolution.Blocked(SliceOutcome.FirmwareBlocked(it)) }
+        val cosmosGeneration = if (ElegooProfiles.isCosmos(model)) {
             // checkCentauriCarbonFirmwareMatch treats a null generation as "this call site isn't
             // about a Centauri Carbon profile at all" and returns Match unconditionally (see its
             // own test coverage in FirmwareIdentityTest) - correct for a generic caller, but wrong
@@ -256,7 +264,7 @@ object SlicingCoordinator {
         SlicingEngineSupport.unsupportedReason(model)?.let { return ProfileResolution.Blocked(SliceOutcome.Failed(it)) }
         val pack = slicingProfilePack(model, cosmosGeneration, profile.customMachine)
             ?: return ProfileResolution.Blocked(SliceOutcome.Failed("No bundled slicer profile exists yet for this printer's confirmed firmware."))
-        return ProfileResolution.Ready(pack.materialize(context))
+        return ProfileResolution.Ready(pack.materialize(context), pack)
     }
 }
 

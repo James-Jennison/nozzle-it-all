@@ -51,7 +51,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
     var finishError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    fun draftProfile() = PrinterProfile(normalizedAddressResult, name.trim().take(80), false, "", apiKey.trim().take(200), kind, serial.trim().take(40), slicingModel, declaredFirmwareVersion, customMachine.takeIf { slicingModel != SlicingPrinterModel.ELEGOO_CENTAURI_CARBON })
+    fun draftProfile() = PrinterProfile(normalizedAddressResult, name.trim().take(80), false, "", apiKey.trim().take(200), kind, serial.trim().take(40), slicingModel, declaredFirmwareVersion, customMachine.takeIf { ElegooProfiles.firmwareFor(slicingModel) == null })
 
     var scanning by remember { mutableStateOf(false) }
     var scanNote by remember { mutableStateOf("") }
@@ -129,6 +129,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.BAMBU_LAB, {kind=PrinterKind.BAMBU_LAB}, label={Text("Bambu Lab")})
                         FilterChip(kind==PrinterKind.PRUSA_LINK, {kind=PrinterKind.PRUSA_LINK}, label={Text("Prusa Link")}, modifier=Modifier.testTag("wizard-kind-prusa-link"))
                         FilterChip(kind==PrinterKind.OCTOPRINT, {kind=PrinterKind.OCTOPRINT}, label={Text("OctoPrint")}, modifier=Modifier.testTag("wizard-kind-octoprint"))
+                        FilterChip(kind==PrinterKind.ELEGOO, {kind=PrinterKind.ELEGOO}, label={Text("Elegoo")}, modifier=Modifier.testTag("wizard-kind-elegoo"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -143,6 +144,12 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                             visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
                         Text("Create one in OctoPrint under Settings > Application Keys (or use your user's API key).", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.ELEGOO) {
+                        OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Access code (Centauri Carbon 2 only, if you set one)")}, singleLine=true, modifier=Modifier.testTag("wizard-elegoo-access-code"),
+                            visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+                        Text("A Centauri Carbon on Elegoo's own firmware or a Centauri Carbon 2, on your network. A Centauri Carbon running OpenCentauri COSMOS is a Klipper printer: choose Generic Klipper for it.", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),
@@ -162,6 +169,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                     Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.", style=MaterialTheme.typography.bodySmall)
                     SlicingModelPicker(slicingModel) { slicingModel = it }
                     CustomMachineEditor(slicingModel, customMachine) { value, problem -> customMachine = value; customMachineError = problem }
+                    ElegooProfiles.connectionProblem(slicingModel, kind)?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("wizard-elegoo-profile-problem")) }
                 }
                 WizardStep.FIRMWARE_CONFIRM -> {
                     Text("Step 3 of 4: firmware confirmation", style = MaterialTheme.typography.labelLarge)
@@ -189,7 +197,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 if(kind == PrinterKind.BAMBU_LAB && serial.isNotBlank()) BambuCertPins.store.forget(serial.trim())
                 step = WizardStep.SLICING_PROFILE
             }, enabled = address.isNotBlank(), modifier = Modifier.testTag("wizard-next-1")) { Text("Next") }
-            WizardStep.SLICING_PROFILE -> Button({ step = if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) WizardStep.FIRMWARE_CONFIRM else WizardStep.CONNECTIVITY_TEST }, enabled = customMachineError == null, modifier = Modifier.testTag("wizard-next-2")) { Text("Next") }
+            WizardStep.SLICING_PROFILE -> Button({ step = if(ElegooProfiles.isCosmos(slicingModel)) WizardStep.FIRMWARE_CONFIRM else WizardStep.CONNECTIVITY_TEST }, enabled = customMachineError == null && ElegooProfiles.connectionProblem(slicingModel, kind) == null, modifier = Modifier.testTag("wizard-next-2")) { Text("Next") }
             WizardStep.FIRMWARE_CONFIRM -> Button({ step = WizardStep.CONNECTIVITY_TEST }, enabled = !detecting, modifier = Modifier.testTag("wizard-next-3")) { Text(if(declaredFirmwareVersion.isNotBlank()) "Next" else "Skip for now") }
             WizardStep.CONNECTIVITY_TEST -> Button({
                 finishError = addProfile(draftProfile())
@@ -202,7 +210,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 WizardStep.TYPE_AND_ADDRESS -> close()
                 WizardStep.SLICING_PROFILE -> step = WizardStep.TYPE_AND_ADDRESS
                 WizardStep.FIRMWARE_CONFIRM -> step = WizardStep.SLICING_PROFILE
-                WizardStep.CONNECTIVITY_TEST -> step = if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) WizardStep.FIRMWARE_CONFIRM else WizardStep.SLICING_PROFILE
+                WizardStep.CONNECTIVITY_TEST -> step = if(ElegooProfiles.isCosmos(slicingModel)) WizardStep.FIRMWARE_CONFIRM else WizardStep.SLICING_PROFILE
             }
         }) { Text(if(step==WizardStep.TYPE_AND_ADDRESS) "Cancel" else "Back") }
     })

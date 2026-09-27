@@ -107,7 +107,7 @@ interchange).
   object; `nozzle-engine` keeps stdout clean during libslic3r's static initialisation; the desktop CLI links the deps
   prefix's libjpeg ahead of OpenCV's copy.
 - **Subsystem / platforms:** slicing. Desktop now (`engine/native/scripts/build_engine_snapmaker.sh`); Android and the
-  Web App still on upstream OrcaSlicer `824b216f` until moved.
+  Web App moved on 2026-09-27 (P-0010).
 - **Test evidence:** the full desktop suite (34 tests, including a painted multicolour slice) on the pinned build; 370
   of 376 bundled printer profiles slice a test cube.
 - **Known divergence:**
@@ -173,6 +173,50 @@ interchange).
     doesn't yet).
   - Gradients are shown and printed from files but, as in PrusaSlicer's dialog, not edited.
 - **Touches:** slicing, Prusa profiles, shared UI, project interchange.
+
+## P-0010 — Android and the Web App move onto the Snapmaker Orca engine
+
+- **Upstream:** Snapmaker Orca `cbf7bbb0b3` + `engine/snapmaker/nozzle-engine.patch`, the same source as the desktop
+  engine (P-0007). AGPL-3.0.
+- **Decision:** owner, 2026-09-27: every platform slices on the same base, so Full Spectrum mixing, PrusaSlicer
+  ColorMix virtual extruders and per-slot filament profiles behave identically everywhere.
+- **Moved:**
+  - Android (arm64-v8a `libslic3rengine.so`): `engine/snapmaker/android/prepare_engine_root.sh` makes an engine root
+    (`/mnt/faststorage/build-work/nozzle-android-sm`) from an untouched export of the pin; Gradle builds it by default
+    (`-PnozzleEngine=snapmaker`; `-PnozzleEngine=upstream` still builds upstream OrcaSlicer `824b216f`, and
+    `ORCASLICER_ENGINE_ROOT` still overrides both). The SBOM follows the chosen base.
+  - Web App (`nozzle-engine.{js,wasm}`): `engine/wasm/scripts/build_engine_snapmaker.sh` (`INSTALL=1` puts it in
+    `web/public/engine`); `build_engine.sh` still builds the upstream engine.
+- **Addenda to the desktop patch (build-only, no slicing change):** `engine/snapmaker/libcxx-includes.patch`
+  (`<sstream>` in LocalesUtils.cpp for LLVM libc++, Android and Web); `engine/snapmaker/android/0001-android-subproject-
+  paths.patch` (NSIS snippet paths, because the engine is a CMake subproject of the app); the browser's existing
+  patches 0001–0003 (0004 patches a file this base doesn't have) plus `engine/wasm/patches-snapmaker/0001-wasm32-nop-
+  layer-id.patch` (32-bit `size_t` narrowing; unchanged value on 64-bit). `USE_BLOSC` is set off for both (their
+  OpenVDB has no Blosc; this base's FindOpenVDB otherwise assumes it).
+- **Dependencies:** unchanged except GMP 6.2.1, rebuilt with its C++ classes (`gmpxx.h`, `libgmpxx.a`) for both
+  platforms, because this base's bundled libigl uses `mpq_class`. Android reuses orcaslicer-android-engine's prefix
+  read-only (a symlink tree with the rebuilt GMP on top); the browser prefix's GMP was rebuilt in place.
+- **Unsupported profiles:** the six Bambu profiles in `engine/snapmaker/unsupported-profiles.json` are no longer offered
+  on Android (`SlicingEngineSupport`, bundled from the same JSON by the domain module; the picker leaves them out and a
+  printer saved with one gets a clear "can't be sliced by this version yet" instead of a slice) or on the Web App
+  (`profileIndex()` filters them; `loadProfile()` refuses them).
+- **Also:** Android's and the Web App's slice stats read Bambu's G-code layout (per-filament weights, time in the
+  header), as the desktop's do since 6d0ffe0/c49b14c.
+- **Test evidence (2026-09-27):** Android: the Snapmaker engine root builds through Gradle (`libslic3rengine.so` with
+  the same 19 JNI exports); `:app:testDebugUnitTest` 639 tests, 0 failures (1 live-server test skipped) and `:domain:test`
+  pass; the upstream path still builds. Web: `smoke_node.mjs` slices the 20 mm cube on the U1 (3.70 g, 9m 13s; the
+  upstream engine gives 3.70 g, 9m 2s), Prusa MK4, Prusa XL 5T, Bambu X1 Carbon and Centauri Carbon AFC profiles;
+  vitest 26/26; Playwright layout + slice specs 34/34 (Chromium and Firefox) against a local `vite preview`.
+- **Sizes:** `libslic3rengine.so` 57.56 MB → 54.41 MB (−3.14 MB, stored uncompressed in the APK; about −0.9 MB
+  deflated in the AAB). `nozzle-engine.wasm` 15.44 MB → 13.02 MB (gzip 5.20 → 4.41 MB).
+- **Known divergence / not yet done:**
+  - The Android engine has not sliced on a device yet (only host builds and unit tests were run); slice a cube on a
+    phone before a release. `-PnozzleEngine=upstream` is the way back.
+  - CI (`.github/workflows/ci.yml`) sets `ORCASLICER_ENGINE_ROOT` to the upstream root on its runner, so CI still builds
+    the upstream engine until the runner has the Snapmaker root (its SBOM would then name the wrong base; set
+    `NOZZLE_ENGINE=upstream` there or move the runner).
+  - Everything listed under P-0007's divergences applies to Android and the Web App too.
+- **Touches:** slicing, Android packaging, Web App engine, Bambu profiles.
 
 ## P-0011 — Snapmaker U1 profile family, bed type and nozzles (ported)
 

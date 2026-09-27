@@ -10,10 +10,52 @@
     "file": "engine/snapmaker/nozzle-engine.patch",
     "sha256": "0e2f4f5d8a9d223dc8943f5d50a0dbb1689e6ffae6aaacb8cebe7381c4c18fbb"
   },
-  "dependencies": "Snapmaker Orca's own deps prefix (deps/build/destdir/usr/local in the local checkout), built by its deps/ superbuild",
+  "dependencies": "Desktop: Snapmaker Orca's own deps prefix (deps/build/destdir/usr/local in the local checkout), built by its deps/ superbuild. Android: orcaslicer-android-engine's NDK prefix (engine/ENGINE_PIN.json archives) with GMP 6.2.1 rebuilt with --enable-cxx (engine/snapmaker/android/prepare_engine_root.sh). Web: the browser prefix from engine/wasm/scripts/build_deps.sh, GMP likewise with C++ classes.",
   "platforms": {
     "desktop": "moved (engine/native/scripts/build_engine_snapmaker.sh)",
-    "android": "not yet: still engine/ENGINE_PIN.json (upstream OrcaSlicer 824b216f)",
-    "web": "not yet: still engine/ENGINE_PIN.json (upstream OrcaSlicer 824b216f)"
+    "android": "moved 2026-09-27, default (engine/snapmaker/android/prepare_engine_root.sh, then Gradle's default -PnozzleEngine=snapmaker; -PnozzleEngine=upstream still builds engine/ENGINE_PIN.json's upstream OrcaSlicer 824b216f). Not yet run on a device. See docs/upstream/PROVENANCE.md P-0010.",
+    "web": "moved 2026-09-27, default (engine/wasm/scripts/build_engine_snapmaker.sh, INSTALL=1 puts it in web/public/engine; engine/wasm/scripts/build_engine.sh still builds the upstream 824b216f engine). See P-0010."
+  },
+  "addenda": {
+    "engine/snapmaker/libcxx-includes.patch": {
+      "sha256": "069874eea8e9cc36c2d3379997dcd90dcd465dafa06fea8a1060ca270bb98460",
+      "platforms": [
+        "android",
+        "web"
+      ],
+      "why": "LLVM libc++ needs <sstream> in LocalesUtils.cpp"
+    },
+    "engine/snapmaker/android/0001-android-subproject-paths.patch": {
+      "sha256": "a8695752b6b0a2926deee3bf09f5af33a7e02dd5669b4c2e3cd3cbdc879fc4fd",
+      "platforms": [
+        "android"
+      ],
+      "why": "the engine is a CMake subproject of the app there; NSIS snippet paths from CMAKE_CURRENT_SOURCE_DIR"
+    },
+    "engine/wasm/patches/0001-tbbmalloc-stand-in.patch": {
+      "sha256": "5055b081ef6c74818346130783739b71841bba33106567633233bf9b2135544a",
+      "platforms": [
+        "web"
+      ]
+    },
+    "engine/wasm/patches/0002-wasm32-bead-count-saturation.patch": {
+      "sha256": "46476c7bcbd7de3d63006e4472e12e2d5b4f823d3168f6b93efdb2d584d21f2f",
+      "platforms": [
+        "web"
+      ]
+    },
+    "engine/wasm/patches/0003-emscripten-platform-guards.patch": {
+      "sha256": "675f3f1ab9f5343324a49d13865bb4b96893456fa96cd521e69af2c137f5dfe4",
+      "platforms": [
+        "web"
+      ]
+    },
+    "engine/wasm/patches-snapmaker/0001-wasm32-nop-layer-id.patch": {
+      "sha256": "126db38bd6487c9c02070f4b99d3da19d2beb21bdef02262dd44de086011a7e1",
+      "platforms": [
+        "web"
+      ],
+      "why": "wasm32 size_t narrowing in GCode.hpp"
+    }
   }
 }

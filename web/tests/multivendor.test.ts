@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { FULL_SPECTRUM, KNOWN_FAMILIES, familyLabel, migratePrinter, readCapabilities, NO_CAPABILITIES } from '../src/printers/model';
 import { parseStatus } from '../src/printers/paxx';
-import { bedOf, loadProfile, searchProfiles, ProfileIndex } from '../src/project/profiles';
+import { UNSUPPORTED_PROFILES, bedOf, loadProfile, profileIndex, searchProfiles, ProfileIndex } from '../src/project/profiles';
 
 const root = new URL('../../', import.meta.url);
 const glossary = JSON.parse(readFileSync(new URL('design/terminology/glossary.json', root), 'utf8'));
@@ -64,5 +64,19 @@ describe('profiles (slicing needs no connection)', () => {
     const f = await loadProfile('prusa_generic', fetcher);
     expect(JSON.parse(f.machine)).toBeTruthy(); expect(JSON.parse(f.process)).toBeTruthy(); expect(JSON.parse(f.filament)).toBeTruthy();
     await expect(loadProfile('../etc', fetcher)).rejects.toThrow();
+  });
+  it('never offers the profiles the engine cannot slice yet (engine/snapmaker/unsupported-profiles.json)', async () => {
+    const hidden = Object.keys(JSON.parse(readFileSync(new URL('engine/snapmaker/unsupported-profiles.json', root), 'utf8')).profiles);
+    expect(hidden.sort()).toEqual(['bambu_h2c', 'bambu_h2d', 'bambu_h2d_pro', 'bambu_h2s', 'bambu_p2s', 'bambu_x2d']);
+    expect(Object.keys(UNSUPPORTED_PROFILES).sort()).toEqual(hidden.sort());
+    const fetcher = (async (u: string) => new Response(readFileSync(new URL(`app/src/main/assets/slicer_profiles/${String(u).replace('/profiles/', '')}`, root)))) as unknown as typeof fetch;
+    const offered = await profileIndex(fetcher);
+    for (const id of hidden) {
+      expect(index.profiles.some((p) => p.id === id), `${id} is in the shared index`).toBe(true);
+      expect(offered.profiles.some((p) => p.id === id), `${id} is offered`).toBe(false);
+      await expect(loadProfile(id, fetcher)).rejects.toThrow(/can't be sliced/);
+    }
+    expect(offered.profiles.length).toBe(index.profiles.length - hidden.length);
+    expect(searchProfiles(offered.profiles, 'bambu x1 carbon').length).toBeGreaterThan(0);
   });
 });

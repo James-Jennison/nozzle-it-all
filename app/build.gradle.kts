@@ -3,6 +3,15 @@ import java.time.Instant
 import java.util.UUID
 
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
+
+// Which slicing-engine base the native build uses (see externalNativeBuild below): "snapmaker" (default since
+// 2026-09-27, P-0010) or "upstream" (the previous engine, kept buildable until the new one is proven on devices).
+val nozzleEngine: String = providers.gradleProperty("nozzleEngine").orElse(providers.environmentVariable("NOZZLE_ENGINE")).getOrElse("snapmaker")
+val nozzleEngineRoot: String? = when (nozzleEngine) {
+ "snapmaker" -> providers.gradleProperty("nozzleSnapmakerEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-sm")
+ "upstream" -> null
+ else -> throw GradleException("nozzleEngine must be snapmaker or upstream, not $nozzleEngine")
+}
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 android {
@@ -44,7 +53,12 @@ android {
     // ORCASLICER_ENGINE_ROOT cache default. Passing the override here, only when the CI
     // environment variable is actually set, keeps local dev builds (no env var) completely
     // unaffected - this is additive, not a behavior change for anyone not running CI.
+    // Engine base (owner decision 2026-09-27: every platform slices on Snapmaker Orca's libslic3r, like the desktop):
+    // -PnozzleEngine=snapmaker builds against the engine root made by engine/snapmaker/android/prepare_engine_root.sh
+    // (-PnozzleSnapmakerEngineRoot=<dir> to move it); -PnozzleEngine=upstream keeps the upstream OrcaSlicer 824b216f
+    // root (orcaslicer-android-engine, CMakeLists.txt's default). ORCASLICER_ENGINE_ROOT, when set, always wins.
     System.getenv("ORCASLICER_ENGINE_ROOT")?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }
+     ?: nozzleEngineRoot?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }
     // Without this, AGP discovers and builds every CMake target in the whole configured
     // project tree - including OrcaSlicer's desktop GUI executable (needs wxWidgets, which
     // isn't cross-compiled here) and its i18n tooling. slic3rengine is the only target this
@@ -160,9 +174,11 @@ dependencies {
 tasks.register("generateSbom") {
  group = "release"; description = "Writes build/sbom/nozzle-it-all.cdx.json"
  val runtime = configurations.named("releaseRuntimeClasspath")
- val pinFile = rootProject.file("engine/ENGINE_PIN.json")
+ val pinFile = rootProject.file("engine/ENGINE_PIN.json") // upstream base; its dependency archives are the Android prefix on both bases
+ val smPinFile = rootProject.file("engine/snapmaker/ENGINE_PIN.json")
+ val snapmakerBase = nozzleEngine == "snapmaker"
  val out = layout.buildDirectory.file("sbom/nozzle-it-all.cdx.json")
- inputs.files(runtime); inputs.file(pinFile); outputs.file(out)
+ inputs.files(runtime); inputs.file(pinFile); inputs.file(smPinFile); inputs.property("nozzleEngine", nozzleEngine); outputs.file(out)
  doLast {
   fun esc(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
   fun sha256(f: java.io.File) = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
@@ -175,8 +191,14 @@ tasks.register("generateSbom") {
    }
   }
   val pin = groovy.json.JsonSlurper().parse(pinFile) as Map<*, *>
+  if (snapmakerBase) {
+   val sm = groovy.json.JsonSlurper().parse(smPinFile) as Map<*, *>
+   val c = (sm["base"] as Map<*, *>)["commit"].toString()
+   components["pkg:github/Snapmaker/OrcaSlicer@$c"] = """{"type":"library","name":"Snapmaker Orca (libslic3r, patched)","version":"${esc(c)}","purl":"pkg:github/Snapmaker/OrcaSlicer@$c","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}],"properties":[{"name":"patch.sha256","value":"${esc((sm["patch"] as Map<*, *>)["sha256"].toString())}"}]}"""
+  } else {
   val upstream = pin["upstream"] as Map<*, *>
   components["pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}"] = """{"type":"library","name":"OrcaSlicer (libslic3r, patched)","version":"${esc(upstream["commit"].toString())}","purl":"pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}],"properties":[{"name":"patch.sha256","value":"${esc((pin["patch"] as Map<*, *>)["sha256"].toString())}"}]}"""
+  }
   (pin["dependencies"] as List<*>).forEach { d ->
    d as Map<*, *>
    val n = d["file"].toString()

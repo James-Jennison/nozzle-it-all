@@ -67,7 +67,7 @@ class SlicingModelCatalogTest {
 
     @Test fun groupingKeepsVendorOrderAndHidesEmptyVendors() {
         val all = groupedSlicingModels("")
-        assertEquals(SlicingModelCatalog.all.size, all.sumOf { it.second.size })
+        assertEquals(SlicingEngineSupport.offered.size, all.sumOf { it.second.size })
         assertEquals("Snapmaker", all.first().first.label)
         val prusa = groupedSlicingModels("mk4s")
         assertTrue(prusa.all { (_, rows) -> rows.isNotEmpty() }); assertTrue(prusa.any { it.first == SlicingVendor.PRUSA })
@@ -81,10 +81,25 @@ class SlicingModelCatalogTest {
         assertEquals(MultiToolFamily.SINGLE, multiToolFamily(SlicingPrinterModel.BAMBU_P1S, 1))
     }
 
+    @Test fun profilesTheEngineCannotSliceAreNeverOffered() {
+        // engine/snapmaker/unsupported-profiles.json: the six newest Bambu profiles need upstream OrcaSlicer's multi-nozzle system.
+        val hidden = listOf(SlicingPrinterModel.BAMBU_H2C, SlicingPrinterModel.BAMBU_H2D, SlicingPrinterModel.BAMBU_H2D_PRO,
+            SlicingPrinterModel.BAMBU_H2S, SlicingPrinterModel.BAMBU_P2S, SlicingPrinterModel.BAMBU_X2D)
+        assertEquals(hidden.map { SlicingModelCatalog.info(it).assetDir }.toSet(), SlicingEngineSupport.unsupported.keys)
+        assertEquals(SlicingModelCatalog.all.size - hidden.size, SlicingEngineSupport.offered.size)
+        hidden.forEach { m ->
+            assertTrue(m.name, matchingSlicingModels("").none { it.model == m })
+            assertTrue(m.name, matchingSlicingModels(SlicingModelCatalog.info(m).label).none { it.model == m })
+            assertTrue(m.name, SlicingEngineSupport.unsupportedReason(m)!!.contains("can't be sliced"))
+        }
+        assertTrue(matchingSlicingModels("bambu").any { it.model == SlicingPrinterModel.BAMBU_X1_CARBON })
+        assertEquals(null, SlicingEngineSupport.unsupportedReason(SlicingPrinterModel.SNAPMAKER_U1))
+    }
+
     @Test fun searchMatchesLabelsAndVendorsAndTagsAreUnique() {
         assertEquals(listOf(SlicingPrinterModel.BAMBU_P1S), matchingSlicingModels("p1s").map { it.model })
         assertTrue(matchingSlicingModels("PRUSA").all { it.vendor == SlicingVendor.PRUSA })
-        assertEquals(SlicingModelCatalog.all.size, matchingSlicingModels("  ").size)
+        assertEquals(SlicingEngineSupport.offered.size, matchingSlicingModels("  ").size)
         assertTrue(matchingSlicingModels("no such printer").isEmpty())
         val tags = SlicingPrinterModel.values().map(::slicingModelTag)
         assertEquals("picker tags must be unique", tags.size, tags.toSet().size)

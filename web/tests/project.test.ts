@@ -101,4 +101,10 @@ describe('cross-platform fixtures', () => {
     expect(s).toEqual({ layers: 100, grams: 3.7, metres: 1.239, seconds: 554, toolChanges: 2 });
     expect(gcodeStats('T0\nG1 X1\nT0\n').toolChanges).toBe(0); // one material: no changes
   });
+  it("reads Bambu's G-code layout (per-filament weights, time in the header)", () => {
+    const s = gcodeStats('; model printing time: 8m 52s; total estimated time: 15m 47s\n; total layer number: 100\n; filament used [mm] = 1298.51\n; filament used [g] = 3.94, 0.50\n');
+    expect(s.seconds).toBe(947); expect(s.grams).toBeCloseTo(4.44); expect(s.layers).toBe(100);
+    // A total, when present, wins over the per-filament sum.
+    expect(gcodeStats('; filament used [g] = 3.70, 3.66\n; total filament used [g] = 7.36\n').grams).toBe(7.36);
+  });
 });

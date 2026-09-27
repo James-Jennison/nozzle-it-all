@@ -28,10 +28,14 @@ internal fun slicingModelTag(model: SlicingPrinterModel): String = when (model) 
 
 internal fun slicingVendorTag(vendor: SlicingVendor): String = "slicing-vendor-" + vendor.name.lowercase().replace('_', '-')
 
-/** Models whose label or vendor matches [query] (case-insensitive, blank = all), in catalog order. */
+/**
+ * Offered models whose label or vendor matches [query] (case-insensitive, blank = all), in catalog order. Profiles the
+ * slicing engine can't slice yet (SlicingEngineSupport) are never offered.
+ */
 internal fun matchingSlicingModels(query: String): List<SlicingModelInfo> {
     val q = query.trim()
-    return if (q.isEmpty()) SlicingModelCatalog.all else SlicingModelCatalog.all.filter { it.label.contains(q, ignoreCase = true) || it.vendor.label.contains(q, ignoreCase = true) }
+    val offered = SlicingEngineSupport.offered
+    return if (q.isEmpty()) offered else offered.filter { it.label.contains(q, ignoreCase = true) || it.vendor.label.contains(q, ignoreCase = true) }
 }
 
 /** The matches grouped by vendor, vendors in catalog order, empty vendors left out. */

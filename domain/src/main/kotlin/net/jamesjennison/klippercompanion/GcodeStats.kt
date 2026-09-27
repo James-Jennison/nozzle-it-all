@@ -48,6 +48,9 @@ data class GcodeStats(
 object GcodeStatsParser {
     private val timeRegex = Regex("""estimated printing time \(normal mode\)\s*=\s*(.+)""")
     private val weightRegex = Regex("""total filament used \[g]\s*=\s*([\d.]+)""")
+    // Bambu's G-code layout (Bambu profiles on the Snapmaker Orca engine): the time is in the header block and the
+    // weights are per filament with no total.
+    private val headerTimeRegex = Regex("""^;\s*model printing time:.*total estimated time:\s*(.+)$""")
     private val perToolMmRegex = Regex("""^;\s*filament used \[mm]\s*=\s*(.+)$""")
     private val perToolGramsRegex = Regex("""^;\s*filament used \[g]\s*=\s*(.+)$""")
     private val changeRegex = Regex("""total filament change\s*=\s*(\d+)""")
@@ -58,13 +61,14 @@ object GcodeStatsParser {
     private fun numbers(text: String) = text.split(',').map { it.trim().toDoubleOrNull()?.takeIf(Double::isFinite) ?: 0.0 }
 
     fun parse(file: File): GcodeStats {
-        var time: String? = null; var weight: Double? = null
+        var time: String? = null; var weight: Double? = null; var headerTime: String? = null
         var perMm: List<Double> = emptyList(); var perG: List<Double> = emptyList()
         var changes: Int? = null; var prime: Boolean? = null; var flush: List<Double> = emptyList(); var density: Double? = null
         file.bufferedReader().useLines { lines ->
             for (line in lines) {
                 if (!line.startsWith(";")) continue
                 if (time == null) timeRegex.find(line)?.let { time = it.groupValues[1].trim() }
+                if (headerTime == null) headerTimeRegex.find(line)?.let { headerTime = it.groupValues[1].trim() }
                 if (weight == null) weightRegex.find(line)?.let { weight = it.groupValues[1].toDoubleOrNull() }
                 if (perMm.isEmpty()) perToolMmRegex.find(line)?.let { perMm = numbers(it.groupValues[1]) }
                 if (perG.isEmpty()) perToolGramsRegex.find(line)?.let { perG = numbers(it.groupValues[1]) }
@@ -74,6 +78,8 @@ object GcodeStatsParser {
                 if (density == null) densityRegex.find(line)?.let { density = it.groupValues[1].toDoubleOrNull() }
             }
         }
+        if (time == null) time = headerTime
+        if (weight == null && perG.isNotEmpty()) weight = perG.sum()
         return GcodeStats(time, weight, perMm.takeIf { it.isNotEmpty() }?.sum(), changes, perG, perMm, prime, flush, density)
     }
 }

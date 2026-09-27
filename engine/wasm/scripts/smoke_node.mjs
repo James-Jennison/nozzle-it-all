@@ -31,7 +31,7 @@ for (;;) {
   if (state !== 2) process.exit(1);
   const g = new TextDecoder().decode(e.FS.readFile(`${dir}/plate.gcode`));
   const grab = (re) => g.match(re)?.[1];
-  console.log(`gcode ${g.length} bytes; layers ${grab(/; total layer number: (\d+)/)}; grams ${grab(/total filament used \[g\] = ([\d.]+)/)}; time ${grab(/estimated printing time \(normal mode\) = ([^\n]+)/)}`);
+  console.log(`gcode ${g.length} bytes; layers ${grab(/; total layer number: (\d+)/)}; grams ${grab(/total filament used \[g\] = ([\d.]+)/) ?? grab(/; filament used \[g\] = ([\d., ]+)/)}; time ${grab(/estimated printing time \(normal mode\) = ([^\n]+)/) ?? grab(/total estimated time: ([^\n]+)/)}`);
   if (process.env.SAVE_GCODE) (await import("node:fs")).writeFileSync(process.env.SAVE_GCODE, g);
   process.exit(0);
 }

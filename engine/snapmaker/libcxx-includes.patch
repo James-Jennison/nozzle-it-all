@@ -1,0 +1,14 @@
+Nozzle headless engine (Android NDK and Emscripten, both LLVM libc++): LocalesUtils.cpp uses std::stringstream without
+including <sstream>; GNU libstdc++ (the desktop build) happens to pull it in transitively, libc++ does not. Upstream
+OrcaSlicer includes <iomanip> and <sstream> here. No behaviour change.
+--- a/src/libslic3r/LocalesUtils.cpp
++++ b/src/libslic3r/LocalesUtils.cpp
+@@ -4,6 +4,8 @@
+     #include <charconv>
+ #endif
+ #include <stdexcept>
++#include <iomanip>
++#include <sstream>
+ 
+ #include <fast_float/fast_float.h>
+ 

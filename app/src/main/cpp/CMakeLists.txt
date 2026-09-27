@@ -27,6 +27,10 @@
 # own third_party/, the approach this file replaced, is still possible but
 # was explicitly superseded once the owner's own working engine was found -
 # see git history for that prior attempt).
+#
+# Since 2026-09-27 (docs/upstream/PROVENANCE.md P-0010) Gradle points ORCASLICER_ENGINE_ROOT at the Snapmaker Orca engine
+# root by default (engine/snapmaker/android/prepare_engine_root.sh, same layout: orcaslicer/ + deps/install/<abi>);
+# -PnozzleEngine=upstream builds against the default below.
 cmake_minimum_required(VERSION 3.22.1)
 project(nozzle_slicer_engine LANGUAGES CXX C)
 
@@ -49,6 +53,9 @@ set(SLIC3R_BUILD_SANDBOXES OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ORCA_TOOLS OFF CACHE BOOL "" FORCE)
 set(OpenCV_DIR "${PREFIX}/sdk/native/jni" CACHE PATH "" FORCE)
+# The Android OpenVDB build has no Blosc. The upstream base never asks for it on Android; the Snapmaker Orca base's
+# FindOpenVDB.cmake assumes a static libopenvdb.a was built with Blosc unless USE_BLOSC is explicitly off.
+set(USE_BLOSC OFF)
 # Must be a directory distinct from this one: OrcaSlicer's patched
 # CMakeLists.txt add_subdirectory()s this path from *inside* its own tree,
 # and a self-reference back to this file (the Gradle entry point) would be

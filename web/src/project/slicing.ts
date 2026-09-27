@@ -39,12 +39,18 @@ export function gcodeStats(text: string): GcodeStats {
   const st: GcodeStats = { toolChanges: 0 };
   // A change is a switch to a different tool. The first selection, and start G-code re-selecting the current tool, aren't.
   let tool: number | null = null;
+  let perToolGrams: number | undefined, headerSeconds: number | undefined;
   for (const l of text.split('\n')) {
     if (l.startsWith('; total layer number:')) st.layers = Number(l.split(':')[1]);
     else if (l.startsWith('; total filament used [g] =')) st.grams = Number(l.split('=')[1]);
     else if (l.startsWith('; filament used [mm] =')) st.metres = l.split('=')[1].split(',').reduce((a, b) => a + Number(b), 0) / 1000;
     else if (l.startsWith('; estimated printing time (normal mode) =')) st.seconds = parseDuration(l.split('=')[1]);
+    // Bambu's G-code layout (Bambu profiles on the Snapmaker Orca engine): per-filament weights with no total, and the
+    // time in the header block.
+    else if (l.startsWith('; filament used [g] =')) perToolGrams = l.split('=')[1].split(',').reduce((a, b) => a + Number(b), 0);
+    else if (l.startsWith('; model printing time:') && l.includes('total estimated time:')) headerSeconds = parseDuration(l.split('total estimated time:')[1]);
     else if (/^T\d{1,2}\s*$/.test(l)) { const t = Number(l.trim().slice(1)); if (tool !== null && t !== tool) st.toolChanges++; tool = t; }
   }
+  st.grams ??= perToolGrams; st.seconds ??= headerSeconds;
   return st;
 }

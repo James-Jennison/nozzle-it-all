@@ -64,6 +64,13 @@ class MultiMaterialTest {
         assertNull(GcodeStatsParser.parse(File.createTempFile("stat3", ".gcode").apply { writeText("; total filament change = 3\n") }).estimatedPurgeGrams()) // no matrix to estimate from
     }
 
+    @Test fun gcodeStatsReadBambusLayout() {
+        // Bambu profiles on the Snapmaker Orca engine: time in the header block, per-filament weights with no total.
+        val s = GcodeStatsParser.parse(File.createTempFile("bambu", ".gcode").apply { writeText(
+            "; model printing time: 8m 52s; total estimated time: 15m 47s\n; total layer number: 100\n; filament used [mm] = 1298.51\n; filament used [g] = 3.94, 0.50\n") })
+        assertEquals("15m 47s", s.printTime); assertEquals(4.44, s.filamentUsedGrams!!, 1e-9)
+    }
+
     @Test fun towerAndFlushControlsAreOnlyOfferedWhereTheyDoSomething() {
         val towerKeys = listOf("enable_prime_tower", "prime_tower_width", "flush_multiplier", "flush_into_infill", "flush_into_objects", "flush_into_support")
         for (family in listOf(null, MultiToolFamily.SINGLE, MultiToolFamily.TOOLCHANGER)) assertTrue(family.toString(), SettingsCatalog.visible(SettingTier.EXPERT, "", family).none { it.key in towerKeys })

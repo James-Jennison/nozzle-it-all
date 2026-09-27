@@ -40,9 +40,10 @@ dep_assimp() {
 dep_gmp() {
   extract gmp-6.2.1.tar.xz gmp-6.2.1
   local b="$BUILD_DIR/gmp"; rm -rf "$b"; mkdir -p "$b"; cd "$b"
-  # No assembly for wasm; ABI=standard picks the generic C limb code.
-  emconfigure "$SRC_DIR/gmp-6.2.1/configure" --host=none --build=x86_64-pc-linux-gnu --disable-assembly --enable-cxx=no \
-    --prefix="$PREFIX" --disable-shared --enable-static ABI=standard CFLAGS="$CFLAGS" CC_FOR_BUILD=gcc
+  # No assembly for wasm; ABI=standard picks the generic C limb code. The C++ classes (gmpxx.h, libgmpxx) are for the
+  # Snapmaker Orca base, whose bundled libigl uses mpq_class; the upstream base never includes them.
+  emconfigure "$SRC_DIR/gmp-6.2.1/configure" --host=none --build=x86_64-pc-linux-gnu --disable-assembly --enable-cxx=yes \
+    --prefix="$PREFIX" --disable-shared --enable-static ABI=standard CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" CC_FOR_BUILD=gcc
   emmake make -j"$JOBS"; emmake make install
 }
 dep_mpfr() {

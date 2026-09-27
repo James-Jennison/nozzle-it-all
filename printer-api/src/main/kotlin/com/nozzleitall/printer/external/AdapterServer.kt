@@ -32,7 +32,7 @@ class AdapterServer(
         fun emit(o: JSONObject) = synchronized(lock) { writer.write(o.toString()); writer.write("\n"); writer.flush() }
         emit(AdapterProtocol.hello {
             put("adapter", JSONObject().put("id", adapter.id).put("displayName", adapter.displayName)
-                .put("firmware", JSONArray(adapter.firmware.map { it.name })).put("mayUseVendorCloud", adapter.mayUseVendorCloud)
+                .put("families", JSONArray(adapter.families.map { it.id })).put("mayUseVendorCloud", adapter.mayUseVendorCloud)
                 .put("version", adapterVersion))
         })
         val reader = BufferedReader(InputStreamReader(input, Charsets.UTF_8))

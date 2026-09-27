@@ -47,8 +47,8 @@ class ExternalAdapterClient(
 
     override val id: String get() = info().optJSONObject("adapter")?.optString("id") ?: "external"
     override val displayName: String get() = info().optJSONObject("adapter")?.optString("displayName") ?: "External adapter"
-    override val firmware: Set<FirmwareFamily> get() = info().optJSONObject("adapter")?.optJSONArray("firmware")
-        ?.let { a -> (0 until a.length()).mapNotNull { n -> FirmwareFamily.entries.firstOrNull { it.name == a.optString(n) } }.toSet() } ?: emptySet()
+    override val families: Set<PrinterFamily> get() = info().optJSONObject("adapter")?.let { it.optJSONArray("families") ?: it.optJSONArray("firmware") }
+        ?.let { a -> (0 until a.length()).map { n -> PrinterFamily.parse(a.optString(n)) }.toSet() } ?: emptySet()
     override val mayUseVendorCloud: Boolean get() = info().optJSONObject("adapter")?.optBoolean("mayUseVendorCloud", true) ?: true
 
     val isRunning: Boolean get() = process?.isAlive == true

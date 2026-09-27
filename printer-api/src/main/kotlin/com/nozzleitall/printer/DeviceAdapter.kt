@@ -2,11 +2,15 @@ package com.nozzleitall.printer
 
 import java.io.File
 
-// The device-adapter boundary:
+// The device-adapter boundary. Vendor-neutral: each printer family is an adapter, registered independently.
 //
 //   DeviceAdapter
-//   ├── PAXX LAN adapter    (:adapter-paxx, in process, required, LAN-only, offline-capable)
-//   └── Stock U1 adapter    (:stock-u1-adapter, a separate helper process, optional, may use a vendor cloud)
+//   ├── PAXX U1 + Moonraker  (:adapter-paxx: flagship PAXX U1, plus generic Klipper; LAN-only, offline-capable)
+//   ├── OctoPrint            (:adapter-octoprint, LAN)
+//   ├── Prusa                (:adapter-prusa, PrusaLink on the LAN; any Prusa Connect support would live only inside it)
+//   ├── Bambu Lab            (:adapter-bambu, LAN mode; any Bambu cloud support would live only inside it)
+//   ├── Stock U1             (:stock-u1-adapter, a separate helper process, optional, may use Snapmaker's cloud)
+//   └── export-only targets  (no adapter at all: slicing and export need no connection)
 //
 // The core depends only on this file's interfaces. Out-of-process adapters are reached through
 // ExternalAdapterClient (protocol in docs/protocols/ADAPTER_PROTOCOL.md) and are never loaded unless the user enabled
@@ -25,7 +29,7 @@ data class PrinterConfig(
 data class DiscoveredPrinter(
     val address: String,
     val model: String,
-    val suggestedFirmware: FirmwareFamily,
+    val suggestedFamily: PrinterFamily,
     val adapterId: String,
     /** Why the firmware was suggested, in plain words, so the user can correct it. */
     val evidence: String,
@@ -57,7 +61,8 @@ interface DeviceAdapter {
     /** Stable id stored with each printer, for example "paxx-lan" or "stock-u1". */
     val id: String
     val displayName: String
-    val firmware: Set<FirmwareFamily>
+    /** Printer families this adapter serves. */
+    val families: Set<PrinterFamily>
     /** True if this adapter may contact a vendor cloud. The registry keeps such adapters out of process. */
     val mayUseVendorCloud: Boolean
     /** Probes one address without changing anything on the printer. Null when nothing this adapter serves answers. */
@@ -108,4 +113,12 @@ fun routeFor(host: String): ConnectionRoute {
     val v4 = h.split('.').mapNotNull { it.toIntOrNull() }.takeIf { it.size == 4 && h.count { c -> c == '.' } == 3 }
     val tailnet = h.endsWith(".ts.net") || h.startsWith("fd7a:115c:a1e0:") || (v4 != null && v4[0] == 100 && v4[1] in 64..127)
     return if (tailnet) ConnectionRoute.PRIVATE_NETWORK else ConnectionRoute.LAN
+}
+
+/**
+ * How an adapter module announces itself (java.util.ServiceLoader, META-INF/services). An application gets exactly the
+ * adapters whose modules it ships: adding or removing a vendor never touches the core or any other adapter.
+ */
+interface DeviceAdapterProvider {
+    fun create(): DeviceAdapter
 }

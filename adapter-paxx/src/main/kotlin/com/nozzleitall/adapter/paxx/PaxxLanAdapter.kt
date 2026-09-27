@@ -1,43 +1,71 @@
 package com.nozzleitall.adapter.paxx
 
 import com.nozzleitall.printer.*
+import com.nozzleitall.printer.ext.Snapmaker
 import okhttp3.EventListener
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 
+/** LAN-only reads that decide what a Moonraker host is. Shared by the PAXX U1 and generic Moonraker adapters. */
+internal fun detectMoonraker(address: String, eventListener: EventListener?): Pair<String, U1Protocol.Detection>? = try {
+    MoonrakerLan(address, eventListener = eventListener).use { m ->
+        val server = m.get("server/info") as? JSONObject ?: return null
+        if (!server.has("klippy_state")) return null
+        val info = runCatching { m.get("printer/info") as? JSONObject }.getOrNull()
+        val objects = runCatching { (m.get("printer/objects/list") as JSONObject).getJSONArray("objects").let { a -> (0 until a.length()).map { a.getString(it) } } }.getOrDefault(emptyList())
+        val config = runCatching { (m.get("server/files/list", mapOf("root" to "config")) as JSONArray).let { a -> (0 until a.length()).map { a.getJSONObject(it).optString("path") } } }.getOrDefault(emptyList())
+        val webcams = runCatching { (m.get("server/webcams/list") as JSONObject).getJSONArray("webcams") }.getOrNull()
+        m.base.toString() to U1Protocol.detect(info, objects, config, webcams)
+    }
+} catch (e: IllegalArgumentException) { null } catch (e: IOException) { null }
+
 /**
- * The required, native PAXX adapter. It talks to Moonraker on the printer's own address (LAN, or the LAN reached through
- * the user's private network) and nothing else. It works with no internet connection and no account of any kind.
+ * The flagship adapter: Snapmaker U1 on PAXX firmware, native Moonraker on the printer's own address (LAN, or the LAN
+ * reached through the user's private network) and nothing else. Works with no internet connection and no account.
  */
 class PaxxLanAdapter(private val eventListener: EventListener? = null) : DeviceAdapter {
     override val id = ID
-    override val displayName = "PAXX (LAN)"
-    override val firmware = setOf(FirmwareFamily.PAXX, FirmwareFamily.KLIPPER)
+    override val displayName = "Snapmaker U1 (PAXX)"
+    override val families = setOf(PrinterFamily.PAXX_U1)
     override val mayUseVendorCloud = false
 
-    companion object { const val ID = "paxx-lan" }
+    companion object {
+        const val ID = "paxx-lan"
+        val CAPABILITIES = Capabilities(uploadJob = true, startPrint = true, pausePrint = true, resumePrint = true, cancelPrint = true, temperatures = true,
+            motion = true, camera = true, materialState = true, materialEdit = true, loadUnload = true, multiMaterial = true, toolheadState = true,
+            bedMesh = true, files = true, jobHistory = true, localConnection = true, remoteConnection = true, vendorCloud = false, calibration = true,
+            acceptedOutputs = setOf("gcode"), vendorExtensions = setOf(Snapmaker.FULL_SPECTRUM, Snapmaker.MULTI_ACE))
+    }
 
-    override fun probe(address: String): DiscoveredPrinter? = try {
-        MoonrakerLan(address, eventListener = eventListener).use { m ->
-            val server = m.get("server/info") as? JSONObject ?: return null
-            if (!server.has("klippy_state")) return null
-            val info = runCatching { m.get("printer/info") as? JSONObject }.getOrNull()
-            val objects = runCatching { (m.get("printer/objects/list") as JSONObject).getJSONArray("objects").let { a -> (0 until a.length()).map { a.getString(it) } } }.getOrDefault(emptyList())
-            val config = runCatching { (m.get("server/files/list", mapOf("root" to "config")) as JSONArray).let { a -> (0 until a.length()).map { a.getJSONObject(it).optString("path") } } }.getOrDefault(emptyList())
-            val webcams = runCatching { (m.get("server/webcams/list") as JSONObject).getJSONArray("webcams") }.getOrNull()
-            val d = U1Protocol.detect(info, objects, config, webcams)
-            DiscoveredPrinter(m.base.toString(), if (d.isU1) "Snapmaker U1" else "Klipper printer", d.firmware,
-                if (d.firmware == FirmwareFamily.STOCK_U1) "stock-u1" else ID, d.evidence, routeFor(m.base.host))
-        }
-    } catch (e: IllegalArgumentException) { null } catch (e: IOException) { null }
+    /** Answers only for U1 printers; a stock-firmware U1 is routed to the optional Stock U1 adapter. */
+    override fun probe(address: String): DiscoveredPrinter? = detectMoonraker(address, eventListener)?.takeIf { it.second.isU1 }?.let { (base, d) ->
+        DiscoveredPrinter(base, "Snapmaker U1", d.family, if (d.family == PrinterFamily.STOCK_U1) "stock-u1" else ID, d.evidence, routeFor(java.net.URI(base).host ?: ""))
+    }
 
-    override fun open(config: PrinterConfig): PrinterSession = U1LanSession(config, paxxCapabilities(config.identity.firmware), eventListener)
+    override fun open(config: PrinterConfig): PrinterSession = U1LanSession(config, CAPABILITIES, eventListener)
+}
 
-    private fun paxxCapabilities(firmware: FirmwareFamily) = Capabilities(camera = true, upload = true, startJob = true, pauseResumeCancel = true,
-        temperatures = true, motion = true, materials = true, materialEdit = firmware == FirmwareFamily.PAXX, fullSpectrum = firmware == FirmwareFamily.PAXX,
-        requiresVendorAccount = false)
+/** Any other Klipper printer through Moonraker: the same native LAN client, without the U1's vendor extensions. */
+class MoonrakerAdapter(private val eventListener: EventListener? = null) : DeviceAdapter {
+    override val id = ID
+    override val displayName = "Klipper (Moonraker)"
+    override val families = setOf(PrinterFamily.KLIPPER)
+    override val mayUseVendorCloud = false
+
+    companion object {
+        const val ID = "moonraker"
+        val CAPABILITIES = Capabilities(uploadJob = true, startPrint = true, pausePrint = true, resumePrint = true, cancelPrint = true, temperatures = true,
+            motion = true, camera = true, materialState = false, loadUnload = true, toolheadState = true, bedMesh = true, files = true, jobHistory = true,
+            localConnection = true, remoteConnection = true, acceptedOutputs = setOf("gcode"))
+    }
+
+    override fun probe(address: String): DiscoveredPrinter? = detectMoonraker(address, eventListener)?.takeIf { !it.second.isU1 }?.let { (base, d) ->
+        DiscoveredPrinter(base, "Klipper printer", PrinterFamily.KLIPPER, ID, d.evidence, routeFor(java.net.URI(base).host ?: ""))
+    }
+
+    override fun open(config: PrinterConfig): PrinterSession = U1LanSession(config, CAPABILITIES, eventListener)
 }
 
 /**
@@ -53,7 +81,7 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
         val server = m.get("server/info") as JSONObject
         if (!server.optBoolean("klippy_connected") || server.optString("klippy_state") != "ready") {
             val klippy = server.optString("klippy_state", "")
-            PrinterStatus(if (klippy == "shutdown" || klippy == "error") PrinterState.ERROR else PrinterState.STARTING, route,
+            PrinterStatus(PrinterState.fromRaw(klippy.ifBlank { "startup" }).takeIf { it == PrinterState.ERROR } ?: PrinterState.STARTING, route,
                 message = "Klipper is ${klippy.ifBlank { "not connected" }}.")
         } else U1Protocol.parseStatus(m.get("printer/objects/query", U1Protocol.statusQuery) as JSONObject, route)
     } catch (e: PrinterRejected) {
@@ -99,6 +127,8 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
                 is PrinterAction.SetNozzleTemperature -> U1Protocol.nozzleTemperature(action.toolhead, action.celsius).let { s -> { m.gcode(s) } }
                 is PrinterAction.SetBedTemperature -> U1Protocol.bedTemperature(action.celsius).let { s -> { m.gcode(s) } }
                 PrinterAction.HomeAll -> { { m.gcode("G28") } }
+                // Moonraker uploads and starts in two steps (upload, then StartJob); capabilities.uploadAndStart is false.
+                is PrinterAction.UploadAndStart -> return ActionOutcome.Rejected("Send the file first, then start it.")
                 is PrinterAction.Jog -> U1Protocol.jog(action.axis, action.millimetres).let { s -> { m.gcode(s) } }
                 is PrinterAction.SelectToolhead -> U1Protocol.selectToolhead(action.toolhead).let { s -> { m.gcode(s) } }
                 is PrinterAction.SetMaterialInfo -> {

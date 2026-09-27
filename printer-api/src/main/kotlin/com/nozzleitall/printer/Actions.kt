@@ -63,6 +63,11 @@ sealed class PrinterAction(val glossaryId: String) {
         override val allowedStates = setOf(PrinterState.READY, PrinterState.FINISHED, PrinterState.CANCELLED)
         override val summary get() = "Change to toolhead ${toolhead + 1}. The toolhead changer will move."
     }
+    /** For printers whose protocol uploads and starts in one request (OctoPrint, PrusaLink, Bambu). Starts a print. */
+    data class UploadAndStart(val localPath: String, val remoteName: String) : PrinterAction("action.start") {
+        override val allowedStates = setOf(PrinterState.READY, PrinterState.FINISHED, PrinterState.CANCELLED)
+        override val summary get() = "Send $remoteName and start printing it"
+    }
 }
 
 /** The action as reviewed by the user, pinned to the printer state they saw. */

@@ -19,12 +19,12 @@ class PaxxLanAdapterTest {
         override fun dnsStart(call: Call, domainName: String) { hosts += "dns:$domainName" }
     }
 
-    private fun config(address: String, firmware: FirmwareFamily = FirmwareFamily.PAXX) =
-        PrinterConfig(PrinterIdentity("u1", "Workshop U1", "Snapmaker U1", firmware, address), PaxxLanAdapter.ID)
+    private fun config(address: String, family: PrinterFamily = PrinterFamily.PAXX_U1) =
+        PrinterConfig(PrinterIdentity("u1", "Workshop U1", "Snapmaker U1", family, address), PaxxLanAdapter.ID)
 
     @Test fun probeRecognisesPaxxFromItsSettingsFile() = FakeMoonraker(paxx = true).use { fake ->
         val found = PaxxLanAdapter().probe(fake.address)!!
-        assertEquals(FirmwareFamily.PAXX, found.suggestedFirmware)
+        assertEquals(PrinterFamily.PAXX_U1, found.suggestedFamily)
         assertEquals(PaxxLanAdapter.ID, found.adapterId)
         assertEquals("Snapmaker U1", found.model)
         assertTrue(found.evidence, found.evidence.contains("extended2.cfg"))
@@ -34,7 +34,7 @@ class PaxxLanAdapterTest {
 
     @Test fun probeRoutesStockFirmwareToTheOptionalAdapter() = FakeMoonraker(paxx = false).use { fake ->
         val found = PaxxLanAdapter().probe(fake.address)!!
-        assertEquals(FirmwareFamily.STOCK_U1, found.suggestedFirmware)
+        assertEquals(PrinterFamily.STOCK_U1, found.suggestedFamily)
         assertEquals("stock-u1", found.adapterId)
     }
 
@@ -50,8 +50,9 @@ class PaxxLanAdapterTest {
             val t0 = st.toolheads[0].material!!
             assertEquals("Polymaker", t0.vendor); assertEquals("PLA", t0.type); assertEquals("#BE38F3", t0.colorHex); assertTrue(t0.fromTag)
             assertEquals("TPU", st.toolheads[2].material!!.type)
-            assertTrue(st.fullSpectrum.available)
-            assertEquals(listOf("#BE38F3", "#E2DEDB", "#DD0000", "#000000"), st.fullSpectrum.palette)
+            val fs = com.nozzleitall.printer.ext.FullSpectrumState.from(st)!!
+            assertTrue(fs.available)
+            assertEquals(listOf("#BE38F3", "#E2DEDB", "#DD0000", "#000000"), fs.palette)
             assertEquals(35.0, st.bed!!.target!!, 0.0)
             assertFalse(s.capabilities.requiresVendorAccount)
         }

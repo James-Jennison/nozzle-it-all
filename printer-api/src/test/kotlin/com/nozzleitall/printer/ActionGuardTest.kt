@@ -9,8 +9,8 @@ class ActionGuardTest {
         var performed = 0
         var next: () -> ActionOutcome = { ActionOutcome.Accepted }
         var clock = 1000L
-        override val identity = PrinterIdentity("p1", "U1", "Snapmaker U1", FirmwareFamily.PAXX, "http://192.168.1.40")
-        override val capabilities = Capabilities(pauseResumeCancel = true)
+        override val identity = PrinterIdentity("p1", "U1", "Snapmaker U1", PrinterFamily.PAXX_U1, "http://192.168.1.40")
+        override val capabilities = Capabilities(pausePrint = true, resumePrint = true, cancelPrint = true)
         override fun status() = PrinterStatus(state, ConnectionRoute.LAN, observedAtMillis = clock)
         override fun cameras() = emptyList<CameraEndpoint>()
         override fun snapshot(camera: CameraEndpoint) = ByteArray(0)
@@ -80,7 +80,7 @@ class ActionGuardTest {
 
     @Test fun registryRefusesCloudAdaptersInProcess() {
         val cloudy = object : DeviceAdapter {
-            override val id = "cloudy"; override val displayName = "Cloudy"; override val firmware = setOf(FirmwareFamily.STOCK_U1)
+            override val id = "cloudy"; override val displayName = "Cloudy"; override val families = setOf(PrinterFamily.STOCK_U1)
             override val mayUseVendorCloud = true
             override fun probe(address: String): DiscoveredPrinter? = null
             override fun open(config: PrinterConfig): PrinterSession = throw UnsupportedOperationException()

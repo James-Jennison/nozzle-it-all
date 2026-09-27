@@ -171,7 +171,7 @@ def kotlin_glossary() -> str:
     lines.append("val PrinterState.label: String get() = Glossary.label(glossaryId)")
     lines.append("val PrinterState.description: String get() = Glossary.term(glossaryId).description")
     lines.append("val ConnectionRoute.label: String get() = Glossary.label(glossaryId)")
-    lines.append("val FirmwareFamily.label: String get() = Glossary.label(glossaryId)")
+    lines.append("val PrinterFamily.label: String get() = Glossary.terms[glossaryId]?.label ?: id")
     lines.append("val PrinterAction.label: String get() = Glossary.label(glossaryId)")
     return "\n".join(lines) + "\n"
 

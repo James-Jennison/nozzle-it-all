@@ -10,7 +10,7 @@ class AdapterProtocolTest {
     @Test fun statusRoundTrips() {
         val s = PrinterStatus(PrinterState.PRINTING, ConnectionRoute.PRIVATE_NETWORK, JobProgress("cube.gcode", 0.25f, 60.0, 3, 100),
             Temperature(60.0, 60.0), listOf(Toolhead(0, 210.0, 210.0, 0.4, true, Material("Polymaker", "PLA", "Basic", "#BE38F3", true), true)),
-            FullSpectrumState(true, listOf("#BE38F3")), "hello", 42)
+            "hello", 42, mapOf("snapmaker.full-spectrum" to mapOf("available" to true, "palette" to listOf("#BE38F3")), "bambu.ams" to listOf(1, 2)))
         assertEquals(s, AdapterProtocol.decodeStatus(JSONObject(AdapterProtocol.encode(s).toString())))
     }
 
@@ -44,7 +44,7 @@ class AdapterProtocolTest {
     private fun helper(mode: String) = ExternalAdapterClient(listOf(File(System.getProperty("java.home"), "bin/java").path,
         "-cp", System.getProperty("java.class.path"), FakeAdapterMain::class.java.name, mode), requestTimeoutMillis = 10_000)
 
-    private val config = PrinterConfig(PrinterIdentity("s1", "Stock", "Snapmaker U1", FirmwareFamily.STOCK_U1, "http://192.168.1.41"), "fake")
+    private val config = PrinterConfig(PrinterIdentity("s1", "Stock", "Snapmaker U1", PrinterFamily.STOCK_U1, "http://192.168.1.41"), "fake")
 
     @Test fun realHelperProcessServesStatusAndActions() {
         helper("ok").use { client ->
@@ -82,7 +82,7 @@ object FakeAdapterMain {
             Thread.sleep(5000); return
         }
         val adapter = object : DeviceAdapter {
-            override val id = "fake"; override val displayName = "Fake"; override val firmware = setOf(FirmwareFamily.STOCK_U1)
+            override val id = "fake"; override val displayName = "Fake"; override val families = setOf(PrinterFamily.STOCK_U1)
             override val mayUseVendorCloud = true
             override fun probe(address: String): DiscoveredPrinter? = null
             override fun open(config: PrinterConfig): PrinterSession = object : PrinterSession {

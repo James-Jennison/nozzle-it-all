@@ -5,7 +5,7 @@ package com.nozzleitall.printer
 data class Term(val id: String, val label: String, val description: String = "", val confirm: String = "", val plural: String = "", val destructive: Boolean = false)
 
 object Glossary {
-    const val VERSION = "1.0.0"
+    const val VERSION = "2.0.0"
     const val PRODUCT_FAMILY = "Nozzle It All"
     const val PRODUCT_DESKTOP = "Nozzle It All for Desktop"
     const val PRODUCT_ANDROID = "Nozzle It All for Android"
@@ -26,10 +26,15 @@ object Glossary {
         Term("state.unknown", "Unknown", "The printer answered, but Nozzle couldn't understand it. Nothing is assumed.", "", "", false),
         Term("route.lan", "Local network", "Connected directly on your home or workshop network.", "", "", false),
         Term("route.private-network", "Private network", "Connected through your own private network, such as Tailscale. Nozzle doesn't relay this traffic.", "", "", false),
-        Term("route.vendor-cloud", "Snapmaker cloud", "Used only by the optional Stock U1 support.", "", "", false),
-        Term("firmware.paxx", "PAXX", "Snapmaker U1 running PAXX firmware in LAN mode. Works fully offline with no account.", "", "", false),
-        Term("firmware.stock-u1", "Stock U1", "Snapmaker U1 on Snapmaker's own firmware. Needs the optional Stock U1 support.", "", "", false),
-        Term("firmware.klipper", "Klipper", "Another Klipper printer on your network.", "", "", false),
+        Term("route.vendor-cloud", "Maker's cloud", "Through the printer maker's own cloud service. Used only by optional support for printers that need it.", "", "", false),
+        Term("route.none", "No connection", "Nozzle slices for this printer but does not connect to it.", "", "", false),
+        Term("family.paxx-u1", "Snapmaker U1 (PAXX)", "Snapmaker U1 running PAXX firmware in LAN mode. The flagship integration: works fully offline with no account.", "", "", false),
+        Term("family.stock-u1", "Snapmaker U1 (stock)", "Snapmaker U1 on Snapmaker's own firmware. Uses optional Stock U1 support for features that need Snapmaker's cloud.", "", "", false),
+        Term("family.bambu-lab", "Bambu Lab", "Bambu Lab printers in LAN mode. Any Bambu cloud features stay inside optional Bambu support.", "", "", false),
+        Term("family.prusa", "Prusa", "Prusa printers through PrusaLink on your network. Any Prusa Connect features stay inside optional Prusa support.", "", "", false),
+        Term("family.klipper", "Klipper", "Other Klipper printers on your network.", "", "", false),
+        Term("family.octoprint", "OctoPrint", "Printers run by OctoPrint on your network.", "", "", false),
+        Term("family.export-only", "Export only", "Slice for this printer and save the file; send it yourself by USB, SD card or the printer's own app.", "", "", false),
         Term("action.start", "Start print", "", "Start printing", "", false),
         Term("action.pause", "Pause", "", "Pause print", "", false),
         Term("action.resume", "Resume", "", "Resume print", "", false),
@@ -64,6 +69,8 @@ object Glossary {
         "cloud" to "Nozzle It All doesn't need an account or a Nozzle cloud service. Your models, projects and printer details stay on your device.",
         "flutter" to "Some Stock U1 features come from Snapmaker's own components, which are only loaded if you turn on Stock U1 support.",
         "web-local" to "Nozzle It All Web slices in your browser. Your models aren't uploaded anywhere.",
+        "multi-vendor" to "Nozzle It All works with printers from different makers. What you can do with each printer depends on what it offers over your network; anything a printer can't do simply isn't shown.",
+        "export-only" to "Every printer with a slicing profile can be used without connecting to it: slice, save and export the file, then send it yourself.",
     )
     /** Implementation words that must not appear in everyday UI copy. */
     val internalWords: List<String> = listOf("Moonraker", "Klippy", "Flutter", "WebAssembly", "WASM", "IPC", "adapter", "MQTT", "JSON", "gcode_macro", "print_task_config", "Snapmaker Orca", "OrcaSlicer")
@@ -74,5 +81,5 @@ object Glossary {
 val PrinterState.label: String get() = Glossary.label(glossaryId)
 val PrinterState.description: String get() = Glossary.term(glossaryId).description
 val ConnectionRoute.label: String get() = Glossary.label(glossaryId)
-val FirmwareFamily.label: String get() = Glossary.label(glossaryId)
+val PrinterFamily.label: String get() = Glossary.terms[glossaryId]?.label ?: id
 val PrinterAction.label: String get() = Glossary.label(glossaryId)

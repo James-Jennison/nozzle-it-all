@@ -17,17 +17,19 @@ const val STOCK_ADAPTER_VERSION = "0.1.0"
 class StockU1Adapter(private val account: SnapmakerAccount) : DeviceAdapter {
     override val id = "stock-u1"
     override val displayName = "Stock U1 (optional)"
-    override val firmware = setOf(FirmwareFamily.STOCK_U1)
+    override val families = setOf(PrinterFamily.STOCK_U1)
     override val mayUseVendorCloud = true
 
     override fun probe(address: String): DiscoveredPrinter? =
-        PaxxLanAdapter().probe(address)?.takeIf { it.suggestedFirmware == FirmwareFamily.STOCK_U1 }?.copy(adapterId = id)
+        PaxxLanAdapter().probe(address)?.takeIf { it.suggestedFamily == PrinterFamily.STOCK_U1 }?.copy(adapterId = id)
 
     override fun open(config: PrinterConfig): PrinterSession {
-        require(config.identity.firmware == FirmwareFamily.STOCK_U1) { "The Stock U1 adapter only serves stock-firmware U1 printers." }
+        require(config.identity.family == PrinterFamily.STOCK_U1) { "The Stock U1 adapter only serves stock-firmware U1 printers." }
         // Stock firmware has no documented LAN camera, and editing tag-read spools needs PAXX's override.
-        return U1LanSession(config, Capabilities(camera = false, upload = true, startJob = true, pauseResumeCancel = true, temperatures = true,
-            motion = true, materials = true, materialEdit = false, fullSpectrum = true, requiresVendorAccount = false))
+        return U1LanSession(config, Capabilities(uploadJob = true, startPrint = true, pausePrint = true, resumePrint = true, cancelPrint = true,
+            temperatures = true, motion = true, camera = false, materialState = true, materialEdit = false, multiMaterial = true, toolheadState = true,
+            files = true, jobHistory = true, localConnection = true, remoteConnection = true, vendorCloud = true, requiresVendorAccount = false,
+            vendorExtensions = setOf(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM)))
     }
 }
 

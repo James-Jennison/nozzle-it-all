@@ -1,6 +1,8 @@
 package com.nozzleitall.adapter.paxx
 
 import com.nozzleitall.printer.*
+import com.nozzleitall.printer.ext.FullSpectrumState
+import com.nozzleitall.printer.ext.Snapmaker
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -82,7 +84,8 @@ object U1Protocol {
             PrinterState.ERROR, PrinterState.STARTING -> webhooks?.optString("state_message")?.takeIf { it.isNotBlank() } ?: stats?.optString("message")?.takeIf { it.isNotBlank() }
             else -> stats?.optString("message")?.takeIf { it.isNotBlank() }
         }
-        return PrinterStatus(state, route, job, bed, heads, fullSpectrum(heads, cfg != null), message, observedAt)
+        val ext = if (cfg != null) mapOf(Snapmaker.FULL_SPECTRUM to fullSpectrum(heads, true).toExtension()) else emptyMap()
+        return PrinterStatus(state, route, job, bed, heads, message, observedAt, ext)
     }
 
     /** Full Spectrum needs the U1's multi-toolhead filament report and at least two loaded, coloured toolheads. */
@@ -93,7 +96,7 @@ object U1Protocol {
         else FullSpectrumState(false, palette, "Load coloured material in at least two toolheads to mix colours.")
     }
 
-    data class Detection(val isU1: Boolean, val firmware: FirmwareFamily, val evidence: String)
+    data class Detection(val isU1: Boolean, val family: PrinterFamily, val evidence: String)
 
     /**
      * Decides what a Moonraker host is from LAN-only reads. [configFiles] is `server/files/list?root=config` paths,
@@ -106,10 +109,10 @@ object U1Protocol {
         val paxxConfig = configFiles.firstOrNull { it.startsWith("extended/extended2.cfg") || it.startsWith("extended/extended.cfg") }
         val paxxCamera = webcams?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.firstOrNull { it.optString("stream_url").startsWith("/webcam/webrtc") || it.optString("stream_url").startsWith("/webcam2/webrtc") } }
         return when {
-            paxxConfig != null -> Detection(isU1, FirmwareFamily.PAXX, "Found PAXX settings file config/$paxxConfig.")
-            isU1 && paxxCamera != null -> Detection(true, FirmwareFamily.PAXX, "Found a PAXX camera stream (${paxxCamera.optString("stream_url")}).")
-            isU1 -> Detection(true, FirmwareFamily.STOCK_U1, "Snapmaker U1 firmware $version with no PAXX settings. Stock U1 printers use the optional Stock U1 adapter.")
-            else -> Detection(false, FirmwareFamily.KLIPPER, "Klipper through Moonraker${if (version.isNotBlank()) " ($version)" else ""}.")
+            paxxConfig != null -> Detection(isU1, PrinterFamily.PAXX_U1, "Found PAXX settings file config/$paxxConfig.")
+            isU1 && paxxCamera != null -> Detection(true, PrinterFamily.PAXX_U1, "Found a PAXX camera stream (${paxxCamera.optString("stream_url")}).")
+            isU1 -> Detection(true, PrinterFamily.STOCK_U1, "Snapmaker U1 firmware $version with no PAXX settings. Stock U1 printers use the optional Stock U1 adapter.")
+            else -> Detection(false, PrinterFamily.KLIPPER, "Klipper through Moonraker${if (version.isNotBlank()) " ($version)" else ""}.")
         }
     }
 

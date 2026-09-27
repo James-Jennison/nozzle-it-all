@@ -6,7 +6,7 @@ import org.junit.Test
 /** Every shared concept the model exposes has one user-facing name in design/terminology/glossary.json. */
 class GlossaryConsistencyTest {
     @Test fun everyStateRouteFirmwareAndActionHasATerm() {
-        val ids = PrinterState.entries.map { it.glossaryId } + ConnectionRoute.entries.map { it.glossaryId } + FirmwareFamily.entries.map { it.glossaryId } +
+        val ids = PrinterState.entries.map { it.glossaryId } + ConnectionRoute.entries.map { it.glossaryId } + PrinterFamily.known.map { it.glossaryId } +
             listOf(PrinterAction.StartJob("a"), PrinterAction.Pause, PrinterAction.Resume, PrinterAction.Cancel, PrinterAction.SetNozzleTemperature(0, 0),
                 PrinterAction.SetBedTemperature(0), PrinterAction.HomeAll, PrinterAction.Jog('X', 1.0), PrinterAction.LoadMaterial(0), PrinterAction.UnloadMaterial(0),
                 PrinterAction.SetMaterialInfo(0, Material()), PrinterAction.SelectToolhead(0)).map { it.glossaryId }

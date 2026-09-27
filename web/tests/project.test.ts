@@ -19,6 +19,7 @@ function sample(): Project3mf {
   m.materials = [{ slot: 1, type: 'PLA', colorHex: '#BE38F3', toolhead: 0 }, { slot: 2, type: 'PETG', colorHex: '#FFFFFF', toolhead: 1 }];
   m.settings = { preset: 'standard', overrides: { sparse_infill_density: '20%' } };
   m.printer = { model: 'Bambu Lab A1', profileId: 'bambu_generic', family: 'bambu-lab' };
+  m.modifiedAtMillis = 1; // fixed, so the committed fixture only changes when its content does
   (m as Record<string, unknown>).futureTopLevel = { x: 1 };
   m.extensions = { web: { cameraOrbit: 42 } };
   return { objects: [{ id: 1, name: 'A', mesh: cube(), placement: [1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 100, 0] }, { id: 2, name: 'B', mesh: cube(10), placement: [1, 0, 0, 0, 1, 0, 0, 0, 1, 150, 120, 0] }],

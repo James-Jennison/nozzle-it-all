@@ -44,8 +44,7 @@ fun FleetScreen(state: AppState) {
         if (ids.isEmpty()) {
             Card(Modifier.fillMaxWidth()) {
                 EmptyState(NzIcon.FLEET, "Add your first printer",
-                    "Nozzle It All talks to your printers on your own network. A Snapmaker U1 with PAXX works fully offline: no account, no cloud. " +
-                        "Away from home? Connect through your own private network, such as Tailscale.") {
+                    Glossary.explanations.getValue("first-printer")) {
                     NzButton("Add printer", { adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.ADD)
                 }
             }

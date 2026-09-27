@@ -71,6 +71,7 @@ object Glossary {
         "web-local" to "Nozzle It All Web slices in your browser. Your models aren't uploaded anywhere.",
         "multi-vendor" to "Nozzle It All works with printers from different makers. What you can do with each printer depends on what it offers over your network; anything a printer can't do simply isn't shown.",
         "export-only" to "Every printer with a slicing profile can be used without connecting to it: slice, save and export the file, then send it yourself.",
+        "first-printer" to "Nozzle It All talks to your printers on your own network: a Snapmaker U1 with PAXX (no account, no cloud), Klipper printers, Prusa printers with PrusaLink, Bambu Lab printers in LAN mode and OctoPrint. No printer yet? You can still prepare and slice for any of 376 printer models.",
     )
     /** Implementation words that must not appear in everyday UI copy. */
     val internalWords: List<String> = listOf("Moonraker", "Klippy", "Flutter", "WebAssembly", "WASM", "IPC", "adapter", "MQTT", "JSON", "gcode_macro", "print_task_config", "Snapmaker Orca", "OrcaSlicer")

@@ -46,7 +46,7 @@ main { max-width: var(--size-content-max); margin: 0 auto; padding: var(--space-
 .btn.quiet { border-color: transparent; background: transparent; }
 .btn[disabled], .btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-control); overflow: hidden; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius-control); overflow: hidden; }
 .seg button { border: 0; background: transparent; padding: 8px 14px; min-height: 40px; cursor: pointer; font: var(--type-label); }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 
@@ -54,7 +54,8 @@ main { max-width: var(--size-content-max); margin: 0 auto; padding: var(--space-
 .card.raised { background: var(--surface-raised); }
 .grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .split { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
-@media (max-width: 960px) { .split { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.split > * { min-width: 0; }
 
 .pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid currentColor; border-radius: var(--radius-chip); padding: 2px 10px; font: var(--type-label); white-space: nowrap; }
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -68,9 +69,9 @@ main { max-width: var(--size-content-max); margin: 0 auto; padding: var(--space-
 .banner.success { border-color: var(--status-finished); }
 .banner p { flex: 1; }
 
-.field { display: grid; gap: 6px; }
+.field { display: grid; gap: 6px; min-width: 0; }
 .field label { font: var(--type-label); }
-.field input, .field select { min-height: 40px; padding: 8px 12px; background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-small); }
+.field input, .field select { width: 100%; min-width: 0; box-sizing: border-box; min-height: 40px; padding: 8px 12px; background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-small); }
 .field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 2px var(--focus); }
 .field .hint { font: var(--type-body-small); color: var(--text-muted); }
 .field .error { font: var(--type-body-small); color: var(--danger); }

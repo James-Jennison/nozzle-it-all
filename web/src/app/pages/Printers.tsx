@@ -53,7 +53,7 @@ export function Printers() {
       <Notice />
       {s.printers.length === 0 ? (
         <section class="card empty"><img src="/brand/mark-violet.svg" alt="" /><h2>No printers yet</h2>
-          <p class="muted">{glossary.explanations.paxx}</p><button class="btn primary" onClick={() => navigate('/printers/add')}>Add printer</button></section>
+          <p class="muted">{glossary.explanations['first-printer']}</p><button class="btn primary" onClick={() => navigate('/printers/add')}>Add printer</button></section>
       ) : <ul class="grid" style={{ listStyle: 'none', padding: 0, margin: 0 }}>{s.printers.map((p) => <PrinterCard p={p} />)}</ul>}
     </>
   );

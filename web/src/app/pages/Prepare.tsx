@@ -28,6 +28,7 @@ export function Prepare() {
     <>
       <div class="page-head">
         <div class="grow">
+          <h1 class="visually-hidden">Prepare {s.name}</h1>
           <label class="visually-hidden" for="project-name">Project name</label>
           <input id="project-name" class="field" style={{ font: 'var(--type-headline)', background: 'transparent', border: 0, color: 'var(--text)', padding: 0, width: '100%' }}
             value={s.name} onInput={(e) => store.set({ name: (e.target as HTMLInputElement).value, dirty: true })} />
@@ -132,7 +133,7 @@ function PrinterStep() {
       )}
       <h3>Materials</h3>
       {s.slots.map((m, idx) => (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'end' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'end' }}>
           <span class="swatch" style={{ background: m.colorHex }} aria-hidden="true" />
           <Field id={`slot-${m.slot}-color`} label={`Material ${m.slot} colour`} value={m.colorHex ?? ''} onInput={(v) => /^#[0-9a-fA-F]{6}$/.test(v) && changed({ slots: s.slots.map((x, j) => (j === idx ? { ...x, colorHex: v.toUpperCase() } : x)) })} />
           <Field id={`slot-${m.slot}-type`} label="Type" value={m.type ?? ''} onInput={(v) => changed({ slots: s.slots.map((x, j) => (j === idx ? { ...x, type: v.toUpperCase() } : x)) })} />

@@ -49,4 +49,17 @@ class PrusaColorMixTest {
         assertTrue("the blend alternates: $changes changes", changes > 40)
         assertTrue("tool changes are counted for the XL's T syntax", out.stats.toolChanges > 40)
     }
+
+    @Test fun colorMixIsForEveryMultiSlotPrinterWithoutFullSpectrum() {
+        val fs = com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM; val cm = com.nozzleitall.printer.ext.Prusa.COLOR_MIX
+        fun of(id: String) = ProfileCatalog.byId(id)!!.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools) }
+        assertEquals(setOf(fs), of("snapmaker_u1"))
+        assertEquals(setOf(cm), of("prusa_xl_5t"))
+        assertEquals(emptySet<String>(), of("prusa_mk4s"))
+        // Not a Prusa rule: any other multi-slot printer (here a generic family with four slots) gets ColorMix.
+        assertEquals(setOf(cm), com.nozzleitall.printer.ext.ProfileFeatures.of("klipper", 4))
+        assertEquals(setOf(fs), com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(setOf(fs), 4))
+        assertEquals(setOf(cm), com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(emptySet(), 2))
+    }
 }
+

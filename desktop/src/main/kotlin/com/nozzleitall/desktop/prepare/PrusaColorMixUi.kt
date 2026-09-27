@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 
 /**
- * PrusaSlicer's Color mix in the Filament card (Prusa printers with two or more slots): the virtual extruders listed as
+ * PrusaSlicer's Color mix in the Filament card (multi-slot printers without Full Spectrum): the virtual extruders listed as
  * "[V] Extruder N" after the physical ones, each in the colour PrusaSlicer predicts, with "Add blend", editing and
  * removal as PrusaSlicer's Color Mixing dialog does them. Values come from PrusaSlicer 2.9.6's code in the engine.
  */

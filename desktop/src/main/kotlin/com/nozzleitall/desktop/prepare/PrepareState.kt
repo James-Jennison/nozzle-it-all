@@ -175,7 +175,7 @@ class PrepareState(private val app: AppState) {
     val mixes = mutableStateListOf<FullSpectrum.Mix>()
     var mixProblem by mutableStateOf<String?>(null)
 
-    // --- PrusaSlicer ColorMix (virtual extruders), for Prusa printers with two or more slots. Stored as PrusaSlicer's
+    // --- PrusaSlicer ColorMix (virtual extruders), for multi-slot printers without Full Spectrum. Stored as PrusaSlicer's
     // own 3MF sidecar, so a project opens in PrusaSlicer with the same virtual extruders and paint.
     val colorMix = mutableStateListOf<PrusaColorMix.Virtual>()
 
@@ -205,7 +205,7 @@ class PrepareState(private val app: AppState) {
     }
 
     /** Colour-mixing features on offer: the connected printer's own report, else what the chosen profile offers. */
-    fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions
+    fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions?.let { com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(it, materials().size) }
         ?: profile?.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools) } ?: emptySet()
 
     fun physicalColours(): List<String> = materials().map { it.colorHex ?: "#FFFFFF" }

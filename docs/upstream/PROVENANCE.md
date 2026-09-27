@@ -163,7 +163,8 @@ interchange).
   extruder 6 on the Prusa XL 5T prints T0,T1,T0 layer by layer (and painted state 6 likewise, engine-side); numbering,
   presets and the sidecar round-trip. Snapmaker Full Spectrum tests still pass.
 - **Known divergence:**
-  - Offered only on Prusa profiles with two or more slots (owner rule); PrusaSlicer offers it on any multi-slot printer.
+  - Offered on every printer with two or more slots, as PrusaSlicer does, except those with Snapmaker's Full Spectrum
+    (owner rule, 2026-09-27: one mixing system per printer).
   - The engine doesn't read the sidecar from the 3MF itself (2.9.6's 3mf.cpp reader isn't ported): Nozzle reads it and
     passes it with the slice request.
   - A display colour read from a file is shown but not kept as an override (PrusaSlicer writes the effective colour

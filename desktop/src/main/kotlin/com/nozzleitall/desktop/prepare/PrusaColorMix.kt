@@ -6,7 +6,7 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
- * PrusaSlicer's ColorMix ("virtual extruders"), for Prusa printers with two or more filament slots. A virtual extruder
+ * PrusaSlicer's ColorMix ("virtual extruders"), for any printer with two or more filament slots except Full Spectrum ones. A virtual extruder
  * is a numbered slot after the physical ones that prints as a repeating layer cycle of 2-3 loaded filaments (a blend),
  * or changes along Z (a gradient). Everything about them is PrusaSlicer 2.9.6's own code, run by the engine
  * (`nozzle-engine --color-mix`): normalising, colour prediction (prusa_fdm_mixer), layer cycles, presets, id remapping.

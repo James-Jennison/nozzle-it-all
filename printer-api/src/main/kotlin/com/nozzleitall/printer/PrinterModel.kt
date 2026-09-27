@@ -135,7 +135,12 @@ data class Toolhead(
 
 enum class CameraKind { WEBRTC, MJPEG_STREAM, SNAPSHOT, RTSP }
 
-data class CameraEndpoint(val id: String, val name: String, val kind: CameraKind, val url: String, val snapshotUrl: String? = null)
+/**
+ * One printer camera. [url] is the camera's own stream address (for WebRTC, the player). [liveUrl] is a live MJPEG stream
+ * (multipart/x-mixed-replace) Nozzle can show itself; screens always prefer it and fall back to [snapshotUrl] stills only
+ * when a camera has no live stream.
+ */
+data class CameraEndpoint(val id: String, val name: String, val kind: CameraKind, val url: String, val snapshotUrl: String? = null, val liveUrl: String? = null)
 
 data class JobProgress(
     val fileName: String,

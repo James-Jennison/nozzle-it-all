@@ -31,6 +31,8 @@ class MoonrakerLan(address: String, private val apiKey: String = "", eventListen
         }.build()
     // Commands block until Klipper finishes them (homing, heating waits); Moonraker itself gives up after about 60 s.
     private val commandClient = client.newBuilder().readTimeout(65, TimeUnit.SECONDS).callTimeout(70, TimeUnit.SECONDS).build()
+    // A live camera stream never ends; only a stalled stream (no bytes for 10 s) times out.
+    private val streamClient = client.newBuilder().readTimeout(10, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()
     private val uploadClient = client.newBuilder().writeTimeout(60, TimeUnit.SECONDS).readTimeout(120, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()
 
     companion object {
@@ -83,6 +85,17 @@ class MoonrakerLan(address: String, private val apiKey: String = "", eventListen
             if (!r.isSuccessful) throw IOException("Camera unavailable (HTTP ${r.code}).")
             return readBody(r, max)
         }
+    }
+
+    /** Opens a live MJPEG stream on the printer's own host. Closing the returned stream ends the request. */
+    fun stream(pathOrUrl: String): java.io.InputStream {
+        val target = base.resolve(pathOrUrl) ?: throw IOException("Invalid address.")
+        if (target.host != base.host) throw IOException("Camera must be on the printer's own host.")
+        val r = streamClient.newCall(Request.Builder().url(target).build()).execute()
+        if (!r.isSuccessful) { r.close(); throw IOException("Camera stream unavailable (HTTP ${r.code}).") }
+        val type = r.header("Content-Type").orEmpty()
+        if (!type.startsWith("multipart/", ignoreCase = true)) { r.close(); throw IOException("The camera didn't answer with a video stream.") }
+        return r.body!!.byteStream()
     }
 
     /** Multipart upload to the gcodes root. Throws [UploadInterrupted] if the connection dropped after bytes were sent. */

@@ -43,7 +43,9 @@ class PrinterEntry(val config: PrinterConfig) {
 
 const val EXPORT_ONLY = "export-only"
 
-class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, private val log: (String) -> Unit = {}) {
+class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, private val log: (String) -> Unit = {},
+            /** Finds the separately installed Stock U1 helper; tests pass their own so the machine's installs don't matter. */
+            private val stockHelper: () -> List<String>? = { StockHelperLocator.find() }) {
     private val store = PrinterStore(paths)
     /** Built-in adapters are whatever adapter modules this installation ships (ServiceLoader); none is named here. */
     val registry = AdapterRegistry().apply {
@@ -57,7 +59,7 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
     private var stockClient: ExternalAdapterClient? = null
     private val pollers = HashMap<String, Job>()
 
-    val stockHelperInstalled: Boolean get() = StockHelperLocator.find() != null
+    val stockHelperInstalled: Boolean get() = stockHelper() != null
     val stockAccount: AccountAdapter? get() = stockClient
 
     init {
@@ -68,7 +70,7 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
     /** Registers the Stock helper as an optional, lazily started adapter only when the user enabled it. */
     private fun applyStockSetting() {
         if (!settings.value.stockU1Enabled) return
-        val cmd = StockHelperLocator.find() ?: return
+        val cmd = stockHelper() ?: return
         val client = ExternalAdapterClient(cmd, log = { log("stock-u1: $it") })
         stockClient = client
         registry.registerOptional("stock-u1") { client }

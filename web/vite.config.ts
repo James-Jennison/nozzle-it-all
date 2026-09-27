@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { cpSync, createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -48,4 +49,6 @@ export default defineConfig({
   preview: { headers: isolation, port: 4173, strictPort: true },
   worker: { format: 'es' },
   build: { target: 'es2022', sourcemap: true },
+  // Unit tests only; e2e/ is Playwright's (npm run e2e).
+  test: { include: ['tests/**/*.test.ts'] },
 });

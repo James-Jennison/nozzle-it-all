@@ -135,7 +135,7 @@ class DesktopAcceptanceTest {
             PrinterConfig(PrinterIdentity("paxx", "PAXX", "Snapmaker U1", PrinterFamily.PAXX_U1, "http://127.0.0.1:9"), "paxx-lan"),
             PrinterConfig(PrinterIdentity("stock", "Stock", "Snapmaker U1", PrinterFamily.STOCK_U1, "http://127.0.0.1:9"), "stock-u1")))
         val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default)
-        val fleet = Fleet(p, scope)
+        val fleet = Fleet(p, scope, stockHelper = { null }) // not installed, whatever this machine has in /opt
         val deadline = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < deadline && (fleet.printers["paxx"]?.capabilities?.value == null || fleet.printers["stock"]?.problem?.value == null)) Thread.sleep(100)
         assertNotNull("PAXX printer opened through the PAXX adapter", fleet.printers["paxx"]!!.capabilities.value)

@@ -79,7 +79,18 @@ class PaxxLanAdapterTest {
             assertEquals(CameraKind.WEBRTC, cams[0].kind)
             assertEquals("${fake.address}/webcam/webrtc", cams[0].url)
             assertEquals("JPEGDATA", String(s.snapshot(cams[0])))
+            // The same camera is shown live as MJPEG, on the printer's own host.
+            assertEquals("${fake.address}/webcam/stream.mjpg", cams[0].liveUrl)
+            val frames = s.liveStream(cams[0]).use { input -> val r = MjpegReader(input); listOfNotNull(r.next(), r.next(), r.next()) }
+            assertEquals(listOf(listOf(0xFF, 0xD8, 1, 2, 3, 0xFF, 0xD9), listOf(0xFF, 0xD8, 4, 5, 0xFF, 0xD9)), frames.map { f -> f.map { it.toInt() and 0xFF } })
         }
+    }
+
+    @Test fun mjpegStreamerCamerasAreLiveToo() {
+        val cams = U1Protocol.cameras(org.json.JSONArray().put(JSONObject().put("name", "webcam").put("service", "mjpegstreamer-adaptive")
+            .put("stream_url", "/webcam/?action=stream").put("snapshot_url", "/webcam/?action=snapshot")))
+        assertEquals(CameraKind.MJPEG_STREAM, cams.single().kind)
+        assertEquals("/webcam/?action=stream", cams.single().liveUrl)
     }
 
     @Test fun uploadSucceedsAndReportsProgress() = FakeMoonraker().use { fake ->

@@ -27,6 +27,18 @@ class FakeMoonraker(var paxx: Boolean = true) : AutoCloseable {
                 val (k, v) = (p.split('=', limit = 2) + "").take(2); URLDecoder.decode(k, "UTF-8") to URLDecoder.decode(v, "UTF-8") } ?: emptyMap()
             val path = ex.requestURI.path
             if (path == "/server/files/upload" && dropUpload) { ex.requestBody.readNBytes(1024); ex.close(); return@createContext }
+            if (path == "/webcam/stream.mjpg") { // camera-streamer's MJPEG: two frames, one with Content-Length and one without
+                calls += Call(ex.requestMethod, path, q, "")
+                ex.responseHeaders.add("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+                ex.sendResponseHeaders(200, 0)
+                ex.responseBody.use { o ->
+                    val f1 = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3, 0xFF.toByte(), 0xD9.toByte())
+                    val f2 = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 4, 5, 0xFF.toByte(), 0xD9.toByte())
+                    o.write("--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${f1.size}\r\n\r\n".toByteArray()); o.write(f1)
+                    o.write("\r\n--frame\r\nContent-Type: image/jpeg\r\n\r\n".toByteArray()); o.write(f2); o.write("\r\n".toByteArray())
+                }
+                return@createContext
+            }
             val body = ex.requestBody.readBytes()
             calls += Call(ex.requestMethod, path, q, if (path == "/server/files/upload") "<${body.size} bytes>" else String(body))
             val (code, text) = route(ex.requestMethod, path, q, body)

@@ -44,7 +44,7 @@ enum class Destination(val label: String, val icon: NzIcon, val key: Key) {
 }
 
 class AppState(val paths: AppPaths, val scope: CoroutineScope) {
-    val fleet = Fleet(paths, scope) { System.err.println(it) }
+    val fleet = Fleet(paths, scope, log = { System.err.println(it) })
     val library = ProjectLibrary(paths)
     val prepare = PrepareState(this)
     val workspace = AdvancedWorkspace(paths)
@@ -57,7 +57,24 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
     fun openPrinter(id: String) { selectedPrinter = id; destination = Destination.MONITOR }
 }
 
-fun main() = application {
+/**
+ * Names the window class "nozzle-it-all" on Linux (X11 and XWayland), so the dock and task switcher match windows to the
+ * installed launcher (StartupWMClass) and show the Nozzle It All icon instead of a generic one. Java otherwise uses the
+ * main class name. Must run before the first window is created.
+ */
+private fun setLinuxWindowClass() {
+    if (!System.getProperty("os.name").orEmpty().startsWith("Linux")) return
+    runCatching {
+        val toolkit = java.awt.Toolkit.getDefaultToolkit()
+        val field = toolkit.javaClass.getDeclaredField("awtAppClassName")
+        field.isAccessible = true
+        field.set(toolkit, "nozzle-it-all")
+    }
+}
+
+fun main() { setLinuxWindowClass(); runApp() }
+
+private fun runApp() = application {
     val paths = remember { AppPaths.resolve().ensure() }
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     val state = remember { AppState(paths, scope) }

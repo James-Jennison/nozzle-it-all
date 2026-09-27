@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Nozzle It All
+GenericName=3D printer manager and slicer
+Comment=Prepare, slice, send and monitor prints on your own printers
+Exec=/opt/nozzle-it-all/bin/nozzle-it-all %F
+Icon=nozzle-it-all
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+Keywords=3D;printer;slicer;Klipper;Snapmaker;PAXX;
+MimeType=model/3mf;model/stl;
+StartupWMClass=nozzle-it-all
+StartupNotify=true

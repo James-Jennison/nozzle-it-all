@@ -101,6 +101,15 @@ fun StatusPill(state: PrinterState, modifier: Modifier = Modifier) {
     }
 }
 
+/** A small labelled marker (for example "Live" on a camera); words and colour, never colour alone. */
+@Composable
+fun Pill(text: String, color: Color, modifier: Modifier = Modifier) {
+    Row(modifier.clip(RoundedCornerShape(NozzleTokens.Radius.chip)).border(1.dp, color, RoundedCornerShape(NozzleTokens.Radius.chip))
+        .padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Txt(text, Nz.type.label, color)
+    }
+}
+
 @Composable
 fun RouteBadge(route: ConnectionRoute) {
     val c = Nz.colors

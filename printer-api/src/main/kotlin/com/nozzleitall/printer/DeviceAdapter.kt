@@ -52,6 +52,11 @@ interface PrinterSession : AutoCloseable {
     fun status(): PrinterStatus
     fun cameras(): List<CameraEndpoint>
     fun snapshot(camera: CameraEndpoint): ByteArray
+    /**
+     * The camera's live MJPEG stream (read frames with [MjpegReader]); the caller closes it. Read-only. Only for cameras
+     * with a [CameraEndpoint.liveUrl]; sessions that can't stream keep this default.
+     */
+    fun liveStream(camera: CameraEndpoint): java.io.InputStream = throw java.io.IOException("This camera has no live stream Nozzle It All can show.")
     fun upload(file: File, remoteName: String, progress: UploadProgress = UploadProgress { _, _ -> }): UploadResult
     /** Performs an already-confirmed action exactly once. Callers must go through [ActionGuard]. */
     fun perform(action: PrinterAction): ActionOutcome

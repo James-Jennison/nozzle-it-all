@@ -124,8 +124,10 @@ object U1Protocol {
             if (name.equals("gui", true) || Regex("/screen(?:/|$)", RegexOption.IGNORE_CASE).containsMatchIn(stream)) return@mapNotNull null
             val id = w.optString("uid").ifBlank { name }
             when {
-                stream.contains("webrtc", true) -> CameraEndpoint(id, name, CameraKind.WEBRTC, stream, snap.ifBlank { null })
-                stream.isNotBlank() && w.optString("service").contains("mjpeg", true) -> CameraEndpoint(id, name, CameraKind.MJPEG_STREAM, stream, snap.ifBlank { null })
+                // camera-streamer serves the same camera as MJPEG beside WebRTC (…/stream.mjpg), which Nozzle shows live itself.
+                stream.contains("webrtc", true) -> CameraEndpoint(id, name, CameraKind.WEBRTC, stream, snap.ifBlank { null },
+                    liveUrl = stream.substringBeforeLast('/', "") + "/stream.mjpg")
+                stream.isNotBlank() && w.optString("service").contains("mjpeg", true) -> CameraEndpoint(id, name, CameraKind.MJPEG_STREAM, stream, snap.ifBlank { null }, liveUrl = stream)
                 snap.isNotBlank() -> CameraEndpoint(id, name, CameraKind.SNAPSHOT, snap, snap)
                 else -> null
             }

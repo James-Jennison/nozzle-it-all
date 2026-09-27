@@ -84,33 +84,59 @@ fun CameraPanel(entry: PrinterEntry) {
     val cams = entry.cameras.value
     var image by remember(entry) { mutableStateOf<ImageBitmap?>(null) }
     var problem by remember(entry) { mutableStateOf<String?>(null) }
+    var live by remember(entry) { mutableStateOf(false) }
     val camera = cams.firstOrNull()
+    // The open stream, so leaving the screen closes it at once (a blocking socket read doesn't notice cancellation).
+    val openStream = remember(entry, camera) { java.util.concurrent.atomic.AtomicReference<java.io.InputStream?>(null) }
+    DisposableEffect(entry, camera) { onDispose { openStream.getAndSet(null)?.let { runCatching { it.close() } } } }
     LaunchedEffect(entry, camera) {
         while (isActive && camera != null) {
             val s = entry.session
-            if (s != null && entry.status.value.state != PrinterState.OFFLINE) {
+            if (s == null || entry.status.value.state == PrinterState.OFFLINE) { delay(2_000); continue }
+            if (camera.liveUrl != null) {
+                // Live: every frame the printer sends, decoded as it arrives. On any failure, wait briefly and reconnect.
+                try {
+                    withContext(Dispatchers.IO) {
+                        s.liveStream(camera).use { input ->
+                            openStream.set(input)
+                            val frames = MjpegReader(input)
+                            while (isActive) {
+                                val frame = frames.next() ?: break
+                                val decoded = runCatching { org.jetbrains.skia.Image.makeFromEncoded(frame).toComposeImageBitmap() }.getOrNull() ?: continue
+                                image = decoded; live = true; problem = null
+                            }
+                        }
+                    }
+                } catch (e: Exception) { if (isActive) problem = e.message ?: "Camera unavailable." }
+                finally { openStream.set(null); live = false }
+                delay(2_000)
+            } else {
+                // Only for cameras with no live stream: stills, refreshed often.
                 try {
                     val bytes = withContext(Dispatchers.IO) { s.snapshot(camera) }
                     image = org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap(); problem = null
                 } catch (e: Exception) { problem = e.message ?: "Camera unavailable." }
+                delay(if (entry.status.value.state.isActiveJob) 1_000 else 3_000)
             }
-            delay(if (entry.status.value.state.isActiveJob) 1_500 else 5_000)
         }
     }
     Card(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(NzIcon.CAMERA, c.textMuted, 18.dp); Spacer(Modifier.width(8.dp))
             Txt(camera?.name?.replaceFirstChar { it.uppercase() } ?: "Camera", Nz.type.title, modifier = Modifier.weight(1f))
-            if (camera?.kind == CameraKind.WEBRTC) NzButton("Open live video", { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(camera.url.replace("/webrtc", "/player"))) } }, kind = ButtonKind.QUIET)
+            if (live) Pill("Live", c.accent)
         }
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(c.surfaceSunken), contentAlignment = Alignment.Center) {
             when {
                 camera == null -> Txt(if (entry.capabilities.value?.camera == false) "Nozzle It All can't show this printer's camera." else "No camera found on this printer.", Nz.type.body, c.textMuted)
-                image != null -> androidx.compose.foundation.Image(image!!, "Camera view of ${entry.config.identity.displayName}", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                image != null -> androidx.compose.foundation.Image(image!!, "Live camera view of ${entry.config.identity.displayName}", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                 else -> Txt(problem ?: "Connecting to the camera…", Nz.type.body, c.textMuted)
             }
         }
-        if (image != null) Txt("Still images refresh every few seconds. The live video opens in your browser, straight from the printer.", Nz.type.bodySmall, c.textMuted)
+        when {
+            camera?.liveUrl == null && image != null -> Txt("This camera only offers still images, so they refresh every second or so.", Nz.type.bodySmall, c.textMuted)
+            !live && image != null && problem != null -> Txt("The live feed dropped ($problem). Reconnecting…", Nz.type.bodySmall, c.textMuted)
+        }
     }
 }
 

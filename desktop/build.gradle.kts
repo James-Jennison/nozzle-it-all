@@ -55,7 +55,9 @@ tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(pr
 compose.desktop {
  application {
   mainClass = "com.nozzleitall.desktop.MainKt"
-  jvmArgs += listOf("-Dnozzle.version=${nozzleVersion.get()}", "-Dsun.java2d.uiScale.enabled=true")
+  jvmArgs += listOf("-Dnozzle.version=${nozzleVersion.get()}", "-Dsun.java2d.uiScale.enabled=true",
+   // Lets Main.kt name the window class so Linux docks show the right icon.
+   "--add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED")
   nativeDistributions {
    appResourcesRootDir.set(engineResources)
    targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Msi)

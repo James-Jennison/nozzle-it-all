@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useStore } from '../store';
 import { navigate, savePrinters, store } from '../state';
 import { Banner, Confirm, Field, Notice, Progress, RouteBadge, StatusPill, fmtDuration } from '../ui';
-import { ActionGuard, MoonrakerClient } from '../../printers/paxx';
+import { ActionGuard, Camera, MoonrakerClient } from '../../printers/paxx';
 import { Action, Capabilities, directCapabilities, PrinterStatus, SavedPrinter, allowedStates, familyDescription, familyLabel, fullSpectrumOf, readCapabilities, routeFor, stateDescription, summary } from '../../printers/model';
 import { ConnectorClient, connector } from '../../printers/connector';
 import { glossary } from '../../design/glossary';
@@ -150,8 +150,14 @@ function PrinterDetail({ id }: { id: string }) {
   const live = usePrinter(id);
   const [pending, setPending] = useState<Action | null>(null);
   const [message, setMessage] = useState<{ text: string; kind: 'success' | 'warning' | 'danger' } | null>(null);
+  const [cams, setCams] = useState<Camera[] | null>(null);
   const [snap, setSnap] = useState(0);
-  useEffect(() => { const t = setInterval(() => setSnap((n) => n + 1), 3000); return () => clearInterval(t); }, []);
+  const [camFailed, setCamFailed] = useState(false);
+  const camera = cams?.[0];
+  useEffect(() => {
+    if (live && live.saved.via === 'direct' && live.client instanceof MoonrakerClient) live.client.cameras().then(setCams); else setCams([]);
+  }, [live?.saved.id, live?.saved.address, live?.saved.via]);
+  useEffect(() => { setCamFailed(false); if (!camera || camera.liveUrl) return; const t = setInterval(() => setSnap((n) => n + 1), 1000); return () => clearInterval(t); }, [camera?.liveUrl, camera?.snapshotUrl]);
   if (!live) return <Banner kind="warning">That printer isn't saved in this browser. <a href="#/printers">Back to printers</a></Banner>;
   const st = live.status;
   const blocked = live.guard.needsReconcile;
@@ -159,7 +165,8 @@ function PrinterDetail({ id }: { id: string }) {
   const supported: Record<Action['kind'], boolean> = { start: k.start_print, pause: k.pause_print, resume: k.resume_print, cancel: k.cancel_print, home: k.motion, nozzleTemperature: k.temperatures, bedTemperature: k.temperatures };
   const offer = (a: Action) => !!st && !blocked && supported[a.kind] && allowedStates[a.kind].includes(st.state);
   const term = pending ? glossary.terms[({ start: 'action.start', pause: 'action.pause', resume: 'action.resume', cancel: 'action.cancel', nozzleTemperature: 'action.heat', bedTemperature: 'action.heat', home: 'action.home' } as const)[pending.kind]] : null;
-  const cam = live.saved.via === 'direct' && k.camera ? `${live.saved.address.replace(/\/+$/, '')}/webcam/snapshot.jpg?n=${snap}` : null;
+  // Always the live stream when the camera has one; stills (refreshed every second) only for cameras without.
+  const cam = !camera ? null : camera.liveUrl ?? (camera.snapshotUrl ? `${camera.snapshotUrl}${camera.snapshotUrl.includes('?') ? '&' : '?'}n=${snap}` : null);
   return (
     <>
       <div class="page-head">
@@ -171,8 +178,11 @@ function PrinterDetail({ id }: { id: string }) {
       <div class="split">
         <section class="card" aria-label="Camera and job">
           <h2>Camera</h2>
-          {cam ? <img src={cam} alt={`Camera view of ${live.saved.name}`} style={{ width: '100%', borderRadius: 12, background: 'var(--surface-sunken)', minHeight: 180 }} crossOrigin="anonymous" onError={(e) => ((e.target as HTMLImageElement).alt = 'Camera image unavailable in this browser. Open it on your printer or use Nozzle It All for Desktop.')} />
-            : <p class="muted">Camera images through the local connector appear in Nozzle It All for Desktop.</p>}
+          {cam && !camFailed ? <><img src={cam} alt={`${camera?.liveUrl ? 'Live camera' : 'Camera'} view of ${live.saved.name}`} style={{ width: '100%', borderRadius: 12, background: 'var(--surface-sunken)', minHeight: 180 }}
+              onError={() => setCamFailed(true)} />{camera?.liveUrl ? <p class="small muted">Live from the printer.</p> : <p class="small muted">This camera only offers still images, so they refresh every second.</p>}</>
+            : <p class="muted">{live.saved.via === 'connector' ? 'Camera video through the local connector appears in Nozzle It All for Desktop.'
+              : camFailed ? "This browser couldn't show the printer's camera. A secure page can't load a printer's plain local address; Nozzle It All for Desktop shows it live."
+              : cams === null ? 'Looking for cameras…' : 'No camera found on this printer.'}</p>}
           <h2>Current job</h2>
           {st?.job ? <><p>{st.job.fileName}</p><Progress value={st.job.fraction} label="Print progress" />
             <div class="metrics"><div><span class="small muted">Done</span><span class="metric">{Math.round(st.job.fraction * 100)}%</span></div>

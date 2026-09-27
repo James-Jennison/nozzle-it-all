@@ -56,3 +56,20 @@ describe('PAXX status (web)', () => {
     expect(performed).toBe(1);
   });
 });
+
+describe('cameras', () => {
+  it('shows camera-streamer and mjpeg-streamer cameras live, and skips the screen mirror', async () => {
+    const { parseCameras } = await import('../src/printers/paxx');
+    const cams = parseCameras([
+      { name: 'case', service: 'webrtc-camerastreamer', stream_url: '/webcam/webrtc', snapshot_url: '/webcam/snapshot.jpg' },
+      { name: 'gui', stream_url: '/screen/', snapshot_url: '' },
+      { name: 'webcam', service: 'mjpegstreamer-adaptive', stream_url: '/webcam/?action=stream', snapshot_url: '/webcam/?action=snapshot' },
+      { name: 'still', service: 'other', stream_url: '', snapshot_url: '/snap.jpg' },
+    ], 'http://192.168.1.113/');
+    expect(cams).toEqual([
+      { name: 'case', liveUrl: 'http://192.168.1.113/webcam/stream.mjpg', snapshotUrl: 'http://192.168.1.113/webcam/snapshot.jpg' },
+      { name: 'webcam', liveUrl: 'http://192.168.1.113/webcam/?action=stream', snapshotUrl: 'http://192.168.1.113/webcam/?action=snapshot' },
+      { name: 'still', snapshotUrl: 'http://192.168.1.113/snap.jpg' },
+    ]);
+  });
+});

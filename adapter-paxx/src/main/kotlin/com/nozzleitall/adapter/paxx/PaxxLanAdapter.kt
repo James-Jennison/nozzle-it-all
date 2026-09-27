@@ -93,7 +93,11 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
     }
 
     override fun cameras(): List<CameraEndpoint> = U1Protocol.cameras((m.get("server/webcams/list") as JSONObject).getJSONArray("webcams"))
-        .map { it.copy(url = m.base.resolve(it.url).toString(), snapshotUrl = it.snapshotUrl?.let { s -> m.base.resolve(s).toString() }) }
+        .map { it.copy(url = m.base.resolve(it.url).toString(), snapshotUrl = it.snapshotUrl?.let { s -> m.base.resolve(s).toString() },
+            liveUrl = it.liveUrl?.let { s -> m.base.resolve(s).toString() }) }
+
+    override fun liveStream(camera: CameraEndpoint): java.io.InputStream =
+        m.stream(camera.liveUrl ?: throw IOException("This camera has no live stream Nozzle It All can show."))
 
     override fun snapshot(camera: CameraEndpoint): ByteArray {
         val target = camera.snapshotUrl ?: throw IOException("This camera has no still-image address; open its live stream instead.")

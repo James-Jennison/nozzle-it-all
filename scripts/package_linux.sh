@@ -25,10 +25,34 @@ VERSION="$(cd "$ROOT" && ./gradlew -q :desktop:properties --property version 2>/
 
 echo "== Desktop ($VERSION)"
 (cd "$ROOT" && ./gradlew -q :desktop:packageDeb :stock-u1-adapter:installDist -PnozzleEngine="$ENGINE")
-cp "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb "$OUT/"
+STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
+
+# Desktop integration jpackage doesn't do well: its postinst registers a launcher with xdg-desktop-menu, which silently
+# does nothing on current Ubuntu, and names it "nozzle-it-all" with no StartupWMClass, so docks show a generic icon.
+# Ship a proper launcher and themed icons in the standard places instead; the app names its window class to match.
+PKG="$STAGE/desktop"
+dpkg-deb -R "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb "$PKG"
+install -Dm644 "$ROOT/desktop/packaging/linux/nozzle-it-all.desktop" "$PKG/usr/share/applications/nozzle-it-all.desktop"
+for size in 16 32 48 64 128 256 512; do
+  install -Dm644 "$ROOT/desktop/packaging/icons/nozzle-it-all-$size.png" "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/nozzle-it-all.png"
+done
+install -Dm644 "$ROOT/desktop/packaging/icons/nozzle-it-all.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/nozzle-it-all.svg"
+rm -f "$PKG/opt/nozzle-it-all/lib/nozzle-it-all-nozzle-it-all.desktop"
+sed -i '/xdg-desktop-menu/d' "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/prerm"
+cat > "$STAGE/refresh" <<'EOF'
+if [ "$1" = configure ] || [ "$1" = remove ]; then
+  command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+  command -v update-desktop-database >/dev/null && update-desktop-database -q /usr/share/applications || true
+fi
+EOF
+for script in postinst postrm; do
+  [ -f "$PKG/DEBIAN/$script" ] || printf '#!/bin/sh\nset -e\n' > "$PKG/DEBIAN/$script"
+  sed -i '/^exit 0$/d' "$PKG/DEBIAN/$script"; cat "$STAGE/refresh" >> "$PKG/DEBIAN/$script"; echo "exit 0" >> "$PKG/DEBIAN/$script"
+  chmod 755 "$PKG/DEBIAN/$script"
+done
+fakeroot dpkg-deb --build "$PKG" "$OUT/$(basename "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb)" >/dev/null
 
 echo "== Stock U1 adapter"
-STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 PKG="$STAGE/stock"
 mkdir -p "$PKG/DEBIAN" "$PKG/opt/nozzle-stock-u1-adapter"
 cp -r "$ROOT/stock-u1-adapter/build/install/nozzle-stock-u1-adapter/lib" "$PKG/opt/nozzle-stock-u1-adapter/"
@@ -63,6 +87,15 @@ if [ -n "$WORKSPACE" ]; then
   PKG="$STAGE/workspace"
   mkdir -p "$PKG/DEBIAN" "$PKG/opt/nozzle-advanced-workspace"
   cp -a "$WORKSPACE"/. "$PKG/opt/nozzle-advanced-workspace/"
+  # Its own launcher (hidden from menus; Desktop opens it) so docks match the window class and show its icon.
+  install -Dm644 "$WORKSPACE/resources/applications/com.nozzleitall.AdvancedWorkspace.desktop" "$PKG/usr/share/applications/com.nozzleitall.AdvancedWorkspace.desktop"
+  sed -i -e 's#^Exec=.*#Exec=/opt/nozzle-advanced-workspace/bin/nozzle-advanced-workspace %U#' -e '$a NoDisplay=true' "$PKG/usr/share/applications/com.nozzleitall.AdvancedWorkspace.desktop"
+  for size in 16 32 48 64 128 256 512; do
+    install -Dm644 "$WORKSPACE/resources/images/nozzle-advanced-workspace_${size}px.png" "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/com.nozzleitall.AdvancedWorkspace.png"
+  done
+  install -Dm644 "$WORKSPACE/resources/images/nozzle-advanced-workspace.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/com.nozzleitall.AdvancedWorkspace.svg"
+  printf '#!/bin/sh\nset -e\n' > "$PKG/DEBIAN/postinst"; cat "$STAGE/refresh" >> "$PKG/DEBIAN/postinst"; echo "exit 0" >> "$PKG/DEBIAN/postinst"
+  cp "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/postrm"; chmod 755 "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/postrm"
   WS_BIN="$(cd "$PKG/opt/nozzle-advanced-workspace" && find . -type f -name nozzle-advanced-workspace -perm -u+x | head -1)"
   [ -n "$WS_BIN" ] || { echo "no nozzle-advanced-workspace executable under $WORKSPACE" >&2; exit 1; }
   cat > "$PKG/DEBIAN/control" <<EOF

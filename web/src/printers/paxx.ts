@@ -63,6 +63,19 @@ export function parseStatus(result: J, route: Route, observedAt = Date.now()): P
     toolheads: heads, message, observedAt, extensions: cfg ? { [FULL_SPECTRUM]: toExtension(fullSpectrum(heads, true)) } : {} };
 }
 
+export interface Camera { name: string; liveUrl?: string; snapshotUrl?: string }
+/** Moonraker's webcam list, same rules as U1Protocol.cameras (Kotlin): camera-streamer's MJPEG beside WebRTC, the screen mirror skipped. */
+export function parseCameras(webcams: J[], base: string): Camera[] {
+  const abs = (u: string) => (u ? new URL(u, base).href : undefined);
+  return webcams.filter((w) => w && w.enabled !== false).flatMap((w): Camera[] => {
+    const stream = String(w.stream_url ?? ''), snap = String(w.snapshot_url ?? ''), name = String(w.name ?? 'Camera');
+    if (name.toLowerCase() === 'gui' || /\/screen(?:\/|$)/i.test(stream)) return [];
+    if (/webrtc/i.test(stream)) return [{ name, liveUrl: abs(stream.slice(0, stream.lastIndexOf('/')) + '/stream.mjpg'), snapshotUrl: abs(snap) }];
+    if (stream && /mjpeg/i.test(String(w.service ?? ''))) return [{ name, liveUrl: abs(stream), snapshotUrl: abs(snap) }];
+    return snap ? [{ name, snapshotUrl: abs(snap) }] : [];
+  });
+}
+
 export function validateRemotePath(p: string): string {
   if (!p || p.length > 255 || p.startsWith('/') || p.includes('\\') || p.split('/').some((s) => s === '..' || s === '.' || s === '')) throw new Error('Invalid file name on the printer.');
   return p;
@@ -123,6 +136,10 @@ export class MoonrakerClient {
       if (!r.ok) throw Object.assign(new Error(`The printer refused the request (HTTP ${r.status}).`), { rejected: true });
       return json?.result;
     } finally { clearTimeout(t); }
+  }
+
+  async cameras(): Promise<Camera[]> {
+    try { return parseCameras((await this.call('server/webcams/list', {}))?.webcams ?? [], this.base()); } catch { return []; }
   }
 
   async status(): Promise<PrinterStatus> {

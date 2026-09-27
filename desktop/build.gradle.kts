@@ -77,3 +77,8 @@ val verifyPaxxBaseline = tasks.register("verifyPaxxBaseline") {
  }
 }
 tasks.named("check") { dependsOn(verifyPaxxBaseline) }
+
+tasks.withType<Test>().configureEach {
+ // LocalConnectorTest sends a forged Host header to prove the DNS-rebinding check.
+ systemProperty("sun.net.http.allowRestrictedHeaders", "true")
+}

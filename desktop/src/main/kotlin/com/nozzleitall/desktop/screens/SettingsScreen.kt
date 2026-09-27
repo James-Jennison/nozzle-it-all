@@ -47,6 +47,7 @@ fun SettingsScreen(state: AppState) {
                 if (installed) "Starts only when a Stock U1 printer is opened." else "Install nozzle-stock-u1-adapter to turn this on.")
             if (fleet.settings.value.stockU1Enabled && installed) StockAccountPanel(state)
         }
+        ConnectorPanel(state)
         Card(Modifier.fillMaxWidth()) {
             Txt("Your data", Nz.type.title)
             Txt(Glossary.explanations.getValue("cloud"), Nz.type.body, c.textMuted)
@@ -64,6 +65,31 @@ fun SettingsScreen(state: AppState) {
                 NzButton("Licences", { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI("https://nozzleitall.com/open-source/")) } }, kind = ButtonKind.QUIET)
             }
         }
+    }
+}
+
+@Composable
+private fun ConnectorPanel(state: AppState) {
+    val c = Nz.colors
+    var on by remember { mutableStateOf(state.connector.running) }
+    var code by remember { mutableStateOf<String?>(null) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    Card(Modifier.fillMaxWidth()) {
+        Txt("Nozzle It All Web on this computer", Nz.type.title)
+        Txt("Browsers limit what a web page can reach on your network. Turn this on to let Nozzle It All Web, open in a browser on this computer, " +
+            "use the printers you've added here. It only listens on this computer, only answers Nozzle's own web app, and only after you pair the browser.", Nz.type.body, c.textMuted)
+        problem?.let { Banner(it, BannerKind.WARNING) }
+        Toggle("Allow Nozzle It All Web to use these printers", on, { v ->
+            problem = null
+            if (v) runCatching { state.connector.start() }.onFailure { problem = "Couldn't start: ${it.message}. Another program may be using port ${state.connector.port}." }
+            else { state.connector.stop(); code = null }
+            on = state.connector.running
+        })
+        if (on) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NzButton("Pair a browser", { code = state.connector.newPairingCode() }, kind = ButtonKind.SECONDARY)
+            NzButton("Forget paired browsers (${state.connector.pairedCount})", { state.connector.forgetAll(); code = null }, kind = ButtonKind.QUIET)
+        }
+        code?.let { Txt("Pairing code: $it", Nz.type.metric); Txt("Enter it in Nozzle It All Web under Settings within two minutes. It works once.", Nz.type.bodySmall, c.textMuted) }
     }
 }
 

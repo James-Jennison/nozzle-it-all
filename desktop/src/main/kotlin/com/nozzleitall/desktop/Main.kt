@@ -48,6 +48,8 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
     val library = ProjectLibrary(paths)
     val prepare = PrepareState(this)
     val workspace = AdvancedWorkspace(paths)
+    /** Off unless the user turns it on in Settings: lets Nozzle It All Web on this computer reach these printers. */
+    val connector = com.nozzleitall.desktop.connector.LocalConnector(fleet, java.io.File(paths.config, "connector-tokens.json"))
     var destination by mutableStateOf(Destination.FLEET)
     var selectedPrinter by mutableStateOf<String?>(null)
     val version: String = System.getProperty("nozzle.version") ?: "0.1.0-dev"
@@ -59,7 +61,7 @@ fun main() = application {
     val paths = remember { AppPaths.resolve().ensure() }
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     val state = remember { AppState(paths, scope) }
-    Window(onCloseRequest = { state.fleet.shutdown(); exitApplication() }, title = Glossary.PRODUCT_FAMILY,
+    Window(onCloseRequest = { state.connector.stop(); state.fleet.shutdown(); exitApplication() }, title = Glossary.PRODUCT_FAMILY,
         icon = painterResource("brand/mark-violet.svg"), state = rememberWindowState(size = DpSize(1360.dp, 860.dp)),
         onPreviewKeyEvent = { e ->
             // Ctrl+1..7 and Ctrl+, move between places, like other desktop apps; plain keys stay with text fields.

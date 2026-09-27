@@ -130,6 +130,10 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
 
     override fun upload(file: File, remoteName: String, progress: UploadProgress): UploadResult = try {
         require(file.isFile) { "The file to upload does not exist." }
+        file.bufferedReader().useLines { U1Protocol.stockElegooCommand(it) }?.let { cmd ->
+            return UploadResult.Failed("This file was sliced for Elegoo's stock firmware (it uses $cmd), which Klipper printers don't have; " +
+                "COSMOS stops the printer on it. Slice again with this printer's own profile.")
+        }
         UploadResult.Uploaded(m.upload(file, U1Protocol.validateRemotePath(remoteName)) { s, t -> progress.onProgress(s, t) })
     } catch (e: UploadInterrupted) { UploadResult.Interrupted(e.message ?: "The upload was interrupted.") }
       catch (e: IllegalArgumentException) { UploadResult.Failed(e.message ?: "Invalid upload.") }

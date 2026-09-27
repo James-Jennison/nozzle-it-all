@@ -84,3 +84,20 @@ class FilamentLanesTest {
         }
     }
 }
+
+class StockElegooGuardTest {
+    @Test fun findsStockFirmwareCommands() {
+        assertEquals("M729", U1Protocol.stockElegooCommand(sequenceOf("G28", "  m729 ; clean nozzle", "M8213")))
+        assertNull(U1Protocol.stockElegooCommand(sequenceOf("PRINT_START EXTRUDER=220", "; M729 in a comment", "M7290", "T1 PURGE_LENGTH=30")))
+    }
+
+    @Test fun moonrakerRefusesAStockElegooFileWithoutSendingIt() = FakeMoonraker(paxx = false).use { fake ->
+        val f = java.io.File.createTempFile("stock", ".gcode").apply { deleteOnExit(); writeText("G28\nM729\nG1 X10\n") }
+        val config = PrinterConfig(PrinterIdentity("cc", "Centauri", "Elegoo Centauri Carbon", PrinterFamily.KLIPPER, fake.address), MoonrakerAdapter.ID)
+        MoonrakerAdapter().open(config).use { s ->
+            val r = s.upload(f, "cube.gcode")
+            assertTrue(r is UploadResult.Failed && "M729" in r.reason)
+            assertTrue(fake.calls.none { it.path == "/server/files/upload" })
+        }
+    }
+}

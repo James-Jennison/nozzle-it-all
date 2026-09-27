@@ -126,6 +126,14 @@ export function parseCameras(webcams: J[], base: string): Camera[] {
   });
 }
 
+/**
+ * The first Elegoo stock-firmware command in a G-code file, if any (port of U1Protocol.stockElegooCommand). Klipper has
+ * neither; OpenCentauri COSMOS 26.07+ deliberately emergency-stops on both, so such a file never goes to a Moonraker printer.
+ */
+export function stockElegooCommand(gcode: string): string | undefined {
+  return /^[ \t]*(M729|M8213)\b/im.exec(gcode)?.[1]?.toUpperCase();
+}
+
 export function validateRemotePath(p: string): string {
   if (!p || p.length > 255 || p.startsWith('/') || p.includes('\\') || p.split('/').some((s) => s === '..' || s === '.' || s === '')) throw new Error('Invalid file name on the printer.');
   return p;
@@ -224,6 +232,8 @@ export class MoonrakerClient {
 
   async upload(name: string, bytes: Uint8Array, onProgress?: (f: number) => void): Promise<{ ok: true; path: string } | { ok: false; interrupted: boolean; reason: string }> {
     const path = validateRemotePath(name);
+    const stock = stockElegooCommand(new TextDecoder().decode(bytes));
+    if (stock) return { ok: false, interrupted: false, reason: `This file was sliced for Elegoo's stock firmware (it uses ${stock}), which Klipper printers don't have; COSMOS stops the printer on it. Slice again with this printer's own profile.` };
     const form = new FormData();
     form.set('root', 'gcodes');
     const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';

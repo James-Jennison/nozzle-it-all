@@ -161,6 +161,15 @@ object U1Protocol {
         return JSONObject().put("path", path).put("print_plate", 1).apply { if (pairs.isNotEmpty()) put("options", JSONObject().put("map_table", "[$pairs]")) }
     }
 
+    private val stockElegoo = Regex("""^\s*(M729|M8213)\b""", RegexOption.IGNORE_CASE)
+
+    /**
+     * The first Elegoo stock-firmware command in a G-code file, if any. Klipper has neither; OpenCentauri COSMOS 26.07+
+     * deliberately emergency-stops on both (docs.opencentauri.cc, troubleshooting/printing), so a file sliced with a
+     * stock Centauri Carbon profile must never reach a Moonraker printer.
+     */
+    fun stockElegooCommand(lines: Sequence<String>): String? = lines.firstNotNullOfOrNull { stockElegoo.find(it)?.groupValues?.get(1)?.uppercase() }
+
     fun validateRemotePath(path: String): String {
         require(path.isNotBlank() && path.length <= 255 && !path.startsWith('/') && '\\' !in path && path.split('/').none { it == ".." || it == "." || it.isEmpty() }) { "Invalid file name on the printer." }
         return path

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { ActionGuard, applyLanes, commandFor, lanesFromHappyHare, lanesFromLaneData, mapState, parseStatus } from '../src/printers/paxx';
+import { ActionGuard, applyLanes, commandFor, lanesFromHappyHare, lanesFromLaneData, mapState, parseStatus, stockElegooCommand } from '../src/printers/paxx';
 import { Action, FULL_SPECTRUM, KNOWN_FAMILIES, Outcome, PrinterStatus, familyLabel, fullSpectrumOf, migratePrinter, readCapabilities, routeFor } from '../src/printers/model';
 
 // The same recorded U1 status the Kotlin PAXX adapter is tested with.
@@ -101,5 +101,12 @@ describe('filament-changer lanes (AFC, Happy Hare)', () => {
     expect(s.toolheads.map((h) => h.active)).toEqual([false, true, false, false]);
     expect(s.toolheads[1].material).toEqual({ type: 'PETG', colorHex: '#00FF00', fromTag: false });
     expect(s.toolheads[2].material).toBeUndefined();
+  });
+});
+
+describe('stock Elegoo guard', () => {
+  it('finds M729/M8213 commands but not comments', () => {
+    expect(stockElegooCommand('G28\n  m729 ; clean\nM8213\n')).toBe('M729');
+    expect(stockElegooCommand('PRINT_START EXTRUDER=220\n; M729 in a comment\nM7290\n')).toBeUndefined();
   });
 });

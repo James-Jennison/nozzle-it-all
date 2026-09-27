@@ -146,3 +146,30 @@ interchange).
   - Filament profiles per slot are bundled for the Snapmaker U1 (0.4 nozzle) only so far.
 - **Touches:** PAXX (U1), slicing, shared UI, project interchange.
 
+## P-0009 — PrusaSlicer ColorMix (virtual extruders) (ported)
+
+- **Upstream:** PrusaSlicer `version_2.9.6` (github.com/prusa3d/PrusaSlicer): `src/libslic3r/Feature/FullSpectrum/
+  VirtualExtruder.{hpp,cpp}` and its integration in PrintObject, Print, PrintRegion, PrintApply, PrintObjectSlice,
+  MultiMaterialSegmentation and TriangleSelector; `bundled_deps/prusa_fdm_mixer` (MIT); FullSpectrumDialog's
+  numbering; presets from 3.0.0-alpha12's `VirtualExtruderPresets.cpp` (2.9.6 builds them inside its dialog). AGPL-3.0.
+- **Imported:** into the Snapmaker-based engine patch (engine/snapmaker/nozzle-engine.patch); slicing takes the virtual
+  extruders through a `virtual_extruders` request line (PrusaSlicer's sidecar format); `nozzle-engine --color-mix`
+  (engine/native/bridge/color_mix.cpp) serves normalising, colour prediction, layer cycles, presets, numbering and
+  the import remap to Nozzle's screens (desktop/.../prepare/PrusaColorMix*.kt). Projects keep PrusaSlicer's own
+  `Metadata/Prusa_Slicer_full_spectrum.json`.
+- **Also fixed in the engine patch:** Snapmaker's `Print::m_isBBLPrinter` was never initialised headless (its GUI and
+  CLI set it), so headless slices picked Bambu-style or generic G-code at random; it is now false, as upstream Orca.
+- **Test evidence:** PrusaColorMixTest: a 2:1 blend normalises to PrusaSlicer's cycle [1,2,1]; a cube on virtual
+  extruder 6 on the Prusa XL 5T prints T0,T1,T0 layer by layer (and painted state 6 likewise, engine-side); numbering,
+  presets and the sidecar round-trip. Snapmaker Full Spectrum tests still pass.
+- **Known divergence:**
+  - Offered only on Prusa profiles with two or more slots (owner rule); PrusaSlicer offers it on any multi-slot printer.
+  - The engine doesn't read the sidecar from the 3MF itself (2.9.6's 3mf.cpp reader isn't ported): Nozzle reads it and
+    passes it with the slice request.
+  - A display colour read from a file is shown but not kept as an override (PrusaSlicer writes the effective colour
+    whether or not it was overridden, so the two can't be told apart).
+  - Bambu profiles now always take the generic G-code path (Snapmaker's CLI sets the flag from printer_model; the bridge
+    doesn't yet).
+  - Gradients are shown and printed from files but, as in PrusaSlicer's dialog, not edited.
+- **Touches:** slicing, Prusa profiles, shared UI, project interchange.
+

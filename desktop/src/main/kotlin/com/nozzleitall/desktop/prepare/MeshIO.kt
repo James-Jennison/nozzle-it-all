@@ -15,7 +15,11 @@ object MeshIO {
     const val MAX_TRIANGLES = 20_000_000
 
     /** A model file's geometry, plus for a 3MF the filaments it was set up with and the one its first object prints with. */
-    class Loaded(val mesh: Mesh, val filaments: List<SourceFilament> = emptyList(), val filament: Int? = null)
+    class Loaded(val mesh: Mesh, val filaments: List<SourceFilament> = emptyList(), val filament: Int? = null,
+                 /** PrusaSlicer's virtual extruders, when the file has them (its ColorMix sidecar). */
+                 val colorMix: List<PrusaColorMix.Virtual> = emptyList(),
+                 /** The ColorMix sidecar as the file has it (for PrusaSlicer's import remap). */
+                 val colorMixSidecar: ByteArray? = null)
 
     fun read(file: File): Mesh = load(file).mesh
 
@@ -32,7 +36,8 @@ object MeshIO {
                 val own = o.filament ?: 1
                 val paint = if (own == (default ?: 1)) o.mesh.paint
                     else Array<String?>(o.mesh.triangleCount) { i -> o.mesh.paint?.get(i)?.let { s -> Paint.remap(s) { if (it == 0) own else it } } ?: Paint.whole(own) }
-                Mesh(v, o.mesh.triangles, paint) }), p.filaments, default)
+                Mesh(v, o.mesh.triangles, paint) }), p.filaments, default,
+                p.passthrough[PrusaColorMix.SIDECAR]?.let { PrusaColorMix.readSidecar(it)?.second }.orEmpty(), p.passthrough[PrusaColorMix.SIDECAR])
         }
         else -> throw ProjectFormatException("Nozzle It All opens STL, OBJ and 3MF files.")
     }

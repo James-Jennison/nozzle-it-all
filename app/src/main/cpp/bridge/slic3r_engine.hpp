@@ -92,11 +92,17 @@ void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, Mo
 // Empirically verified end to end against the real Snapmaker U1 bundled profile - see
 // ToolAssignmentSlicingDeviceTest's own header comment for the real config_overrides recipe that
 // produces genuine, distinct Tx tool-change commands in the sliced G-code.
+//
+// virtual_extruders_json: PrusaSlicer 2.9.6 virtual extruders (colour-mixing blends and gradients), as the text of a
+// Metadata/Prusa_Slicer_full_spectrum.json sidecar. Empty = none. Objects whose tool index is a virtual id, and
+// painted areas whose state is one, then print by PrusaSlicer's layer cycle. Only an engine built with PrusaSlicer's
+// virtual extruders (the desktop's Snapmaker Orca engine) accepts it; others throw.
 void slice_multi_object(const std::vector<std::tuple<std::string, ModelTransform, int>>& objects,
                          const std::string& output_gcode_path,
                          const std::vector<std::string>& profile_paths,
                          const std::vector<std::pair<std::string, std::string>>& config_overrides = {},
-                         const std::vector<ObjectExtras>& extras = {});
+                         const std::vector<ObjectExtras>& extras = {},
+                         const std::string& virtual_extruders_json = {});
 
 // Loads input_model_path (STL/3MF/OBJ) the same way slice_file() does - real Model::read_from_file,
 // bed-centered - but stops short of slicing. Returns 3 floats (the first object's first

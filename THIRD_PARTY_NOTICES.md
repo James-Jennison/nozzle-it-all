@@ -77,6 +77,14 @@ build, fixes ported from upstream OrcaSlicer, and upstream's per-filament flush 
 `engine/snapmaker/ENGINE_PIN.json`; `engine/native/scripts/build_engine_snapmaker.sh` rebuilds it from that commit.
 Android and the Web App still use the upstream OrcaSlicer engine described below until they move too.
 
+## PrusaSlicer ColorMix and prusa_fdm_mixer (desktop slicing engine)
+
+The desktop engine's virtual extruders (colour mixing for Prusa printers) are ported from PrusaSlicer 2.9.6
+(github.com/prusa3d/PrusaSlicer, AGPL-3.0), with presets from PrusaSlicer 3.0.0-alpha12, as part of
+`engine/snapmaker/nozzle-engine.patch` and `engine/native/bridge/color_mix.cpp`. Its colour prediction is
+**prusa_fdm_mixer** (bundled with PrusaSlicer 2.9.6, MIT licence, Copyright Prusa Research), included unchanged with its
+licence notice in the patch. See docs/upstream/PROVENANCE.md P-0009.
+
 ## OrcaSlicer (on-device slicing, WO-13, in progress)
 
 The on-device slicing engine (not yet feature-complete — see

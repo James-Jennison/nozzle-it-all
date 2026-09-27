@@ -22,6 +22,8 @@ data class SliceRequest(
     /** One entry per material slot (1-based order), "#RRGGBB" and a type, from the printer's loaded toolheads or the user. */
     val materials: List<ProjectManifest.MaterialSlot>,
     val extraOverrides: Map<String, String> = emptyMap(),
+    /** PrusaSlicer ColorMix virtual extruders (its sidecar JSON), or null. */
+    val virtualExtruders: String? = null,
 )
 
 data class SliceStats(val layers: Int?, val seconds: Double?, val grams: Double?, val metres: Double?, val toolChanges: Int)
@@ -144,7 +146,7 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             val usedSlots = req.project.objects.maxOfOrNull { o -> maxOf(objectSlots[o.id] ?: 1, paint[o.id]?.second ?: 1) } ?: 1
             val materials = req.materials.sortedBy { it.slot }.ifEmpty { listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")) }
             // Full Spectrum mixes name physical slots by number, so with any mixes every loaded slot is passed to the engine.
-            val mixing = !req.extraOverrides[FullSpectrum.DEFINITIONS_KEY].isNullOrBlank()
+            val mixing = !req.extraOverrides[FullSpectrum.DEFINITIONS_KEY].isNullOrBlank() || req.virtualExtruders != null
             val slots = if (mixing) materials else materials.take(maxOf(usedSlots, 1))
             // Each slot slices with its own filament profile when it has one (one combined per-slot filament file, as a
             // slicer combines its filament presets); otherwise the printer profile's own filament.
@@ -163,6 +165,8 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
                 lines += "set\t$k\t$v"
             }
+            // PrusaSlicer ColorMix: the virtual extruders, in PrusaSlicer's own file format, for the engine to print.
+            req.virtualExtruders?.let { json -> lines += "virtual_extruders\t" + File(job, "virtual_extruders.json").apply { writeText(json) }.absolutePath }
             val (bedW, bedD) = bedOf(File(req.profileDir, "machine.json").readText())
             req.project.objects.forEachIndexed { i, o ->
                 // A painted object goes as a 3MF, which the engine's own importer reads paint from; others as STL.
@@ -199,7 +203,8 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             // A change is a switch to a different tool. The first selection, and start G-code re-selecting the current tool,
             // aren't (same rule as the Web App's gcodeStats in web/src/project/slicing.ts).
             var tool: Int? = null
-            val select = Regex("^T(\\d{1,2})\\s*$")
+            // "T1", or with parameters as Prusa's XL writes it ("T1 S1 L0 D0"); comments after ';' are ignored.
+            val select = Regex("^T(\\d{1,2})(?:\\s+[A-Z][^;]*)?\\s*(?:;.*)?$")
             gcode.useLines { lines -> lines.forEach { l ->
                 when {
                     l.startsWith("; total layer number:") -> layers = l.substringAfter(':').trim().toIntOrNull()

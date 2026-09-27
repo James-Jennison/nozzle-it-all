@@ -208,6 +208,8 @@ private fun MaterialsSection(state: AppState) {
         p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
         // Full Spectrum (Snapmaker Orca's colour mixing), wherever the printer or profile offers it.
         if (com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM in p.features() && slots.size >= 2) ColourMixingSection(p)
+        // PrusaSlicer's Color mix, on Prusa printers with two or more slots.
+        if (com.nozzleitall.printer.ext.Prusa.COLOR_MIX in p.features() && slots.size >= 2) PrusaColorMixSection(p)
     }
 }
 

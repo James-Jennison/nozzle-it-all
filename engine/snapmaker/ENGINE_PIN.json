@@ -8,7 +8,7 @@
   },
   "patch": {
     "file": "engine/snapmaker/nozzle-engine.patch",
-    "sha256": "02007aa5ef6d384d23121ee7d39722c6162238b30a31a5d42c2fa3388ed833b7"
+    "sha256": "0e2f4f5d8a9d223dc8943f5d50a0dbb1689e6ffae6aaacb8cebe7381c4c18fbb"
   },
   "dependencies": "Snapmaker Orca's own deps prefix (deps/build/destdir/usr/local in the local checkout), built by its deps/ superbuild",
   "platforms": {

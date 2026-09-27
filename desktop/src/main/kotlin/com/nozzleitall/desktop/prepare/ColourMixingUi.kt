@@ -259,7 +259,7 @@ private fun LayerStripe(components: List<Int>, weights: List<Int>, p: PrepareSta
 
 /** Three filaments' shares on a triangle (each corner one filament), each share clamped to at least [minShare]. */
 @Composable
-private fun TrianglePicker(colours: List<Color>, weights: List<Float>, minShare: Float, onChange: (List<Float>) -> Unit) {
+internal fun TrianglePicker(colours: List<Color>, weights: List<Float>, minShare: Float, onChange: (List<Float>) -> Unit) {
     val c = Nz.colors
     var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize(1, 1)) }
     fun corners(): List<androidx.compose.ui.geometry.Offset> { val w = size.width.toFloat(); val h = size.height.toFloat()
@@ -296,7 +296,7 @@ private fun TrianglePicker(colours: List<Color>, weights: List<Float>, minShare:
 
 /** A two-colour bar split at [share] percent of the second colour; click or drag to set it within [min]..[max] in [step]s. */
 @Composable
-private fun RatioBar(share: Int, first: Color, second: Color, modifier: Modifier, min: Int = 5, max: Int = 95, step: Int = 5, onChange: (Int) -> Unit) {
+internal fun RatioBar(share: Int, first: Color, second: Color, modifier: Modifier, min: Int = 5, max: Int = 95, step: Int = 5, onChange: (Int) -> Unit) {
     var width by remember { mutableStateOf(1f) }
     val set: (Float) -> Unit = { x -> onChange((Math.round(x / width * 100f / step) * step).coerceIn(min, max)) }
     Box(modifier.height(20.dp).clip(RoundedCornerShape(4.dp)).border(1.dp, Nz.colors.line, RoundedCornerShape(4.dp))

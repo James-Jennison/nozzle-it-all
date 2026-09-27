@@ -1,0 +1,9 @@
+{
+  "$description": "Guided print settings shared by Desktop, Android and Web. Each maps to explicit engine keys so the same choice slices the same way everywhere. Desktop's QualityPreset and Web's GUIDED_PRESETS are checked against this file.",
+  "version": 1,
+  "presets": [
+    { "id": "draft", "label": "Draft", "detail": "0.28 mm layers. Fastest.", "overrides": { "layer_height": "0.28" } },
+    { "id": "standard", "label": "Standard", "detail": "0.20 mm layers. The everyday choice.", "overrides": { "layer_height": "0.2" } },
+    { "id": "fine", "label": "Fine", "detail": "0.12 mm layers. Smoother, slower.", "overrides": { "layer_height": "0.12" } }
+  ]
+}

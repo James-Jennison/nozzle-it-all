@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
  * Infill mark (rhombus lattice, nozzle tip) so the family is recognisable without copying any icon set.
  */
 enum class NzIcon { FLEET, PROJECTS, PREPARE, MONITOR, MATERIALS, SPECTRUM, WORKSPACE, SETTINGS, CAMERA, ADD, PLAY, PAUSE, STOP, HEAT, HOME, MOVE,
-    CHECK, ALERT, QUESTION, OFFLINE, NETWORK, PRIVATE_NETWORK, CLOUD, FOLDER, IMPORT, SLICE, SEND, ARROW_RIGHT, CLOSE, TOOLHEAD, LAYERS, EXPORT }
+    CHECK, ALERT, QUESTION, OFFLINE, NETWORK, PRIVATE_NETWORK, CLOUD, FOLDER, IMPORT, SLICE, SEND, ARROW_RIGHT, CLOSE, TOOLHEAD, LAYERS, EXPORT, SEARCH, TUNE }
 
 @Composable
 fun Icon(icon: NzIcon, tint: Color, size: Dp = 20.dp, description: String? = null, modifier: Modifier = Modifier) {
@@ -63,6 +63,9 @@ fun DrawScope.drawIcon(icon: NzIcon, tint: Color) {
         NzIcon.MOVE -> { line(12f, 3f, 12f, 21f); line(3f, 12f, 21f, 12f); line(9f, 6f, 12f, 3f, 15f, 6f); line(9f, 18f, 12f, 21f, 15f, 18f); line(6f, 9f, 3f, 12f, 6f, 15f); line(18f, 9f, 21f, 12f, 18f, 15f) }
         NzIcon.CHECK -> line(5f, 12.5f, 10f, 17.5f, 19f, 7f)
         NzIcon.ALERT -> { line(12f, 3f, 21.5f, 20f, 2.5f, 20f, close = true); line(12f, 9f, 12f, 14f); circle(12f, 17f, 0.9f, fill = true) }
+        NzIcon.SEARCH -> { circle(10.5f, 10.5f, 6f); line(15f, 15f, 20f, 20f) }
+        // Three sliders: settings for this item.
+        NzIcon.TUNE -> { line(4f, 7f, 20f, 7f); line(4f, 12f, 20f, 12f); line(4f, 17f, 20f, 17f); circle(9f, 7f, 1.8f, fill = true); circle(15f, 12f, 1.8f, fill = true); circle(8f, 17f, 1.8f, fill = true) }
         NzIcon.QUESTION -> { circle(12f, 12f, 9f); line(9.5f, 9.5f, 10.5f, 7.5f, 13.5f, 7.5f, 14.5f, 9.5f, 12f, 12f, 12f, 13.5f); circle(12f, 16.8f, 0.9f, fill = true) }
         NzIcon.OFFLINE -> { circle(12f, 12f, 9f); line(5.5f, 5.5f, 18.5f, 18.5f) }
         NzIcon.NETWORK -> { rect(9f, 3f, 6f, 5f, 1f); rect(3f, 16f, 6f, 5f, 1f); rect(15f, 16f, 6f, 5f, 1f); line(12f, 8f, 12f, 12f); line(6f, 16f, 6f, 12f, 18f, 12f, 18f, 16f) }

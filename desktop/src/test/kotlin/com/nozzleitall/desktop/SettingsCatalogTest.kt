@@ -25,6 +25,12 @@ class SettingsCatalogTest {
         assertTrue(catalog.all.size > 700)
     }
 
+    @Test fun everyGroupIsInExactlyOneTabOfItsScope() {
+        val tabbed = catalog.tabs.values.flatten().flatMap { t -> t.groups.map { g -> assertEquals(t.scope, g.scope); g.id } }
+        assertEquals(catalog.groups.map { it.id }.sorted(), tabbed.sorted())
+        assertEquals(listOf("Quality", "Strength", "Speed", "Supports", "Multi-material", "Others"), catalog.tabs.getValue(Scope.PROCESS).map { it.title })
+    }
+
     @Test fun credentialsAreNeverShownAsSettings() {
         val shown = catalog.groups.flatMap { g -> g.settings.map { it.key } }
         listOf("printhost_apikey", "printhost_password", "printhost_user", "print_host").forEach { assertFalse(it, it in shown) }

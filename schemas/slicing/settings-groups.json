@@ -1,73 +1,640 @@
 {
   "schema": "nozzle.settings-groups",
   "version": 1,
-  "$comment": "Nozzle's own organisation of the engine's settings (settings-schema.json), by what a person is trying to change. Each setting goes to the first group whose patterns match its key (regular expressions, whole key). 'hidden' lists settings never shown: credentials (Nozzle keeps those out of profiles), preset bookkeeping and engine internals. A test requires every setting to be grouped or hidden.",
+  "$comment": "Nozzle's own organisation of the engine's settings (settings-schema.json), by what a person is trying to change. Each setting goes to the first group whose patterns match its key (regular expressions, whole key). 'hidden' lists settings never shown: credentials (Nozzle keeps those out of profiles), preset bookkeeping and engine internals. A test requires every setting to be grouped or hidden. 'tabs' orders the groups into tabs per scope; every group belongs to exactly one tab.",
   "hidden": [
-    "printhost_.*", "print_host.*", "host_type", "bbl_use_printhost", "flashforge_serial_number", "printer_agent",
-    "inherits", "compatible_printers.*", "compatible_prints.*", "default_print_profile", "default_filament_profile", "upward_compatible_machine",
-    "printer_model", "printer_variant", "printer_technology", ".*_plugin_config_overrides", "slicing_pipeline_plugin", "plugins",
-    "print_extruder_id", "print_extruder_variant", "printer_extruder_id", "printer_extruder_variant", "extruder_variant_list", "filament_extruder_variant",
-    "calib_flowrate_topinfill_special_order", "filament_dev_.*", "physical_extruder_map", "master_extruder_id", "group_algo_with_time",
-    "nozzle_flush_dataset", "extruder_max_nozzle_count", "support_fast_purge_mode", "machine_prepare_compensation_time", "default_nozzle_volume_type"
+    "printhost_.*",
+    "print_host.*",
+    "host_type",
+    "bbl_use_printhost",
+    "flashforge_serial_number",
+    "printer_agent",
+    "inherits",
+    "compatible_printers.*",
+    "compatible_prints.*",
+    "default_print_profile",
+    "default_filament_profile",
+    "upward_compatible_machine",
+    "printer_model",
+    "printer_variant",
+    "printer_technology",
+    ".*_plugin_config_overrides",
+    "slicing_pipeline_plugin",
+    "plugins",
+    "print_extruder_id",
+    "print_extruder_variant",
+    "printer_extruder_id",
+    "printer_extruder_variant",
+    "extruder_variant_list",
+    "filament_extruder_variant",
+    "calib_flowrate_topinfill_special_order",
+    "filament_dev_.*",
+    "physical_extruder_map",
+    "master_extruder_id",
+    "group_algo_with_time",
+    "nozzle_flush_dataset",
+    "extruder_max_nozzle_count",
+    "support_fast_purge_mode",
+    "machine_prepare_compensation_time",
+    "default_nozzle_volume_type"
   ],
   "groups": [
-    { "id": "layers", "scope": "process", "title": "Layers and resolution", "summary": "How thick each layer is, the first layer, and how finely curves are traced.",
-      "keys": ["layer_height", "initial_layer_print_height", "precise_z_height", "resolution", "slice_closing_radius", "slicing_mode", "independent_support_layer_height", "interface_shells", "zaa_.*"] },
-    { "id": "walls", "scope": "process", "title": "Walls", "summary": "The outline of every layer: how many walls, their order, overhangs and thin parts.",
-      "keys": ["wall_.*", "alternate_extra_wall", "extra_perimeters_on_overhangs", "ensure_vertical_shell_thickness", "reduce_crossing_wall", "detect_thin_wall", "detect_overhang_wall", "unsupported_wall_last", "overhang_reverse.*", "is_infill_first", "only_one_wall_.*", "precise_outer_wall", "min_feature_size", "min_bead_width", "initial_layer_min_bead_width", "min_length_factor", "make_overhang_printable.*", "hole_to_polyhole.*", "xy_.*_compensation", "elefant_foot_.*"] },
-    { "id": "seams", "scope": "process", "title": "Seams", "summary": "Where each layer starts and ends, and how the joint is hidden.",
-      "keys": ["seam_.*", "staggered_inner_seams", "scarf_.*"] },
-    { "id": "top-bottom", "scope": "process", "title": "Top and bottom surfaces", "summary": "Solid layers that close the part, their patterns, and ironing for a smooth top.",
-      "keys": ["top_shell_.*", "bottom_shell_.*", "top_surface_(?!speed|acceleration|jerk|line_width|filament_id).*", "bottom_surface_(?!filament_id).*", "top_layer_direction", "bottom_layer_direction", "top_solid_infill_flow_ratio", "bottom_solid_infill_flow_ratio", "min_width_top_surface", "ironing_.*", "support_ironing.*", "center_of_surface_pattern"] },
-    { "id": "infill", "scope": "process", "title": "Inside (infill)", "summary": "How much and what shape of material fills the part, which decides strength, weight and time.",
-      "keys": ["sparse_infill_(?!speed|acceleration|line_width|flow_ratio|filament_id).*", "fill_multiline", "gyroid_optimized", "lateral_lattice_.*", "infill_(?!jerk|wall_overlap).*", "lightning_.*", "solid_infill_.*", "internal_solid_infill_pattern", "counterbore_hole_bridging", "symmetric_infill_y_axis", "skeleton_infill_density", "skin_infill_(depth|density)", "align_infill_direction_to_model", "extra_solid_infills", "separated_infills", "minimum_sparse_infill_area", "reduce_infill_retraction", "gap_fill_target", "filter_out_gap_fill", "detect_narrow_internal_solid_infill", "small_area_infill_flow_compensation.*", "interlocking_.*"] },
-    { "id": "bridges", "scope": "process", "title": "Bridges and overhangs", "summary": "Printing across gaps and out over nothing.",
-      "keys": ["bridge_(?!speed|acceleration).*", "internal_bridge_(?!speed|fan).*", "relative_bridge_angle", "thick_bridges", "thick_internal_bridges", "dont_filter_internal_bridges", "enable_extra_bridge_layer", "max_bridge_length"] },
-    { "id": "supports", "scope": "process", "title": "Supports", "summary": "Temporary structures under overhangs: where they go, their shape, and how easily they come off.",
-      "keys": ["enable_support", "support_(?!speed|interface_speed|line_width|flow_ratio|interface_flow_ratio|filament|interface_filament|ironing.*).*", "tree_support_.*", "enforce_support_layers", "bridge_no_support", "raft_.*"] },
-    { "id": "adhesion", "scope": "process", "title": "Sticking to the bed", "summary": "Brims, skirts and draft shields that hold the first layer down and prime the nozzle.",
-      "keys": ["brim_.*", "combine_brims", "skirt_.*", "min_skirt_length", "single_loop_draft_shield", "draft_shield"] },
-    { "id": "speed", "scope": "process", "title": "Speed", "summary": "How fast each part of the print moves. Slower is usually cleaner.",
-      "keys": [".*_speed", "enable_overhang_speed", "slowdown_for_curled_perimeters", "overhang_\\d_4_speed", "small_perimeter_threshold", "small_support_perimeter_threshold", "max_volumetric_extrusion_rate_slope.*", "extrusion_rate_smoothing_external_perimeter_only", "slow_down_layers", "travel_speed_z"] },
-    { "id": "motion", "scope": "process", "title": "Acceleration and jerk", "summary": "How quickly the printer changes speed and direction. Lower means less ringing.",
-      "keys": [".*_acceleration", ".*_jerk", "default_junction_deviation", "accel_to_decel_.*"] },
-    { "id": "extrusion", "scope": "process", "title": "Line widths and flow", "summary": "How wide each line is and how much plastic goes into it.",
-      "keys": [".*line_width", ".*flow_ratio", "set_other_flow_ratios", "infill_wall_overlap", "top_bottom_infill_wall_overlap", "bridge_flow", "internal_bridge_flow"] },
-    { "id": "travel", "scope": "process", "title": "Travel and wiping", "summary": "Moves between printed parts, and wiping the nozzle to avoid strings.",
-      "keys": ["max_travel_detour_distance", "wipe_(speed|on_loops|inward|inward_distance|before_external_loop)", "role_based_wipe_speed", "exclude_object"] },
-    { "id": "multimaterial", "scope": "process", "title": "Several materials", "summary": "Which material prints what, the prime tower, and where purged material goes.",
-      "keys": [".*_filament_id", "support_filament", "support_interface_filament", "support_interface_not_for_body", "enable_prime_tower", "prime_.*", "enable_tower_interface_.*", "wipe_tower_.*", "flush_into_.*", "wiping_volumes_extruders", "single_extruder_multi_material_priming", "toolchange_.*", "ooze_prevention", "standby_temperature_delta", "preheat_time", "preheat_steps", "enable_mixed_color_sublayer", "mmu_segmented_region_.*"] },
-    { "id": "special", "scope": "process", "title": "Special modes", "summary": "Vase mode, textured (fuzzy) skin, printing one object at a time, and smoother arcs.",
-      "keys": ["spiral_.*", "fuzzy_skin.*", "print_sequence", "print_order", "enable_arc_fitting", "enable_wrapping_detection", "infill_combination.*"] },
-    { "id": "output", "scope": "process", "title": "Output file", "summary": "The file name, comments and scripts run on the finished G-code.",
-      "keys": ["filename_format", "gcode_.*", "post_process", "notes", "timelapse_type", "process_change_extrusion_role_gcode"] },
-
-    { "id": "material", "scope": "filament", "title": "Material", "summary": "What the material is: type, diameter, density, cost and colour.",
-      "keys": ["filament_(type|vendor|diameter|density|cost|soluble|is_support|printable|notes|shrink|shrinkage_compensation_z|adhesiveness_category|extruder_compatibility)", "default_filament_colour", "required_nozzle_HRC", "pellet_flow_coefficient", "temperature_vitrification"] },
-    { "id": "temperatures", "scope": "filament", "title": "Temperatures", "summary": "Nozzle, bed and chamber temperatures for this material.",
-      "keys": ["nozzle_temperature.*", ".*plate_temp.*", "chamber_temperature", "activate_chamber_temp_control", "chamber_minimal_temperature", "idle_temperature", "filament_preheat_temperature_delta"] },
-    { "id": "flow", "scope": "filament", "title": "Flow and pressure", "summary": "How much the material flows, its maximum speed, and pressure advance.",
-      "keys": ["filament_flow_ratio", "filament_max_volumetric_speed", "filament_adaptive_volumetric_speed", "volumetric_speed_coefficients", "enable_pressure_advance", "pressure_advance", "adaptive_pressure_advance.*"] },
-    { "id": "cooling", "scope": "filament", "title": "Cooling", "summary": "Fans, and slowing down so small layers have time to cool.",
-      "keys": [".*fan.*", "slow_down_.*", "dont_slow_down_outer_wall", "close_additional_fan_first_x_layers", "full_fan_speed_layer", "activate_air_filtration.*", "during_print_exhaust_fan_speed", "complete_print_exhaust_fan_speed"] },
-    { "id": "retraction", "scope": "filament", "title": "Retraction (this material)", "summary": "Pulling the material back during moves to stop strings; overrides the printer's defaults.",
-      "keys": ["filament_(retract|retraction|deretraction|wipe|z_hop).*", "filament_long_retractions_when_cut", "filament_retraction_distances_when_cut", "long_retractions_when_ec", "retraction_distances_when_ec"] },
-    { "id": "material-change", "scope": "filament", "title": "Changing materials", "summary": "Loading, unloading, ramming and purging when this material is swapped.",
-      "keys": ["filament_(loading|unloading|toolchange|cooling|stamping|ramming|multitool|flush|change_length|prime_volume|pre_cooling|minimal_purge|tower_).*", "filament_ironing_.*"] },
-    { "id": "material-gcode", "scope": "filament", "title": "Material G-code", "summary": "Commands sent when this material starts, ends or changes role.",
-      "keys": ["filament_start_gcode", "filament_end_gcode", "filament_change_extrusion_role_gcode"] },
-
-    { "id": "machine", "scope": "printer", "title": "Printer and bed", "summary": "Bed size and shape, excluded areas, bed types and the build height.",
-      "keys": ["printable_area", "printable_height", "extruder_printable_(area|height)", "bed_.*", "support_multi_bed_types", "default_bed_type", "support_parallel_printheads", "parallel_printheads_.*", "best_object_pos", "preferred_orientation", "wrapping_.*", "head_wrap_detect_zone", "printer_structure", "scan_first_layer", "enable_power_loss_recovery", "z_offset", "printer_notes", "pellet_modded_printer", "use_3mf", "time_cost"] },
-    { "id": "toolhead", "scope": "printer", "title": "Toolheads and nozzles", "summary": "Nozzle size and type, several toolheads, and how the head clears printed parts.",
-      "keys": ["nozzle_.*", "extruder_(type|colour|offset|clearance_.*)", "single_extruder_multi_material", "manual_filament_change", "auxiliary_fan", "fan_direction", "max_layer_height", "min_layer_height", "grab_length", "use_relative_e_distances", "use_firmware_retraction", "enable_pre_heating", "hotend_.*", "machine_(load_filament|unload_filament|tool_change|hotend_change)_time", "support_object_skip_flush", "support_chamber_temp_control", "support_air_filtration", "support_cooling_filter", "cooling_filter_enabled", "fan_kickstart", "part_cooling_fan_min_pwm", "fan_speedup_.*"] },
-    { "id": "printer-retraction", "scope": "printer", "title": "Retraction", "summary": "The printer's default retraction, lift (z-hop) and wipe.",
-      "keys": ["retract.*", "retraction_.*", "deretraction_speed", "deretract_speed_extruder_change", "wipe", "wipe_distance", "z_hop", "z_hop_types", "travel_slope", "enable_long_retraction_when_cut", "long_retractions_when_cut"] },
-    { "id": "material-swap", "scope": "printer", "title": "Material swapping hardware", "summary": "Single-nozzle material changers and prime tower behaviour.",
-      "keys": ["cooling_tube_.*", "high_current_on_filament_swap", "parking_pos_retraction", "extra_loading_move", "wipe_tower_type", "purge_in_prime_tower", "enable_filament_ramming", "tool_change_on_wipe_tower", "wait_for_temp_on_wipe_tower"] },
-    { "id": "limits", "scope": "printer", "title": "Motion limits", "summary": "The fastest the printer may move and accelerate, resonance avoidance and input shaping.",
-      "keys": ["machine_max_.*", "machine_min_.*", "machine_bed_mass_Y", "resonance_avoidance", ".*_resonance_avoidance_speed", "input_shaping_.*", "emit_machine_limits_to_gcode", "silent_mode"] },
-    { "id": "printer-gcode", "scope": "printer", "title": "Printer G-code", "summary": "Start, end, layer-change and other commands, the G-code dialect, and thumbnails.",
-      "keys": [".*_gcode", "gcode_flavor", "gcode_skip_config_block", "disable_m73", "thumbnails", "thumbnails_format", "farthest_point_timelapse", "bed_temperature_formula", "adaptive_bed_mesh_margin", "bed_mesh_.*"] }
-  ]
+    {
+      "id": "layers",
+      "scope": "process",
+      "title": "Layers and resolution",
+      "summary": "How thick each layer is, the first layer, and how finely curves are traced.",
+      "keys": [
+        "layer_height",
+        "initial_layer_print_height",
+        "precise_z_height",
+        "resolution",
+        "slice_closing_radius",
+        "slicing_mode",
+        "independent_support_layer_height",
+        "interface_shells",
+        "zaa_.*"
+      ]
+    },
+    {
+      "id": "walls",
+      "scope": "process",
+      "title": "Walls",
+      "summary": "The outline of every layer: how many walls, their order, overhangs and thin parts.",
+      "keys": [
+        "wall_.*",
+        "alternate_extra_wall",
+        "extra_perimeters_on_overhangs",
+        "ensure_vertical_shell_thickness",
+        "reduce_crossing_wall",
+        "detect_thin_wall",
+        "detect_overhang_wall",
+        "unsupported_wall_last",
+        "overhang_reverse.*",
+        "is_infill_first",
+        "only_one_wall_.*",
+        "precise_outer_wall",
+        "min_feature_size",
+        "min_bead_width",
+        "initial_layer_min_bead_width",
+        "min_length_factor",
+        "make_overhang_printable.*",
+        "hole_to_polyhole.*",
+        "xy_.*_compensation",
+        "elefant_foot_.*"
+      ]
+    },
+    {
+      "id": "seams",
+      "scope": "process",
+      "title": "Seams",
+      "summary": "Where each layer starts and ends, and how the joint is hidden.",
+      "keys": [
+        "seam_.*",
+        "staggered_inner_seams",
+        "scarf_.*"
+      ]
+    },
+    {
+      "id": "top-bottom",
+      "scope": "process",
+      "title": "Top and bottom surfaces",
+      "summary": "Solid layers that close the part, their patterns, and ironing for a smooth top.",
+      "keys": [
+        "top_shell_.*",
+        "bottom_shell_.*",
+        "top_surface_(?!speed|acceleration|jerk|line_width|filament_id).*",
+        "bottom_surface_(?!filament_id).*",
+        "top_layer_direction",
+        "bottom_layer_direction",
+        "top_solid_infill_flow_ratio",
+        "bottom_solid_infill_flow_ratio",
+        "min_width_top_surface",
+        "ironing_.*",
+        "support_ironing.*",
+        "center_of_surface_pattern"
+      ]
+    },
+    {
+      "id": "infill",
+      "scope": "process",
+      "title": "Inside (infill)",
+      "summary": "How much and what shape of material fills the part, which decides strength, weight and time.",
+      "keys": [
+        "sparse_infill_(?!speed|acceleration|line_width|flow_ratio|filament_id).*",
+        "fill_multiline",
+        "gyroid_optimized",
+        "lateral_lattice_.*",
+        "infill_(?!jerk|wall_overlap).*",
+        "lightning_.*",
+        "solid_infill_.*",
+        "internal_solid_infill_pattern",
+        "counterbore_hole_bridging",
+        "symmetric_infill_y_axis",
+        "skeleton_infill_density",
+        "skin_infill_(depth|density)",
+        "align_infill_direction_to_model",
+        "extra_solid_infills",
+        "separated_infills",
+        "minimum_sparse_infill_area",
+        "reduce_infill_retraction",
+        "gap_fill_target",
+        "filter_out_gap_fill",
+        "detect_narrow_internal_solid_infill",
+        "small_area_infill_flow_compensation.*",
+        "interlocking_.*"
+      ]
+    },
+    {
+      "id": "bridges",
+      "scope": "process",
+      "title": "Bridges and overhangs",
+      "summary": "Printing across gaps and out over nothing.",
+      "keys": [
+        "bridge_(?!speed|acceleration).*",
+        "internal_bridge_(?!speed|fan).*",
+        "relative_bridge_angle",
+        "thick_bridges",
+        "thick_internal_bridges",
+        "dont_filter_internal_bridges",
+        "enable_extra_bridge_layer",
+        "max_bridge_length"
+      ]
+    },
+    {
+      "id": "supports",
+      "scope": "process",
+      "title": "Supports",
+      "summary": "Temporary structures under overhangs: where they go, their shape, and how easily they come off.",
+      "keys": [
+        "enable_support",
+        "support_(?!speed|interface_speed|line_width|flow_ratio|interface_flow_ratio|filament|interface_filament|ironing.*).*",
+        "tree_support_.*",
+        "enforce_support_layers",
+        "bridge_no_support",
+        "raft_.*"
+      ]
+    },
+    {
+      "id": "adhesion",
+      "scope": "process",
+      "title": "Sticking to the bed",
+      "summary": "Brims, skirts and draft shields that hold the first layer down and prime the nozzle.",
+      "keys": [
+        "brim_.*",
+        "combine_brims",
+        "skirt_.*",
+        "min_skirt_length",
+        "single_loop_draft_shield",
+        "draft_shield"
+      ]
+    },
+    {
+      "id": "speed",
+      "scope": "process",
+      "title": "Speed",
+      "summary": "How fast each part of the print moves. Slower is usually cleaner.",
+      "keys": [
+        ".*_speed",
+        "enable_overhang_speed",
+        "slowdown_for_curled_perimeters",
+        "overhang_\\d_4_speed",
+        "small_perimeter_threshold",
+        "small_support_perimeter_threshold",
+        "max_volumetric_extrusion_rate_slope.*",
+        "extrusion_rate_smoothing_external_perimeter_only",
+        "slow_down_layers",
+        "travel_speed_z"
+      ]
+    },
+    {
+      "id": "motion",
+      "scope": "process",
+      "title": "Acceleration and jerk",
+      "summary": "How quickly the printer changes speed and direction. Lower means less ringing.",
+      "keys": [
+        ".*_acceleration",
+        ".*_jerk",
+        "default_junction_deviation",
+        "accel_to_decel_.*"
+      ]
+    },
+    {
+      "id": "extrusion",
+      "scope": "process",
+      "title": "Line widths and flow",
+      "summary": "How wide each line is and how much plastic goes into it.",
+      "keys": [
+        ".*line_width",
+        ".*flow_ratio",
+        "set_other_flow_ratios",
+        "infill_wall_overlap",
+        "top_bottom_infill_wall_overlap",
+        "bridge_flow",
+        "internal_bridge_flow"
+      ]
+    },
+    {
+      "id": "travel",
+      "scope": "process",
+      "title": "Travel and wiping",
+      "summary": "Moves between printed parts, and wiping the nozzle to avoid strings.",
+      "keys": [
+        "max_travel_detour_distance",
+        "wipe_(speed|on_loops|inward|inward_distance|before_external_loop)",
+        "role_based_wipe_speed",
+        "exclude_object"
+      ]
+    },
+    {
+      "id": "multimaterial",
+      "scope": "process",
+      "title": "Several materials",
+      "summary": "Which material prints what, the prime tower, and where purged material goes.",
+      "keys": [
+        ".*_filament_id",
+        "support_filament",
+        "support_interface_filament",
+        "support_interface_not_for_body",
+        "enable_prime_tower",
+        "prime_.*",
+        "enable_tower_interface_.*",
+        "wipe_tower_.*",
+        "flush_into_.*",
+        "wiping_volumes_extruders",
+        "single_extruder_multi_material_priming",
+        "toolchange_.*",
+        "ooze_prevention",
+        "standby_temperature_delta",
+        "preheat_time",
+        "preheat_steps",
+        "enable_mixed_color_sublayer",
+        "mmu_segmented_region_.*"
+      ]
+    },
+    {
+      "id": "special",
+      "scope": "process",
+      "title": "Special modes",
+      "summary": "Vase mode, textured (fuzzy) skin, printing one object at a time, and smoother arcs.",
+      "keys": [
+        "spiral_.*",
+        "fuzzy_skin.*",
+        "print_sequence",
+        "print_order",
+        "enable_arc_fitting",
+        "enable_wrapping_detection",
+        "infill_combination.*"
+      ]
+    },
+    {
+      "id": "output",
+      "scope": "process",
+      "title": "Output file",
+      "summary": "The file name, comments and scripts run on the finished G-code.",
+      "keys": [
+        "filename_format",
+        "gcode_.*",
+        "post_process",
+        "notes",
+        "timelapse_type",
+        "process_change_extrusion_role_gcode"
+      ]
+    },
+    {
+      "id": "material",
+      "scope": "filament",
+      "title": "Material",
+      "summary": "What the material is: type, diameter, density, cost and colour.",
+      "keys": [
+        "filament_(type|vendor|diameter|density|cost|soluble|is_support|printable|notes|shrink|shrinkage_compensation_z|adhesiveness_category|extruder_compatibility)",
+        "default_filament_colour",
+        "required_nozzle_HRC",
+        "pellet_flow_coefficient",
+        "temperature_vitrification"
+      ]
+    },
+    {
+      "id": "temperatures",
+      "scope": "filament",
+      "title": "Temperatures",
+      "summary": "Nozzle, bed and chamber temperatures for this material.",
+      "keys": [
+        "nozzle_temperature.*",
+        ".*plate_temp.*",
+        "chamber_temperature",
+        "activate_chamber_temp_control",
+        "chamber_minimal_temperature",
+        "idle_temperature",
+        "filament_preheat_temperature_delta"
+      ]
+    },
+    {
+      "id": "flow",
+      "scope": "filament",
+      "title": "Flow and pressure",
+      "summary": "How much the material flows, its maximum speed, and pressure advance.",
+      "keys": [
+        "filament_flow_ratio",
+        "filament_max_volumetric_speed",
+        "filament_adaptive_volumetric_speed",
+        "volumetric_speed_coefficients",
+        "enable_pressure_advance",
+        "pressure_advance",
+        "adaptive_pressure_advance.*"
+      ]
+    },
+    {
+      "id": "cooling",
+      "scope": "filament",
+      "title": "Cooling",
+      "summary": "Fans, and slowing down so small layers have time to cool.",
+      "keys": [
+        ".*fan.*",
+        "slow_down_.*",
+        "dont_slow_down_outer_wall",
+        "close_additional_fan_first_x_layers",
+        "full_fan_speed_layer",
+        "activate_air_filtration.*",
+        "during_print_exhaust_fan_speed",
+        "complete_print_exhaust_fan_speed"
+      ]
+    },
+    {
+      "id": "retraction",
+      "scope": "filament",
+      "title": "Retraction (this material)",
+      "summary": "Pulling the material back during moves to stop strings; overrides the printer's defaults.",
+      "keys": [
+        "filament_(retract|retraction|deretraction|wipe|z_hop).*",
+        "filament_long_retractions_when_cut",
+        "filament_retraction_distances_when_cut",
+        "long_retractions_when_ec",
+        "retraction_distances_when_ec"
+      ]
+    },
+    {
+      "id": "material-change",
+      "scope": "filament",
+      "title": "Changing materials",
+      "summary": "Loading, unloading, ramming and purging when this material is swapped.",
+      "keys": [
+        "filament_(loading|unloading|toolchange|cooling|stamping|ramming|multitool|flush|change_length|prime_volume|pre_cooling|minimal_purge|tower_).*",
+        "filament_ironing_.*"
+      ]
+    },
+    {
+      "id": "material-gcode",
+      "scope": "filament",
+      "title": "Material G-code",
+      "summary": "Commands sent when this material starts, ends or changes role.",
+      "keys": [
+        "filament_start_gcode",
+        "filament_end_gcode",
+        "filament_change_extrusion_role_gcode"
+      ]
+    },
+    {
+      "id": "machine",
+      "scope": "printer",
+      "title": "Printer and bed",
+      "summary": "Bed size and shape, excluded areas, bed types and the build height.",
+      "keys": [
+        "printable_area",
+        "printable_height",
+        "extruder_printable_(area|height)",
+        "bed_.*",
+        "support_multi_bed_types",
+        "default_bed_type",
+        "support_parallel_printheads",
+        "parallel_printheads_.*",
+        "best_object_pos",
+        "preferred_orientation",
+        "wrapping_.*",
+        "head_wrap_detect_zone",
+        "printer_structure",
+        "scan_first_layer",
+        "enable_power_loss_recovery",
+        "z_offset",
+        "printer_notes",
+        "pellet_modded_printer",
+        "use_3mf",
+        "time_cost"
+      ]
+    },
+    {
+      "id": "toolhead",
+      "scope": "printer",
+      "title": "Toolheads and nozzles",
+      "summary": "Nozzle size and type, several toolheads, and how the head clears printed parts.",
+      "keys": [
+        "nozzle_.*",
+        "extruder_(type|colour|offset|clearance_.*)",
+        "single_extruder_multi_material",
+        "manual_filament_change",
+        "auxiliary_fan",
+        "fan_direction",
+        "max_layer_height",
+        "min_layer_height",
+        "grab_length",
+        "use_relative_e_distances",
+        "use_firmware_retraction",
+        "enable_pre_heating",
+        "hotend_.*",
+        "machine_(load_filament|unload_filament|tool_change|hotend_change)_time",
+        "support_object_skip_flush",
+        "support_chamber_temp_control",
+        "support_air_filtration",
+        "support_cooling_filter",
+        "cooling_filter_enabled",
+        "fan_kickstart",
+        "part_cooling_fan_min_pwm",
+        "fan_speedup_.*"
+      ]
+    },
+    {
+      "id": "printer-retraction",
+      "scope": "printer",
+      "title": "Retraction",
+      "summary": "The printer's default retraction, lift (z-hop) and wipe.",
+      "keys": [
+        "retract.*",
+        "retraction_.*",
+        "deretraction_speed",
+        "deretract_speed_extruder_change",
+        "wipe",
+        "wipe_distance",
+        "z_hop",
+        "z_hop_types",
+        "travel_slope",
+        "enable_long_retraction_when_cut",
+        "long_retractions_when_cut"
+      ]
+    },
+    {
+      "id": "material-swap",
+      "scope": "printer",
+      "title": "Material swapping hardware",
+      "summary": "Single-nozzle material changers and prime tower behaviour.",
+      "keys": [
+        "cooling_tube_.*",
+        "high_current_on_filament_swap",
+        "parking_pos_retraction",
+        "extra_loading_move",
+        "wipe_tower_type",
+        "purge_in_prime_tower",
+        "enable_filament_ramming",
+        "tool_change_on_wipe_tower",
+        "wait_for_temp_on_wipe_tower"
+      ]
+    },
+    {
+      "id": "limits",
+      "scope": "printer",
+      "title": "Motion limits",
+      "summary": "The fastest the printer may move and accelerate, resonance avoidance and input shaping.",
+      "keys": [
+        "machine_max_.*",
+        "machine_min_.*",
+        "machine_bed_mass_Y",
+        "resonance_avoidance",
+        ".*_resonance_avoidance_speed",
+        "input_shaping_.*",
+        "emit_machine_limits_to_gcode",
+        "silent_mode"
+      ]
+    },
+    {
+      "id": "printer-gcode",
+      "scope": "printer",
+      "title": "Printer G-code",
+      "summary": "Start, end, layer-change and other commands, the G-code dialect, and thumbnails.",
+      "keys": [
+        ".*_gcode",
+        "gcode_flavor",
+        "gcode_skip_config_block",
+        "disable_m73",
+        "thumbnails",
+        "thumbnails_format",
+        "farthest_point_timelapse",
+        "bed_temperature_formula",
+        "adaptive_bed_mesh_margin",
+        "bed_mesh_.*"
+      ]
+    }
+  ],
+  "tabs": {
+    "process": [
+      {
+        "id": "quality",
+        "title": "Quality",
+        "groups": [
+          "layers",
+          "extrusion",
+          "seams",
+          "top-bottom"
+        ]
+      },
+      {
+        "id": "strength",
+        "title": "Strength",
+        "groups": [
+          "walls",
+          "infill",
+          "bridges"
+        ]
+      },
+      {
+        "id": "speed",
+        "title": "Speed",
+        "groups": [
+          "speed",
+          "motion",
+          "travel"
+        ]
+      },
+      {
+        "id": "supports",
+        "title": "Supports",
+        "groups": [
+          "supports"
+        ]
+      },
+      {
+        "id": "multimaterial",
+        "title": "Multi-material",
+        "groups": [
+          "multimaterial"
+        ]
+      },
+      {
+        "id": "others",
+        "title": "Others",
+        "groups": [
+          "adhesion",
+          "special",
+          "output"
+        ]
+      }
+    ],
+    "filament": [
+      {
+        "id": "material",
+        "title": "Material",
+        "groups": [
+          "material",
+          "temperatures",
+          "flow"
+        ]
+      },
+      {
+        "id": "cooling",
+        "title": "Cooling",
+        "groups": [
+          "cooling"
+        ]
+      },
+      {
+        "id": "retraction",
+        "title": "Retraction",
+        "groups": [
+          "retraction"
+        ]
+      },
+      {
+        "id": "changes",
+        "title": "Changes",
+        "groups": [
+          "material-change",
+          "material-gcode"
+        ]
+      }
+    ],
+    "printer": [
+      {
+        "id": "machine",
+        "title": "Printer",
+        "groups": [
+          "machine",
+          "limits"
+        ]
+      },
+      {
+        "id": "toolheads",
+        "title": "Toolheads",
+        "groups": [
+          "toolhead",
+          "printer-retraction",
+          "material-swap"
+        ]
+      },
+      {
+        "id": "gcode",
+        "title": "G-code",
+        "groups": [
+          "printer-gcode"
+        ]
+      }
+    ]
+  }
 }

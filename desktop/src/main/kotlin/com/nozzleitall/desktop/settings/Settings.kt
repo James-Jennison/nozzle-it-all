@@ -91,8 +91,10 @@ data class SettingDef(
 }
 
 data class SettingGroup(val id: String, val scope: Scope, val title: String, val summary: String, val settings: List<SettingDef>)
+/** A tab of groups for one scope (for example Print → Quality). */
+data class SettingTab(val id: String, val scope: Scope, val title: String, val groups: List<SettingGroup>)
 
-class SettingsCatalog(val all: List<SettingDef>, val groups: List<SettingGroup>, val engineCommit: String?) {
+class SettingsCatalog(val all: List<SettingDef>, val groups: List<SettingGroup>, val engineCommit: String?, val tabs: Map<Scope, List<SettingTab>> = emptyMap()) {
     val byKey = all.associateBy { it.key }
 
     /** Settings matching every word of [query] in their label, help, key, group or choices ("gyroid" finds the infill pattern). */
@@ -135,7 +137,13 @@ class SettingsCatalog(val all: List<SettingDef>, val groups: List<SettingGroup>,
                 SettingGroup(r.getString("id"), Scope.entries.first { it.id == r.getString("scope") }, r.getString("title"), r.getString("summary"),
                     list.sortedBy { listOf("simple", "advanced", "expert").indexOf(it.mode).let { i -> if (i < 0) 9 else i } })
             }
-            return SettingsCatalog(defs, groups, schema.optJSONObject("source")?.optString("commit"))
+            val byId = groups.associateBy { it.id }
+            val tabs = layout.optJSONObject("tabs")?.let { t ->
+                Scope.entries.associateWith { sc -> t.optJSONArray(sc.id)?.let { a -> (0 until a.length()).map { a.getJSONObject(it) }.map { o ->
+                    SettingTab(o.getString("id"), sc, o.getString("title"), o.getJSONArray("groups").strings().mapNotNull(byId::get))
+                } } ?: emptyList() }
+            } ?: emptyMap()
+            return SettingsCatalog(defs, groups, schema.optJSONObject("source")?.optString("commit"), tabs)
         }
 
         /** The catalog shipped with the app (resources/settings). */

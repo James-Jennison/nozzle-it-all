@@ -55,7 +55,36 @@ class PrepareState(private val app: AppState) {
     var infill by mutableStateOf(15)
     /** Settings changed in All settings, in the engine's serialized form; applied after the preset and quick controls. */
     val overrides = androidx.compose.runtime.mutableStateMapOf<String, String>()
-    var showAllSettings by mutableStateOf(false)
+    /** Which settings the panel shows: the print (process), a material, or the printer. */
+    var settingsScope by mutableStateOf(com.nozzleitall.desktop.settings.Scope.PROCESS)
+    /** Everything (on) or only the essential settings (off). */
+    var advancedSettings by mutableStateOf(false)
+
+    /** What a setting is before any change for this project: the quality preset's value, else the printer profile's. */
+    fun baseSetting(key: String, profile: com.nozzleitall.desktop.settings.ProfileValues): String? = preset.overrides[key] ?: profile[key]
+
+    /** What a setting is for this project. Infill density and supports are the quick controls' own values. */
+    fun setting(key: String, profile: com.nozzleitall.desktop.settings.ProfileValues): String? = when (key) {
+        "sparse_infill_density" -> "$infill%"
+        "enable_support" -> if (supports) "1" else "0"
+        else -> overrides[key] ?: baseSetting(key, profile)
+    }
+
+    fun isChanged(key: String, profile: com.nozzleitall.desktop.settings.ProfileValues) = when (key) {
+        "sparse_infill_density" -> infill != 15
+        "enable_support" -> supports
+        else -> key in overrides
+    }
+
+    /** Sets (or with null, resets) a setting; a value equal to the base clears the change rather than storing a copy. */
+    fun setSetting(key: String, value: String?, profile: com.nozzleitall.desktop.settings.ProfileValues) {
+        when (key) {
+            "sparse_infill_density" -> infill = value?.removeSuffix("%")?.trim()?.toDoubleOrNull()?.toInt()?.coerceIn(0, 100) ?: 15
+            "enable_support" -> supports = value == "1"
+            else -> if (value == null || value == baseSetting(key, profile)) overrides.remove(key) else overrides[key] = value
+        }
+        changed()
+    }
     var slice by mutableStateOf<SliceState>(SliceState.Idle)
     var previewLayer by mutableStateOf(0)
     var showPreview by mutableStateOf(false)

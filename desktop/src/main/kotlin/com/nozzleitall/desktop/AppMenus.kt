@@ -90,7 +90,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Delete", Shortcut(Key.Delete, text = "Delete"), enabled = p.selected != null) { p.removeSelected() },
             MenuAction("Arrange plate", ctrl(Key.A, "A", shift = true), enabled = p.items.isNotEmpty()) { if (!p.arrange()) p.notice = "Not everything fits on the plate." },
             null,
-            MenuAction("All settings…", ctrl(Key.Period, ".")) { p.showAllSettings = true; state.destination = Destination.PREPARE },
+            MenuAction("Show every setting", ctrl(Key.Period, ".")) { p.advancedSettings = true; p.settingsScope = com.nozzleitall.desktop.settings.Scope.PROCESS; state.destination = Destination.PREPARE },
         )),
         AppMenu("Go", Key.G, Destination.entries.map { d -> MenuAction(d.label, Shortcut(d.key, ctrl = true, text = "Ctrl+" + if (d.key == Key.Comma) "," else d.key.toString().removePrefix("Key: "))) { state.destination = d } }),
         AppMenu("Help", Key.H, listOf(

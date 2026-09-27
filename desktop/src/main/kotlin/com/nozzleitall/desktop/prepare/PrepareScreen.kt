@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.nozzleitall.design.NozzleTokens
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import com.nozzleitall.desktop.AppState
@@ -47,22 +48,17 @@ fun PrepareScreen(state: AppState) {
     Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         // Left: the project and everything about how it prints, with Slice always in view at the bottom. All settings
         // opens in the same place, wider, so the plate stays visible.
-        Column(Modifier.width(if (p.showAllSettings) 640.dp else 390.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Left: the project, printer, filament and objects, then every print setting in dense tabs, with Slice always
+        // in view at the bottom.
+        Column(Modifier.width(420.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ProjectHeader(state)
             p.notice?.let { Banner(it, BannerKind.WARNING, "Dismiss" to { p.notice = null }) }
-            if (p.showAllSettings) {
-                val profileValues = remember(p.profileId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir()) }
-                com.nozzleitall.desktop.settings.AllSettingsPanel(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p.overrides,
-                    onChanged = { p.changed() }, onClose = { p.showAllSettings = false }, modifier = Modifier.weight(1f).fillMaxWidth())
-            } else {
-                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StepPrinter(state)
-                    MaterialsSection(state)
-                    StepObjects(state)
-                    StepSettings(state)
-                }
-                StepSlice(state)
-            }
+            StepPrinter(state)
+            MaterialsSection(state)
+            StepObjects(state)
+            val profileValues = remember(p.profileId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir()) }
+            com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
+            StepSlice(state)
         }
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -104,15 +100,12 @@ fun PrepareScreen(state: AppState) {
 private fun ProjectHeader(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Field("Project", p.name, { p.name = it; p.dirty = true }, Modifier.fillMaxWidth())
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Txt(if (p.dirty) "Unsaved changes" else p.file?.let { "Saved" } ?: "Not saved yet", Nz.type.bodySmall, if (p.dirty) Nz.status.paused else c.textMuted, modifier = Modifier.weight(1f))
-            NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } },
-                icon = NzIcon.IMPORT, testTag = "add-model")
-            NzButton("Save", { runCatching { p.save() }.onFailure { p.notice = "Couldn't save: ${it.message}" } }, kind = ButtonKind.PRIMARY, enabled = p.items.isNotEmpty(), testTag = "save-project")
-        }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        com.nozzleitall.desktop.settings.DenseInput(p.name, { p.name = it; p.dirty = true }, "Project name", Modifier.weight(1f))
+        com.nozzleitall.desktop.settings.IconToggle(NzIcon.IMPORT, "Add model", false) { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }
+        NzButton("Save", { runCatching { p.save() }.onFailure { p.notice = "Couldn't save: ${it.message}" } }, kind = ButtonKind.PRIMARY, enabled = p.items.isNotEmpty(), testTag = "save-project")
     }
+    Txt(if (p.dirty) "Unsaved changes" else p.file?.let { "Saved" } ?: "Not saved yet", Nz.type.bodySmall, if (p.dirty) Nz.status.paused else c.textMuted)
 }
 
 /**
@@ -120,15 +113,20 @@ private fun ProjectHeader(state: AppState) {
  * folded, so the whole setup can be read at a glance.
  */
 @Composable
-private fun Section(title: String, summary: String, content: @Composable ColumnScope.() -> Unit) {
+private fun Section(title: String, summary: String, initiallyOpen: Boolean = true, action: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val c = Nz.colors
-    var open by remember(title) { mutableStateOf(true) }
-    Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = if (open) "Fold $title" else "Open $title") { open = !open }
-            .semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Txt(title, Nz.type.title)
-            Txt(if (open) "" else summary, Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
-            Txt(if (open) "▾" else "▸", Nz.type.label, c.textMuted)
+    var open by remember(title) { mutableStateOf(initiallyOpen) }
+    val shape = RoundedCornerShape(NozzleTokens.Radius.card)
+    Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.line, shape).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = if (open) "Fold $title" else "Open $title") { open = !open }
+                .semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Txt(if (open) "▾" else "▸", Nz.type.label, c.textMuted)
+                Txt(title, Nz.type.label)
+                Txt(if (open) "" else summary, Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
+            }
+            action?.invoke()
         }
         if (open) content()
     }
@@ -141,18 +139,24 @@ private fun StepPrinter(state: AppState) {
     var query by remember { mutableStateOf("") }
     var choosing by remember { mutableStateOf(false) }
     val printerName = p.printer()?.config?.identity?.displayName ?: "None (export only)"
-    Section("Printer", printerName + " · " + (p.profile?.model ?: p.profileId)) {
+    Section("Printer", printerName + " · " + (p.profile?.model ?: p.profileId),
+        action = { com.nozzleitall.desktop.settings.IconToggle(NzIcon.TUNE, "Printer settings", p.settingsScope == com.nozzleitall.desktop.settings.Scope.PRINTER) {
+            p.settingsScope = if (p.settingsScope == com.nozzleitall.desktop.settings.Scope.PRINTER) com.nozzleitall.desktop.settings.Scope.PROCESS else com.nozzleitall.desktop.settings.Scope.PRINTER } }) {
         val ids = state.fleet.order.value
         val choices = listOf(com.nozzleitall.desktop.settings.Choice("", "None (export only)")) +
             ids.mapNotNull { id -> state.fleet.printers[id]?.let { com.nozzleitall.desktop.settings.Choice(id, it.config.identity.displayName) } }
-        com.nozzleitall.desktop.settings.NzSelect("Printer", choices, p.printerId ?: "") { v -> p.choosePrinter(v.ifBlank { null }) }
+        com.nozzleitall.desktop.settings.DenseSelect("Printer", choices, p.printerId ?: "", Modifier.fillMaxWidth()) { v -> p.choosePrinter(v.ifBlank { null }) }
         // Slicing needs only a profile. It is independent of the connection, so any printer can be prepared for, offline.
-        Txt("Slicing profile: ${p.profile?.let { "${it.vendor} · ${it.model}" } ?: p.profileId}", Nz.type.body)
-        NzButton(if (choosing) "Done" else "Change profile", { choosing = !choosing }, kind = ButtonKind.QUIET)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Txt("Profile", Nz.type.bodySmall, c.textMuted)
+            Txt(p.profile?.let { "${it.vendor} · ${it.model}" } ?: p.profileId, Nz.type.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
+            Txt(if (choosing) "Done" else "Change", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { choosing = !choosing }.padding(4.dp))
+        }
         if (choosing) {
-            Field("Search printer models", query, { query = it }, placeholder = "Snapmaker, Prusa, Bambu, Voron…")
-            ProfileCatalog.search(query).take(10).forEach { pr ->
-                NzButton("${pr.vendor} · ${pr.model}", { p.profileId = pr.id; p.changed(); choosing = false }, kind = if (p.profileId == pr.id) ButtonKind.PRIMARY else ButtonKind.QUIET)
+            com.nozzleitall.desktop.settings.DenseInput(query, { query = it }, "Search printer models", Modifier.fillMaxWidth(), placeholder = "Snapmaker, Prusa, Bambu, Voron…")
+            ProfileCatalog.search(query).take(8).forEach { pr ->
+                Txt("${pr.vendor} · ${pr.model}", Nz.type.bodySmall, if (p.profileId == pr.id) c.accent else c.text, maxLines = 1,
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { p.profileId = pr.id; p.changed(); choosing = false }.padding(horizontal = 6.dp, vertical = 5.dp))
             }
             Txt("${ProfileCatalog.all.size} printer profiles. A profile means Nozzle can slice for that printer; it doesn't mean the printer has been tested.",
                 Nz.type.bodySmall, c.textMuted)
@@ -165,14 +169,25 @@ private fun MaterialsSection(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     val slots = p.materials()
-    Section("Materials", slots.joinToString(" · ") { "${it.slot} ${it.type ?: "?"}" }) {
-        val fromPrinter = p.printer()?.status?.value?.toolheads?.any { it.material != null } == true
-        if (fromPrinter) Txt("Loaded in the printer now:", Nz.type.bodySmall, c.textMuted)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            slots.forEach { s -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "Material ${s.slot}: ${s.type} ${s.colorHex}" }) {
-                Box(Modifier.size(34.dp).clip(CircleShape).background(parseHex(s.colorHex) ?: c.surfaceSunken).border(1.dp, c.lineStrong, CircleShape))
-                Txt("${s.slot} · ${s.type ?: "?"}", Nz.type.bodySmall)
-            } }
+    val fromPrinter = p.printer()?.status?.value?.toolheads?.any { it.material != null } == true
+    Section("Filament", slots.joinToString(" · ") { "${it.slot} ${it.type ?: "?"}" },
+        action = { com.nozzleitall.desktop.settings.IconToggle(NzIcon.TUNE, "Material settings", p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) {
+            p.settingsScope = if (p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) com.nozzleitall.desktop.settings.Scope.PROCESS else com.nozzleitall.desktop.settings.Scope.FILAMENT } }) {
+        if (fromPrinter) Txt("As loaded in ${p.printer()?.config?.identity?.displayName}", Nz.type.bodySmall, c.textMuted)
+        // Two columns of slots: the number on the material's colour, then the material.
+        slots.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { s ->
+                    val colour = parseHex(s.colorHex) ?: c.surfaceSunken
+                    val ink = if (colour.red * 0.299f + colour.green * 0.587f + colour.blue * 0.114f > 0.6f) Color(0xFF0D1114) else Color.White
+                    Row(Modifier.weight(1f).height(30.dp).clip(RoundedCornerShape(6.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(6.dp))
+                        .semantics(mergeDescendants = true) { contentDescription = "Material ${s.slot}: ${s.type} ${s.colorHex}" }, verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(30.dp).background(colour), contentAlignment = Alignment.Center) { Txt("${s.slot}", Nz.type.label, ink) }
+                        Txt(listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "?" }, Nz.type.bodySmall, modifier = Modifier.padding(horizontal = 8.dp).weight(1f), maxLines = 1)
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
         }
     }
 }
@@ -181,63 +196,58 @@ private fun MaterialsSection(state: AppState) {
 private fun StepObjects(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
-    Section("Objects", if (p.items.isEmpty()) "None yet" else "${p.items.size} on the plate") {
-        if (p.items.isEmpty()) { Txt("Nothing on the plate yet.", Nz.type.body, c.textMuted); return@Section }
+    Section("Objects", if (p.items.isEmpty()) "None yet" else "${p.items.size} on the plate", initiallyOpen = p.items.isNotEmpty(),
+        action = { if (p.items.isNotEmpty()) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { if (!p.arrange()) p.notice = "Not everything fits on the plate." } }) {
+        if (p.items.isEmpty()) { Txt("Nothing on the plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
+        val slots = p.materials()
         p.items.forEach { item ->
             val sel = item.id == p.selected
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (sel) c.surfaceRaised else Color.Transparent)
-                .selectable(sel, role = Role.Button) { p.selected = if (sel) null else item.id }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Txt(item.name, Nz.type.body, modifier = Modifier.weight(1f), maxLines = 1)
-                Txt("${"%.0f".format(item.footprintW)}×${"%.0f".format(item.footprintD)}×${"%.0f".format(item.height)} mm", Nz.type.metricSmall, c.textMuted)
+            Row(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else Color.Transparent)
+                .selectable(sel, role = Role.Button) { p.selected = if (sel) null else item.id }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(parseHex(slots.getOrNull(item.slot - 1)?.colorHex) ?: c.accent))
+                Txt(item.name, Nz.type.bodySmall, if (sel) c.accent else c.text, modifier = Modifier.weight(1f), maxLines = 1)
+                Txt("${"%.0f".format(item.footprintW)}×${"%.0f".format(item.footprintD)}×${"%.0f".format(item.height)} mm", Nz.type.bodySmall, c.textMuted)
             }
         }
         val s = p.items.firstOrNull { it.id == p.selected }
         if (s != null) {
-            Txt("Material for ${s.name}", Nz.type.label)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                p.materials().forEach { m -> NzButton("${m.slot}", { s.slot = m.slot; p.changed() }, kind = if (s.slot == m.slot) ButtonKind.PRIMARY else ButtonKind.SECONDARY) }
+            ObjectRow("Material") {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    slots.forEach { m ->
+                        val on = s.slot == m.slot
+                        Box(Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(m.colorHex) ?: c.surfaceSunken)
+                            .border(if (on) 2.dp else 1.dp, if (on) c.accent else c.line, RoundedCornerShape(5.dp)).clickable(onClickLabel = "Material ${m.slot}") { s.slot = m.slot; p.changed() },
+                            contentAlignment = Alignment.Center) { Txt("${m.slot}", Nz.type.label, if ((parseHex(m.colorHex)?.let { it.red + it.green + it.blue } ?: 0f) > 1.8f) Color(0xFF0D1114) else Color.White) }
+                    }
+                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField("X mm", s.x) { s.x = it; p.changed() }
-                NumberField("Y mm", s.y) { s.y = it; p.changed() }
-                NumberField("Turn °", s.rotZ) { s.rotZ = it; p.changed() }
-                NumberField("Size %", s.scale * 100) { v -> if (v > 0) { s.scale = v / 100; p.changed() } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NzButton("Duplicate", { p.duplicateSelected() }, kind = ButtonKind.SECONDARY)
-                NzButton("Remove", { p.removeSelected() }, kind = ButtonKind.QUIET)
+            ObjectRow("Position (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("X", s.x) { s.x = it; p.changed() }; ObjectNumber("Y", s.y) { s.y = it; p.changed() } } }
+            ObjectRow("Turn and size") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() }; ObjectNumber("%", s.scale * 100) { v -> if (v > 0) { s.scale = v / 100; p.changed() } } } }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.duplicateSelected() }.padding(4.dp))
+                Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.removeSelected() }.padding(4.dp))
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { NzButton("Arrange", { p.arrange() }, kind = ButtonKind.SECONDARY, icon = NzIcon.MOVE) }
         p.outOfBounds().takeIf { it.isNotEmpty() }?.let { Txt("Off the plate: ${it.joinToString { o -> o.name }}", Nz.type.bodySmall, c.danger) }
     }
+}
+
+@Composable
+private fun ObjectRow(label: String, content: @Composable () -> Unit) = Row(Modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+    Txt(label, Nz.type.bodySmall, Nz.colors.textMuted, modifier = Modifier.weight(1f)); content()
+}
+
+@Composable
+private fun ObjectNumber(units: String, value: Float, onValue: (Float) -> Unit) {
+    var text by remember(value) { mutableStateOf("%.1f".format(value).removeSuffix(".0")) }
+    com.nozzleitall.desktop.settings.DenseInput(text, { t -> text = t; t.replace(',', '.').toFloatOrNull()?.let(onValue) }, units, Modifier.width(80.dp), units = units)
 }
 
 @Composable
 private fun NumberField(label: String, value: Float, onValue: (Float) -> Unit) {
     var text by remember(value) { mutableStateOf("%.1f".format(value).removeSuffix(".0")) }
     Field(label, text, { t -> text = t; t.replace(',', '.').toFloatOrNull()?.let(onValue) }, Modifier.width(84.dp))
-}
-
-@Composable
-private fun StepSettings(state: AppState) {
-    val p = state.prepare
-    val c = Nz.colors
-    Section("Print settings", "${p.preset.label} · ${if (p.supports) "supports" else "no supports"} · ${p.infill}% infill" + if (p.overrides.isNotEmpty()) " · ${p.overrides.size} changed" else "") {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            QualityPreset.entries.forEach { q -> NzButton(q.label, { p.preset = q; p.changed() }, kind = if (p.preset == q) ButtonKind.PRIMARY else ButtonKind.SECONDARY) }
-        }
-        Txt(p.preset.detail, Nz.type.bodySmall, c.textMuted)
-        Toggle("Supports", p.supports, { p.supports = it; p.changed() }, "Add supports under overhangs.")
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Txt("Infill", Nz.type.body, modifier = Modifier.width(60.dp))
-            listOf(10, 15, 25, 40).forEach { v -> NzButton("$v%", { p.infill = v; p.changed() }, kind = if (p.infill == v) ButtonKind.PRIMARY else ButtonKind.SECONDARY) }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NzButton("All settings", { p.showAllSettings = true }, kind = ButtonKind.SECONDARY, icon = NzIcon.SETTINGS, testTag = "all-settings")
-            if (p.overrides.isNotEmpty()) Txt("${p.overrides.size} changed", Nz.type.bodySmall, c.accent)
-        }
-    }
 }
 
 @Composable

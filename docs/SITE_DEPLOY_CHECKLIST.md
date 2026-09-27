@@ -24,3 +24,18 @@ Deploying is done with `scripts/deploy_site.sh` (Claude, authorised by the owner
 
 ## Rollback
 Restore the backed-up web root, purge the Cloudflare cache, and re-test `/mmf-auth`.
+
+## Sending mail as support@nozzleitall.com (2026-09-26)
+
+The mail server (mail-vm-admin, 209.94.63.87) already DKIM-signs every outgoing message with a key named after the From
+domain (selector `upcloud2026`, `/var/webuzo-data/mail/dkim/private/<domain>`); a key for nozzleitall.com exists. Only DNS
+(Cloudflare) is missing. Add these three records to nozzleitall.com, then send a test and check `dkim=pass spf=pass dmarc=pass`:
+
+| Type | Name | Value |
+|---|---|---|
+| TXT | `upcloud2026._domainkey` | `v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtfOH7/Jj7rha49gYhZAscRHmFSECHuiAY37x5hYmb1jm5PHvkp67Y44fmFrRgtE9XQzC/+VFAWU9ySPNMmM6e/DCpjGrkkr2qPoW3ay5kB4lpVTrvVC3yTbJ4YZELMBGdRcjbnA+snYx2/IptysIpdDIQl/hloX84IuLBa/hT8SYantlvnstWZ4+tMVAWOPPcyWk4DvJgjZtmjgIRdo1sSNptqql0uz8cqj8XrYPlKLP/j/wTcWDFLTB9x2E38mII05ektNm83ja7e8j1hFNJzjVwql6dnNZpG4w/YgEJ2iEWvyupb8a7+BHZgOTTmhccdfg32DbH53yXNWPoI2VBQIDAQAB` |
+| TXT | `@` (replaces the current `v=spf1 -all`) | `v=spf1 ip4:209.94.63.87 -all` |
+| TXT | `_dmarc` (update) | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s; rua=mailto:support@nozzleitall.com` |
+
+The public key above is safe to publish; the private key never leaves the server. DMARC alignment is strict, and DKIM
+(d=nozzleitall.com) is what satisfies it, because the envelope sender is on jamesjennison.net.

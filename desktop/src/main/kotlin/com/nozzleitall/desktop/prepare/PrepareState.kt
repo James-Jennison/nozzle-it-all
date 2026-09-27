@@ -139,7 +139,31 @@ class PrepareState(private val app: AppState) {
     val headProfiles = androidx.compose.runtime.mutableStateMapOf<Int, String>()
 
     /** The filament profiles this printer profile can slice with, one per slot. */
-    fun filamentLibrary(): List<FilamentLibrary.Entry> = FilamentLibrary.forProfile(profileId)
+    fun filamentLibrary(): List<FilamentLibrary.Entry> = FilamentLibrary.forProfile(filamentKey())
+
+    // --- The printer's profile family (PrinterLibrary), where it has one: nozzle size and process preset.
+    /** The nozzle diameter chosen on the printer card ("0.4"), or null for the family's 0.4 mm default. */
+    var nozzle by mutableStateOf<String?>(null)
+    /** The process preset chosen in the Print header (a library id), or null for the machine's default. */
+    var processId by mutableStateOf<String?>(null)
+    fun library(): PrinterLibrary? = PrinterLibrary.of(profileId)
+    fun machineVariant(): PrinterLibrary.Machine? = library()?.machineFor(nozzle)
+    fun processes(): List<PrinterLibrary.Process> = library()?.let { lib -> machineVariant()?.let { lib.processesFor(it) } }.orEmpty()
+    fun currentProcess(): PrinterLibrary.Process? = machineVariant()?.let { m ->
+        library()?.processes?.get(processId?.takeIf { it in m.processes } ?: m.defaultProcess) }
+    /** Switches every nozzle to [diameter]: the family's machine for it, its default process, and each slot's filament
+     *  kept by family where that size has it (else the printer default). */
+    fun chooseNozzle(diameter: String) {
+        val lib = library() ?: return
+        val next = lib.machineFor(diameter)
+        val nextFilaments = lib.filamentsFor(next)
+        fun carry(id: String?): String? = id?.let { old -> lib.filaments[old]?.family?.let { fam -> nextFilaments.firstOrNull { it.family.equals(fam, true) }?.id } }
+        for (i in manualSlots.indices) manualSlots[i] = manualSlots[i].copy(filamentProfile = carry(manualSlots[i].filamentProfile))
+        headProfiles.keys.toList().forEach { k -> carry(headProfiles[k])?.let { headProfiles[k] = it } ?: headProfiles.remove(k) }
+        nozzle = next.nozzle; processId = null; changed()
+    }
+
+    private fun filamentKey(): String = machineVariant()?.let { "$profileId@${it.id}" } ?: profileId
 
     /** Sets slot [slot]'s filament profile (and, for a slot Nozzle keeps itself, its material type and colour). */
     fun setSlotFilament(slot: Int, entry: FilamentLibrary.Entry?, colourHex: String? = null) {
@@ -160,14 +184,16 @@ class PrepareState(private val app: AppState) {
             val chosen = headProfiles[t.index + 1]
             ProjectManifest.MaterialSlot(t.index + 1, t.material?.type ?: "PLA", t.material?.vendor, t.material?.subType,
                 t.material?.colorHex ?: manualSlots.getOrNull(t.index)?.colorHex, t.index,
-                filamentProfile = chosen ?: FilamentLibrary.bestFor(profileId, t.material?.vendor, t.material?.type ?: "PLA", t.material?.subType)?.id)
+                filamentProfile = chosen ?: FilamentLibrary.bestFor(filamentKey(), t.material?.vendor, t.material?.type ?: "PLA", t.material?.subType)?.id)
         }
         // No printer report: one slot per tool the profile has (a U1 has four, most printers one).
         val tools = (profile?.tools ?: 1).coerceIn(1, manualSlots.size)
         return manualSlots.take(tools)
     }
 
-    fun profileDir(): File = ProfileCatalog.materialize(app.paths.cache, profileId)
+    /** The engine's profile folder: the family's machine and process when the printer has a library, else its pack. */
+    fun profileDir(): File = library()?.let { lib -> lib.materialize(app.paths.cache, lib.machineFor(nozzle), processId) }
+        ?: ProfileCatalog.materialize(app.paths.cache, profileId)
 
     // --- Colour mixing (Snapmaker Full Spectrum). The mixes are Snapmaker's own mixed_filament_definitions string; the
     // engine (Snapmaker Orca's MixedFilamentManager) turns it into rows with virtual slot numbers after the physical ones.
@@ -211,8 +237,9 @@ class PrepareState(private val app: AppState) {
     val nozzleFlows = mutableStateListOf<String>()
 
     private var machineCache: Pair<String, JSONObject>? = null
-    fun machineJson(): JSONObject = machineCache?.takeIf { it.first == profileId }?.second
-        ?: runCatching { JSONObject(File(profileDir(), "machine.json").readText()) }.getOrDefault(JSONObject()).also { machineCache = profileId to it }
+    fun machineJson(): JSONObject { val key = "$profileId@${nozzle.orEmpty()}"
+        return machineCache?.takeIf { it.first == key }?.second
+            ?: runCatching { JSONObject(File(profileDir(), "machine.json").readText()) }.getOrDefault(JSONObject()).also { machineCache = key to it } }
     fun beds(): PrinterSetup.Beds = PrinterSetup.beds(machineJson())
     /** The bed type slicing uses: the choice when it's valid for this printer, else the printer's default. */
     fun effectiveBedType(): String { val b = beds(); return bedType?.takeIf { b.enabled && b.choices.any { c -> c.value == it } } ?: b.default }
@@ -302,7 +329,7 @@ class PrepareState(private val app: AppState) {
     }
 
     fun newProject() {
-        bedType = null; nozzleFlows.clear()
+        bedType = null; nozzleFlows.clear(); nozzle = null; processId = null
         overrides.clear(); mixDefinitions = ""; mixes.clear(); mixProblem = null; headProfiles.clear(); colorMix.clear()
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         slice = SliceState.Idle; showPreview = false; nextId = 1
@@ -317,7 +344,10 @@ class PrepareState(private val app: AppState) {
         p.passthrough[PrusaColorMix.SIDECAR]?.let { PrusaColorMix.readSidecar(it) }?.let { (_, list) -> setColorMix(list) }
         val entries = p.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
         p.objects.forEach { o -> addFromPlacement(o, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments) }
-        p.manifest?.settings?.preset?.let { key -> QualityPreset.entries.firstOrNull { it.name.equals(key, true) }?.let { preset = it } }
+        p.manifest?.settings?.preset?.let { key ->
+            if (key.startsWith("process:")) processId = key.removePrefix("process:")
+            else QualityPreset.entries.firstOrNull { it.name.equals(key, true) }?.let { preset = it } }
+        p.manifest?.printer?.nozzleDiameters?.firstOrNull()?.let { d -> nozzle = if (d == Math.floor(d)) d.toInt().toString() else d.toString() }
         p.manifest?.settings?.overrides?.let { ov ->
             ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" }
             // Everything else the project changed (from any platform) shows up in All settings.
@@ -432,11 +462,13 @@ class PrepareState(private val app: AppState) {
                 modifiedBy = ProjectManifest.Producer("Nozzle It All", "desktop", app.version), modifiedAtMillis = System.currentTimeMillis(),
                 printer = ProjectManifest.PrinterTarget(profile?.model ?: p?.config?.identity?.model ?: "Unknown printer", base.printer?.firmware, p?.config?.identity?.id,
                     unknown = base.printer?.unknown ?: org.json.JSONObject(), profileId = profileId,
-                    family = p?.config?.identity?.family?.id ?: profile?.familyHint),
+                    family = p?.config?.identity?.family?.id ?: profile?.familyHint,
+                    nozzleDiameters = machineVariant()?.let { m -> PrinterSetup.nozzles(machineJson()).map { it.toDoubleOrNull() ?: 0.4 } } ?: base.printer?.nozzleDiameters.orEmpty()),
                 plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList()) },
                     base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
                 materials = materials(),
-                settings = ProjectManifest.SettingsChoice(preset.name.lowercase(), mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + preset.overrides + overrides +
+                settings = ProjectManifest.SettingsChoice(currentProcess()?.let { "process:${it.id}" } ?: preset.name.lowercase(),
+                    mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + (if (library() == null) preset.overrides else emptyMap()) + overrides +
                     (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()) + printerOverrides(),
                     base.settings.unknown))
         }
@@ -460,7 +492,7 @@ class PrepareState(private val app: AppState) {
         if (items.isEmpty()) { slice = SliceState.Failed("Add a model to the plate first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
         val e = SliceEngine(bin, app.paths.slices).also { engine = it }
-        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), extraOverrides = printerOverrides() + overrides.toMap() +
+        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, extraOverrides = printerOverrides() + overrides.toMap() +
             (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
             virtualExtruders = colorMix.takeIf { it.isNotEmpty() }?.let { PrusaColorMix.sidecar(materials().map { m -> m.colorHex ?: "#FFFFFF" }, it.toList()) })
         slice = SliceState.Running(0f, "Starting")

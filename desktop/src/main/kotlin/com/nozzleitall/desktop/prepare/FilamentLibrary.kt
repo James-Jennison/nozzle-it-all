@@ -17,9 +17,13 @@ object FilamentLibrary {
 
     private val cache = HashMap<String, List<Entry>>()
 
-    /** Filament profiles bundled for printer profile [profileId] (empty when none are). */
+    /**
+     * Filament profiles for [profileId]: "<profile>@<machine>" reads that nozzle size's filaments from the printer's
+     * profile family (PrinterLibrary); a plain profile id reads its bundled filament list (empty when none is).
+     */
     fun forProfile(profileId: String): List<Entry> = synchronized(cache) {
         cache.getOrPut(profileId) {
+            libraryMachine(profileId)?.let { (lib, m) -> return@getOrPut lib.filamentsFor(m) }
             val text = FilamentLibrary::class.java.getResourceAsStream("/filaments/$profileId/index.json")?.readBytes()?.decodeToString() ?: return@getOrPut emptyList()
             val a = JSONObject(text).getJSONArray("filaments")
             (0 until a.length()).map { a.getJSONObject(it) }.map { Entry(it.getString("id"), it.getString("name"), it.optString("vendor"), it.optString("type"), it.optString("family")) }
@@ -27,7 +31,18 @@ object FilamentLibrary {
     }
 
     fun profileJson(profileId: String, filamentId: String): JSONObject? =
-        FilamentLibrary::class.java.getResourceAsStream("/filaments/$profileId/$filamentId.json")?.readBytes()?.decodeToString()?.let { JSONObject(it) }
+        libraryMachine(profileId)?.first?.json("filament", filamentId)
+            ?: FilamentLibrary::class.java.getResourceAsStream("/filaments/$profileId/$filamentId.json")?.readBytes()?.decodeToString()?.let { JSONObject(it) }
+
+    private fun libraryMachine(key: String): Pair<PrinterLibrary, PrinterLibrary.Machine>? {
+        val parts = key.split('@')
+        val lib = PrinterLibrary.of(parts[0]) ?: return null
+        // A plain printer id means its family's default machine (the 0.4 mm nozzle).
+        return if (parts.size < 2) lib to lib.machineFor(null) else lib.machines.firstOrNull { it.id == parts[1] }?.let { lib to it }
+    }
+
+    /** The filament key for a slice's profile folder ("<profile>@<machine>@<process>" → "<profile>@<machine>"). */
+    fun keyForDir(dirName: String): String = dirName.split('@').take(2).joinToString("@")
 
     /**
      * The library entry for a loaded filament a printer reports (vendor and type, e.g. Snapmaker PLA), preferring the

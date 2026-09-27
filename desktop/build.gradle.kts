@@ -37,8 +37,9 @@ tasks.named<ProcessResources>("processResources") {
  from(rootProject.file("engine/snapmaker/unsupported-profiles.json")) { into("profiles") }
  // Snapmaker Orca's filament colour library (Full Spectrum's recommended palette), from the pinned commit.
  from(rootProject.file("engine/snapmaker/resources/filaments_colours.json")) { into("fullspectrum") }
- // Per-slot filament profiles, per printer profile (scripts/bundle_filament_library.py).
- from(rootProject.file("engine/snapmaker/filaments")) { into("filaments") }
+ // Printers' whole profile families from their own slicers: nozzle sizes, process presets, filaments
+ // (scripts/bundle_printer_library.py).
+ from(rootProject.file("engine/snapmaker/library")) { into("library") }
  // Every engine setting (exported from the engine itself) and Nozzle's own grouping of them.
  from(rootProject.file("schemas/slicing")) { into("settings"); include("settings-schema.json", "settings-groups.json") }
 }

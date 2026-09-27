@@ -22,6 +22,8 @@ data class SliceRequest(
     /** One entry per material slot (1-based order), "#RRGGBB" and a type, from the printer's loaded toolheads or the user. */
     val materials: List<ProjectManifest.MaterialSlot>,
     val extraOverrides: Map<String, String> = emptyMap(),
+    /** Whether [preset]'s layer height applies (false when the printer's own process preset is in use). */
+    val applyPreset: Boolean = true,
     /** PrusaSlicer ColorMix virtual extruders (its sidecar JSON), or null. */
     val virtualExtruders: String? = null,
 )
@@ -150,13 +152,13 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             val slots = if (mixing) materials else materials.take(maxOf(usedSlots, 1))
             // Each slot slices with its own filament profile when it has one (one combined per-slot filament file, as a
             // slicer combines its filament presets); otherwise the printer profile's own filament.
-            val filaments = FilamentLibrary.writeCombined(req.profileDir.name, req.profileDir, slots, job) ?: File(req.profileDir, "filament.json")
+            val filaments = FilamentLibrary.writeCombined(FilamentLibrary.keyForDir(req.profileDir.name), req.profileDir, slots, job) ?: File(req.profileDir, "filament.json")
             listOf(File(req.profileDir, "machine.json"), File(req.profileDir, "process.json"), filaments).forEach { lines += "profile\t${it.absolutePath}" }
             val baseNozzleC = runCatching { JSONObject(File(req.profileDir, "filament.json").readText()).optJSONArray("nozzle_temperature")?.optString(0)?.toIntOrNull() }.getOrNull()
-            fun slotNozzleC(s: ProjectManifest.MaterialSlot): Int? = (s.filamentProfile?.let { FilamentLibrary.profileJson(req.profileDir.name, it) }
+            fun slotNozzleC(s: ProjectManifest.MaterialSlot): Int? = (s.filamentProfile?.let { FilamentLibrary.profileJson(FilamentLibrary.keyForDir(req.profileDir.name), it) }
                 ?.optJSONArray("nozzle_temperature")?.optString(0)?.toIntOrNull()) ?: baseNozzleC
             val overrides = LinkedHashMap<String, String>()
-            overrides += req.preset.overrides
+            if (req.applyPreset) overrides += req.preset.overrides
             overrides["sparse_infill_density"] = "${req.infillPercent.coerceIn(0, 100)}%"
             overrides["enable_support"] = if (req.supports) "1" else "0"
             if (slots.size > 1) overrides += multiToolOverrides(1.75, slots, ::slotNozzleC)

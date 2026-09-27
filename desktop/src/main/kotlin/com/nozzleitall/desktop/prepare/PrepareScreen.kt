@@ -62,7 +62,7 @@ fun PrepareScreen(state: AppState) {
                 MaterialsSection(state)
                 StepObjects(state)
             }
-            val profileValues = remember(p.profileId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
+            val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
             com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
             StepSlice(state)
         }
@@ -184,10 +184,12 @@ private fun StepPrinter(state: AppState) {
 @Composable
 private fun PrinterSetupRows(p: PrepareState) {
     val c = Nz.colors
-    val beds = remember(p.profileId) { p.beds() }
-    val machine = remember(p.profileId) { p.machineJson() }
-    val nozzles = remember(p.profileId) { PrinterSetup.nozzles(machine) }
-    val highFlow = remember(p.profileId) { PrinterSetup.supportsHighFlow(machine) }
+    val beds = remember(p.profileId, p.nozzle) { p.beds() }
+    val machine = remember(p.profileId, p.nozzle) { p.machineJson() }
+    val nozzles = remember(p.profileId, p.nozzle) { PrinterSetup.nozzles(machine) }
+    val highFlow = remember(p.profileId, p.nozzle) { PrinterSetup.supportsHighFlow(machine) }
+    if (nozzles.size > 1 && p.library() != null && p.machineVariant() != null)
+        Txt("Changing the diameter changes every nozzle to it.", Nz.type.bodySmall, c.textMuted)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Txt("Bed type", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(72.dp))
         if (beds.enabled) com.nozzleitall.desktop.settings.DenseSelect("Bed type", beds.choices.map { com.nozzleitall.desktop.settings.Choice(it.value, it.label) },
@@ -205,7 +207,11 @@ private fun PrinterSetupRows(p: PrepareState) {
     val i = tab.coerceIn(0, nozzles.lastIndex)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Txt(if (nozzles.size > 1) "Diameter" else "Nozzle", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(72.dp))
-        Txt("${nozzles[i]} mm", Nz.type.bodySmall, modifier = Modifier.weight(1f))
+        // The printer's nozzle sizes (its profile family); choosing one switches every nozzle, as Snapmaker Orca does.
+        val sizes = p.library()?.machines?.map { it.nozzle }.orEmpty()
+        if (sizes.size > 1) com.nozzleitall.desktop.settings.DenseSelect("Nozzle diameter", sizes.map { com.nozzleitall.desktop.settings.Choice(it, "$it mm") },
+            p.machineVariant()?.nozzle ?: nozzles[i], Modifier.weight(1f)) { v -> p.chooseNozzle(v) }
+        else Txt("${nozzles[i]} mm", Nz.type.bodySmall, modifier = Modifier.weight(1f))
         Txt("Flow", Nz.type.bodySmall, c.textMuted)
         if (highFlow) com.nozzleitall.desktop.settings.DenseSelect("Nozzle ${i + 1} flow",
             listOf(com.nozzleitall.desktop.settings.Choice("standard", "Standard"), com.nozzleitall.desktop.settings.Choice("high_flow", "High Flow")),

@@ -174,3 +174,21 @@ interchange).
   - Gradients are shown and printed from files but, as in PrusaSlicer's dialog, not edited.
 - **Touches:** slicing, Prusa profiles, shared UI, project interchange.
 
+## P-0011 — Snapmaker U1 profile family, bed type and nozzles (ported)
+
+- **Upstream:** Snapmaker Orca `cbf7bbb0b3`: `resources/profiles/Snapmaker` (machines "Snapmaker U1 (0.2/0.4/0.6/0.8
+  nozzle)", their compatible process presets and filaments), and the printer card's rules in `src/slic3r/GUI/Plater.cpp`
+  (bed-type list and default, nozzle tabs: diameter switches the whole printer preset, flow per nozzle) with
+  `Preset::get_default_bed_type` and `FlowTypeHelper.cpp`. AGPL-3.0.
+- **Imported:** `engine/snapmaker/library/snapmaker_u1` (scripts/bundle_printer_library.py) replaces the filament-only
+  bundle; Prepare's printer card offers Snapmaker's bed types, nozzle diameters and per-nozzle flow, the Print header
+  lists Snapmaker's process presets (e.g. "0.10mm Color Mixing"), and each nozzle size has its own filaments.
+- **Test evidence:** PrinterSetupTest, PrinterLibraryTest (a 0.6 mm slice uses a 0.6 nozzle and 0.30 mm layers).
+- **Known divergence:**
+  - Snapmaker's U1 machines name "Snapmaker PLA" as the default filament, which is compatible only with its A-series;
+    Nozzle uses "Snapmaker PLA Basic @U1" (0.4) or Generic PLA (other sizes) instead of the GUI's first-visible
+    fallback. The 0.2 mm machine's "0.10 Standard" default doesn't exist; the first compatible process is used.
+  - Printers without a profile family keep Nozzle's guided Draft/Standard/Fine layer heights until their families are
+    bundled from their own slicers.
+- **Touches:** PAXX (U1), slicing, shared UI.
+

@@ -24,6 +24,12 @@ class MjpegReaderTest {
         assertArrayEquals(a, r.next()); assertArrayEquals(b, r.next()); assertArrayEquals(a, r.next()); assertNull(r.next())
     }
 
+    @Test fun readsBackToBackJpegsWithoutHeaders() {
+        val a = jpeg(1, 2); val b = jpeg(3)
+        val r = MjpegReader(ByteArrayInputStream(a + b), multipart = false)
+        assertArrayEquals(a, r.next()); assertArrayEquals(b, r.next()); assertNull(r.next())
+    }
+
     @Test fun oversizedFramesEndTheStream() {
         val big = jpeg(*IntArray(2000) { 1 })
         val r = MjpegReader(ByteArrayInputStream(stream(big to false)), maxFrame = 1000)
@@ -31,7 +37,7 @@ class MjpegReaderTest {
     }
 
     @Test fun liveUrlSurvivesTheAdapterProtocol() {
-        val cam = CameraEndpoint("c", "case", CameraKind.WEBRTC, "http://p/webcam/webrtc", "http://p/webcam/snapshot.jpg", "http://p/webcam/stream.mjpg")
+        val cam = CameraEndpoint("c", "case", CameraKind.WEBRTC, "http://p/webcam/webrtc", "http://p/webcam/snapshot.jpg", "http://p/webcam/stream.mjpg", "http://p/webcam/stream.h264")
         assertEquals(cam, AdapterProtocol.decodeCamera(AdapterProtocol.encode(cam)))
     }
 }

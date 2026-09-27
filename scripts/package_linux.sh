@@ -39,6 +39,8 @@ done
 install -Dm644 "$ROOT/desktop/packaging/icons/nozzle-it-all.svg" "$PKG/usr/share/icons/hicolor/scalable/apps/nozzle-it-all.svg"
 rm -f "$PKG/opt/nozzle-it-all/lib/nozzle-it-all-nozzle-it-all.desktop"
 sed -i '/xdg-desktop-menu/d' "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/prerm"
+# ffmpeg plays printer cameras' H.264 streams at full frame rate (MJPEG from camera-streamer tops out near 4 fps).
+sed -i 's/^Depends: /Depends: ffmpeg, /' "$PKG/DEBIAN/control"
 cat > "$STAGE/refresh" <<'EOF'
 if [ "$1" = configure ] || [ "$1" = remove ]; then
   command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true

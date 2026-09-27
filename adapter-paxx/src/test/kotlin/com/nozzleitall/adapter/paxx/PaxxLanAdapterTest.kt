@@ -81,6 +81,7 @@ class PaxxLanAdapterTest {
             assertEquals("JPEGDATA", String(s.snapshot(cams[0])))
             // The same camera is shown live as MJPEG, on the printer's own host.
             assertEquals("${fake.address}/webcam/stream.mjpg", cams[0].liveUrl)
+            assertEquals("${fake.address}/webcam/stream.h264", cams[0].videoUrl)
             val frames = s.liveStream(cams[0]).use { input -> val r = MjpegReader(input); listOfNotNull(r.next(), r.next(), r.next()) }
             assertEquals(listOf(listOf(0xFF, 0xD8, 1, 2, 3, 0xFF, 0xD9), listOf(0xFF, 0xD8, 4, 5, 0xFF, 0xD9)), frames.map { f -> f.map { it.toInt() and 0xFF } })
         }

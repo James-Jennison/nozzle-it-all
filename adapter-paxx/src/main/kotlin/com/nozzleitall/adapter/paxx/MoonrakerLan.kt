@@ -102,12 +102,12 @@ class MoonrakerLan(address: String, private val apiKey: String = "", eventListen
         throw IOException("The camera redirected too many times.")
     }
 
-    /** Opens a live MJPEG stream on the printer's own host. Closing the returned stream ends the request. */
-    fun stream(pathOrUrl: String): java.io.InputStream {
+    /** Opens a live camera stream (MJPEG, or raw video when [multipart] is false) on the printer's own host. Closing it ends the request. */
+    fun stream(pathOrUrl: String, multipart: Boolean = true): java.io.InputStream {
         val r = cameraResponse(streamClient, pathOrUrl)
         if (!r.isSuccessful) { r.close(); throw IOException("Camera stream unavailable (HTTP ${r.code}).") }
         val type = r.header("Content-Type").orEmpty()
-        if (!type.startsWith("multipart/", ignoreCase = true)) { r.close(); throw IOException("The camera didn't answer with a video stream.") }
+        if (multipart && !type.startsWith("multipart/", ignoreCase = true)) { r.close(); throw IOException("The camera didn't answer with a video stream.") }
         return r.body!!.byteStream()
     }
 

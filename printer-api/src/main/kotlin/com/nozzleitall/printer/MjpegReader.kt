@@ -10,11 +10,14 @@ import java.io.InputStream
  * Uses each part's Content-Length when present and otherwise finds the frame by its JPEG start and end markers, so the
  * boundary string doesn't need to be known. A frame larger than [maxFrame] ends the stream with an error.
  */
-class MjpegReader(input: InputStream, private val maxFrame: Int = 8 * 1024 * 1024) {
+class MjpegReader(input: InputStream, private val maxFrame: Int = 8 * 1024 * 1024,
+                  /** False for back-to-back JPEGs with no part headers (ffmpeg's -f mjpeg output). */
+                  private val multipart: Boolean = true) {
     private val input = input as? BufferedInputStream ?: BufferedInputStream(input, 64 * 1024)
 
     /** The next complete JPEG frame, or null at the end of the stream. */
     fun next(): ByteArray? {
+        if (!multipart) return scanFrame()
         var contentLength: Int? = null
         var sawHeader = false
         while (true) { // the boundary line and the part's headers, up to the blank line that ends them

@@ -137,10 +137,12 @@ enum class CameraKind { WEBRTC, MJPEG_STREAM, SNAPSHOT, RTSP }
 
 /**
  * One printer camera. [url] is the camera's own stream address (for WebRTC, the player). [liveUrl] is a live MJPEG stream
- * (multipart/x-mixed-replace) Nozzle can show itself; screens always prefer it and fall back to [snapshotUrl] stills only
- * when a camera has no live stream.
+ * (multipart/x-mixed-replace) Nozzle can show itself. [videoUrl] is a raw H.264 stream of the same camera, usually at a far
+ * higher frame rate than its MJPEG (camera-streamer caps MJPEG at about 4 fps at 1080p but sends H.264 at 30). Screens
+ * prefer video, then the MJPEG stream, and fall back to [snapshotUrl] stills only when a camera has neither.
  */
-data class CameraEndpoint(val id: String, val name: String, val kind: CameraKind, val url: String, val snapshotUrl: String? = null, val liveUrl: String? = null)
+data class CameraEndpoint(val id: String, val name: String, val kind: CameraKind, val url: String, val snapshotUrl: String? = null, val liveUrl: String? = null,
+                          val videoUrl: String? = null)
 
 data class JobProgress(
     val fileName: String,

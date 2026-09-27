@@ -126,7 +126,7 @@ object U1Protocol {
             when {
                 // camera-streamer serves the same camera as MJPEG beside WebRTC (…/stream.mjpg), which Nozzle shows live itself.
                 stream.contains("webrtc", true) -> CameraEndpoint(id, name, CameraKind.WEBRTC, stream, snap.ifBlank { null },
-                    liveUrl = stream.substringBeforeLast('/', "") + "/stream.mjpg")
+                    liveUrl = stream.substringBeforeLast('/', "") + "/stream.mjpg", videoUrl = stream.substringBeforeLast('/', "") + "/stream.h264")
                 stream.isNotBlank() && w.optString("service").contains("mjpeg", true) -> CameraEndpoint(id, name, CameraKind.MJPEG_STREAM, stream, snap.ifBlank { null }, liveUrl = stream)
                 snap.isNotBlank() -> CameraEndpoint(id, name, CameraKind.SNAPSHOT, snap, snap)
                 else -> null

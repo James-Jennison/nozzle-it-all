@@ -88,24 +88,33 @@ fun CameraPanel(entry: PrinterEntry) {
     var live by remember(entry) { mutableStateOf(false) }
     val camera = cams.firstOrNull()
     // The open stream, so leaving the screen closes it at once (a blocking socket read doesn't notice cancellation).
-    val openStream = remember(entry, camera) { java.util.concurrent.atomic.AtomicReference<java.io.InputStream?>(null) }
+    val openStream = remember(entry, camera) { java.util.concurrent.atomic.AtomicReference<java.io.Closeable?>(null) }
+    val ffmpeg = remember { com.nozzleitall.desktop.camera.FfmpegVideo.locate() }
     DisposableEffect(entry, camera) { onDispose { openStream.getAndSet(null)?.let { runCatching { it.close() } } } }
     LaunchedEffect(entry, camera) {
+        var videoWorks = true // a video attempt that produced no frame falls back to MJPEG from then on
         while (isActive && camera != null) {
             val s = entry.session
             if (s == null || entry.status.value.state == PrinterState.OFFLINE) { delay(2_000); continue }
-            if (camera.liveUrl != null) {
-                // Live: every frame the printer sends, decoded as it arrives. On any failure, wait briefly and reconnect.
+            if (camera.liveUrl != null || (videoWorks && camera.videoUrl != null && ffmpeg != null)) {
+                // Live: the camera's H.264 video when ffmpeg can play it (full frame rate), otherwise its MJPEG stream.
+                // Every frame is decoded as it arrives; on any failure, wait briefly and reconnect.
                 try {
                     withContext(Dispatchers.IO) {
-                        s.liveStream(camera).use { input ->
-                            openStream.set(input)
-                            val frames = MjpegReader(input)
+                        val video = if (videoWorks && camera.videoUrl != null && ffmpeg != null) runCatching { com.nozzleitall.desktop.camera.FfmpegVideo.start(ffmpeg, s.videoStream(camera)) }.getOrNull() else null
+                        val mjpeg = if (video == null) s.liveStream(camera) else null
+                        val source: java.io.Closeable = video ?: mjpeg!!
+                        source.use {
+                            openStream.set(source)
+                            val frames = mjpeg?.let { MjpegReader(it) }
+                            var shown = 0
                             while (isActive) {
-                                val frame = frames.next() ?: break
+                                val frame = (video?.next() ?: frames?.next()) ?: break
+                                shown++
                                 val decoded = runCatching { org.jetbrains.skia.Image.makeFromEncoded(frame).toComposeImageBitmap() }.getOrNull() ?: continue
                                 image = decoded; live = true; problem = null
                             }
+                            if (video != null && shown == 0 && camera.liveUrl != null) videoWorks = false
                         }
                     }
                 } catch (e: Exception) { if (isActive) problem = e.message ?: "Camera unavailable." }

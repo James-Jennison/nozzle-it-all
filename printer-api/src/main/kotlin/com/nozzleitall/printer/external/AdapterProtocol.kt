@@ -107,8 +107,8 @@ object AdapterProtocol {
             job, bed, heads, o.optStringOrNull("message"), o.optLong("observedAtMillis", System.currentTimeMillis()), ext)
     }
 
-    fun encode(c: CameraEndpoint) = JSONObject().put("id", c.id).put("name", c.name).put("kind", c.kind.name).put("url", c.url).putOpt("snapshotUrl", c.snapshotUrl).putOpt("liveUrl", c.liveUrl)
-    fun decodeCamera(o: JSONObject) = CameraEndpoint(o.getString("id"), o.optString("name"), enumOr(o.optString("kind"), CameraKind.SNAPSHOT), o.getString("url"), o.optStringOrNull("snapshotUrl"), o.optStringOrNull("liveUrl"))
+    fun encode(c: CameraEndpoint) = JSONObject().put("id", c.id).put("name", c.name).put("kind", c.kind.name).put("url", c.url).putOpt("snapshotUrl", c.snapshotUrl).putOpt("liveUrl", c.liveUrl).putOpt("videoUrl", c.videoUrl)
+    fun decodeCamera(o: JSONObject) = CameraEndpoint(o.getString("id"), o.optString("name"), enumOr(o.optString("kind"), CameraKind.SNAPSHOT), o.getString("url"), o.optStringOrNull("snapshotUrl"), o.optStringOrNull("liveUrl"), o.optStringOrNull("videoUrl"))
 
     fun encode(d: DiscoveredPrinter) = JSONObject().put("address", d.address).put("model", d.model).put("suggestedFamily", d.suggestedFamily.id)
         .put("adapterId", d.adapterId).put("evidence", d.evidence).put("route", d.route.name)

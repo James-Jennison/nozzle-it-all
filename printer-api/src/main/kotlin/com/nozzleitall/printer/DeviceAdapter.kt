@@ -57,6 +57,8 @@ interface PrinterSession : AutoCloseable {
      * with a [CameraEndpoint.liveUrl]; sessions that can't stream keep this default.
      */
     fun liveStream(camera: CameraEndpoint): java.io.InputStream = throw java.io.IOException("This camera has no live stream Nozzle It All can show.")
+    /** The camera's raw H.264 stream (Annex B), for cameras with a [CameraEndpoint.videoUrl]; the caller closes it. Read-only. */
+    fun videoStream(camera: CameraEndpoint): java.io.InputStream = throw java.io.IOException("This camera has no video stream Nozzle It All can show.")
     fun upload(file: File, remoteName: String, progress: UploadProgress = UploadProgress { _, _ -> }): UploadResult
     /** Performs an already-confirmed action exactly once. Callers must go through [ActionGuard]. */
     fun perform(action: PrinterAction): ActionOutcome

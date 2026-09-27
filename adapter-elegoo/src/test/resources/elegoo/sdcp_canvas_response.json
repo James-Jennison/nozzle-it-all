@@ -1,0 +1,29 @@
+{
+    "_source": "Cmd 324 response: envelope from the SDCP V3.0.0 document's response messages; Data.Data fields from elegoo-link elegoo_fdm_cc_message_adapter.cpp handleCanvasStatus (active_canvas_id, active_tray_id, auto_refill, canvas_list/tray_list). Values are illustrative, not a hardware capture.",
+    "Id": "979d4C788A4a78bC777A870F1A02867A",
+    "Data": {
+        "Cmd": 324,
+        "Data": {
+            "Ack": 0,
+            "active_canvas_id": 0,
+            "active_tray_id": 1,
+            "auto_refill": false,
+            "canvas_list": [
+                {
+                    "canvas_id": 0,
+                    "connected": 1,
+                    "tray_list": [
+                        {"tray_id": 0, "brand": "ELEGOO", "filament_type": "PLA", "filament_name": "PLA Matte", "filament_code": "0x0000", "filament_color": "#ff0000", "min_nozzle_temp": 190, "max_nozzle_temp": 230, "status": 2},
+                        {"tray_id": 1, "brand": " ", "filament_type": "PETG", "filament_name": "PETG", "filament_code": "", "filament_color": "00ff00", "min_nozzle_temp": 230, "max_nozzle_temp": 260, "status": 1},
+                        {"tray_id": 2, "brand": "", "filament_type": "", "filament_name": "", "filament_code": "", "filament_color": "", "min_nozzle_temp": 0, "max_nozzle_temp": 0, "status": 0},
+                        {"tray_id": 3, "brand": "ELEGOO", "filament_type": "PLA", "filament_name": "PLA", "filament_code": "", "filament_color": "#0000FFFF", "min_nozzle_temp": 190, "max_nozzle_temp": 230, "status": 2}
+                    ]
+                }
+            ]
+        },
+        "RequestID": "REPLACED_BY_TEST",
+        "MainboardID": "000000000001d354",
+        "TimeStamp": 1687069655
+    },
+    "Topic": "sdcp/response/000000000001d354"
+}

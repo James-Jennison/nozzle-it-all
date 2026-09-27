@@ -35,6 +35,18 @@ printer of that kind (see [PRINTER_SUPPORT_MATRIX.md](PRINTER_SUPPORT_MATRIX.md)
 | accepted_outputs | gcode | gcode | gcode | gcode | gcode, bgcode | gcode.3mf | whatever the profile produces |
 | vendor_extensions | `snapmaker.full-spectrum`, `snapmaker.multi-ace` | – | `snapmaker.full-spectrum` | – | – | – | – |
 
+Elegoo (`elegoo-lan`, added 2026-09-27; hardware status UNVERIFIED, tested against in-process fakes only):
+
+| Capability | Centauri Carbon, stock firmware (SDCP) | Centauri Carbon 2 (MQTT) |
+|---|---|---|
+| upload_job, start_print (with a CANVAS slot map) | ✓ | ✓ |
+| pause / resume | ✓ / ✓ | – / – (no LAN resume in elegoo-link) |
+| cancel | ✓ | ✓ |
+| material_state, multi_material, toolhead_state (CANVAS slots, read only) | ✓ | ✓ |
+| local_connection | ✓ | ✓ |
+| everything else (temperatures, motion, camera, material_edit, load_unload, files, remote_connection, vendor_cloud) | – | – |
+| accepted_outputs | gcode | gcode |
+
 Notes:
 
 - **Temperatures** means setting heater targets. Temperature readings are shown whenever a printer's status reports

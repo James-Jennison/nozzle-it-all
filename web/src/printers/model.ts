@@ -6,7 +6,7 @@ export type PrinterState = 'offline' | 'connecting' | 'starting' | 'ready' | 'pr
 export type Route = 'lan' | 'private-network' | 'vendor-cloud' | 'none';
 /** Printer family id, open-ended like PrinterFamily in printer-api: 'paxx-u1', 'stock-u1', 'bambu-lab', 'prusa', 'klipper', 'octoprint', 'export-only', or a future vendor. */
 export type Family = string;
-export const KNOWN_FAMILIES = ['paxx-u1', 'stock-u1', 'bambu-lab', 'prusa', 'klipper', 'octoprint', 'export-only'] as const;
+export const KNOWN_FAMILIES = ['paxx-u1', 'stock-u1', 'bambu-lab', 'prusa', 'elegoo', 'klipper', 'octoprint', 'export-only'] as const;
 
 export const stateLabel = (s: PrinterState) => glossary.terms[`state.${s}` as keyof typeof glossary.terms].label;
 export const stateDescription = (s: PrinterState) => (glossary.terms[`state.${s}` as keyof typeof glossary.terms] as { description?: string }).description ?? '';

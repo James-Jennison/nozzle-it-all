@@ -22,9 +22,11 @@ value class PrinterFamily(val id: String) {
         /** Any other Klipper printer reached through Moonraker. */
         val KLIPPER = PrinterFamily("klipper")
         val OCTOPRINT = PrinterFamily("octoprint")
+        /** Elegoo Centauri Carbon printers on stock firmware (SDCP) and Centauri Carbon 2 (MQTT), on the LAN. */
+        val ELEGOO = PrinterFamily("elegoo")
         /** A printer profile with no live connection: slice, save and export only. */
         val EXPORT_ONLY = PrinterFamily("export-only")
-        val known = listOf(PAXX_U1, STOCK_U1, BAMBU_LAB, PRUSA, KLIPPER, OCTOPRINT, EXPORT_ONLY)
+        val known = listOf(PAXX_U1, STOCK_U1, BAMBU_LAB, PRUSA, ELEGOO, KLIPPER, OCTOPRINT, EXPORT_ONLY)
         /** Reads ids written by earlier builds ("PAXX", "STOCK_U1", "KLIPPER") as well as current ones. */
         fun parse(raw: String?): PrinterFamily = when (raw) {
             null, "" -> PAXX_U1

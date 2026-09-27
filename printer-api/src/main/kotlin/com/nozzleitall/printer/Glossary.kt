@@ -31,6 +31,7 @@ object Glossary {
         Term("family.stock-u1", "Snapmaker U1 (stock)", "Snapmaker U1 on Snapmaker's own firmware. Uses optional Stock U1 support for features that need Snapmaker's cloud.", "", "", false),
         Term("family.bambu-lab", "Bambu Lab", "Bambu Lab printers in LAN mode. Any Bambu cloud features stay inside optional Bambu support.", "", "", false),
         Term("family.prusa", "Prusa", "Prusa printers through PrusaLink on your network. Any Prusa Connect features stay inside optional Prusa support.", "", "", false),
+        Term("family.elegoo", "Elegoo", "Elegoo Centauri Carbon and Centauri Carbon 2 on your network, including the CANVAS filament switcher's slots. Elegoo's cloud is never used.", "", "", false),
         Term("family.klipper", "Klipper", "Other Klipper printers on your network.", "", "", false),
         Term("family.octoprint", "OctoPrint", "Printers run by OctoPrint on your network.", "", "", false),
         Term("family.export-only", "Export only", "Slice for this printer and save the file; send it yourself by USB, SD card or the printer's own app.", "", "", false),

@@ -82,6 +82,10 @@
       "label": "Prusa",
       "description": "Prusa printers through PrusaLink on your network. Any Prusa Connect features stay inside optional Prusa support."
     },
+    "family.elegoo": {
+      "label": "Elegoo",
+      "description": "Elegoo Centauri Carbon and Centauri Carbon 2 on your network, including the CANVAS filament switcher's slots. Elegoo's cloud is never used."
+    },
     "family.klipper": {
       "label": "Klipper",
       "description": "Other Klipper printers on your network."

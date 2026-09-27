@@ -307,3 +307,53 @@ interchange).
   - Not yet printed on a real Centauri Carbon, Centauri Carbon 2 or CANVAS.
 - **Touches:** Elegoo profiles, Prepare (nozzle sizes, process presets, filament presets), shared profile index.
 
+
+## P-0014 — Elegoo Centauri Carbon / Centauri Carbon 2 LAN adapter with CANVAS slots (ported)
+
+- **Upstream:** elegoo-link (github.com/ELEGOO-3D/elegoo-link) `46c7b814e0`, Apache-2.0, Copyright 2025 Shenzhen Elegoo
+  Technology Co., Ltd.; the SDCP V3.0.0 document (github.com/cbd-tech/SDCP-Smart-Device-Control-Protocol-V3.0.0
+  `f977215761`, no licence file, used as a protocol reference); ElegooSlicer `2d507e39a9` (AGPL-3.0), read only for
+  its send dialog's defaults and slot mapping (`src/slic3r/GUI/Elegoo/PrintSendDialogEx.cpp`,
+  `src/slic3r/Utils/Elegoo/ElegooLink.cpp`, `PrinterMmsManager.cpp`).
+- **Imported (re-implemented in Kotlin, nothing copied), per file of `adapter-elegoo/`:**
+  - `Sdcp.kt` / `SdcpSession.kt` — Centauri Carbon: `src/lan/adapters/elegoo_fdm_cc/elegoo_fdm_cc_protocol.cpp`
+    (ws://host:3030/websocket, "ping" heartbeat), `elegoo_fdm_cc_message_adapter.cpp` (request envelope with outer
+    `Id` = MainboardID, empty `Topic`, `From` 1; commands 0 status, 1 attributes, 128 start with `slot_map`, 129 pause,
+    130 stop, 131 resume, 324 CANVAS; machine and print sub-status enums; status field names; Ack handling), the SDCP
+    document (discovery, topics, Ack codes 1-7).
+  - `Cc2.kt` / `Cc2Session.kt` / `MiniMqtt.kt` — Centauri Carbon 2: `src/lan/adapters/elegoo_fdm_cc2/elegoo_fdm_cc2_protocol.cpp`
+    (MQTT 1883, user `elegoo`, access code or `123456`, client id `1_PC_nnnn`, topics, registration and its errors,
+    `{"type":"PING"}` every 10 s), `elegoo_fdm_cc2_message_adapter.cpp` (methods 1002 status, 1020 start with
+    `config.slot_map`, 1021 pause, 1022 stop, 2005 CANVAS, 6000 status events merged into the cached full status;
+    machine_status/sub_status meanings; error codes), `src/lan/protocols/mqtt_protocol.cpp` (clean session, 60 s
+    keep-alive, QoS 1). The MQTT client is a minimal MQTT 3.1.1 implementation instead of Paho.
+  - `Canvas.kt` — both adapters' `handleCanvasStatus` (canvas_list/tray_list fields), ElegooSlicer's tray status
+    reading (0 empty, 1 pre-loaded, 2 loaded) and blank-brand rule; `slot_map` items `{t, canvas_id, tray_id}`.
+  - `ElegooUpload.kt` — `elegoo_fdm_cc_http_transfer.cpp` (multipart POST /uploadFile/upload, 1 MiB pieces, Check,
+    S-File-MD5, Offset, Uuid, TotalSize; `code` "000000") and `elegoo_fdm_cc2_http_transfer.cpp` (PUT /upload with
+    Content-Range, X-File-Name, X-File-MD5, X-Token; `error_code` 0).
+  - `ElegooDiscovery.kt` — `src/lan/discovery/printer_discovery.cpp` and both discovery strategies ("M99999" to UDP
+    3000; `{"id":0,"method":7000}` to UDP 52700), asked of one address only.
+- **Adaptations:** LAN and private-network hosts only (checked before any packet); bounded replies; no retries and
+  no auto-reconnect of commands; outcomes follow Nozzle's rules (non-zero Ack / error_code = Rejected, silence or a
+  lost connection after sending = Unknown). Slots map to `PrinterStatus.toolheads` (canvas by canvas, tray by tray,
+  from 0) and `StartJob.toolheadMap` maps back to the printer's own canvas/tray ids. Busy machine states (levelling,
+  receiving a file, homing, ...) map to STARTING so no action is offered. Start uses ElegooSlicer's defaults
+  (levelling off, time-lapse off, plate type 0 / "A").
+- **Subsystem / platforms:** printer adapters; Desktop only (`nozzleAdapters` default now includes `elegoo`). New
+  printer family `elegoo` (PrinterFamily.ELEGOO, glossary `family.elegoo`).
+- **Test evidence (2026-09-27):** `:adapter-elegoo:test` 37 tests (fake SDCP printer on MockWebServer's WebSocket,
+  in-test MQTT broker, UDP responders, MockWebServer uploads), `:printer-api:test`, `:desktop:test` (incl.
+  MultiVendorAcceptanceTest) pass. Fixtures are built from the SDCP document's samples and elegoo-link's field names,
+  not hardware captures.
+- **Known divergence / unverified:**
+  - Never run against a real Centauri Carbon or Centauri Carbon 2.
+  - Upload port: elegoo-link posts the Centauri Carbon's pieces to the bare address (port 80); the SDCP document
+    says port 3030. Nozzle follows elegoo-link.
+  - Cmd 324's reply shape: the CC adapter reads the slots from `Data.Data`, the CC2 adapter from `canvas_info`;
+    both are accepted. Whether CANVAS ids count from 0 or 1 isn't assumed: the printer's own ids are sent back.
+  - SDCP `CurrentTicks` is read as seconds, as elegoo-link does (the SDCP document says milliseconds).
+  - Centauri Carbon 2: no resume in elegoo-link's LAN method table, so pause and resume are not offered; a printer in
+    cloud mode (lan_status 0) is untested.
+  - No camera, temperature, motion, light, fan or material-edit controls; no Android or Web App port.
+- **Touches:** printer adapters, shared model (new family), glossary, Desktop's Add printer form.

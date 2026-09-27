@@ -33,6 +33,8 @@ private fun formFor(f: PrinterFamily) = when (f) {
         note = "Find the PrusaLink password on the printer's screen under Settings → Network → PrusaLink.")
     PrinterFamily.BAMBU_LAB -> FamilyForm(secretLabel = "Access code", secretRequired = true, needsSerial = true, defaultProfile = "bambu_generic",
         note = "Turn on LAN mode on the printer (and Developer Mode on current firmware), then copy its access code and serial number from the printer's screen.")
+    PrinterFamily.ELEGOO -> FamilyForm(canProbe = true, secretLabel = "Access code (Centauri Carbon 2 only, if you set one)",
+        note = "Enter the printer's local address from its network settings. A Centauri Carbon needs nothing else; a Centauri Carbon 2 uses its access code if one is set.")
     PrinterFamily.EXPORT_ONLY -> FamilyForm(needsAddress = false)
     else -> FamilyForm()
 }

@@ -19,12 +19,13 @@ class MultiVendorAcceptanceTest {
 
     @Test fun adaptersComeOnlyFromTheModulesShipped() {
         val fleet = Fleet(paths(), CoroutineScope(Dispatchers.Default))
-        val expected = (System.getProperty("nozzle.adapters") ?: "paxx,octoprint,prusa,bambu").split(",").map { it.trim() }.toSet()
+        val expected = (System.getProperty("nozzle.adapters") ?: "paxx,octoprint,prusa,bambu,elegoo").split(",").map { it.trim() }.toSet()
         val families = fleet.registry.builtInIds.flatMap { fleet.registry.adapter(it).families }.toSet()
         assertTrue("PAXX U1 is always there", PrinterFamily.PAXX_U1 in families)
         if ("octoprint" in expected) assertTrue(PrinterFamily.OCTOPRINT in families) else assertFalse(PrinterFamily.OCTOPRINT in families)
         if ("prusa" in expected) assertTrue(PrinterFamily.PRUSA in families) else assertFalse(PrinterFamily.PRUSA in families)
         if ("bambu" in expected) assertTrue(PrinterFamily.BAMBU_LAB in families) else assertFalse(PrinterFamily.BAMBU_LAB in families)
+        if ("elegoo" in expected) assertTrue(PrinterFamily.ELEGOO in families) else assertFalse(PrinterFamily.ELEGOO in families)
         // No built-in adapter may use a vendor cloud; the registry refuses them, and Stock U1 is never among them.
         assertTrue(fleet.registry.builtInIds.none { fleet.registry.adapter(it).mayUseVendorCloud })
         assertFalse("stock-u1" in fleet.registry.builtInIds)
@@ -52,7 +53,7 @@ class MultiVendorAcceptanceTest {
         // switch, and where printers saved by older versions are read; screens that show or control printers must decide
         // from capabilities only.
         val allowed = setOf("AddPrinterDialog.kt", "Fleet.kt", "PrinterStore.kt")
-        val pattern = Regex("PrinterFamily\\.(PAXX_U1|STOCK_U1|BAMBU_LAB|PRUSA|KLIPPER|OCTOPRINT)|family\\s*==|\\.family\\.id\\s*==|\"(bambu|prusa|octoprint|paxx)")
+        val pattern = Regex("PrinterFamily\\.(PAXX_U1|STOCK_U1|BAMBU_LAB|PRUSA|ELEGOO|KLIPPER|OCTOPRINT)|family\\s*==|\\.family\\.id\\s*==|\"(bambu|prusa|octoprint|paxx)")
         val offenders = File(root, "desktop/src/main/kotlin").walkTopDown().filter { it.isFile && it.extension == "kt" && it.name !in allowed }.flatMap { f ->
             f.readLines().mapIndexedNotNull { i, l -> if (pattern.containsMatchIn(l.substringBefore("//"))) "${f.name}:${i + 1}: ${l.trim()}" else null }
         }.toList()

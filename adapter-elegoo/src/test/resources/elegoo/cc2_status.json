@@ -1,0 +1,25 @@
+{
+    "_source": "Method 1002 reply with the fields elegoo-link elegoo_fdm_cc2_message_adapter.cpp handlePrinterStatus reads (machine_status, print_status, extruder, heater_bed, canvas_info). Values are illustrative, not a hardware capture.",
+    "id": 0,
+    "method": 1002,
+    "result": {
+        "error_code": 0,
+        "machine_status": {"status": 2, "sub_status": 2075, "progress": 25, "exception_status": []},
+        "print_status": {"filename": "benchy.gcode", "print_duration": 900, "total_duration": 3600, "remaining_time_sec": 2700, "current_layer": 30, "total_layer": 120},
+        "extruder": {"temperature": 214.5, "target": 215},
+        "heater_bed": {"temperature": 55.2, "target": 55},
+        "canvas_info": {
+            "active_canvas_id": 0,
+            "active_tray_id": 0,
+            "auto_refill": true,
+            "canvas_list": [
+                {"canvas_id": 0, "connected": 1, "tray_list": [
+                    {"tray_id": 0, "brand": "ELEGOO", "filament_type": "PLA", "filament_name": "PLA Silk", "filament_color": "#C0C0C0", "status": 2},
+                    {"tray_id": 1, "brand": "", "filament_type": "", "filament_name": "", "filament_color": "", "status": 0},
+                    {"tray_id": 2, "brand": "Generic", "filament_type": "ABS", "filament_name": "ABS", "filament_color": "#FFFFFF", "status": 2},
+                    {"tray_id": 3, "brand": "", "filament_type": "", "filament_name": "", "filament_color": "", "status": 0}
+                ]}
+            ]
+        }
+    }
+}

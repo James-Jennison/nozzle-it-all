@@ -9,6 +9,7 @@ import java.io.File
 //   ├── OctoPrint            (:adapter-octoprint, LAN)
 //   ├── Prusa                (:adapter-prusa, PrusaLink on the LAN; any Prusa Connect support would live only inside it)
 //   ├── Bambu Lab            (:adapter-bambu, LAN mode; any Bambu cloud support would live only inside it)
+//   ├── Elegoo               (:adapter-elegoo, Centauri Carbon over SDCP and Centauri Carbon 2 over MQTT, LAN only)
 //   ├── Stock U1             (:stock-u1-adapter, a separate helper process, optional, may use Snapmaker's cloud)
 //   └── export-only targets  (no adapter at all: slicing and export need no connection)
 //

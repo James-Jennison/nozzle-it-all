@@ -201,6 +201,28 @@ Generic filament presets) are flattened from **ElegooSlicer**
 Copyright Elegoo and the OrcaSlicer/Bambu Studio/PrusaSlicer authors; see `PROVENANCE.md`
 and `docs/upstream/PROVENANCE.md` for the settings pinned to match ElegooSlicer.
 
+## elegoo-link and SDCP (Elegoo printer protocols)
+
+The Elegoo printer adapter (`adapter-elegoo/`: Centauri Carbon over SDCP, Centauri
+Carbon 2 over MQTT, and the CANVAS filament switcher's slots) is ported from
+**[elegoo-link](https://github.com/ELEGOO-3D/elegoo-link)**, Elegoo's printer connection
+library, Copyright 2025 Shenzhen Elegoo Technology Co., Ltd., licensed under the
+Apache License 2.0 (checkout `46c7b814e0`; licence text at
+`third_party_licenses/elegoo-link-Apache-2.0.txt`). The message formats, command and
+method numbers, status meanings, upload procedures and discovery messages were
+re-implemented in Kotlin from its `src/lan/` sources; no C++ was copied. Each source
+file in `adapter-elegoo/` names the upstream files it follows. Changes from upstream:
+LAN only (the cloud half of elegoo-link is not used), no automatic retries, bounded
+replies, and a minimal MQTT client in place of Eclipse Paho.
+
+The SDCP V3.0.0 protocol description
+(github.com/cbd-tech/SDCP-Smart-Device-Control-Protocol-V3.0.0, checkout `f977215761`,
+Shenzhen CBD Technology Co., Ltd.) was used as a protocol reference for
+interoperability; it carries no licence file and none of its text is included beyond
+one short sample discovery reply used as a test fixture. ElegooSlicer (AGPL-3.0) was
+read for how its send dialog maps slots and which defaults it sends. See
+`docs/upstream/PROVENANCE.md`.
+
 ## Fonts
 
 The app's typography (`res/font/`) bundles three typefaces from Google Fonts'

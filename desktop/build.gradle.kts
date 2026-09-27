@@ -15,9 +15,9 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 dependencies {
  implementation(project(":printer-api"))
  // Printer adapters are discovered at run time (ServiceLoader); Desktop's own code never names a vendor. Which adapter
- // modules ship is a build choice: -PnozzleAdapters=paxx,octoprint,prusa,bambu (PAXX U1, the flagship, is the default
+ // modules ship is a build choice: -PnozzleAdapters=paxx,octoprint,prusa,bambu,elegoo (PAXX U1, the flagship, is the default
  // minimum). Building with fewer proves that removing one vendor never breaks another.
- providers.gradleProperty("nozzleAdapters").orElse("paxx,octoprint,prusa,bambu").get().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+ providers.gradleProperty("nozzleAdapters").orElse("paxx,octoprint,prusa,bambu,elegoo").get().split(",").map { it.trim() }.filter { it.isNotEmpty() }
   .forEach { runtimeOnly(project(":adapter-$it")) }
  testImplementation(project(":adapter-paxx"))
  implementation(project(":project-format"))
@@ -119,5 +119,5 @@ tasks.withType<Test>().configureEach {
  systemProperty("nozzle.engine", nozzleEngine.get())
  // LocalConnectorTest sends a forged Host header to prove the DNS-rebinding check.
  systemProperty("sun.net.http.allowRestrictedHeaders", "true")
- systemProperty("nozzle.adapters", providers.gradleProperty("nozzleAdapters").orElse("paxx,octoprint,prusa,bambu").get())
+ systemProperty("nozzle.adapters", providers.gradleProperty("nozzleAdapters").orElse("paxx,octoprint,prusa,bambu,elegoo").get())
 }

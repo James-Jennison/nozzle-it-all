@@ -137,7 +137,6 @@ class SliceEngine(private val binary: File, private val workDir: File) {
          */
         fun nativeRequest(req: SliceRequest, job: File, gcode: File): String {
             val lines = mutableListOf("out\t${gcode.absolutePath}")
-            listOf("machine.json", "process.json", "filament.json").forEach { lines += "profile\t${File(req.profileDir, it).absolutePath}" }
             val entries = req.project.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
             val objectSlots = entries.mapValues { it.value.materialSlot ?: 1 }
             // Painted objects print their colours in the slots chosen for them; the highest slot in use sets the tool count.
@@ -147,11 +146,18 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             // Full Spectrum mixes name physical slots by number, so with any mixes every loaded slot is passed to the engine.
             val mixing = !req.extraOverrides[FullSpectrum.DEFINITIONS_KEY].isNullOrBlank()
             val slots = if (mixing) materials else materials.take(maxOf(usedSlots, 1))
+            // Each slot slices with its own filament profile when it has one (one combined per-slot filament file, as a
+            // slicer combines its filament presets); otherwise the printer profile's own filament.
+            val filaments = FilamentLibrary.writeCombined(req.profileDir.name, req.profileDir, slots, job) ?: File(req.profileDir, "filament.json")
+            listOf(File(req.profileDir, "machine.json"), File(req.profileDir, "process.json"), filaments).forEach { lines += "profile\t${it.absolutePath}" }
+            val baseNozzleC = runCatching { JSONObject(File(req.profileDir, "filament.json").readText()).optJSONArray("nozzle_temperature")?.optString(0)?.toIntOrNull() }.getOrNull()
+            fun slotNozzleC(s: ProjectManifest.MaterialSlot): Int? = (s.filamentProfile?.let { FilamentLibrary.profileJson(req.profileDir.name, it) }
+                ?.optJSONArray("nozzle_temperature")?.optString(0)?.toIntOrNull()) ?: baseNozzleC
             val overrides = LinkedHashMap<String, String>()
             overrides += req.preset.overrides
             overrides["sparse_infill_density"] = "${req.infillPercent.coerceIn(0, 100)}%"
             overrides["enable_support"] = if (req.supports) "1" else "0"
-            if (slots.size > 1) overrides += multiToolOverrides(1.75, slots)
+            if (slots.size > 1) overrides += multiToolOverrides(1.75, slots, ::slotNozzleC)
             overrides += req.extraOverrides
             overrides.forEach { (k, v) ->
                 require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }

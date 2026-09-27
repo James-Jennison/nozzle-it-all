@@ -44,8 +44,13 @@ data class ProjectManifest(
      * [paintSlots] maps the object's painted colours to slots: entry N-1 is the slot that the file's filament N prints with.
      */
     data class ObjectEntry(val objectId: Int, val name: String = "", val materialSlot: Int? = null, val unknown: JSONObject = JSONObject(), val paintSlots: List<Int> = emptyList())
-    /** [slot] is 1-based. [toolhead] is the 0-based physical toolhead it is loaded in, when known. */
-    data class MaterialSlot(val slot: Int, val type: String? = null, val vendor: String? = null, val subType: String? = null, val colorHex: String? = null, val toolhead: Int? = null, val unknown: JSONObject = JSONObject())
+    /**
+     * [slot] is 1-based. [toolhead] is the 0-based physical toolhead it is loaded in, when known. [filamentProfile] names
+     * the filament profile this slot slices with (an id in the printer's filament library), or null for the printer
+     * profile's own filament.
+     */
+    data class MaterialSlot(val slot: Int, val type: String? = null, val vendor: String? = null, val subType: String? = null, val colorHex: String? = null, val toolhead: Int? = null,
+                            val unknown: JSONObject = JSONObject(), val filamentProfile: String? = null)
     /** [preset] names a guided choice ("standard", "fine", "draft", ...); [overrides] are explicit engine setting keys. */
     data class SettingsChoice(val preset: String? = null, val overrides: Map<String, String> = emptyMap(), val unknown: JSONObject = JSONObject())
     data class Attribution(val title: String, val creator: String? = null, val source: String? = null, val license: String? = null, val unknown: JSONObject = JSONObject())
@@ -90,7 +95,7 @@ data class ProjectManifest(
                     p.rest("index", "name", "objects")) } } ?: emptyList()
             val materials = o.optJSONArray("materials")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { m ->
                 MaterialSlot(m.optInt("slot"), m.strOrNull("type"), m.strOrNull("vendor"), m.strOrNull("subType"), m.strOrNull("colorHex"), m.intOrNull("toolhead"),
-                    m.rest("slot", "type", "vendor", "subType", "colorHex", "toolhead")) } } ?: emptyList()
+                    m.rest("slot", "type", "vendor", "subType", "colorHex", "toolhead", "filamentProfile"), m.strOrNull("filamentProfile")) } } ?: emptyList()
             val settings = o.optJSONObject("settings")?.let { s ->
                 SettingsChoice(s.strOrNull("preset"), s.optJSONObject("overrides")?.let { ov -> ov.keySet().associateWith { ov.optString(it) } } ?: emptyMap(), s.rest("preset", "overrides"))
             } ?: SettingsChoice()
@@ -116,7 +121,7 @@ data class ProjectManifest(
             .put("objects", JSONArray(p.objects.map { e -> merge(JSONObject().put("objectId", e.objectId).put("name", e.name).putOpt("materialSlot", e.materialSlot)
                 .apply { if (e.paintSlots.isNotEmpty()) put("paintSlots", JSONArray(e.paintSlots)) }, e.unknown) })), p.unknown) }))
         o.put("materials", JSONArray(materials.map { m -> merge(JSONObject().put("slot", m.slot).putOpt("type", m.type).putOpt("vendor", m.vendor)
-            .putOpt("subType", m.subType).putOpt("colorHex", m.colorHex).putOpt("toolhead", m.toolhead), m.unknown) }))
+            .putOpt("subType", m.subType).putOpt("colorHex", m.colorHex).putOpt("toolhead", m.toolhead).putOpt("filamentProfile", m.filamentProfile), m.unknown) }))
         o.put("settings", merge(JSONObject().putOpt("preset", settings.preset).put("overrides", JSONObject(settings.overrides)), settings.unknown))
         o.put("attribution", JSONArray(attribution.map { a -> merge(JSONObject().put("title", a.title).putOpt("creator", a.creator).putOpt("source", a.source).putOpt("license", a.license), a.unknown) }))
         o.put("extensions", extensions)

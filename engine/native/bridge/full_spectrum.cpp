@@ -20,7 +20,15 @@
 //   Sidebar::init_color_mix_panel's "+" and "-" handlers (~6585-6640), Sidebar::update_color_mix_panel's display context
 //   and row label (~6645-6780), the row Edit / Delete menu handlers (~6840-7031)
 // Ported from src/slic3r/GUI/MixedFilamentDialog.cpp:
-//   collect_result() in RATIO mode (the result a plain "a + b at x%" edit produces)
+//   collect_result() for all four modes (3246-3414), validate_cycle_pattern (3155-3227), update_compatibility_warning /
+//   get_ratio_warning_msg (2173-2351), the Match card's recipe hand-off (1224-1275), build_swatch_grid (2607-2886),
+//   and the tri-picker weight clamps (1881-1903, 2004-2025)
+// Ported from src/slic3r/GUI/MixedColorMatchHelpers.cpp (also): the material-compatibility check (1027-1359),
+//   build_color_match_presets (201-268), build_mixed_filament_display_context (744-802)
+// Ported from src/slic3r/GUI/MixedColorMatchPanel.cpp: launch_recipe_match / sync_recipe_preview (363-372, 494-505)
+// Ported from src/libslic3r/PresetBundle.cpp: build_filament_id_remap (3955-4090, the no-physical-deletion case)
+// Ported from src/slic3r/GUI/Plater.cpp (also): Sidebar::cleanup_unused_filaments_after_batch_match (8652-8990,
+//   mixed rows only), the recommended-mode id remap of the batch apply (~2735-2750)
 #include "full_spectrum.hpp"
 #include "fs_color.hpp"
 
@@ -44,6 +52,7 @@
 #include <stdexcept>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <unistd.h>
 
 namespace nozzle_fs {
@@ -95,6 +104,160 @@ struct MixedColorMatchRecipeResult {
     FsColour     preview_color = colour_from_string("#26A69A");
     double       delta_e       = std::numeric_limits<double>::infinity();
 };
+
+
+// ---- Material compatibility (MixedColorMatchHelpers.cpp 1027-1314) ----
+// The preset bundle is replaced by a per-slot filament_type list. filament_compatibility.json defaults to the table
+// Snapmaker ships (resources/profiles/Snapmaker/filament/filament_compatibility.json at cbf7bbb0b3); a request may name
+// another copy with "compatibility".
+
+enum class FilamentCategory : uint8_t { PLA, PETG, TPU, PET, ABS, ASA, PC, PA, SUPPORT, UNKNOWN };
+static constexpr const char* k_category_names[] = {"PLA", "PETG", "TPU", "PET", "ABS", "ASA", "PC", "PA", "SUPPORT"};
+static constexpr size_t k_category_count = sizeof(k_category_names) / sizeof(k_category_names[0]);
+static constexpr size_t k_compat_dim     = static_cast<size_t>(FilamentCategory::UNKNOWN) + 1;
+
+static const char* k_shipped_compatibility_json = R"({
+  "compatibility": {
+    "PLA":     ["PC"],
+    "PETG":    ["TPU", "PET", "ABS", "ASA", "PC"],
+    "TPU":     ["PETG", "PET"],
+    "PET":     ["PETG", "TPU", "ABS", "ASA", "PC"],
+    "ABS":     ["PETG", "PET", "ASA", "PC", "PA"],
+    "ASA":     ["PETG", "PET", "ABS", "PC", "PA"],
+    "PC":      ["PLA", "PETG", "PET", "ABS", "ASA", "PA"],
+    "PA":      ["ABS", "ASA", "PC"],
+    "SUPPORT": []
+  }
+})";
+
+static FilamentCategory filament_category_from_name(const std::string& name)
+{
+    for (size_t i = 0; i < k_category_count; ++i)
+        if (name == k_category_names[i]) return static_cast<FilamentCategory>(i);
+    return FilamentCategory::UNKNOWN;
+}
+
+static std::vector<std::vector<bool>> s_compat;
+
+// load_filament_compatibility, reading `text` (the JSON file's contents) instead of a path.
+static void load_filament_compatibility(const std::string& text)
+{
+    s_compat.assign(k_compat_dim, std::vector<bool>(k_compat_dim, false));
+    for (size_t i = 0; i < k_category_count; ++i) s_compat[i][i] = true;
+    try {
+        nlohmann::json j = nlohmann::json::parse(text);
+        if (!j.contains("compatibility")) return;
+        for (auto& [cat_a_str, partner_list] : j["compatibility"].items()) {
+            FilamentCategory cat_a = filament_category_from_name(cat_a_str);
+            if (cat_a == FilamentCategory::UNKNOWN || !partner_list.is_array()) continue;
+            for (auto& cat_b_val : partner_list) {
+                FilamentCategory cat_b = filament_category_from_name(cat_b_val.get<std::string>());
+                if (cat_b == FilamentCategory::UNKNOWN) continue;
+                s_compat[static_cast<size_t>(cat_a)][static_cast<size_t>(cat_b)] = true;
+                s_compat[static_cast<size_t>(cat_b)][static_cast<size_t>(cat_a)] = true;
+            }
+        }
+    } catch (const std::exception&) {
+    }
+}
+
+static bool is_category_compatible(FilamentCategory a, FilamentCategory b)
+{
+    if (s_compat.empty()) load_filament_compatibility(k_shipped_compatibility_json);
+    return s_compat[static_cast<size_t>(a)][static_cast<size_t>(b)];
+}
+
+static const std::unordered_map<std::string, FilamentCategory>& filament_type_category_map()
+{
+    static const std::unordered_map<std::string, FilamentCategory> m = {
+        {"PLA", FilamentCategory::PLA},   {"PLA-CF", FilamentCategory::PLA}, {"ABS", FilamentCategory::ABS},
+        {"ASA", FilamentCategory::ASA},   {"PETG", FilamentCategory::PETG},  {"PETG-CF", FilamentCategory::PETG},
+        {"PCTG", FilamentCategory::PETG}, {"TPU", FilamentCategory::TPU},    {"PET", FilamentCategory::PET},
+        {"PA", FilamentCategory::PA},     {"PA-CF", FilamentCategory::PA},   {"PC", FilamentCategory::PC},
+        {"BVOH", FilamentCategory::SUPPORT}, {"PVA", FilamentCategory::SUPPORT},
+    };
+    return m;
+}
+
+static std::string normalize_filament_type(const std::string& type)
+{
+    std::string normalized = type;
+    size_t start = normalized.find_first_not_of(" \t\r\n");
+    size_t end   = normalized.find_last_not_of(" \t\r\n");
+    if (start != std::string::npos && end != std::string::npos)
+        normalized = normalized.substr(start, end - start + 1);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) { return std::toupper(c); });
+    return normalized;
+}
+
+static FilamentCategory get_filament_category(const std::string& filament_type)
+{
+    const auto& m  = filament_type_category_map();
+    auto        it = m.find(normalize_filament_type(filament_type));
+    return it != m.end() ? it->second : FilamentCategory::UNKNOWN;
+}
+
+struct ResolvedFilamentCategory { unsigned int filament_id; FilamentCategory category; };
+
+// resolve_filament_categories: 0-based ids; slots with no type are skipped.
+static std::vector<ResolvedFilamentCategory> resolve_filament_categories(const std::vector<unsigned int>& filament_ids,
+                                                                         const std::vector<std::string>&  types)
+{
+    std::vector<ResolvedFilamentCategory> result;
+    for (unsigned int id : filament_ids) {
+        if (id >= types.size() || types[id].empty()) continue;
+        result.push_back({id, get_filament_category(types[id])});
+    }
+    return result;
+}
+
+bool is_filament_compatible(const std::vector<unsigned int>& filament_ids, const std::vector<std::string>& types)
+{
+    if (filament_ids.size() <= 1) return true;
+    auto resolved = resolve_filament_categories(filament_ids, types);
+    for (const auto& r : resolved)
+        if (r.category == FilamentCategory::UNKNOWN) return false;
+    if (resolved.size() <= 1) return true;
+    if (std::all_of(resolved.begin() + 1, resolved.end(), [&](const ResolvedFilamentCategory& r) { return r.category == resolved[0].category; }))
+        return true;
+    for (size_t i = 0; i < resolved.size(); ++i)
+        for (size_t j = i + 1; j < resolved.size(); ++j)
+            if (!is_category_compatible(resolved[i].category, resolved[j].category)) return false;
+    return true;
+}
+
+// find_incompatible_filament_pair: 1-based ids of the first incompatible pair, {0,0} when all compatible.
+std::pair<unsigned int, unsigned int> find_incompatible_filament_pair(const std::vector<unsigned int>& filament_ids,
+                                                                      const std::vector<std::string>&  types)
+{
+    if (filament_ids.size() <= 1) return {0, 0};
+    auto resolved = resolve_filament_categories(filament_ids, types);
+    for (const auto& r : resolved)
+        if (r.category == FilamentCategory::UNKNOWN)
+            for (const auto& other : resolved)
+                if (other.filament_id != r.filament_id) return {r.filament_id + 1, other.filament_id + 1};
+    if (resolved.size() <= 1) return {0, 0};
+    if (std::all_of(resolved.begin() + 1, resolved.end(), [&](const ResolvedFilamentCategory& r) { return r.category == resolved[0].category; }))
+        return {0, 0};
+    for (size_t i = 0; i < resolved.size(); ++i)
+        for (size_t j = i + 1; j < resolved.size(); ++j)
+            if (!is_category_compatible(resolved[i].category, resolved[j].category))
+                return {resolved[i].filament_id + 1, resolved[j].filament_id + 1};
+    return {0, 0};
+}
+
+static std::vector<std::vector<bool>> build_compatibility_matrix(size_t n, const std::vector<std::string>& types)
+{
+    std::vector<std::vector<bool>> m(n, std::vector<bool>(n, false));
+    for (size_t i = 0; i < n; ++i) {
+        m[i][i] = true;
+        for (size_t j = i + 1; j < n; ++j) {
+            bool ok = is_filament_compatible(std::vector<unsigned int>{(unsigned int) i, (unsigned int) j}, types);
+            m[i][j] = m[j][i] = ok;
+        }
+    }
+    return m;
+}
 
 std::vector<int> decode_color_match_gradient_weights(const std::string& value, size_t expected_components);
 std::vector<unsigned int> build_color_match_sequence(const std::vector<unsigned int>& ids, const std::vector<int>& weights);
@@ -279,12 +442,14 @@ double color_delta_e00(const FsColour& lhs, const FsColour& rhs)
     return double(DeltaE00(lhs_l, lhs_a, lhs_b, rhs_l, rhs_a, rhs_b));
 }
 
-// check_compatible is not ported: the batch match (the only caller here) passes false in both modes
-// (MixedFilamentBatchDialog.cpp launch_background_match), which makes the compatibility matrix all-true.
+// `types` stands in for the preset bundle's filament_type per palette slot (the compatibility check reads
+// preset_bundle->filament_presets[i]); an empty string is a slot whose type cannot be resolved (skipped, as in the source).
 MixedColorMatchRecipeResult build_best_color_match_recipe(const std::vector<std::string>& physical_colors,
                                                           const FsColour&                 target_color,
                                                           int                             min_component_percent,
-                                                          int                             max_component_percent)
+                                                          int                             max_component_percent,
+                                                          bool                            check_compatible,
+                                                          const std::vector<std::string>& types)
 {
     MixedColorMatchRecipeResult best;
     if (!target_color.IsOk() || physical_colors.size() < 2)
@@ -309,7 +474,11 @@ MixedColorMatchRecipeResult build_best_color_match_recipe(const std::vector<std:
     const int loop_min_weight = std::max(1, std::clamp(min_component_percent, 0, 50));
 
     std::vector<std::vector<bool>> compat;
-    compat.assign(n, std::vector<bool>(n, true));
+    if (check_compatible) {
+        compat = build_compatibility_matrix(n, types);
+    } else {
+        compat.assign(n, std::vector<bool>(n, true));
+    }
 
     auto encode_gradient_ids = [](const std::vector<unsigned int>& ids) -> std::string {
         return MixedFilamentManager::encode_gradient_component_ids(ids);
@@ -723,6 +892,58 @@ FsColour blend_sequence_filament_mixer(const std::vector<FsColour>& palette, con
     return blend_multi_filament_mixer(colors, weights);
 }
 
+// MixedColorMatchHelpers.cpp build_color_match_presets (~201-268)
+std::vector<MixedColorMatchRecipeResult> build_color_match_presets(const std::vector<std::string>& physical_colors,
+                                                                   int                             min_component_percent,
+                                                                   const std::vector<std::string>& types)
+{
+    std::vector<MixedColorMatchRecipeResult> presets;
+    if (physical_colors.size() < 2)
+        return presets;
+
+    std::vector<FsColour> palette;
+    palette.reserve(physical_colors.size());
+    for (const std::string& hex : physical_colors)
+        palette.emplace_back(parse_mixed_color(hex));
+
+    constexpr size_t                k_max_presets = 9999;
+    std::unordered_set<std::string> seen_colors;
+    auto add_candidate = [&presets, &seen_colors](MixedColorMatchRecipeResult candidate) {
+        if (!candidate.valid)
+            return;
+        const std::string color_key = normalize_color_match_hex(candidate.preview_color.hex());
+        if (color_key.empty() || !seen_colors.insert(color_key).second)
+            return;
+        presets.emplace_back(std::move(candidate));
+    };
+
+    auto compat = build_compatibility_matrix(palette.size(), types);
+    for (size_t left_idx = 0; left_idx < palette.size() && presets.size() < k_max_presets; ++left_idx) {
+        for (size_t right_idx = left_idx + 1; right_idx < palette.size() && presets.size() < k_max_presets; ++right_idx) {
+            if (!compat[left_idx][right_idx]) continue;
+            add_candidate(build_pair_color_match_candidate(palette, unsigned(left_idx + 1), unsigned(right_idx + 1), 50, min_component_percent));
+        }
+    }
+
+    const size_t           triple_limit         = std::min<size_t>(palette.size(), 6);
+    const std::vector<int> equal_triple_weights = normalize_color_match_weights({1, 1, 1}, 3);
+    for (size_t first_idx = 0; first_idx + 2 < triple_limit && presets.size() < k_max_presets; ++first_idx) {
+        for (size_t second_idx = first_idx + 1; second_idx + 1 < triple_limit && presets.size() < k_max_presets; ++second_idx) {
+            for (size_t third_idx = second_idx + 1; third_idx < triple_limit && presets.size() < k_max_presets; ++third_idx) {
+                if (!compat[first_idx][second_idx] || !compat[second_idx][third_idx] || !compat[first_idx][third_idx]) continue;
+                const std::vector<unsigned int> ids = {unsigned(first_idx + 1), unsigned(second_idx + 1), unsigned(third_idx + 1)};
+                add_candidate(build_multi_color_match_candidate(palette, ids, equal_triple_weights, min_component_percent));
+                for (size_t dominant_idx = 0; dominant_idx < ids.size() && presets.size() < k_max_presets; ++dominant_idx) {
+                    std::vector<int> dominant_weights(ids.size(), 25);
+                    dominant_weights[dominant_idx] = 50;
+                    add_candidate(build_multi_color_match_candidate(palette, ids, dominant_weights, min_component_percent));
+                }
+            }
+        }
+    }
+    return presets;
+}
+
 // ---- Batch Match Mapping (MixedColorMatchHelpers.hpp) ----
 
 struct ModelColorEntry {
@@ -856,7 +1077,8 @@ BatchMatchResult batch_match_model_colors(const std::vector<ModelColorEntry>& mo
     for (size_t i = 0; i < model_colors.size(); ++i) {
         const auto&                 entry = model_colors[i];
         MixedColorMatchRecipeResult recipe =
-            build_best_color_match_recipe(physical_colors, entry.color, min_component_percent, max_component_percent);
+            build_best_color_match_recipe(physical_colors, entry.color, min_component_percent, max_component_percent,
+                                          /*check_compatible=*/false, {});
 
         if (!recipe.valid)
             continue;
@@ -1141,6 +1363,12 @@ struct PanelSettings {
     float               upper_bound            = 0.16f;
     bool                local_z_mode           = false;
     bool                component_bias_enabled = false;
+    // Print settings read only by build_mixed_filament_display_context (the Match-mode preview).
+    float               layer_height                = 0.2f;
+    int                 wall_loops                  = 1;
+    float               preferred_a_height          = 0.f;
+    float               preferred_b_height          = 0.f;
+    bool                local_z_direct_multicolor   = false;
 };
 
 // Sidebar::update_color_mix_panel's display context.
@@ -1379,11 +1607,491 @@ static PanelSettings read_settings(const json& req)
     num("mixed_filament_height_upper_bound", s.upper_bound);
     flag("dithering_local_z_mode", s.local_z_mode);
     flag("mixed_filament_component_bias_enabled", s.component_bias_enabled);
+    num("layer_height", s.layer_height);
+    num("mixed_color_layer_height_a", s.preferred_a_height);
+    num("mixed_color_layer_height_b", s.preferred_b_height);
+    flag("dithering_local_z_direct_multicolor", s.local_z_direct_multicolor);
+    if (req.contains("wall_loops")) s.wall_loops = read_int(req, "wall_loops", 1);
     return s;
 }
 
+// Per-slot filament_type from "physical": [{"color", "type"}]; "" where no type is given.
+static std::vector<std::string> read_types(const json& req)
+{
+    std::vector<std::string> out;
+    for (const json& p : req["physical"])
+        out.push_back(p.is_object() && p.contains("type") && p["type"].is_string() ? p["type"].get<std::string>() : std::string());
+    return out;
+}
+
+static void read_compatibility(const json& req)
+{
+    if (req.contains("compatibility") && req["compatibility"].is_string()) {
+        std::ifstream in(req["compatibility"].get<std::string>(), std::ios::binary);
+        if (!in) throw BadRequest("Cannot read compatibility file " + req["compatibility"].get<std::string>());
+        std::stringstream ss;
+        ss << in.rdbuf();
+        load_filament_compatibility(ss.str());
+    } else {
+        load_filament_compatibility(k_shipped_compatibility_json);
+    }
+}
+
+// MixedColorMatchHelpers.cpp build_mixed_filament_display_context (744-802), with the print settings from the request.
+static MixedFilamentDisplayContext print_display_context(const std::vector<std::string>& physical_colors, const PanelSettings& s)
+{
+    MixedFilamentDisplayContext context;
+    context.num_physical    = physical_colors.size();
+    context.physical_colors = physical_colors;
+    context.nozzle_diameters.assign(context.num_physical, 0.4);
+    const size_t opt_count = s.nozzle_diameters.size();
+    if (opt_count > 0)
+        for (size_t i = 0; i < context.num_physical; ++i)
+            context.nozzle_diameters[i] = std::max(0.05, s.nozzle_diameters[std::min(i, opt_count - 1)]);
+    context.preview_settings.mixed_lower_bound    = std::max(0.01, double(s.lower_bound));
+    context.preview_settings.mixed_upper_bound    = std::max(context.preview_settings.mixed_lower_bound, double(s.upper_bound));
+    context.preview_settings.preferred_a_height   = std::max(0.0, double(s.preferred_a_height));
+    context.preview_settings.preferred_b_height   = std::max(0.0, double(s.preferred_b_height));
+    context.preview_settings.nominal_layer_height = std::max(0.01, double(s.layer_height));
+    context.preview_settings.wall_loops           = std::max<size_t>(1, size_t(std::max(1, s.wall_loops)));
+    context.preview_settings.local_z_mode         = s.local_z_mode;
+    context.preview_settings.local_z_direct_multicolor = s.local_z_direct_multicolor && context.preview_settings.preferred_a_height <= EPSILON &&
+                                                         context.preview_settings.preferred_b_height <= EPSILON;
+    context.component_bias_enabled = s.component_bias_enabled;
+    return context;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Virtual-id remapping
+// ---------------------------------------------------------------------------------------------------------------------
+
+// PresetBundle.cpp build_filament_id_remap (3955-4090), for the case Nozzle has: no physical filament is being deleted
+// (deleting_filament == false). `new_mixed` is PresetBundle::mixed_filaments after the change. Index = old 1-based id,
+// value = new id (0 = removed).
+static std::vector<unsigned int> build_filament_id_remap(const std::vector<MixedFilament>& old_mixed, const std::vector<MixedFilament>& new_mixed,
+                                                         size_t old_num_filaments, size_t new_num_filaments, size_t deleted_mixed_idx,
+                                                         const std::vector<unsigned int>& kept_physical_ids = {})
+{
+    const bool         deleting_filament = false;
+    const unsigned int deleted_1based    = 0u;
+    size_t old_enabled_mixed = 0;
+    for (const auto& mf : old_mixed)
+        if (mf.enabled) ++old_enabled_mixed;
+
+    const size_t              old_total_filaments = old_num_filaments + old_enabled_mixed;
+    std::vector<unsigned int> remap(old_total_filaments + 1, 0);
+
+    std::vector<unsigned int> kept_sorted;
+    if (!deleting_filament && !kept_physical_ids.empty()) {
+        kept_sorted = kept_physical_ids;
+        std::sort(kept_sorted.begin(), kept_sorted.end());
+        kept_sorted.erase(std::unique(kept_sorted.begin(), kept_sorted.end()), kept_sorted.end());
+    }
+    for (unsigned int old_id = 1; old_id <= unsigned(old_num_filaments); ++old_id) {
+        unsigned int mapped = 0;
+        if (!kept_sorted.empty()) {
+            auto it = std::lower_bound(kept_sorted.begin(), kept_sorted.end(), old_id);
+            mapped  = (it != kept_sorted.end() && *it == old_id) ? static_cast<unsigned int>(it - kept_sorted.begin() + 1) : 0;
+        } else if (old_id <= unsigned(new_num_filaments)) {
+            mapped = old_id;
+        }
+        remap[old_id] = mapped;
+    }
+
+    auto canonical_pair = [](unsigned int a, unsigned int b) { return std::make_pair(std::min(a, b), std::max(a, b)); };
+    std::unordered_map<uint64_t, unsigned int>                                  new_stable_id_to_virtual_id;
+    std::map<std::pair<unsigned int, unsigned int>, std::vector<unsigned int>> new_pair_to_ids;
+    unsigned int next_virtual_id = unsigned(new_num_filaments + 1);
+    for (const auto& mf : new_mixed) {
+        if (!mf.enabled) continue;
+        if (mf.stable_id != 0) new_stable_id_to_virtual_id.emplace(mf.stable_id, next_virtual_id);
+        new_pair_to_ids[canonical_pair(mf.component_a, mf.component_b)].push_back(next_virtual_id++);
+    }
+
+    std::map<std::pair<unsigned int, unsigned int>, size_t> used_per_pair;
+    unsigned int old_virtual_id = unsigned(old_num_filaments + 1);
+    for (size_t midx = 0; midx < old_mixed.size(); ++midx) {
+        const auto& mf = old_mixed[midx];
+        if (!mf.enabled) continue;
+        if (midx == deleted_mixed_idx) { ++old_virtual_id; continue; }
+        const std::string norm = MixedFilamentManager::normalize_manual_pattern(mf.manual_pattern);
+        unsigned int      a    = mf.component_a;
+        unsigned int      b    = mf.component_b;
+        if (norm.empty() && (a == deleted_1based || b == deleted_1based)) {
+            remap[old_virtual_id] = 0;
+        } else {
+            bool mapped_by_stable_id = false;
+            if (mf.stable_id != 0) {
+                auto it_stable = new_stable_id_to_virtual_id.find(mf.stable_id);
+                if (it_stable != new_stable_id_to_virtual_id.end()) {
+                    remap[old_virtual_id] = it_stable->second;
+                    mapped_by_stable_id   = true;
+                }
+            }
+            if (!mapped_by_stable_id) {
+                const auto key = canonical_pair(a, b);
+                auto       it  = new_pair_to_ids.find(key);
+                if (it == new_pair_to_ids.end()) {
+                    remap[old_virtual_id] = 0;
+                } else {
+                    size_t& used = used_per_pair[key];
+                    remap[old_virtual_id] = used >= it->second.size() ? 0 : it->second[used++];
+                }
+            }
+        }
+        ++old_virtual_id;
+    }
+    return remap;
+}
+
+// {"<old id>": <new id>} for every id whose number changes (0 = removed; Snapmaker then clears that paint to NONE).
+static json remap_json(const std::vector<unsigned int>& remap)
+{
+    json out = json::object();
+    for (size_t i = 1; i < remap.size(); ++i)
+        if (remap[i] != i) out[std::to_string(i)] = remap[i];
+    return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// MixedFilamentDialog (Add Mix / Edit Mix): collect_result per mode, with the dialog's validation and banners
+// ---------------------------------------------------------------------------------------------------------------------
+
+static constexpr int MODE_RATIO = 0, MODE_CYCLE = 1, MODE_MATCH = 2, MODE_GRADIENT = 3;
+static constexpr int MIN_RATIO_PERCENT = 10, MAX_RATIO_PERCENT = 90; // MixedGradientSelector.hpp
+
+struct DialogOutcome {
+    MixedFilament r;
+    std::string   warning; // the orange advisory banner, if any (OK stays enabled)
+};
+
+static int mode_from_name(const std::string& m)
+{
+    if (m == "ratio") return MODE_RATIO;
+    if (m == "cycle") return MODE_CYCLE;
+    if (m == "match") return MODE_MATCH;
+    if (m == "gradient") return MODE_GRADIENT;
+    throw BadRequest("\"mode\" must be ratio, cycle, match or gradient");
+}
+
+static std::string fmt(const char* f, int a, int b = 0)
+{
+    char buf[256];
+    std::snprintf(buf, sizeof buf, f, a, b);
+    return buf;
+}
+
+// get_ratio_warning_msg (MixedFilamentDialog.cpp 2262-2351): `ratios` indexed by 0-based physical slot.
+static std::string ratio_warning(const std::vector<double>& ratios)
+{
+    static constexpr double HIGH_RATIO_THRESHOLD = 0.667;
+    double total = 0.0;
+    for (double r : ratios) total += r;
+    if (total <= 0.0) return {};
+    double max_ratio = 0.0;
+    int    max_idx   = -1;
+    for (int i = 0; i < int(ratios.size()); ++i) {
+        const double ratio = ratios[i] / total;
+        if (ratio > max_ratio) { max_ratio = ratio; max_idx = i; }
+    }
+    if (max_idx >= 0 && max_ratio > HIGH_RATIO_THRESHOLD)
+        return fmt("Filament %d ratio is too high. Mix may be affected.", max_idx + 1);
+    return {};
+}
+
+// update_compatibility_warning's error branch: `fids` 0-based.
+static void check_compatibility(const std::vector<unsigned int>& fids, const std::vector<std::string>& types)
+{
+    if (is_filament_compatible(fids, types)) return;
+    const auto pair = find_incompatible_filament_pair(fids, types);
+    if (pair.first != 0)
+        throw BadRequest(fmt("Filament %d and Filament %d cannot be mixed. Please select filaments of the same type.", int(pair.first), int(pair.second)));
+    throw BadRequest("Different filament types cannot be mixed. Please correct the settings.");
+}
+
+static std::vector<unsigned int> read_filaments(const json& req, size_t num_physical, size_t min_count, size_t max_count)
+{
+    if (!req.contains("filaments") || !req["filaments"].is_array()) throw BadRequest("this mode needs \"filaments\": [1-based slot ids]");
+    std::vector<unsigned int> ids;
+    for (const json& v : req["filaments"]) {
+        if (!v.is_number_integer() || v.get<long long>() < 1 || v.get<long long>() > (long long) num_physical)
+            throw BadRequest("filaments must be physical slot ids 1.." + std::to_string(num_physical));
+        const unsigned int id = v.get<unsigned int>();
+        if (std::find(ids.begin(), ids.end(), id) != ids.end()) throw BadRequest("each filament can be picked once"); // combos exclude each other
+        ids.push_back(id);
+    }
+    if (ids.size() < min_count || ids.size() > max_count)
+        throw BadRequest("this mode takes " + std::to_string(min_count) + (min_count == max_count ? "" : "-" + std::to_string(max_count)) + " filaments");
+    return ids;
+}
+
+static std::vector<double> read_weights(const json& req, size_t n)
+{
+    std::vector<double> w;
+    if (!req.contains("weights")) return w;
+    if (!req["weights"].is_array() || req["weights"].size() != n) throw BadRequest("\"weights\" must have one number per filament");
+    for (const json& v : req["weights"]) {
+        if (!v.is_number() || v.get<double>() < 0) throw BadRequest("weights must be non-negative numbers");
+        w.push_back(v.get<double>());
+    }
+    return w;
+}
+
+// validate_cycle_pattern (3155-3227): returns the normalized pattern or throws the dialog's error text.
+static std::string validate_cycle_pattern(const std::string& raw, size_t num_physical)
+{
+    bool        has_invalid_chars = false;
+    std::string filtered;
+    for (char c : raw) {
+        if (c == ',' || c == '[' || c == ']' || (c >= '0' && c <= '9')) filtered.push_back(c);
+        else has_invalid_chars = true;
+    }
+    const bool        has_leading_trailing_comma = !raw.empty() && (raw.front() == ',' || raw.back() == ',');
+    const std::string normalized                 = MixedFilamentManager::normalize_manual_pattern(filtered);
+    const bool        is_malformed               = !filtered.empty() && normalized.empty();
+    if (has_leading_trailing_comma) throw BadRequest("Leading or trailing commas are not allowed.");
+    if (has_invalid_chars) throw BadRequest("Invalid characters found. Only digits, square brackets ([ and ]), and commas (,) are allowed.");
+    if (is_malformed) throw BadRequest("Unrecognized pattern format. Please check the pattern syntax.");
+    if (num_physical >= 2 && !normalized.empty()) {
+        // parse_cycle_pattern (MixedColorMatchHelpers.cpp 1361-1385)
+        for (const auto& group : MixedFilamentManager::split_pattern_groups(normalized))
+            for (const auto& token : MixedFilamentManager::split_pattern_group_to_tokens(group, num_physical)) {
+                char*         end = nullptr;
+                unsigned long id  = std::strtoul(token.c_str(), &end, 10);
+                if (!end || *end != '\0') throw BadRequest("Unrecognized pattern format. Please check the pattern syntax.");
+                if (id < 1 || id > num_physical) throw BadRequest(fmt("Filament %d not recognized. Please re-enter.", int(id)));
+            }
+    }
+    return normalized.empty() ? "12" : normalized;
+}
+
+// The row MixedFilamentDialog::collect_result (3246-3414) returns for `mode`, starting from `base` (m_result: the edited
+// row, or the Add dialog's fresh row a=1, b=2, 50%), with the controls set from the request.
+static DialogOutcome dialog_collect(const MixedFilament& base, const json& req, const std::vector<std::string>& colours,
+                                   const std::vector<std::string>& types)
+{
+    const size_t  n_phys = colours.size();
+    const int     mode   = mode_from_name(req["mode"].get<std::string>());
+    DialogOutcome out;
+    MixedFilament& r = out.r;
+    r = base;
+    // The Ratio card's MixedGradientSelector: constructed from m_result.mix_b_percent, clamped to 10..90.
+    int val = std::clamp(base.mix_b_percent, MIN_RATIO_PERCENT, MAX_RATIO_PERCENT);
+    r.ui_mode = mode;
+    r.gradient_enabled = false;
+    std::vector<unsigned int> fids; // 0-based, for the compatibility check
+    std::vector<double>       ratios(n_phys, 0.0);
+
+    switch (mode) {
+    case MODE_RATIO: {
+        const auto ids = read_filaments(req, n_phys, 2, 3);
+        r.component_a = ids[0];
+        r.component_b = ids[1];
+        if (req.contains("mix_b_percent")) val = std::clamp(read_int(req, "mix_b_percent", val), MIN_RATIO_PERCENT, MAX_RATIO_PERCENT);
+        r.mix_b_percent = val;
+        r.gradient_component_weights.clear();
+        if (ids.size() == 3) {
+            // Tri picker: weights clamped to 10..90% (4 passes of clamp + renormalize, as a drag does). Without
+            // "weights": the Edit dialog's restored weights, else 1/3 each.
+            double wx = 1.0 / 3.0, wy = 1.0 / 3.0, wz = 1.0 / 3.0;
+            const auto w = read_weights(req, 3);
+            if (!w.empty()) {
+                const double sum = w[0] + w[1] + w[2];
+                if (sum <= 0) throw BadRequest("weights must not all be zero");
+                wx = w[0] / sum; wy = w[1] / sum; wz = w[2] / sum;
+                for (int i = 0; i < 4; ++i) {
+                    wx = std::clamp(wx, 0.10, 0.90); wy = std::clamp(wy, 0.10, 0.90); wz = std::clamp(wz, 0.10, 0.90);
+                    const double s2 = wx + wy + wz;
+                    if (s2 > 0) { wx /= s2; wy /= s2; wz /= s2; }
+                }
+            } else if (base.ui_mode == MODE_RATIO && !base.gradient_component_weights.empty()) {
+                std::vector<int> vals;
+                const char*      p = base.gradient_component_weights.c_str();
+                while (*p) {
+                    char* end;
+                    int   v = (int) std::strtol(p, &end, 10);
+                    if (end == p) break;
+                    vals.push_back(v);
+                    p = end;
+                    if (*p == '/') ++p;
+                }
+                if (vals.size() >= 3) {
+                    int total = 0;
+                    for (int v : vals) total += v;
+                    if (total > 0) {
+                        wx = std::clamp(vals[0] / (double) total, 0.10, 0.90);
+                        wy = std::clamp(vals[1] / (double) total, 0.10, 0.90);
+                        wz = std::clamp(vals[2] / (double) total, 0.10, 0.90);
+                        const double s2 = wx + wy + wz;
+                        if (s2 > 0) { wx /= s2; wy /= s2; wz /= s2; }
+                    }
+                }
+            }
+            r.distribution_mode = int(MixedFilament::LayerCycle);
+            r.manual_pattern.clear();
+            r.gradient_component_ids = MixedFilamentManager::encode_gradient_component_ids(ids);
+            const int r0 = (int) (wx * 100 + 0.5);
+            const int r1 = (int) (wy * 100 + 0.5);
+            const int r2 = 100 - r0 - r1;
+            r.gradient_component_weights = std::to_string(r0) + "/" + std::to_string(r1) + "/" + std::to_string(r2);
+            ratios[ids[0] - 1] = wx; ratios[ids[1] - 1] = wy; ratios[ids[2] - 1] = wz;
+        } else {
+            r.distribution_mode = int(MixedFilament::Simple);
+            r.gradient_component_ids.clear();
+            r.manual_pattern.clear();
+            const int pct_b   = std::clamp(val, 0, 100);
+            int       ratio_a = 1, ratio_b = 0;
+            if (pct_b >= 100) {
+                ratio_a = 0; ratio_b = 1;
+            } else if (pct_b > 0) {
+                const int  pct_a      = 100 - pct_b;
+                const bool b_is_major = pct_b >= pct_a;
+                const int  major_pct  = b_is_major ? pct_b : pct_a;
+                const int  minor_pct  = b_is_major ? pct_a : pct_b;
+                const int  g          = std::gcd(major_pct, minor_pct);
+                ratio_a = b_is_major ? (minor_pct / g) : (major_pct / g);
+                ratio_b = b_is_major ? (major_pct / g) : (minor_pct / g);
+            }
+            r.ratio_a = std::max(0, ratio_a);
+            r.ratio_b = std::max(0, ratio_b);
+            ratios[ids[0] - 1] = (100.0 - val) / 100.0;
+            ratios[ids[1] - 1] = val / 100.0;
+        }
+        for (unsigned int id : ids) fids.push_back(id - 1);
+        break;
+    }
+    case MODE_CYCLE: {
+        std::string raw = MixedFilamentManager::normalize_manual_pattern(base.ui_mode == MODE_CYCLE || base.ui_mode < 0 ? base.manual_pattern : std::string());
+        if (raw.empty()) raw = "12";
+        if (req.contains("pattern")) {
+            if (!req["pattern"].is_string()) throw BadRequest("\"pattern\" must be a string");
+            raw = req["pattern"].get<std::string>();
+        }
+        r.mix_b_percent     = val;
+        r.distribution_mode = int(MixedFilament::Simple);
+        r.manual_pattern    = validate_cycle_pattern(raw, n_phys);
+        r.gradient_component_ids.clear();
+        r.gradient_component_weights.clear();
+        r.component_a = 1;
+        r.component_b = 2;
+        for (const auto& group : MixedFilamentManager::split_pattern_groups(r.manual_pattern))
+            for (const auto& token : MixedFilamentManager::split_pattern_group_to_tokens(group, n_phys)) {
+                const unsigned long id = std::strtoul(token.c_str(), nullptr, 10);
+                if (id >= 1 && id <= n_phys && std::find(fids.begin(), fids.end(), unsigned(id - 1)) == fids.end()) fids.push_back(unsigned(id - 1));
+            }
+        break;
+    }
+    case MODE_MATCH: {
+        // The Match card: tri picker for 3 filaments, gradient bar (range min..100-min) for 2.
+        const auto ids     = read_filaments(req, n_phys, 2, 3);
+        const int  min_pct = std::clamp(read_int(req, "min_percent", 15), 0, 50);
+        r.mix_b_percent     = val;
+        r.distribution_mode = int(MixedFilament::Simple);
+        r.manual_pattern.clear();
+        r.ratio_a = 1;
+        r.ratio_b = 1;
+        r.component_a = ids[0];
+        r.component_b = ids[1];
+        if (ids.size() == 3) {
+            const auto w = read_weights(req, 3);
+            if (w.empty()) throw BadRequest("match with 3 filaments needs \"weights\"");
+            const double total = w[0] + w[1] + w[2];
+            if (total <= 0) throw BadRequest("weights must not all be zero");
+            const double wx = w[0] / total, wy = w[1] / total, wz = w[2] / total;
+            const int w0 = (int) (wx * 100 + 0.5);
+            const int w1 = (int) (wy * 100 + 0.5);
+            const int w2 = std::max(0, 100 - w0 - w1);
+            std::string               weights_str;
+            std::vector<unsigned int> match_ids;
+            if (w0 > 0) { match_ids.push_back(ids[0]); weights_str += std::to_string(w0); }
+            if (w1 > 0) { match_ids.push_back(ids[1]); if (!weights_str.empty()) weights_str += "/"; weights_str += std::to_string(w1); }
+            if (w2 > 0) { match_ids.push_back(ids[2]); if (!weights_str.empty()) weights_str += "/"; weights_str += std::to_string(w2); }
+            r.gradient_component_ids     = MixedFilamentManager::encode_gradient_component_ids(match_ids);
+            r.gradient_component_weights = weights_str;
+            if (match_ids.size() >= 3) {
+                r.distribution_mode = int(MixedFilament::LayerCycle);
+                r.mix_b_percent     = 50;
+            } else if (match_ids.size() == 2) {
+                r.distribution_mode = int(MixedFilament::Simple);
+                int total_w = 0;
+                if (w0 > 0) total_w += w0;
+                if (w1 > 0) total_w += w1;
+                if (w2 > 0) total_w += w2;
+                r.mix_b_percent = (total_w > 0) ? (100 * (w1 > 0 ? w1 : w2) / total_w) : 50;
+            }
+            ratios[ids[0] - 1] = wx; ratios[ids[1] - 1] = wy; ratios[ids[2] - 1] = wz;
+        } else {
+            const int mval = std::clamp(read_int(req, "mix_b_percent", 50), min_pct, 100 - min_pct);
+            r.mix_b_percent              = mval;
+            r.gradient_component_ids     = MixedFilamentManager::encode_gradient_component_ids({r.component_a, r.component_b});
+            r.gradient_component_weights.clear();
+            ratios[ids[0] - 1] = (100.0 - mval) / 100.0;
+            ratios[ids[1] - 1] = mval / 100.0;
+        }
+        for (unsigned int id : ids) fids.push_back(id - 1);
+        break;
+    }
+    case MODE_GRADIENT: {
+        const auto ids = read_filaments(req, n_phys, 2, 2);
+        int direction  = (base.gradient_start >= base.gradient_end) ? 0 : 1;
+        if (req.contains("direction")) direction = read_int(req, "direction", direction) != 0 ? 1 : 0;
+        r.component_a       = ids[0];
+        r.component_b       = ids[1];
+        r.distribution_mode = int(MixedFilament::LayerCycle);
+        r.gradient_component_ids.clear();
+        r.gradient_component_weights.clear();
+        r.manual_pattern.clear();
+        r.gradient_enabled = true;
+        if (direction == 0) {
+            r.gradient_start = MixedFilament::k_default_gradient_dominant;
+            r.gradient_end   = MixedFilament::k_default_gradient_minority;
+        } else {
+            r.gradient_start = MixedFilament::k_default_gradient_minority;
+            r.gradient_end   = MixedFilament::k_default_gradient_dominant;
+        }
+        r.mix_b_percent = 50;
+        r.ratio_a       = 1;
+        r.ratio_b       = 1;
+        if (r.local_z_max_sublayers < 2) r.local_z_max_sublayers = 2;
+        ratios[ids[0] - 1] = 0.5;
+        ratios[ids[1] - 1] = 0.5;
+        for (unsigned int id : ids) fids.push_back(id - 1);
+        break;
+    }
+    }
+    r.custom = true;
+
+    // update_compatibility_warning (2173-2237): an incompatible mix blocks OK; the rest are advisories.
+    check_compatibility(fids, types);
+    if (mode != MODE_CYCLE) out.warning = ratio_warning(ratios);
+    if (out.warning.empty() && mode == MODE_CYCLE && fids.size() == 1)
+        out.warning = "Same filament colors cannot produce new colors. Please select different colors for mixing.";
+    else if (out.warning.empty() && mode == MODE_CYCLE && fids.size() > 4)
+        out.warning = "Excessive filaments in the mix may affect the result. Please use with caution.";
+    return out;
+}
+
+// Fields no dialog control writes, accepted as explicit overrides on add/update (see the report).
+static void apply_row_overrides(MixedFilament& mf, const json& req)
+{
+    auto fnum = [&](const char* key, float& out) {
+        if (!req.contains(key)) return;
+        if (!req[key].is_number()) throw BadRequest(std::string("\"") + key + "\" must be a number");
+        out = req[key].get<float>();
+    };
+    if (req.contains("local_z_max_sublayers")) mf.local_z_max_sublayers = std::max(0, read_int(req, "local_z_max_sublayers", 0));
+    fnum("component_a_surface_offset", mf.component_a_surface_offset);
+    fnum("component_b_surface_offset", mf.component_b_surface_offset);
+    if (req.contains("gradient_enabled")) {
+        if (!req["gradient_enabled"].is_boolean()) throw BadRequest("\"gradient_enabled\" must be a boolean");
+        mf.gradient_enabled = req["gradient_enabled"].get<bool>();
+    }
+    fnum("gradient_start", mf.gradient_start);
+    fnum("gradient_end", mf.gradient_end);
+}
+
 // MixedFilamentDialog::collect_result in RATIO mode, starting from `base` (the row being edited, or a fresh row), with
-// the request's explicit fields applied on top.
+// the request's explicit fields applied on top. Used when the request names no "mode" (the flat-field form).
 static MixedFilament dialog_result(const MixedFilament& base, const json& req, size_t num_physical)
 {
     MixedFilament r = base;
@@ -1391,10 +2099,10 @@ static MixedFilament dialog_result(const MixedFilament& base, const json& req, s
     r.component_b   = unsigned(read_int(req, "b", int(base.component_b)));
     if (r.component_a < 1 || r.component_a > num_physical || r.component_b < 1 || r.component_b > num_physical)
         throw BadRequest("a and b must be physical filament ids (1.." + std::to_string(num_physical) + ")");
-    r.mix_b_percent = std::clamp(read_int(req, "mix_b_percent", base.mix_b_percent), 0, 100);
-    r.ui_mode       = 0; // MODE_RATIO
+    r.mix_b_percent    = std::clamp(read_int(req, "mix_b_percent", base.mix_b_percent), 0, 100);
+    r.ui_mode          = 0; // MODE_RATIO
     r.gradient_enabled = false;
-    std::string gids = base.gradient_component_ids;
+    std::string gids   = base.gradient_component_ids;
     if (req.contains("gradient_ids")) {
         if (!req["gradient_ids"].is_string()) throw BadRequest("\"gradient_ids\" must be a string such as \"124\"");
         gids = req["gradient_ids"].get<std::string>();
@@ -1403,8 +2111,7 @@ static MixedFilament dialog_result(const MixedFilament& base, const json& req, s
     }
     const std::vector<unsigned int> ids = MixedFilamentManager::decode_gradient_component_ids(gids, num_physical);
     if (ids.size() >= 3) {
-        // Three filaments: weighted layer cycle over all of them.
-        r.distribution_mode      = int(MixedFilament::LayerCycle);
+        r.distribution_mode = int(MixedFilament::LayerCycle);
         r.manual_pattern.clear();
         r.gradient_component_ids = MixedFilamentManager::encode_gradient_component_ids(ids);
         if (req.contains("gradient_weights")) {
@@ -1426,13 +2133,12 @@ static MixedFilament dialog_result(const MixedFilament& base, const json& req, s
             const int  major_pct  = b_is_major ? pct_b : pct_a;
             const int  minor_pct  = b_is_major ? pct_a : pct_b;
             const int  g          = std::gcd(major_pct, minor_pct);
-            ratio_a               = b_is_major ? (minor_pct / g) : (major_pct / g);
-            ratio_b               = b_is_major ? (major_pct / g) : (minor_pct / g);
+            ratio_a = b_is_major ? (minor_pct / g) : (major_pct / g);
+            ratio_b = b_is_major ? (major_pct / g) : (minor_pct / g);
         }
         r.ratio_a = std::max(0, ratio_a);
         r.ratio_b = std::max(0, ratio_b);
     }
-    // Explicit overrides (the dialog's other modes produce these directly).
     if (req.contains("distribution_mode")) r.distribution_mode = std::clamp(read_int(req, "distribution_mode", r.distribution_mode), 0, 2);
     if (req.contains("manual_pattern")) {
         if (!req["manual_pattern"].is_string()) throw BadRequest("\"manual_pattern\" must be a string");
@@ -1451,49 +2157,83 @@ static json display_response(MixedFilamentManager& mgr, const std::vector<std::s
     return out;
 }
 
+// Plater's copy of the dialog result into the row ("+" handler 6585-6620, Edit handlers 6840-6915).
+static void copy_dialog_result(MixedFilament& dst, const MixedFilament& r, bool edit)
+{
+    if (edit) {
+        dst.component_a   = r.component_a;
+        dst.component_b   = r.component_b;
+        dst.mix_b_percent = r.mix_b_percent;
+    }
+    dst.distribution_mode          = r.distribution_mode;
+    dst.manual_pattern             = r.manual_pattern;
+    dst.gradient_component_ids     = r.gradient_component_ids;
+    dst.gradient_component_weights = r.gradient_component_weights;
+    dst.ratio_a                    = r.ratio_a;
+    dst.ratio_b                    = r.ratio_b;
+    dst.local_z_max_sublayers      = r.local_z_max_sublayers;
+    dst.gradient_enabled           = r.gradient_enabled;
+    dst.gradient_start             = r.gradient_start;
+    dst.gradient_end               = r.gradient_end;
+    dst.ui_mode                    = r.ui_mode;
+    dst.custom                     = true;
+}
+
+// The row the dialog produces for this request: a named "mode" runs the dialog emulation, otherwise the flat fields.
+static MixedFilament request_row(const MixedFilament& base, const json& req, const std::vector<std::string>& colours,
+                                 const std::vector<std::string>& types, std::string& warning)
+{
+    MixedFilament r;
+    if (req.contains("mode")) {
+        if (!req["mode"].is_string()) throw BadRequest("\"mode\" must be a string");
+        DialogOutcome o = dialog_collect(base, req, colours, types);
+        r       = o.r;
+        warning = o.warning;
+    } else {
+        r = dialog_result(base, req, colours.size());
+    }
+    return r;
+}
+
 // Sidebar::init_color_mix_panel "+" handler.
 static json op_add(const json& req)
 {
     const auto          colors   = read_physical(req);
+    const auto          types    = read_types(req);
     const PanelSettings settings = read_settings(req);
+    read_compatibility(req);
     MixedFilamentManager mgr;
     load_manager(mgr, read_definitions(req), colors);
-    for (const char* k : {"a", "b"})
-        if (!req.contains(k)) throw BadRequest(std::string("add needs \"") + k + "\"");
+    if (!req.contains("mode"))
+        for (const char* k : {"a", "b"})
+            if (!req.contains(k)) throw BadRequest(std::string("add needs \"") + k + "\" (or a \"mode\")");
 
-    MixedFilament fresh; // MixedFilamentDialog's initial m_result (mix_b_percent 50)
+    MixedFilament fresh; // MixedFilamentDialog's "Add Mix" m_result: a=1, b=2, 50%
+    fresh.component_a   = 1;
+    fresh.component_b   = 2;
     fresh.mix_b_percent = 50;
-    const MixedFilament r = dialog_result(fresh, req, colors.size());
+    std::string         warning;
+    const MixedFilament r = request_row(fresh, req, colors, types, warning);
 
     long long added_id = 0;
     if (mgr.total_filaments(colors.size()) < MAXIMUM_FILAMENT_NUMBER) {
         mgr.add_custom_filament(r.component_a, r.component_b, r.mix_b_percent, colors);
         auto& mfs = mgr.mixed_filaments();
         if (!mfs.empty()) {
-            mfs.back().distribution_mode          = r.distribution_mode;
-            mfs.back().manual_pattern             = r.manual_pattern;
-            mfs.back().gradient_component_ids     = r.gradient_component_ids;
-            mfs.back().gradient_component_weights = r.gradient_component_weights;
-            mfs.back().ratio_a                    = r.ratio_a;
-            mfs.back().ratio_b                    = r.ratio_b;
-            mfs.back().local_z_max_sublayers      = r.local_z_max_sublayers;
-            mfs.back().gradient_enabled           = r.gradient_enabled;
-            mfs.back().gradient_start             = r.gradient_start;
-            mfs.back().gradient_end               = r.gradient_end;
-            mfs.back().ui_mode                    = r.ui_mode;
-            mfs.back().custom                     = true;
+            copy_dialog_result(mfs.back(), r, false);
+            apply_row_overrides(mfs.back(), req);
             size_t visible = 0;
             for (const MixedFilament& mf : mfs) if (!mf.deleted) ++visible;
             added_id = (long long) (colors.size() + visible);
         }
     }
     if (added_id == 0) throw std::runtime_error("The filament list is full (" + std::to_string(MAXIMUM_FILAMENT_NUMBER) + " filaments).");
-    // Round-trip through the project string, as the GUI does (it stores serialize_custom_entries() and the panel reloads).
-    const std::string defs = mgr.serialize_custom_entries();
+    const std::string    defs = mgr.serialize_custom_entries();
     MixedFilamentManager saved;
     load_manager(saved, defs, colors);
     json out = display_response(saved, colors, settings);
     out["added_id"] = added_id;
+    if (!warning.empty()) out["warning"] = warning;
     return out;
 }
 
@@ -1504,58 +2244,62 @@ static json op_remove(const json& req)
     const PanelSettings settings = read_settings(req);
     MixedFilamentManager mgr;
     load_manager(mgr, read_definitions(req), colors);
-    auto& mfs = mgr.mixed_filaments();
+    auto&                            mfs       = mgr.mixed_filaments();
+    const std::vector<MixedFilament> old_mixed = mfs;
+    int                              i         = -1;
     if (req.contains("id") && !req["id"].is_null()) {
         if (!req["id"].is_number_integer()) throw BadRequest("\"id\" must be an integer");
-        const int i = panel_index_from_id(mgr, colors.size(), req["id"].get<long long>());
+        i = panel_index_from_id(mgr, colors.size(), req["id"].get<long long>());
         if (i < 0) throw BadRequest("No colour-mixing row has id " + std::to_string(req["id"].get<long long>()));
         mfs[size_t(i)].deleted = true;
         mfs[size_t(i)].enabled = false;
     } else {
-        for (int i = static_cast<int>(mfs.size()) - 1; i >= 0; --i) {
-            if (mfs[i].custom && !mfs[i].deleted) {
-                mfs[i].deleted = true;
+        for (int k = static_cast<int>(mfs.size()) - 1; k >= 0; --k) {
+            if (mfs[k].custom && !mfs[k].deleted) {
+                mfs[k].deleted = true;
+                // The "-" handler leaves `enabled` set; the row is disabled when the project string is reloaded.
+                mfs[k].enabled = false;
+                i = k;
                 break;
             }
         }
     }
-    const std::string defs = mgr.serialize_custom_entries();
+    // Delete menu: update_mixed_filament_id_remap(old_mixed, N, N, i) (Plater.cpp 7020).
+    const std::vector<unsigned int> remap =
+        build_filament_id_remap(old_mixed, mfs, colors.size(), colors.size(), i >= 0 ? size_t(i) : size_t(-1));
+    const std::string    defs = mgr.serialize_custom_entries();
     MixedFilamentManager saved;
     load_manager(saved, defs, colors);
-    return display_response(saved, colors, settings);
+    json out    = display_response(saved, colors, settings);
+    out["remap"] = remap_json(remap);
+    return out;
 }
 
-// The row Edit handler (MixedFilamentDialog on an existing row).
+// The row Edit handler (MixedFilamentDialog on an existing row). Editing never changes which rows are enabled, so no id
+// is renumbered.
 static json op_update(const json& req)
 {
     const auto          colors   = read_physical(req);
+    const auto          types    = read_types(req);
     const PanelSettings settings = read_settings(req);
+    read_compatibility(req);
     MixedFilamentManager mgr;
     load_manager(mgr, read_definitions(req), colors);
     if (!req.contains("id") || !req["id"].is_number_integer()) throw BadRequest("update needs an integer \"id\"");
     const int i = panel_index_from_id(mgr, colors.size(), req["id"].get<long long>());
     if (i < 0) throw BadRequest("No colour-mixing row has id " + std::to_string(req["id"].get<long long>()));
     auto&               mfs2 = mgr.mixed_filaments();
-    const MixedFilament r    = dialog_result(mfs2[size_t(i)], req, colors.size());
-    mfs2[i].component_a                = r.component_a;
-    mfs2[i].component_b                = r.component_b;
-    mfs2[i].mix_b_percent              = r.mix_b_percent;
-    mfs2[i].distribution_mode          = r.distribution_mode;
-    mfs2[i].manual_pattern             = r.manual_pattern;
-    mfs2[i].gradient_component_ids     = r.gradient_component_ids;
-    mfs2[i].gradient_component_weights = r.gradient_component_weights;
-    mfs2[i].ratio_a                    = r.ratio_a;
-    mfs2[i].ratio_b                    = r.ratio_b;
-    mfs2[i].local_z_max_sublayers      = r.local_z_max_sublayers;
-    mfs2[i].gradient_enabled           = r.gradient_enabled;
-    mfs2[i].gradient_start             = r.gradient_start;
-    mfs2[i].gradient_end               = r.gradient_end;
-    mfs2[i].ui_mode                    = r.ui_mode;
-    mfs2[i].custom                     = true;
-    const std::string defs = mgr.serialize_custom_entries();
+    std::string         warning;
+    const MixedFilament r = request_row(mfs2[size_t(i)], req, colors, types, warning);
+    copy_dialog_result(mfs2[size_t(i)], r, true);
+    apply_row_overrides(mfs2[size_t(i)], req);
+    const std::string    defs = mgr.serialize_custom_entries();
     MixedFilamentManager saved;
     load_manager(saved, defs, colors);
-    return display_response(saved, colors, settings);
+    json out = display_response(saved, colors, settings);
+    out["remap"] = json::object();
+    if (!warning.empty()) out["warning"] = warning;
+    return out;
 }
 
 static json op_display(const json& req)
@@ -1564,6 +2308,361 @@ static json op_display(const json& req)
     MixedFilamentManager mgr;
     load_manager(mgr, read_definitions(req), colors);
     return display_response(mgr, colors, read_settings(req));
+}
+
+// Sidebar::cleanup_unused_filaments_after_batch_match (Plater.cpp 8672-8990), mixed rows only: Nozzle's physical slots
+// are toolheads and are never deleted, so every physical slot is kept for the cascade check, and the physical slots
+// Snapmaker would have deleted are only reported.
+static json op_cleanup(const json& req)
+{
+    const auto          colors   = read_physical(req);
+    const PanelSettings settings = read_settings(req);
+    MixedFilamentManager mgr;
+    load_manager(mgr, read_definitions(req), colors);
+    const size_t num_physical = colors.size();
+    if (!req.contains("used_ids") || !req["used_ids"].is_array()) throw BadRequest("cleanup needs \"used_ids\"");
+    std::vector<unsigned int> used_physical, kept_mixed;
+    for (const json& v : req["used_ids"]) {
+        if (!v.is_number_integer() || v.get<long long>() < 1) throw BadRequest("used_ids must be positive integers");
+        const unsigned int id = v.get<unsigned int>();
+        (id <= num_physical ? used_physical : kept_mixed).push_back(id);
+    }
+    auto& mfs = mgr.mixed_filaments();
+
+    std::vector<unsigned int> all_physical;
+    for (unsigned int k = 1; k <= num_physical; ++k) all_physical.push_back(k);
+    const RedundantFilamentSet red = compute_redundant_filaments(num_physical, all_physical, kept_mixed, mfs);
+
+    // Physical slots Snapmaker would delete: those no used id needs, counting the components of the mixed rows that
+    // survive (otherwise Snapmaker's cascade would delete a row the project still uses).
+    std::vector<unsigned int> needed_physical = used_physical;
+    {
+        const std::unordered_set<unsigned int> doomed(red.redundant_mixed.begin(), red.redundant_mixed.end());
+        unsigned int vid = static_cast<unsigned int>(num_physical) + 1;
+        for (const MixedFilament& mf : mfs) {
+            if (!mf.enabled || mf.deleted) continue;
+            if (!doomed.count(vid)) {
+                const std::string norm = MixedFilamentManager::normalize_manual_pattern(mf.manual_pattern);
+                if (!norm.empty()) {
+                    for (const auto& g : MixedFilamentManager::split_pattern_groups(norm))
+                        for (const auto& t : MixedFilamentManager::split_pattern_group_to_tokens(g, 0))
+                            needed_physical.push_back(MixedFilamentManager::physical_filament_from_token(t, mf, num_physical));
+                } else {
+                    needed_physical.push_back(mf.component_a);
+                    needed_physical.push_back(mf.component_b);
+                    for (unsigned int gid : MixedFilamentManager::decode_gradient_component_ids(mf.gradient_component_ids, 0))
+                        needed_physical.push_back(gid);
+                }
+            }
+            ++vid;
+        }
+    }
+    const RedundantFilamentSet phys = compute_redundant_filaments(num_physical, needed_physical, {}, {});
+    std::vector<unsigned int>  unused_physical(phys.redundant_physical.rbegin(), phys.redundant_physical.rend());
+
+    // Mark the redundant rows (by stable id) and build the T2 -> T3 painting remap, as the source does.
+    std::vector<uint64_t> redundant_sids;
+    for (unsigned int redundant_id : red.redundant_mixed) {
+        const int idx = mgr.mixed_index_from_filament_id(redundant_id, num_physical);
+        if (idx >= 0 && mfs[size_t(idx)].stable_id != 0) redundant_sids.push_back(mfs[size_t(idx)].stable_id);
+    }
+    std::vector<unsigned int> remap;
+    if (!redundant_sids.empty()) {
+        const std::unordered_set<uint64_t> to_delete(redundant_sids.begin(), redundant_sids.end());
+        std::vector<unsigned int>          deleted_t2_vids;
+        unsigned int                       vid = static_cast<unsigned int>(num_physical) + 1;
+        for (const MixedFilament& mf : mfs) {
+            if (!mf.enabled || mf.deleted) continue;
+            if (mf.stable_id != 0 && to_delete.count(mf.stable_id) > 0) deleted_t2_vids.push_back(vid);
+            ++vid;
+        }
+        remap = MixedFilamentManager::build_mixed_deletion_painting_remap(num_physical, num_physical + mgr.enabled_count(), deleted_t2_vids);
+        for (auto& mf : mfs)
+            if (mf.stable_id != 0 && to_delete.count(mf.stable_id) > 0) { mf.deleted = true; mf.enabled = false; }
+    }
+    const std::string    defs = mgr.serialize_custom_entries();
+    MixedFilamentManager saved;
+    load_manager(saved, defs, colors);
+    json out = display_response(saved, colors, settings);
+    out["deleted_ids"]     = red.redundant_mixed;
+    out["remap"]           = remap_json(remap);
+    out["unused_physical"] = unused_physical;
+    return out;
+}
+
+// The Match card's tri/gradient state after a recipe arrives (MixedFilamentDialog.cpp 1224-1275: weights expanded over
+// the physical slots, sorted by weight, the top three kept), as the dialog_collect "match" request that reproduces it.
+static json match_dialog_request(const MixedColorMatchRecipeResult& recipe, size_t num_physical, int min_pct)
+{
+    const auto                       weights = expand_color_match_recipe_weights(recipe, num_physical);
+    std::vector<std::pair<int, int>> sorted;
+    for (int i = 0; i < (int) weights.size(); ++i)
+        if (weights[i] > 0) sorted.push_back({i, weights[i]});
+    std::sort(sorted.begin(), sorted.end(), [](auto& a, auto& b) { return a.second > b.second; });
+    json d;
+    d["mode"]        = "match";
+    d["min_percent"] = min_pct;
+    if (sorted.size() >= 3) {
+        sorted.resize(3);
+        d["filaments"] = {sorted[0].first + 1, sorted[1].first + 1, sorted[2].first + 1};
+        d["weights"]   = {sorted[0].second, sorted[1].second, sorted[2].second};
+    } else if (sorted.size() == 2) {
+        const int total = sorted[0].second + sorted[1].second;
+        d["filaments"]     = {sorted[0].first + 1, sorted[1].first + 1};
+        d["mix_b_percent"] = (total > 0) ? (sorted[1].second * 100 / total) : 50;
+    }
+    return d;
+}
+
+static json row_fields(const MixedFilament& r)
+{
+    json j;
+    j["a"]                = r.component_a;
+    j["b"]                = r.component_b;
+    j["mix_b_percent"]    = r.mix_b_percent;
+    j["gradient_ids"]     = r.gradient_component_ids;
+    j["gradient_weights"] = r.gradient_component_weights;
+    j["manual_pattern"]   = r.manual_pattern;
+    j["distribution_mode"] = r.distribution_mode;
+    j["gradient_enabled"] = r.gradient_enabled;
+    j["gradient_start"]   = r.gradient_start;
+    j["gradient_end"]     = r.gradient_end;
+    j["local_z_max_sublayers"] = r.local_z_max_sublayers;
+    j["ui_mode"]          = r.ui_mode;
+    return j;
+}
+
+// The recipe search behind the dialog's Match mode (MixedColorMatchPanel::launch_recipe_match and
+// sync_recipe_preview; the same call as MixedFilamentColorMatchDialog in Plater.cpp ~1925), without adding a row.
+static json op_match_one(const json& req)
+{
+    const auto          colors   = read_physical(req);
+    const auto          types    = read_types(req);
+    const PanelSettings settings = read_settings(req);
+    read_compatibility(req);
+    if (!req.contains("target")) throw BadRequest("match_one needs a \"target\" colour");
+    FsColour target;
+    try_parse_color_match_hex(require_colour(req["target"], "target"), target);
+    const int min_pct = read_int(req, "min_percent", 15);  // m_match_min_pct / m_min_component_percent default
+    const int max_pct = read_int(req, "max_percent", 100); // build_best_color_match_recipe's default
+    if (min_pct < 0 || min_pct > 50) throw BadRequest("min_percent must be in [0, 50]");
+    if (max_pct < 50 || max_pct > 100) throw BadRequest("max_percent must be in [50, 100]");
+
+    // Optional subset of slots (not a Snapmaker control: the dialog always searches every physical filament).
+    std::vector<unsigned int> slots;
+    if (req.contains("slots")) {
+        if (!req["slots"].is_array()) throw BadRequest("\"slots\" must be an array");
+        for (const json& v : req["slots"]) {
+            if (!v.is_number_integer() || v.get<long long>() < 1 || v.get<long long>() > (long long) colors.size())
+                throw BadRequest("slots must be physical slot ids");
+            slots.push_back(v.get<unsigned int>());
+        }
+        if (slots.size() < 2) throw BadRequest("slots needs at least 2 slots");
+    } else {
+        for (unsigned int k = 1; k <= colors.size(); ++k) slots.push_back(k);
+    }
+    std::vector<std::string> palette, palette_types;
+    for (unsigned int k : slots) { palette.push_back(colors[k - 1]); palette_types.push_back(types[k - 1]); }
+
+    MixedColorMatchRecipeResult recipe = build_best_color_match_recipe(palette, target, min_pct, max_pct, true, palette_types);
+    if (!recipe.valid) throw std::runtime_error("Unable to create a color match from the current physical filament colors.");
+    auto remap_id = [&](unsigned int& id) { if (id >= 1 && id <= slots.size()) id = slots[id - 1]; };
+    remap_id(recipe.component_a);
+    remap_id(recipe.component_b);
+    if (!recipe.gradient_component_ids.empty()) {
+        auto ids = MixedFilamentManager::decode_gradient_component_ids(recipe.gradient_component_ids);
+        for (auto& id : ids) remap_id(id);
+        recipe.gradient_component_ids = MixedFilamentManager::encode_gradient_component_ids(ids);
+    }
+    const FsColour search_preview = recipe.preview_color;
+    // sync_recipe_preview: the preview becomes the row's display colour; ΔE is re-measured against it.
+    recipe.preview_color = compute_color_match_recipe_display_color(recipe, print_display_context(colors, settings));
+    recipe.delta_e       = color_delta_e00(target, recipe.preview_color);
+
+    std::vector<unsigned int> ids;
+    std::vector<int>          weights;
+    color_match_recipe_components(recipe, ids, weights);
+    json out;
+    out["target"]            = target.hex();
+    out["components"]        = ids;
+    out["weights"]           = weights;
+    out["summary"]           = summarize_color_match_recipe(recipe);
+    out["a"]                 = recipe.component_a;
+    out["b"]                 = recipe.component_b;
+    out["mix_b_percent"]     = recipe.mix_b_percent;
+    out["gradient_ids"]      = recipe.gradient_component_ids;
+    out["gradient_weights"]  = recipe.gradient_component_weights;
+    out["distribution_mode"] = recipe.gradient_component_ids.empty() ? int(MixedFilament::Simple) : int(MixedFilament::LayerCycle);
+    out["preview"]           = recipe.preview_color.hex();
+    out["search_preview"]    = search_preview.hex();
+    out["delta_e"]           = std::round(recipe.delta_e * 100.0) / 100.0;
+    out["quality"]           = recipe.delta_e < kDeltaEGoodMax ? "Good" : (recipe.delta_e < kDeltaEFairMax ? "Fair" : "Poor");
+    // What OK in the Match mode stores: pass "dialog" to add/update.
+    json          dlg = match_dialog_request(recipe, colors.size(), min_pct);
+    MixedFilament fresh;
+    fresh.component_a = 1; fresh.component_b = 2; fresh.mix_b_percent = 50;
+    DialogOutcome o   = dialog_collect(fresh, dlg, colors, types);
+    out["dialog"]     = dlg;
+    out["row"]        = row_fields(o.r);
+    if (!o.warning.empty()) out["warning"] = o.warning;
+    return out;
+}
+
+// The dialog's "Mixing Recommendations" swatches (MixedFilamentDialog::build_swatch_grid 2607-2886) per mode; "match"
+// uses build_color_match_presets. Each entry carries the dialog request a click + OK produces.
+static json op_presets(const json& req)
+{
+    const auto colors = read_physical(req);
+    const auto types  = read_types(req);
+    read_compatibility(req);
+    const std::string mode    = req.value("mode", std::string("match"));
+    const int         min_pct = std::clamp(read_int(req, "min_percent", 15), 0, 50);
+    int               n       = (int) colors.size();
+    std::vector<FsColour> palette;
+    for (const auto& c : colors) palette.push_back(parse_mixed_color(c));
+
+    struct Candidate {
+        FsColour    color;
+        std::string tooltip;
+        int         rows[3] = {0, 0, 0};
+        int         n_rows  = 2;
+        int         b_pct   = 50;
+        std::vector<int> w;  // triple weights (percent)
+        std::vector<unsigned int> ids; // summary ids
+        std::vector<int> wts;          // summary weights
+    };
+    std::vector<Candidate> candidates;
+    char                   buf[128];
+
+    if (mode == "match") {
+        for (const auto& preset : build_color_match_presets(colors, min_pct, types)) {
+            if (!preset.valid) continue;
+            Candidate c;
+            c.color   = preset.preview_color;
+            c.tooltip = summarize_color_match_recipe(preset);
+            color_match_recipe_components(preset, c.ids, c.wts);
+            auto decoded = MixedFilamentManager::decode_gradient_component_ids(preset.gradient_component_ids);
+            if (decoded.size() >= 2) {
+                c.rows[0] = (int) decoded[0] - 1; c.rows[1] = (int) decoded[1] - 1;
+                c.n_rows = 2; c.b_pct = preset.mix_b_percent;
+                if (decoded.size() >= 3) {
+                    c.rows[2] = (int) decoded[2] - 1; c.n_rows = 3;
+                    c.w = decode_color_match_gradient_weights(preset.gradient_component_weights, 3);
+                }
+            } else {
+                c.rows[0] = (int) preset.component_a - 1; c.rows[1] = (int) preset.component_b - 1;
+                c.n_rows = 2; c.b_pct = preset.mix_b_percent;
+            }
+            candidates.push_back(c);
+        }
+    } else if (mode == "ratio" || mode == "ratio3") {
+        if (mode == "ratio3") {
+            n = std::min(n, 6);
+            auto add_triple = [&](int i, int j, int k, const std::vector<int>& input_weights) {
+                auto recipe = build_multi_color_match_candidate(palette, {unsigned(i + 1), unsigned(j + 1), unsigned(k + 1)}, input_weights, 0);
+                if (!recipe.valid) return;
+                Candidate c;
+                c.color  = recipe.preview_color;
+                c.n_rows = 3;
+                c.rows[0] = i; c.rows[1] = j; c.rows[2] = k;
+                c.w      = input_weights;
+                std::snprintf(buf, sizeof buf, "F%d(%d%%)+F%d(%d%%)+F%d(%d%%)", i + 1, input_weights[0], j + 1, input_weights[1], k + 1, input_weights[2]);
+                c.tooltip = buf;
+                c.ids = {unsigned(i + 1), unsigned(j + 1), unsigned(k + 1)};
+                c.wts = input_weights;
+                candidates.push_back(c);
+            };
+            const std::vector<int> eq = normalize_color_match_weights({1, 1, 1}, 3);
+            for (int i = 0; i < n; ++i)
+                for (int j = i + 1; j < n; ++j)
+                    for (int k = j + 1; k < n; ++k) {
+                        add_triple(i, j, k, eq);
+                        for (int dom = 0; dom < 3; ++dom) {
+                            std::vector<int> dw = {25, 25, 25};
+                            dw[dom] = 50;
+                            add_triple(i, j, k, dw);
+                        }
+                    }
+        } else {
+            for (int i = 0; i < n; ++i)
+                for (int j = i + 1; j < n; ++j) {
+                    auto recipe = build_pair_color_match_candidate(palette, i + 1, j + 1, 50, 0);
+                    if (!recipe.valid) continue;
+                    Candidate c;
+                    c.color = recipe.preview_color;
+                    std::snprintf(buf, sizeof buf, "F%d(50%%) + F%d(50%%)", i + 1, j + 1);
+                    c.tooltip = buf;
+                    c.rows[0] = i; c.rows[1] = j;
+                    c.ids = {unsigned(i + 1), unsigned(j + 1)};
+                    c.wts = {50, 50};
+                    candidates.push_back(c);
+                }
+        }
+    } else if (mode == "gradient") {
+        for (int i = 0; i < n; ++i)
+            for (int j = i + 1; j < n; ++j) {
+                const FsColour blended = parse_mixed_color(MixedFilamentManager::blend_color(colors[i], colors[j], 50, 50));
+                for (int dir = 0; dir < 2; ++dir) {
+                    Candidate c;
+                    c.color = blended;
+                    const int from = dir == 0 ? i : j, to = dir == 0 ? j : i;
+                    std::snprintf(buf, sizeof buf, "F%d \xE2\x86\x92 F%d", from + 1, to + 1);
+                    c.tooltip = buf;
+                    c.rows[0] = from; c.rows[1] = to;
+                    c.ids = {unsigned(from + 1), unsigned(to + 1)};
+                    c.wts = {50, 50};
+                    candidates.push_back(c);
+                }
+            }
+    } else {
+        throw BadRequest("presets \"mode\" must be match, ratio, ratio3 or gradient (Cycle mode shows no swatches)");
+    }
+
+    json presets = json::array();
+    int  badge_idx = 0;
+    for (const auto& cand : candidates) {
+        std::vector<unsigned int> fids;
+        for (int r = 0; r < cand.n_rows; ++r) fids.push_back(unsigned(cand.rows[r]));
+        if (!is_filament_compatible(fids, types)) continue;
+        int min_w = 100;
+        if (cand.n_rows == 2) min_w = std::min(100 - cand.b_pct, cand.b_pct);
+        else if (cand.n_rows == 3 && cand.w.size() == 3) min_w = static_cast<int>(std::min({cand.w[0] / 100.0, cand.w[1] / 100.0, cand.w[2] / 100.0}) * 100.0 + 0.5);
+        else if (cand.n_rows == 3) min_w = static_cast<int>(1.0 / 3.0 * 100.0 + 0.5);
+        json p;
+        p["index"]      = ++badge_idx;
+        p["components"] = cand.ids;
+        p["weights"]    = cand.wts;
+        p["preview"]    = cand.color.hex();
+        p["tooltip"]    = cand.tooltip;
+        // Match mode hides swatches whose smallest component is below Min Mix Ratio (rebuild_swatch_sizer).
+        p["visible"]    = mode != "match" || min_w >= min_pct;
+        json d;
+        d["mode"] = mode == "ratio3" ? "ratio" : mode;
+        json f    = json::array();
+        for (int r = 0; r < cand.n_rows; ++r) f.push_back(cand.rows[r] + 1);
+        d["filaments"] = f;
+        if (mode == "match") {
+            d["min_percent"] = min_pct;
+            if (cand.n_rows == 3) {
+                if (cand.w.size() == 3) d["weights"] = cand.w;
+                else d["weights"] = {1, 1, 1}; // the tri state keeps its previous weights (default 1/3 each)
+            } else {
+                d["mix_b_percent"] = cand.b_pct;
+            }
+        } else if (mode == "ratio3") {
+            d["weights"] = cand.w;
+        } else if (mode == "ratio") {
+            d["mix_b_percent"] = cand.b_pct;
+        } else {
+            d["direction"] = 0;
+        }
+        p["dialog"] = d;
+        presets.push_back(std::move(p));
+    }
+    json out;
+    out["mode"]    = mode;
+    out["presets"] = std::move(presets);
+    return out;
 }
 
 // FilamentColorLibrary reads filaments_colours.json from <data_dir>/system/Snapmaker/filament/ or
@@ -1685,7 +2784,8 @@ static json op_match(const json& req)
         }
     }
 
-    std::vector<std::string> colors_vec;
+    std::vector<std::string>  colors_vec;
+    std::vector<unsigned int> match_remap;
     if (result.is_recommended_mode && result.recommended_physical_colors.size() >= 4) {
         const auto&  cm            = result.recommended_physical_colors;
         const size_t current_count = m_physical_colors.size();
@@ -1695,10 +2795,14 @@ static json op_match(const json& req)
         for (size_t i = 0; i < 4 && i < cm.size(); ++i)
             colors_vec[i] = cm[i];
         // set_num_filaments + the "Restore custom entries" reload, against the new palette.
+        const std::vector<MixedFilament> old_mixed_snapshot = mgr.mixed_filaments();
         const std::string saved = mgr.serialize_custom_entries();
         MixedFilamentManager fresh;
         load_manager(fresh, saved, colors_vec);
         mgr = std::move(fresh);
+        // update_mixed_filament_id_remap(old_mixed_snapshot, current_count, target_count) (Plater.cpp ~2745).
+        if (current_count != target_count || old_mixed_snapshot != mgr.mixed_filaments())
+            match_remap = build_filament_id_remap(old_mixed_snapshot, mgr.mixed_filaments(), current_count, target_count, size_t(-1));
     } else {
         colors_vec = m_physical_colors;
     }
@@ -1881,6 +2985,7 @@ static json op_match(const json& req)
         out["redundant"] = std::move(c);
     }
 
+    out["remap"]       = remap_json(match_remap);
     out["definitions"] = mgr.serialize_custom_entries();
     out["rows"]        = panel_rows(mgr, colors_vec, settings);
     return out;
@@ -1903,6 +3008,9 @@ int run_full_spectrum(const std::string& request_text, std::string& response)
         else if (op == "remove") out = op_remove(req);
         else if (op == "update") out = op_update(req);
         else if (op == "match") out = op_match(req);
+        else if (op == "match_one") out = op_match_one(req);
+        else if (op == "presets") out = op_presets(req);
+        else if (op == "cleanup") out = op_cleanup(req);
         else throw BadRequest("Unknown op: " + op);
         response = out.dump();
         return 0;

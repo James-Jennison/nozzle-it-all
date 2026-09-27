@@ -132,11 +132,33 @@ class PrepareState(private val app: AppState) {
         changed()
     }
 
+    /** Filament profiles chosen on slots of a printer that reports what's loaded (slot → library id). */
+    val headProfiles = androidx.compose.runtime.mutableStateMapOf<Int, String>()
+
+    /** The filament profiles this printer profile can slice with, one per slot. */
+    fun filamentLibrary(): List<FilamentLibrary.Entry> = FilamentLibrary.forProfile(profileId)
+
+    /** Sets slot [slot]'s filament profile (and, for a slot Nozzle keeps itself, its material type and colour). */
+    fun setSlotFilament(slot: Int, entry: FilamentLibrary.Entry?, colourHex: String? = null) {
+        if (printer()?.status?.value?.toolheads.isNullOrEmpty()) {
+            val i = manualSlots.indexOfFirst { it.slot == slot }
+            if (i >= 0) manualSlots[i] = manualSlots[i].copy(filamentProfile = entry?.id, type = entry?.type ?: manualSlots[i].type,
+                vendor = entry?.vendor?.takeIf { it.isNotBlank() }, colorHex = colourHex ?: manualSlots[i].colorHex)
+        } else if (entry != null) headProfiles[slot] = entry.id else headProfiles.remove(slot)
+        changed()
+    }
+
     /** Materials in slot order: the printer's loaded toolheads when it reports them, otherwise the manual slots. */
     fun materials(): List<ProjectManifest.MaterialSlot> {
         val heads = printer()?.status?.value?.toolheads.orEmpty()
-        if (heads.isNotEmpty()) return heads.map { t -> ProjectManifest.MaterialSlot(t.index + 1, t.material?.type ?: "PLA", t.material?.vendor, t.material?.subType,
-            t.material?.colorHex ?: manualSlots.getOrNull(t.index)?.colorHex, t.index) }
+        // A loaded filament slices with the printer's own filament profile for it, matched by vendor and type (the choice
+        // made on the slot overrides that).
+        if (heads.isNotEmpty()) return heads.map { t ->
+            val chosen = headProfiles[t.index + 1]
+            ProjectManifest.MaterialSlot(t.index + 1, t.material?.type ?: "PLA", t.material?.vendor, t.material?.subType,
+                t.material?.colorHex ?: manualSlots.getOrNull(t.index)?.colorHex, t.index,
+                filamentProfile = chosen ?: FilamentLibrary.bestFor(profileId, t.material?.vendor, t.material?.type ?: "PLA", t.material?.subType)?.id)
+        }
         // No printer report: one slot per tool the profile has (a U1 has four, most printers one).
         val tools = (profile?.tools ?: 1).coerceIn(1, manualSlots.size)
         return manualSlots.take(tools)
@@ -176,27 +198,55 @@ class PrepareState(private val app: AppState) {
     fun editMixes(scope: kotlinx.coroutines.CoroutineScope, op: (List<String>, String) -> FullSpectrum.Mixes) {
         val defs = mixDefinitions; val physical = physicalColours()
         scope.launch { runCatching { withContext(Dispatchers.IO) { op(physical, defs) } }
-            .onSuccess { setMixes(it); changed() }.onFailure { mixProblem = it.message } }
+            .onSuccess { setMixes(it); followRemap(it.remap); changed() }.onFailure { mixProblem = it.message } }
     }
+
+    /**
+     * Every model follows Snapmaker's renumbering after mixes are deleted: a colour on a mix that moved follows it; one
+     * on a deleted mix (mapped to 0) goes back to the object's own slot, and an object on a deleted mix to slot 1.
+     */
+    fun followRemap(remap: Map<Int, Int>) {
+        if (remap.isEmpty()) return
+        items.forEach { item ->
+            item.slot = remap[item.slot]?.let { if (it == 0) 1 else it } ?: item.slot
+            for (i in item.paintSlots.indices) remap[item.paintSlots[i]]?.let { item.paintSlots[i] = if (it == 0) item.slot else it }
+        }
+    }
+
+    /** The slots the project uses: every object's own slot and every slot its colours print in. */
+    fun usedSlots(): Set<Int> = items.flatMapTo(HashSet()) { item -> listOf(item.slot) + item.painted.map { item.slotFor(it) } }
 
     /** Applies a Color Mixing Match to [item]: its colours print in the matched slots or new mixes. */
     fun applyMatch(item: PrepItem, result: FullSpectrum.MatchResult, scope: kotlinx.coroutines.CoroutineScope) {
         mixDefinitions = result.definitions
         // Auto mode matched against Snapmaker's recommended filaments: with no printer reporting what's loaded, the slots
         // become those filaments (as Snapmaker Orca's apply step sets them); a connected printer's slots are what's loaded.
-        if (printer()?.status?.value?.toolheads.isNullOrEmpty()) result.palette.forEach { (slot, hex) ->
-            val i = manualSlots.indexOfFirst { it.slot == slot }
-            if (i >= 0) manualSlots[i] = manualSlots[i].copy(type = "PLA", colorHex = hex)
+        result.palette.forEach { (slot, hex) ->
+            // Each palette slot slices with its Full Spectrum family's filament profile for this printer
+            // (find_selectable_full_spectrum_family_preset: the family's profile by match name).
+            val family = result.families[slot]
+            val entry = family?.let { f -> filamentLibrary().firstOrNull { it.family.equals(f, true) } }
+            if (printer()?.status?.value?.toolheads.isNullOrEmpty()) {
+                val i = manualSlots.indexOfFirst { it.slot == slot }
+                if (i >= 0) manualSlots[i] = manualSlots[i].copy(type = entry?.type ?: "PLA", vendor = entry?.vendor?.takeIf { it.isNotBlank() },
+                    colorHex = hex, filamentProfile = entry?.id ?: manualSlots[i].filamentProfile)
+            } else entry?.let { headProfiles[slot] = it.id }
         }
         result.results.forEach { m -> m.sourceIds.forEach { n ->
             if (n == item.ownFilament) item.slot = m.slot
             if (n >= 1) { while (item.paintSlots.size < n) item.paintSlots.add(item.slot); item.paintSlots[n - 1] = m.slot }
         } }
-        changed(); refreshMixes(scope)
+        // Snapmaker Orca then deletes mixes the project no longer uses (cleanup_unused_filaments_after_batch_match).
+        val physical = physicalColours(); val defs = mixDefinitions; val used = usedSlots()
+        changed()
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { FullSpectrum.cleanup(physical, defs, used) } }
+                .onSuccess { setMixes(it); followRemap(it.remap) }.onFailure { mixProblem = it.message; refreshMixes(scope) }
+        }
     }
 
     fun newProject() {
-        overrides.clear(); mixDefinitions = ""; mixes.clear(); mixProblem = null
+        overrides.clear(); mixDefinitions = ""; mixes.clear(); mixProblem = null; headProfiles.clear()
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         slice = SliceState.Idle; showPreview = false; nextId = 1
     }
@@ -216,6 +266,13 @@ class PrepareState(private val app: AppState) {
             ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && k != FullSpectrum.DEFINITIONS_KEY && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
         }
         p.manifest?.printer?.profileId?.takeIf { ProfileCatalog.byId(it) != null }?.let { profileId = it }
+        // The project's slots: what a printer doesn't report comes back as saved (colour, material, filament profile).
+        p.manifest?.materials?.forEach { m ->
+            val i = manualSlots.indexOfFirst { it.slot == m.slot }
+            if (i >= 0) manualSlots[i] = manualSlots[i].copy(type = m.type ?: manualSlots[i].type, vendor = m.vendor, subType = m.subType,
+                colorHex = m.colorHex ?: manualSlots[i].colorHex, filamentProfile = m.filamentProfile)
+            m.filamentProfile?.let { headProfiles[m.slot] = it }
+        }
         p.manifest?.printer?.printerId?.takeIf { it in app.fleet.printers }?.let { printerId = it }
         notice = p.manifestProblem
         dirty = false

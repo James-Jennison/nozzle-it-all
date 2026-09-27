@@ -1,0 +1,307 @@
+{
+ "printer": "Snapmaker U1 (0.4 nozzle)",
+ "source": "Snapmaker Orca resources/profiles (AGPL-3.0), see engine/snapmaker/ENGINE_PIN.json",
+ "filaments": [
+  {
+   "id": "generic_abs",
+   "name": "Generic ABS",
+   "vendor": "Generic",
+   "type": "ABS",
+   "family": "Generic ABS"
+  },
+  {
+   "id": "generic_asa_u1_0_4_nozzle",
+   "name": "Generic ASA @U1 0.4 nozzle",
+   "vendor": "Generic",
+   "type": "ASA",
+   "family": "Generic ASA @U1"
+  },
+  {
+   "id": "generic_bvoh",
+   "name": "Generic BVOH",
+   "vendor": "Generic",
+   "type": "BVOH",
+   "family": "Generic BVOH"
+  },
+  {
+   "id": "generic_pa",
+   "name": "Generic PA",
+   "vendor": "Generic",
+   "type": "PA",
+   "family": "Generic PA"
+  },
+  {
+   "id": "generic_pa_cf",
+   "name": "Generic PA-CF",
+   "vendor": "Generic",
+   "type": "PA-CF",
+   "family": "Generic PA-CF"
+  },
+  {
+   "id": "generic_pc",
+   "name": "Generic PC",
+   "vendor": "Generic",
+   "type": "PC",
+   "family": "Generic PC"
+  },
+  {
+   "id": "generic_pctg",
+   "name": "Generic PCTG",
+   "vendor": "Generic",
+   "type": "PCTG",
+   "family": "Generic PCTG"
+  },
+  {
+   "id": "generic_petg",
+   "name": "Generic PETG",
+   "vendor": "Generic",
+   "type": "PETG",
+   "family": "Generic PETG"
+  },
+  {
+   "id": "generic_petg_hf",
+   "name": "Generic PETG HF",
+   "vendor": "Generic",
+   "type": "PETG",
+   "family": "Generic PETG HF"
+  },
+  {
+   "id": "generic_petg_cf",
+   "name": "Generic PETG-CF",
+   "vendor": "Generic",
+   "type": "PETG-CF",
+   "family": "Generic PETG-CF"
+  },
+  {
+   "id": "generic_petg_gf",
+   "name": "Generic PETG-GF",
+   "vendor": "Generic",
+   "type": "PETG-GF",
+   "family": "Generic PETG-GF"
+  },
+  {
+   "id": "generic_pla",
+   "name": "Generic PLA",
+   "vendor": "Generic",
+   "type": "PLA",
+   "family": "Generic PLA"
+  },
+  {
+   "id": "generic_pla_high_speed",
+   "name": "Generic PLA High Speed",
+   "vendor": "Generic",
+   "type": "PLA",
+   "family": "Generic PLA High Speed"
+  },
+  {
+   "id": "generic_pla_silk",
+   "name": "Generic PLA Silk",
+   "vendor": "Generic",
+   "type": "PLA",
+   "family": "Generic PLA Silk"
+  },
+  {
+   "id": "generic_pla_cf",
+   "name": "Generic PLA-CF",
+   "vendor": "Generic",
+   "type": "PLA-CF",
+   "family": "Generic PLA-CF"
+  },
+  {
+   "id": "generic_pva",
+   "name": "Generic PVA",
+   "vendor": "Generic",
+   "type": "PVA",
+   "family": "Generic PVA"
+  },
+  {
+   "id": "generic_support_for_pla",
+   "name": "Generic Support For PLA",
+   "vendor": "Generic",
+   "type": "PLA",
+   "family": "Generic Support For PLA"
+  },
+  {
+   "id": "generic_tpu",
+   "name": "Generic TPU",
+   "vendor": "Generic",
+   "type": "TPU",
+   "family": "Generic TPU"
+  },
+  {
+   "id": "generic_tpu_95a_hf",
+   "name": "Generic TPU 95A HF",
+   "vendor": "Generic",
+   "type": "TPU",
+   "family": "Generic TPU 95A HF"
+  },
+  {
+   "id": "polymaker_general_pla_family_u1",
+   "name": "Polymaker General PLA Family @U1",
+   "vendor": "Polymaker",
+   "type": "PLA",
+   "family": "Polymaker General PLA Family @U1"
+  },
+  {
+   "id": "polymaker_silk_pla_family_u1",
+   "name": "Polymaker Silk PLA Family @U1",
+   "vendor": "Polymaker",
+   "type": "PLA",
+   "family": "Polymaker Silk PLA Family @U1"
+  },
+  {
+   "id": "polymaker_tough_pla_family_u1",
+   "name": "Polymaker Tough PLA Family @U1",
+   "vendor": "Polymaker",
+   "type": "PLA",
+   "family": "Polymaker Tough PLA Family @U1"
+  },
+  {
+   "id": "snapmaker_abs_u1_0_4_nozzle",
+   "name": "Snapmaker ABS @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "ABS",
+   "family": "Snapmaker ABS @U1"
+  },
+  {
+   "id": "snapmaker_asa_u1_0_4_nozzle",
+   "name": "Snapmaker ASA @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "ASA",
+   "family": "Snapmaker ASA @U1"
+  },
+  {
+   "id": "snapmaker_peba_90a_u1_0_4_nozzle",
+   "name": "Snapmaker PEBA 90A @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PEBA",
+   "family": "Snapmaker PEBA 90A @U1"
+  },
+  {
+   "id": "snapmaker_petg_hf",
+   "name": "Snapmaker PETG HF",
+   "vendor": "Snapmaker",
+   "type": "PETG",
+   "family": "Snapmaker PETG HF"
+  },
+  {
+   "id": "snapmaker_petg_translucent_u1_0_4_nozzle",
+   "name": "Snapmaker PETG Translucent @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PETG",
+   "family": "Snapmaker PETG Translucent @U1"
+  },
+  {
+   "id": "snapmaker_petg_cf_u1_0_4_nozzle",
+   "name": "Snapmaker PETG-CF @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PETG-CF",
+   "family": "Snapmaker PETG-CF @U1"
+  },
+  {
+   "id": "snapmaker_pla_basic_u1",
+   "name": "Snapmaker PLA Basic @U1",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Basic @U1"
+  },
+  {
+   "id": "snapmaker_pla_full_spectrum_u1_0_4_nozzle",
+   "name": "Snapmaker PLA Full Spectrum @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Full Spectrum @U1"
+  },
+  {
+   "id": "snapmaker_pla_glow_u1_0_4_nozzle",
+   "name": "Snapmaker PLA Glow @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Glow @U1"
+  },
+  {
+   "id": "snapmaker_pla_matte_u1",
+   "name": "Snapmaker PLA Matte @U1",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Matte @U1"
+  },
+  {
+   "id": "snapmaker_pla_rainbow_u1_0_4_nozzle",
+   "name": "Snapmaker PLA Rainbow @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Rainbow @U1"
+  },
+  {
+   "id": "snapmaker_pla_silk_u1",
+   "name": "Snapmaker PLA Silk @U1",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Silk @U1"
+  },
+  {
+   "id": "snapmaker_pla_snapspeed_u1",
+   "name": "Snapmaker PLA SnapSpeed @U1",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA SnapSpeed @U1"
+  },
+  {
+   "id": "snapmaker_pla_translucent_u1_0_4_nozzle",
+   "name": "Snapmaker PLA Translucent @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Translucent @U1"
+  },
+  {
+   "id": "snapmaker_pla_wood_u1_0_4_nozzle",
+   "name": "Snapmaker PLA Wood @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker PLA Wood @U1"
+  },
+  {
+   "id": "snapmaker_pla_cf_u1_0_4_nozzle",
+   "name": "Snapmaker PLA-CF @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PLA-CF",
+   "family": "Snapmaker PLA-CF @U1"
+  },
+  {
+   "id": "snapmaker_pva_u1",
+   "name": "Snapmaker PVA @U1",
+   "vendor": "Snapmaker",
+   "type": "PVA",
+   "family": "Snapmaker PVA @U1"
+  },
+  {
+   "id": "snapmaker_support_for_pla_u1_0_4_nozzle",
+   "name": "Snapmaker Support For PLA @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "PLA",
+   "family": "Snapmaker Support For PLA @U1"
+  },
+  {
+   "id": "snapmaker_tpu_90a_u1",
+   "name": "Snapmaker TPU 90A @U1",
+   "vendor": "Snapmaker",
+   "type": "TPU",
+   "family": "Snapmaker TPU 90A @U1"
+  },
+  {
+   "id": "snapmaker_tpu_95a_hf_u1_0_4_nozzle",
+   "name": "Snapmaker TPU 95A HF @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "TPU",
+   "family": "Snapmaker TPU 95A HF @U1"
+  },
+  {
+   "id": "snapmaker_tpu_u1_0_4_nozzle",
+   "name": "Snapmaker TPU @U1 0.4 nozzle",
+   "vendor": "Snapmaker",
+   "type": "TPU",
+   "family": "Snapmaker TPU @U1"
+  }
+ ]
+}

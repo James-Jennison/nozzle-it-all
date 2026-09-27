@@ -18,15 +18,20 @@ object FullSpectrum {
 
     /** One mixed filament: printed as virtual slot [id] (after the physical slots), from [components] in [weights] percent. */
     data class Mix(val id: Int, val a: Int, val b: Int, val mixBPercent: Int, val components: List<Int>, val weights: List<Int>,
-                   val displayHex: String, val label: String, val enabled: Boolean)
+                   val displayHex: String, val label: String, val enabled: Boolean, val uiMode: Int = -1, val pattern: String = "")
 
-    data class Mixes(val definitions: String, val rows: List<Mix>, val addedId: Int? = null)
+    /**
+     * The mixes after an edit. [remap] is Snapmaker's old → new slot number for every mix that moved (a deleted one maps
+     * to 0, "the object's own"), which everything referring to those slots must follow.
+     */
+    data class Mixes(val definitions: String, val rows: List<Mix>, val addedId: Int? = null, val remap: Map<Int, Int> = emptyMap(), val warning: String? = null)
 
     /** One model colour's match: a loaded slot ([pure]) or a new mix, with its preview and how close it is. */
     data class Match(val targetHex: String, val sourceIds: List<Int>, val pure: Boolean, val slot: Int, val components: List<Int>,
                      val weights: List<Int>, val previewHex: String?, val deltaE: Double?, val quality: String?)
 
-    data class MatchResult(val palette: List<Pair<Int, String>>, val results: List<Match>, val definitions: String)
+    /** [families] names each palette slot's Full Spectrum filament family (Auto mode), e.g. "Snapmaker PLA Full Spectrum @U1". */
+    data class MatchResult(val palette: List<Pair<Int, String>>, val results: List<Match>, val definitions: String, val families: Map<Int, String> = emptyMap())
 
     class EngineError(message: String) : Exception(message)
 
@@ -57,9 +62,10 @@ object FullSpectrum {
             val gW = r.optString("gradient_weights").split('/').mapNotNull { it.toIntOrNull() }
             val a1 = r.getInt("a"); val b1 = r.getInt("b"); val mixB = r.optInt("mix_b_percent", 50)
             Mix(r.getInt("id"), a1, b1, mixB, gIds.ifEmpty { listOf(a1, b1) }, gW.ifEmpty { listOf(100 - mixB, mixB) },
-                r.optString("display", "#26A69A"), r.optString("label"), r.optBoolean("enabled", true))
+                r.optString("display", "#26A69A"), r.optString("label"), r.optBoolean("enabled", true), r.optInt("ui_mode", -1), r.optString("manual_pattern"))
         } } ?: emptyList()
-        return Mixes(o.optString("definitions"), rows, o.optInt("added_id", -1).takeIf { it > 0 })
+        val remap = o.optJSONObject("remap")?.let { r -> r.keySet().mapNotNull { k -> k.toIntOrNull()?.let { it to r.getInt(k) } }.toMap() } ?: emptyMap()
+        return Mixes(o.optString("definitions"), rows, o.optInt("added_id", -1).takeIf { it > 0 }, remap, o.optString("warning").ifBlank { null })
     }
 
     private fun base(op: String, physical: List<String>, definitions: String) =
@@ -71,6 +77,46 @@ object FullSpectrum {
     fun update(physical: List<String>, definitions: String, id: Int, a: Int, b: Int, mixBPercent: Int): Mixes =
         mixes(run(base("update", physical, definitions).put("id", id).put("a", a).put("b", b).put("mix_b_percent", mixBPercent)))
     fun remove(physical: List<String>, definitions: String, id: Int): Mixes = mixes(run(base("remove", physical, definitions).put("id", id)))
+
+    private fun typed(op: String, physical: List<Pair<String, String?>>, definitions: String = "") = JSONObject().put("op", op).put("definitions", definitions)
+        .put("physical", JSONArray(physical.map { (c, t) -> JSONObject().put("color", c).put("type", t ?: "PLA") }))
+
+    /** What the mix editor would produce, without keeping it: its colour, label and any advisory (Snapmaker's preview). */
+    fun preview(physical: List<Pair<String, String?>>, dialog: JSONObject): Mixes {
+        val req = typed("add", physical); dialog.keySet().forEach { req.put(it, dialog.get(it)) }
+        return mixes(run(req))
+    }
+
+    /** A recommendation swatch: the mix it makes, its colour and Snapmaker's tooltip; [visible] false below Min Mix Ratio. */
+    data class Preset(val dialog: JSONObject, val previewHex: String, val tooltip: String, val visible: Boolean)
+
+    /** The editor's "Mixing Recommendations" for [mode] (match, ratio, ratio3, gradient): build_color_match_presets and kin. */
+    fun presets(physical: List<Pair<String, String?>>, mode: String, minPercent: Int = 15): List<Preset> {
+        val o = run(typed("presets", physical).put("mode", mode).put("min_percent", minPercent))
+        return o.optJSONArray("presets")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) }.map {
+            Preset(it.getJSONObject("dialog"), it.optString("preview"), it.optString("tooltip"), it.optBoolean("visible", true)) } } ?: emptyList()
+    }
+
+    /** Match mode's search for one colour (build_best_color_match_recipe): the mix to store, its colour and closeness. */
+    data class OneMatch(val dialog: JSONObject, val previewHex: String, val deltaE: Double, val quality: String, val warning: String?)
+
+    fun matchOne(physical: List<Pair<String, String?>>, target: String, minPercent: Int): OneMatch {
+        val o = run(typed("match_one", physical).put("target", target).put("min_percent", minPercent))
+        return OneMatch(o.getJSONObject("dialog"), o.optString("preview"), o.optDouble("delta_e"), o.optString("quality"), o.optString("warning").ifBlank { null })
+    }
+
+    /** Snapmaker's clean-up after Color Mixing Match: mixes nothing uses any more are deleted (and the rest renumbered). */
+    fun cleanup(physical: List<String>, definitions: String, usedIds: Collection<Int>): Mixes =
+        mixes(run(base("cleanup", physical, definitions).put("used_ids", JSONArray(usedIds.sorted()))))
+
+    /** A mix from the editor, in one of Snapmaker's four modes ([dialog] holds that mode's fields); [id] edits an existing one. */
+    fun save(physical: List<Pair<String, String?>>, definitions: String, dialog: JSONObject, id: Int?): Mixes {
+        val req = JSONObject().put("op", if (id == null) "add" else "update").put("definitions", definitions)
+            .put("physical", JSONArray(physical.map { (c, t) -> JSONObject().put("color", c).put("type", t ?: "PLA") }))
+        dialog.keySet().forEach { req.put(it, dialog.get(it)) }
+        id?.let { req.put("id", it) }
+        return mixes(run(req))
+    }
 
     /**
      * Snapmaker's "Color Mixing Match": [targets] are the model's colours (hex to the model filament numbers that use it).
@@ -94,6 +140,8 @@ object FullSpectrum {
                 ints(r.optJSONArray("components")), ints(r.optJSONArray("weights")), r.optString("preview").ifBlank { null },
                 if (r.has("delta_e")) r.getDouble("delta_e") else null, r.optString("quality").ifBlank { null })
         } } ?: emptyList()
-        return MatchResult(palette, results, o.optString("definitions", definitions))
+        val families = o.optJSONArray("palette")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) }
+            .filter { it.optString("family").isNotBlank() }.associate { it.getInt("slot") to it.getString("family") } } ?: emptyMap()
+        return MatchResult(palette, results, o.optString("definitions", definitions), families)
     }
 }

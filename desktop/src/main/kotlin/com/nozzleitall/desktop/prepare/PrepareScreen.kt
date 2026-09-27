@@ -50,15 +50,22 @@ fun PrepareScreen(state: AppState) {
         // opens in the same place, wider, so the plate stays visible.
         // Left: the project, printer, filament and objects, then every print setting in dense tabs, with Slice always
         // in view at the bottom.
-        Column(Modifier.width(420.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        BoxWithConstraints(Modifier.width(420.dp).fillMaxHeight()) {
+        val panelHeight = maxHeight
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ProjectHeader(state)
             p.notice?.let { Banner(it, BannerKind.WARNING, "Dismiss" to { p.notice = null }) }
-            StepPrinter(state)
-            MaterialsSection(state)
-            StepObjects(state)
+            // Printer, filament and objects scroll within the upper part of the panel when they grow (an open mix or
+            // slot editor, many colours), so the print settings and Slice always stay in view.
+            Column(Modifier.fillMaxWidth().heightIn(max = panelHeight * 0.58f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StepPrinter(state)
+                MaterialsSection(state)
+                StepObjects(state)
+            }
             val profileValues = remember(p.profileId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
             com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
             StepSlice(state)
+        }
         }
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -178,21 +185,25 @@ private fun MaterialsSection(state: AppState) {
         action = { com.nozzleitall.desktop.settings.IconToggle(NzIcon.TUNE, "Material settings", p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) {
             p.settingsScope = if (p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) com.nozzleitall.desktop.settings.Scope.PROCESS else com.nozzleitall.desktop.settings.Scope.FILAMENT } }) {
         if (fromPrinter) Txt("As loaded in ${p.printer()?.config?.identity?.displayName}", Nz.type.bodySmall, c.textMuted)
-        // Two columns of slots: the number on the material's colour, then the material.
+        // Two columns of slots: the number on the material's colour, then the filament it slices with. Click to change it.
+        var editingSlot by remember { mutableStateOf<Int?>(null) }
+        val library = p.filamentLibrary()
         slots.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { s ->
-                    val colour = parseHex(s.colorHex) ?: c.surfaceSunken
-                    val ink = if (colour.red * 0.299f + colour.green * 0.587f + colour.blue * 0.114f > 0.6f) Color(0xFF0D1114) else Color.White
-                    Row(Modifier.weight(1f).height(30.dp).clip(RoundedCornerShape(6.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(6.dp))
-                        .semantics(mergeDescendants = true) { contentDescription = "Material ${s.slot}: ${s.type} ${s.colorHex}" }, verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(30.dp).background(colour), contentAlignment = Alignment.Center) { Txt("${s.slot}", Nz.type.label, ink) }
-                        Txt(listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "?" }, Nz.type.bodySmall, modifier = Modifier.padding(horizontal = 8.dp).weight(1f), maxLines = 1)
+                    val name = s.filamentProfile?.let { id -> library.firstOrNull { it.id == id }?.displayName } ?: listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "?" }
+                    Row(Modifier.weight(1f).height(30.dp).clip(RoundedCornerShape(6.dp)).background(c.surfaceSunken)
+                        .border(1.dp, if (editingSlot == s.slot) c.accent else c.line, RoundedCornerShape(6.dp))
+                        .clickable(onClickLabel = "Change slot ${s.slot}'s filament") { editingSlot = if (editingSlot == s.slot) null else s.slot }
+                        .semantics(mergeDescendants = true) { contentDescription = "Slot ${s.slot}: $name ${s.colorHex}" }, verticalAlignment = Alignment.CenterVertically) {
+                        SlotBadge(s.slot, s.colorHex)
+                        Txt(name, Nz.type.bodySmall, modifier = Modifier.padding(horizontal = 8.dp).weight(1f), maxLines = 1)
                     }
                 }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
+        editingSlot?.let { id -> slots.firstOrNull { it.slot == id }?.let { SlotEditor(p, it, library, fromPrinter) { editingSlot = null } } }
         // Painted models: which slot prints each of the model's own colours.
         p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
         // Full Spectrum (Snapmaker Orca's colour mixing), wherever the printer or profile offers it.
@@ -382,3 +393,46 @@ fun LayerSlider(value: Int, count: Int, modifier: Modifier, onChange: (Int) -> U
     }
 }
 
+/**
+ * One slot's filament: the filament profile it slices with (the printer's own library), and for a slot Nozzle keeps
+ * itself, its colour from that filament's catalogue colours (or any colour). A printer that reports what's loaded
+ * decides the colour and material; only the profile is chosen here.
+ */
+@Composable
+private fun SlotEditor(p: PrepareState, slot: com.nozzleitall.project.ProjectManifest.MaterialSlot, library: List<FilamentLibrary.Entry>,
+                       fromPrinter: Boolean, onDone: () -> Unit) {
+    val c = Nz.colors
+    val current = library.firstOrNull { it.id == slot.filamentProfile }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Txt("Slot ${slot.slot}", Nz.type.label)
+            Spacer(Modifier.weight(1f))
+            Txt("Done", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { onDone() }.padding(4.dp))
+        }
+        if (library.isEmpty()) Txt("This printer profile slices every slot with its own filament.", Nz.type.bodySmall, c.textMuted)
+        else com.nozzleitall.desktop.settings.DenseSelect("Filament for slot ${slot.slot}",
+            listOf(com.nozzleitall.desktop.settings.Choice("", "Printer default")) + library.map { com.nozzleitall.desktop.settings.Choice(it.id, it.displayName) },
+            current?.id ?: "", Modifier.fillMaxWidth()) { id -> p.setSlotFilament(slot.slot, library.firstOrNull { it.id == id }) }
+        if (fromPrinter) Txt("Colour and material are what the printer reports loaded.", Nz.type.bodySmall, c.textMuted)
+        else {
+            val swatches = current?.let { FilamentColours.forFamily(it.family) }.orEmpty()
+            if (swatches.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                swatches.forEach { sw ->
+                    val on = sw.hex.equals(slot.colorHex, true)
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(sw.hex) ?: c.surface)
+                        .border(if (on) 2.dp else 1.dp, if (on) c.accent else c.line, RoundedCornerShape(5.dp))
+                        .clickable(onClickLabel = sw.name.ifBlank { sw.hex }) { p.setSlotFilament(slot.slot, current, sw.hex) }
+                        .semantics { contentDescription = "${sw.name} ${sw.hex}" })
+                }
+            }
+            var hex by remember(slot.slot, slot.colorHex) { mutableStateOf(slot.colorHex ?: "") }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Txt("Colour", Nz.type.bodySmall, c.textMuted)
+                com.nozzleitall.desktop.settings.DenseInput(hex, { t -> hex = t
+                    if (Regex("#?[0-9A-Fa-f]{6}").matches(t.trim())) p.setSlotFilament(slot.slot, current, "#" + t.trim().removePrefix("#").uppercase()) },
+                    "Colour for slot ${slot.slot}", Modifier.width(120.dp), placeholder = "#RRGGBB")
+            }
+        }
+    }
+}

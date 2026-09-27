@@ -13,8 +13,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import com.nozzleitall.desktop.settings.Choice
@@ -78,57 +80,233 @@ fun ColourMixingSection(p: PrepareState) {
     matching?.let { item -> ColourMatchWindow(p, item) { matching = null } }
 }
 
-/** Adding or adjusting a two-filament mix: the two loaded slots and the share of the second, in 5 % steps. */
+/**
+ * Snapmaker's mix editor (MixedFilamentDialog), in its four modes, computed by Snapmaker's own code in the engine:
+ * Ratio (two filaments on a 10-90 % bar, or three on a triangle), Cycle (a layer pattern such as "1124"), Match (a
+ * target colour; Snapmaker's search picks the mix, Min Mix Ratio 0-50 %), and Gradient (two filaments, bottom to top).
+ * Every mode previews the result (its layer stripe and colour) and offers Snapmaker's recommended swatches.
+ */
 @Composable
 private fun MixEditor(p: PrepareState, mix: FullSpectrum.Mix?, physical: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>, onDone: () -> Unit) {
     val c = Nz.colors
     val scope = rememberCoroutineScope()
-    var a by remember(mix?.id) { mutableStateOf(mix?.a ?: physical.getOrNull(0)?.slot ?: 1) }
-    var b by remember(mix?.id) { mutableStateOf(mix?.b ?: physical.getOrNull(1)?.slot ?: 2) }
-    var share by remember(mix?.id) { mutableStateOf(mix?.mixBPercent ?: 50) }
-    val choices = physical.map { s -> Choice(s.slot.toString(), "${s.slot} · ${listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "Filament" }}") }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Txt(if (mix == null) "New mix" else "Mix ${mix.id}", Nz.type.label)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            DenseSelect("First filament", choices, a.toString(), Modifier.weight(1f)) { v -> v.toIntOrNull()?.let { a = it } }
-            Txt("+", Nz.type.label, c.textMuted)
-            DenseSelect("Second filament", choices, b.toString(), Modifier.weight(1f)) { v -> v.toIntOrNull()?.let { b = it } }
+    val typed = physical.map { (it.colorHex ?: "#FFFFFF") to it.type }
+    val ids = physical.map { it.slot }
+    // Edit opens on the mode the mix was made in (Snapmaker's ui_mode: 0 Ratio, 1 Cycle, 2 Match, 3 Gradient).
+    var mode by remember(mix?.id) { mutableStateOf(when (mix?.uiMode) { 1 -> "cycle"; 2 -> "match"; 3 -> "gradient"; else -> "ratio" }) }
+    // Ratio / Match / Gradient filaments, and the ratio state.
+    val filaments = remember(mix?.id) { mutableStateListOf<Int>().apply { addAll(mix?.components?.take(3) ?: ids.take(2)) } }
+    var share by remember(mix?.id) { mutableStateOf((mix?.mixBPercent ?: 50).coerceIn(10, 90)) }
+    var tri by remember(mix?.id) { mutableStateOf(mix?.weights?.takeIf { it.size == 3 }?.map { it / 100f } ?: listOf(1 / 3f, 1 / 3f, 1 / 3f)) }
+    var pattern by remember(mix?.id) { mutableStateOf(mix?.pattern?.ifBlank { null } ?: "12") }
+    var target by remember(mix?.id) { mutableStateOf(mix?.displayHex ?: "#808080") }
+    var minPct by remember { mutableStateOf(15) }
+    var matchDialog by remember { mutableStateOf<org.json.JSONObject?>(null) }
+    var matchInfo by remember { mutableStateOf<String?>(null) }
+    var direction by remember { mutableStateOf(0) }
+    var preview by remember { mutableStateOf<FullSpectrum.Mixes?>(null) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var presets by remember { mutableStateOf<List<FullSpectrum.Preset>>(emptyList()) }
+
+    fun dialog(): org.json.JSONObject? = when (mode) {
+        "ratio" -> org.json.JSONObject().put("mode", "ratio").put("filaments", org.json.JSONArray(filaments.toList())).apply {
+            if (filaments.size == 3) put("weights", org.json.JSONArray(tri.map { (it * 100).toInt() })) else put("mix_b_percent", share) }
+        "cycle" -> org.json.JSONObject().put("mode", "cycle").put("pattern", pattern)
+        "match" -> matchDialog
+        else -> org.json.JSONObject().put("mode", "gradient").put("filaments", org.json.JSONArray(filaments.take(2))).put("direction", direction)
+    }
+    // Preview (debounced), exactly what OK would store.
+    LaunchedEffect(mode, filaments.toList(), share, tri, pattern, matchDialog, direction) {
+        kotlinx.coroutines.delay(150)
+        val d = dialog() ?: run { preview = null; return@LaunchedEffect }
+        runCatching { withContext(Dispatchers.IO) { FullSpectrum.preview(typed, d) } }
+            .onSuccess { preview = it; problem = null }.onFailure { preview = null; problem = it.message }
+    }
+    // Match: Snapmaker's search, 120 ms after the target or Min Mix Ratio changes.
+    LaunchedEffect(mode, target, minPct) {
+        if (mode != "match") return@LaunchedEffect
+        kotlinx.coroutines.delay(120)
+        runCatching { withContext(Dispatchers.IO) { FullSpectrum.matchOne(typed, target, minPct) } }
+            .onSuccess { matchDialog = it.dialog; matchInfo = "${it.quality} · ΔE %.1f".format(it.deltaE); problem = null }
+            .onFailure { matchDialog = null; matchInfo = null; problem = it.message }
+    }
+    LaunchedEffect(mode, filaments.size, minPct) {
+        val m = when (mode) { "ratio" -> if (filaments.size == 3) "ratio3" else "ratio"; "cycle" -> null; else -> mode }
+        presets = m?.let { runCatching { withContext(Dispatchers.IO) { FullSpectrum.presets(typed, it, minPct) } }.getOrDefault(emptyList()) } ?: emptyList()
+    }
+    fun applyPreset(d: org.json.JSONObject) {
+        val f = d.optJSONArray("filaments")?.let { a -> (0 until a.length()).map { a.getInt(it) } }
+        f?.let { filaments.clear(); filaments.addAll(it) }
+        d.optJSONArray("weights")?.let { a -> val w = (0 until a.length()).map { a.getDouble(it).toFloat() }; val sum = w.sum().takeIf { it > 0 } ?: 1f
+            if (w.size == 3) tri = w.map { it / sum } else if (w.size == 2) share = ((w[1] / sum) * 100).toInt().coerceIn(10, 90) }
+        if (d.has("mix_b_percent")) share = d.getInt("mix_b_percent").coerceIn(10, 90)
+        if (d.has("direction")) direction = d.getInt("direction")
+        if (mode == "match") matchDialog = d
+    }
+
+    // Opening the editor scrolls it into view (it opens below the mix list).
+    val bring = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(mix?.id) { kotlinx.coroutines.delay(50); bring.bringIntoView() }
+    Column(Modifier.fillMaxWidth().bringIntoViewRequester(bring).clip(RoundedCornerShape(8.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Txt(if (mix == null) "Add Mix" else "Edit Mix ${mix.id}", Nz.type.label)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("ratio" to "Ratio", "cycle" to "Cycle", "match" to "Match", "gradient" to "Gradient").forEach { (m, label) ->
+                val on = mode == m
+                Txt(label, Nz.type.label, if (on) c.accent else c.textMuted, modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                    .background(if (on) c.accent.copy(alpha = 0.14f) else Color.Transparent).clickable { mode = m; if (m == "gradient" && filaments.size > 2) filaments.removeAt(2) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp))
+            }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Txt("${100 - share}%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
-            RatioBar(share, parseHex(p.slotHex(a)) ?: c.accent, parseHex(p.slotHex(b)) ?: c.accent, Modifier.weight(1f)) { share = it }
-            Txt("$share%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
+        val choices = physical.map { s -> Choice(s.slot.toString(), "${s.slot} · ${listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "Filament" }}") }
+        when (mode) {
+            "ratio", "gradient" -> {
+                filaments.forEachIndexed { i, id ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Txt(if (mode == "gradient") (if (i == 0) "Bottom" else "Top") else "Filament ${i + 1}", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(64.dp))
+                        SlotBadge(id, p.slotHex(id), 22.dp)
+                        DenseSelect("Filament ${i + 1}", choices.filter { it.value == id.toString() || it.value.toInt() !in filaments }, id.toString(), Modifier.weight(1f)) { v ->
+                            v.toIntOrNull()?.let { filaments[i] = it } }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (mode == "ratio" && filaments.size < 3 && physical.size >= 3) Txt("+ Add one filament", Nz.type.label, c.accent, modifier = Modifier.clickable {
+                        ids.firstOrNull { it !in filaments }?.let { filaments.add(it) } })
+                    if (mode == "ratio" && filaments.size > 2) Txt("− Remove last filament", Nz.type.label, c.accent, modifier = Modifier.clickable { filaments.removeAt(filaments.lastIndex) })
+                    if (mode == "gradient") Txt("Swap filaments", Nz.type.label, c.accent, modifier = Modifier.clickable {
+                        val a0 = filaments[0]; filaments[0] = filaments[1]; filaments[1] = a0; direction = 0 })
+                }
+                if (mode == "ratio" && filaments.size == 2) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Txt("${100 - share}%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
+                    RatioBar(share, parseHex(p.slotHex(filaments[0])) ?: c.accent, parseHex(p.slotHex(filaments[1])) ?: c.accent, Modifier.weight(1f), 10, 90, 1) { share = it }
+                    Txt("$share%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
+                }
+                if (mode == "ratio" && filaments.size == 3) TrianglePicker(filaments.map { parseHex(p.slotHex(it)) ?: c.accent }, tri, 0.10f) { tri = it }
+            }
+            "cycle" -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Txt("Tap to add", Nz.type.bodySmall, c.textMuted)
+                    physical.forEach { s -> Box(Modifier.clickable(onClickLabel = "Append filament ${s.slot} to pattern") {
+                        pattern = (pattern + if (s.slot >= 10) "[${s.slot}]" else "${s.slot}").take(512) }) { SlotBadge(s.slot, s.colorHex, 22.dp) } }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Txt("Pattern", Nz.type.bodySmall, c.textMuted)
+                    com.nozzleitall.desktop.settings.DenseInput(pattern, { pattern = it.take(512) }, "Layer pattern", Modifier.weight(1f), placeholder = "12")
+                    Txt("Clear", Nz.type.label, c.accent, modifier = Modifier.clickable { pattern = "" })
+                }
+            }
+            "match" -> {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Txt("Target colour", Nz.type.bodySmall, c.textMuted)
+                    Box(Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(target) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(5.dp)))
+                    var hex by remember(target) { mutableStateOf(target.removePrefix("#")) }
+                    Txt("Hex: #", Nz.type.bodySmall, c.textMuted)
+                    com.nozzleitall.desktop.settings.DenseInput(hex, { t -> hex = t.take(6); if (Regex("[0-9A-Fa-f]{6}").matches(hex)) target = "#" + hex.uppercase() },
+                        "Target colour hex", Modifier.width(100.dp), error = !Regex("[0-9A-Fa-f]{6}").matches(hex))
+                    matchInfo?.let { Txt(it, Nz.type.bodySmall, c.textMuted) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Txt("Min Mix Ratio", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(96.dp))
+                    RatioBar(minPct, c.line, c.accent, Modifier.weight(1f), 0, 50, 1) { minPct = it }
+                    Txt("$minPct%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
+                }
+            }
+        }
+        // Result: the layer stripe and the colour it reads as, with Snapmaker's label.
+        preview?.rows?.lastOrNull()?.let { r ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Txt("Mix Effect", Nz.type.bodySmall, c.textMuted)
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(parseHex(r.displayHex) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(6.dp)))
+                LayerStripe(r.components, r.weights, p, Modifier.weight(1f).height(14.dp))
+                Txt(r.label, Nz.type.bodySmall, maxLines = 1)
+            }
+        }
+        preview?.warning?.let { Txt(it, Nz.type.bodySmall, c.heat) }
+        problem?.let { Txt(it, Nz.type.bodySmall, c.danger) }
+        if (presets.any { it.visible }) {
+            Txt("Mixing Recommendations", Nz.type.bodySmall, c.textMuted)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                presets.filter { it.visible }.take(24).forEach { pr ->
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(pr.previewHex) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(5.dp))
+                        .clickable(onClickLabel = pr.tooltip) { applyPreset(pr.dialog) }.semantics { contentDescription = pr.tooltip })
+                }
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (mix != null) Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable {
+            if (mix != null) Txt("Delete", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable {
                 p.editMixes(scope) { phys, defs -> FullSpectrum.remove(phys, defs, mix.id) }; onDone() }.padding(4.dp))
             Spacer(Modifier.weight(1f))
             NzButton("Cancel", onDone, kind = ButtonKind.SECONDARY)
-            NzButton(if (mix == null) "Add" else "Apply", {
-                if (a != b) {
-                    if (mix == null) p.editMixes(scope) { phys, defs -> FullSpectrum.add(phys, defs, a, b, share) }
-                    else p.editMixes(scope) { phys, defs -> FullSpectrum.update(phys, defs, mix.id, a, b, share) }
-                    onDone()
-                }
-            }, kind = ButtonKind.PRIMARY, enabled = a != b)
+            NzButton("OK", {
+                dialog()?.let { d -> p.editMixes(scope) { _, defs -> FullSpectrum.save(typed, defs, d, mix?.id) }; onDone() }
+            }, kind = ButtonKind.PRIMARY, enabled = problem == null && preview != null)
         }
     }
 }
 
-/** A two-colour bar split at [share] percent of the second colour; click or drag to set it, in 5 % steps (5-95). */
+/** The repeating layer order of a mix, one band per layer (a:b ratio or the weights), as Snapmaker's preview stripe. */
 @Composable
-private fun RatioBar(share: Int, first: Color, second: Color, modifier: Modifier, onChange: (Int) -> Unit) {
+private fun LayerStripe(components: List<Int>, weights: List<Int>, p: PrepareState, modifier: Modifier) {
+    val total = weights.sum().takeIf { it > 0 } ?: 1
+    val seq = ArrayList<Int>(); val emitted = IntArray(components.size)
+    val len = 20
+    for (pos in 0 until len) {
+        val pick = components.indices.maxByOrNull { i -> (pos + 1) * weights.getOrElse(i) { 0 } / total.toDouble() - emitted[i] } ?: 0
+        emitted[pick]++; seq += components.getOrElse(pick) { 1 }
+    }
+    Row(modifier.clip(RoundedCornerShape(3.dp))) { seq.forEach { id -> Box(Modifier.weight(1f).fillMaxHeight().background(parseHex(p.slotHex(id)) ?: Nz.colors.surface)) } }
+}
+
+/** Three filaments' shares on a triangle (each corner one filament), each share clamped to at least [minShare]. */
+@Composable
+private fun TrianglePicker(colours: List<Color>, weights: List<Float>, minShare: Float, onChange: (List<Float>) -> Unit) {
+    val c = Nz.colors
+    var size by remember { mutableStateOf(androidx.compose.ui.unit.IntSize(1, 1)) }
+    fun corners(): List<androidx.compose.ui.geometry.Offset> { val w = size.width.toFloat(); val h = size.height.toFloat()
+        return listOf(androidx.compose.ui.geometry.Offset(w / 2, 6f), androidx.compose.ui.geometry.Offset(6f, h - 6f), androidx.compose.ui.geometry.Offset(w - 6f, h - 6f)) }
+    fun pick(pt: androidx.compose.ui.geometry.Offset) {
+        val (a, b, d) = corners()
+        val det = (b.y - d.y) * (a.x - d.x) + (d.x - b.x) * (a.y - d.y)
+        var w1 = ((b.y - d.y) * (pt.x - d.x) + (d.x - b.x) * (pt.y - d.y)) / det
+        var w2 = ((d.y - a.y) * (pt.x - d.x) + (a.x - d.x) * (pt.y - d.y)) / det
+        var w3 = 1 - w1 - w2
+        repeat(4) { w1 = w1.coerceIn(minShare, 1 - 2 * minShare); w2 = w2.coerceIn(minShare, 1 - 2 * minShare); w3 = w3.coerceIn(minShare, 1 - 2 * minShare)
+            val s = w1 + w2 + w3; w1 /= s; w2 /= s; w3 /= s }
+        onChange(listOf(w1, w2, w3))
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        androidx.compose.foundation.Canvas(Modifier.size(160.dp, 140.dp).onSizeChanged { size = it }
+            .pointerInput(Unit) { detectTapGestures { pick(it) } }
+            .pointerInput(Unit) { detectDragGestures { ch: androidx.compose.ui.input.pointer.PointerInputChange, _: androidx.compose.ui.geometry.Offset -> pick(ch.position) } }
+            .semantics { contentDescription = "Mix of three filaments: " + weights.joinToString { "${(it * 100).toInt()} percent" } }) {
+            val (a, b, d) = corners()
+            val path = androidx.compose.ui.graphics.Path().apply { moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(d.x, d.y); close() }
+            drawPath(path, c.surface)
+            drawPath(path, c.line, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+            listOf(a, b, d).forEachIndexed { i, o -> drawCircle(colours[i], 7f, o) }
+            val pt = androidx.compose.ui.geometry.Offset(a.x * weights[0] + b.x * weights[1] + d.x * weights[2], a.y * weights[0] + b.y * weights[1] + d.y * weights[2])
+            drawCircle(Color.White, 6f, pt); drawCircle(c.accent, 4f, pt)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            weights.forEachIndexed { i, w -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(colours[i])); Txt("${(w * 100).toInt()}%", Nz.type.bodySmall) } }
+        }
+    }
+}
+
+/** A two-colour bar split at [share] percent of the second colour; click or drag to set it within [min]..[max] in [step]s. */
+@Composable
+private fun RatioBar(share: Int, first: Color, second: Color, modifier: Modifier, min: Int = 5, max: Int = 95, step: Int = 5, onChange: (Int) -> Unit) {
     var width by remember { mutableStateOf(1f) }
-    val set: (Float) -> Unit = { x -> onChange((Math.round(x / width * 100f / 5f) * 5).coerceIn(5, 95)) }
+    val set: (Float) -> Unit = { x -> onChange((Math.round(x / width * 100f / step) * step).coerceIn(min, max)) }
     Box(modifier.height(20.dp).clip(RoundedCornerShape(4.dp)).border(1.dp, Nz.colors.line, RoundedCornerShape(4.dp))
         .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
-        .pointerInput(Unit) { detectTapGestures { set(it.x) } }
-        .pointerInput(Unit) { detectHorizontalDragGestures { change, _ -> set(change.position.x) } }
-        .semantics { contentDescription = "Mix ratio: ${100 - share} percent first, $share percent second" }) {
+        .pointerInput(min, max, step) { detectTapGestures { set(it.x) } }
+        .pointerInput(min, max, step) { detectHorizontalDragGestures { change, _ -> set(change.position.x) } }
+        .semantics { contentDescription = "${100 - share} percent first, $share percent second" }) {
         Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight((100 - share).toFloat()).fillMaxHeight().background(first))
-            Box(Modifier.weight(share.toFloat()).fillMaxHeight().background(second))
+            Box(Modifier.weight((100 - share).coerceAtLeast(1).toFloat()).fillMaxHeight().background(first))
+            Box(Modifier.weight(share.coerceAtLeast(1).toFloat()).fillMaxHeight().background(second))
         }
     }
 }

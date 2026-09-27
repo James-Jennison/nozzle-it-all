@@ -18,7 +18,7 @@ export interface PrinterTarget { model: string; firmware?: string; printerId?: s
 /** paintSlots: entry N-1 is the slot the file's painted filament N prints with. */
 export interface ObjectEntry { objectId: number; name: string; materialSlot?: number; paintSlots?: number[]; [k: string]: unknown }
 export interface PlateEntry { index: number; name: string; objects: ObjectEntry[]; [k: string]: unknown }
-export interface MaterialSlot { slot: number; type?: string; vendor?: string; subType?: string; colorHex?: string; toolhead?: number; [k: string]: unknown }
+export interface MaterialSlot { slot: number; type?: string; vendor?: string; subType?: string; colorHex?: string; toolhead?: number; filamentProfile?: string; [k: string]: unknown }
 export interface SettingsChoice { preset?: string; overrides: Record<string, string>; [k: string]: unknown }
 export interface Attribution { title: string; creator?: string; source?: string; license?: string; [k: string]: unknown }
 

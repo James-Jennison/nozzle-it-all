@@ -119,3 +119,30 @@ interchange).
   - Upstream's fast-purge flush temperature (`filament_flush_temp_fast`, `prime_volume_mode`) isn't ported.
 - **Touches:** slicing, packaging, PAXX (U1 prints), Bambu profiles.
 
+## P-0008 — Full Spectrum colour mixing (ported)
+
+- **Upstream:** Snapmaker Orca `cbf7bbb0b3`: `src/slic3r/GUI/MixedColorMatchHelpers.cpp` (build_best_color_match_recipe and
+  helpers, build_color_match_presets), `MixedFilamentBatchDialog.cpp` (Color Mixing Match: palette, reuse pass, match
+  worker, id assignment and merging), `MixedFilamentDialog.cpp` (the four editor modes), `Plater.cpp` (apply path,
+  Color Mixing panel, cleanup_unused_filaments_after_batch_match), `ColorSpaceConvert.cpp` (RGB2Lab, DeltaE00),
+  `PresetBundle.cpp` (id remap; per-slot filament composition with flow-variant segments), and libslic3r's
+  `MixedFilamentManager` used directly; the colour library `filaments_colours.json` and the U1 filament profiles from
+  `resources/profiles/Snapmaker`. AGPL-3.0.
+- **Imported:** the C++ runs inside `nozzle-engine --full-spectrum` (engine/native/bridge/full_spectrum.cpp); Nozzle's
+  screens call it for every value (mix rows, labels, display colours, previews, searches, validation messages).
+  Per-slot filament profiles are composed in Kotlin exactly as PresetBundle::full_fff_config() does
+  (desktop/.../prepare/FilamentLibrary.kt).
+- **Subsystem / platforms:** Prepare, slicing, Desktop. Mixes are Snapmaker's `mixed_filament_definitions`.
+- **Test evidence:** FullSpectrumTest (6): labels and slot numbers, the owner's Snapmaker screenshot mapping, a painted
+  mix printing as its two filaments alternating, per-slot profiles reaching the printer (temperatures per tool),
+  renumbering and clean-up, the four editor modes.
+- **Known divergence:**
+  - Physical slots are printer toolheads: clean-up after a match never deletes them (Snapmaker deletes unused project
+    filaments), and a filament still used by a surviving mix counts as used.
+  - Removing the last mix with "−" renumbers like the row menu's Delete (Snapmaker's "−" builds no remap).
+  - Match mode's search can be limited to chosen slots (`slots`), which Snapmaker's dialog doesn't offer.
+  - Model colours from PrusaSlicer files aren't used (Snapmaker loads those as geometry only); colours are matched from
+    what the model shows.
+  - Filament profiles per slot are bundled for the Snapmaker U1 (0.4 nozzle) only so far.
+- **Touches:** PAXX (U1), slicing, shared UI, project interchange.
+

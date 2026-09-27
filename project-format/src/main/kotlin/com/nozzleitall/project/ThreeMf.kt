@@ -12,8 +12,12 @@ import java.util.zip.ZipOutputStream
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
-/** A triangle mesh in millimetres: [vertices] is x,y,z triples, [triangles] is vertex-index triples. */
-class Mesh(val vertices: FloatArray, val triangles: IntArray) {
+/**
+ * A triangle mesh in millimetres: [vertices] is x,y,z triples, [triangles] is vertex-index triples. [paint], when present,
+ * has one entry per triangle: null for unpainted, otherwise its colour paint in the engine's encoding (see [Paint]).
+ */
+class Mesh(val vertices: FloatArray, val triangles: IntArray, val paint: Array<String?>? = null) {
+    val isPainted get() = paint?.any { it != null } == true
     val vertexCount get() = vertices.size / 3
     val triangleCount get() = triangles.size / 3
     fun bounds(): FloatArray {
@@ -45,8 +49,11 @@ data class Transform(val m: DoubleArray = doubleArrayOf(1.0, 0.0, 0.0, 0.0, 1.0,
     }
 }
 
-/** One printable object: a name, a mesh already flattened from any components, and its placement on the plate. */
-data class ModelObject(val id: Int, val name: String, val mesh: Mesh, val placement: Transform = Transform())
+/**
+ * One printable object: a name, a mesh already flattened from any components, and its placement on the plate. [filament]
+ * is the file's own 1-based filament for the object (what unpainted areas print with), when the file says.
+ */
+data class ModelObject(val id: Int, val name: String, val mesh: Mesh, val placement: Transform = Transform(), val filament: Int? = null)
 
 /**
  * A project as stored on disk: objects, the model-level 3MF metadata, the Nozzle manifest (null for a plain 3MF from
@@ -59,6 +66,8 @@ data class Project3mf(
     val passthrough: Map<String, ByteArray> = emptyMap(),
     /** Why the manifest could not be used, when there was one. The project still opens from its geometry. */
     val manifestProblem: String? = null,
+    /** The filaments the file was set up with in the slicer that made it; paint states and [ModelObject.filament] index these. */
+    val filaments: List<SourceFilament> = emptyList(),
 )
 
 /** Resource limits for reading untrusted archives. */
@@ -71,6 +80,10 @@ object ThreeMf {
     private const val PROD_NS = "http://schemas.microsoft.com/3dmanufacturing/production/2015/06"
     /** Entries Nozzle regenerates on every save. Everything else is passthrough. */
     private val owned = setOf("[Content_Types].xml", "_rels/.rels", MODEL_PATH, ProjectManifest.ARCHIVE_PATH)
+    /** Per-part settings from other slicers. Their part filaments are folded into the paint on read, so they're not kept. */
+    private val partSettings = setOf("Metadata/model_settings.config", "Metadata/Slic3r_PE_model.config")
+    const val PAINT_ATTR = "paint_color"
+    private const val PRUSA_PAINT_ATTR = "slic3rpe:mmu_segmentation"
 
     fun validEntryName(name: String): Boolean =
         name.isNotEmpty() && name.length <= 1024 && !name.startsWith("/") && !name.contains('\\') && !name.contains('\u0000') &&
@@ -117,12 +130,15 @@ object ThreeMf {
         val metadata = LinkedHashMap<String, String>()
         children(rootDoc, "metadata").forEach { m -> m.getAttribute("name").takeIf { it.isNotBlank() }?.let { metadata[it] = m.textContent.trim() } }
         var triangles = 0
+        // A Nozzle project already carries part filaments in its paint; another slicer's part settings are read once.
+        val fromNozzle = metadata["Application"]?.startsWith("Nozzle It All") == true
+        val parts = if (fromNozzle) PartSettings() else PartSettings.read(entries)
         val cache = HashMap<String, Map<Int, Element>>()
         fun objectsIn(path: String): Map<Int, Element> = cache.getOrPut(path) {
             val doc = if (path == root) rootDoc else parseXml(entries[path] ?: throw ProjectFormatException("The 3MF refers to a missing part ($path)."))
             resources(doc).associateBy { it.getAttribute("id").toIntOrNull() ?: throw ProjectFormatException("A 3MF object has no valid id.") }
         }
-        fun flatten(path: String, id: Int, t: Transform, depth: Int, vs: MutableList<Float>, ts: MutableList<Int>) {
+        fun flatten(path: String, id: Int, t: Transform, depth: Int, vs: MutableList<Float>, ts: MutableList<Int>, ps: MutableList<String?>, part: (Int) -> Int?) {
             if (depth > 16) throw ProjectFormatException("The 3MF nests components too deeply.")
             val obj = objectsIn(path)[id] ?: throw ProjectFormatException("The 3MF refers to a missing object ($id).")
             child(obj, "mesh")?.let { mesh ->
@@ -135,23 +151,35 @@ object ThreeMf {
                     val a = tri.getAttribute("v1").toInt(); val b = tri.getAttribute("v2").toInt(); val c = tri.getAttribute("v3").toInt()
                     if (a !in 0 until count || b !in 0 until count || c !in 0 until count) throw ProjectFormatException("A 3MF mesh refers to a vertex that doesn't exist.")
                     ts += base + a; ts += base + b; ts += base + c
+                    val painted = tri.getAttribute(PAINT_ATTR).ifEmpty { tri.getAttribute(PRUSA_PAINT_ATTR) }.trim().ifEmpty { null }
+                    ps += painted?.takeIf { it.length <= 4096 && runCatching { Paint.decode(it) }.isSuccess }
+                    part(ps.size - 1)?.let { f -> ps[ps.size - 1] = ps.last()?.let { p -> Paint.remap(p) { if (it == 0) f else it } } ?: Paint.whole(f) }
                     if (++triangles > limits.maxTriangles) throw ProjectFormatException("The project has more triangles than Nozzle It All can open.")
                 } }
             }
             child(obj, "components")?.let { comps -> children(comps, "component").forEach { c ->
                 val subPath = c.getAttributeNS(PROD_NS, "path").ifBlank { c.getAttribute("p:path") }.removePrefix("/").ifBlank { path }
                 if (!validEntryName(subPath)) throw ProjectFormatException("The project contains an unsafe part path.")
-                flatten(subPath, c.getAttribute("objectid").toInt(), Transform.parse(c.getAttribute("transform")).then(t), depth + 1, vs, ts)
+                val cid = c.getAttribute("objectid").toInt()
+                // A top-level component is a part; its filament applies to everything under it.
+                val sub = if (depth == 0) parts.partFilament(id, cid)?.let { f -> { _: Int -> f } } ?: part else part
+                flatten(subPath, cid, Transform.parse(c.getAttribute("transform")).then(t), depth + 1, vs, ts, ps, sub)
             } }
         }
         val build = child(rootDoc.documentElement, "build") ?: throw ProjectFormatException("The 3MF has no build plate contents.")
         val objects = children(build, "item").mapIndexed { index, item ->
             val id = item.getAttribute("objectid").toIntOrNull() ?: throw ProjectFormatException("A 3MF build item has no object.")
             val path = item.getAttributeNS(PROD_NS, "path").ifBlank { item.getAttribute("p:path") }.removePrefix("/").ifBlank { root }
-            val vs = ArrayList<Float>(); val ts = ArrayList<Int>()
-            flatten(path, id, Transform(), 0, vs, ts)
-            val name = objectsIn(path)[id]?.getAttribute("name")?.ifBlank { null } ?: "Object ${index + 1}"
-            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray()), Transform.parse(item.getAttribute("transform")))
+            val vs = ArrayList<Float>(); val ts = ArrayList<Int>(); val ps = ArrayList<String?>()
+            val own = parts.objectFilament(id)
+            // Parts whose filament differs from the object's are painted that filament; the object's own is the default.
+            val byRange = parts.rangeFilament(id)
+            flatten(path, id, Transform(), 0, vs, ts, ps) { tri -> byRange(tri)?.takeIf { it != (own ?: 1) } }
+            val plain = Paint.whole(own ?: 1)
+            for (i in ps.indices) if (ps[i] == plain) ps[i] = null
+            val name = parts.name(id) ?: objectsIn(path)[id]?.getAttribute("name")?.ifBlank { null } ?: "Object ${index + 1}"
+            val paint = if (ps.any { it != null }) ps.toTypedArray() else null
+            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray(), paint), Transform.parse(item.getAttribute("transform")), own)
         }
         var manifest: ProjectManifest? = null
         var problem: String? = null
@@ -168,8 +196,8 @@ object ThreeMf {
             catch (e: Exception) { problem = "The project's Nozzle details are damaged (${e.message}). The models opened; check materials and printer." }
         }
         // Geometry parts (3D/...) are flattened into the canonical model on save, so they are not carried forward.
-        val passthrough = entries.filterKeys { it !in owned && it != root && !it.startsWith("3D/") }
-        return Project3mf(objects, metadata, manifest, passthrough, problem)
+        val passthrough = entries.filterKeys { it !in owned && it != root && !it.startsWith("3D/") && it !in partSettings }
+        return Project3mf(objects, metadata, manifest, passthrough, problem, sourceFilaments(entries))
     }
 
     /**
@@ -201,7 +229,12 @@ object ThreeMf {
                 for (i in v.indices step 3) sb.append("     <vertex x=\"${num(v[i])}\" y=\"${num(v[i + 1])}\" z=\"${num(v[i + 2])}\"/>\n")
                 sb.append("    </vertices>\n    <triangles>\n")
                 val t = o.mesh.triangles
-                for (i in t.indices step 3) sb.append("     <triangle v1=\"${t[i]}\" v2=\"${t[i + 1]}\" v3=\"${t[i + 2]}\"/>\n")
+                val paint = o.mesh.paint
+                for (i in t.indices step 3) {
+                    sb.append("     <triangle v1=\"${t[i]}\" v2=\"${t[i + 1]}\" v3=\"${t[i + 2]}\"")
+                    paint?.getOrNull(i / 3)?.let { sb.append(" $PAINT_ATTR=\"").append(it).append('"') }
+                    sb.append("/>\n")
+                }
                 sb.append("    </triangles>\n   </mesh>\n  </object>\n")
             }
             sb.append(" </resources>\n <build>\n")
@@ -226,6 +259,68 @@ object ThreeMf {
     }
 
     fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    /** The filament list from an Orca/Bambu project_settings.config (JSON) or a PrusaSlicer Slic3r_PE.config (INI). */
+    private fun sourceFilaments(entries: Map<String, ByteArray>): List<SourceFilament> {
+        fun list(v: Any?): List<String> = when (v) {
+            is org.json.JSONArray -> (0 until v.length()).map { v.optString(it) }
+            is String -> v.split(';')
+            else -> emptyList()
+        }
+        entries["Metadata/project_settings.config"]?.let { bytes ->
+            runCatching { org.json.JSONObject(String(bytes, Charsets.UTF_8)) }.getOrNull()?.let { o ->
+                val colours = list(o.opt("filament_colour")); val types = list(o.opt("filament_type")); val names = list(o.opt("filament_settings_id"))
+                return colours.indices.map { i -> SourceFilament(i + 1, colours[i].takeIf { hex(it) }, types.getOrNull(i)?.ifBlank { null }, names.getOrNull(i)?.ifBlank { null }) }
+            }
+        }
+        entries["Metadata/Slic3r_PE.config"]?.let { bytes ->
+            val ini = String(bytes, Charsets.UTF_8).lines().mapNotNull { l -> l.removePrefix(";").split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0].trim() to it[1].trim() } }.toMap()
+            val colours = ini["filament_colour"]?.split(';').orEmpty(); val types = ini["filament_type"]?.split(';').orEmpty()
+            val names = ini["filament_settings_id"]?.split(';')?.map { it.trim('"') }.orEmpty()
+            return colours.indices.map { i -> SourceFilament(i + 1, colours[i].takeIf { hex(it) }, types.getOrNull(i)?.ifBlank { null }, names.getOrNull(i)?.ifBlank { null }) }
+        }
+        return emptyList()
+    }
+    private fun hex(s: String) = Regex("#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?").matches(s)
+
+    /**
+     * Object names and filaments from another slicer's per-part settings: Orca/Bambu's model_settings.config (parts are
+     * the object's components) or PrusaSlicer's Slic3r_PE_model.config (parts are triangle ranges of one mesh).
+     */
+    internal class PartSettings(
+        private val names: Map<Int, String> = emptyMap(),
+        private val objects: Map<Int, Int> = emptyMap(),
+        private val parts: Map<Pair<Int, Int>, Int> = emptyMap(),
+        private val ranges: Map<Int, List<Triple<Int, Int, Int>>> = emptyMap(),
+    ) {
+        fun name(obj: Int) = names[obj]
+        fun objectFilament(obj: Int) = objects[obj]
+        fun partFilament(obj: Int, part: Int) = parts[obj to part]
+        fun rangeFilament(obj: Int): (Int) -> Int? { val r = ranges[obj] ?: return { null }; return { tri -> r.firstOrNull { tri in it.first..it.second }?.third } }
+
+        companion object {
+            fun read(entries: Map<String, ByteArray>): PartSettings {
+                val names = HashMap<Int, String>(); val objects = HashMap<Int, Int>(); val parts = HashMap<Pair<Int, Int>, Int>(); val ranges = HashMap<Int, MutableList<Triple<Int, Int, Int>>>()
+                fun meta(e: Element, key: String) = children(e, "metadata").firstOrNull { it.getAttribute("key") == key }?.getAttribute("value")
+                for (path in listOf("Metadata/model_settings.config", "Metadata/Slic3r_PE_model.config")) {
+                    val doc = entries[path]?.let { runCatching { parseXml(it) }.getOrNull() } ?: continue
+                    children(doc, "object").forEach { o ->
+                        val id = o.getAttribute("id").toIntOrNull() ?: return@forEach
+                        // Orca and Bambu name an object after the file it came from ("Pangolin.stl"); the name is enough.
+                        meta(o, "name")?.replace(Regex("\\.(stl|obj|3mf|step|stp|amf)$", RegexOption.IGNORE_CASE), "")?.ifBlank { null }?.let { names[id] = it }
+                        meta(o, "extruder")?.toIntOrNull()?.takeIf { it > 0 }?.let { objects[id] = it }
+                        children(o, "part").forEach { p -> p.getAttribute("id").toIntOrNull()?.let { pid -> meta(p, "extruder")?.toIntOrNull()?.takeIf { it > 0 }?.let { parts[id to pid] = it } } }
+                        children(o, "volume").forEach { v ->
+                            val first = v.getAttribute("firstid").toIntOrNull(); val last = v.getAttribute("lastid").toIntOrNull()
+                            val f = meta(v, "extruder")?.toIntOrNull()?.takeIf { it > 0 }
+                            if (first != null && last != null && f != null) ranges.getOrPut(id) { mutableListOf() } += Triple(first, last, f)
+                        }
+                    }
+                }
+                return PartSettings(names, objects, parts, ranges)
+            }
+        }
+    }
 
     private fun modelPath(entries: Map<String, ByteArray>): String {
         entries["_rels/.rels"]?.let { rels ->

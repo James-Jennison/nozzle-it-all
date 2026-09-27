@@ -1,6 +1,9 @@
 package com.nozzleitall.desktop.prepare
 
 import com.nozzleitall.project.Mesh
+import com.nozzleitall.project.Paint
+import com.nozzleitall.project.ProjectManifest
+import com.nozzleitall.project.SourceFilament
 import com.nozzleitall.project.ProjectFormatException
 import com.nozzleitall.project.ThreeMf
 import java.io.File
@@ -11,21 +14,67 @@ import java.nio.ByteOrder
 object MeshIO {
     const val MAX_TRIANGLES = 20_000_000
 
-    fun read(file: File): Mesh = when (file.extension.lowercase()) {
-        "stl" -> readStl(file.readBytes())
-        "obj" -> readObj(file.readLines())
-        "3mf" -> ThreeMf.read(file).objects.let { objs -> merge(objs.map { o ->
-            val v = o.mesh.vertices.copyOf()
-            for (i in v.indices step 3) { val p = o.placement.apply(v[i].toDouble(), v[i + 1].toDouble(), v[i + 2].toDouble()); v[i] = p[0].toFloat(); v[i + 1] = p[1].toFloat(); v[i + 2] = p[2].toFloat() }
-            Mesh(v, o.mesh.triangles) }) }
+    /** A model file's geometry, plus for a 3MF the filaments it was set up with and the one its first object prints with. */
+    class Loaded(val mesh: Mesh, val filaments: List<SourceFilament> = emptyList(), val filament: Int? = null)
+
+    fun read(file: File): Mesh = load(file).mesh
+
+    fun load(file: File): Loaded = when (file.extension.lowercase()) {
+        "stl" -> Loaded(readStl(file.readBytes()))
+        "obj" -> Loaded(readObj(file.readLines()))
+        "3mf" -> ThreeMf.read(file).let { p ->
+            // Every object becomes part of one model. The first object's filament is the model's default; another object
+            // with a different filament has it painted on, so colours survive the merge.
+            val default = p.objects.firstOrNull()?.filament
+            Loaded(merge(p.objects.map { o ->
+                val v = o.mesh.vertices.copyOf()
+                for (i in v.indices step 3) { val q = o.placement.apply(v[i].toDouble(), v[i + 1].toDouble(), v[i + 2].toDouble()); v[i] = q[0].toFloat(); v[i + 1] = q[1].toFloat(); v[i + 2] = q[2].toFloat() }
+                val own = o.filament ?: 1
+                val paint = if (own == (default ?: 1)) o.mesh.paint
+                    else Array<String?>(o.mesh.triangleCount) { i -> o.mesh.paint?.get(i)?.let { s -> Paint.remap(s) { if (it == 0) own else it } } ?: Paint.whole(own) }
+                Mesh(v, o.mesh.triangles, paint) }), p.filaments, default)
+        }
         else -> throw ProjectFormatException("Nozzle It All opens STL, OBJ and 3MF files.")
     }
 
     fun merge(meshes: List<Mesh>): Mesh {
+        if (meshes.size == 1) return meshes[0]
         val v = FloatArray(meshes.sumOf { it.vertices.size }); val t = IntArray(meshes.sumOf { it.triangles.size })
+        val paint = if (meshes.any { it.paint != null }) arrayOfNulls<String>(t.size / 3) else null
         var vo = 0; var to = 0
-        meshes.forEach { m -> m.vertices.copyInto(v, vo); val base = vo / 3; for (i in m.triangles.indices) t[to + i] = m.triangles[i] + base; vo += m.vertices.size; to += m.triangles.size }
-        return Mesh(v, t)
+        meshes.forEach { m ->
+            m.vertices.copyInto(v, vo); val base = vo / 3; for (i in m.triangles.indices) t[to + i] = m.triangles[i] + base
+            m.paint?.copyInto(paint!!, to / 3)
+            vo += m.vertices.size; to += m.triangles.size
+        }
+        return Mesh(v, t, paint)
+    }
+
+    /** The painted filament numbers a mesh uses (state 0, "the object's own", excluded). */
+    fun paintedFilaments(mesh: Mesh): List<Int> {
+        val out = java.util.TreeSet<Int>(); val seen = HashSet<String>()
+        mesh.paint?.forEach { s -> if (s != null && seen.add(s)) runCatching { out += Paint.states(Paint.decode(s)) } }
+        out.remove(0)
+        return out.toList()
+    }
+
+    /**
+     * The slot each of the file's filaments 1..[count] prints with: the loaded slot nearest in colour, preferring the same
+     * material type. Without the file's colours, filament N goes to slot N (wrapping when the printer has fewer).
+     */
+    fun matchSlots(count: Int, sources: List<SourceFilament>, slots: List<ProjectManifest.MaterialSlot>): List<Int> {
+        if (slots.isEmpty()) return List(count) { 1 }
+        fun rgb(h: String?) = h?.removePrefix("#")?.take(6)?.toIntOrNull(16)?.let { floatArrayOf((it shr 16 and 255) / 255f, (it shr 8 and 255) / 255f, (it and 255) / 255f) }
+        return List(count) { i ->
+            val src = sources.firstOrNull { it.index == i + 1 }
+            val want = rgb(src?.colorHex) ?: return@List slots[i % slots.size].slot
+            slots.minByOrNull { s ->
+                val have = rgb(s.colorHex) ?: floatArrayOf(0.5f, 0.5f, 0.5f)
+                // Weighted RGB distance (closer to how different colours look), plus a nudge towards the same material.
+                val dr = want[0] - have[0]; val dg = want[1] - have[1]; val db = want[2] - have[2]
+                2 * dr * dr + 4 * dg * dg + 3 * db * db + if (src?.type != null && !src.type.equals(s.type, true)) 0.15f else 0f
+            }!!.slot
+        }
     }
 
     fun readStl(bytes: ByteArray): Mesh {

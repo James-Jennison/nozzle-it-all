@@ -106,6 +106,8 @@ val verifyPaxxBaseline = tasks.register("verifyPaxxBaseline") {
 tasks.named("check") { dependsOn(verifyPaxxBaseline) }
 
 tasks.withType<Test>().configureEach {
+ // Room for real-world models (a million-triangle painted 3MF needs more than the 512 MB default).
+ maxHeapSize = "4g"
  // Tests slice with the native engine when it has been built (SliceEngine.locateNative()).
  systemProperty("nozzle.engine", nozzleEngine.get())
  // LocalConnectorTest sends a forged Host header to prove the DNS-rebinding check.

@@ -123,7 +123,8 @@ class ThreeMfTest {
         // And it writes back as a canonical single-file 3MF that reads the same.
         val again = ThreeMf.read(ByteArrayInputStream(ThreeMf.write(p)))
         assertEquals(15f, again.objects.single().mesh.vertices[3], 0f)
-        assertTrue(again.passthrough.containsKey("Metadata/model_settings.config"))
+        // Per-part settings are folded into the geometry's paint on read, so they aren't carried (they'd name old ids).
+        assertFalse(again.passthrough.containsKey("Metadata/model_settings.config"))
     }
 
     @Test fun atomicWriteNeverLeavesAHalfWrittenProject() {

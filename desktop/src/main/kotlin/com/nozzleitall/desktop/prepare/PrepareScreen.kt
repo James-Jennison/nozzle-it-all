@@ -71,7 +71,10 @@ fun PrepareScreen(state: AppState) {
                 }
                 val slots = p.materials()
                 val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
-                val objects = p.items.map { PlateObject(it.id, it.name, it.mesh, slotColors.getOrElse(it.slot - 1) { c.accent }, it.x, it.y, it.rotZ, it.scale, it.id == p.selected) }
+                val objects = p.items.map { item ->
+                    val paintColors = if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> slotColors.getOrNull(item.slotFor(n) - 1) }
+                    PlateObject(item.id, item.name, item.mesh, slotColors.getOrElse(item.slot - 1) { c.accent }, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors)
+                }
                 val (bw, bd) = p.bed
                 Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(20.dp))) {
                     if (p.items.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, "Start with a model",
@@ -188,6 +191,37 @@ private fun MaterialsSection(state: AppState) {
                 }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+        // Painted models: which slot prints each of the model's own colours.
+        p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
+    }
+}
+
+@Composable
+private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>) {
+    val c = Nz.colors
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Txt("Colours in ${item.name}", Nz.type.label, c.text, modifier = Modifier.weight(1f), maxLines = 1)
+        Txt("Match", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Match colours to the loaded filament") {
+            p.matchColours(item, null); p.changed() }.padding(4.dp))
+    }
+    val choices = slots.map { s -> com.nozzleitall.desktop.settings.Choice(s.slot.toString(), "${s.slot} · ${listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "?" }}") }
+    Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(16.dp))
+        Txt("Rest of the model", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
+        Txt("→", Nz.type.bodySmall, c.textMuted)
+        Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(parseHex(slots.getOrNull(item.slot - 1)?.colorHex) ?: c.accent))
+        com.nozzleitall.desktop.settings.DenseSelect("Slot for the rest of the model", choices, item.slot.toString(), Modifier.width(140.dp)) { v -> v.toIntOrNull()?.let { item.slot = it; p.changed() } }
+    }
+    item.painted.forEach { n ->
+        val src = item.sources.firstOrNull { it.index == n }
+        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(parseHex(src?.colorHex) ?: c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(4.dp)))
+            Txt(src?.name?.substringBefore(" @") ?: src?.type ?: "Colour $n", Nz.type.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
+            Txt("→", Nz.type.bodySmall, c.textMuted)
+            val slot = item.slotFor(n)
+            Box(Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).background(parseHex(slots.getOrNull(slot - 1)?.colorHex) ?: c.accent))
+            com.nozzleitall.desktop.settings.DenseSelect("Slot for colour $n", choices, slot.toString(), Modifier.width(140.dp)) { v -> v.toIntOrNull()?.let { p.setPaintSlot(item, n, it) } }
         }
     }
 }

@@ -138,8 +138,11 @@ class SliceEngine(private val binary: File, private val workDir: File) {
         fun nativeRequest(req: SliceRequest, job: File, gcode: File): String {
             val lines = mutableListOf("out\t${gcode.absolutePath}")
             listOf("machine.json", "process.json", "filament.json").forEach { lines += "profile\t${File(req.profileDir, it).absolutePath}" }
-            val objectSlots = req.project.manifest?.plates?.flatMap { it.objects }?.associate { it.objectId to (it.materialSlot ?: 1) } ?: emptyMap()
-            val usedSlots = req.project.objects.maxOfOrNull { objectSlots[it.id] ?: 1 } ?: 1
+            val entries = req.project.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
+            val objectSlots = entries.mapValues { it.value.materialSlot ?: 1 }
+            // Painted objects print their colours in the slots chosen for them; the highest slot in use sets the tool count.
+            val paint = req.project.objects.associate { o -> o.id to (if (o.mesh.isPainted) paintInSlots(o.mesh, entries[o.id]?.paintSlots.orEmpty(), objectSlots[o.id] ?: 1) else null) }
+            val usedSlots = req.project.objects.maxOfOrNull { o -> maxOf(objectSlots[o.id] ?: 1, paint[o.id]?.second ?: 1) } ?: 1
             val materials = req.materials.sortedBy { it.slot }.ifEmpty { listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")) }
             val slots = materials.take(maxOf(usedSlots, 1))
             val overrides = LinkedHashMap<String, String>()
@@ -154,7 +157,9 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             }
             val (bedW, bedD) = bedOf(File(req.profileDir, "machine.json").readText())
             req.project.objects.forEachIndexed { i, o ->
-                val stl = File(job, "object-$i.stl").apply { writeBytes(stlBytes(o.mesh)) }
+                // A painted object goes as a 3MF, which the engine's own importer reads paint from; others as STL.
+                val stl = paint[o.id]?.let { (painted, _) -> File(job, "object-$i.3mf").apply { writeBytes(ThreeMf.write(Project3mf(listOf(ModelObject(1, o.name, painted))))) } }
+                    ?: File(job, "object-$i.stl").apply { writeBytes(stlBytes(o.mesh)) }
                 val m = o.placement.m
                 val scale = Math.hypot(m[0], m[1]).takeIf { it > 0 } ?: 1.0
                 val rot = Math.toDegrees(Math.atan2(m[1], m[0]))
@@ -164,6 +169,21 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 lines += "object\t${stl.absolutePath}\t${x - bedW / 2}\t${y - bedD / 2}\t$rot\t$scale\t$tool"
             }
             return lines.joinToString("\n") + "\n"
+        }
+
+        /**
+         * [mesh] with its paint renumbered from the file's filaments to slots ([paintSlots] entry N-1 for filament N; state 0,
+         * the object's own, stays 0), and the highest slot it uses.
+         */
+        fun paintInSlots(mesh: Mesh, paintSlots: List<Int>, objectSlot: Int): Pair<Mesh, Int> {
+            var highest = objectSlot
+            val cache = HashMap<String, String?>()
+            val out = Array(mesh.triangleCount) { i ->
+                mesh.paint?.get(i)?.let { s -> cache.getOrPut(s) {
+                    runCatching { Paint.remap(s) { n -> if (n == 0) 0 else (paintSlots.getOrNull(n - 1) ?: objectSlot).also { highest = maxOf(highest, it) } } }.getOrNull()
+                } }
+            }
+            return Mesh(mesh.vertices, mesh.triangles, out) to highest
         }
 
         fun parseStats(gcode: File): SliceStats {

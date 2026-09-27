@@ -12,12 +12,33 @@ import org.json.JSONObject
 import java.io.File
 import kotlin.math.*
 
-class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, rotZ: Float = 0f, scale: Float = 1f, slot: Int = 1) {
+/**
+ * An object on the plate. [slot] is what it prints with where it isn't painted. A painted model keeps the file's own
+ * filament numbers in its paint; [paintSlots] (entry N-1 for the file's filament N) says which slot each one prints with,
+ * and [sources] describes those filaments as the file had them.
+ */
+class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, rotZ: Float = 0f, scale: Float = 1f, slot: Int = 1,
+               paintSlots: List<Int> = emptyList(), val sources: List<SourceFilament> = emptyList()) {
     var name by mutableStateOf(name); var x by mutableStateOf(x); var y by mutableStateOf(y)
     var rotZ by mutableStateOf(rotZ); var scale by mutableStateOf(scale); var slot by mutableStateOf(slot)
+    val paintSlots = androidx.compose.runtime.mutableStateListOf<Int>().apply { addAll(paintSlots) }
+    /** The file's filament numbers this model's paint uses, in order. */
+    val painted: List<Int> by lazy { MeshIO.paintedFilaments(mesh) }
+    /** The slot the file's filament [n] prints with. */
+    fun slotFor(n: Int): Int = if (n == 0) slot else paintSlots.getOrNull(n - 1) ?: slot
     val bounds = mesh.bounds()
-    val footprintW get() = (bounds[3] - bounds[0]) * scale
-    val footprintD get() = (bounds[4] - bounds[1]) * scale
+    /** The outline seen from above (convex hull, centred on the mesh's footprint centre), so rotation is measured exactly. */
+    private val outline: FloatArray by lazy { hull2d(mesh.vertices, (bounds[0] + bounds[3]) / 2, (bounds[1] + bounds[4]) / 2) }
+    /** How far the object reaches from (x, y) at its current turn and scale: min x, max x, min y, max y. */
+    val reach: FloatArray get() {
+        val c = cos(Math.toRadians(rotZ.toDouble())).toFloat() * scale; val s = sin(Math.toRadians(rotZ.toDouble())).toFloat() * scale
+        val r = floatArrayOf(Float.MAX_VALUE, -Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE)
+        for (i in outline.indices step 2) { val px = outline[i] * c - outline[i + 1] * s; val py = outline[i] * s + outline[i + 1] * c
+            r[0] = min(r[0], px); r[1] = max(r[1], px); r[2] = min(r[2], py); r[3] = max(r[3], py) }
+        return r
+    }
+    val footprintW get() = reach.let { it[1] - it[0] }
+    val footprintD get() = reach.let { it[3] - it[2] }
     val height get() = (bounds[5] - bounds[2]) * scale
 
     /** Placement as a 3MF transform: centre the mesh on its own footprint, drop it onto the bed, rotate about Z, scale, move. */
@@ -132,8 +153,8 @@ class PrepareState(private val app: AppState) {
         newProject()
         file = f; manifest = p.manifest; name = p.manifest?.name ?: p.metadata["Title"] ?: f.nameWithoutExtension
         passthrough = p.passthrough; metadata = p.metadata
-        val slots = p.manifest?.plates?.flatMap { it.objects }?.associate { it.objectId to (it.materialSlot ?: 1) } ?: emptyMap()
-        p.objects.forEach { o -> addFromPlacement(o, slots[o.id] ?: 1) }
+        val entries = p.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
+        p.objects.forEach { o -> addFromPlacement(o, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments) }
         p.manifest?.settings?.preset?.let { key -> QualityPreset.entries.firstOrNull { it.name.equals(key, true) }?.let { preset = it } }
         p.manifest?.settings?.overrides?.let { ov ->
             ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" }
@@ -147,25 +168,44 @@ class PrepareState(private val app: AppState) {
     }
 
     /** Reverses [PrepItem.placement] for a mesh loaded from a 3MF: recovers bed position, Z rotation and uniform scale. */
-    private fun addFromPlacement(o: ModelObject, slot: Int) {
+    private fun addFromPlacement(o: ModelObject, slot: Int, paintSlots: List<Int>, sources: List<SourceFilament>) {
         val m = o.placement.m
         val scale = sqrt(m[0] * m[0] + m[1] * m[1]).toFloat().takeIf { it > 0 } ?: 1f
         val rot = Math.toDegrees(atan2(m[1], m[0])).toFloat()
         val b = o.mesh.bounds(); val cx = (b[0] + b[3]) / 2.0; val cy = (b[1] + b[4]) / 2.0
         val p = o.placement.apply(cx, cy, 0.0)
-        items += PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot)
+        val item = PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot, paintSlots, sources)
+        // A painted model from another slicer (or saved before colours were mapped) gets its colours matched to the slots.
+        if (item.painted.isNotEmpty() && item.paintSlots.size < item.painted.max()) matchColours(item, o.filament)
+        items += item
         nextId = maxOf(nextId, o.id + 1)
     }
 
     fun importModel(f: File) {
-        val mesh = MeshIO.read(f)
+        val loaded = MeshIO.load(f)
         val (bw, bd) = bed
-        items += PrepItem(nextId++, f.nameWithoutExtension, mesh, bw / 2, bd / 2)
+        val item = PrepItem(nextId++, f.nameWithoutExtension, loaded.mesh, bw / 2, bd / 2, sources = loaded.filaments)
+        if (item.painted.isNotEmpty() || loaded.filament != null) matchColours(item, loaded.filament)
+        items += item
         arrange(); dirty = true; invalidateSlice()
         if (name == "Untitled project") name = f.nameWithoutExtension
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot); arrange(); changed() } }
+    /** Matches the file's filaments to the loaded slots by colour and material; the object's own filament sets its slot. */
+    fun matchColours(item: PrepItem, own: Int?) {
+        val count = maxOf(item.painted.maxOrNull() ?: 0, own ?: 0, item.sources.size)
+        val matched = MeshIO.matchSlots(count, item.sources, materials())
+        item.paintSlots.clear(); item.paintSlots.addAll(matched)
+        own?.let { f -> matched.getOrNull(f - 1)?.let { item.slot = it } }
+    }
+
+    /** Sets which slot the file's filament [n] of [item] prints with. */
+    fun setPaintSlot(item: PrepItem, n: Int, slot: Int) {
+        while (item.paintSlots.size < n) item.paintSlots.add(item.slot)
+        item.paintSlots[n - 1] = slot; changed()
+    }
+
+    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources); arrange(); changed() } }
     fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
     fun changed() { dirty = true; invalidateSlice() }
     private fun invalidateSlice() { if (slice !is SliceState.Running) { slice = SliceState.Idle; showPreview = false } }
@@ -177,11 +217,11 @@ class PrepareState(private val app: AppState) {
         var x = gap; var y = gap; var row = 0f; var fits = true
         order.forEach { it ->
             if (x + it.footprintW > bw - gap) { x = gap; y += row + gap; row = 0f }
-            it.x = x + it.footprintW / 2; it.y = y + it.footprintD / 2
+            val r = it.reach; it.x = x - r[0]; it.y = y - r[2]
             x += it.footprintW + gap; row = max(row, it.footprintD)
             if (y + it.footprintD > bd - gap || it.footprintW > bw - 2 * gap) fits = false
         }
-        val usedW = items.maxOfOrNull { it.x + it.footprintW / 2 } ?: 0f; val usedD = items.maxOfOrNull { it.y + it.footprintD / 2 } ?: 0f
+        val usedW = items.maxOfOrNull { it.x + it.reach[1] } ?: 0f; val usedD = items.maxOfOrNull { it.y + it.reach[3] } ?: 0f
         val dx = (bw - usedW - gap) / 2; val dy = (bd - usedD - gap) / 2
         if (dx > 0 && dy > 0) items.forEach { it.x += dx; it.y += dy }
         if (!fits) notice = "Not everything fits on one plate. Remove or scale down an object before slicing."
@@ -190,7 +230,7 @@ class PrepareState(private val app: AppState) {
     }
 
     fun outOfBounds(): List<PrepItem> { val (bw, bd) = bed
-        return items.filter { it.x - it.footprintW / 2 < 0 || it.y - it.footprintD / 2 < 0 || it.x + it.footprintW / 2 > bw || it.y + it.footprintD / 2 > bd || it.height > (profile?.height ?: 250f) } }
+        return items.filter { val r = it.reach; it.x + r[0] < 0 || it.y + r[2] < 0 || it.x + r[1] > bw || it.y + r[3] > bd || it.height > (profile?.height ?: 250f) } }
 
     fun toProject(): Project3mf {
         val m = (manifest ?: app.library.newManifest(name, app.version)).let { base ->
@@ -200,7 +240,7 @@ class PrepareState(private val app: AppState) {
                 printer = ProjectManifest.PrinterTarget(profile?.model ?: p?.config?.identity?.model ?: "Unknown printer", base.printer?.firmware, p?.config?.identity?.id,
                     unknown = base.printer?.unknown ?: org.json.JSONObject(), profileId = profileId,
                     family = p?.config?.identity?.family?.id ?: profile?.familyHint),
-                plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot) },
+                plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList()) },
                     base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(preset.name.lowercase(), mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + preset.overrides + overrides,
@@ -250,3 +290,17 @@ class PrepareState(private val app: AppState) {
     }
 }
 
+/** The 2D convex hull (monotone chain) of a mesh's vertices seen from above, relative to ([cx], [cy]), as x,y pairs. */
+fun hull2d(v: FloatArray, cx: Float, cy: Float): FloatArray {
+    val n = v.size / 3
+    if (n == 0) return FloatArray(0)
+    val idx = (0 until n).sortedWith(compareBy<Int>({ v[it * 3] }, { v[it * 3 + 1] }))
+    fun cross(o: Int, a: Int, b: Int) = (v[a * 3] - v[o * 3]) * (v[b * 3 + 1] - v[o * 3 + 1]) - (v[a * 3 + 1] - v[o * 3 + 1]) * (v[b * 3] - v[o * 3])
+    val h = IntArray(2 * n); var k = 0
+    for (i in idx) { while (k >= 2 && cross(h[k - 2], h[k - 1], i) <= 0) k--; h[k++] = i }
+    val lower = k + 1
+    for (i in idx.asReversed()) { while (k >= lower && cross(h[k - 2], h[k - 1], i) <= 0) k--; h[k++] = i }
+    val out = FloatArray(2 * maxOf(k - 1, 1))
+    for (j in 0 until maxOf(k - 1, 1)) { out[j * 2] = v[h[j] * 3] - cx; out[j * 2 + 1] = v[h[j] * 3 + 1] - cy }
+    return out
+}

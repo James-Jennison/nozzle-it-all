@@ -39,8 +39,11 @@ data class ProjectManifest(
     data class PrinterTarget(val model: String, val firmware: String? = null, val printerId: String? = null, val nozzleDiameters: List<Double> = emptyList(),
                              val unknown: JSONObject = JSONObject(), val profileId: String? = null, val family: String? = null)
     data class PlateEntry(val index: Int, val name: String = "", val objects: List<ObjectEntry> = emptyList(), val unknown: JSONObject = JSONObject())
-    /** [objectId] is the 3MF `<object id>` of a build item on this plate. [materialSlot] is 1-based, like Orca's filament index. */
-    data class ObjectEntry(val objectId: Int, val name: String = "", val materialSlot: Int? = null, val unknown: JSONObject = JSONObject())
+    /**
+     * [objectId] is the 3MF `<object id>` of a build item on this plate. [materialSlot] is 1-based, like Orca's filament index.
+     * [paintSlots] maps the object's painted colours to slots: entry N-1 is the slot that the file's filament N prints with.
+     */
+    data class ObjectEntry(val objectId: Int, val name: String = "", val materialSlot: Int? = null, val unknown: JSONObject = JSONObject(), val paintSlots: List<Int> = emptyList())
     /** [slot] is 1-based. [toolhead] is the 0-based physical toolhead it is loaded in, when known. */
     data class MaterialSlot(val slot: Int, val type: String? = null, val vendor: String? = null, val subType: String? = null, val colorHex: String? = null, val toolhead: Int? = null, val unknown: JSONObject = JSONObject())
     /** [preset] names a guided choice ("standard", "fine", "draft", ...); [overrides] are explicit engine setting keys. */
@@ -82,7 +85,8 @@ data class ProjectManifest(
             }
             val plates = o.optJSONArray("plates")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { p ->
                 PlateEntry(p.optInt("index"), p.optString("name"), p.optJSONArray("objects")?.let { oa -> (0 until oa.length()).mapNotNull { oa.optJSONObject(it) }.map { e ->
-                    ObjectEntry(e.optInt("objectId"), e.optString("name"), e.intOrNull("materialSlot"), e.rest("objectId", "name", "materialSlot")) } } ?: emptyList(),
+                    ObjectEntry(e.optInt("objectId"), e.optString("name"), e.intOrNull("materialSlot"), e.rest("objectId", "name", "materialSlot", "paintSlots"),
+                        e.optJSONArray("paintSlots")?.let { ps -> (0 until ps.length()).map { ps.optInt(it, 1).coerceAtLeast(1) } } ?: emptyList()) } } ?: emptyList(),
                     p.rest("index", "name", "objects")) } } ?: emptyList()
             val materials = o.optJSONArray("materials")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { m ->
                 MaterialSlot(m.optInt("slot"), m.strOrNull("type"), m.strOrNull("vendor"), m.strOrNull("subType"), m.strOrNull("colorHex"), m.intOrNull("toolhead"),
@@ -109,7 +113,8 @@ data class ProjectManifest(
             .putOpt("profileId", p.profileId).putOpt("family", p.family)
             .apply { if (p.nozzleDiameters.isNotEmpty()) put("nozzleDiameters", JSONArray(p.nozzleDiameters)) }, p.unknown)) }
         o.put("plates", JSONArray(plates.map { p -> merge(JSONObject().put("index", p.index).put("name", p.name)
-            .put("objects", JSONArray(p.objects.map { e -> merge(JSONObject().put("objectId", e.objectId).put("name", e.name).putOpt("materialSlot", e.materialSlot), e.unknown) })), p.unknown) }))
+            .put("objects", JSONArray(p.objects.map { e -> merge(JSONObject().put("objectId", e.objectId).put("name", e.name).putOpt("materialSlot", e.materialSlot)
+                .apply { if (e.paintSlots.isNotEmpty()) put("paintSlots", JSONArray(e.paintSlots)) }, e.unknown) })), p.unknown) }))
         o.put("materials", JSONArray(materials.map { m -> merge(JSONObject().put("slot", m.slot).putOpt("type", m.type).putOpt("vendor", m.vendor)
             .putOpt("subType", m.subType).putOpt("colorHex", m.colorHex).putOpt("toolhead", m.toolhead), m.unknown) }))
         o.put("settings", merge(JSONObject().putOpt("preset", settings.preset).put("overrides", JSONObject(settings.overrides)), settings.unknown))

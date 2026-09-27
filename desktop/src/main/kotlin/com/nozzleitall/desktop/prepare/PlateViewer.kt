@@ -18,17 +18,64 @@ import kotlin.math.*
 /** Camera looking at the bed centre: yaw/pitch in degrees, distance in mm, and a pan offset in screen pixels. */
 class ViewCamera { var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(55f); var distance by mutableStateOf(600f); var pan by mutableStateOf(Offset.Zero) }
 
-class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean)
+/** An object to draw. [paintColors] gives the colour of each painted filament number (index N for the file's filament N). */
+class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean,
+                  val paintColors: List<Color?> = emptyList())
 
-/** A mesh ready to draw: possibly simplified, with smooth normals, and the original's bounds (so placement never shifts). */
-class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray) { val tris = IntArray(mesh.triangleCount) { it } }
+/**
+ * A mesh ready to draw: possibly simplified, with smooth normals, and the original's bounds (so placement never shifts).
+ * [states] is each triangle's painted filament (0 = the object's own), when the model is painted.
+ */
+class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray, val states: IntArray? = null) { val tris = IntArray(mesh.triangleCount) { it } }
 
 private val displayCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Mesh, DisplayMesh>())
 
 /** The display version of [mesh], computed once per mesh. Slicing always uses the full mesh. */
 fun displayMesh(mesh: Mesh, budget: Int = 150_000): DisplayMesh = displayCache.getOrPut(mesh) {
-    val m = simplifyForDisplay(mesh, budget)
-    DisplayMesh(m, vertexNormals(m, IntArray(m.triangleCount) { it }), mesh.bounds())
+    val (painted, states) = expandPaint(mesh)
+    val (m, kept) = simplifyWithStates(painted, states, budget)
+    DisplayMesh(m, vertexNormals(m, IntArray(m.triangleCount) { it }), mesh.bounds(), kept)
+}
+
+/**
+ * The mesh with each painted triangle replaced by its painted pieces (as the engine subdivides it), and each triangle's
+ * filament. Unpainted meshes come back unchanged with no states.
+ */
+fun expandPaint(mesh: Mesh): Pair<Mesh, IntArray?> {
+    val paint = mesh.paint ?: return mesh to null
+    val v = mesh.vertices; val t = mesh.triangles
+    val verts = PaintVerts(v.size + 1024); verts.addAll(v)
+    val tris = PaintInts(t.size + 1024); val states = PaintInts(t.size / 3 + 1024)
+    fun corner(i: Int) = floatArrayOf(v[i * 3], v[i * 3 + 1], v[i * 3 + 2])
+    for (k in 0 until mesh.triangleCount) {
+        val s = paint[k]
+        val node = s?.let { runCatching { com.nozzleitall.project.Paint.decode(it) }.getOrNull() }
+        if (node == null || node is com.nozzleitall.project.Paint.Node.Leaf) {
+            tris.add(t[k * 3]); tris.add(t[k * 3 + 1]); tris.add(t[k * 3 + 2]); states.add((node as? com.nozzleitall.project.Paint.Node.Leaf)?.state ?: 0)
+            continue
+        }
+        com.nozzleitall.project.Paint.leaves(node, corner(t[k * 3]), corner(t[k * 3 + 1]), corner(t[k * 3 + 2])) { a, b, c, state ->
+            for (p in arrayOf(a, b, c)) { tris.add(verts.size / 3); verts.add(p[0]); verts.add(p[1]); verts.add(p[2]) }
+            states.add(state)
+        }
+    }
+    return Mesh(verts.toArray(), tris.toArray()) to states.toArray()
+}
+
+private class PaintVerts(cap: Int) { var a = FloatArray(cap); var size = 0
+    fun add(x: Float) { if (size == a.size) a = a.copyOf(a.size * 2); a[size++] = x }
+    fun addAll(x: FloatArray) { if (size + x.size > a.size) a = a.copyOf(maxOf(a.size * 2, size + x.size)); x.copyInto(a, size); size += x.size }
+    fun toArray() = a.copyOf(size) }
+private class PaintInts(cap: Int) { var a = IntArray(cap); var size = 0
+    fun add(x: Int) { if (size == a.size) a = a.copyOf(a.size * 2); a[size++] = x }
+    fun toArray() = a.copyOf(size) }
+
+/** [simplifyForDisplay], keeping each surviving triangle's state. */
+fun simplifyWithStates(mesh: Mesh, states: IntArray?, budget: Int): Pair<Mesh, IntArray?> {
+    if (states == null) return simplifyForDisplay(mesh, budget) to null
+    val kept = IntArray(mesh.triangleCount); var n = 0
+    val m = simplifyForDisplay(mesh, budget) { k -> kept[n++] = states[k] }
+    return if (m === mesh) mesh to states else m to kept.copyOf(m.triangleCount)
 }
 
 /**
@@ -36,7 +83,7 @@ fun displayMesh(mesh: Mesh, budget: Int = 150_000): DisplayMesh = displayCache.g
  * dropped. The shell stays closed (unlike skipping triangles, which leaves holes), just with less detail. The cell size
  * shrinks until the result fits [budget] triangles.
  */
-fun simplifyForDisplay(mesh: Mesh, budget: Int): Mesh {
+fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): Mesh {
     if (mesh.triangleCount <= budget) return mesh
     val v = mesh.vertices; val t = mesh.triangles
     val b = mesh.bounds()
@@ -55,14 +102,14 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int): Mesh {
             sums[id * 3] += v[i * 3]; sums[id * 3 + 1] += v[i * 3 + 1]; sums[id * 3 + 2] += v[i * 3 + 2]; counts[id] = counts[id] + 1
             remap[i] = id
         }
-        val tris = ArrayList<Int>(t.size)
+        val tris = ArrayList<Int>(t.size); val survivors = ArrayList<Int>()
         for (k in 0 until mesh.triangleCount) {
             val a = remap[t[k * 3]]; val bb = remap[t[k * 3 + 1]]; val c = remap[t[k * 3 + 2]]
-            if (a != bb && bb != c && a != c) { tris += a; tris += bb; tris += c }
+            if (a != bb && bb != c && a != c) { tris += a; tris += bb; tris += c; survivors += k }
         }
         val verts = FloatArray(counts.size * 3) { sums[it] / counts[it / 3] }
         best = Mesh(verts, tris.toIntArray())
-        if (best.triangleCount <= budget) return best
+        if (best.triangleCount <= budget || it == 7) { keep?.let { f -> survivors.forEach(f) }; return best }
         resolution = (resolution * 0.75).toInt().coerceAtLeast(16)
     }
     return best
@@ -195,9 +242,13 @@ private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh
     // from the right, a highlight, and a rim on silhouettes that separates the model from the background.
     val key = norm(-0.45f, -0.60f, 0.66f); val fill = norm(0.70f, 0.05f, 0.45f)
     val half = norm(key[0], key[1], key[2] + 1f)
-    val base = displayBase(if (o.selected) lerpColor(o.color, Color.White, 0.18f) else o.color)
+    fun shade(c: Color) = displayBase(if (o.selected) lerpColor(c, Color.White, 0.18f) else c)
+    val own = shade(o.color)
+    val palette = o.paintColors.map { it?.let(::shade) ?: own }
+    val states = d.states
     val fn = FloatArray(3); val vn = FloatArray(3); val w = FloatArray(9)
     for ((k, tri) in tris.withIndex()) {
+        val base = states?.get(tri)?.let { s -> if (s == 0) own else palette.getOrNull(s) ?: own } ?: own
         for (c in 0..2) {
             val vi = t[tri * 3 + c] * 3
             val lx = (v[vi] - mx) * o.scale; val ly = (v[vi + 1] - my) * o.scale; val lz = (v[vi + 2] - minZ) * o.scale

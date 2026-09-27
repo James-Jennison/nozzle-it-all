@@ -29,7 +29,7 @@ Restore the backed-up web root, purge the Cloudflare cache, and re-test `/mmf-au
 
 The mail server (mail-vm-admin, 209.94.63.87) already DKIM-signs every outgoing message with a key named after the From
 domain (selector `upcloud2026`, `/var/webuzo-data/mail/dkim/private/<domain>`); a key for nozzleitall.com exists. Only DNS
-(Cloudflare) is missing. Add these three records to nozzleitall.com, then send a test and check `dkim=pass spf=pass dmarc=pass`:
+(Cloudflare) is missing. **Done 2026-09-26:** all three records are live in Cloudflare, and a test message sent as support@nozzleitall.com from the mail server (submitted locally with `exim -f`; unauthenticated SMTP relay is correctly refused) reached Gmail's Inbox with SPF PASS (209.94.63.87), DKIM PASS (d=nozzleitall.com) and DMARC PASS. To send as this address from a mail client, add it as a "send as" identity using mail.jamesjennison.net:587 and your normal login. Records:
 
 | Type | Name | Value |
 |---|---|---|

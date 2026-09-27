@@ -119,12 +119,52 @@ object ThreeMf {
         return entries
     }
 
-    fun read(file: File, limits: ReadLimits = ReadLimits()): Project3mf = file.inputStream().buffered().use { read(it, limits, file.length()) }
+    /**
+     * Reads a file through the ZIP central directory, like desktop zip tools. Bambu Studio stores preview images
+     * uncompressed with a trailing size descriptor, which a streaming reader can't read.
+     */
+    fun read(file: File, limits: ReadLimits = ReadLimits()): Project3mf {
+        val entries = try { java.util.zip.ZipFile(file).use { readEntries(it, limits, file.length()) } }
+            catch (e: java.util.zip.ZipException) { throw ProjectFormatException("The project file is damaged or incomplete (${e.message}).") }
+            catch (e: java.io.EOFException) { throw ProjectFormatException("The project file is incomplete. It may have been only partly saved or copied.") }
+        return parse(entries, limits)
+    }
+
+    /** The same checks as [readEntries] for a stream: traversal, count, size and expansion. */
+    fun readEntries(zip: java.util.zip.ZipFile, limits: ReadLimits, compressedSize: Long): Map<String, ByteArray> {
+        val entries = LinkedHashMap<String, ByteArray>()
+        var total = 0L
+        for (e in zip.entries()) {
+            if (e.isDirectory) continue
+            val name = e.name.removePrefix("/")
+            if (!validEntryName(name)) throw ProjectFormatException("The project contains an unsafe file path and was not opened.")
+            if (entries.size >= limits.maxEntries) throw ProjectFormatException("The project contains too many files.")
+            if (entries.containsKey(name)) throw ProjectFormatException("The project contains a duplicate file ($name).")
+            val out = ByteArrayOutputStream(); val buf = ByteArray(64 * 1024); var size = 0L
+            zip.getInputStream(e).use { input ->
+                while (true) {
+                    val n = input.read(buf); if (n <= 0) break
+                    size += n; total += n
+                    if (size > limits.maxEntryBytes || total > limits.maxTotalBytes) throw ProjectFormatException("The project is larger than Nozzle It All can open.")
+                    out.write(buf, 0, n)
+                }
+            }
+            entries[name] = out.toByteArray()
+        }
+        if (entries.isEmpty()) throw ProjectFormatException("The file is not a 3MF project (it is empty or not a ZIP archive).")
+        if (compressedSize > 0 && total / compressedSize > limits.maxCompressionRatio && total > 50L * 1024 * 1024)
+            throw ProjectFormatException("The project expands to an implausible size and was not opened.")
+        return entries
+    }
 
     fun read(input: InputStream, limits: ReadLimits = ReadLimits(), compressedSize: Long? = null): Project3mf {
         val entries = try { readEntries(input, limits, compressedSize) }
             catch (e: java.util.zip.ZipException) { throw ProjectFormatException("The project file is damaged or incomplete (${e.message}).") }
             catch (e: java.io.EOFException) { throw ProjectFormatException("The project file is incomplete. It may have been only partly saved or copied.") }
+        return parse(entries, limits)
+    }
+
+    private fun parse(entries: Map<String, ByteArray>, limits: ReadLimits): Project3mf {
         val root = modelPath(entries)
         val rootDoc = parseXml(entries[root] ?: throw ProjectFormatException("The 3MF has no model."))
         val metadata = LinkedHashMap<String, String>()

@@ -91,3 +91,39 @@ class PaintTest {
         return out.toByteArray()
     }
 }
+
+/** Bambu Studio stores preview images uncompressed with a trailing data descriptor; those files must open. */
+class StoredEntryTest {
+    @Test fun storedEntriesWithADataDescriptorOpen() {
+        val model = """<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources>
+<object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="0" y="10" z="0"/></vertices>
+<triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>""".toByteArray()
+        val png = ByteArray(300) { it.toByte() }
+        val f = java.io.File.createTempFile("bambu", ".3mf").apply { deleteOnExit(); writeBytes(zipWithStoredDescriptor(listOf("3D/3dmodel.model" to model, "Metadata/plate_1.png" to png))) }
+        // The streaming reader is what used to fail on this layout.
+        assertThrows(Exception::class.java) { java.util.zip.ZipInputStream(f.inputStream()).use { z -> while (z.nextEntry != null) z.readBytes() } }
+        val p = ThreeMf.read(f)
+        assertEquals(1, p.objects.single().mesh.triangleCount)
+        assertArrayEquals(png, p.passthrough["Metadata/plate_1.png"])
+    }
+
+    /** Every entry STORED, with general-purpose flag bit 3: sizes and CRC are zero in the local header and follow the data. */
+    private fun zipWithStoredDescriptor(entries: List<Pair<String, ByteArray>>): ByteArray {
+        val out = java.io.ByteArrayOutputStream(); val central = java.io.ByteArrayOutputStream()
+        fun le(o: java.io.OutputStream, v: Long, n: Int) { for (i in 0 until n) o.write(((v shr (8 * i)) and 0xFF).toInt()) }
+        for ((name, data) in entries) {
+            val crc = java.util.zip.CRC32().apply { update(data) }.value
+            val offset = out.size().toLong(); val nb = name.toByteArray()
+            le(out, 0x04034b50, 4); le(out, 20, 2); le(out, 8, 2); le(out, 0, 2); le(out, 0, 4); le(out, 0, 4); le(out, 0, 4); le(out, 0, 4); le(out, nb.size.toLong(), 2); le(out, 0, 2)
+            out.write(nb); out.write(data)
+            le(out, 0x08074b50, 4); le(out, crc, 4); le(out, data.size.toLong(), 4); le(out, data.size.toLong(), 4)
+            le(central, 0x02014b50, 4); le(central, 20, 2); le(central, 20, 2); le(central, 8, 2); le(central, 0, 2); le(central, 0, 4)
+            le(central, crc, 4); le(central, data.size.toLong(), 4); le(central, data.size.toLong(), 4); le(central, nb.size.toLong(), 2)
+            le(central, 0, 2); le(central, 0, 2); le(central, 0, 2); le(central, 0, 2); le(central, 0, 4); le(central, offset, 4); central.write(nb)
+        }
+        val cdOffset = out.size().toLong(); val cd = central.toByteArray(); out.write(cd)
+        le(out, 0x06054b50, 4); le(out, 0, 2); le(out, 0, 2); le(out, entries.size.toLong(), 2); le(out, entries.size.toLong(), 2)
+        le(out, cd.size.toLong(), 4); le(out, cdOffset, 4); le(out, 0, 2)
+        return out.toByteArray()
+    }
+}

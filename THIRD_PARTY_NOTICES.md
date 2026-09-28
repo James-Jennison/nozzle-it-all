@@ -68,57 +68,35 @@ of the Bespok3d Organisation, which is not a legal entity; copyright is held by
 its individual authors. This app is not affiliated with or endorsed by
 Bespok3d.
 
-## Snapmaker Orca (desktop slicing engine)
+## nozzle-engine (slicing engine, all platforms)
 
-Since 2026-09-27 the desktop slicing engine (`nozzle-engine`, shipped with Nozzle It All for Linux) is built from
-Snapmaker Orca (github.com/Snapmaker/OrcaSlicer, a fork of OrcaSlicer, AGPL-3.0) at commit
-`cbf7bbb0b323b76a9a6dbc203d94ae6c9e8b2294`, with Nozzle's patch `engine/snapmaker/nozzle-engine.patch` (headless
-build, fixes ported from upstream OrcaSlicer, and upstream's per-filament flush settings). The pin is
-`engine/snapmaker/ENGINE_PIN.json`; `engine/native/scripts/build_engine_snapmaker.sh` rebuilds it from that commit.
-The Android engine (`libslic3rengine.so`) and the Web App engine (`nozzle-engine.wasm`) are built from the same commit
-and patch by default since 2026-09-27 (`engine/snapmaker/android/prepare_engine_root.sh`,
-`engine/wasm/scripts/build_engine_snapmaker.sh`; see docs/upstream/PROVENANCE.md P-0010), with the same dependencies
-as described below except GMP, which is built with its C++ classes. The upstream OrcaSlicer engine described below
-can still be built for both (`-PnozzleEngine=upstream`, `engine/wasm/scripts/build_engine.sh`).
+Since 2026-09-28 every platform slices with **nozzle-engine** (github.com/James-Jennison/nozzle-engine, AGPL-3.0),
+pinned by commit in `engine/fork/ENGINE_PIN.json`: the desktop engine (`nozzle-engine`, shipped with Nozzle It All for
+Linux), the Android engine (`libslic3rengine.so`) and the Web App engine (`nozzle-engine.wasm`). nozzle-engine is a
+full-history fork of Snapmaker Orca (github.com/Snapmaker/OrcaSlicer, itself a fork of OrcaSlicer, AGPL-3.0) at commit
+`cbf7bbb0b323b76a9a6dbc203d94ae6c9e8b2294`, with Nozzle's changes (headless builds, fixes ported from upstream
+OrcaSlicer, upstream's per-filament flush settings, and the JNI, desktop and browser bridges in `nozzle/bridge/`) as
+individual commits. See docs/upstream/PROVENANCE.md P-0010 and P-0020 to P-0022. The Android build links the dependency
+prefix described below, with GMP built with its C++ classes (`engine/fork/android/DEPENDENCIES.json`).
 
 ## PrusaSlicer ColorMix and prusa_fdm_mixer (desktop slicing engine)
 
 The desktop engine's virtual extruders (colour mixing for Prusa printers) are ported from PrusaSlicer 2.9.6
 (github.com/prusa3d/PrusaSlicer, AGPL-3.0), with presets from PrusaSlicer 3.0.0-alpha12, as part of
-`engine/snapmaker/nozzle-engine.patch` and `engine/native/bridge/color_mix.cpp`. Its colour prediction is
+nozzle-engine (its `nozzle/bridge/native/color_mix.cpp`). Its colour prediction is
 **prusa_fdm_mixer** (bundled with PrusaSlicer 2.9.6, MIT licence, Copyright Prusa Research), included unchanged with its
-licence notice in the patch. See docs/upstream/PROVENANCE.md P-0009.
+licence notice in the engine. See docs/upstream/PROVENANCE.md P-0009.
 
-## OrcaSlicer (on-device slicing, WO-13, in progress)
+## orcaslicer-android-engine (Android dependency prefix)
 
-The on-device slicing engine (not yet feature-complete — see
-`docs/WORK_ORDER.md`'s WO-13 entry for current status) is the owner's own
-separate **orcaslicer-android-engine** project (local to this machine, no git
-remote), which cross-compiles upstream `OrcaSlicer/OrcaSlicer` (AGPL-3.0-or-
-later) for Android arm64-v8a — the *full* engine, including Boost, CGAL, GMP,
-MPFR, OpenVDB, and OCCT (OpenCASCADE), built entirely from source. An earlier
-approach in this project vendored a feature-reduced OrcaSlicer+oneTBB build as
-pinned git submodules directly under `third_party/`, accepting a scope cut
-(no OpenVDB/CGAL/OCCT) because cross-compiling those from source looked like
-an unsolved problem — that approach is superseded now that the owner's
-already-working, full-featured engine was found. `app/src/main/cpp/
-CMakeLists.txt` builds directly against that project's patched OrcaSlicer
-checkout and prebuilt dependency prefix (`ORCASLICER_ENGINE_ROOT`, an
-absolute local path); `app/src/main/cpp/bridge/` (`slic3r_engine.cpp/hpp`,
-`slic3r_jni.cpp`, `nanosvg_impl.cpp`, `cli_test.cpp`) is copied from that
-project's own JNI bridge, with one local addition (`nativeSliceFile` forwards
-direct config overrides, not just profile-file paths — see `slic3r_jni.cpp`'s
-own header comment).
-
-This build depends on a machine-local path and will not work on a checkout
-that doesn't have `orcaslicer-android-engine` at that same location — there
-is no public/portable alternative yet. Because that project has no git
-remote, its own commit history (not a public URL) is the only provenance
-record for the exact source state a given build used; `scripts/
-artifact-proof.py`'s manifest still covers everything under this app's own
-`app/src/main/` (including the copied bridge files and this `CMakeLists.txt`),
-the same mechanism that ruled out vendoring the Snapmaker `u1-slicer-for-
-android` project's unattested prebuilt binary in the first place.
+The Android engine's dependencies (Boost, CGAL, GMP, MPFR, OpenVDB, OCCT (OpenCASCADE), OpenCV and the rest) are the
+prefix cross-compiled for arm64-v8a by the owner's own **orcaslicer-android-engine** project (local to this machine,
+no git remote), built entirely from source archives whose SHA-256 are pinned in `engine/fork/android/DEPENDENCIES.json`
+(`scripts/engine_pin.py verify` checks them). `engine/fork/android/prepare_engine_root.sh` links that prefix, read only,
+next to the pinned nozzle-engine source; `app/src/main/cpp/CMakeLists.txt` builds against the result
+(`ORCASLICER_ENGINE_ROOT`). Until 2026-09-27 the engine itself also came from that project (upstream OrcaSlicer
+`824b216f` + `engine/android-headless-engine.patch`), and the JNI bridge was copied from it; the bridge now lives in
+nozzle-engine (`nozzle/bridge/android`, with its attribution headers).
 
 **Real bug found and fixed during integration (2026-09-21):** `nativeSliceFile`
 threw `"Some EditGcodeDialog defs were not specified properly"` only when
@@ -194,7 +172,7 @@ against. See `PROVENANCE.md` for the full transcription and attribution detail.
 
 The Elegoo Centauri Carbon and Centauri Carbon 2 stock-firmware (CANVAS) packs
 (`elegoo_centauri_carbon_canvas`, `elegoo_centauri_carbon_2_canvas`) and their profile
-families under `engine/snapmaker/library/` (nozzle sizes, process presets, Elegoo and
+families under `engine/profiles/library/` (nozzle sizes, process presets, Elegoo and
 Generic filament presets) are flattened from **ElegooSlicer**
 (github.com/ELEGOO-3D/ElegooSlicer, Elegoo's fork of OrcaSlicer, AGPL-3.0;
 `resources/profiles/Elegoo`, checkout `2d507e39a9`) by `scripts/bundle_elegoo_canvas.sh`.

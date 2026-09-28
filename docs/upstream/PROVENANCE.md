@@ -572,3 +572,32 @@ interchange).
   - `engine/fork/android/ci_engine_root.sh` prepared the engine root on the CI runner (gthost-build01) from the pinned commit.
 - **Known divergence:** none beyond P-0020.
 - **Touches:** slicing (all platforms), CI.
+
+## P-0022 — the older engine bases are retired
+
+- **Upstream:** unchanged: nozzle-engine `dc86dbf00d1d3239bf0a937cf0eefdb4459054b1` (`engine/fork/ENGINE_PIN.json`).
+- **Imported:** nothing.
+- **Removed:** the Snapmaker Orca patch base (P-0010: `engine/snapmaker/nozzle-engine.patch`, its addenda and pin, the
+  Android, desktop and browser build scripts for it) and the upstream OrcaSlicer `824b216f` base (`engine/ENGINE_PIN.json`,
+  `engine/android-headless-engine.patch`, `engine/native/scripts/{build_engine,build_deps,env}.sh`,
+  `engine/wasm/scripts/build_engine.sh`, `engine/wasm/patches`), and this repository's bridge copies
+  (`app/src/main/cpp/bridge`, `engine/native/bridge`, `engine/wasm/bridge`): nozzle-engine carries all of them as commits
+  and its own `nozzle/bridge`. Gradle has no `-PnozzleEngine` choice any more (`-PnozzleEngineRoot` moves the root).
+- **Adaptations:**
+  - `engine/fork/android/prepare_engine_root.sh` builds its own dependency prefix (a symlink tree over
+    orcaslicer-android-engine's, with GMP rebuilt with C++ classes) instead of borrowing the Snapmaker root's;
+    `ci_engine_root.sh` no longer fetches Snapmaker Orca.
+  - The Android dependency archive hashes moved from `engine/ENGINE_PIN.json` to `engine/fork/android/DEPENDENCIES.json`
+    (unchanged, 24 archives); `scripts/engine_pin.py` verifies only those, and the SBOM reads them from there.
+  - Printer and filament data moved from `engine/snapmaker/` to `engine/profiles/` (`library/`, `resources/`,
+    `unsupported-profiles.json`); where it comes from is in `engine/profiles/SOURCES.json` (OrcaSlicer `824b216f` and
+    Snapmaker Orca `cbf7bbb`, as data sources only).
+  - The source offer now names the engine actually shipped: the app's About dialog (`OpenSourceNotice`), the Desktop About
+    text and the website's open-source page link nozzle-engine at the pinned commit and its change history, instead of
+    OrcaSlicer `824b216f` and the old patch. `schemas/slicing/settings-schema.json` records nozzle-engine as its source
+    (the 567 options are unchanged).
+- **Test evidence:** full gate after a clean build (734 JVM tests, lint, SBOM), Web App typecheck and 33 unit tests, the
+  Android engine root rebuilt by the new script (GMP identical to the tested one apart from embedded build paths), and all
+  51 engine device tests on the Razr (Android 17).
+- **Known divergence:** none; the engine is unchanged.
+- **Touches:** build, CI, licensing notices, packaging.

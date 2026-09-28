@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # Builds the desktop slicing engine (nozzle-engine, Linux x86_64) from the pinned nozzle-engine commit
 # (engine/fork/ENGINE_PIN.json, P-0020). The engine carries its own bridges (nozzle/bridge/native), so nothing from this
-# repository is compiled in. Dependencies: Snapmaker Orca's deps prefix, as for the Snapmaker base.
+# repository is compiled in. Dependencies: Snapmaker Orca's own deps prefix (engine/fork/ENGINE_PIN.json desktop_deps_prefix).
 #   heavy-build -- engine/native/scripts/build_engine_fork.sh
 # Output: $WORK/dist/nozzle-engine and a provenance record (also copied to engine/fork/PROVENANCE.txt).
 set -euo pipefail
 NOZZLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-sm_pin() { python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(eval("d"+sys.argv[2]))' "$NOZZLE_ROOT/engine/snapmaker/ENGINE_PIN.json" "$1"; }
-PREFIX="${SNAPMAKER_DEPS:-$(sm_pin '["base"]["local_checkout"]')/deps/build/destdir/usr/local}"
+PREFIX="${SNAPMAKER_DEPS:-$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["desktop_deps_prefix"])' "$NOZZLE_ROOT/engine/fork/ENGINE_PIN.json")}"
 WORK="${NOZZLE_NATIVE_FORK_WORK:-/mnt/faststorage/build-work/nozzle-native-fork}"
 SRC="$WORK/src"; BDIR="$WORK/build"; DIST="$WORK/dist"
 JOBS="${HEAVY_BUILD_JOBS:-${JOBS:-6}}"

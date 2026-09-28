@@ -5,7 +5,7 @@
 import u1Machine from '../../../app/src/main/assets/slicer_profiles/snapmaker_u1/machine.json?raw';
 import u1Process from '../../../app/src/main/assets/slicer_profiles/snapmaker_u1/process.json?raw';
 import u1Filament from '../../../app/src/main/assets/slicer_profiles/snapmaker_u1/filament.json?raw';
-import unsupportedProfiles from '../../../engine/snapmaker/unsupported-profiles.json';
+import unsupportedProfiles from '../../../engine/profiles/unsupported-profiles.json';
 
 export interface ProfileInfo {
   id: string; vendor: string; model: string; name: string; bed: [number, number]; height: number; tools: number; nozzle?: number;
@@ -21,7 +21,7 @@ const BUNDLED: ProfileFiles = { machine: u1Machine, process: u1Process, filament
 
 /**
  * Profiles the slicing engine (Snapmaker Orca base, like Android and Desktop) can't slice yet, with the reason
- * (engine/snapmaker/unsupported-profiles.json). They are left out of the index, so they can't be picked, and a project
+ * (engine/profiles/unsupported-profiles.json). They are left out of the index, so they can't be picked, and a project
  * saved with one keeps the current profile.
  */
 export const UNSUPPORTED_PROFILES: Readonly<Record<string, string>> = unsupportedProfiles.profiles;

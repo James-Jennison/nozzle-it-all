@@ -41,7 +41,7 @@ def family_for(vendor: str, pid: str, flavor: str = "") -> str:
 
 
 def main() -> int:
-    pin = json.loads((ROOT / "engine/ENGINE_PIN.json").read_text())
+    pin = {"upstream": json.loads((ROOT / "engine/profiles/SOURCES.json").read_text())["orcaslicer"]}
     profiles = []
     for d in sorted(p for p in DIR.iterdir() if p.is_dir()):
         mpath = d / "machine.json"

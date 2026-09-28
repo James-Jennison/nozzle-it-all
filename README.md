@@ -52,7 +52,8 @@ Requirements:
 - JDK 17
 - Android SDK 36
 - Android NDK `27.1.12297006`
-- The separately prepared `orcaslicer-android-engine` dependency for the native slicing target
+- The prebuilt Android dependency prefix (`orcaslicer-android-engine/deps/install/arm64-v8a`) for the native slicing
+  target; `engine/fork/android/prepare_engine_root.sh` combines it with the pinned engine source
 
 Run the standard local checks from the repository root:
 
@@ -66,8 +67,9 @@ Run connected UI and native-engine tests against an explicitly selected Android 
 ANDROID_SERIAL=<device-id> ./gradlew connectedDebugAndroidTest
 ```
 
-The native engine dependency and its exact source patch are recorded in
-[`engine/ENGINE_PIN.json`](engine/ENGINE_PIN.json). A checkout without the prepared engine can run
+The slicing engine is [nozzle-engine](https://github.com/James-Jennison/nozzle-engine), pinned by commit in
+[`engine/fork/ENGINE_PIN.json`](engine/fork/ENGINE_PIN.json); its Android dependency archives are pinned in
+[`engine/fork/android/DEPENDENCIES.json`](engine/fork/android/DEPENDENCIES.json). A checkout without the prepared engine can run
 the JVM checks but cannot build the native `slic3rengine` target. CI uses a provisioned self-hosted
 runner for the full native build; real-device suites run separately on AWS Device Farm.
 

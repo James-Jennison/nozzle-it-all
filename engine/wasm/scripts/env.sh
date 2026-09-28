@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared environment for building the Nozzle slicing engine for the browser (WebAssembly, Emscripten).
-# Mirrors the Android engine cross-compile (/mnt/faststorage/orcaslicer-android-engine/scripts/env.sh): same pinned
-# upstream sources (engine/ENGINE_PIN.json), same dependency set, different toolchain. Source this from every script.
+# Mirrors the Android dependency cross-compile (/mnt/faststorage/orcaslicer-android-engine/scripts/env.sh): same pinned
+# dependency archives (engine/fork/android/DEPENDENCIES.json), different toolchain. Source this from every script.
 set -euo pipefail
 
 export NOZZLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -9,11 +9,10 @@ export EMSDK="${EMSDK:-/mnt/faststorage/emsdk}"
 # shellcheck disable=SC1091
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 
-# Pinned source archives, read-only. They are the same files ENGINE_PIN.json hashes; we extract our own copies.
+# Pinned source archives, read-only. They are the same files DEPENDENCIES.json hashes; we extract our own copies.
 export EMSCRIPTEN="$EMSDK/upstream/emscripten"
 export ANDROID_ENGINE_ROOT="${ANDROID_ENGINE_ROOT:-/mnt/faststorage/orcaslicer-android-engine}"
 export ARCHIVES="$ANDROID_ENGINE_ROOT/deps/src"
-export ORCA_SRC="${ORCA_SRC:-$ANDROID_ENGINE_ROOT/orcaslicer}"
 
 export WORK="${NOZZLE_WASM_WORK:-/mnt/faststorage/build-work/nozzle-wasm}"
 export SRC_DIR="$WORK/src"

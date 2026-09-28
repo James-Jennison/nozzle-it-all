@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // End-to-end tests run against the production build (vite preview sends the same isolation headers as hosting) with
-// the real slicing engine from public/engine (engine/wasm/scripts/build_engine.sh). Set NOZZLE_E2E_URL to test a
+// the real slicing engine from public/engine (engine/wasm/scripts/build_engine_fork.sh). Set NOZZLE_E2E_URL to test a
 // deployed copy instead (for example https://app.nozzleitall.com).
 const live = process.env.NOZZLE_E2E_URL;
 export default defineConfig({

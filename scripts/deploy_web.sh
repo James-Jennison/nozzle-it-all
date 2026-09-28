@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy the Web App (web/dist) to app.nozzleitall.com: Webuzo subdomain of jamesjen on website-vm-admin,
 # docroot /home/jamesjen/app.nozzleitall.com. Dry run by default; --go deploys (after a backup). Never deletes remote files.
-# Needs the slicing engine in web/public/engine (engine/wasm/scripts/build_engine.sh).
+# Needs the slicing engine in web/public/engine (engine/wasm/scripts/build_engine_fork.sh INSTALL=1).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST=website-vm-admin; DOCROOT=/home/jamesjen/app.nozzleitall.com

@@ -4,7 +4,7 @@
 
 # --- JNI native bridge (critical, not something R8 itself warns about) ---
 # org.orcaslicer.engine.NativeEngine's package/class/method names are hard-coded into the native
-# bridge's exported JNI symbols (app/src/main/cpp/bridge/slic3r_jni.cpp uses static linkage:
+# bridge's exported JNI symbols (nozzle-engine's nozzle/bridge/android/slic3r_jni.cpp uses static linkage:
 # Java_org_orcaslicer_engine_NativeEngine_<method>, not JNI_OnLoad/RegisterNatives). If R8 renamed
 # or inlined this class or any of its `external fun` methods, System.loadLibrary("slic3rengine")
 # would still succeed (a real, silent trap: linking the .so and resolving a specific native

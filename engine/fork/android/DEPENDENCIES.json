@@ -1,12 +1,5 @@
 {
-  "upstream": {
-    "repo": "https://github.com/SoftFever/OrcaSlicer.git",
-    "commit": "824b216f18232a0e25644e225c286746ee07cb5f"
-  },
-  "patch": {
-    "file": "engine/android-headless-engine.patch",
-    "sha256": "23913586860a8ac3897e7cae548327bf8522ea2743801e111795411d790adda4"
-  },
+  "about": "Source archives of the Android dependency prefix the engine links (orcaslicer-android-engine's deps/src, cross-compiled with NDK 27.1 into deps/install/arm64-v8a). engine/fork/android/prepare_engine_root.sh links that prefix and rebuilds GMP from gmp-6.2.1.tar.xz with its C++ classes. scripts/engine_pin.py verify checks the archives against these hashes; the SBOM lists them.",
   "dependencies": [
     {
       "file": "CGAL-5.6.3.zip",

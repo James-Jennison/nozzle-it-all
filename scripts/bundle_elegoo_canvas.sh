@@ -4,7 +4,7 @@
 #   scripts/bundle_elegoo_canvas.sh [<ElegooSlicer checkout>]     (default /mnt/faststorage/ElegooSlicer)
 #
 # Writes the 0.4 mm packs (app/src/main/assets/slicer_profiles/elegoo_centauri_carbon{,_2}_canvas: every platform) and
-# the whole families (engine/snapmaker/library/...: nozzle sizes, process presets, Elegoo filament presets; Desktop).
+# the whole families (engine/profiles/library/...: nozzle sizes, process presets, Elegoo filament presets; Desktop).
 # The index.json entries (tools 4 = CANVAS's four slots) are kept by hand, like the COSMOS AFC pack's.
 #
 # --pin adds a setting only where ElegooSlicer's profile leaves it unset and ElegooSlicer's own default differs from
@@ -24,7 +24,7 @@ SRC="Elegoo profiles from ElegooSlicer (github.com/ELEGOO-3D/ElegooSlicer $COMMI
 family() { # <library id> <machine name prefix>
   python3 "$ROOT/scripts/bundle_printer_library.py" --profiles "$PROFILES" --vendor Elegoo --nested "${PINS[@]}" --source "$SRC" \
     --machine "$2 0.2 nozzle" --machine "$2 0.4 nozzle" --machine "$2 0.6 nozzle" --machine "$2 0.8 nozzle" \
-    --out "$ROOT/engine/snapmaker/library/$1"
+    --out "$ROOT/engine/profiles/library/$1"
 }
 pack() { # <pack id> <machine> <process> <filament>
   python3 "$ROOT/scripts/flatten_orca_profile.py" --profiles "$PROFILES" --vendor Elegoo --nested "${PINS[@]}" \

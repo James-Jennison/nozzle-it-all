@@ -26,14 +26,15 @@ it deletes the saved printers.
 
 ## SBOM
 `./gradlew generateSbom` writes `app/build/sbom/nozzle-it-all.cdx.json` (CycloneDX 1.5): the resolved release runtime
-dependencies with SHA-256 of each artifact, the pinned OrcaSlicer commit and patch hash, and the native dependency
-archives. Note the archive list is everything present in the engine's `deps/src`, including alternates that may not be linked
-(for example CGAL 6.0.1 next to 5.6.3); trim `engine/ENGINE_PIN.json` if that matters for a submission.
+dependencies with SHA-256 of each artifact, the pinned nozzle-engine commit, and the Android dependency archives. Note the
+archive list is everything present in orcaslicer-android-engine's `deps/src`, including alternates that may not be linked
+(for example CGAL 6.0.1 next to 5.6.3); trim `engine/fork/android/DEPENDENCIES.json` if that matters for a submission.
 
 ## Engine pinning
-`engine/ENGINE_PIN.json` pins the upstream OrcaSlicer commit (`824b216f`, an unreleased nightly), the patch applied on top
-(`engine/android-headless-engine.patch`, three CMake files) and the SHA-256 of every dependency source archive.
-`python3 scripts/engine_pin.py verify` fails on any drift; `update` re-pins after a deliberate engine change. CI runs `verify`.
+`engine/fork/ENGINE_PIN.json` pins the nozzle-engine commit (github.com/James-Jennison/nozzle-engine), which every
+platform builds from; the source is fetched by that commit, so there is no local patch. `engine/fork/android/DEPENDENCIES.json`
+pins the SHA-256 of every Android dependency source archive: `python3 scripts/engine_pin.py verify` fails on any drift;
+`update` re-pins after a deliberate dependency change.
 
 ## Provenance
 The `release` job in `.github/workflows/ci.yml` (tag `v*`) builds the release APK and SBOM and attaches GitHub build-provenance

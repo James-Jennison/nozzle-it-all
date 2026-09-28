@@ -3,7 +3,7 @@ package net.jamesjennison.klippercompanion
 import org.json.JSONObject
 
 /**
- * Bundled printer profiles the slicing engine can't slice yet (engine/snapmaker/unsupported-profiles.json, the same list
+ * Bundled printer profiles the slicing engine can't slice yet (engine/profiles/unsupported-profiles.json, the same list
  * Desktop and the Web App use). The engine is Snapmaker Orca's libslic3r on every platform; these profiles' start G-code
  * needs upstream OrcaSlicer's multi-nozzle system, which that engine doesn't have. Owner decision 2026-09-27: they are
  * not offered until that system is ported, never sliced with a single-nozzle stand-in.

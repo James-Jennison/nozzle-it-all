@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Generates schemas/fixtures/flush-volumes.json from the slicers' own flushing-volume code, compiled into tiny harnesses:
-#   pairs   Snapmaker Orca (engine pin): src/libslic3r/FlushVolCalc.cpp + RGB2HSV (src/slic3r/Utils/ColorSpaceConvert.cpp)
-#   orca    OrcaSlicer (engine/ENGINE_PIN.json's upstream commit): FlushVolCalc.cpp + FlushVolPredictor.cpp with its
+#   pairs   Snapmaker Orca (engine/profiles/SOURCES.json): src/libslic3r/FlushVolCalc.cpp + RGB2HSV (src/slic3r/Utils/ColorSpaceConvert.cpp)
+#   orca    OrcaSlicer (engine/profiles/SOURCES.json): FlushVolCalc.cpp + FlushVolPredictor.cpp with its
 #           resources/flush data (the measured-flush predictor, then the colour formula)
 #   elegoo  ElegooSlicer (the commit its profiles were bundled from): the same plus its per-printer overrides
 #           (FlushVolumeRules, resources/profiles/Elegoo/flush/flush_volumes.json) snapped through StandardColorMatcher.cpp
@@ -11,10 +11,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 pin() { python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print(eval("d"+sys.argv[2]))' "$1" "$2"; }
-SM="${SNAPMAKER_ORCA:-$(pin "$ROOT/engine/snapmaker/ENGINE_PIN.json" '["base"]["local_checkout"]')}"
-SM_COMMIT="$(pin "$ROOT/engine/snapmaker/ENGINE_PIN.json" '["base"]["commit"]')"
+SM="${SNAPMAKER_ORCA:-$(pin "$ROOT/engine/profiles/SOURCES.json" '["snapmaker_orca"]["local_checkout"]')}"
+SM_COMMIT="$(pin "$ROOT/engine/profiles/SOURCES.json" '["snapmaker_orca"]["commit"]')"
 ORCA="${ORCASLICER:-/mnt/faststorage/orcaslicer-android-engine/orcaslicer}"
-ORCA_COMMIT="$(pin "$ROOT/engine/ENGINE_PIN.json" '["upstream"]["commit"]')"
+ORCA_COMMIT="$(pin "$ROOT/engine/profiles/SOURCES.json" '["orcaslicer"]["commit"]')"
 ELEGOO="${ELEGOOSLICER:-/mnt/faststorage/ElegooSlicer}"
 ELEGOO_COMMIT="${ELEGOOSLICER_COMMIT:-2d507e39a96ab9562b35d06b23ef5df8fe613297}" # scripts/bundle_elegoo_canvas.sh's checkout
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT

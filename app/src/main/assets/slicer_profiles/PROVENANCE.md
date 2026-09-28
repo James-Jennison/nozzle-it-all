@@ -7,7 +7,7 @@ profile's `"inherits"` chain and merging child-over-parent, the same resolution
 OrcaSlicer's own GUI (`PresetBundle`) does at runtime. Flattened rather than left as
 `inherits` chains because this app's JNI bridge loads profiles via a sequence of
 plain `ConfigBase::load()` calls with no inherits resolution of its own (see
-`app/src/main/cpp/bridge/slic3r_jni.cpp`). See `docs/WORK_ORDER.md`'s WO-13 entry.
+nozzle-engine's `nozzle/bridge/android/slic3r_jni.cpp`). See `docs/WORK_ORDER.md`'s WO-13 entry.
 
 | Pack | Machine (bundled OrcaSlicer name) | Process | Filament |
 |---|---|---|---|
@@ -78,7 +78,7 @@ OpenCentauri documents; `T0` is always `T0` in the file. **Not yet printed on a 
 **ElegooSlicer** (github.com/ELEGOO-3D/ElegooSlicer, Elegoo's OrcaSlicer fork, AGPL-3.0; checkout `2d507e39a9`, profile
 bundle version 01.05.03.05) by `scripts/bundle_elegoo_canvas.sh`: machine, the machine's `default_print_profile` and
 `default_filament_profile`. The same script writes each printer's whole family for the Desktop
-(`engine/snapmaker/library/<id>`: 0.2/0.4/0.6/0.8 mm machines, ElegooSlicer's process presets and the Elegoo and
+(`engine/profiles/library/<id>`: 0.2/0.4/0.6/0.8 mm machines, ElegooSlicer's process presets and the Elegoo and
 Generic filament presets it marks compatible). ElegooSlicer keeps one profile per printer for single colour and CANVAS
 alike: an ordinary single-nozzle multi-material profile (`single_extruder_multi_material 1`, `purge_in_prime_tower 0`,
 `manual_filament_change 0`) whose G-code drives the CANVAS through the printer's own `M6211` swap-and-purge command:

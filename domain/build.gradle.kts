@@ -21,10 +21,10 @@ val verifyNoAndroidImports = tasks.register("verifyNoAndroidImports") {
 }
 tasks.named("check") { dependsOn(verifyNoAndroidImports) }
 
-// The printer profiles the slicing engine can't slice yet (engine/snapmaker/unsupported-profiles.json, shared with Desktop
+// The printer profiles the slicing engine can't slice yet (engine/profiles/unsupported-profiles.json, shared with Desktop
 // and the Web App), bundled as a resource so SlicingEngineSupport reads the one list instead of a copy.
 val engineSupportResources = tasks.register<Copy>("engineSupportResources") {
- from(rootProject.file("engine/snapmaker/unsupported-profiles.json"))
+ from(rootProject.file("engine/profiles/unsupported-profiles.json"))
  into(layout.buildDirectory.dir("generated/engine-support/net/jamesjennison/klippercompanion"))
 }
 sourceSets.main { resources.srcDir(files(layout.buildDirectory.dir("generated/engine-support")).builtBy(engineSupportResources)) }

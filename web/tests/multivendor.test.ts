@@ -65,8 +65,8 @@ describe('profiles (slicing needs no connection)', () => {
     expect(JSON.parse(f.machine)).toBeTruthy(); expect(JSON.parse(f.process)).toBeTruthy(); expect(JSON.parse(f.filament)).toBeTruthy();
     await expect(loadProfile('../etc', fetcher)).rejects.toThrow();
   });
-  it('never offers the profiles the engine cannot slice yet (engine/snapmaker/unsupported-profiles.json)', async () => {
-    const hidden = Object.keys(JSON.parse(readFileSync(new URL('engine/snapmaker/unsupported-profiles.json', root), 'utf8')).profiles);
+  it('never offers the profiles the engine cannot slice yet (engine/profiles/unsupported-profiles.json)', async () => {
+    const hidden = Object.keys(JSON.parse(readFileSync(new URL('engine/profiles/unsupported-profiles.json', root), 'utf8')).profiles);
     expect(hidden.sort()).toEqual(['bambu_h2c', 'bambu_h2d', 'bambu_h2d_pro', 'bambu_h2s', 'bambu_p2s', 'bambu_x2d']);
     expect(Object.keys(UNSUPPORTED_PROFILES).sort()).toEqual(hidden.sort());
     const fetcher = (async (u: string) => new Response(readFileSync(new URL(`app/src/main/assets/slicer_profiles/${String(u).replace('/profiles/', '')}`, root)))) as unknown as typeof fetch;

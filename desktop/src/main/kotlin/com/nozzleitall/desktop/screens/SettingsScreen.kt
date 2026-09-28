@@ -58,8 +58,8 @@ fun SettingsScreen(state: AppState) {
         Card(Modifier.fillMaxWidth()) {
             Txt("About", Nz.type.title)
             Txt("${Glossary.PRODUCT_DESKTOP} ${state.version}", Nz.type.body)
-            Txt("Free software under the GNU AGPL 3.0 or later. Its slicing engine is derived from OrcaSlicer (AGPL-3.0), " +
-                "which build on PrusaSlicer and Bambu Studio. Nozzle It All is not affiliated with Snapmaker, OrcaSlicer, Prusa Research or Bambu Lab.", Nz.type.bodySmall, c.textMuted)
+            Txt("Free software under the GNU AGPL 3.0 or later. Its slicing engine, nozzle-engine, is derived from OrcaSlicer by way of " +
+                "Snapmaker Orca (AGPL-3.0), which build on PrusaSlicer and Bambu Studio. Nozzle It All is not affiliated with Snapmaker, OrcaSlicer, Prusa Research or Bambu Lab.", Nz.type.bodySmall, c.textMuted)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NzButton("Source code", { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI("https://github.com/James-Jennison/nozzle-it-all")) } }, kind = ButtonKind.QUIET)
                 NzButton("Licences", { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI("https://nozzleitall.com/open-source/")) } }, kind = ButtonKind.QUIET)

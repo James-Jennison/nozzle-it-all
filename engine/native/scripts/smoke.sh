@@ -3,7 +3,7 @@
 # smoke test sends (engine/wasm/scripts/smoke_node.mjs). Usage: smoke.sh [engine binary] [profile id ...]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-ENGINE="${1:-/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine}"; shift || true
+ENGINE="${1:-/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine}"; shift || true
 PROFILES=("$@"); [ ${#PROFILES[@]} -gt 0 ] || PROFILES=(snapmaker_u1 prusa_generic bambu_generic generic_klipper prusa_xl_5t)
 "$ENGINE" --version
 JOB="$(mktemp -d)"; trap 'rm -rf "$JOB"' EXIT

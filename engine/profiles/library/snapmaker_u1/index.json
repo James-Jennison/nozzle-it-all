@@ -1,6 +1,6 @@
 {
  "vendor": "Snapmaker",
- "source": "Snapmaker profiles from its own slicer (AGPL-3.0); see engine/snapmaker/ENGINE_PIN.json",
+ "source": "Snapmaker profiles from its own slicer (AGPL-3.0); see engine/profiles/SOURCES.json",
  "machines": [
   {
    "id": "snapmaker_u1_0_2_nozzle",

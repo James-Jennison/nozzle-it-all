@@ -12,12 +12,14 @@ class OpenSourceNoticeTest {
     }
 
     @Test fun engineCommitMatchesThePinnedEngine() {
-        val pin = repoFile("engine/ENGINE_PIN.json").readText()
+        val pin = repoFile("engine/fork/ENGINE_PIN.json").readText()
         assertTrue("shown commit must be the pinned one", pin.contains("\"commit\": \"${OpenSourceNotice.ENGINE_COMMIT}\""))
     }
 
-    @Test fun theLinkedPatchAndNoticesExistInTheRepo() {
-        assertTrue(repoFile("engine/android-headless-engine.patch").isFile)
+    @Test fun theEngineLinksNameThePinnedRepositoryAndTheNoticesExist() {
+        val pin = repoFile("engine/fork/ENGINE_PIN.json").readText()
+        assertTrue("engine source link must be the pinned repository", pin.contains("\"repo\": \"${OpenSourceNotice.ENGINE_SOURCE_URL}.git\""))
+        assertTrue(OpenSourceNotice.ENGINE_HISTORY_URL.endsWith(OpenSourceNotice.ENGINE_COMMIT))
         assertTrue(repoFile("THIRD_PARTY_NOTICES.md").isFile)
         assertTrue(repoFile("LICENSE").readText().contains("GNU AFFERO GENERAL PUBLIC LICENSE"))
     }

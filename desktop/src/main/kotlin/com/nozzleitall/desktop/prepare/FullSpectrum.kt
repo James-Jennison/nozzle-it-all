@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Snapmaker Full Spectrum colour mixing, computed by Snapmaker Orca's own code inside the engine
- * (`nozzle-engine --full-spectrum`, engine/native/bridge): mixed filaments, their virtual slot numbers, display colours
+ * (`nozzle-engine --full-spectrum`, the engine's nozzle/bridge/native): mixed filaments, their virtual slot numbers, display colours
  * and labels (libslic3r's MixedFilamentManager), and "Color Mixing Match" (MixedFilamentBatchDialog /
  * MixedColorMatchHelpers). Nozzle only draws the results; the mixes themselves are Snapmaker's
  * `mixed_filament_definitions` string, which is saved with the project and sent to the engine when slicing.
@@ -35,7 +35,7 @@ object FullSpectrum {
 
     class EngineError(message: String) : Exception(message)
 
-    /** Snapmaker Orca's filament colour library (engine/snapmaker/resources), copied out of the app so the engine can read it. */
+    /** Snapmaker Orca's filament colour library (engine/profiles/resources), copied out of the app so the engine can read it. */
     private fun colourLibrary(): File? = runCatching {
         val bytes = FullSpectrum::class.java.getResourceAsStream("/fullspectrum/filaments_colours.json")?.readBytes() ?: return null
         File.createTempFile("filaments_colours", ".json").apply { deleteOnExit(); writeBytes(bytes) }

@@ -8,7 +8,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/dist/linux"
-ENGINE="${NOZZLE_ENGINE:-/mnt/faststorage/build-work/nozzle-native/dist/nozzle-engine}"
+ENGINE="${NOZZLE_ENGINE:-/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine}"
 GRADLE=(/bin/bash "$ROOT/gradlew" --no-daemon --max-workers="${HEAVY_BUILD_JOBS:-6}")
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -16,7 +16,7 @@ while [ $# -gt 0 ]; do
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
-[ -x "$ENGINE" ] || { echo "slicing engine not found at $ENGINE (build it with engine/native/scripts/build_engine.sh)" >&2; exit 1; }
+[ -x "$ENGINE" ] || { echo "slicing engine not found at $ENGINE (build it with engine/native/scripts/build_engine_fork.sh)" >&2; exit 1; }
 mkdir -p "$OUT"
 VERSION="$(cd "$ROOT" && "${GRADLE[@]}" -q :desktop:properties --property version 2>/dev/null | awk '/^version:/{print $2}')"
 [ -n "$VERSION" ] && [ "$VERSION" != "unspecified" ] || VERSION="0.1.0"

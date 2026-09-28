@@ -2,10 +2,10 @@
 """Bundle a printer model's whole profile family from its own slicer, flattened: one machine per nozzle size, and for
 each the process presets and filament profiles that slicer marks compatible with it (compatible_printers), plus its
 defaults. Prepare then offers the same nozzle sizes, process presets and per-slot filaments the vendor's slicer does.
-Source for the Snapmaker U1: Snapmaker Orca's own profiles at the engine pin (engine/snapmaker/ENGINE_PIN.json).
+Source for the Snapmaker U1: Snapmaker Orca's own profiles at the engine pin (engine/profiles/SOURCES.json).
 
   bundle_printer_library.py --profiles <Snapmaker Orca>/resources/profiles --vendor Snapmaker \
-      --machine "Snapmaker U1 (0.2 nozzle)" --machine "Snapmaker U1 (0.4 nozzle)" ... --out engine/snapmaker/library/snapmaker_u1
+      --machine "Snapmaker U1 (0.2 nozzle)" --machine "Snapmaker U1 (0.4 nozzle)" ... --out engine/profiles/library/snapmaker_u1
 
 Writes machine/<id>.json, process/<id>.json, filament/<id>.json and index.json.
 Elegoo's Centauri Carbon / Centauri Carbon 2 come from ElegooSlicer (--nested, since it keeps profiles in sub-folders,
@@ -84,7 +84,7 @@ def main():
         machines.append({"id": slug(mname), "name": mname, "nozzle": first(m, "nozzle_diameter"),
                          "default_process": default_proc, "default_filament": default_fil, "processes": proc_ids, "filaments": fil_ids})
     with open(os.path.join(a.out, "index.json"), "w") as f:
-        json.dump({"vendor": a.vendor, "source": a.source or f"{a.vendor} profiles from its own slicer (AGPL-3.0); see engine/snapmaker/ENGINE_PIN.json",
+        json.dump({"vendor": a.vendor, "source": a.source or f"{a.vendor} profiles from its own slicer (AGPL-3.0); see engine/profiles/SOURCES.json",
                    "machines": machines, "processes": list(processes.values()), "filaments": list(filaments.values())}, f, indent=1); f.write("\n")
     for mm in machines: print(f"{mm['name']}: {len(mm['processes'])} processes, {len(mm['filaments'])} filaments, default {mm['default_process']} / {mm['default_filament']}")
 

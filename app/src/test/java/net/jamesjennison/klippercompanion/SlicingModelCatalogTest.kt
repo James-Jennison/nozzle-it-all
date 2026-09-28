@@ -82,7 +82,7 @@ class SlicingModelCatalogTest {
     }
 
     @Test fun profilesTheEngineCannotSliceAreNeverOffered() {
-        // engine/snapmaker/unsupported-profiles.json: the six newest Bambu profiles need upstream OrcaSlicer's multi-nozzle system.
+        // engine/profiles/unsupported-profiles.json: the six newest Bambu profiles need upstream OrcaSlicer's multi-nozzle system.
         val hidden = listOf(SlicingPrinterModel.BAMBU_H2C, SlicingPrinterModel.BAMBU_H2D, SlicingPrinterModel.BAMBU_H2D_PRO,
             SlicingPrinterModel.BAMBU_H2S, SlicingPrinterModel.BAMBU_P2S, SlicingPrinterModel.BAMBU_X2D)
         assertEquals(hidden.map { SlicingModelCatalog.info(it).assetDir }.toSet(), SlicingEngineSupport.unsupported.keys)

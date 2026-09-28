@@ -4,16 +4,9 @@ import java.util.UUID
 
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
 
-// Which slicing-engine base the native build uses (see externalNativeBuild below): "fork" (the nozzle-engine repository,
-// P-0020; default since 2026-09-28, P-0021), "snapmaker" (the previous default, P-0010) or "upstream" (the engine before
-// that). The older two stay buildable until their patch paths are retired.
-val nozzleEngine: String = providers.gradleProperty("nozzleEngine").orElse(providers.environmentVariable("NOZZLE_ENGINE")).getOrElse("fork")
-val nozzleEngineRoot: String? = when (nozzleEngine) {
- "snapmaker" -> providers.gradleProperty("nozzleSnapmakerEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-sm")
- "fork" -> providers.gradleProperty("nozzleForkEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-fork")
- "upstream" -> null
- else -> throw GradleException("nozzleEngine must be snapmaker, fork or upstream, not $nozzleEngine")
-}
+// The native engine is nozzle-engine (engine/fork/ENGINE_PIN.json, P-0020/P-0021/P-0022), built against the engine root
+// engine/fork/android/prepare_engine_root.sh makes (-PnozzleEngineRoot=<dir> to move it; ORCASLICER_ENGINE_ROOT wins).
+val nozzleEngineRoot: String = providers.gradleProperty("nozzleEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-fork")
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 android {
@@ -55,13 +48,10 @@ android {
     // ORCASLICER_ENGINE_ROOT cache default. Passing the override here, only when the CI
     // environment variable is actually set, keeps local dev builds (no env var) completely
     // unaffected - this is additive, not a behavior change for anyone not running CI.
-    // Engine base (owner decision 2026-09-28: every platform slices on nozzle-engine, P-0021): -PnozzleEngine=fork builds
-    // against the engine root made by engine/fork/android/prepare_engine_root.sh (-PnozzleForkEngineRoot=<dir> to move
-    // it); -PnozzleEngine=snapmaker uses engine/snapmaker/android/prepare_engine_root.sh's root
-    // (-PnozzleSnapmakerEngineRoot=<dir>); -PnozzleEngine=upstream keeps the upstream OrcaSlicer 824b216f
-    // root (orcaslicer-android-engine, CMakeLists.txt's default). ORCASLICER_ENGINE_ROOT, when set, always wins.
+    // The engine root: engine/fork/android/prepare_engine_root.sh's (-PnozzleEngineRoot=<dir> to move it).
+    // ORCASLICER_ENGINE_ROOT, when set (CI), always wins.
     System.getenv("ORCASLICER_ENGINE_ROOT")?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }
-     ?: nozzleEngineRoot?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }
+     ?: run { arguments += "-DORCASLICER_ENGINE_ROOT=$nozzleEngineRoot" }
     // Without this, AGP discovers and builds every CMake target in the whole configured
     // project tree - including OrcaSlicer's desktop GUI executable (needs wxWidgets, which
     // isn't cross-compiled here) and its i18n tooling. slic3rengine is the only target this
@@ -178,17 +168,15 @@ dependencies {
 }
 
 // Phase 9g: CycloneDX 1.5 SBOM of everything that ships - the resolved release runtime dependencies (with SHA-256 of
-// each artifact) plus the pinned native engine and its dependencies from engine/ENGINE_PIN.json. Offline, no plugin.
+// each artifact) plus the pinned native engine (engine/fork/ENGINE_PIN.json) and the source archives of its Android
+// dependencies (engine/fork/android/DEPENDENCIES.json). Offline, no plugin.
 tasks.register("generateSbom") {
  group = "release"; description = "Writes build/sbom/nozzle-it-all.cdx.json"
  val runtime = configurations.named("releaseRuntimeClasspath")
- val pinFile = rootProject.file("engine/ENGINE_PIN.json") // upstream base; its dependency archives are the Android prefix on both bases
- val smPinFile = rootProject.file("engine/snapmaker/ENGINE_PIN.json")
- val forkPinFile = rootProject.file("engine/fork/ENGINE_PIN.json")
- val snapmakerBase = nozzleEngine == "snapmaker"
- val forkBase = nozzleEngine == "fork"
+ val pinFile = rootProject.file("engine/fork/ENGINE_PIN.json")
+ val depsFile = rootProject.file("engine/fork/android/DEPENDENCIES.json")
  val out = layout.buildDirectory.file("sbom/nozzle-it-all.cdx.json")
- inputs.files(runtime); inputs.file(pinFile); inputs.file(smPinFile); inputs.file(forkPinFile); inputs.property("nozzleEngine", nozzleEngine); outputs.file(out)
+ inputs.files(runtime); inputs.file(pinFile); inputs.file(depsFile); outputs.file(out)
  doLast {
   fun esc(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
   fun sha256(f: java.io.File) = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
@@ -201,19 +189,10 @@ tasks.register("generateSbom") {
    }
   }
   val pin = groovy.json.JsonSlurper().parse(pinFile) as Map<*, *>
-  if (forkBase) {
-   val fk = groovy.json.JsonSlurper().parse(forkPinFile) as Map<*, *>
-   val c = (fk["base"] as Map<*, *>)["commit"].toString()
-   components["pkg:github/James-Jennison/nozzle-engine@$c"] = """{"type":"library","name":"nozzle-engine (libslic3r)","version":"${esc(c)}","purl":"pkg:github/James-Jennison/nozzle-engine@$c","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}]}"""
-  } else if (snapmakerBase) {
-   val sm = groovy.json.JsonSlurper().parse(smPinFile) as Map<*, *>
-   val c = (sm["base"] as Map<*, *>)["commit"].toString()
-   components["pkg:github/Snapmaker/OrcaSlicer@$c"] = """{"type":"library","name":"Snapmaker Orca (libslic3r, patched)","version":"${esc(c)}","purl":"pkg:github/Snapmaker/OrcaSlicer@$c","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}],"properties":[{"name":"patch.sha256","value":"${esc((sm["patch"] as Map<*, *>)["sha256"].toString())}"}]}"""
-  } else {
-  val upstream = pin["upstream"] as Map<*, *>
-  components["pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}"] = """{"type":"library","name":"OrcaSlicer (libslic3r, patched)","version":"${esc(upstream["commit"].toString())}","purl":"pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}],"properties":[{"name":"patch.sha256","value":"${esc((pin["patch"] as Map<*, *>)["sha256"].toString())}"}]}"""
-  }
-  (pin["dependencies"] as List<*>).forEach { d ->
+  val c = (pin["base"] as Map<*, *>)["commit"].toString()
+  components["pkg:github/James-Jennison/nozzle-engine@$c"] = """{"type":"library","name":"nozzle-engine (libslic3r)","version":"${esc(c)}","purl":"pkg:github/James-Jennison/nozzle-engine@$c","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}]}"""
+  val deps = groovy.json.JsonSlurper().parse(depsFile) as Map<*, *>
+  (deps["dependencies"] as List<*>).forEach { d ->
    d as Map<*, *>
    val n = d["file"].toString()
    components["pkg:generic/$n"] = """{"type":"library","name":"${esc(n)}","purl":"pkg:generic/${esc(n)}","hashes":[{"alg":"SHA-256","content":"${d["sha256"]}"}],"properties":[{"name":"linked","value":"native (arm64-v8a)"}]}"""

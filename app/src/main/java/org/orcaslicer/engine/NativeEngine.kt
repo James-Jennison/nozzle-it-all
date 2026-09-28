@@ -2,8 +2,8 @@ package org.orcaslicer.engine
 
 // Package name is fixed by the JNI bridge's exported symbol names
 // (Java_org_orcaslicer_engine_NativeEngine_...), copied from the owner's
-// orcaslicer-android-engine project - see app/src/main/cpp/bridge/ and
-// THIRD_PARTY_NOTICES.md. Deliberately not net.jamesjennison.klippercompanion:
+// orcaslicer-android-engine project and now in nozzle-engine's nozzle/bridge/android -
+// see THIRD_PARTY_NOTICES.md. Deliberately not net.jamesjennison.klippercompanion:
 // renaming this would mean patching the C++ bridge instead of reusing it
 // as-is.
 //

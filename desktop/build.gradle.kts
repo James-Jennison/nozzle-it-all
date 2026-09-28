@@ -36,20 +36,20 @@ dependencies {
 tasks.named<ProcessResources>("processResources") {
  from(rootProject.file("app/src/main/assets/slicer_profiles")) { into("profiles"); exclude("PROVENANCE.md") }
  // Profiles the desktop engine (Snapmaker Orca base) can't slice yet; the catalog leaves them out.
- from(rootProject.file("engine/snapmaker/unsupported-profiles.json")) { into("profiles") }
+ from(rootProject.file("engine/profiles/unsupported-profiles.json")) { into("profiles") }
  // Snapmaker Orca's filament colour library (Full Spectrum's recommended palette), from the pinned commit.
- from(rootProject.file("engine/snapmaker/resources/filaments_colours.json")) { into("fullspectrum") }
+ from(rootProject.file("engine/profiles/resources/filaments_colours.json")) { into("fullspectrum") }
  // Printers' whole profile families from their own slicers: nozzle sizes, process presets, filaments
  // (scripts/bundle_printer_library.py).
- from(rootProject.file("engine/snapmaker/library")) { into("library") }
+ from(rootProject.file("engine/profiles/library")) { into("library") }
  // Every engine setting (exported from the engine itself) and Nozzle's own grouping of them.
  from(rootProject.file("schemas/slicing")) { into("settings"); include("settings-schema.json", "settings-groups.json") }
 }
 
 val nozzleVersion = providers.gradleProperty("nozzleDesktopVersion").orElse("0.1.0")
 
-// The native slicing engine (engine/native: the same patched OrcaSlicer source and shared bridge as Android and the Web
-// App). -PnozzleEngine=/path/to/nozzle-engine; defaults to engine/native/scripts/build_engine_fork.sh's output. When the file
+// The native slicing engine (nozzle-engine: the same engine commit and bridge code as Android and the Web App).
+// -PnozzleEngine=/path/to/nozzle-engine; defaults to engine/native/scripts/build_engine_fork.sh's output. When the file
 // exists it is bundled into the Linux distribution's app resources, where SliceEngine.locateNative() looks first.
 val nozzleEngine = providers.gradleProperty("nozzleEngine").orElse("/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine")
 val engineResources = layout.buildDirectory.dir("engine-resources")

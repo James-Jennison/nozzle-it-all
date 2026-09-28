@@ -7,9 +7,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'schemas/slicing/settings-schema.json')
 engine = os.environ.get('NOZZLE_ENGINE', '/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine')
 raw = json.loads(subprocess.run([engine, '--schema'], check=True, capture_output=True, text=True).stdout)
-# The desktop engine is Snapmaker Orca's libslic3r plus Nozzle's patch (engine/snapmaker/ENGINE_PIN.json).
-pin = json.load(open(os.path.join(ROOT, 'engine/snapmaker/ENGINE_PIN.json')))
-raw['source'] = {'engine': 'libslic3r (Snapmaker Orca)', 'commit': pin['base']['commit'], 'patch_sha256': pin['patch']['sha256'], 'licence': 'AGPL-3.0'}
+# The engine is nozzle-engine at its pinned commit (engine/fork/ENGINE_PIN.json).
+pin = json.load(open(os.path.join(ROOT, 'engine/fork/ENGINE_PIN.json')))
+raw['source'] = {'engine': 'libslic3r (nozzle-engine)', 'repo': pin['base']['repo'], 'commit': pin['base']['commit'], 'licence': 'AGPL-3.0'}
 text = json.dumps(raw, indent=1, ensure_ascii=False) + '\n'
 if '--check' in sys.argv:
     same = os.path.exists(OUT) and open(OUT, encoding='utf8').read() == text

@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The plate tools of Orca's workspace. Arrange, Auto orient and Cut run in the engine, on libslic3r's own code
- * (`nozzle-engine --plate`, engine/native/bridge/plate_ops.cpp); Split is libslic3r's its_split (TriangleMesh.cpp,
+ * (`nozzle-engine --plate`, the engine's nozzle/bridge/native/plate_ops.cpp); Split is libslic3r's its_split (TriangleMesh.cpp,
  * MeshSplitImpl.hpp: triangles joined through shared edges form one part) ported here, so each part keeps its paint.
  */
 object PlateOps {

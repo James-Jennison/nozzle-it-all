@@ -260,7 +260,7 @@ object SlicingCoordinator {
             // is the one actually trusted for which profile pack gets selected.
             live?.let { cosmosRequiresCurrentProfile(it.version) }?.let { if (it) CosmosProfileGeneration.CURRENT else CosmosProfileGeneration.LEGACY }
         } else null
-        // A printer saved with a profile the engine can't slice yet (engine/snapmaker/unsupported-profiles.json) says so.
+        // A printer saved with a profile the engine can't slice yet (engine/profiles/unsupported-profiles.json) says so.
         SlicingEngineSupport.unsupportedReason(model)?.let { return ProfileResolution.Blocked(SliceOutcome.Failed(it)) }
         val pack = slicingProfilePack(model, cosmosGeneration, profile.customMachine)
             ?: return ProfileResolution.Blocked(SliceOutcome.Failed("No bundled slicer profile exists yet for this printer's confirmed firmware."))

@@ -43,8 +43,8 @@ sealed class SliceOutcome {
 /**
  * Slices headless, as a separate process: no window, no network. A crash or cancellation ends only that process.
  *
- * Preferred engine: `nozzle-engine`, the native build of the same patched OrcaSlicer source (engine/ENGINE_PIN.json) and
- * the same shared bridge (app/src/main/cpp/bridge) that Android and the Web App use, built by engine/native. It takes the
+ * Preferred engine: `nozzle-engine`, the native build of the same engine commit (engine/fork/ENGINE_PIN.json) and bridge
+ * code Android and the Web App use, built by engine/native/scripts/build_engine_fork.sh. It takes the
  * Web App's request format (profiles, overrides, objects relative to the bed centre), so a plate slices identically on
  * all three platforms.
  */

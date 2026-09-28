@@ -65,7 +65,7 @@ class SlicingProfilePacksDeviceTest {
     // generation and has its own tests above.
     // Every printer the app offers slices real G-code. COSMOS profiles are sliced as the app slices them, after the
     // printer's firmware has been confirmed (CosmosProfileGeneration.CURRENT); the profiles the engine can't slice yet
-    // (SlicingEngineSupport, engine/snapmaker/unsupported-profiles.json) are never offered, so they are not sliced here.
+    // (SlicingEngineSupport, engine/profiles/unsupported-profiles.json) are never offered, so they are not sliced here.
     @Test fun everyBundledCatalogModelSlicesRealGcode() {
         val failures = mutableListOf<String>()
         SlicingEngineSupport.offered.forEach { info ->

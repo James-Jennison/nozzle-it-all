@@ -337,14 +337,14 @@
       },
       "gradeSources": {
         "controls": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
-        "file_transfer": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
+        "file_transfer": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
         "monitoring": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
         "physical_print": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
         "slicing": "ffbe615e-5926-4d34-a02b-db86d8493ae8"
       },
       "grades": {
         "controls": "SKIPPED (unreviewed)",
-        "file_transfer": "PARTIAL (unreviewed)",
+        "file_transfer": "PASS",
         "monitoring": "PASS (unreviewed)",
         "physical_print": "SKIPPED (unreviewed)",
         "slicing": "PASS (unreviewed)"
@@ -384,7 +384,7 @@
           "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
           "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "ffbe615e-5926-4d34-a02b-db86d8493ae8"
+          "supersededBy": null
         },
         {
           "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",

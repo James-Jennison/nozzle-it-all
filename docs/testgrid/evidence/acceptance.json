@@ -1,5 +1,12 @@
 {
-  "accepted": [],
+  "accepted": [
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3",
+      "date": "2026-09-28",
+      "note": "Level 1 run on the owner's PAXX U1, owner at the printer. Accepted with the recorded corrections: sourceRevision should read af63b08; engine version was masked. Multi-material monitoring FAIL is a real app gap (no U1 material reading on Android)."
+    }
+  ],
   "format": "nozzle.evidence-acceptance",
   "rejected": [],
   "version": [

@@ -14,9 +14,21 @@ class PrinterDiscoveryTest {
         assertEquals(PrinterKind.GENERIC_KLIPPER, cc1.kind); assertEquals(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, cc1.slicingModel); assertEquals("CC1", cc1.name)
         val u1 = PrinterDiscovery.classifyMoonraker("U1", "", "1.6.0.267_20260815150420", "192.168.1.110")
         assertEquals(PrinterKind.SNAPMAKER_U1, u1.kind); assertEquals(SlicingPrinterModel.SNAPMAKER_U1, u1.slicingModel)
+        val paxx = PrinterDiscovery.classifyMoonraker("lava", "", "1.6.0.267_20260815150420", "192.168.1.113", paxx = true)
+        assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, paxx.kind); assertEquals(SlicingPrinterModel.SNAPMAKER_U1, paxx.slicingModel)
+        assertEquals("the PAXX flag alone does not make a generic Klipper a U1", PrinterKind.GENERIC_KLIPPER, PrinterDiscovery.classifyMoonraker("voron", "Klipper", "v0.12.0-123", "10.0.0.7", paxx = true).kind)
         val generic = PrinterDiscovery.classifyMoonraker("voron", "Klipper", "v0.12.0-123", "10.0.0.7")
         assertEquals(PrinterKind.GENERIC_KLIPPER, generic.kind); assertEquals(SlicingPrinterModel.GENERIC_KLIPPER, generic.slicingModel)
         assertEquals("a blank hostname falls back to the address", "10.0.0.7", PrinterDiscovery.classifyMoonraker("", "", "", "10.0.0.7").name)
+    }
+
+    @Test fun theExtendedConfigFolderMarksPaxxFirmware() {
+        // Shape of the owner's PAXX U1's server/files/list?root=config result.
+        val paxx = org.json.JSONArray("""[{"path":"snapmaker/print_task.json"},{"path":"extended/extended2.cfg"},{"path":"printer.cfg"}]""")
+        val stock = org.json.JSONArray("""[{"path":"snapmaker/print_task.json"},{"path":"printer.cfg"},{"path":"moonraker.conf"}]""")
+        assertTrue(PrinterDiscovery.hasExtendedConfig(paxx))
+        assertFalse(PrinterDiscovery.hasExtendedConfig(stock))
+        assertFalse(PrinterDiscovery.hasExtendedConfig(null))
     }
 
     @Test fun readsAPrusaLinkVersionReplyAndRejectsOtherJson() {
@@ -54,6 +66,18 @@ class PrinterDiscoveryTest {
             scanner.scan(listOf("127.0.0.1", "127.0.0.2"), AtomicBoolean(false)) { found += it }
             val u1 = found.singleOrNull { it.address == "127.0.0.1:${s.port}" }
             assertNotNull("the mock printer is found: $found", u1); assertEquals(PrinterKind.SNAPMAKER_U1, u1!!.kind)
+        } finally { s.shutdown() }
+    }
+
+    @Test fun theScannerRecognisesAU1OnPaxxFirmware() {
+        val s = server(mapOf("/server/info" to """{"result":{"klippy_connected":true,"klippy_state":"ready","moonraker_version":"1.6.0"}}""",
+            "/printer/info" to """{"result":{"hostname":"lava","software_version":"1.6.0.267_20260815150420"}}""",
+            "/server/files/list" to """{"result":[{"path":"printer.cfg"},{"path":"extended/extended2.cfg"}]}"""))
+        try {
+            val scanner = PrinterScanner(moonrakerPorts = listOf(s.port), prusaPorts = emptyList(), octoPrintPorts = emptyList(), ssdpPorts = emptyList(), ssdpWaitMs = 100)
+            val found = mutableListOf<DiscoveredPrinter>()
+            scanner.scan(listOf("127.0.0.1"), AtomicBoolean(false)) { found += it }
+            assertEquals(PrinterKind.SNAPMAKER_U1_PAXX, found.single().kind)
         } finally { s.shutdown() }
     }
 

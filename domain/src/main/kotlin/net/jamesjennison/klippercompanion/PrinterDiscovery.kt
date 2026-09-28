@@ -19,18 +19,33 @@ object PrinterDiscovery {
     private val U1_VERSION = Regex("""^\d+\.\d+\.\d+\.\d+_\d{10,14}$""")
 
     /** [hasAfc]: Klipper reports an `AFC` object (Armored Turtle's AFC, which drives the Elegoo CANVAS on COSMOS). */
-    fun classifyMoonraker(hostname: String, app: String, softwareVersion: String, address: String, hasAfc: Boolean = false): DiscoveredPrinter {
+    /** [paxx]: the printer's config files include PAXX's `extended/` folder (see [hasExtendedConfig]). */
+    fun classifyMoonraker(hostname: String, app: String, softwareVersion: String, address: String, hasAfc: Boolean = false, paxx: Boolean = false): DiscoveredPrinter {
         val name = hostname.trim().take(80).ifBlank { address }
         return when {
             isCosmos(app) && hasAfc ->
                 DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS, detail = "Elegoo Centauri Carbon with CANVAS ($softwareVersion)")
             isCosmos(app) ->
                 DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, detail = "Elegoo Centauri Carbon ($softwareVersion)")
-            U1_VERSION.matches(softwareVersion.trim()) ->
-                // Moonraker cannot tell stock from PAXX/extended firmware, so default to stock (the common case); a PAXX owner switches the type.
+            isU1Version(softwareVersion) && paxx ->
+                DiscoveredPrinter(address, PrinterKind.SNAPMAKER_U1_PAXX, name, SlicingPrinterModel.SNAPMAKER_U1, detail = "Snapmaker U1 with PAXX extended firmware ($softwareVersion)")
+            isU1Version(softwareVersion) ->
+                // No PAXX `extended/` config folder (or it could not be read): stock firmware, the common case.
                 DiscoveredPrinter(address, PrinterKind.SNAPMAKER_U1, name, SlicingPrinterModel.SNAPMAKER_U1, detail = "Snapmaker U1 ($softwareVersion)")
             else -> DiscoveredPrinter(address, PrinterKind.GENERIC_KLIPPER, name, SlicingPrinterModel.GENERIC_KLIPPER, detail = "Klipper / Moonraker" + softwareVersion.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty())
         }
+    }
+
+    fun isU1Version(softwareVersion: String): Boolean = U1_VERSION.matches(softwareVersion.trim())
+
+    /**
+     * `server/files/list?root=config`'s result: does it hold the `extended/` folder PAXX's extended firmware installs
+     * (extended/extended2.cfg, extended/moonraker/...)? Stock U1 firmware has no such folder. Verified against the
+     * owner's PAXX U1.
+     */
+    fun hasExtendedConfig(configFiles: org.json.JSONArray?): Boolean {
+        val files = configFiles ?: return false
+        return (0 until minOf(files.length(), 10_000)).any { files.optJSONObject(it)?.optString("path").orEmpty().startsWith("extended/") }
     }
 
     fun isCosmos(app: String): Boolean = app.contains("cosmos", ignoreCase = true) || app.contains("opencentauri", ignoreCase = true)

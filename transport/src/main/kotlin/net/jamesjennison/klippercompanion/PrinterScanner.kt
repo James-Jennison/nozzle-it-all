@@ -69,7 +69,10 @@ class PrinterScanner(
         val app = info?.optString("app").orEmpty()
         // A COSMOS Centauri Carbon with AFC (the CANVAS) gets the CANVAS profile suggested; one more read-only GET.
         val afc = PrinterDiscovery.isCosmos(app) && PrinterDiscovery.hasAfcObject(get("$base/printer/objects/list")?.let { try { JSONObject(it).optJSONObject("result") } catch (_: Exception) { null } })
-        return PrinterDiscovery.classifyMoonraker(info?.optString("hostname").orEmpty(), app, info?.optString("software_version").orEmpty(), address, afc)
+        val version = info?.optString("software_version").orEmpty()
+        // A Snapmaker U1 on PAXX's extended firmware keeps an `extended/` folder among its config files; one more read-only GET.
+        val paxx = PrinterDiscovery.isU1Version(version) && PrinterDiscovery.hasExtendedConfig(get("$base/server/files/list?root=config")?.let { try { JSONObject(it).optJSONArray("result") } catch (_: Exception) { null } })
+        return PrinterDiscovery.classifyMoonraker(info?.optString("hostname").orEmpty(), app, version, address, afc, paxx)
     }
 
     companion object {

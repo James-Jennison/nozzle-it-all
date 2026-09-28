@@ -280,6 +280,7 @@ class RunSession private constructor(
         val step = test.steps[idx]
         val kind = step.kind!!
         when {
+            nothingToDo(step) != null -> { stepRec.status = StepStatus.SKIPPED; stepRec.detail = nothingToDo(step)!!; stepRec.finishedAt = now() }
             kind.consequential || step.requiresConfirmation -> { stepRec.status = StepStatus.AWAITING_CONFIRMATION; rec.state = RunState.AWAITING_CONFIRMATION }
             kind.operator -> { stepRec.status = StepStatus.AWAITING_OBSERVATION; rec.state = RunState.AWAITING_OBSERVATION; captureShown(step, stepRec) }
             else -> {
@@ -296,6 +297,7 @@ class RunSession private constructor(
         val stepRec = rec.cleanup[idx]; val step = test.cleanup[idx]
         val kind = step.kind!!
         when {
+            nothingToDo(step) != null -> { stepRec.status = StepStatus.SKIPPED; stepRec.detail = nothingToDo(step)!!; stepRec.finishedAt = now() }
             kind.consequential || step.requiresConfirmation -> stepRec.status = StepStatus.AWAITING_CONFIRMATION
             kind.operator -> { stepRec.status = StepStatus.SKIPPED; stepRec.detail = "Operator steps are not run during cleanup." }
             else -> execute(test, step, stepRec)
@@ -549,9 +551,18 @@ class RunSession private constructor(
     fun actionText(step: Step): String = when (step.kind) {
         StepKind.UPLOAD -> latestSlice(step)?.let { "Upload ${uploadName(step)} (${it.optLong("bytes")} bytes, SHA-256 ${it.optString("sha256").take(16)}…) to the printer's G-code folder. Nothing is printed." }
             ?: "Upload the sliced file (no sliced file yet: this step will be blocked)"
-        StepKind.DELETE_UPLOADED -> latestUpload(step)?.let { "Delete ${it.optString("remotePath")} from the printer: the file this run uploaded, verified by SHA-256 before deletion." }
+        StepKind.DELETE_UPLOADED -> latestUpload(step)?.takeIf { !it.optBoolean("deleted") }?.let { "Delete ${it.optString("remotePath")} from the printer: the file this run uploaded, verified by SHA-256 before deletion." }
             ?: "Delete the file this run uploaded (nothing uploaded yet: this step will be skipped)"
         else -> controlAction(step)?.describe() ?: step.title
+    }
+
+    /**
+     * Why a consequential step has nothing to act on, so it is skipped without asking. Found on the first level-2 run:
+     * cleanup asked the operator to approve deleting a file the test had already deleted.
+     */
+    private fun nothingToDo(step: Step): String? = when (step.kind) {
+        StepKind.DELETE_UPLOADED -> if (latestUpload(step)?.takeIf { !it.optBoolean("deleted") } == null) "Nothing uploaded by this run is left to delete." else null
+        else -> null
     }
 
     private fun controlAction(step: Step): ControlAction? = when (step.kind) {

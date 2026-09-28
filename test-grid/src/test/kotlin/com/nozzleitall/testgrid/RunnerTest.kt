@@ -406,4 +406,22 @@ class RunnerTest {
         assertEquals(24.0, step.data.getJSONObject("shown").getDouble("nozzle"), 0.01)
         assertEquals("yes", step.data.getString("response"))
     }
+
+    @Test fun cleanupNeverAsksToDeleteAFileThatIsAlreadyGone() {
+        val clock = Support.Clock()
+        val t = Counting(SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now))
+        val st = Support.start("paxx-u1", t, clock, level = SafetyLevel.REVERSIBLE_FILES)
+        val asked = mutableListOf<String>()
+        var p = st.session.proceed()
+        while (p !is Pending.Finished) p = when (p) {
+            is Pending.Preconditions -> st.session.answerPreconditions(p.test.preconditions.associate { it.id to true })
+            is Pending.Observation -> st.session.observe(p.step.id, ScriptedOperator.defaultAnswer(p.step))
+            is Pending.Confirmation -> { asked += "${p.test.id}/${p.step.id}"; st.session.approve(p.step.id) }
+            else -> fail("unexpected $p").let { p }
+        }
+        assertEquals(listOf("transfer/upload", "transfer/delete"), asked)
+        assertEquals(1, t.deleted.size)
+        assertEquals(StepStatus.SKIPPED, st.session.record.test("transfer")!!.step("cleanup-delete")!!.status)
+        assertNull(st.session.record.test("transfer")!!.step("cleanup-delete")!!.confirmation)
+    }
 }

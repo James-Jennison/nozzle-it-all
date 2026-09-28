@@ -32,7 +32,7 @@ fun ScreenState.kindFor(address: String): PrinterKind = profiles.find { it.addre
 fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
 // Filament slots: an Elegoo printer's CANVAS trays through its own service, every other printer's filament-changer lanes through Moonraker.
 fun ScreenState.filamentSlotReaderFor(address: String): FilamentSlotReader =
-    if(kindFor(address) == PrinterKind.ELEGOO) printerServiceFor(profiles.find { it.address == address }, address) as FilamentSlotReader else moonrakerFor(address)
+    if(kindFor(address) == PrinterKind.ELEGOO || kindFor(address) == PrinterKind.BAMBU_LAB) printerServiceFor(profiles.find { it.address == address }, address) as FilamentSlotReader else moonrakerFor(address)
 // A Bambu profile's address is a bare host - it has no HTTP endpoint for a URL to point at - so it
 // is validated by bambuHostAddress rather than Moonraker.parseAddress. Both throw
 // IllegalArgumentException, so every call site keeps its existing failure handling.

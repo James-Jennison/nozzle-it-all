@@ -1,11 +1,12 @@
 // Adapted from Helix (github.com/FatBoy721/Helix), AGPL-3.0-or-later.
 // Original: android/app/src/main/java/org/crabcore/u1control/bambu/BambuPrintProtocol.kt
 //
-// Trimmed against Helix's original: this app prints single-material only, from
-// the external spool. Helix's AMS/multi-material lane mapping (a tool -> global
-// AMS lane map, and the use_ams switch that feeds it) is therefore dropped, and
-// the on-wire ams_mapping/ams_mapping2 fields are always emitted in their
-// external-spool form. Everything else is Helix's payload verbatim.
+// Helix's AMS lane mapping (a file tool -> global AMS lane map, and the use_ams
+// switch that feeds it) was first trimmed from this port and is restored here
+// from Helix's original. With no mapping (the default) the payload is the
+// single-material, external-spool form this app has always sent. Starting a
+// multi-filament print with a mapping is gated by BambuAms.AMS_PRINT_VERIFIED
+// until a real Bambu printer has confirmed it.
 package net.jamesjennison.klippercompanion
 
 import org.json.JSONArray
@@ -29,6 +30,9 @@ object BambuPrintProtocol {
         val bedLeveling: Boolean,
         val flowCalibration: Boolean,
         val timelapse: Boolean,
+        /** Zero-based file tool -> zero-based global AMS lane (BambuAmsTrays numbering); -1 is the external spool. */
+        val toolToLane: Map<Int, Int> = emptyMap(),
+        val useAms: Boolean = false,
         val layerInspection: Boolean = true,
         val vibrationCalibration: Boolean = false,
         val autoBedLeveling: Int = 1,
@@ -53,9 +57,11 @@ object BambuPrintProtocol {
         require(command.md5.uppercase().matches(MD5_PATTERN)) { "md5 must contain 32 hex digits" }
         require(command.bedType.isNotBlank()) { "bedType is required" }
 
-        // Single-material, external spool: every tool routes off the AMS.
-        val mapping = List(TOOL_COUNT) { EXTERNAL_SPOOL }
-        val mapping2 = mapping.map { externalSpoolMapping() }
+        // Helix's normalizedMapping: without use_ams every tool routes off the AMS (the external spool).
+        require(command.toolToLane.keys.all { it in 0 until TOOL_COUNT }) { "tool index must be 0..3" }
+        require(command.toolToLane.values.all { it == EXTERNAL_SPOOL || it >= 0 }) { "lane must be zero-based or -1 for the external spool" }
+        val mapping = List(TOOL_COUNT) { tool -> if (command.useAms) command.toolToLane[tool] ?: EXTERNAL_SPOOL else EXTERNAL_SPOOL }
+        val mapping2 = mapping.map(::detailedMapping)
 
         val print = JSONObject().apply {
             put("ams_mapping", JSONArray(mapping))
@@ -80,7 +86,7 @@ object BambuPrintProtocol {
             put("subtask_name", command.subtaskName)
             put("task_id", "0")
             put("timelapse", command.timelapse)
-            put("use_ams", false)
+            put("use_ams", command.useAms)
             put("vibration_cali", command.vibrationCalibration)
             put("url", "ftp://${command.fileName}")
         }
@@ -101,6 +107,14 @@ object BambuPrintProtocol {
      */
     fun usedFilaments(sliceInfo: String): Int = Regex("<filament\\s").findAll(sliceInfo).count()
 
+    /** The filaments a bundle's slice_info lists, with their zero-based T numbers, types and colours. */
+    fun fileFilaments(sliceInfo: String): List<BambuAms.FileFilament> =
+        Regex("<filament\\s([^>]*)>").findAll(sliceInfo).mapNotNull { row ->
+            fun attr(name: String) = Regex("\\b$name=\"([^\"]*)\"").find(row.groupValues[1])?.groupValues?.get(1)
+            val id = attr("id")?.toIntOrNull() ?: return@mapNotNull null
+            BambuAms.FileFilament(id - 1, attr("type").orEmpty(), FilamentLanes.normalizeColor(attr("color")))
+        }.toList()
+
     const val MULTI_MATERIAL_NOT_SUPPORTED =
         "This file uses more than one filament. Nozzle It All can slice multi-colour prints for Bambu printers but " +
         "can't start them with the AMS yet. Print it from Bambu Studio or Bambu Handy, or slice it with one filament."
@@ -117,8 +131,11 @@ object BambuPrintProtocol {
         }
     }
 
-    private fun externalSpoolMapping(): JSONObject =
+    private fun detailedMapping(lane: Int): JSONObject = if (lane == EXTERNAL_SPOOL) {
         JSONObject().put("ams_id", UNUSED_AMS_ID).put("slot_id", UNUSED_SLOT_ID)
+    } else {
+        JSONObject().put("ams_id", lane / BambuAmsTrays.TRAYS_PER_AMS).put("slot_id", lane % BambuAmsTrays.TRAYS_PER_AMS)
+    }
 
     private fun String.isSafeRootFileName(): Boolean =
         isNotBlank() && this != "." && this != ".." && !contains('/') && !contains('\\')

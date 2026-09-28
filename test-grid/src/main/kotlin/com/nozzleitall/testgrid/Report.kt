@@ -32,7 +32,12 @@ data class RunEntry(
     val review: String, val supersedes: List<String>, var supersededBy: String? = null,
 )
 
-data class Row(val key: RowKey, val current: RunEntry?, val history: List<RunEntry>, val note: String)
+/**
+ * [current] is the newest eligible run; [sources] names, per category, the run whose grade the matrix shows: the newest
+ * eligible run that actually graded that category. A later run that skipped a category (a lower safety level) does not
+ * displace an earlier graded result for it (found filing a level-1 rerun after a level-2 run on the PAXX U1).
+ */
+data class Row(val key: RowKey, val current: RunEntry?, val history: List<RunEntry>, val note: String, val sources: Map<Category, RunEntry?> = emptyMap())
 
 data class CompatibilityReport(val rows: List<Row>, val rejected: List<Pair<String, List<String>>>, val duplicates: List<Pair<String, String>>)
 
@@ -84,17 +89,21 @@ object ReportBuilder {
             val history = runs.sortedWith(compareBy<RunEntry> { it.completedAt }.thenBy { it.bundleDigest })
             // Newest eligible physical run is current; a newer run supersedes older ones but never deletes them.
             val eligible = history.filter { !it.review.startsWith("rejected") }
-            val current = eligible.lastOrNull { it.targetKind == TargetKind.PHYSICAL } ?: eligible.lastOrNull()
+            val pool = eligible.filter { it.targetKind == TargetKind.PHYSICAL }.ifEmpty { eligible }
+            val current = pool.lastOrNull()
+            val sources = Category.entries.associateWith { c ->
+                pool.lastOrNull { (it.grades[c] ?: ResultState.UNVERIFIED) !in setOf(ResultState.SKIPPED, ResultState.UNVERIFIED) } ?: current
+            }
             history.forEach { old ->
                 old.supersededBy = history.firstOrNull { it.supersedes.contains(old.runId) }?.runId
-                    ?: if (old !== current && current != null && old.targetKind == current.targetKind && old.completedAt <= current.completedAt) current.runId else null
+                    ?: if (old !== current && current != null && sources.values.none { it === old } && old.targetKind == current.targetKind && old.completedAt <= current.completedAt) current.runId else null
             }
             val note = when {
                 current == null -> "Every bundle for this configuration was rejected by a maintainer."
                 current.targetKind == TargetKind.SIMULATED -> "Simulated runs only: software exercised, hardware UNVERIFIED."
                 else -> ""
             }
-            Row(key, current, history, note)
+            Row(key, current, history, note, sources)
         }.toMutableList()
 
         // Configurations a suite covers but no bundle does: listed, every category UNVERIFIED.
@@ -111,7 +120,7 @@ object ReportBuilder {
     }
 
     fun cell(row: Row, c: Category): String {
-        val cur = row.current ?: return ResultState.UNVERIFIED.name
+        val cur = row.sources[c] ?: row.current ?: return ResultState.UNVERIFIED.name
         val r = cur.grades[c] ?: ResultState.UNVERIFIED
         return if (cur.targetKind == TargetKind.PHYSICAL && cur.review == "unreviewed" && r != ResultState.UNVERIFIED) "${r.name} (unreviewed)" else r.name
     }
@@ -127,21 +136,29 @@ object ReportBuilder {
         appendLine("|" + "---|".repeat(6 + Category.entries.size))
         report.rows.forEach { r ->
             val fw = if (r.key.firmwareVersion == "—") r.key.firmwareFamily else "${r.key.firmwareFamily} ${r.key.firmwareVersion}"
-            val ev = r.current?.let { "${it.targetKind.id} run `${it.runId.take(8)}` (${it.suiteId} ${it.suiteVersion}), bundle `${it.bundleDigest.take(12)}`" } ?: r.note
+            val used = Category.entries.mapNotNull { r.sources[it] }.distinct()
+            val ev = if (used.isEmpty()) r.note else used.joinToString("; ") { "${it.targetKind.id} run `${it.runId.take(8)}` (${it.suiteId} ${it.suiteVersion}), bundle `${it.bundleDigest.take(12)}`" }
+            fun shown(c: Category) = cell(r, c) + if (used.size > 1) " · `${r.sources[c]?.runId?.take(8)}`" else ""
             appendLine("| ${r.key.manufacturer} ${r.key.model} | $fw | ${r.key.nozzleVersion} | ${r.key.adapter} | ${r.key.scope.label} | " +
-                Category.entries.joinToString(" | ") { cell(r, it) } + " | $ev |")
+                Category.entries.joinToString(" | ") { shown(it) } + " | $ev |")
         }
         val withHistory = report.rows.filter { it.history.isNotEmpty() }
         if (withHistory.isNotEmpty()) {
             appendLine(); appendLine("## History"); appendLine()
-            appendLine("Every run is kept. A newer run supersedes an older one for the current column; the older run and its bundle digest remain here.")
+            appendLine("Every run is kept. For each category the matrix shows the newest run that graded it; a newer run that skipped a category leaves the earlier result in place. Superseded runs and their bundle digests remain here.")
             withHistory.forEach { r ->
                 appendLine(); appendLine("### ${r.key.manufacturer} ${r.key.model} · ${r.key.firmwareFamily} ${r.key.firmwareVersion} · Nozzle ${r.key.nozzleVersion} · ${r.key.adapter} · ${r.key.scope.label}")
                 appendLine()
                 appendLine("| Run | Kind | Suite | Completed (UTC) | " + Category.entries.joinToString(" | ") { it.label } + " | Review | Status | Bundle digest | Source |")
                 appendLine("|" + "---|".repeat(8 + Category.entries.size))
                 r.history.forEach { h ->
-                    val status = when { h === r.current -> "current"; h.supersededBy != null -> "superseded by `${h.supersededBy!!.take(8)}`"; else -> "historical" }
+                    val shownFor = Category.entries.filter { r.sources[it] === h }
+                    val status = when {
+                        h === r.current && shownFor.size == Category.entries.size -> "current"
+                        shownFor.isNotEmpty() -> "current for ${shownFor.joinToString { it.label.lowercase() }}"
+                        h.supersededBy != null -> "superseded by `${h.supersededBy!!.take(8)}`"
+                        else -> "historical"
+                    }
                     appendLine("| `${h.runId.take(8)}` | ${h.targetKind.id} | ${h.suiteId} ${h.suiteVersion} | ${java.time.Instant.ofEpochMilli(h.completedAt)} | " +
                         Category.entries.joinToString(" | ") { (h.grades[it] ?: ResultState.UNVERIFIED).name } + " | ${h.review} | $status | `${h.bundleDigest}` | ${h.source} |")
                 }
@@ -161,6 +178,7 @@ object ReportBuilder {
                 .put("firmware", JSONObject().put("family", r.key.firmwareFamily).put("version", r.key.firmwareVersion))
                 .put("nozzleVersion", r.key.nozzleVersion).put("adapter", r.key.adapter).put("scope", r.key.scope.id)
                 .put("grades", JSONObject(Category.entries.associate { it.id to cell(r, it) }))
+                .put("gradeSources", JSONObject(Category.entries.associate { it.id to (r.sources[it]?.runId ?: JSONObject.NULL) }))
                 .put("current", r.current?.runId ?: JSONObject.NULL).put("note", r.note)
                 .put("history", JSONArray(r.history.map { h ->
                     JSONObject().put("runId", h.runId).put("kind", h.targetKind.id).put("suite", "${h.suiteId} ${h.suiteVersion}").put("completedAt", h.completedAt)

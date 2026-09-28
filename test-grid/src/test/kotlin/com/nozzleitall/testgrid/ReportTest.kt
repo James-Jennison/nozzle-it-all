@@ -169,4 +169,27 @@ class ReportTest {
         r.rows.forEach { row -> assertNull(row.current); Category.entries.forEach { assertEquals("UNVERIFIED", ReportBuilder.cell(row, it)) } }
         assertNotNull(r.rows.firstOrNull { it.note.contains("fixture") })
     }
+
+    @Test fun aLaterRunThatSkippedACategoryKeepsTheEarlierGradeForIt() {
+        // A level-2 run grades file transfer; a later level-1 run skips it. File transfer must stay PASS from the first.
+        fun run(start: Long, level: SafetyLevel): Pair<String, EvidenceBundle> {
+            val clock = Support.Clock(start)
+            val target = Support.PhysicalFake(SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now))
+            val work = Support.tmp(); val env = Support.env(work, clock, generateSequence(start) { it + 1 }.map { "run-$it" }.iterator())
+            val journal = RunJournal(java.io.File(work, "run"))
+            val s = RunSession.start(Support.suite("paxx-u1"), target, TargetCheck.inspect(target), SimulatedSlicer(Support.profiles(), work), env, journal, level)
+            Support.drive(s)
+            return s.record.runId to EvidenceBuilder.build(s, env, Redactor(target.localSecrets()), journal::attachment)
+        }
+        val (l2, a) = run(1_790_000_000_000L, SafetyLevel.REVERSIBLE_FILES)
+        val (l1, b) = run(1_791_000_000_000L, SafetyLevel.READ_ONLY)
+        val r = ReportBuilder.build(listOf("a.zip" to a.zip(), "b.zip" to b.zip()), emptyList())
+        val row = row(r, FirmwareFamilies.PAXX)
+        assertEquals(l1, row.current!!.runId)
+        assertEquals(l2, row.sources[Category.FILE_TRANSFER]!!.runId)
+        assertEquals("PASS (unreviewed)", ReportBuilder.cell(row, Category.FILE_TRANSFER))
+        assertEquals(l1, row.sources[Category.MONITORING]!!.runId)
+        assertNull(row.history.single { it.runId == l2 }.supersededBy)
+        assertTrue(ReportBuilder.markdown(r).contains("current for file transfer"))
+    }
 }

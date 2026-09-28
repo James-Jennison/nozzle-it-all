@@ -51,9 +51,11 @@ simulated run never becomes current over a physical run.
 
 - Every verified bundle is kept in its row's history with run id, kind, suite and version, completion time, grades,
   review status, bundle digest and source file name.
-- The **current** run is the newest physical run not rejected by a maintainer (or, with no physical run, the newest
-  simulated one, shown as UNVERIFIED).
-- A newer run supersedes older ones for the current column. A run can also name the runs it supersedes
+- Each **category** shows the newest physical run, not rejected by a maintainer, that actually graded it (anything
+  but SKIPPED or UNVERIFIED); with no physical run, the newest simulated one, shown as UNVERIFIED. So a level-1 rerun
+  does not displace an earlier level-2 file-transfer result. When a row's cells come from different runs, each cell
+  names its run, and the JSON report lists `gradeSources`.
+- A newer run supersedes older ones for the categories it graded. A run can also name the runs it supersedes
   (`run.supersedes`). The older run stays in history marked "superseded by …", with its digest. Nothing is ever
   deleted or overwritten; `EvidenceStore` files bundles under their bundle digest and refuses to overwrite.
 - Identical bundles (same bundle digest) count once. Corrupt, tampered or incomplete bundles are listed under

@@ -26,6 +26,8 @@ android {
   // MMF_API_KEY enables Discover browsing; MMF_CLIENT_KEY enables sign-in (file downloads). Empty = the user enters their own in Discover.
   buildConfigField("String", "MMF_API_KEY", "\"${providers.gradleProperty("MMF_API_KEY").orElse(providers.environmentVariable("MMF_API_KEY")).getOrElse("")}\"")
   buildConfigField("String", "MMF_CLIENT_KEY", "\"${providers.gradleProperty("MMF_CLIENT_KEY").orElse(providers.environmentVariable("MMF_CLIENT_KEY")).getOrElse("")}\"")
+  // Test Grid evidence names the commit a build came from. Blank outside a git checkout; -PnozzleSourceRevision overrides.
+  buildConfigField("String", "SOURCE_REVISION", "\"${providers.gradleProperty("nozzleSourceRevision").orElse(providers.exec { commandLine("git", "rev-parse", "HEAD"); isIgnoreExitValue = true }.standardOutput.asText.map { it.trim() }).getOrElse("").filter { it.isLetterOrDigit() }}\"")
   externalNativeBuild {
    cmake {
     // CMAKE_BUILD_TYPE=Release regardless of the Gradle Debug/Release variant - matches
@@ -117,6 +119,7 @@ android {
 dependencies {
  implementation(project(":domain"))
  implementation(project(":transport")); implementation(project(":printer-api"))
+ implementation(project(":test-grid"))
  implementation(platform("androidx.compose:compose-bom:2026.06.00"))
  implementation("androidx.activity:activity-compose:1.11.0")
  implementation("androidx.compose.material3:material3")

@@ -79,6 +79,7 @@ runner for the full native build; real-device suites run separately on AWS Devic
 - [`docs/WORK_ORDER.md`](docs/WORK_ORDER.md) — current implementation and verification queue
 - [`docs/ACCEPTANCE.md`](docs/ACCEPTANCE.md) — acceptance index
 - [`docs/HARDWARE_TESTING.md`](docs/HARDWARE_TESTING.md) — physical-printer testing procedure
+- [`docs/testgrid/README.md`](docs/testgrid/README.md) — Nozzle Test Grid: Test Mode, evidence bundles, compatibility matrix
 - [`docs/RELEASE.md`](docs/RELEASE.md) — release process
 - [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) — third-party components and licenses
 

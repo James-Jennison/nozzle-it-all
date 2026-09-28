@@ -230,6 +230,18 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         val info = request("printer/info") as? JSONObject ?: throw ApiFailure("Firmware identity unavailable.")
         return FirmwareIdentity(app = info.optString("app", ""), version = info.optString("software_version", ""))
     }
+    /**
+     * Read-only facts the network scan also reads (PrinterScanner): the hostname, PAXX's `extended/` config folder and
+     * Klipper's AFC object, classified with the same PrinterDiscovery rules. Used by Test Mode to confirm the firmware
+     * family before a suite runs. A part that can't be read reads as absent, which never classifies a printer as PAXX or
+     * CANVAS by mistake.
+     */
+    fun discoveryDetails(): MoonrakerDiscoveryDetails {
+        val info = request("printer/info") as? JSONObject ?: throw ApiFailure("Printer information unavailable.")
+        val paxx = try { PrinterDiscovery.hasExtendedConfig(request("server/files/list", mapOf("root" to "config")) as? JSONArray) } catch (e: Exception) { false }
+        val afc = try { PrinterDiscovery.hasAfcObject(request("printer/objects/list") as? JSONObject) } catch (e: Exception) { false }
+        return MoonrakerDiscoveryDetails(info.optString("hostname"), paxx, afc)
+    }
     override fun snapshot(): PrinterSnapshot {
         val info = request("server/info") as? JSONObject ?: throw ApiFailure("Invalid server information.")
         if (!info.optBoolean("klippy_connected") || info.optString("klippy_state") != "ready") return PrinterSnapshot(false, info.optString("klippy_state", "not ready"))
@@ -362,3 +374,6 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
     }
     override fun close() { client.dispatcher.cancelAll(); client.connectionPool.evictAll(); commandClient.dispatcher.cancelAll(); commandClient.connectionPool.evictAll() }
 }
+
+/** See [Moonraker.discoveryDetails]. */
+data class MoonrakerDiscoveryDetails(val hostname: String, val paxxExtendedConfig: Boolean, val afc: Boolean)

@@ -1,0 +1,18 @@
+{
+  "format": "nozzle.test-suite-index",
+  "version": [
+    1,
+    0
+  ],
+  "suites": [
+    "paxx-u1.json",
+    "cosmos-centauri-carbon.json",
+    "fixture-bambu-lan.json",
+    "fixture-elegoo-cc-stock.json",
+    "fixture-generic-klipper.json",
+    "fixture-octoprint.json",
+    "fixture-opencentauri-patched.json",
+    "fixture-prusalink.json",
+    "fixture-snapmaker-u1-stock.json"
+  ]
+}

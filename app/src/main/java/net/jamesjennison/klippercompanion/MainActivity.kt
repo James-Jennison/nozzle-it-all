@@ -286,6 +286,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     LaunchedEffect(MmfRedirects.pending) { if (MmfRedirects.pending != null) tab = 5 }
     var selfCheckRunning by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
+    // Test Mode (Nozzle Test Grid): a separate full-screen window; it never shares the dashboard's connection or pending command.
+    var testModeOpen by rememberSaveable { mutableStateOf(false) }
     var backupStep by remember { mutableStateOf(BackupStep.NONE) }
     var backupPassphrase by remember { mutableStateOf("") }
     var backupMessage by remember { mutableStateOf<String?>(null) }
@@ -455,6 +457,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedButton({ selfCheckRunning = true; uiScope.launch { selfCheckResults = SelfCheck.run(context); selfCheckRunning = false } }, enabled = !selfCheckRunning, modifier = Modifier.testTag("run-self-check")) { Text(if(selfCheckRunning) "Checking…" else "Run self-check", maxLines = 1) }
                         OutlinedButton({ creditsOpen = true }, modifier = Modifier.testTag("open-credits")) { Text("About & credits", maxLines = 1) }
+                        OutlinedButton({ testModeOpen = true }, modifier = Modifier.testTag("open-test-mode")) { Text("Test Mode", maxLines = 1) }
                         OutlinedButton({ backupStep = BackupStep.EXPORT_PASSPHRASE; backupMessage = null }, modifier = Modifier.testTag("backup-printers")) { Text("Back up printers", maxLines = 1) }
                         OutlinedButton({ restorePicker.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("restore-printers")) { Text("Restore printers", maxLines = 1) }
                     }
@@ -996,6 +999,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             confirmButton = { Button({ pending = null; execute(command, epoch) }, enabled = enabled && (command.allowedStates.isEmpty() || state.snapshot?.state in command.allowedStates)) { Text("Confirm") } },
             dismissButton = { TextButton({ pending = null }) { Text("Go back") } })
     }
+    if(testModeOpen) net.jamesjennison.klippercompanion.testgrid.TestModeScreen(state.profiles) { testModeOpen = false }
     // Separate from the pending?.let dialog above: that one disables Confirm once the printer's
     // state drifts from what was reviewed, which is exactly backwards for an emergency stop.
     if(estopConfirm) AlertDialog(onDismissRequest = { estopConfirm = false }, title = { Text("Emergency stop?") },

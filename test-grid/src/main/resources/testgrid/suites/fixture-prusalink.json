@@ -1,0 +1,309 @@
+{
+  "schema": "nozzle.test-suite",
+  "version": [
+    1,
+    0
+  ],
+  "id": "prusalink",
+  "suiteVersion": "1.0.0",
+  "title": "Prusa printer through PrusaLink",
+  "description": "For testers with a PrusaLink printer (MK4S profile shown; other models are separate configurations). Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
+  "coverage": "fixture",
+  "requiredNozzleVersion": "0.1.0",
+  "target": {
+    "manufacturer": "Prusa",
+    "model": "MK4S",
+    "firmwareFamily": "prusalink",
+    "firmwareVariants": [
+      "prusalink"
+    ],
+    "printerKinds": [
+      "PRUSA_LINK"
+    ],
+    "adapter": "android-prusalink",
+    "protocol": "prusalink-http",
+    "slicingProfile": "prusa_mk4s",
+    "hardware": {},
+    "notEquivalentTo": []
+  },
+  "requiredCapabilities": [
+    "status"
+  ],
+  "tests": [
+    {
+      "id": "telemetry",
+      "title": "Read status",
+      "category": "monitoring",
+      "scope": "single_material",
+      "safetyLevel": 1,
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "status",
+          "kind": "read_status",
+          "expect": {
+            "temperatures": [
+              "nozzle",
+              "bed"
+            ]
+          }
+        },
+        {
+          "id": "matches",
+          "kind": "observe",
+          "params": {
+            "question": "Do the temperatures Nozzle shows match the printer's screen (within 2 °C)?",
+            "response": "yes_no"
+          }
+        }
+      ],
+      "expectedObservations": [],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "slice-single",
+      "title": "Slice the acceptance model",
+      "category": "slicing",
+      "scope": "single_material",
+      "safetyLevel": 0,
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-acceptance-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-acceptance-v1",
+            "profile": "prusa_mk4s"
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "within_bed"
+              },
+              {
+                "check": "centered",
+                "toleranceMm": 5
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "print-single",
+      "title": "Send and print the acceptance model",
+      "category": "physical_print",
+      "scope": "single_material",
+      "safetyLevel": 4,
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "first-layer",
+          "kind": "observe",
+          "params": {
+            "question": "Judge the first layer.",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "tower-x",
+          "kind": "observe",
+          "params": {
+            "question": "Measure the tower's outside width along X.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 19.75,
+            "max": 20.25
+          }
+        },
+        {
+          "id": "photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "top",
+            "prompt": "Photo of the finished print"
+          }
+        }
+      ],
+      "expectedObservations": [],
+      "requiredEvidence": [
+        {
+          "id": "top",
+          "kind": "photo",
+          "description": "The finished print"
+        }
+      ],
+      "timeout": {
+        "seconds": 21600,
+        "onTimeout": "fail"
+      },
+      "cleanup": [],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    },
+    {
+      "id": "print-controls",
+      "title": "Pause, resume and cancel",
+      "category": "controls",
+      "scope": "single_material",
+      "safetyLevel": 4,
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing"
+          },
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "pause",
+          "kind": "pause"
+        },
+        {
+          "id": "paused",
+          "kind": "monitor",
+          "params": {
+            "until": "paused"
+          },
+          "timeoutSeconds": 180
+        },
+        {
+          "id": "resume",
+          "kind": "resume"
+        },
+        {
+          "id": "cancel",
+          "kind": "cancel"
+        },
+        {
+          "id": "cancel-ok",
+          "kind": "observe",
+          "params": {
+            "question": "Did the print stop?",
+            "response": "yes_no"
+          }
+        }
+      ],
+      "expectedObservations": [],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    }
+  ]
+}

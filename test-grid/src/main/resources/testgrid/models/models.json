@@ -1,0 +1,97 @@
+{
+  "format": "nozzle.acceptance-models",
+  "generator": "com.nozzleitall.testgrid.AcceptanceModel v1",
+  "models": [
+    {
+      "dimensions": {
+        "baseThickness": 0.6,
+        "bridge": {
+          "deckThickness": 1.2,
+          "height": 9.8,
+          "span": 18,
+          "width": 20
+        },
+        "footprint": {
+          "x": 60,
+          "y": 60
+        },
+        "pillars": {
+          "gap": 12,
+          "height": 15.6,
+          "size": 4
+        },
+        "thinWall": {
+          "height": 8.6,
+          "length": 20,
+          "thickness": 1.2,
+          "toleranceThickness": 0.2
+        },
+        "tower": {
+          "height": 10.6,
+          "hole": 8,
+          "outside": 20,
+          "toleranceHeight": 0.25,
+          "toleranceHole": 0.3,
+          "toleranceOutside": 0.25
+        }
+      },
+      "features": [
+        "bed placement and limits",
+        "first layer",
+        "dimensional accuracy",
+        "retraction",
+        "bridging",
+        "surface quality",
+        "thin walls"
+      ],
+      "id": "nozzle-acceptance-v1",
+      "parts": [
+        {
+          "bytes": 47284,
+          "file": "nozzle-acceptance-v1.stl",
+          "sha256": "f91f4bad851566cdf80d12d46bfeca8c042e3998af849c76323497c2cf052439",
+          "tool": 1
+        }
+      ],
+      "scope": "single_material",
+      "title": "Nozzle acceptance model v1 (single material)"
+    },
+    {
+      "dimensions": {
+        "footprint": {
+          "x": 40,
+          "y": 40
+        },
+        "height": 3,
+        "stripeWidth": 10,
+        "stripes": 4
+      },
+      "features": [
+        "tool or material change",
+        "purge",
+        "colour bleed at boundaries"
+      ],
+      "id": "nozzle-acceptance-mm-v1",
+      "parts": [
+        {
+          "bytes": 1284,
+          "file": "nozzle-acceptance-mm-v1-a.stl",
+          "sha256": "c1338f179a8b254ce6deba0d3df288de8e5c65fe1f453f35e1e848210470b8b9",
+          "tool": 1
+        },
+        {
+          "bytes": 1284,
+          "file": "nozzle-acceptance-mm-v1-b.stl",
+          "sha256": "324aa51655b05ede6a1cb7872ce93ad63ae987bcb686f706cc88925284760946",
+          "tool": 2
+        }
+      ],
+      "scope": "multi_material",
+      "title": "Nozzle multi-material acceptance model v1"
+    }
+  ],
+  "version": [
+    1,
+    0
+  ]
+}

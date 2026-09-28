@@ -130,11 +130,10 @@ object SlicingCoordinator {
     // toolSlotIndices (Phase 8 follow-up, §11, WO-25/WO-26): parallel to `objects` (index i is
     // that object's own real, 1-based filament/tool assignment - see ToolSlots.kt and
     // NativeEngine.nativeSliceMultiObject's own doc comment for the real 1-based convention),
-    // applied only on the plain-gcode Moonraker path today (nativeSliceMultiObject) - the Bambu
-    // bundle path doesn't take per-object tool assignment yet (every bundled Bambu profile is
-    // single-extruder today, so there is nothing real to assign there - see WORK_ORDER.md's own
-    // note on this). Defaults to empty, meaning "every object keeps the printer's default
-    // extruder" - unchanged behavior for every caller that predates this parameter.
+    // applied on the plain-gcode path (nativeSliceMultiObjectEx) and on the Bambu bundle path
+    // (nativeSliceMultiObjectBambuBundleTools: AMS slots, BambuAms). Defaults to empty, meaning
+    // "every object keeps the printer's default extruder" - unchanged behavior for every caller
+    // that predates this parameter.
     // slotMaterials (Phase 8 follow-up, §11, §16, WO-27): index i is real tool slot (i+1)'s own
     // assigned MaterialProfile (null = unassigned, falls back to `overrides`' own material - see
     // below). When non-empty, this builds the real multi-slot filament config
@@ -151,44 +150,46 @@ object SlicingCoordinator {
             is ProfileResolution.Ready -> return@withContext try {
                 val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
                 val output = freshOutputFile(context, if (outputTag != null) "project-$outputTag" else "project", bambuBundle = bambuTarget, keepOthers = outputTag != null)
+                val slots = toolSlotIndices.ifEmpty { List(objects.size) { 0 } }
+                val effectiveOverrides = if (slotMaterials.isEmpty()) overrides else {
+                    // resolved.profilePaths is materialized in SlicingProfilePack.materialize()'s
+                    // own fixed order (machine, process, filament) - index 0/2 are the real
+                    // machine/filament files this exact slice is about to load.
+                    val realToolCount = resolved.pack.toolCountOf(File(resolved.profilePaths[0]).readText())
+                    // A real config inconsistency, not a cosmetic one: filament_diameter's own
+                    // array length must match the target's real declared extruder count
+                    // (ToolSlots.kt's own parseToolCount) or libslic3r's Print::validate()
+                    // rejects the slice outright ("Flush volumes matrix do not match to the
+                    // correct size!" - hit live building this feature, not assumed). Caught
+                    // here with an actionable message instead of surfacing that raw engine
+                    // error to a caller who passed the wrong number of slots.
+                    require(slotMaterials.size == realToolCount) {
+                        "slotMaterials must have exactly $realToolCount entries for this printer (one per its real declared tool slot), got ${slotMaterials.size}."
+                    }
+                    val baseFilamentJson = File(resolved.profilePaths[2]).readText()
+                    val baseDiameter = parseBaseFilamentDiameter(baseFilamentJson)
+                    val fallback = slotMaterials.filterNotNull().firstOrNull()
+                        ?: BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+                    // Flushing volumes the printer's own slicer's way, with its nozzle volume (FlushVolumes, every slot on the base filament).
+                    val flush = runCatching {
+                        val base = org.json.JSONObject(baseFilamentJson)
+                        FlushVolumes.setup(org.json.JSONObject(File(resolved.profilePaths[0]).readText()), List(slotMaterials.size) { base })
+                    }.getOrDefault(FlushVolumes.Setup())
+                    overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback, flush)
+                }
                 if (bambuTarget) {
-                    NativeEngine.nativeSliceMultiObjectBambuBundleEx(
+                    // Bambu: a .gcode.3mf bundle; with an AMS (BambuAms) each object prints with its assigned slot.
+                    NativeEngine.nativeSliceMultiObjectBambuBundleTools(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
-                        output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                        slots.toIntArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), effectiveOverrides.keys.toTypedArray(), effectiveOverrides.values.toTypedArray(),
                         objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
                     )
                 } else {
-                    val slots = toolSlotIndices.ifEmpty { List(objects.size) { 0 } }
-                    val effectiveOverrides = if (slotMaterials.isEmpty()) overrides else {
-                        // resolved.profilePaths is materialized in SlicingProfilePack.materialize()'s
-                        // own fixed order (machine, process, filament) - index 0/2 are the real
-                        // machine/filament files this exact slice is about to load.
-                        val realToolCount = resolved.pack.toolCountOf(File(resolved.profilePaths[0]).readText())
-                        // A real config inconsistency, not a cosmetic one: filament_diameter's own
-                        // array length must match the target's real declared extruder count
-                        // (ToolSlots.kt's own parseToolCount) or libslic3r's Print::validate()
-                        // rejects the slice outright ("Flush volumes matrix do not match to the
-                        // correct size!" - hit live building this feature, not assumed). Caught
-                        // here with an actionable message instead of surfacing that raw engine
-                        // error to a caller who passed the wrong number of slots.
-                        require(slotMaterials.size == realToolCount) {
-                            "slotMaterials must have exactly $realToolCount entries for this printer (one per its real declared tool slot), got ${slotMaterials.size}."
-                        }
-                        val baseFilamentJson = File(resolved.profilePaths[2]).readText()
-                        val baseDiameter = parseBaseFilamentDiameter(baseFilamentJson)
-                        val fallback = slotMaterials.filterNotNull().firstOrNull()
-                            ?: BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
-                        // Flushing volumes the printer's own slicer's way, with its nozzle volume (FlushVolumes, every slot on the base filament).
-                        val flush = runCatching {
-                            val base = org.json.JSONObject(baseFilamentJson)
-                            FlushVolumes.setup(org.json.JSONObject(File(resolved.profilePaths[0]).readText()), List(slotMaterials.size) { base })
-                        }.getOrDefault(FlushVolumes.Setup())
-                        overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback, flush)
-                    }
                     NativeEngine.nativeSliceMultiObjectEx(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),

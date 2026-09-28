@@ -8,7 +8,8 @@ import java.io.File
 // applies to a given printer. Kept separate from SlicingPrinterModel itself so the mapping from
 // "what kind of printer" to "which asset files" is one obvious place, not scattered.
 // filamentSlots: the pack's filament slot count when machine.json can't say it (the CANVAS packs: one nozzle fed by four
-// lanes - ElegooProfiles.filamentSlots); null means machine.json's own count (ToolSlots.kt's parseToolCount).
+// lanes - ElegooProfiles.filamentSlots; Bambu printers with an AMS - BambuAms.filamentSlots); null means machine.json's
+// own count (ToolSlots.kt's parseToolCount).
 internal data class SlicingProfilePack(val assetDir: String, val cosmosGeneration: CosmosProfileGeneration? = null, val custom: CustomMachine? = null, val filamentSlots: Int? = null) {
     val machinePath get() = "$assetDir/machine.json"
     /** The machine profile as it will be used: the bundled file, with this printer's custom bed/G-code applied to a copy when set. */
@@ -33,7 +34,8 @@ internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: Co
             else null
         ElegooProfileFirmware.ELEGOO_STOCK -> SlicingProfilePack(dir, filamentSlots = ElegooProfiles.filamentSlots(model))
         // Every other model is one row of the generated catalog (scripts/bundle_vendor_profiles.py).
-        null -> SlicingProfilePack(dir, custom = custom)
+        // Bambu printers that take an AMS get its slots (BambuAms).
+        null -> SlicingProfilePack(dir, custom = custom, filamentSlots = BambuAms.filamentSlots(model))
     }
 }
 

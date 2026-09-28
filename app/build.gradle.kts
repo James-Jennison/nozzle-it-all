@@ -90,6 +90,9 @@ android {
  }
  if (providers.gradleProperty("nozzleSmoke").isPresent) testBuildType = "releaseSmoke"
  buildTypes {
+  // -PnozzleIdSuffix=.something installs a debug build beside the real app (its own application ID and data), for
+  // on-device tests that must never replace or uninstall the installed app and its saved printers.
+  debug { providers.gradleProperty("nozzleIdSuffix").orNull?.let { applicationIdSuffix = it; versionNameSuffix = it } }
   release {
    isMinifyEnabled = true; isShrinkResources = true
    proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

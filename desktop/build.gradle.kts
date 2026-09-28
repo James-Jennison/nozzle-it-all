@@ -49,9 +49,9 @@ tasks.named<ProcessResources>("processResources") {
 val nozzleVersion = providers.gradleProperty("nozzleDesktopVersion").orElse("0.1.0")
 
 // The native slicing engine (engine/native: the same patched OrcaSlicer source and shared bridge as Android and the Web
-// App). -PnozzleEngine=/path/to/nozzle-engine; defaults to engine/native/scripts/build_engine_snapmaker.sh's output. When the file
+// App). -PnozzleEngine=/path/to/nozzle-engine; defaults to engine/native/scripts/build_engine_fork.sh's output. When the file
 // exists it is bundled into the Linux distribution's app resources, where SliceEngine.locateNative() looks first.
-val nozzleEngine = providers.gradleProperty("nozzleEngine").orElse("/mnt/faststorage/build-work/nozzle-native-sm/dist/nozzle-engine")
+val nozzleEngine = providers.gradleProperty("nozzleEngine").orElse("/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine")
 val engineResources = layout.buildDirectory.dir("engine-resources")
 val prepareEngineResources = tasks.register<Sync>("prepareEngineResources") {
  from(nozzleEngine.map { path -> files(path).filter { it.isFile } }) {

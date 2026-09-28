@@ -5,7 +5,7 @@ committed file differs from the engine's output."""
 import json, os, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'schemas/slicing/settings-schema.json')
-engine = os.environ.get('NOZZLE_ENGINE', '/mnt/faststorage/build-work/nozzle-native-sm/dist/nozzle-engine')
+engine = os.environ.get('NOZZLE_ENGINE', '/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine')
 raw = json.loads(subprocess.run([engine, '--schema'], check=True, capture_output=True, text=True).stdout)
 # The desktop engine is Snapmaker Orca's libslic3r plus Nozzle's patch (engine/snapmaker/ENGINE_PIN.json).
 pin = json.load(open(os.path.join(ROOT, 'engine/snapmaker/ENGINE_PIN.json')))

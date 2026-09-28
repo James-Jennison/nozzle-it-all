@@ -54,8 +54,8 @@ class SliceEngine(private val binary: File, private val workDir: File) {
 
     companion object {
         const val NATIVE_ENGINE_NAME = "nozzle-engine"
-        /** Where engine/native/scripts/build_engine_snapmaker.sh puts the binary on a development machine. */
-        const val NATIVE_BUILD_OUTPUT = "/mnt/faststorage/build-work/nozzle-native-sm/dist/nozzle-engine"
+        /** Where engine/native/scripts/build_engine_fork.sh puts the binary on a development machine. */
+        const val NATIVE_BUILD_OUTPUT = "/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine"
 
         /**
          * The native engine: next to the app (the packaged resources directory, where build.gradle.kts bundles it), then

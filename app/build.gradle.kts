@@ -4,10 +4,10 @@ import java.util.UUID
 
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
 
-// Which slicing-engine base the native build uses (see externalNativeBuild below): "snapmaker" (default since
-// 2026-09-27, P-0010), "fork" (the nozzle-engine repository, P-0020; becomes the default once proven on devices) or
-// "upstream" (the previous engine, kept buildable until the new one is proven on devices).
-val nozzleEngine: String = providers.gradleProperty("nozzleEngine").orElse(providers.environmentVariable("NOZZLE_ENGINE")).getOrElse("snapmaker")
+// Which slicing-engine base the native build uses (see externalNativeBuild below): "fork" (the nozzle-engine repository,
+// P-0020; default since 2026-09-28, P-0021), "snapmaker" (the previous default, P-0010) or "upstream" (the engine before
+// that). The older two stay buildable until their patch paths are retired.
+val nozzleEngine: String = providers.gradleProperty("nozzleEngine").orElse(providers.environmentVariable("NOZZLE_ENGINE")).getOrElse("fork")
 val nozzleEngineRoot: String? = when (nozzleEngine) {
  "snapmaker" -> providers.gradleProperty("nozzleSnapmakerEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-sm")
  "fork" -> providers.gradleProperty("nozzleForkEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-fork")
@@ -55,9 +55,10 @@ android {
     // ORCASLICER_ENGINE_ROOT cache default. Passing the override here, only when the CI
     // environment variable is actually set, keeps local dev builds (no env var) completely
     // unaffected - this is additive, not a behavior change for anyone not running CI.
-    // Engine base (owner decision 2026-09-27: every platform slices on Snapmaker Orca's libslic3r, like the desktop):
-    // -PnozzleEngine=snapmaker builds against the engine root made by engine/snapmaker/android/prepare_engine_root.sh
-    // (-PnozzleSnapmakerEngineRoot=<dir> to move it); -PnozzleEngine=upstream keeps the upstream OrcaSlicer 824b216f
+    // Engine base (owner decision 2026-09-28: every platform slices on nozzle-engine, P-0021): -PnozzleEngine=fork builds
+    // against the engine root made by engine/fork/android/prepare_engine_root.sh (-PnozzleForkEngineRoot=<dir> to move
+    // it); -PnozzleEngine=snapmaker uses engine/snapmaker/android/prepare_engine_root.sh's root
+    // (-PnozzleSnapmakerEngineRoot=<dir>); -PnozzleEngine=upstream keeps the upstream OrcaSlicer 824b216f
     // root (orcaslicer-android-engine, CMakeLists.txt's default). ORCASLICER_ENGINE_ROOT, when set, always wins.
     System.getenv("ORCASLICER_ENGINE_ROOT")?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }
      ?: nozzleEngineRoot?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }

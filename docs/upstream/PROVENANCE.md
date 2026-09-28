@@ -552,3 +552,23 @@ interchange).
     schema and every profile's G-code against `tools/nozzle/golden/outputs.sha256` on each push.
 - **Known divergence:** the output changes above; everything else is unchanged. The settings schema is identical to P-0010.
 - **Touches:** slicing (all platforms), packaging (engine source and SBOM).
+
+## P-0021 — nozzle-engine becomes the default engine on every platform
+
+- **Upstream:** unchanged from P-0020: nozzle-engine `dc86dbf00d1d3239bf0a937cf0eefdb4459054b1` (`engine/fork/ENGINE_PIN.json`).
+- **Imported:** nothing new.
+- **Adaptations:** the default engine base is now `fork` (owner decision 2026-09-28):
+  - Android: Gradle's `nozzleEngine` defaults to `fork`; CI prepares the engine with `engine/fork/android/ci_engine_root.sh`.
+  - Desktop: `desktop/build.gradle.kts` and `SliceEngine.NATIVE_BUILD_OUTPUT` point at `engine/native/scripts/build_engine_fork.sh`'s output.
+  - Web: `engine/wasm/scripts/build_engine_fork.sh` (`INSTALL=1`) builds what goes into `web/public/engine`.
+  - `scripts/export_settings_schema.py` reads the schema from the fork's desktop engine.
+  `-PnozzleEngine=snapmaker` (P-0010) and `-PnozzleEngine=upstream` still build until their patch paths and bridge copies
+  are retired.
+- **Test evidence:**
+  - Razr (Android 17), side-by-side debug install: all 51 engine device tests pass on the fork base.
+  - Web App smoke test: 5 of 5 printer profiles slice in the browser engine.
+  - A real print: a 20 mm test cube sliced on the phone for the owner's Snapmaker U1 (PAXX firmware), printed clean and
+    within tolerance (owner-confirmed 2026-09-28).
+  - `engine/fork/android/ci_engine_root.sh` prepared the engine root on the CI runner (gthost-build01) from the pinned commit.
+- **Known divergence:** none beyond P-0020.
+- **Touches:** slicing (all platforms), CI.

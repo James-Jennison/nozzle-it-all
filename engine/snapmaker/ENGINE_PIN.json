@@ -13,8 +13,8 @@
   "dependencies": "Desktop: Snapmaker Orca's own deps prefix (deps/build/destdir/usr/local in the local checkout), built by its deps/ superbuild. Android: orcaslicer-android-engine's NDK prefix (engine/ENGINE_PIN.json archives) with GMP 6.2.1 rebuilt with --enable-cxx (engine/snapmaker/android/prepare_engine_root.sh). Web: the browser prefix from engine/wasm/scripts/build_deps.sh, GMP likewise with C++ classes.",
   "platforms": {
     "desktop": "moved (engine/native/scripts/build_engine_snapmaker.sh)",
-    "android": "moved 2026-09-27, default (engine/snapmaker/android/prepare_engine_root.sh, then Gradle's default -PnozzleEngine=snapmaker; -PnozzleEngine=upstream still builds engine/ENGINE_PIN.json's upstream OrcaSlicer 824b216f). Not yet run on a device. See docs/upstream/PROVENANCE.md P-0010.",
-    "web": "moved 2026-09-27, default (engine/wasm/scripts/build_engine_snapmaker.sh, INSTALL=1 puts it in web/public/engine; engine/wasm/scripts/build_engine.sh still builds the upstream 824b216f engine). See P-0010."
+    "android": "moved 2026-09-27; default until 2026-09-28, when nozzle-engine (engine/fork, P-0021) took over (engine/snapmaker/android/prepare_engine_root.sh, then Gradle's default -PnozzleEngine=snapmaker; -PnozzleEngine=upstream still builds engine/ENGINE_PIN.json's upstream OrcaSlicer 824b216f). Not yet run on a device. See docs/upstream/PROVENANCE.md P-0010.",
+    "web": "moved 2026-09-27; default until 2026-09-28, when nozzle-engine (engine/fork, P-0021) took over (engine/wasm/scripts/build_engine_snapmaker.sh, INSTALL=1 puts it in web/public/engine; engine/wasm/scripts/build_engine.sh still builds the upstream 824b216f engine). See P-0010."
   },
   "addenda": {
     "engine/snapmaker/libcxx-includes.patch": {

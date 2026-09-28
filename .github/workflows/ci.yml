@@ -1,8 +1,8 @@
 name: CI
 
 # Phase 0 (Consumer Slicer Plan §16): the app's own JVM/Kotlin gate (lint, unit tests, an
-# assembled debug build) plus the real native slicing-engine build (the Snapmaker-based engine,
-# engine/snapmaker/android/ci_engine_root.sh, over the runner's prebuilt NDK dependency prefix). Runs on a self-hosted runner
+# assembled debug build) plus the real native slicing-engine build (nozzle-engine,
+# engine/fork/android/ci_engine_root.sh, over the runner's prebuilt NDK dependency prefix). Runs on a self-hosted runner
 # (gthost-build01) with that dependency pre-provisioned, per the owner's decision (§22 open
 # question 5) - a hosted GitHub runner cannot build this target at all.
 #
@@ -65,11 +65,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The engine is Snapmaker Orca's libslic3r at the pinned commit + Nozzle's patches (engine/snapmaker/ENGINE_PIN.json,
-      # docs/upstream/PROVENANCE.md P-0010), checked against the pinned hashes and prepared in a cache that survives runs.
+      # The engine is nozzle-engine at the pinned commit (engine/fork/ENGINE_PIN.json, docs/upstream/PROVENANCE.md P-0020,
+      # P-0021), fetched and prepared in a cache that survives runs.
       - name: Prepare slicing engine (pinned)
         run: |
-          root="$(engine/snapmaker/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
+          root="$(engine/fork/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
           echo "ORCASLICER_ENGINE_ROOT=${root##*$'\n'}" >> "$GITHUB_ENV"
 
       # The static website (site/) is generated from site-src/; fail if they drift or a release-state rule is broken.
@@ -251,7 +251,7 @@ jobs:
           fetch-depth: 0   # versionCode is the commit count, so it only ever goes up
       - name: Prepare slicing engine (pinned)
         run: |
-          root="$(engine/snapmaker/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
+          root="$(engine/fork/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
           echo "ORCASLICER_ENGINE_ROOT=${root##*$'\n'}" >> "$GITHUB_ENV"
       - name: Decode signing key (if configured)
         run: |

@@ -129,7 +129,7 @@ class SimulatedSlicer(private val readProfileFile: (String, String) -> ByteArray
 
     override fun slice(request: SliceRequest): SliceResult {
         val bed = request.profile.bed ?: return SliceResult.Failed("Profile ${request.profile.id} has no printable area.")
-        val boxes = request.parts.map { (f, part) -> part to stlBounds(f.readBytes()) }
+        val boxes = request.parts.map { (f, part) -> part to StlGeometry.bounds(f.readBytes()) }
         val minX = boxes.minOf { it.second[0] }; val minY = boxes.minOf { it.second[1] }; val maxX = boxes.maxOf { it.second[3] }; val maxY = boxes.maxOf { it.second[4] }
         val maxZ = boxes.maxOf { it.second[5] }
         val dx = (bed[0] + bed[2]) / 2 - (minX + maxX) / 2; val dy = (bed[1] + bed[3]) / 2 - (minY + maxY) / 2
@@ -153,17 +153,5 @@ class SimulatedSlicer(private val readProfileFile: (String, String) -> ByteArray
         val out = File(outDir, "${request.outputName}.gcode")
         out.writeText(sb.toString())
         return SliceResult.Success(out)
-    }
-
-    /** minX, minY, minZ, maxX, maxY, maxZ of a binary STL. */
-    private fun stlBounds(b: ByteArray): DoubleArray {
-        val buf = ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN)
-        val n = buf.getInt(80)
-        val r = doubleArrayOf(Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE)
-        for (t in 0 until n) for (v in 0 until 3) for (a in 0 until 3) {
-            val f = buf.getFloat(84 + t * 50 + 12 + v * 12 + a * 4).toDouble()
-            r[a] = minOf(r[a], f); r[a + 3] = maxOf(r[a + 3], f)
-        }
-        return r
     }
 }

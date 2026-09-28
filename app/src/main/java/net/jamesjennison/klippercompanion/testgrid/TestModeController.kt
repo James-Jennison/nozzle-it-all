@@ -93,7 +93,9 @@ class TestModeController private constructor(private val context: Context) {
             lock.withLock {
                 update { it.copy(busy = true, error = null) }
                 try { withContext(Dispatchers.IO) { block() } }
-                catch (e: Exception) { update { it.copy(error = e.message ?: e.javaClass.simpleName) } }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                // Errors too (a first device run hit an ExceptionInInitializerError while building the bundle): report, don't crash.
+                catch (e: Throwable) { update { it.copy(error = (e.cause ?: e).let { c -> c.message ?: c.javaClass.simpleName }) } }
                 finally { update { it.copy(busy = false, revision = it.revision + 1, pending = session?.pending() ?: it.pending) } }
             }
         }

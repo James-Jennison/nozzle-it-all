@@ -21,16 +21,18 @@ class Redactor(literals: Collection<String> = emptyList()) {
             "x-api-key", "accesscode", "access_code", "authorization", "cookie", "set-cookie", "serial", "serialnumber", "sn",
             "address", "host", "hostname", "ip", "url", "cameraurl", "snapshoturl", "streamurl", "label", "email", "privatekey", "certificate")
 
+        // Android's regex engine is ICU, which reads "[:" inside a character class as the start of a POSIX class name
+        // ("[:alpha:]"), so a literal colon at the start of a set is written "\:". RegexPortabilityTest enforces it.
         private val PRIVATE_KEY = Regex("""-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)""")
-        private val HEADER = Regex("""(?im)\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-auth-token|x-access-token)(["']?\s*[:=]\s*)[^\r\n]*""")
+        private val HEADER = Regex("""(?im)\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-auth-token|x-access-token)(["']?\s*[\:=]\s*)[^\r\n]*""")
         /** A header whose value is not a redaction marker: what [leaks] looks for, inside plain text or a JSON string. */
-        private val HEADER_LEAK = Regex("""(?i)\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-auth-token|x-access-token)["']?\s*[:=]\s*(?!["']?\[(?:redacted|private)\])["']?[^\s"',}\]]""")
+        private val HEADER_LEAK = Regex("""(?i)\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-auth-token|x-access-token)["']?\s*[\:=]\s*(?!["']?\[(?:redacted|private)\])["']?[^\s"',}\]]""")
         private val SCHEME_TOKEN = Regex("""(?i)\b(bearer|basic|digest|token)\s+[A-Za-z0-9._~+/=-]{8,}""")
         private val JWT = Regex("""\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}""")
-        private val KEY_VALUE = Regex("""(?i)(["']?)\b(password|passwd|pwd|passphrase|token|access[_-]?token|refresh[_-]?token|api[_-]?key|apikey|access[_-]?code|secret|client[_-]?secret|session[_-]?id|sessionid|auth[_-]?token|serial(?:[_-]?number)?|sn|pin|psk|wifi[_-]?password)\1(\s*[:=]\s*)(?!["']?\[(?:redacted|private)\])("[^"]*"|'[^']*'|[^\s,&;}\]]+)""")
+        private val KEY_VALUE = Regex("""(?i)(["']?)\b(password|passwd|pwd|passphrase|token|access[_-]?token|refresh[_-]?token|api[_-]?key|apikey|access[_-]?code|secret|client[_-]?secret|session[_-]?id|sessionid|auth[_-]?token|serial(?:[_-]?number)?|sn|pin|psk|wifi[_-]?password)\1(\s*[\:=]\s*)(?!["']?\[(?:redacted|private)\])("[^"]*"|'[^']*'|[^\s,&;}\]]+)""")
         private val URL = Regex("""(?i)\b(?:https?|rtsp|rtsps|wss?|ftps?|mqtts?)://[^\s"'<>\]\)]+""")
         private val EMAIL = Regex("""(?i)\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b""")
-        private val MAC = Regex("""(?i)(?<![0-9a-f:])(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}(?![0-9a-f:])""")
+        private val MAC = Regex("""(?i)(?<![0-9a-f:])(?:[0-9a-f]{2}[\:-]){5}[0-9a-f]{2}(?![0-9a-f:])""")
         private val IPV4 = Regex("""(?<![\w.])((?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})(?::\d{1,5})?(?![\w]|\.\w)""")
         private val IPV6 = Regex("""(?i)(?<![\w:.])(?:[0-9a-f]{1,4}:){1,7}:?(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?(?![\w:])""")
         private val LOCAL_HOST = Regex("""(?i)\b[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)*\.(?:local|lan|home|internal|localdomain|home\.arpa|ts\.net|intranet|corp)\b""")

@@ -188,3 +188,30 @@ object GcodeScan {
         else -> "Unknown check \"${check.optString("check")}\"."
     }
 }
+
+/** Geometry read straight from a binary STL: what the slicers need to keep a multi-part model's parts in place. */
+object StlGeometry {
+    /** minX, minY, minZ, maxX, maxY, maxZ. */
+    fun bounds(b: ByteArray): DoubleArray {
+        val buf = java.nio.ByteBuffer.wrap(b).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        require(b.size >= 84) { "Not a binary STL." }
+        val n = buf.getInt(80)
+        require(n > 0 && b.size >= 84 + 50L * n) { "Not a binary STL." }
+        val r = doubleArrayOf(Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE)
+        for (t in 0 until n) for (v in 0 until 3) for (a in 0 until 3) {
+            val f = buf.getFloat(84 + t * 50 + 12 + v * 12 + a * 4).toDouble()
+            r[a] = minOf(r[a], f); r[a + 3] = maxOf(r[a + 3], f)
+        }
+        return r
+    }
+
+    /**
+     * Each part's XY offset from the centre of all parts together. The engine centres every object on the bed and then
+     * applies its offset (found slicing the multi-material model on a real device: with no offsets, both parts landed
+     * on the same spot), so these offsets keep the parts where the model file put them relative to each other.
+     */
+    fun partOffsets(bounds: List<DoubleArray>): List<Pair<Double, Double>> {
+        val cx = (bounds.minOf { it[0] } + bounds.maxOf { it[3] }) / 2; val cy = (bounds.minOf { it[1] } + bounds.maxOf { it[4] }) / 2
+        return bounds.map { (it[0] + it[3]) / 2 - cx to (it[1] + it[4]) / 2 - cy }
+    }
+}

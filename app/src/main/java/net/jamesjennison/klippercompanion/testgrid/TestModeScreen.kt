@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
@@ -18,6 +19,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
@@ -38,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -180,7 +183,9 @@ fun TestModeScreen(profiles: List<PrinterProfile>, close: () -> Unit) {
         Text("Highest safety level to allow in this run", fontWeight = FontWeight.Bold)
         Column(Modifier.testTag("safety-levels")) {
             SafetyLevel.entries.filter { it <= suite.maxSafetyLevel }.forEach { l ->
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(s.maxLevel == l, { c.setMaxLevel(l) }, modifier = Modifier.testTag("level-${l.level}")); Text(l.label) }
+                Row(Modifier.fillMaxWidth().selectable(s.maxLevel == l, role = Role.RadioButton) { c.setMaxLevel(l) }.testTag("level-${l.level}"), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(s.maxLevel == l, null); Text(l.label)
+                }
             }
         }
         Text("Tests above this level are recorded as skipped, never as passed.", style = MaterialTheme.typography.bodySmall)

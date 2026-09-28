@@ -9,16 +9,22 @@ import com.nozzleitall.testgrid.Producer
 import com.nozzleitall.testgrid.ProfileInfo
 import com.nozzleitall.testgrid.SliceRequest
 import com.nozzleitall.testgrid.SliceResult
+import com.nozzleitall.testgrid.StlGeometry
 import com.nozzleitall.testgrid.TestSlicer
 import com.nozzleitall.testgrid.VirtualClock
 import kotlinx.coroutines.runBlocking
+import net.jamesjennison.klippercompanion.BUNDLED_MATERIAL_PROFILES
 import net.jamesjennison.klippercompanion.BuildConfig
+import net.jamesjennison.klippercompanion.CosmosProfileGeneration
+import net.jamesjennison.klippercompanion.ElegooProfiles
 import net.jamesjennison.klippercompanion.ModelTransform
 import net.jamesjennison.klippercompanion.OpenSourceNotice
 import net.jamesjennison.klippercompanion.PrinterProfile
 import net.jamesjennison.klippercompanion.SliceOutcome
 import net.jamesjennison.klippercompanion.SlicingCoordinator
 import net.jamesjennison.klippercompanion.SlicingModelCatalog
+import net.jamesjennison.klippercompanion.readToolCount
+import net.jamesjennison.klippercompanion.slicingProfilePack
 import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipFile
@@ -43,8 +49,18 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
         val profile = printer.copy(slicingModel = model)
         val outcome = runBlocking {
             if (request.parts.size == 1) SlicingCoordinator.slice(context, request.parts[0].first, profile)
-            else SlicingCoordinator.sliceProject(context, request.parts.map { it.first to ModelTransform() }, profile,
-                toolSlotIndices = request.parts.map { it.second.tool }, outputTag = "testgrid")
+            else {
+                // Two things the project editor already does, found missing on the first real multi-material slice: each
+                // part keeps its place relative to the others (the engine centres every object, then applies its offset),
+                // and every tool slot gets a material entry, or the engine collapses all parts onto the first tool.
+                val offsets = StlGeometry.partOffsets(request.parts.map { StlGeometry.bounds(it.first.readBytes()) })
+                val tools = request.parts.map { it.second.tool }
+                val slots = slicingProfilePack(model, CosmosProfileGeneration.CURRENT.takeIf { ElegooProfiles.isCosmos(model) }, profile.customMachine)?.readToolCount(context) ?: 1
+                if (tools.any { it !in 1..slots }) return@runBlocking SliceOutcome.Failed("This model needs tools ${tools.distinct().sorted()}, but the profile has $slots tool slot(s).")
+                val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+                SlicingCoordinator.sliceProject(context, request.parts.mapIndexed { i, p -> p.first to ModelTransform(offsets[i].first.toFloat(), offsets[i].second.toFloat()) }, profile,
+                    toolSlotIndices = tools, slotMaterials = if (slots > 1) (1..slots).map { if (it in tools) pla else null } else emptyList(), outputTag = "testgrid")
+            }
         }
         return when (outcome) {
             is SliceOutcome.Success -> SliceResult.Success(outcome.gcode)

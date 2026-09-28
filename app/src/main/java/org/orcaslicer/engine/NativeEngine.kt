@@ -117,6 +117,16 @@ object NativeEngine {
         paintStrokes: Array<String>, volumeSpecs: Array<String>,
     )
 
+    // Multi-colour Bambu bundles: nativeSliceMultiObjectBambuBundleEx plus a 1-based filament (AMS slot) per object,
+    // parallel to modelPaths (0 = the default), as nativeSliceMultiObjectEx takes.
+    external fun nativeSliceMultiObjectBambuBundleTools(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray, toolSlotIndices: IntArray,
+        outputBundlePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+        paintStrokes: Array<String>, volumeSpecs: Array<String>,
+    )
+
     // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - real
     // Model::read_from_file, bed-centered - but stops short of slicing. Returns 3 floats (the
     // model's own real transform pivot - see engine::load_mesh_preview) followed by a flat

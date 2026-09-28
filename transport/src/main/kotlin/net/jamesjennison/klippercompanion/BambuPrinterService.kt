@@ -150,6 +150,8 @@ class BambuPrinterService(
      * Single-material, external spool only - see BambuPrintProtocol's header.
      */
     private fun startPrint(request: BambuPrintRequest) {
+        // A multi-filament bundle needs an AMS mapping this command doesn't send yet; refuse it before anything moves.
+        if (bambuBundleFilaments(request.file) > 1) throw ApiFailure(BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED)
         val remoteName = request.remoteName
         val md5 = md5Hex(request.file)
         try {
@@ -310,3 +312,10 @@ object BambuSnapshot {
         )
     }
 }
+
+/** How many filaments a `.gcode.3mf` bundle's slice_info lists; 0 for a plain G-code file or a bundle without one. */
+fun bambuBundleFilaments(file: File): Int = try {
+    java.util.zip.ZipFile(file).use { zip ->
+        zip.getEntry("Metadata/slice_info.config")?.let { entry -> zip.getInputStream(entry).bufferedReader().use { BambuPrintProtocol.usedFilaments(it.readText()) } } ?: 0
+    }
+} catch (_: java.util.zip.ZipException) { 0 }

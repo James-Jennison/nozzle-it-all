@@ -648,3 +648,21 @@ interchange).
 - **Test evidence:** listed in the commit.
 - **Known divergence:** none for printers already offered (G-code identical to P-0023 apart from the new setting line).
 - **Touches:** slicing (Bambu multi-extruder profiles only).
+
+## P-0025 — Bambu multi-colour (AMS) slicing
+
+- **Upstream:** nozzle-engine `c8e5a4d7d402016df78addc52f3992834abd3b74` (`engine/fork/ENGINE_PIN.json`): `25ca1a2` (P-0024) plus one commit.
+- **Imported:** nothing into this repository.
+- **Engine change:** the Bambu `.gcode.3mf` bundle path takes a filament (AMS slot) per object
+  (`slice_multi_object_bambu_bundle`, JNI `nativeSliceMultiObjectBambuBundleTools`; the older entry points still work),
+  and `slice_info` now lists each used filament's type and colour, as upstream's Plater writes them. The filament's
+  catalogue id stays empty: upstream converts it with Bambu's network plugin, which this app does not use.
+- **Adaptations:** Bambu printers that take an AMS (X1, X1 Carbon, X1E, P1P, P1S, A1, A1 mini, and the hidden P2S and
+  H2S) get four filament slots (`BambuAms`, the way the CANVAS packs declare theirs), which turns on the project's
+  per-object slot assignment and material painting for them; `SlicingCoordinator.sliceProject` gives the Bambu bundle
+  the same per-slot filament config and flushing volumes as other multi-material printers.
+- **Not in this change:** starting an AMS print over LAN. The print command still sends `use_ams:false` with an empty
+  AMS mapping, so a multi-colour file prints from the external spool until the mapping is added and tested on a real
+  Bambu printer.
+- **Test evidence:** listed in the commit.
+- **Touches:** slicing (Bambu), project editor slots.

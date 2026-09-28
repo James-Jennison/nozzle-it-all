@@ -94,6 +94,17 @@ object BambuPrintProtocol {
         JSONObject().put("print", JSONObject().put("sequence_id", sequenceId).put("command", control.wire).put("param", "")).toString()
 
     /** Only a matching `project_file` response can resolve a start request. */
+    /**
+     * The filaments a `.gcode.3mf` bundle's `Metadata/slice_info.config` lists (one `<filament>` row per filament the
+     * print uses). More than one needs the AMS, which this app's print command doesn't map yet: it always sends
+     * `use_ams:false` (see the header), so such a file is refused rather than started on a guess.
+     */
+    fun usedFilaments(sliceInfo: String): Int = Regex("<filament\\s").findAll(sliceInfo).count()
+
+    const val MULTI_MATERIAL_NOT_SUPPORTED =
+        "This file uses more than one filament. Nozzle It All can slice multi-colour prints for Bambu printers but " +
+        "can't start them with the AMS yet. Print it from Bambu Studio or Bambu Handy, or slice it with one filament."
+
     fun acknowledgement(payload: String, expectedSequenceId: String): Acknowledgement {
         val print = runCatching { JSONObject(payload).optJSONObject("print") }.getOrNull()
             ?: return Acknowledgement.NOT_MATCHING

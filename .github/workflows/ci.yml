@@ -63,7 +63,7 @@ jobs:
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The engine is nozzle-engine at the pinned commit (engine/fork/ENGINE_PIN.json, docs/upstream/PROVENANCE.md P-0020,
       # P-0021), fetched and prepared in a cache that survives runs.
@@ -85,7 +85,7 @@ jobs:
 
       - name: Upload lint/test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reports
           path: |
@@ -129,7 +129,7 @@ jobs:
           PYEOF
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-debug
           path: apk-artifacts/
@@ -152,7 +152,7 @@ jobs:
       TEST_FILTER: ${{ inputs.test_filter }}
       DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || vars.DEVICE_FARM_POOL_ARN }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: app-debug
           path: apks
@@ -246,7 +246,7 @@ jobs:
       NOZZLE_KEY_ALIAS: ${{ secrets.NOZZLE_KEY_ALIAS }}
       NOZZLE_KEY_PASSWORD: ${{ secrets.NOZZLE_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # versionCode is the commit count, so it only ever goes up
       - name: Prepare slicing engine (pinned)
@@ -275,13 +275,13 @@ jobs:
           cp app/build/outputs/mapping/release/mapping.txt release-artifacts/
           (cd release-artifacts && sha256sum * > SHA256SUMS)
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             release-artifacts/*.apk
             release-artifacts/*.aab
             release-artifacts/nozzle-it-all.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release
           path: release-artifacts/

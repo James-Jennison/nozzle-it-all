@@ -27,7 +27,7 @@ object ProfileCatalog {
     }
 
     /**
-     * Profiles this app's engine can't slice yet (engine/profiles/unsupported-profiles.json), with the reason. They are
+     * Profiles this app doesn't offer yet (engine/profiles/unsupported-profiles.json), with the reason. They are
      * left out of [all], so they can't be picked; a project saved with one falls back to the default profile.
      */
     val unsupported: Map<String, String> by lazy {

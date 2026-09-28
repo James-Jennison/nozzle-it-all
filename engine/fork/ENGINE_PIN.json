@@ -1,0 +1,13 @@
+{
+  "base": {
+    "name": "nozzle-engine",
+    "repo": "https://github.com/James-Jennison/nozzle-engine.git",
+    "commit": "dc86dbf00d1d3239bf0a937cf0eefdb4459054b1",
+    "local_checkout": "/mnt/faststorage/Test Slicer/engine",
+    "licence": "AGPL-3.0"
+  },
+  "lineage": "Snapmaker Orca cbf7bbb0b323b76a9a6dbc203d94ae6c9e8b2294 + engine/snapmaker/nozzle-engine.patch and its addenda, as commits, plus the engine fixes and APIs listed in docs/upstream/PROVENANCE.md P-0020",
+  "bridges": "nozzle/bridge/{android,native,wasm} inside the engine (moved from app/src/main/cpp/bridge, engine/native/bridge, engine/wasm/bridge)",
+  "dependencies": "unchanged: Desktop uses Snapmaker Orca's deps prefix; Android the prepared NDK prefix (engine/snapmaker/android/prepare_engine_root.sh); Web the browser prefix (engine/wasm/scripts/build_deps.sh)",
+  "golden": "the engine's tools/nozzle/golden/outputs.sha256 lists the expected G-code of every bundled printer profile for this commit"
+}

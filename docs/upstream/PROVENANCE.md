@@ -506,3 +506,49 @@ interchange).
     project, but shows them all on one bed.
 - **Touches:** Prepare plates and objects, project format (desktop, Web App save).
 
+
+## P-0020 — the engine moves into its own repository, nozzle-engine (built, not yet the default)
+
+- **Upstream:** github.com/James-Jennison/nozzle-engine, commit `dc86dbf00d1d3239bf0a937cf0eefdb4459054b1`
+  (`engine/fork/ENGINE_PIN.json`). A full-history fork of Snapmaker Orca at `cbf7bbb0b3` (the P-0010 base) with this
+  repository's `engine/snapmaker/nozzle-engine.patch` and its addenda (libc++ includes, Android subproject paths, the
+  browser patches 0001–0003 and the Snapmaker browser patch) applied as individual commits. AGPL-3.0.
+- **Imported:** the engine itself, and the bridges: `app/src/main/cpp/bridge`, `engine/native/bridge` and
+  `engine/wasm/bridge` from this repository at `a657948` now also live in the engine as `nozzle/bridge/{android,native,wasm}`
+  (the engine's `tools/nozzle/bridge_drift.sh` reports any difference until this repository drops its copies).
+- **Engine changes beyond P-0010** (each its own commit in nozzle-engine):
+  - Plate origin initialised (`Print::m_origin`): headless slicing read uninitialised memory, so
+    `EXCLUDE_OBJECT_DEFINE ... CENTER=` was garbage (about 1e-310) on beds centred at 0. Output change: `CENTER=0,0` on
+    flsun_s1, flsun_t1, flsun_v400 and rolohaundesign_rolohaun_delta_flyer_refit.
+  - Uninitialised members found with valgrind (`GCode::m_last_notgapfill_extrusion_role`,
+    `RetractWhenCrossingPerimeters::m_layer`, `ModelVolume` cache state): the first-layer Z-hop was random on
+    dremel_3d20 and re3d_gigabot_4_xlt. Output change on those two: the lift decision is now fixed (no top surface
+    printed yet), so G-code is the same on every run.
+  - More uninitialised state that made G-code differ between runs under parallel load (an extra short wall segment, a
+    feed rate off by 2, a different retract/wipe sequence on some profiles): Arachne's `WallToolPathsParams` (a 0%
+    `min_feature_size`, `min_bead_width`, `wall_transition_length` or `wall_transition_filter_deviation` was never copied,
+    so the parameter was garbage) and `Extruder` state on shared-extruder printers. No expected output changed: the
+    garbage usually held the intended value.
+  - `NOZZLE_GCODE_RANDOM_SEED` makes profiles' `random()` custom G-code reproducible for tests (unset = clock, as before).
+  - `--option-states` (desktop CLI) and `engine::print_option_states` (all three bridges): Orca's settings
+    enable/visibility rules (`ConfigManipulation::toggle_print_fff_options`) and the values they force, computed by the
+    engine, so settings screens can grey out and hide options as Orca does.
+- **Adaptations:** new engine base `fork` next to `snapmaker` and `upstream`:
+  - Desktop: `engine/native/scripts/build_engine_fork.sh`.
+  - Android: `engine/fork/android/prepare_engine_root.sh` (CI: `ci_engine_root.sh`), reusing the Snapmaker root's
+    dependency prefix; `app/src/main/cpp/CMakeLists.txt` uses the engine's own bridge when the engine has one;
+    Gradle `-PnozzleEngine=fork` (SBOM lists nozzle-engine).
+  - Web: `engine/wasm/scripts/build_engine_fork.sh`.
+  - `engine/fork/export_source.sh` exports the pinned commit from a local checkout or fetches it.
+  The default stays `snapmaker` until the fork base passes the device, printer and Web App acceptance runs.
+- **Test evidence:**
+  - Before the engine fixes, nozzle-engine built a byte-identical desktop engine to the P-0010 build (sha256
+    `3aee8a34…`), and a byte-identical browser engine to a fresh build of the P-0010 sources with the current bridge
+    (`nozzle-engine.wasm` `8511d6f9…`). The Android library matches in size and section layout; its bytes differ only
+    where build-directory paths are embedded.
+  - At the pinned commit, eight passes over all 379 bundled printer profiles, 24 slices at a time on a 64-core machine,
+    produce identical G-code every time (373 slice; the six hidden Bambu H2/P2 profiles fail on every base, as
+    documented in P-0010). Before the uninitialised-state fixes the same test gave 17 differing outputs. The engine's CI checks the settings
+    schema and every profile's G-code against `tools/nozzle/golden/outputs.sha256` on each push.
+- **Known divergence:** the output changes above; everything else is unchanged. The settings schema is identical to P-0010.
+- **Touches:** slicing (all platforms), packaging (engine source and SBOM).

@@ -60,7 +60,12 @@ set(USE_BLOSC OFF)
 # CMakeLists.txt add_subdirectory()s this path from *inside* its own tree,
 # and a self-reference back to this file (the Gradle entry point) would be
 # a duplicate top-level project, not a real subdirectory.
-set(ANDROID_JNI_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bridge" CACHE PATH "" FORCE)
+# The nozzle-engine base (P-0020) carries its own bridge (nozzle/bridge/android); the other bases use this app's copy.
+if(EXISTS "${ORCASLICER_ENGINE_ROOT}/orcaslicer/nozzle/bridge/android/CMakeLists.txt")
+    set(ANDROID_JNI_BRIDGE_DIR "${ORCASLICER_ENGINE_ROOT}/orcaslicer/nozzle/bridge/android" CACHE PATH "" FORCE)
+else()
+    set(ANDROID_JNI_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bridge" CACHE PATH "" FORCE)
+endif()
 
 set(CMAKE_PREFIX_PATH "${PREFIX}")
 set(CMAKE_FIND_ROOT_PATH "${PREFIX}")

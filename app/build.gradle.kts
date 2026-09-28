@@ -5,12 +5,14 @@ import java.util.UUID
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
 
 // Which slicing-engine base the native build uses (see externalNativeBuild below): "snapmaker" (default since
-// 2026-09-27, P-0010) or "upstream" (the previous engine, kept buildable until the new one is proven on devices).
+// 2026-09-27, P-0010), "fork" (the nozzle-engine repository, P-0020; becomes the default once proven on devices) or
+// "upstream" (the previous engine, kept buildable until the new one is proven on devices).
 val nozzleEngine: String = providers.gradleProperty("nozzleEngine").orElse(providers.environmentVariable("NOZZLE_ENGINE")).getOrElse("snapmaker")
 val nozzleEngineRoot: String? = when (nozzleEngine) {
  "snapmaker" -> providers.gradleProperty("nozzleSnapmakerEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-sm")
+ "fork" -> providers.gradleProperty("nozzleForkEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-fork")
  "upstream" -> null
- else -> throw GradleException("nozzleEngine must be snapmaker or upstream, not $nozzleEngine")
+ else -> throw GradleException("nozzleEngine must be snapmaker, fork or upstream, not $nozzleEngine")
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
@@ -178,9 +180,11 @@ tasks.register("generateSbom") {
  val runtime = configurations.named("releaseRuntimeClasspath")
  val pinFile = rootProject.file("engine/ENGINE_PIN.json") // upstream base; its dependency archives are the Android prefix on both bases
  val smPinFile = rootProject.file("engine/snapmaker/ENGINE_PIN.json")
+ val forkPinFile = rootProject.file("engine/fork/ENGINE_PIN.json")
  val snapmakerBase = nozzleEngine == "snapmaker"
+ val forkBase = nozzleEngine == "fork"
  val out = layout.buildDirectory.file("sbom/nozzle-it-all.cdx.json")
- inputs.files(runtime); inputs.file(pinFile); inputs.file(smPinFile); inputs.property("nozzleEngine", nozzleEngine); outputs.file(out)
+ inputs.files(runtime); inputs.file(pinFile); inputs.file(smPinFile); inputs.file(forkPinFile); inputs.property("nozzleEngine", nozzleEngine); outputs.file(out)
  doLast {
   fun esc(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
   fun sha256(f: java.io.File) = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
@@ -193,7 +197,11 @@ tasks.register("generateSbom") {
    }
   }
   val pin = groovy.json.JsonSlurper().parse(pinFile) as Map<*, *>
-  if (snapmakerBase) {
+  if (forkBase) {
+   val fk = groovy.json.JsonSlurper().parse(forkPinFile) as Map<*, *>
+   val c = (fk["base"] as Map<*, *>)["commit"].toString()
+   components["pkg:github/James-Jennison/nozzle-engine@$c"] = """{"type":"library","name":"nozzle-engine (libslic3r)","version":"${esc(c)}","purl":"pkg:github/James-Jennison/nozzle-engine@$c","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}]}"""
+  } else if (snapmakerBase) {
    val sm = groovy.json.JsonSlurper().parse(smPinFile) as Map<*, *>
    val c = (sm["base"] as Map<*, *>)["commit"].toString()
    components["pkg:github/Snapmaker/OrcaSlicer@$c"] = """{"type":"library","name":"Snapmaker Orca (libslic3r, patched)","version":"${esc(c)}","purl":"pkg:github/Snapmaker/OrcaSlicer@$c","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}],"properties":[{"name":"patch.sha256","value":"${esc((sm["patch"] as Map<*, *>)["sha256"].toString())}"}]}"""

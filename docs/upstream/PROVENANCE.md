@@ -632,3 +632,19 @@ interchange).
 - **Known divergence:** printed G-code is unchanged for every printer already offered; the five older Bambu printers'
   config block lists one value per setting.
 - **Touches:** slicing (all platforms), settings schema, licensing notice.
+
+## P-0024 — default filament-to-extruder rule on Bambu multi-extruder printers
+
+- **Upstream:** nozzle-engine `25ca1a2b6e66e1e3ebb6d77c841b7ab6a0dcb7af` (`engine/fork/ENGINE_PIN.json`,
+  James-Jennison/nozzle-engine pull 2): `e23c0df` (P-0023) plus one commit.
+- **Imported:** nothing into this repository.
+- **Engine change:** a request that doesn't map every filament to an extruder (this app sends no `filament_map`) gets
+  upstream OrcaSlicer's rule for printers without its grouping engine: filament *i* on extruder *i* while there are
+  extruders, the rest on the master extruder (new option `master_extruder_id`). Only Bambu printers that declare extruder
+  variants are affected. Upstream's own default for Bambu printers is its flush-minimising grouping, which is not ported.
+- **Adaptations:** pin, About dialog, website and `engine/profiles/unsupported-profiles.json` updated. The app's tool slots
+  are one per extruder, so slot *n* prints on extruder *n*, which is this rule; a per-filament choice needs more
+  filaments than extruders (a Bambu AMS), which the app doesn't model yet.
+- **Test evidence:** listed in the commit.
+- **Known divergence:** none for printers already offered (G-code identical to P-0023 apart from the new setting line).
+- **Touches:** slicing (Bambu multi-extruder profiles only).

@@ -1,7 +1,5 @@
-nozzle-engine (native Linux x86_64, nozzle-engine base) built 2026-09-28T20:09:20Z
-engine source: nozzle-engine e23c0df67b36854f52b6e57fd33c62bdd2831634 (engine/fork/ENGINE_PIN.json), bridges from the engine (nozzle/bridge)
-compiler: gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0; cmake version 4.2.3
-config: Release, SLIC3R_GUI=OFF SLIC3R_CAD=OFF SLIC3R_STATIC=ON; deps: /mnt/faststorage/Snapmaker-Orca/OrcaSlicer/deps/build/destdir/usr/local
-dynamic libraries: linux-vdso.so.1 libexpat.so.1 libfontconfig.so.1 libz.so.1 libm.so.6 libc.so.6 /lib64/ld-linux-x86-64.so.2 libfreetype.so.6 libbz2.so.1.0 libpng16.so.16 libbrotlidec.so.1 libbrotlicommon.so.1 
-07d878a245f37d7c24af9ccd1e37ed25e3890ab3c7006b8c3a2c68adbf66c5cc  nozzle-engine
--rwxrwxr-x 1 jjennison jjennison 59579360 Sep 28 13:09 nozzle-engine
+nozzle-engine (native Linux x86_64) built on gthost-build01 by nozzle-engine CI (run 36486291280), 2026-09-28T21:32:28Z from aa055885ef8b3fdeaa1dbad4cd0e31e9223c107c
+engine source: nozzle-engine 25ca1a2b6e66e1e3ebb6d77c841b7ab6a0dcb7af (engine/fork/ENGINE_PIN.json); built from the pull request's test merge aa05588, whose tree cf690be is identical to 25ca1a2's
+bridge: /home/jjennison/actions-runner-nozzle-engine/_work/nozzle-engine/nozzle-engine/engine/nozzle/bridge/native
+deps: /home/jjennison/nozzle-engine-ci/desktop-deps
+2d994c9eb5008862523bb627939b75948edea9c0f020693b83cb3f01c8e3fbf5  nozzle-engine

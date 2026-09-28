@@ -601,3 +601,34 @@ interchange).
   51 engine device tests on the Razr (Android 17).
 - **Known divergence:** none; the engine is unchanged.
 - **Touches:** build, CI, licensing notices, packaging.
+
+## P-0023 — nozzle-engine with Bambu's multi-extruder / multi-nozzle support
+
+- **Upstream:** nozzle-engine `e23c0df67b36854f52b6e57fd33c62bdd2831634` (`engine/fork/ENGINE_PIN.json`), from
+  `dc86dbf` (P-0020 to P-0022) plus the engine's `e3/multi-nozzle` work (github.com/James-Jennison/nozzle-engine pull 1).
+  Each change is its own commit there, ported from upstream OrcaSlicer (dev at `5298e49d`) with the differences listed.
+- **Imported:** nothing into this repository; the engine carries the code.
+- **Engine changes** (from upstream OrcaSlicer, AGPL-3.0):
+  - G-code templates: `ceil()`, `floor()`, vector leniency. Divergence: an unindexed per-extruder vector reads the
+    filament's extruder from `filament_map` converted to 0-based (upstream indexes with the 1-based value and reads the
+    other nozzle; reported upstream as a draft).
+  - Extruder variants: Bambu profiles' per-variant printer, process and filament settings are collapsed to each extruder
+    / filament for the variant it has installed (only printers declaring more than one variant). Multi-filament prints
+    give every filament its own copy of the filament profile's variant columns.
+  - The start, tool-change, layer and timelapse G-code variables and options Bambu's H2S, P2S, H2D, H2D Pro, X2D and
+    H2C profiles read (see the engine commits for the list).
+  - Not ported: upstream's flush-minimising filament/nozzle grouping (the H2C's rack nozzles are assigned in filament
+    order), perimeter-avoiding travel to the prime tower, tower interface layers, ramming cool-down, the timelapse
+    position picker and farthest-point timelapse.
+- **Adaptations:** the pin, the About dialog's engine commit and the website's open-source page name `e23c0df`;
+  `schemas/slicing/settings-schema.json` regenerated (source commit only: the new options are profile keys the schema
+  does not list); `engine/profiles/unsupported-profiles.json` and
+  its message now say why the six Bambu profiles stay hidden: they slice, but none has been printed on a real machine,
+  and the two-extruder models need a filament-to-extruder choice (`filament_map`) the app doesn't make yet.
+- **Test evidence:** engine CI on gthost for the branch (run 36473192446: desktop, golden on all 380 profiles, contract,
+  Android, WebAssembly); printed G-code unchanged on every profile that sliced before, single- and two-filament; this
+  repository's gate (734 JVM tests, lint, site and schema checks), the Web App's typecheck, 33 unit tests and the browser
+  engine smoke test on five printers (same layers, grams and times as before), and all 51 engine device tests on the Razr.
+- **Known divergence:** printed G-code is unchanged for every printer already offered; the five older Bambu printers'
+  config block lists one value per setting.
+- **Touches:** slicing (all platforms), settings schema, licensing notice.

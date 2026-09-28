@@ -1,7 +1,7 @@
-nozzle-engine (native Linux x86_64, nozzle-engine base) built 2026-09-28T04:23:18Z
-engine source: nozzle-engine dc86dbf00d1d3239bf0a937cf0eefdb4459054b1 (engine/fork/ENGINE_PIN.json), bridges from the engine (nozzle/bridge)
+nozzle-engine (native Linux x86_64, nozzle-engine base) built 2026-09-28T20:09:20Z
+engine source: nozzle-engine e23c0df67b36854f52b6e57fd33c62bdd2831634 (engine/fork/ENGINE_PIN.json), bridges from the engine (nozzle/bridge)
 compiler: gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0; cmake version 4.2.3
 config: Release, SLIC3R_GUI=OFF SLIC3R_CAD=OFF SLIC3R_STATIC=ON; deps: /mnt/faststorage/Snapmaker-Orca/OrcaSlicer/deps/build/destdir/usr/local
 dynamic libraries: linux-vdso.so.1 libexpat.so.1 libfontconfig.so.1 libz.so.1 libm.so.6 libc.so.6 /lib64/ld-linux-x86-64.so.2 libfreetype.so.6 libbz2.so.1.0 libpng16.so.16 libbrotlidec.so.1 libbrotlicommon.so.1 
-fef55b051d280aeda25e671fb86f60f93faf563e7b5ecbfb4d03fd46cf5c6404  nozzle-engine
--rwxrwxr-x 1 jjennison jjennison 59382752 Sep 27 21:23 nozzle-engine
+07d878a245f37d7c24af9ccd1e37ed25e3890ab3c7006b8c3a2c68adbf66c5cc  nozzle-engine
+-rwxrwxr-x 1 jjennison jjennison 59579360 Sep 28 13:09 nozzle-engine

@@ -82,7 +82,7 @@ class SlicingModelCatalogTest {
     }
 
     @Test fun profilesTheEngineCannotSliceAreNeverOffered() {
-        // engine/profiles/unsupported-profiles.json: the six newest Bambu profiles need upstream OrcaSlicer's multi-nozzle system.
+        // engine/profiles/unsupported-profiles.json: the six newest Bambu profiles, not yet tested on a real machine.
         val hidden = listOf(SlicingPrinterModel.BAMBU_H2C, SlicingPrinterModel.BAMBU_H2D, SlicingPrinterModel.BAMBU_H2D_PRO,
             SlicingPrinterModel.BAMBU_H2S, SlicingPrinterModel.BAMBU_P2S, SlicingPrinterModel.BAMBU_X2D)
         assertEquals(hidden.map { SlicingModelCatalog.info(it).assetDir }.toSet(), SlicingEngineSupport.unsupported.keys)
@@ -90,7 +90,7 @@ class SlicingModelCatalogTest {
         hidden.forEach { m ->
             assertTrue(m.name, matchingSlicingModels("").none { it.model == m })
             assertTrue(m.name, matchingSlicingModels(SlicingModelCatalog.info(m).label).none { it.model == m })
-            assertTrue(m.name, SlicingEngineSupport.unsupportedReason(m)!!.contains("can't be sliced"))
+            assertTrue(m.name, SlicingEngineSupport.unsupportedReason(m)!!.contains("isn't offered"))
         }
         assertTrue(matchingSlicingModels("bambu").any { it.model == SlicingPrinterModel.BAMBU_X1_CARBON })
         assertEquals(null, SlicingEngineSupport.unsupportedReason(SlicingPrinterModel.SNAPMAKER_U1))

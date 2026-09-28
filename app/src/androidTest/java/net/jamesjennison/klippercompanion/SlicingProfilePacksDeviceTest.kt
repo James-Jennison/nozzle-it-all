@@ -87,7 +87,7 @@ class SlicingProfilePacksDeviceTest {
             assertNotNull("${info.label} has a profile once its firmware is confirmed", slicingProfilePack(info.model, CosmosProfileGeneration.CURRENT))
         }
         SlicingModelCatalog.all.filter { !SlicingEngineSupport.isSupported(it.model) }.forEach { info ->
-            assertTrue("${info.label} is refused with a reason", SlicingEngineSupport.unsupportedReason(info.model)!!.contains("can't be sliced"))
+            assertTrue("${info.label} is refused with a reason", SlicingEngineSupport.unsupportedReason(info.model)!!.contains("isn't offered"))
             assertTrue("${info.label} is not offered", SlicingEngineSupport.offered.none { it.model == info.model })
         }
     }

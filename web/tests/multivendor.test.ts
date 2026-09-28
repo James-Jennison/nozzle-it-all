@@ -74,7 +74,7 @@ describe('profiles (slicing needs no connection)', () => {
     for (const id of hidden) {
       expect(index.profiles.some((p) => p.id === id), `${id} is in the shared index`).toBe(true);
       expect(offered.profiles.some((p) => p.id === id), `${id} is offered`).toBe(false);
-      await expect(loadProfile(id, fetcher)).rejects.toThrow(/can't be sliced/);
+      await expect(loadProfile(id, fetcher)).rejects.toThrow(/isn't offered/);
     }
     expect(offered.profiles.length).toBe(index.profiles.length - hidden.length);
     expect(searchProfiles(offered.profiles, 'bambu x1 carbon').length).toBeGreaterThan(0);

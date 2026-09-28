@@ -30,6 +30,8 @@ data class RunEntry(
     val runId: String, val bundleDigest: String, val contentDigest: String, val completedAt: Long, val targetKind: TargetKind,
     val suiteId: String, val suiteVersion: String, val coverage: String, val source: String, val grades: Map<Category, ResultState>,
     val review: String, val supersedes: List<String>, var supersededBy: String? = null,
+    /** Per category, the tests this run actually ran (anything but SKIPPED or UNVERIFIED). */
+    val testsRun: Map<Category, Set<String>> = emptyMap(),
 )
 
 /**
@@ -77,9 +79,14 @@ object ReportBuilder {
                             // Simulated evidence never grades hardware, whatever the bundle claims.
                             if (kind == TargetKind.SIMULATED) ResultState.UNVERIFIED else raw
                         }
+                        val tests = ev.objects("tests").filter { it.optString("scope") == scope.id }
+                        val testsRun = Category.entries.associateWith { c ->
+                            tests.filter { it.optString("category") == c.id && ResultState.parse(it.optString("result")) !in setOf(ResultState.SKIPPED, ResultState.UNVERIFIED, null) }
+                                .map { it.optString("id") }.toSet()
+                        }
                         entries.getOrPut(key) { mutableListOf() } += RunEntry(run.optString("runId"), b.bundleDigest, b.contentDigest, run.optLong("completedAt"), kind,
                             ev.getJSONObject("suite").optString("id"), ev.getJSONObject("suite").optString("version"), ev.getJSONObject("suite").optString("coverage"),
-                            source, cells, review, run.strings("supersedes"))
+                            source, cells, review, run.strings("supersedes"), testsRun = testsRun)
                     }
                 }
             }
@@ -91,8 +98,17 @@ object ReportBuilder {
             val eligible = history.filter { !it.review.startsWith("rejected") }
             val pool = eligible.filter { it.targetKind == TargetKind.PHYSICAL }.ifEmpty { eligible }
             val current = pool.lastOrNull()
+            // Per category: the newest run that covered it, unless an older run covered strictly more of its tests (a
+            // lower-level rerun doesn't replace a fuller earlier result; a newer run with at least the same coverage does).
             val sources = Category.entries.associateWith { c ->
-                pool.lastOrNull { (it.grades[c] ?: ResultState.UNVERIFIED) !in setOf(ResultState.SKIPPED, ResultState.UNVERIFIED) } ?: current
+                var chosen: RunEntry? = null
+                pool.asReversed().forEach { r ->
+                    val cov = r.testsRun[c].orEmpty()
+                    if (cov.isEmpty()) return@forEach
+                    val best = chosen?.testsRun?.get(c).orEmpty()
+                    if (chosen == null || (cov.containsAll(best) && cov.size > best.size)) chosen = r
+                }
+                chosen ?: current
             }
             history.forEach { old ->
                 old.supersededBy = history.firstOrNull { it.supersedes.contains(old.runId) }?.runId

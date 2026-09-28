@@ -51,9 +51,11 @@ simulated run never becomes current over a physical run.
 
 - Every verified bundle is kept in its row's history with run id, kind, suite and version, completion time, grades,
   review status, bundle digest and source file name.
-- Each **category** shows the newest physical run, not rejected by a maintainer, that actually graded it (anything
-  but SKIPPED or UNVERIFIED); with no physical run, the newest simulated one, shown as UNVERIFIED. So a level-1 rerun
-  does not displace an earlier level-2 file-transfer result. When a row's cells come from different runs, each cell
+- Each **category** shows the newest physical run, not rejected by a maintainer, that ran tests in it, unless an
+  older run ran strictly more of that category's tests (its tests other than SKIPPED or UNVERIFIED are a superset).
+  With no physical run, the newest simulated one is shown, as UNVERIFIED. So a level-1 rerun (upload guard only) does
+  not displace an earlier level-2 file-transfer result, while a newer run covering the same tests always does, even
+  when it fails. When a row's cells come from different runs, each cell
   names its run, and the JSON report lists `gradeSources`.
 - A newer run supersedes older ones for the categories it graded. A run can also name the runs it supersedes
   (`run.supersedes`). The older run stays in history marked "superseded by …", with its digest. Nothing is ever

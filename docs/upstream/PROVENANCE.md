@@ -666,3 +666,21 @@ interchange).
   Bambu printer.
 - **Test evidence:** listed in the commit.
 - **Touches:** slicing (Bambu), project editor slots.
+
+## P-0026 — Bambu AMS trays and print mapping (ported from Helix, gated)
+
+- **Upstream:** Helix (github.com/FatBoy721/Helix, AGPL-3.0-or-later, main as of 2026-09-05):
+  `android/app/src/main/java/org/crabcore/u1control/bambu/BambuPrintProtocol.kt` (the `toolToLane` / `use_ams` mapping
+  our port had dropped) and `services/bambuReport.ts` (AMS tray numbering and occupancy), with its
+  `scripts/fixtures/bambu-p1s-report.json`.
+- **Imported:** `BambuAmsTrays.kt` (new, from `bambuReport.ts`); the mapping restored in `BambuPrintProtocol.kt`; the
+  fixture as `domain/src/test/resources/bambu/helix-p1s-report.json`.
+- **Adaptations:** trays become `FilamentSlot`s, so the Bambu printer screen's new "AMS slots" button shows them
+  (read-only, one status probe); `BambuAms.matchTrays` matches a bundle's filaments (slice_info) to loaded trays by
+  material, then colour; `BambuPrintRequest.toolToLane` carries the result.
+- **Gate:** `BambuAms.AMS_PRINT_VERIFIED = false`. Until a tester with a Bambu printer and an AMS has started and
+  completed a multi-filament print with this mapping, `BambuPrinterService.startPrint` still refuses multi-filament
+  files and sends `use_ams:false` for everything else, exactly as before. The mapping itself is unit-tested against
+  Helix's wire format only; it has never reached a printer.
+- **Test evidence:** listed in the commit.
+- **Touches:** Bambu printer screen (AMS slots), Bambu print command (unchanged on the wire while gated).

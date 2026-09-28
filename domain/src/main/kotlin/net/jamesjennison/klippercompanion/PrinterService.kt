@@ -98,6 +98,8 @@ data class BambuPrintRequest(
     val bedLeveling: Boolean = true,
     val flowCalibration: Boolean = true,
     val timelapse: Boolean = false,
+    /** Zero-based file tool -> global AMS lane (BambuAms.matchTrays). Only used once BambuAms.AMS_PRINT_VERIFIED. */
+    val toolToLane: Map<Int, Int> = emptyMap(),
 )
 
 /**

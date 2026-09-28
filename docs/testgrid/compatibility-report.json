@@ -189,7 +189,7 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+      "current": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
       "firmware": {
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
@@ -197,9 +197,9 @@
       "grades": {
         "controls": "UNVERIFIED",
         "file_transfer": "UNVERIFIED",
-        "monitoring": "FAIL",
-        "physical_print": "SKIPPED",
-        "slicing": "PASS"
+        "monitoring": "FAIL (unreviewed)",
+        "physical_print": "SKIPPED (unreviewed)",
+        "slicing": "PASS (unreviewed)"
       },
       "history": [
         {
@@ -218,6 +218,24 @@
           "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
           "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
+          "supersededBy": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b"
+        },
+        {
+          "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
+          "completedAt": 1790638739136,
+          "contentDigest": "3d43c728cc833f6106e5e7a55fced84c1b2e06ea2a2ebac24b3084c245035b9c",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "FAIL",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "unreviewed",
+          "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
+          "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
           "supersededBy": null
         }
       ],
@@ -231,17 +249,17 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+      "current": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
       "firmware": {
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
       },
       "grades": {
-        "controls": "SKIPPED",
-        "file_transfer": "PARTIAL",
-        "monitoring": "PASS",
-        "physical_print": "SKIPPED",
-        "slicing": "PASS"
+        "controls": "SKIPPED (unreviewed)",
+        "file_transfer": "PASS (unreviewed)",
+        "monitoring": "PASS (unreviewed)",
+        "physical_print": "SKIPPED (unreviewed)",
+        "slicing": "PASS (unreviewed)"
       },
       "history": [
         {
@@ -259,6 +277,24 @@
           "review": "accepted",
           "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
           "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b"
+        },
+        {
+          "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
+          "completedAt": 1790638739136,
+          "contentDigest": "3d43c728cc833f6106e5e7a55fced84c1b2e06ea2a2ebac24b3084c245035b9c",
+          "grades": {
+            "controls": "SKIPPED",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "unreviewed",
+          "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
+          "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
           "supersededBy": null
         }

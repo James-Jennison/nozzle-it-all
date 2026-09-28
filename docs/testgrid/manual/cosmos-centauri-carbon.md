@@ -1,7 +1,7 @@
 # Elegoo Centauri Carbon on OpenCentauri COSMOS
 
 Suite `cosmos-centauri-carbon` version 1.0.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `eb675959f1caacfb41930341e822bec5b807754e34167e2b4cf6d3151c552467`.
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `8848f927b8da9a8a722d72270d25b9d24a312945e845edd05b72ae52d14c44be`.
 
 Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.
 
@@ -38,7 +38,7 @@ Preconditions:
 Steps:
 1. Nozzle reads status and temperatures (read-only).
 2. Nozzle lists the printer's G-code files.
-3. **You answer:** Do the nozzle and bed temperatures Nozzle shows match the printer's own screen (within 2 °C)? (yes/no)
+3. **You answer:** Do the temperatures Nozzle reads (shown below) match the printer's own screen, within 2 °C? (yes/no)
 
 Expected:
 - Status is ready
@@ -53,7 +53,7 @@ Only the camera's kind, the snapshot's size and its hash are recorded; no image 
 Steps:
 1. Nozzle lists cameras (URLs are not recorded).
 2. Nozzle takes one camera snapshot and records only its size and hash.
-3. **You answer:** Open the camera in Nozzle's dashboard. Does the picture update live? (yes/no)
+3. **You answer:** Does the camera picture below show the printer, and change when you tap Refresh? (yes/no)
 
 Expected:
 - At least one camera
@@ -267,7 +267,7 @@ Read-only view of the CANVAS lanes (through AFC). Graded separately from single-
 
 Steps:
 1. Nozzle reads the material slots (read-only).
-2. **You answer:** Do the four CANVAS lanes Nozzle lists match what is loaded? (yes/no)
+2. **You answer:** Do the four CANVAS lanes Nozzle reads (shown below) match what is loaded? (yes/no)
 
 Expected:
 - Every slot is reported

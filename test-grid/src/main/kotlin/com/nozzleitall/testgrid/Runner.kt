@@ -281,7 +281,7 @@ class RunSession private constructor(
         val kind = step.kind!!
         when {
             kind.consequential || step.requiresConfirmation -> { stepRec.status = StepStatus.AWAITING_CONFIRMATION; rec.state = RunState.AWAITING_CONFIRMATION }
-            kind.operator -> { stepRec.status = StepStatus.AWAITING_OBSERVATION; rec.state = RunState.AWAITING_OBSERVATION }
+            kind.operator -> { stepRec.status = StepStatus.AWAITING_OBSERVATION; rec.state = RunState.AWAITING_OBSERVATION; captureShown(step, stepRec) }
             else -> {
                 execute(test, step, stepRec)
                 if (stepRec.status in setOf(StepStatus.FAILED, StepStatus.BLOCKED)) { skipRemaining(rec, "Not reached: step ${step.id} did not pass."); finishTest(test, rec) }
@@ -384,12 +384,40 @@ class RunSession private constructor(
         if (step.kind != StepKind.OBSERVE) throw RunRefused("Step $stepId needs an attachment, not an answer.")
         val (status, detail) = Observations.evaluate(step, value)
         stepRec.status = status; stepRec.detail = detail; stepRec.finishedAt = now(); stepRec.startedAt = stepRec.startedAt ?: stepRec.finishedAt
-        stepRec.data = JSONObject().put("response", value.trim().take(2000)).put("responseType", step.params.optString("response"))
+        val shown = stepRec.data.optJSONObject("shown")
+        stepRec.data = JSONObject().put("response", value.trim().take(2000)).put("responseType", step.params.optString("response")).putOpt("shown", shown)
             .apply { if (note.isNotBlank()) put("note", note.trim().take(2000)); step.params.strOrNull("unit")?.let { put("unit", it) } }
         log("Observation ${test.id}/$stepId: ${status.name}")
         rec.state = RunState.RUNNING
         save()
         return proceed()
+    }
+
+    /**
+     * Re-reads what an observe step shows (params.show) so the operator compares against a fresh value. Read-only. The
+     * reading is kept with the answer, so the evidence says what Nozzle showed when the question was answered.
+     */
+    fun refreshShown(stepId: String) = synchronized(this) {
+        val rec = currentRecord() ?: return@synchronized
+        val stepRec = rec.step(stepId)?.takeIf { it.status == StepStatus.AWAITING_OBSERVATION } ?: return@synchronized
+        captureShown(suite.test(rec.testId)!!.steps.first { it.id == stepId }, stepRec)
+        save()
+    }
+
+    private fun captureShown(step: Step, s: StepRecord) {
+        val show = step.params.strOrNull("show") ?: return
+        val t = target ?: return
+        val shown = try {
+            when (show) {
+                "status" -> t.status().let { r -> JSONObject().put("state", r.state).put("ready", r.ready).put("nozzle", r.nozzle).put("nozzleTarget", r.nozzleTarget)
+                    .put("bed", r.bed).put("bedTarget", r.bedTarget).put("observedAt", r.observedAtMillis) }
+                "slots" -> JSONObject().put("slots", JSONArray(t.materialSlots().take(16)))
+                // Camera images are shown live by the UI and never stored; only that a camera was listed is recorded.
+                "camera" -> JSONObject().put("cameras", t.cameras().size)
+                else -> return
+            }
+        } catch (e: Exception) { JSONObject().put("error", e.message ?: e.javaClass.simpleName) }
+        s.data = JSONObject().put("shown", shown)
     }
 
     /** Stores a sanitized copy (image metadata removed) of a required photo or file. */

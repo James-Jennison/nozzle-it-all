@@ -386,4 +386,24 @@ class RunnerTest {
         assertFalse(s.canRetry("controls-idle", "heat-nozzle"))
         assertFalse(s.canRetry("controls-idle", "nozzle-reached"))
     }
+
+    @Test fun anObservationShowsWhatNozzleReadsAndKeepsItWithTheAnswer() {
+        val clock = Support.Clock()
+        val st = Support.start("paxx-u1", SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now), clock, level = SafetyLevel.READ_ONLY)
+        val s = st.session
+        var p = s.proceed()
+        while (!(p is Pending.Observation && p.step.id == "matches")) p = when (p) {
+            is Pending.Preconditions -> s.answerPreconditions(p.test.preconditions.associate { it.id to true })
+            else -> fail("unexpected $p").let { p }
+        }
+        val step = s.record.test("telemetry")!!.step("matches")!!
+        val first = step.data.getJSONObject("shown")
+        assertEquals(24.0, first.getDouble("nozzle"), 0.01)
+        assertEquals("standby", first.getString("state"))
+        s.refreshShown("matches")
+        assertTrue(step.data.getJSONObject("shown").getLong("observedAt") > first.getLong("observedAt"))
+        s.observe("matches", "yes")
+        assertEquals(24.0, step.data.getJSONObject("shown").getDouble("nozzle"), 0.01)
+        assertEquals("yes", step.data.getString("response"))
+    }
 }

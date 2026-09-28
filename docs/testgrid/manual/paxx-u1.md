@@ -1,7 +1,7 @@
 # Snapmaker U1 on PAXX extended firmware
 
 Suite `paxx-u1` version 1.0.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `792b8df4144fa75ee8e96a93d6f9d6feea0a9d9875a5ee04061f2943c4ed3751`.
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `5a3fbcd3d71178dc9f28bff26db6d6aef0cea0d8bdd2ea86f03b11c722addf9d`.
 
 Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.
 
@@ -38,7 +38,7 @@ Preconditions:
 Steps:
 1. Nozzle reads status and temperatures (read-only).
 2. Nozzle lists the printer's G-code files.
-3. **You answer:** Do the nozzle and bed temperatures Nozzle shows match the printer's own screen (within 2 °C)? (yes/no)
+3. **You answer:** Do the temperatures Nozzle reads (shown below) match the printer's own screen, within 2 °C? (yes/no)
 
 Expected:
 - Status is ready
@@ -53,7 +53,7 @@ Only the camera's kind, the snapshot's size and its hash are recorded; no image 
 Steps:
 1. Nozzle lists cameras (URLs are not recorded).
 2. Nozzle takes one camera snapshot and records only its size and hash.
-3. **You answer:** Open the camera in Nozzle's dashboard. Does the picture update live? (yes/no)
+3. **You answer:** Does the camera picture below show the printer, and change when you tap Refresh? (yes/no)
 
 Expected:
 - At least one camera
@@ -258,7 +258,7 @@ Read-only view of the four toolheads. Graded separately from single-material mon
 
 Steps:
 1. Nozzle reads the material slots (read-only).
-2. **You answer:** Do the four toolheads Nozzle lists match what is loaded in each? (yes/no)
+2. **You answer:** Do the four toolheads Nozzle reads (shown below) match what is loaded in each? (yes/no)
 
 Expected:
 - Every slot is reported

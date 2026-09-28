@@ -99,8 +99,9 @@
           "id": "matches",
           "kind": "observe",
           "params": {
-            "question": "Do the nozzle and bed temperatures Nozzle shows match the printer's own screen (within 2 °C)?",
-            "response": "yes_no"
+            "question": "Do the temperatures Nozzle reads (shown below) match the printer's own screen, within 2 °C?",
+            "response": "yes_no",
+            "show": "status"
           }
         }
       ],
@@ -145,8 +146,9 @@
           "id": "live",
           "kind": "observe",
           "params": {
-            "question": "Open the camera in Nozzle's dashboard. Does the picture update live?",
-            "response": "yes_no"
+            "question": "Does the camera picture below show the printer, and change when you tap Refresh?",
+            "response": "yes_no",
+            "show": "camera"
           }
         }
       ],
@@ -947,8 +949,9 @@
           "id": "slots-match",
           "kind": "observe",
           "params": {
-            "question": "Do the four toolheads Nozzle lists match what is loaded in each?",
-            "response": "yes_no"
+            "question": "Do the four toolheads Nozzle reads (shown below) match what is loaded in each?",
+            "response": "yes_no",
+            "show": "slots"
           }
         }
       ],

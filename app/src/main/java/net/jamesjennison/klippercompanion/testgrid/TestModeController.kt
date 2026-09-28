@@ -188,6 +188,13 @@ class TestModeController private constructor(private val context: Context) {
     fun attach(stepId: String, bytes: ByteArray, mime: String) = act { it.attach(stepId, bytes, mime) }
     fun reviewUnknown(note: String) = act { it.reviewUnknown(note); it.proceed() }
     fun finishRun() = act { it.finish() }
+    /** Re-reads what the current observation shows (temperatures, slots). Read-only. */
+    fun refreshShown(stepId: String) = act { it.refreshShown(stepId); it.pending() }
+
+    /** One camera frame for an observation card. Shown on screen only; never stored or exported. */
+    suspend fun cameraFrame(): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching { target?.let { t -> t.cameras().firstOrNull()?.let { t.cameraSnapshot(it) } } }.getOrNull()
+    }
 
     /** Safe from any thread and while a step is running: nothing further runs for the current test except its cleanup. */
     fun interrupt() { session?.interrupt("Interrupted by the operator in Test Mode."); proceed() }

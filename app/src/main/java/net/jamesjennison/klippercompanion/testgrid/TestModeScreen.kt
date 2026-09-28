@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -235,7 +236,7 @@ fun TestModeScreen(profiles: List<PrinterProfile>, close: () -> Unit) {
                 }
             }
         }
-        is Pending.Observation -> ObservationCard(c, p, s.busy)
+        is Pending.Observation -> ObservationCard(c, p, s)
         is Pending.Attachment -> AttachmentCard(c, p, s.busy)
         is Pending.UnknownReview -> UnknownCard(c, p, s.busy)
         else -> if (!s.busy) Button({ c.proceed() }, modifier = Modifier.testTag("continue-run")) { Text("Continue") }
@@ -265,13 +266,56 @@ fun TestModeScreen(profiles: List<PrinterProfile>, close: () -> Unit) {
     }
 }
 
+/**
+ * What Nozzle itself sees, beside a question that asks the operator to compare it with the printer. Found on the first
+ * real run: "do Nozzle's temperatures match the printer?" is unanswerable if Test Mode doesn't show them.
+ */
+@Composable private fun ShownReading(c: TestModeController, p: Pending.Observation, s: TestModeState) {
+    val show = p.step.params.optString("show").ifBlank { return }
+    val shown = c.session?.record?.test(p.test.id)?.step(p.step.id)?.data?.optJSONObject("shown")
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth().testTag("observation-shown")) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("What Nozzle reads now", style = MaterialTheme.typography.labelLarge)
+            fun t(v: Any?) = (v as? Number)?.let { "%.1f".format(java.util.Locale.ROOT, it.toDouble()) } ?: "—"
+            when {
+                shown?.has("error") == true -> Text("Couldn't read the printer: ${shown.optString("error")}", color = MaterialTheme.colorScheme.error)
+                show == "status" && shown != null -> {
+                    Text("Nozzle ${t(shown.opt("nozzle"))} °C (target ${t(shown.opt("nozzleTarget"))} °C)", style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("shown-nozzle"))
+                    Text("Bed ${t(shown.opt("bed"))} °C (target ${t(shown.opt("bedTarget"))} °C)", style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("shown-bed"))
+                    Text("Printer state: ${shown.optString("state")}${if (shown.optBoolean("ready")) "" else " (not ready)"}", style = MaterialTheme.typography.bodySmall)
+                }
+                show == "slots" && shown != null -> (0 until (shown.optJSONArray("slots")?.length() ?: 0)).forEach { Text(shown.getJSONArray("slots").getString(it)) }
+                show == "camera" -> CameraFrame(c, s.revision)
+            }
+            if (show != "camera") OutlinedButton({ c.refreshShown(p.step.id) }, enabled = !s.busy, modifier = Modifier.testTag("refresh-shown")) { Text("Refresh") }
+        }
+    }
+}
+
+@Composable private fun CameraFrame(c: TestModeController, revision: Int) {
+    var frame by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var tries by remember { mutableStateOf(0) }
+    var loading by remember { mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(tries, revision) {
+        loading = true
+        frame = c.cameraFrame()?.let { b -> runCatching { android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size) }.getOrNull() }
+        loading = false
+    }
+    frame?.let { androidx.compose.foundation.Image(it.asImageBitmap(), "Camera", Modifier.fillMaxWidth().testTag("shown-camera")) }
+        ?: Text(if (loading) "Loading the camera…" else "No picture from the camera.", style = MaterialTheme.typography.bodySmall)
+    Text("Shown here only; camera pictures are never saved or exported.", style = MaterialTheme.typography.bodySmall)
+    OutlinedButton({ tries++ }, modifier = Modifier.testTag("refresh-shown")) { Text("Refresh") }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
-@Composable private fun ObservationCard(c: TestModeController, p: Pending.Observation, busy: Boolean) {
+@Composable private fun ObservationCard(c: TestModeController, p: Pending.Observation, s: TestModeState) {
+    val busy = s.busy
     var value by remember(p.step.id) { mutableStateOf("") }
     var note by remember(p.step.id) { mutableStateOf("") }
     val params = p.step.params
     Section("Your observation") {
         Text(params.optString("question"), fontWeight = FontWeight.Bold, modifier = Modifier.testTag("observation-question"))
+        ShownReading(c, p, s)
         when (params.optString("response")) {
             "yes_no" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("yes", "no").forEach { v -> FilterChip(value == v, { value = v }, label = { Text(v) }, modifier = Modifier.testTag("answer-$v")) } }
             "pass_partial_fail" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("pass", "partial", "fail").forEach { v -> FilterChip(value == v, { value = v }, label = { Text(v) }, modifier = Modifier.testTag("answer-$v")) } }

@@ -176,6 +176,8 @@ object StepLimits {
     val RESPONSES = setOf("yes_no", "pass_partial_fail", "number", "text", "choice")
     val GCODE_CHECKS = setOf("non_empty", "no_stock_elegoo_commands", "requires_macro", "within_bed", "centered", "max_tool_index", "uses_tools")
     val PRECONDITION_CHECKS = setOf("printer_idle", "printer_connected")
+    /** What an observe step shows the operator alongside the question: what Nozzle itself sees, to compare against. */
+    val OBSERVE_SHOWS = setOf("status", "slots", "camera")
 }
 
 object SuiteValidator {
@@ -261,6 +263,7 @@ object SuiteValidator {
                 if (a.optString("question").isBlank()) p += "params.question is required"
                 if (a.optString("response") !in StepLimits.RESPONSES) p += "params.response must be one of ${StepLimits.RESPONSES.sorted()}"
                 if (a.optString("response") == "choice" && (a.optJSONArray("choices")?.length() ?: 0) < 2) p += "a choice needs at least two params.choices"
+                a.strOrNull("show")?.let { if (it !in StepLimits.OBSERVE_SHOWS) p += "params.show must be one of ${StepLimits.OBSERVE_SHOWS.sorted()}" }
             }
             StepKind.ATTACH -> if (a.optString("evidence").isBlank()) p += "params.evidence is required"
             StepKind.CHECK_CAPABILITIES -> if ((a.optJSONArray("required")?.length() ?: 0) == 0 && t.requiredCapabilities.isEmpty()) p += "params.required or the test's requiredCapabilities must name something"

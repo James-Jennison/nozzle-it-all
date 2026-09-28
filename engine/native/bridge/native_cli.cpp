@@ -9,6 +9,7 @@
 //                                    Full Spectrum colour mixing (Snapmaker Orca's Color Mixing list and Color Mixing
 //                                    Match, see full_spectrum.cpp): one JSON response on stdout; exit 0 success,
 //                                    1 the operation failed, 2 bad request (response {"error": "..."})
+//   nozzle-engine --plate <request.json>           plate tools (arrange, auto-orient, cut): see plate_ops.cpp
 //   nozzle-engine --color-mix <request.json>
 //                                    PrusaSlicer 2.9.6 colour mixing (virtual extruders; see color_mix.cpp): one JSON
 //                                    response on stdout, exit codes as --full-spectrum
@@ -31,6 +32,7 @@
 #include "slic3r_engine.hpp"
 #include "full_spectrum.hpp"
 #include "color_mix.hpp"
+#include "plate_ops.hpp"
 
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/Preset.hpp>
@@ -239,15 +241,17 @@ int main(int argc, char** argv) {
         std::cout << "nozzle-engine 1 (libslic3r, shared Android pipeline, native)" << std::endl;
         return 0;
     }
-    if (argc == 3 && (std::string(argv[1]) == "--full-spectrum" || std::string(argv[1]) == "--color-mix")) {
-        const bool color_mix = std::string(argv[1]) == "--color-mix";
+    if (argc == 3 && (std::string(argv[1]) == "--full-spectrum" || std::string(argv[1]) == "--color-mix" || std::string(argv[1]) == "--plate")) {
+        const std::string mode = argv[1];
+        const bool color_mix = mode == "--color-mix";
         std::string request, response;
         int code = 2;
         std::ifstream f(argv[2], std::ios::binary);
         if (f) {
             std::stringstream ss; ss << f.rdbuf();
             request = ss.str();
-            code = color_mix ? nozzle_cm::run_color_mix(request, response) : nozzle_fs::run_full_spectrum(request, response);
+            code = mode == "--plate" ? nozzle_plate::run_plate(request, response)
+                 : color_mix ? nozzle_cm::run_color_mix(request, response) : nozzle_fs::run_full_spectrum(request, response);
         } else {
             response = "{\"error\":" + json_string(std::string("Cannot read request file ") + argv[2]) + "}";
         }
@@ -256,7 +260,7 @@ int main(int argc, char** argv) {
         return code;
     }
     if (argc != 2) {
-        std::cerr << "usage: nozzle-engine <request.txt> | --version | --schema | --full-spectrum <request.json> | --color-mix <request.json>" << std::endl;
+        std::cerr << "usage: nozzle-engine <request.txt> | --version | --schema | --full-spectrum <request.json> | --color-mix <request.json> | --plate <request.json>" << std::endl;
         return 2;
     }
     Request req;

@@ -76,6 +76,7 @@ fun PrepareScreen(state: AppState) {
                     Spacer(Modifier.weight(1f))
                     Txt("Drag to orbit · Shift-drag to pan · Scroll to zoom", Nz.type.bodySmall, c.textMuted)
                 }
+                if (!p.showPreview && p.items.isNotEmpty()) PlateToolbar(p)
                 val slots = p.materials()
                 val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
                 val objects = p.items.map { item ->
@@ -299,7 +300,7 @@ private fun StepObjects(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     Section("Objects", if (p.items.isEmpty()) "None yet" else "${p.items.size} on the plate", initiallyOpen = p.items.isNotEmpty(),
-        action = { if (p.items.isNotEmpty()) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { if (!p.arrange()) p.notice = "Not everything fits on the plate." } }) {
+        action = { if (p.items.isNotEmpty()) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() } }) {
         if (p.items.isEmpty()) { Txt("Nothing on the plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
         val slots = p.materials()
         p.items.forEach { item ->
@@ -334,6 +335,29 @@ private fun StepObjects(state: AppState) {
             }
         }
         p.outOfBounds().takeIf { it.isNotEmpty() }?.let { Txt("Off the plate: ${it.joinToString { o -> o.name }}", Nz.type.bodySmall, c.danger) }
+    }
+}
+
+/** Orca's plate tools: Arrange, Auto orient (the selection, or everything), Split and Cut for the selected object. */
+@Composable
+private fun PlateToolbar(p: PrepareState) {
+    val c = Nz.colors
+    val sel = p.items.firstOrNull { it.id == p.selected }
+    var cutting by remember(sel?.id) { mutableStateOf(false) }
+    var height by remember(sel?.id) { mutableStateOf(sel?.let { "%.1f".format(it.height / 2) } ?: "") }
+    val idle = p.toolBusy == null
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        NzButton("Arrange", { p.arrange() }, kind = ButtonKind.SECONDARY, icon = NzIcon.MOVE, enabled = idle, testTag = "plate-arrange")
+        NzButton(if (sel == null) "Auto orient all" else "Auto orient", { p.orient() }, kind = ButtonKind.SECONDARY, enabled = idle, testTag = "plate-orient")
+        NzButton("Split", { p.splitSelected() }, kind = ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-split")
+        NzButton("Cut", { cutting = !cutting }, kind = if (cutting) ButtonKind.PRIMARY else ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-cut")
+        if (cutting && sel != null) {
+            com.nozzleitall.desktop.settings.DenseInput(height, { height = it }, "Cut height above the base", Modifier.width(110.dp), units = "mm")
+            NzButton("Cut here", { height.replace(',', '.').toFloatOrNull()?.let { p.cutSelected(it); cutting = false } }, kind = ButtonKind.PRIMARY, enabled = idle)
+            Txt("of ${"%.1f".format(sel.height)} mm", Nz.type.bodySmall, c.textMuted)
+        }
+        Spacer(Modifier.weight(1f))
+        p.toolBusy?.let { Txt("$it…", Nz.type.bodySmall, c.accent) }
     }
 }
 

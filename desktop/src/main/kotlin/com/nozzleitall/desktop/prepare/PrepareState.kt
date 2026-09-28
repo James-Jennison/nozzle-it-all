@@ -442,7 +442,7 @@ class PrepareState(private val app: AppState) {
         if (item.painted.isNotEmpty() || loaded.filament != null) matchColours(item, loaded.filament)
         virtualRemap.forEach { (old, new) -> if (old in 1..item.paintSlots.size) item.paintSlots[old - 1] = new }
         items += item
-        arrange(); dirty = true; invalidateSlice()
+        dirty = true; invalidateSlice(); arrange()
         if (name == "Untitled project") name = f.nameWithoutExtension
     }
 
@@ -472,28 +472,109 @@ class PrepareState(private val app: AppState) {
         item.paintSlots[n - 1] = slot; changed()
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap()); arrange(); changed() } }
+    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap()); changed(); arrange() } }
     fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
     fun changed() { dirty = true; invalidateSlice() }
     private fun invalidateSlice() { if (slice !is SliceState.Running) { slice = SliceState.Idle; showPreview = false } }
 
     /** Shelf packing by footprint, largest first, with a 6 mm gap, centred on the bed. Objects that can't fit are reported. */
-    fun arrange(): Boolean {
-        val (bw, bd) = bed; val gap = 6f
-        val order = items.sortedByDescending { it.footprintD }
-        var x = gap; var y = gap; var row = 0f; var fits = true
-        order.forEach { it ->
-            if (x + it.footprintW > bw - gap) { x = gap; y += row + gap; row = 0f }
-            val r = it.reach; it.x = x - r[0]; it.y = y - r[2]
-            x += it.footprintW + gap; row = max(row, it.footprintD)
-            if (y + it.footprintD > bd - gap || it.footprintW > bw - 2 * gap) fits = false
+    // --- Plate tools (PlateOps): Orca's Arrange, Auto orient, Split and Cut, run on the engine off the UI thread.
+    /** What the plate tools are doing now ("Arranging"...), or null. */
+    var toolBusy by mutableStateOf<String?>(null)
+
+    private fun plateWork() = File(app.paths.cache, "plate").apply { mkdirs() }
+
+    private fun runTool(label: String, block: suspend () -> Unit) {
+        if (toolBusy != null) return
+        toolBusy = label
+        // On the UI thread: the plate's state changes there; the engine work inside runs on IO.
+        app.scope.launch(Dispatchers.Main) {
+            try { block() } catch (e: Exception) { notice = "$label didn't work: ${e.message ?: e.javaClass.simpleName}" }
+            finally { toolBusy = null }
         }
-        val usedW = items.maxOfOrNull { it.x + it.reach[1] } ?: 0f; val usedD = items.maxOfOrNull { it.y + it.reach[3] } ?: 0f
-        val dx = (bw - usedW - gap) / 2; val dy = (bd - usedD - gap) / 2
-        if (dx > 0 && dy > 0) items.forEach { it.x += dx; it.y += dy }
-        if (!fits) notice = "Not everything fits on one plate. Remove or scale down an object before slicing."
-        changed()
-        return fits
+    }
+
+    /** The same object with a new mesh (its turn, size, slot, colours and settings kept). */
+    private fun withMesh(old: PrepItem, mesh: Mesh, id: Int = old.id, name: String = old.name, x: Float = old.x, y: Float = old.y) =
+        PrepItem(id, name, mesh, x, y, old.rotZ, old.scale, old.slot, old.paintSlots.toList(), old.sources, old.settings.toMap()).also { it.ownFilament = old.ownFilament }
+
+    private fun replace(old: PrepItem, vararg new: PrepItem) {
+        val i = items.indexOfFirst { it.id == old.id }.takeIf { it >= 0 } ?: return
+        items.removeAt(i); items.addAll(i, new.toList())
+    }
+
+    /**
+     * Orca's Arrange (engine: ModelArrange/Arrange with the printer's clearances and the print's brim/skirt spacing).
+     * Objects that don't fit stay where they are and are named.
+     */
+    fun arrange() { if (items.isNotEmpty()) runTool("Arrange") { arrangeNow() } }
+
+    private suspend fun arrangeNow() {
+            val snapshot = items.toList()
+            val (bw, bd) = bed
+            val dir = profileDir()
+            val placed = withContext(Dispatchers.IO) {
+                PlateOps.arrange(listOf("machine.json", "process.json", "filament.json").map { File(dir, it) },
+                    (printerOverrides() + overrides.toMap() - FLUSH_KEY).filterKeys { it != FullSpectrum.DEFINITIONS_KEY }, snapshot, bw, bd, work = plateWork())
+            }
+            val left = ArrayList<String>()
+            snapshot.zip(placed).forEach { (item, p) ->
+                if (p.plate != 0) { left += item.name; return@forEach }
+                item.x += p.dx.toFloat(); item.y += p.dy.toFloat(); item.rotZ = (item.rotZ + p.rotationDeg.toFloat()) % 360f
+            }
+            if (left.isNotEmpty()) notice = "Not everything fits on one plate: ${left.joinToString()}. Remove or scale down an object before slicing."
+            changed()
+    }
+
+    /** Orca's Auto orient for the selected object, or every object when none is selected. */
+    fun orient() {
+        val targets = items.filter { selected == null || it.id == selected }.ifEmpty { return }
+        runTool("Auto orient") {
+            targets.forEach { item ->
+                val mesh = withContext(Dispatchers.IO) { PlateOps.orient(item.mesh, plateWork()) }
+                replace(item, withMesh(item, mesh))
+            }
+            changed()
+        }
+    }
+
+    /** Orca's Split to objects: each separate part of the selected object becomes its own object, where it was. */
+    fun splitSelected() {
+        val item = items.firstOrNull { it.id == selected } ?: return
+        runTool("Split") {
+            val parts = withContext(Dispatchers.Default) { PlateOps.split(item.mesh) }
+            if (parts.size < 2) { notice = "${item.name} is one piece, so there's nothing to split."; return@runTool }
+            val place = item.placement()
+            val made = parts.mapIndexed { i, m ->
+                val b = m.bounds(); val c = place.apply((b[0] + b[3]) / 2.0, (b[1] + b[4]) / 2.0, 0.0)
+                withMesh(item, m, if (i == 0) item.id else nextId++, "${item.name} ${i + 1}", c[0].toFloat(), c[1].toFloat())
+            }
+            replace(item, *made.toTypedArray())
+            selected = made.first().id
+            changed()
+        }
+    }
+
+    /**
+     * Orca's Cut with a horizontal plane [heightMm] above the selected object's base: both halves are kept, each on the
+     * bed, then the plate is arranged. Painted colours don't carry over to the halves.
+     */
+    fun cutSelected(heightMm: Float) {
+        val item = items.firstOrNull { it.id == selected } ?: return
+        if (heightMm <= 0f || heightMm >= item.height) { notice = "Cut between the object's base and its top (0-${"%.1f".format(item.height)} mm)."; return }
+        runTool("Cut") {
+            val z = item.bounds[2] + heightMm / item.scale
+            val (upper, lower) = withContext(Dispatchers.IO) { PlateOps.cut(item.mesh, z, plateWork()) }
+            val halves = listOfNotNull(lower?.let { withMesh(item, it, item.id, "${item.name} (lower)") },
+                upper?.let { withMesh(item, it, nextId++, "${item.name} (upper)", item.x + item.footprintW + 5f) })
+            if (halves.isEmpty()) return@runTool
+            // A half has no paint of its own; its colours follow the object's material slot.
+            halves.forEach { it.paintSlots.clear() }
+            if (item.mesh.isPainted) notice = "The cut halves print in ${item.name}'s material; its painted colours aren't kept."
+            replace(item, *halves.toTypedArray())
+            changed()
+            arrangeNow()
+        }
     }
 
     fun outOfBounds(): List<PrepItem> { val (bw, bd) = bed

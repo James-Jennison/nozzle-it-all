@@ -455,3 +455,29 @@ interchange).
     rebuilt).
 - **Touches:** Prepare objects, project format, slicing on the desktop.
 
+## P-0018 — plate tools: Arrange, Auto orient, Split, Cut (ported)
+
+- **Upstream:** Snapmaker Orca `cbf7bbb0b3` (AGPL-3.0), run by the engine itself (`nozzle-engine --plate`,
+  `engine/native/bridge/plate_ops.cpp` over `slic3r_engine.cpp`): Arrange as `src/slic3r/GUI/Jobs/ArrangeJob.cpp` does it
+  (`init_arrange_params`, then `libslic3r/ModelArrange.cpp` `get_instance_arrange_poly`, `Arrange.cpp`
+  `update_arrange_params`, `update_selected_items_inflation`, `update_selected_items_axis_align`, `get_shrink_bedpts`,
+  `arrangement::arrange`); Auto orient as `libslic3r/Orient.cpp` `orient(ModelInstance*)` (AutoOrienter); Cut with
+  `TriangleMeshSlicer.cpp` `cut_mesh` (capped halves). Split is `TriangleMesh.cpp`/`MeshSplitImpl.hpp` `its_split`
+  (triangles sharing an edge form one part, after merging coincident vertices as `its_merge_vertices` does) ported to
+  Kotlin (`PlateOps.split`) so each part keeps its painted colours.
+- **Imported:** the desktop plate toolbar (Arrange, Auto orient for the selection or everything, Split, Cut at a height);
+  Arrange replaces Nozzle's own row packer, and adding or duplicating a model arranges the plate with it.
+- **Test evidence:** PlateOpsTest (split keeps paint and treats an STL's repeated corners as one part; a 30°-tilted cube
+  is stood back on a face; a cut cube gives two capped 10 mm halves; three stacked cubes are spread apart on the U1's
+  plate; 200 cubes spill onto another plate).
+- **Known divergence:**
+  - Arrange uses Orca's default settings (automatic spacing, no rotation, no Y alignment); its settings dialog isn't
+    offered yet. Objects that don't fit stay where they were (there's one plate until multi-plate exists).
+  - Orca's `object_skirt_offset` (from a Print) isn't added to the clearance radius; it matters only for printing
+    object by object.
+  - Cut is a horizontal plane only (no rotated plane, connectors, dowels or flip/placement options) and the halves lose
+    painted colours; upstream's cut gizmo has all of these.
+  - Orient, split and cut bake their result into the object's mesh (Nozzle's placement is a Z turn and scale).
+  - Not on Android (its own simpler orient/arrange) or the Web App yet.
+- **Touches:** Prepare plate, shared engine.
+

@@ -29,6 +29,9 @@
 #include "libslic3r/Utils.hpp"
 #include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/TriangleMeshSlicer.hpp"
+#include "libslic3r/Arrange.hpp"
+#include "libslic3r/ModelArrange.hpp"
+#include "libslic3r/Orient.hpp"
 // PrusaSlicer 2.9.6 virtual extruders exist only in the desktop engine (Snapmaker Orca + engine/snapmaker patch); the
 // same bridge still builds against upstream OrcaSlicer (Android, Web), where they are refused.
 #if __has_include("libslic3r/Feature/FullSpectrum/VirtualExtruder.hpp")
@@ -449,6 +452,98 @@ CutResult cut_mesh_soup(const std::vector<float>& soup, float z) {
         return out;
     };
     return CutResult{flatten(upper), flatten(lower)};
+}
+
+namespace {
+indexed_triangle_set soup_to_its(const std::vector<float>& soup) {
+    using namespace Slic3r;
+    if (soup.empty() || soup.size() % 9 != 0) throw std::runtime_error("Unexpected mesh data.");
+    indexed_triangle_set mesh;
+    const size_t triangles = soup.size() / 9;
+    mesh.vertices.reserve(triangles * 3);
+    mesh.indices.reserve(triangles);
+    for (size_t t = 0; t < triangles; ++t) {
+        for (size_t k = 0; k < 3; ++k) mesh.vertices.emplace_back(soup[t * 9 + k * 3], soup[t * 9 + k * 3 + 1], soup[t * 9 + k * 3 + 2]);
+        mesh.indices.emplace_back(int(t * 3), int(t * 3 + 1), int(t * 3 + 2));
+    }
+    its_merge_vertices(mesh);
+    return mesh;
+}
+} // namespace
+
+std::vector<double> orient_mesh_soup(const std::vector<float>& soup) {
+    using namespace Slic3r;
+    Model model;
+    ModelObject* object = model.add_object();
+    object->add_volume(TriangleMesh(soup_to_its(soup)));
+    ModelInstance* instance = object->add_instance();
+    const Matrix3d before = instance->get_matrix().linear();
+    orientation::orient(instance);
+    const Matrix3d r = instance->get_matrix().linear() * before.inverse();
+    return {r(0, 0), r(0, 1), r(0, 2), r(1, 0), r(1, 1), r(1, 2), r(2, 0), r(2, 1), r(2, 2)};
+}
+
+std::vector<ArrangeResult> arrange_models(const std::vector<ArrangeItem>& items, const std::vector<std::string>& profile_paths,
+                                          const std::vector<std::pair<std::string, std::string>>& config_overrides, const ArrangeOptions& options) {
+    using namespace Slic3r;
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    for (const auto& profile_path : profile_paths) {
+        DynamicPrintConfig profile_config;
+        profile_config.load(profile_path, ForwardCompatibilitySubstitutionRule::Enable);
+        drop_unset_feature_filaments(profile_config);
+        config.apply(profile_config);
+    }
+    for (const auto& [key, value] : config_overrides) config.set_deserialize_strict(key, value);
+
+    Model model;
+    for (const ArrangeItem& item : items) {
+        Model loaded = load_and_place_model(item.model_path, config, item.transform);
+        if (loaded.objects.size() != 1) throw std::runtime_error("Arrange takes one object per model file.");
+        model.add_object(*loaded.objects.front());
+    }
+    arrangement::ArrangePolygons polys;
+    std::vector<Vec3d> offsets;
+    std::vector<double> rotations;
+    for (size_t i = 0; i < model.objects.size(); ++i) {
+        ModelInstance* instance = model.objects[i]->instances.front();
+        arrangement::ArrangePolygon ap = get_instance_arrange_poly(instance, config);
+        ap.itemid = int(i);
+        polys.push_back(std::move(ap));
+        offsets.push_back(instance->get_offset());
+        rotations.push_back(instance->get_rotation(Z));
+    }
+
+    // init_arrange_params (ArrangeJob.cpp) without the GUI: the arrange settings are Orca's defaults unless given.
+    auto number = [&](const char* key, double fallback) { const ConfigOption* o = config.option(key); return o != nullptr ? o->getFloat() : fallback; };
+    arrangement::ArrangeParams params;
+    params.clearance_height_to_rod = float(number("extruder_clearance_height_to_rod", 0));
+    params.clearance_height_to_lid = float(number("extruder_clearance_height_to_lid", 0));
+    params.clearance_radius = float(number("extruder_clearance_radius", 0));
+    params.printable_height = float(number("printable_height", 256));
+    params.nozzle_height = float(number("nozzle_height", 0));
+    if (const auto* best = config.option<ConfigOptionPoint>("best_object_pos")) params.align_center = best->value;
+    params.allow_rotations = options.allow_rotations;
+    params.min_obj_distance = scaled(options.distance_mm);
+    params.align_to_y_axis = options.align_to_y_axis;
+    if (const auto* seq = config.option<ConfigOptionEnum<PrintSequence>>("print_sequence")) params.is_seq_print = seq->value == PrintSequence::ByObject;
+    if (params.is_seq_print) { params.bed_shrink_x = BED_SHRINK_SEQ_PRINT; params.bed_shrink_y = BED_SHRINK_SEQ_PRINT; }
+    params.progressind = [](unsigned, std::string) {};
+
+    update_arrange_params(params, &config, polys);
+    update_selected_items_inflation(polys, &config, params);
+    update_selected_items_axis_align(polys, &config, params);
+    const Points bedpts = get_shrink_bedpts(&config, params);
+    arrangement::arrange(polys, {}, bedpts, params);
+
+    std::vector<ArrangeResult> out(polys.size());
+    for (const auto& ap : polys) {
+        const size_t i = size_t(ap.itemid);
+        out[i].dx_mm = unscale<double>(ap.translation.x()) - offsets[i].x();
+        out[i].dy_mm = unscale<double>(ap.translation.y()) - offsets[i].y();
+        out[i].rotation_deg = (ap.rotation - rotations[i]) * 180.0 / M_PI;
+        out[i].plate = ap.bed_idx;
+    }
+    return out;
 }
 
 void request_cancel() {

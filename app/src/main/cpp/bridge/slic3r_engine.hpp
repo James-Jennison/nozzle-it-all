@@ -179,4 +179,18 @@ int slice_progress();
 struct CutResult { std::vector<float> upper; std::vector<float> lower; };
 CutResult cut_mesh_soup(const std::vector<float>& soup, float z);
 
+// The plate's Arrange, as Orca's ArrangeJob does it (src/slic3r/GUI/Jobs/ArrangeJob.cpp init_arrange_params, process):
+// each model loaded and placed as for slicing, get_instance_arrange_poly, update_arrange_params,
+// update_selected_items_inflation/axis_align, get_shrink_bedpts, arrangement::arrange. [distance_mm] 0 is Orca's "auto"
+// spacing. Results are the change in each object's XY offset and Z rotation, and the plate it landed on (0 = this one).
+struct ArrangeItem { std::string model_path; ModelTransform transform; };
+struct ArrangeOptions { double distance_mm = 0.0; bool allow_rotations = false; bool align_to_y_axis = false; };
+struct ArrangeResult { double dx_mm = 0.0; double dy_mm = 0.0; double rotation_deg = 0.0; int plate = 0; };
+std::vector<ArrangeResult> arrange_models(const std::vector<ArrangeItem>& items, const std::vector<std::string>& profile_paths,
+                                          const std::vector<std::pair<std::string, std::string>>& config_overrides, const ArrangeOptions& options);
+
+// Orca's Auto orient for one object (libslic3r/Orient.cpp orient(ModelInstance*), AutoOrienter): the rotation that puts
+// the mesh (a triangle soup, 9 floats per triangle) on its best face, row-major 3x3.
+std::vector<double> orient_mesh_soup(const std::vector<float>& soup);
+
 } // namespace engine

@@ -63,15 +63,33 @@ class SlicingProfilePacksDeviceTest {
     // Every model in the generated catalog (scripts/bundle_vendor_profiles.py) must load and slice through the real engine;
     // a pack that fails is reported by name so one bad Bambu/Prusa profile is easy to find. COSMOS needs a firmware
     // generation and has its own tests above.
+    // Every printer the app offers slices real G-code. COSMOS profiles are sliced as the app slices them, after the
+    // printer's firmware has been confirmed (CosmosProfileGeneration.CURRENT); the profiles the engine can't slice yet
+    // (SlicingEngineSupport, engine/snapmaker/unsupported-profiles.json) are never offered, so they are not sliced here.
     @Test fun everyBundledCatalogModelSlicesRealGcode() {
         val failures = mutableListOf<String>()
-        SlicingModelCatalog.all.filter { it.model != SlicingPrinterModel.ELEGOO_CENTAURI_CARBON }.forEach { info ->
+        SlicingEngineSupport.offered.forEach { info ->
             try {
-                val gcode = sliceCube(info.model)
+                val cosmos = ElegooProfiles.isCosmos(info.model)
+                val gcode = sliceCube(info.model, if (cosmos) CosmosProfileGeneration.CURRENT else null)
                 if (!gcode.contains("G1")) failures += "${info.label}: no G1 moves in output"
+                if (cosmos && !gcode.contains("PRINT_START")) failures += "${info.label}: COSMOS start G-code has no PRINT_START"
             } catch (t: Throwable) { failures += "${info.label}: ${t.javaClass.simpleName}: ${t.message}" }
         }
         assertTrue("models that failed to slice:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    // The two safety rules that keep printers out of the loop above: an unconfirmed COSMOS firmware gets no profile, and
+    // a profile the engine can't slice is refused with a reason instead of being sliced with stand-in values.
+    @Test fun cosmosProfilesNeedConfirmedFirmwareAndUnsupportedProfilesAreRefused() {
+        SlicingModelCatalog.all.filter { ElegooProfiles.isCosmos(it.model) }.forEach { info ->
+            assertNull("${info.label} has no profile until its firmware is confirmed", slicingProfilePack(info.model, null))
+            assertNotNull("${info.label} has a profile once its firmware is confirmed", slicingProfilePack(info.model, CosmosProfileGeneration.CURRENT))
+        }
+        SlicingModelCatalog.all.filter { !SlicingEngineSupport.isSupported(it.model) }.forEach { info ->
+            assertTrue("${info.label} is refused with a reason", SlicingEngineSupport.unsupportedReason(info.model)!!.contains("can't be sliced"))
+            assertTrue("${info.label} is not offered", SlicingEngineSupport.offered.none { it.model == info.model })
+        }
     }
     // Custom machine (bed, origin, start/end G-code): a real slice through the real engine must use them.
     @Test fun customMachineBedAndGcodeReachTheRealEngine() {

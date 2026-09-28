@@ -139,7 +139,7 @@ object ReportBuilder {
                 appendLine(); appendLine("### ${r.key.manufacturer} ${r.key.model} · ${r.key.firmwareFamily} ${r.key.firmwareVersion} · Nozzle ${r.key.nozzleVersion} · ${r.key.adapter} · ${r.key.scope.label}")
                 appendLine()
                 appendLine("| Run | Kind | Suite | Completed (UTC) | " + Category.entries.joinToString(" | ") { it.label } + " | Review | Status | Bundle digest | Source |")
-                appendLine("|" + "---|".repeat(9 + Category.entries.size))
+                appendLine("|" + "---|".repeat(8 + Category.entries.size))
                 r.history.forEach { h ->
                     val status = when { h === r.current -> "current"; h.supersededBy != null -> "superseded by `${h.supersededBy!!.take(8)}`"; else -> "historical" }
                     appendLine("| `${h.runId.take(8)}` | ${h.targetKind.id} | ${h.suiteId} ${h.suiteVersion} | ${java.time.Instant.ofEpochMilli(h.completedAt)} | " +

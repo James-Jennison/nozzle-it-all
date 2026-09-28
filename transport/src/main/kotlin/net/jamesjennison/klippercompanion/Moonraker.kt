@@ -216,7 +216,8 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
     // namespace (AFC - the Elegoo CANVAS on COSMOS), else Happy Hare's mmu object. Read-only. A printer without either
     // (no such namespace: Moonraker answers 404) reports no slots rather than an error.
     override fun filamentSlots(): FilamentSlotStatus {
-        val objects = (request("printer/objects/query", mapOf("AFC" to "current_load", "mmu" to FilamentLanes.MMU_FIELDS)) as? JSONObject)?.optJSONObject("status")
+        val objects = (request("printer/objects/query", mapOf("AFC" to "current_load", "mmu" to FilamentLanes.MMU_FIELDS,
+            "print_task_config" to FilamentLanes.U1_TASK_CONFIG_FIELDS, "toolhead" to "extruder")) as? JSONObject)?.optJSONObject("status")
         val laneData = try { request("server/database/item", mapOf("namespace" to "lane_data")) as? JSONObject } catch (e: ApiFailure) { null }
         return FilamentLanes.read(laneData, objects)
     }

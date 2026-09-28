@@ -82,10 +82,35 @@ object FilamentLanes {
      * namespace doesn't exist), [objects] the `status` of `printer/objects/query` with `AFC=current_load` and
      * `mmu=MMU_FIELDS`.
      */
+    /** Fields the Snapmaker U1 reports per toolhead in its `print_task_config` object (U1Protocol.statusQuery's). */
+    const val U1_TASK_CONFIG_FIELDS = "filament_exist,filament_vendor,filament_type,filament_sub_type,filament_color_rgba,filament_official"
+    private const val U1_TOOLHEADS = 4
+
+    /**
+     * The Snapmaker U1's four toolheads from `print_task_config`, with the desktop PAXX adapter's rules (adapter-paxx
+     * U1Protocol.parseStatus; field semantics from the Snapmaker Orca fork, docs/upstream/PROVENANCE.md P-0001):
+     * `filament_exist` says whether a toolhead is loaded; type, vendor and colour are read only for loaded ones.
+     * [activeExtruder] is `toolhead.extruder` ("extruder", "extruder1", ...). Null when the printer has no such object.
+     * Found missing on a real PAXX U1 in Test Mode: Android listed four toolheads with no materials.
+     */
+    fun fromU1TaskConfig(cfg: JSONObject?, activeExtruder: String?): List<FilamentSlot>? {
+        val exist = cfg?.optJSONArray("filament_exist") ?: return null
+        fun JSONArray?.str(i: Int): String? = this?.opt(i)?.takeIf { it != JSONObject.NULL }?.toString()?.trim()?.takeIf { it.isNotEmpty() && !it.equals("NONE", true) }
+        return (0 until minOf(U1_TOOLHEADS, exist.length())).map { i ->
+            val loaded = exist.opt(i) == true
+            val type = if (loaded) cfg.optJSONArray("filament_type").str(i)?.uppercase() ?: "LOADED (TYPE NOT REPORTED)" else null
+            FilamentSlot(i, type, if (loaded) normalizeColor(cfg.optJSONArray("filament_color_rgba").str(i)) else null,
+                vendor = if (loaded) cfg.optJSONArray("filament_vendor").str(i) else null,
+                active = activeExtruder == (if (i == 0) "extruder" else "extruder$i"), name = "T$i")
+        }.takeIf { it.isNotEmpty() }
+    }
+
     fun read(laneData: JSONObject?, objects: JSONObject?): FilamentSlotStatus {
         val mmu = objects?.optJSONObject("mmu")
         val fromDb = fromLaneData(laneData)
-        val lanes = fromDb ?: fromHappyHare(mmu) ?: return FilamentSlotStatus(emptyList(), "")
+        val lanes = fromDb ?: fromHappyHare(mmu)
+            ?: return fromU1TaskConfig(objects?.optJSONObject("print_task_config"), objects?.optJSONObject("toolhead")?.optString("extruder"))
+                ?.let { FilamentSlotStatus(it, "Snapmaker U1 toolheads") } ?: FilamentSlotStatus(emptyList(), "")
         val current = objects?.optJSONObject("AFC")?.optString("current_load")?.takeIf { it.isNotBlank() && it != "null" }
         return FilamentSlotStatus(slots(lanes, current, (mmu?.opt("tool") as? Number)?.toInt()?.takeIf { it >= 0 }),
             if (fromDb != null) "Filament changer lanes (AFC)" else "Happy Hare gates")

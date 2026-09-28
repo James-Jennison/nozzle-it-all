@@ -101,7 +101,7 @@ class AndroidTestTarget(
 
     override fun materialSlots(): List<String> {
         if (!moonraker && profile.kind != PrinterKind.ELEGOO) throw UnsupportedByTarget("This connection reports no material slots.")
-        val slots = service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots }.orEmpty().map { "slot ${it.tool + 1}: ${it.label}" }
+        val slots = service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots }.orEmpty().map { "${it.name ?: "slot ${it.tool + 1}"}: ${it.label}${it.colorHex?.let { c -> " $c" } ?: ""}${if (it.active) " (active)" else ""}" }
         if (slots.isNotEmpty()) return slots
         if (profile.kind == PrinterKind.SNAPMAKER_U1 || profile.kind == PrinterKind.SNAPMAKER_U1_PAXX) return moonraker { m -> m.toolStatus().tools.map { "toolhead $it" } }
         return emptyList()

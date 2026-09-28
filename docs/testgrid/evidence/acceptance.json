@@ -5,6 +5,12 @@
       "bundleDigest": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3",
       "date": "2026-09-28",
       "note": "Level 1 run on the owner's PAXX U1, owner at the printer. Accepted with the recorded corrections: sourceRevision should read af63b08; engine version was masked. Multi-material monitoring FAIL is a real app gap (no U1 material reading on Android)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
+      "date": "2026-09-28",
+      "note": "Level 2 run on the owner's PAXX U1, owner at the printer: upload (SHA-256 verified), listing and delete. Built from 0b6d902. Extra cleanup approval prompt had no effect (fixed in acadaab)."
     }
   ],
   "format": "nozzle.evidence-acceptance",

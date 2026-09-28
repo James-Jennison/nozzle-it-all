@@ -14,8 +14,8 @@ configurations without physical evidence are UNVERIFIED. "(unreviewed)" means no
 | Generic Klipper | klipper | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite generic-klipper 1.0.0). |
 | Generic OctoPrint printer | octoprint | — | android-octoprint | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite octoprint 1.0.0). |
 | Prusa MK4S | prusalink | — | android-prusalink | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite prusalink 1.0.0). |
-| Snapmaker U1 | paxx-extended 1.6.0.267_20260815150420 | 0.1.0.testgrid | android-moonraker | Multi-material / tool changing | PASS (unreviewed) | UNVERIFIED | FAIL (unreviewed) | UNVERIFIED | SKIPPED (unreviewed) | physical run `d4e722c4` (paxx-u1 1.0.0), bundle `af07e2adc7be` |
-| Snapmaker U1 | paxx-extended 1.6.0.267_20260815150420 | 0.1.0.testgrid | android-moonraker | Single material | PASS (unreviewed) | PASS (unreviewed) | PASS (unreviewed) | SKIPPED (unreviewed) | SKIPPED (unreviewed) | physical run `d4e722c4` (paxx-u1 1.0.0), bundle `af07e2adc7be` |
+| Snapmaker U1 | paxx-extended 1.6.0.267_20260815150420 | 0.1.0.testgrid | android-moonraker | Multi-material / tool changing | PASS | UNVERIFIED | FAIL | UNVERIFIED | SKIPPED | physical run `d4e722c4` (paxx-u1 1.0.0), bundle `af07e2adc7be` |
+| Snapmaker U1 | paxx-extended 1.6.0.267_20260815150420 | 0.1.0.testgrid | android-moonraker | Single material | PASS | PASS | PASS | SKIPPED | SKIPPED | physical run `d4e722c4` (paxx-u1 1.0.0), bundle `af07e2adc7be` |
 | Snapmaker U1 | snapmaker-stock | — | android-moonraker | Multi-material / tool changing | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite snapmaker-u1-stock 1.0.0). |
 | Snapmaker U1 | snapmaker-stock | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite snapmaker-u1-stock 1.0.0). |
 
@@ -28,11 +28,11 @@ Every run is kept. A newer run supersedes an older one for the current column; t
 | Run | Kind | Suite | Completed (UTC) | Slicing | File transfer | Monitoring | Controls | Physical printing | Review | Status | Bundle digest | Source |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `d2bd7369` | physical | paxx-u1 1.0.0 | 2026-09-28T23:28:20.919Z | PASS | UNVERIFIED | FAIL | UNVERIFIED | SKIPPED | accepted | superseded by `d4e722c4` | `e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3` | e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip |
-| `d4e722c4` | physical | paxx-u1 1.0.0 | 2026-09-28T23:38:59.136Z | PASS | UNVERIFIED | FAIL | UNVERIFIED | SKIPPED | unreviewed | current | `af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e` | af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip |
+| `d4e722c4` | physical | paxx-u1 1.0.0 | 2026-09-28T23:38:59.136Z | PASS | UNVERIFIED | FAIL | UNVERIFIED | SKIPPED | accepted | current | `af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e` | af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip |
 
 ### Snapmaker U1 · paxx-extended 1.6.0.267_20260815150420 · Nozzle 0.1.0.testgrid · android-moonraker · Single material
 
 | Run | Kind | Suite | Completed (UTC) | Slicing | File transfer | Monitoring | Controls | Physical printing | Review | Status | Bundle digest | Source |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `d2bd7369` | physical | paxx-u1 1.0.0 | 2026-09-28T23:28:20.919Z | PASS | PARTIAL | PASS | SKIPPED | SKIPPED | accepted | superseded by `d4e722c4` | `e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3` | e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip |
-| `d4e722c4` | physical | paxx-u1 1.0.0 | 2026-09-28T23:38:59.136Z | PASS | PASS | PASS | SKIPPED | SKIPPED | unreviewed | current | `af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e` | af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip |
+| `d4e722c4` | physical | paxx-u1 1.0.0 | 2026-09-28T23:38:59.136Z | PASS | PASS | PASS | SKIPPED | SKIPPED | accepted | current | `af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e` | af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip |

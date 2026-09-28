@@ -120,7 +120,7 @@ class M2DeviceTest {
         lateinit var workspace:FileWorkspace
         compose.setContent {val context=LocalContext.current;val scope=rememberCoroutineScope();workspace=remember{FileWorkspace(context,scope)};CompanionTheme {FileWorkspacePanel(workspace)}}
         try {
-            compose.runOnIdle {workspace.import(android.net.Uri.parse("content://net.jamesjennison.klippercompanion.test.gcodefixture/sample"))}
+            compose.runOnIdle {workspace.import(android.net.Uri.parse("content://${androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.packageName}.gcodefixture/sample"))}
             compose.waitUntil(20000){!workspace.loading}
             assertNotNull(workspace.note,workspace.localFile);assertEquals("fixture.gcode",workspace.name)
             compose.onNodeWithText("Preview layers").performClick();compose.waitUntil(10000){!workspace.loading}
@@ -135,7 +135,7 @@ class M2DeviceTest {
                 assertEquals("Copy saved to the selected document.",workspace.note)
                 assertArrayEquals(expected,destination.readBytes())
             }finally{destination.delete()}
-            compose.runOnIdle {workspace.import(android.net.Uri.parse("content://net.jamesjennison.klippercompanion.test.gcodefixture/wrong"))}
+            compose.runOnIdle {workspace.import(android.net.Uri.parse("content://${androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.packageName}.gcodefixture/wrong"))}
             compose.waitUntil(10000){!workspace.loading}
             assertEquals("Choose a .gcode or .gco file with a valid name.",workspace.note)
         }finally{compose.runOnIdle{workspace.close()}}

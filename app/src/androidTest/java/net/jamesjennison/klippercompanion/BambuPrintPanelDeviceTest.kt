@@ -10,7 +10,7 @@ import org.junit.Test
 class BambuPrintPanelDeviceTest {
     @get:Rule val compose = createComposeRule()
     private val state = ScreenState(address = "192.168.1.50", connected = true, generation = 7, snapshot = PrinterSnapshot(true, "standby"))
-    private fun fixture(path: String) = Uri.parse("content://net.jamesjennison.klippercompanion.test.gcodefixture/$path")
+    private fun fixture(path: String) = Uri.parse("content://${androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.packageName}.gcodefixture/$path")
 
     @Test fun confirmingASlicedShareSendsOnePrintRequestThroughExecute() {
         val sent = mutableListOf<Pair<PrinterCommand, Int>>();var closed = false

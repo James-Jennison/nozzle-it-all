@@ -103,12 +103,31 @@ class Redactor(literals: Collection<String> = emptyList()) {
             value.keySet().forEach { k ->
                 val norm = k.lowercase().replace("-", "").replace("_", "")
                 if (norm in SENSITIVE_KEYS.map { it.replace("-", "").replace("_", "") }) { out.put(k, "[redacted]"); count("sensitive-field", 1) }
+                else if (norm == "version" && value.opt(k) is String) out.put(k, versionText(value.getString(k)))
                 else out.put(k, json(value.opt(k)))
             }
         }
         is JSONArray -> JSONArray().also { out -> (0 until value.length()).forEach { out.put(json(value.opt(it))) } }
         is String -> text(value)
         else -> value
+    }
+
+    /**
+     * Version fields (engine, firmware) are four-part numbers often enough to look like IPv4 addresses; the general
+     * IP rule masked the native engine's version on the first real bundle. Here only known-private values, and a value
+     * that is literally a private-network or loopback address, are masked.
+     */
+    private fun versionText(input: String): String {
+        var s = input
+        literals.forEach { lit -> if (s.contains(lit, ignoreCase = true)) { s = s.replace(lit, "[private]", ignoreCase = true); count("known-private-value", 1) } }
+        val m = IPV4.find(s)
+        if (m != null && m.value == s.trim() && isPrivateV4(m.groupValues[1])) { count("ip-address", 1); return "[ip]" }
+        return s
+    }
+
+    private fun isPrivateV4(ip: String): Boolean {
+        val p = ip.split('.').map { it.toInt() }
+        return p[0] == 10 || p[0] == 127 || (p[0] == 192 && p[1] == 168) || (p[0] == 172 && p[1] in 16..31) || (p[0] == 169 && p[1] == 254) || (p[0] == 100 && p[1] in 64..127)
     }
 
     /**
@@ -121,7 +140,10 @@ class Redactor(literals: Collection<String> = emptyList()) {
         if (PRIVATE_KEY.containsMatchIn(output)) found += "private key material"
         if (HEADER_LEAK.containsMatchIn(output)) found += "an authentication header"
         if (JWT.containsMatchIn(output)) found += "a token"
-        IPV4.findAll(output).forEach { found += "an IP address" }
+        output.lineSequence().forEach { line ->
+            val versionLine = line.trimStart().startsWith("\"version\":")
+            IPV4.findAll(line).forEach { m -> if (!versionLine || isPrivateV4(m.groupValues[1])) found += "an IP address" }
+        }
         LOCAL_HOST.findAll(output).forEach { found += "a local hostname" }
         USER_PATHS.forEach { (re, _) -> if (re.containsMatchIn(output)) found += "a user filesystem path" }
         EMAIL.findAll(output).forEach { found += "an email address" }

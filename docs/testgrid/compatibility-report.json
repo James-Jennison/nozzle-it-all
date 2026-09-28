@@ -1,0 +1,325 @@
+{
+  "duplicates": [],
+  "format": "nozzle.compatibility-report",
+  "rejected": [],
+  "rows": [
+    {
+      "adapter": "android-bambu-lan",
+      "current": null,
+      "firmware": {
+        "family": "bambu-lan",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite bambu-lan 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Bambu Lab",
+        "model": "X1 Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "cosmos",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "cosmos",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-elegoo-sdcp",
+      "current": null,
+      "firmware": {
+        "family": "elegoo-stock",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-elegoo-sdcp",
+      "current": null,
+      "firmware": {
+        "family": "opencentauri-patched",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "klipper",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite generic-klipper 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "Klipper"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-octoprint",
+      "current": null,
+      "firmware": {
+        "family": "octoprint",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite octoprint 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "OctoPrint printer"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-prusalink",
+      "current": null,
+      "firmware": {
+        "family": "prusalink",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite prusalink 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Prusa",
+        "model": "MK4S"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+      "firmware": {
+        "family": "paxx-extended",
+        "version": "1.6.0.267_20260815150420"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "FAIL (unreviewed)",
+        "physical_print": "SKIPPED (unreviewed)",
+        "slicing": "PASS (unreviewed)"
+      },
+      "history": [
+        {
+          "bundleDigest": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3",
+          "completedAt": 1790638100919,
+          "contentDigest": "ea5cc48ea9bd26a3c5aa26d0bf561a0c2aeccd0d9084ed5eac5f4b48554247be",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "FAIL",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "unreviewed",
+          "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+          "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": null
+        }
+      ],
+      "note": "",
+      "nozzleVersion": "0.1.0.testgrid",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+      "firmware": {
+        "family": "paxx-extended",
+        "version": "1.6.0.267_20260815150420"
+      },
+      "grades": {
+        "controls": "SKIPPED (unreviewed)",
+        "file_transfer": "PARTIAL (unreviewed)",
+        "monitoring": "PASS (unreviewed)",
+        "physical_print": "SKIPPED (unreviewed)",
+        "slicing": "PASS (unreviewed)"
+      },
+      "history": [
+        {
+          "bundleDigest": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3",
+          "completedAt": 1790638100919,
+          "contentDigest": "ea5cc48ea9bd26a3c5aa26d0bf561a0c2aeccd0d9084ed5eac5f4b48554247be",
+          "grades": {
+            "controls": "SKIPPED",
+            "file_transfer": "PARTIAL",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "unreviewed",
+          "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+          "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": null
+        }
+      ],
+      "note": "",
+      "nozzleVersion": "0.1.0.testgrid",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "snapmaker-stock",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "snapmaker-stock",
+        "version": "—"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.0.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "single_material"
+    }
+  ],
+  "version": [
+    1,
+    0
+  ]
+}

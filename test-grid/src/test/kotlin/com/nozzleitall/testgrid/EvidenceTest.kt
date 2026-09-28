@@ -125,6 +125,23 @@ class EvidenceTest {
         assertEquals("fine", o.getJSONObject("nested").getString("ok"))
     }
 
+    @Test fun versionFieldsAreNotMistakenForAddresses() {
+        // Found on the first real bundle: the native engine's four-part version came out as "[ip]".
+        val r = Redactor(listOf("workshop-u1"))
+        val o = r.json(JSONObject().put("engine", JSONObject().put("version", "2.3.1.0"))
+            .put("firmware", JSONObject().put("version", "1.6.0.267_20260815150420")).put("a", JSONObject().put("version", "192.168.1.5"))
+            .put("b", JSONObject().put("version", "workshop-u1 v2")).put("detail", "engine 2.3.1.0 at 192.168.1.5")) as JSONObject
+        assertEquals("2.3.1.0", o.getJSONObject("engine").getString("version"))
+        assertEquals("1.6.0.267_20260815150420", o.getJSONObject("firmware").getString("version"))
+        assertEquals("[ip]", o.getJSONObject("a").getString("version"))
+        assertEquals("[private] v2", o.getJSONObject("b").getString("version"))
+        // Free text keeps the general rule.
+        assertFalse(o.getString("detail").contains("192.168.1.5"))
+        // And the export gate accepts the kept version but not a private address in the same position.
+        assertTrue(r.leaks(Canon.write(o)).isEmpty())
+        assertTrue(r.leaks("{\n  \"version\": \"192.168.1.5\"\n}").isNotEmpty())
+    }
+
     @Test fun jpegMetadataIsStripped() {
         val jpeg = ByteArrayOutputStream().apply {
             write(byteArrayOf(0xFF.toByte(), 0xD8.toByte()))

@@ -53,9 +53,30 @@ data class Transform(val m: DoubleArray = doubleArrayOf(1.0, 0.0, 0.0, 0.0, 1.0,
  * One printable object: a name, a mesh already flattened from any components, and its placement on the plate. [filament]
  * is the file's own 1-based filament for the object (what unpainted areas print with), when the file says.
  */
-/** [settings]: the object's own print settings from another slicer's 3MF (Orca/Bambu object metadata), engine keys to values. */
+/**
+ * [settings]: the object's own print settings (Orca/Bambu object metadata), engine keys to values. [plate]: the 0-based
+ * plate it's on in an Orca/Bambu multi-plate project (its placement is then in that slicer's world coordinates, where
+ * plate i sits at [Plates.origin]).
+ */
 data class ModelObject(val id: Int, val name: String, val mesh: Mesh, val placement: Transform = Transform(), val filament: Int? = null,
-                       val settings: Map<String, String> = emptyMap())
+                       val settings: Map<String, String> = emptyMap(), val plate: Int? = null)
+
+/**
+ * Orca's plate layout (src/slic3r/GUI/PartPlate.cpp at the engine pin: compute_colum_count, compute_shape_position,
+ * plate_stride_x/y with LOGICAL_PART_PLATE_GAP 1/5): plates in a grid of about the square root of their count's columns,
+ * each 1.2 bed widths right of the last and rows 1.2 bed depths towards -Y.
+ */
+object Plates {
+    fun columns(count: Int): Int {
+        val value = kotlin.math.sqrt(count.toFloat()); val rounded = kotlin.math.round(value)
+        return (if (value > rounded) rounded + 1 else rounded).toInt().coerceAtLeast(1)
+    }
+    /** Where plate [index] (0-based) of [count] starts, for a bed [width] x [depth] mm. */
+    fun origin(index: Int, count: Int, width: Double, depth: Double): Pair<Double, Double> {
+        val cols = columns(count)
+        return (index % cols) * width * 1.2 to -(index / cols) * depth * 1.2
+    }
+}
 
 /**
  * A project as stored on disk: objects, the model-level 3MF metadata, the Nozzle manifest (null for a plain 3MF from
@@ -70,6 +91,10 @@ data class Project3mf(
     val manifestProblem: String? = null,
     /** The filaments the file was set up with in the slicer that made it; paint states and [ModelObject.filament] index these. */
     val filaments: List<SourceFilament> = emptyList(),
+    /** Plate names in plate order: another slicer's plates on read; on write, the plates to record for Orca/Bambu. */
+    val plateNames: List<String> = emptyList(),
+    /** The bed the file was laid out on (its printable_area), for placing another slicer's plates. */
+    val sourceBed: Pair<Double, Double>? = null,
 )
 
 /** Resource limits for reading untrusted archives. */
@@ -221,7 +246,7 @@ object ThreeMf {
             for (i in ps.indices) if (ps[i] == plain) ps[i] = null
             val name = parts.name(id) ?: objectsIn(path)[id]?.getAttribute("name")?.ifBlank { null } ?: "Object ${index + 1}"
             val paint = if (ps.any { it != null }) ps.toTypedArray() else null
-            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray(), paint), Transform.parse(item.getAttribute("transform")), own, parts.settings(id))
+            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray(), paint), Transform.parse(item.getAttribute("transform")), own, parts.settings(id), parts.plate(id))
         }
         var manifest: ProjectManifest? = null
         var problem: String? = null
@@ -239,7 +264,7 @@ object ThreeMf {
         }
         // Geometry parts (3D/...) are flattened into the canonical model on save, so they are not carried forward.
         val passthrough = entries.filterKeys { it !in owned && it != root && !it.startsWith("3D/") && it !in partSettings }
-        return Project3mf(objects, metadata, manifest, passthrough, problem, sourceFilaments(entries))
+        return Project3mf(objects, metadata, manifest, passthrough, problem, sourceFilaments(entries), parts.plateNames, sourceBed(entries))
     }
 
     /**
@@ -284,9 +309,35 @@ object ThreeMf {
             sb.append(" </build>\n</model>\n")
             put(MODEL_PATH, sb.toString().toByteArray())
             project.manifest?.let { put(ProjectManifest.ARCHIVE_PATH, it.toJson().toString(2).toByteArray()) }
+            modelSettings(project)?.let { put("Metadata/model_settings.config", it.toByteArray()) }
             project.passthrough.forEach { (name, bytes) -> if (validEntryName(name) && name !in owned) put(name, bytes) }
         }
         return out.toByteArray()
+    }
+
+    /**
+     * Orca/Bambu's model_settings.config for what they'd otherwise lose (bbs_3mf.cpp _add_model_config_file_to_archive):
+     * each object's name, filament and own settings, and the plates with their objects. Nozzle reads its own projects
+     * from the manifest; this is for other slicers. Null when there's nothing to say.
+     */
+    private fun modelSettings(project: Project3mf): String? {
+        if (project.plateNames.isEmpty() && project.objects.none { it.settings.isNotEmpty() }) return null
+        val sb = StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<config>\n")
+        fun meta(indent: String, k: String, v: String) = sb.append(indent).append("<metadata key=\"").append(xml(k)).append("\" value=\"").append(xml(v)).append("\"/>\n")
+        project.objects.forEach { o ->
+            sb.append("  <object id=\"${o.id}\">\n")
+            meta("    ", "name", o.name); o.filament?.let { meta("    ", "extruder", it.toString()) }
+            o.settings.toSortedMap().forEach { (k, v) -> meta("    ", k, v) }
+            sb.append("  </object>\n")
+        }
+        project.plateNames.forEachIndexed { i, name ->
+            sb.append("  <plate>\n"); meta("    ", "plater_id", (i + 1).toString()); meta("    ", "plater_name", name)
+            project.objects.filter { (it.plate ?: 0) == i }.forEach { o ->
+                sb.append("    <model_instance>\n"); meta("      ", "object_id", o.id.toString()); meta("      ", "instance_id", "0"); sb.append("    </model_instance>\n")
+            }
+            sb.append("  </plate>\n")
+        }
+        return sb.append("</config>\n").toString()
     }
 
     /** Writes to a temporary file in the same folder and renames it over the target, so a crash never leaves half a project. */
@@ -301,6 +352,13 @@ object ThreeMf {
     }
 
     fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    /** The bed size from an Orca/Bambu project_settings.config's printable_area ("0x0","270x0",...). */
+    private fun sourceBed(entries: Map<String, ByteArray>): Pair<Double, Double>? = runCatching {
+        val area = org.json.JSONObject(String(entries["Metadata/project_settings.config"] ?: return null, Charsets.UTF_8)).optJSONArray("printable_area") ?: return null
+        val pts = (0 until area.length()).map { area.getString(it).split('x').map(String::toDouble) }
+        (pts.maxOf { it[0] } - pts.minOf { it[0] }) to (pts.maxOf { it[1] } - pts.minOf { it[1] })
+    }.getOrNull()
 
     /** The filament list from an Orca/Bambu project_settings.config (JSON) or a PrusaSlicer Slic3r_PE.config (INI). */
     private fun sourceFilaments(entries: Map<String, ByteArray>): List<SourceFilament> {
@@ -337,7 +395,11 @@ object ThreeMf {
         private val parts: Map<Pair<Int, Int>, Int> = emptyMap(),
         private val ranges: Map<Int, List<Triple<Int, Int, Int>>> = emptyMap(),
         private val settings: Map<Int, Map<String, String>> = emptyMap(),
+        private val plates: Map<Int, Int> = emptyMap(),
+        val plateNames: List<String> = emptyList(),
     ) {
+        /** The object's plate (0-based) from Orca/Bambu's <plate> blocks (bbs_3mf.cpp PLATE_TAG, model_instance object_id). */
+        fun plate(obj: Int) = plates[obj]
         /** The object's own print settings: Orca writes every key of ModelObject::config as object metadata (bbs_3mf.cpp). */
         fun settings(obj: Int) = settings[obj].orEmpty()
         fun name(obj: Int) = names[obj]
@@ -351,7 +413,7 @@ object ThreeMf {
 
             fun read(entries: Map<String, ByteArray>): PartSettings {
                 val names = HashMap<Int, String>(); val objects = HashMap<Int, Int>(); val parts = HashMap<Pair<Int, Int>, Int>(); val ranges = HashMap<Int, MutableList<Triple<Int, Int, Int>>>()
-                val settings = HashMap<Int, Map<String, String>>()
+                val settings = HashMap<Int, Map<String, String>>(); val plates = HashMap<Int, Int>(); val plateNames = sortedMapOf<Int, String>()
                 fun meta(e: Element, key: String) = children(e, "metadata").firstOrNull { it.getAttribute("key") == key }?.getAttribute("value")
                 for (path in listOf("Metadata/model_settings.config", "Metadata/Slic3r_PE_model.config")) {
                     val doc = entries[path]?.let { runCatching { parseXml(it) }.getOrNull() } ?: continue
@@ -371,7 +433,15 @@ object ThreeMf {
                         }
                     }
                 }
-                return PartSettings(names, objects, parts, ranges, settings)
+                entries["Metadata/model_settings.config"]?.let { runCatching { parseXml(it) }.getOrNull() }?.let { doc ->
+                    children(doc, "plate").forEach { pl ->
+                        val id = meta(pl, "plater_id")?.toIntOrNull()?.takeIf { it >= 1 } ?: return@forEach
+                        plateNames[id] = meta(pl, "plater_name").orEmpty()
+                        children(pl, "model_instance").forEach { mi -> meta(mi, "object_id")?.toIntOrNull()?.let { plates[it] = id - 1 } }
+                    }
+                }
+                val names2 = if (plateNames.isEmpty()) emptyList() else (1..plateNames.lastKey()).map { plateNames[it].orEmpty() }
+                return PartSettings(names, objects, parts, ranges, settings, plates, names2)
             }
         }
     }

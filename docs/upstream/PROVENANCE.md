@@ -481,3 +481,28 @@ interchange).
   - Not on Android (its own simpler orient/arrange) or the Web App yet.
 - **Touches:** Prepare plate, shared engine.
 
+## P-0019 — plates, plate names, object info (ported)
+
+- **Upstream:** Snapmaker Orca `cbf7bbb0b3` (AGPL-3.0): `src/slic3r/GUI/PartPlate.cpp`/`.hpp` (`compute_colum_count`,
+  `compute_shape_position`, `plate_stride_x/y` with `LOGICAL_PART_PLATE_GAP` 1/5: plates side by side in world coordinates)
+  and `src/libslic3r/Format/bbs_3mf.cpp` (`<plate>` blocks in `model_settings.config`: `plater_id`, `plater_name`,
+  `model_instance`/`object_id`; object metadata `name`, `extruder` and settings).
+- **Imported:** the desktop project has plates: tabs to show, rename, add and remove (empty) plates; objects move between
+  plates; Arrange puts what doesn't fit onto new plates (as Orca's arrange fills further beds); Slice slices the plate
+  shown. Projects are saved with objects where Orca lays plates out, the manifest's plate list, and a
+  `model_settings.config` with the plates, each object's filament and its own settings, so Orca/Bambu open the same
+  plates (and see per-object settings, closing that P-0017 gap). Orca/Bambu multi-plate 3MFs open with their plates and
+  names, using the file's own bed size for the layout. The Objects card shows each object's size, volume, triangle count
+  and open edges.
+- **Test evidence:** PlatesTest (Orca's column count and plate origins; another slicer's plates, names and bed read;
+  a two-plate project with a renamed plate saves with Orca's layout and `model_settings.config`, reopens with each object
+  on its plate at its place, and slices only the plate shown; a cube's volume 8000 mm³ and no open edges).
+- **Known divergence:**
+  - Orca shows every plate at once on one canvas; Nozzle shows one plate at a time, with tabs.
+  - Per-plate settings (bed type, print sequence, layer-based settings) and "slice all plates" aren't there yet; a
+    plate with objects can't be removed (move or remove them first) where Orca removes them with it.
+  - Nozzle writes a minimal `model_settings.config` (no part/volume records, no plate thumbnails or per-plate G-code).
+  - The Web App and Android have no plate list: the Web App keeps each object on its plate when it saves a desktop
+    project, but shows them all on one bed.
+- **Touches:** Prepare plates and objects, project format (desktop, Web App save).
+

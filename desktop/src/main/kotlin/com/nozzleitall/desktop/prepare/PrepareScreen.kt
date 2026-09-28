@@ -76,17 +76,19 @@ fun PrepareScreen(state: AppState) {
                     Spacer(Modifier.weight(1f))
                     Txt("Drag to orbit · Shift-drag to pan · Scroll to zoom", Nz.type.bodySmall, c.textMuted)
                 }
-                if (!p.showPreview && p.items.isNotEmpty()) PlateToolbar(p)
+                if (!p.showPreview) PlateTabs(p)
+                val onPlate = p.plateItems()
+                if (!p.showPreview && onPlate.isNotEmpty()) PlateToolbar(p)
                 val slots = p.materials()
                 val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
-                val objects = p.items.map { item ->
+                val objects = onPlate.map { item ->
                     // A slot is a loaded filament or a Full Spectrum mix (drawn in its blended colour).
                     val paintColors = if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
                     PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors)
                 }
                 val (bw, bd) = p.bed
                 Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(20.dp))) {
-                    if (p.items.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, "Start with a model",
+                    if (onPlate.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, if (p.items.isEmpty()) "Start with a model" else "${p.plateNames.getOrNull(p.currentPlate) ?: "This plate"} is empty",
                         "Add an STL, 3MF or OBJ file, or open a project from Projects. Nothing leaves this computer.", Modifier.align(Alignment.Center)) {
                         NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY)
                     }
@@ -299,11 +301,12 @@ private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzle
 private fun StepObjects(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
-    Section("Objects", if (p.items.isEmpty()) "None yet" else "${p.items.size} on the plate", initiallyOpen = p.items.isNotEmpty(),
-        action = { if (p.items.isNotEmpty()) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() } }) {
-        if (p.items.isEmpty()) { Txt("Nothing on the plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
+    val onPlate = p.plateItems()
+    Section("Objects", if (onPlate.isEmpty()) "None yet" else "${onPlate.size} on ${p.plateNames.getOrNull(p.currentPlate) ?: "the plate"}", initiallyOpen = onPlate.isNotEmpty(),
+        action = { if (onPlate.isNotEmpty()) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() } }) {
+        if (onPlate.isEmpty()) { Txt("Nothing on this plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
         val slots = p.materials()
-        p.items.forEach { item ->
+        onPlate.forEach { item ->
             val sel = item.id == p.selected
             Row(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else Color.Transparent)
                 .selectable(sel, role = Role.Button) { p.selected = if (sel) null else item.id }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
@@ -313,7 +316,7 @@ private fun StepObjects(state: AppState) {
                 Txt("${"%.0f".format(item.footprintW)}×${"%.0f".format(item.footprintD)}×${"%.0f".format(item.height)} mm", Nz.type.bodySmall, c.textMuted)
             }
         }
-        val s = p.items.firstOrNull { it.id == p.selected }
+        val s = onPlate.firstOrNull { it.id == p.selected }
         if (s != null) {
             ObjectRow("Material") {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -327,6 +330,11 @@ private fun StepObjects(state: AppState) {
             }
             ObjectRow("Position (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("X", s.x) { s.x = it; p.changed() }; ObjectNumber("Y", s.y) { s.y = it; p.changed() } } }
             ObjectRow("Turn and size") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() }; ObjectNumber("%", s.scale * 100) { v -> if (v > 0) { s.scale = v / 100; p.changed() } } } }
+            if (p.plateNames.size > 1) ObjectRow("Plate") {
+                com.nozzleitall.desktop.settings.DenseSelect("Move to plate", p.plateNames.mapIndexed { i, n -> com.nozzleitall.desktop.settings.Choice("$i", n) }, "${s.plate}",
+                    Modifier.width(160.dp)) { v -> v.toIntOrNull()?.let { p.moveToPlate(s, it) } }
+            }
+            ObjectInfo(s)
             val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
             ObjectSettingsSection(p, s, profileValues)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -338,11 +346,49 @@ private fun StepObjects(state: AppState) {
     }
 }
 
+/** The project's plates (Orca's plate list): pick one to show it, rename it in place, add one, remove an empty one. */
+@Composable
+private fun PlateTabs(p: PrepareState) {
+    val c = Nz.colors
+    var renaming by remember { mutableStateOf<Int?>(null) }
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        p.plateNames.forEachIndexed { i, name ->
+            val on = i == p.currentPlate
+            if (renaming == i) {
+                var text by remember(i) { mutableStateOf(name) }
+                com.nozzleitall.desktop.settings.DenseInput(text, { text = it }, "Plate name", Modifier.width(150.dp))
+                NzButton("OK", { p.renamePlate(i, text.trim().ifBlank { "Plate ${i + 1}" }); renaming = null }, kind = ButtonKind.PRIMARY)
+            } else {
+                val count = p.plateItems(i).size
+                Row(Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) c.accent.copy(alpha = 0.14f) else c.surfaceSunken)
+                    .border(1.dp, if (on) c.accent else c.line, RoundedCornerShape(8.dp))
+                    .clickable(onClickLabel = if (on) "Rename $name" else "Show $name") { if (on) renaming = i else p.showPlate(i) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Txt(name, Nz.type.label, if (on) c.accent else c.text, maxLines = 1)
+                    Txt("$count", Nz.type.bodySmall, c.textMuted)
+                    if (on && count == 0 && p.plateNames.size > 1)
+                        Txt("×", Nz.type.label, c.textMuted, modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClickLabel = "Remove $name") { p.removePlate(i) }.padding(horizontal = 2.dp))
+                }
+            }
+        }
+        NzButton("Add plate", { p.addPlate() }, kind = ButtonKind.QUIET, icon = NzIcon.ADD, testTag = "add-plate")
+    }
+}
+
+/** What the object is: its size, volume and triangles, and open edges when its surface isn't closed (as Orca's object info). */
+@Composable
+private fun ObjectInfo(s: PrepItem) {
+    val c = Nz.colors
+    ObjectRow("Size") { Txt("${"%.1f".format(s.footprintW)} × ${"%.1f".format(s.footprintD)} × ${"%.1f".format(s.height)} mm", Nz.type.bodySmall) }
+    ObjectRow("Volume") { Txt("${"%.1f".format(s.volume / 1000.0)} cm³ · ${"%,d".format(s.mesh.triangleCount)} triangles", Nz.type.bodySmall) }
+    if (s.openEdges > 0) ObjectRow("Surface") { Txt("${s.openEdges} open edge${if (s.openEdges == 1) "" else "s"}: it may not slice as expected", Nz.type.bodySmall, c.danger) }
+}
+
 /** Orca's plate tools: Arrange, Auto orient (the selection, or everything), Split and Cut for the selected object. */
 @Composable
 private fun PlateToolbar(p: PrepareState) {
     val c = Nz.colors
-    val sel = p.items.firstOrNull { it.id == p.selected }
+    val sel = p.plateItems().firstOrNull { it.id == p.selected }
     var cutting by remember(sel?.id) { mutableStateOf(false) }
     var height by remember(sel?.id) { mutableStateOf(sel?.let { "%.1f".format(it.height / 2) } ?: "") }
     val idle = p.toolBusy == null
@@ -388,7 +434,7 @@ private fun StepSlice(state: AppState) {
             SliceState.Idle, SliceState.Cancelled, is SliceState.Failed -> {
                 if (s is SliceState.Failed) Banner(s.message, BannerKind.DANGER)
                 if (s is SliceState.Cancelled) Txt("Slicing was cancelled. Nothing was changed.", Nz.type.bodySmall, c.textMuted)
-                NzButton("Slice", { p.slice(state.scope) }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, icon = NzIcon.SLICE, enabled = p.items.isNotEmpty(), testTag = "slice")
+                NzButton("Slice", { p.slice(state.scope) }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, icon = NzIcon.SLICE, enabled = p.plateItems().isNotEmpty(), testTag = "slice")
             }
             is SliceState.Running -> {
                 Txt(s.stage, Nz.type.body)

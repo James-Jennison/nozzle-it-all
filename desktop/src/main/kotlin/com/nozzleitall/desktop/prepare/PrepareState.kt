@@ -22,7 +22,10 @@ private const val FLUSH_KEY = "flush_volumes_matrix"
  * and [sources] describes those filaments as the file had them.
  */
 class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, rotZ: Float = 0f, scale: Float = 1f, slot: Int = 1,
-               paintSlots: List<Int> = emptyList(), val sources: List<SourceFilament> = emptyList(), settings: Map<String, String> = emptyMap()) {
+               paintSlots: List<Int> = emptyList(), val sources: List<SourceFilament> = emptyList(), settings: Map<String, String> = emptyMap(),
+               plate: Int = 0) {
+    /** The plate it's on (0-based); x and y are on that plate. */
+    var plate by mutableStateOf(plate)
     /** The object's own print settings (Orca's per-object settings), engine keys to serialized values. */
     val settings = androidx.compose.runtime.mutableStateMapOf<String, String>().apply { putAll(settings) }
     var name by mutableStateOf(name); var x by mutableStateOf(x); var y by mutableStateOf(y)
@@ -48,6 +51,31 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     val footprintW get() = reach.let { it[1] - it[0] }
     val footprintD get() = reach.let { it[3] - it[2] }
     val height get() = (bounds[5] - bounds[2]) * scale
+
+    /** The mesh's volume in mm³ before scaling (signed tetrahedra; a closed mesh's is exact). */
+    val rawVolume: Double by lazy {
+        val v = mesh.vertices; val t = mesh.triangles; var sum = 0.0
+        for (i in t.indices step 3) {
+            val a = t[i] * 3; val b = t[i + 1] * 3; val c = t[i + 2] * 3
+            sum += (v[a] * (v[b + 1] * v[c + 2] - v[b + 2] * v[c + 1]) - v[a + 1] * (v[b] * v[c + 2] - v[b + 2] * v[c]) + v[a + 2] * (v[b] * v[c + 1] - v[b + 1] * v[c])).toDouble()
+        }
+        kotlin.math.abs(sum / 6.0)
+    }
+    val volume get() = rawVolume * scale * scale * scale
+
+    /** Edges used by only one triangle (vertices at the same place counted as one): 0 for a closed, printable surface. */
+    val openEdges: Int by lazy {
+        val canonical = HashMap<Triple<Float, Float, Float>, Int>()
+        val same = IntArray(mesh.vertexCount) { i -> canonical.getOrPut(Triple(mesh.vertices[i * 3], mesh.vertices[i * 3 + 1], mesh.vertices[i * 3 + 2])) { i } }
+        val count = HashMap<Long, Int>()
+        val t = mesh.triangles
+        for (f in 0 until mesh.triangleCount) for (e in 0..2) {
+            val a = same[t[f * 3 + e]]; val b = same[t[f * 3 + (e + 1) % 3]]
+            val k = if (a < b) (a.toLong() shl 32) or b.toLong() else (b.toLong() shl 32) or a.toLong()
+            count[k] = (count[k] ?: 0) + 1
+        }
+        count.values.count { it == 1 }
+    }
 
     /** Placement as a 3MF transform: centre the mesh on its own footprint, drop it onto the bed, rotate about Z, scale, move. */
     fun placement(): Transform {
@@ -131,6 +159,27 @@ class PrepareState(private val app: AppState) {
     val profile: PrinterProfileInfo? get() = ProfileCatalog.byId(profileId)
     /** The chosen profile's printable area. */
     val bed: Pair<Float, Float> get() = profile?.let { it.bedW to it.bedD } ?: (270f to 270f)
+
+    // --- Plates (Orca's plate list): names in order, the one shown, and the objects on it.
+    val plateNames = androidx.compose.runtime.mutableStateListOf("Plate 1")
+    var currentPlate by mutableStateOf(0)
+    fun plateItems(plate: Int = currentPlate): List<PrepItem> = items.filter { it.plate == plate }
+
+    /** Shows plate [i]; a slice result belongs to the plate it was made for. */
+    fun showPlate(i: Int) { if (i in plateNames.indices && i != currentPlate) { currentPlate = i; selected = null; invalidateSlice() } }
+
+    fun addPlate() { plateNames += "Plate ${plateNames.size + 1}"; currentPlate = plateNames.lastIndex; selected = null; changed() }
+    fun renamePlate(i: Int, name: String) { if (i in plateNames.indices) { plateNames[i] = name; changed() } }
+    /** Removes an empty plate; the plates after it move up one. */
+    fun removePlate(i: Int) {
+        if (plateNames.size <= 1 || plateItems(i).isNotEmpty()) return
+        plateNames.removeAt(i); items.forEach { if (it.plate > i) it.plate -= 1 }
+        currentPlate = currentPlate.coerceAtMost(plateNames.lastIndex).let { if (it > i) it - 1 else it }.coerceAtLeast(0); changed()
+    }
+    fun moveToPlate(item: PrepItem, plate: Int) {
+        if (plate !in plateNames.indices || plate == item.plate) return
+        item.plate = plate; selected = null; changed()
+    }
 
     fun printer(): PrinterEntry? = printerId?.let { app.fleet.printers[it] }
 
@@ -375,6 +424,7 @@ class PrepareState(private val app: AppState) {
         bedType = null; nozzleFlows.clear(); nozzle = null; processId = null
         overrides.clear(); mixDefinitions = ""; mixes.clear(); mixProblem = null; headProfiles.clear(); colorMix.clear()
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
+        plateNames.clear(); plateNames += "Plate 1"; currentPlate = 0
         slice = SliceState.Idle; showPreview = false; nextId = 1
     }
 
@@ -386,8 +436,22 @@ class PrepareState(private val app: AppState) {
         // PrusaSlicer's virtual extruders, when the project has them (its own sidecar, kept as it is).
         p.passthrough[PrusaColorMix.SIDECAR]?.let { PrusaColorMix.readSidecar(it) }?.let { (_, list) -> setColorMix(list) }
         val entries = p.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
-        p.objects.forEach { o -> addFromPlacement(o, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments,
-            ObjectSettings.usable(entries[o.id]?.settings?.takeIf { it.isNotEmpty() } ?: o.settings)) }
+        // Plates: Nozzle's own from the manifest, another slicer's from its plate list. Objects are stored where that
+        // slicer puts its plates side by side (Plates.origin), so each is brought back onto its own plate.
+        val ownPlates = p.manifest?.plates?.sortedBy { it.index }?.takeIf { it.size > 1 || it.firstOrNull()?.name?.isNotBlank() == true }
+        val plateOf: (ModelObject) -> Int = if (ownPlates != null) { o -> ownPlates.indexOfFirst { pl -> pl.objects.any { it.objectId == o.id } }.coerceAtLeast(0) } else { o -> o.plate ?: 0 }
+        val names = ownPlates?.map { it.name } ?: p.plateNames
+        val count = maxOf(names.size, (p.objects.maxOfOrNull(plateOf) ?: 0) + 1, 1)
+        plateNames.clear(); plateNames.addAll((0 until count).map { i -> names.getOrNull(i)?.takeIf { it.isNotBlank() } ?: "Plate ${i + 1}" })
+        val layoutBed = (if (ownPlates != null) p.manifest?.printer?.profileId?.let { ProfileCatalog.byId(it) }?.let { it.bedW.toDouble() to it.bedD.toDouble() } else p.sourceBed)
+            ?: bed.let { it.first.toDouble() to it.second.toDouble() }
+        p.objects.forEach { o ->
+            val plate = plateOf(o)
+            val (ox, oy) = Plates.origin(plate, count, layoutBed.first, layoutBed.second)
+            val local = if (ox == 0.0 && oy == 0.0) o else o.copy(placement = Transform(o.placement.m.copyOf().also { it[9] -= ox; it[10] -= oy }))
+            addFromPlacement(local, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments,
+                ObjectSettings.usable(entries[o.id]?.settings?.takeIf { it.isNotEmpty() } ?: o.settings), plate)
+        }
         p.manifest?.settings?.preset?.let { key ->
             if (key.startsWith("process:")) processId = key.removePrefix("process:")
             else QualityPreset.entries.firstOrNull { it.name.equals(key, true) }?.let { preset = it } }
@@ -415,13 +479,13 @@ class PrepareState(private val app: AppState) {
     }
 
     /** Reverses [PrepItem.placement] for a mesh loaded from a 3MF: recovers bed position, Z rotation and uniform scale. */
-    private fun addFromPlacement(o: ModelObject, slot: Int, paintSlots: List<Int>, sources: List<SourceFilament>, settings: Map<String, String> = emptyMap()) {
+    private fun addFromPlacement(o: ModelObject, slot: Int, paintSlots: List<Int>, sources: List<SourceFilament>, settings: Map<String, String> = emptyMap(), plate: Int = 0) {
         val m = o.placement.m
         val scale = sqrt(m[0] * m[0] + m[1] * m[1]).toFloat().takeIf { it > 0 } ?: 1f
         val rot = Math.toDegrees(atan2(m[1], m[0])).toFloat()
         val b = o.mesh.bounds(); val cx = (b[0] + b[3]) / 2.0; val cy = (b[1] + b[4]) / 2.0
         val p = o.placement.apply(cx, cy, 0.0)
-        val item = PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot, paintSlots, sources, settings)
+        val item = PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot, paintSlots, sources, settings, plate)
         // A painted model from another slicer (or saved before colours were mapped) gets its colours matched to the slots.
         if (item.painted.isNotEmpty() && item.paintSlots.size < item.painted.max()) matchColours(item, o.filament)
         items += item
@@ -431,7 +495,7 @@ class PrepareState(private val app: AppState) {
     fun importModel(f: File) {
         val loaded = MeshIO.load(f)
         val (bw, bd) = bed
-        val item = PrepItem(nextId++, f.nameWithoutExtension, loaded.mesh, bw / 2, bd / 2, sources = loaded.filaments)
+        val item = PrepItem(nextId++, f.nameWithoutExtension, loaded.mesh, bw / 2, bd / 2, sources = loaded.filaments, plate = currentPlate)
         // A PrusaSlicer file's virtual extruders come with it (into an empty list; the first file's win), their ids moved
         // clear of this printer's extruders by PrusaSlicer's own import remap; the paint follows.
         var virtualRemap = emptyMap<Int, Int>()
@@ -472,7 +536,7 @@ class PrepareState(private val app: AppState) {
         item.paintSlots[n - 1] = slot; changed()
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap()); changed(); arrange() } }
+    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate); changed(); arrange() } }
     fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
     fun changed() { dirty = true; invalidateSlice() }
     private fun invalidateSlice() { if (slice !is SliceState.Running) { slice = SliceState.Idle; showPreview = false } }
@@ -496,7 +560,7 @@ class PrepareState(private val app: AppState) {
 
     /** The same object with a new mesh (its turn, size, slot, colours and settings kept). */
     private fun withMesh(old: PrepItem, mesh: Mesh, id: Int = old.id, name: String = old.name, x: Float = old.x, y: Float = old.y) =
-        PrepItem(id, name, mesh, x, y, old.rotZ, old.scale, old.slot, old.paintSlots.toList(), old.sources, old.settings.toMap()).also { it.ownFilament = old.ownFilament }
+        PrepItem(id, name, mesh, x, y, old.rotZ, old.scale, old.slot, old.paintSlots.toList(), old.sources, old.settings.toMap(), old.plate).also { it.ownFilament = old.ownFilament }
 
     private fun replace(old: PrepItem, vararg new: PrepItem) {
         val i = items.indexOfFirst { it.id == old.id }.takeIf { it >= 0 } ?: return
@@ -507,28 +571,34 @@ class PrepareState(private val app: AppState) {
      * Orca's Arrange (engine: ModelArrange/Arrange with the printer's clearances and the print's brim/skirt spacing).
      * Objects that don't fit stay where they are and are named.
      */
-    fun arrange() { if (items.isNotEmpty()) runTool("Arrange") { arrangeNow() } }
+    fun arrange() { if (plateItems().isNotEmpty()) runTool("Arrange") { arrangeNow() } }
 
     private suspend fun arrangeNow() {
-            val snapshot = items.toList()
+            val snapshot = plateItems()
             val (bw, bd) = bed
             val dir = profileDir()
             val placed = withContext(Dispatchers.IO) {
                 PlateOps.arrange(listOf("machine.json", "process.json", "filament.json").map { File(dir, it) },
                     (printerOverrides() + overrides.toMap() - FLUSH_KEY).filterKeys { it != FullSpectrum.DEFINITIONS_KEY }, snapshot, bw, bd, work = plateWork())
             }
-            val left = ArrayList<String>()
+            // What doesn't fit goes onto new plates after the last, as Orca's arrange fills further plates.
+            val firstNew = plateNames.size
+            var moved = 0
             snapshot.zip(placed).forEach { (item, p) ->
-                if (p.plate != 0) { left += item.name; return@forEach }
                 item.x += p.dx.toFloat(); item.y += p.dy.toFloat(); item.rotZ = (item.rotZ + p.rotationDeg.toFloat()) % 360f
+                if (p.plate > 0) {
+                    val target = firstNew + p.plate - 1
+                    while (plateNames.size <= target) plateNames += "Plate ${plateNames.size + 1}"
+                    item.plate = target; moved++
+                }
             }
-            if (left.isNotEmpty()) notice = "Not everything fits on one plate: ${left.joinToString()}. Remove or scale down an object before slicing."
+            if (moved > 0) notice = "$moved object${if (moved == 1) "" else "s"} didn't fit, so Arrange put ${if (moved == 1) "it" else "them"} on another plate."
             changed()
     }
 
     /** Orca's Auto orient for the selected object, or every object when none is selected. */
     fun orient() {
-        val targets = items.filter { selected == null || it.id == selected }.ifEmpty { return }
+        val targets = plateItems().filter { selected == null || it.id == selected }.ifEmpty { return }
         runTool("Auto orient") {
             targets.forEach { item ->
                 val mesh = withContext(Dispatchers.IO) { PlateOps.orient(item.mesh, plateWork()) }
@@ -578,9 +648,15 @@ class PrepareState(private val app: AppState) {
     }
 
     fun outOfBounds(): List<PrepItem> { val (bw, bd) = bed
-        return items.filter { val r = it.reach; it.x + r[0] < 0 || it.y + r[2] < 0 || it.x + r[1] > bw || it.y + r[3] > bd || it.height > (profile?.height ?: 250f) } }
+        return plateItems().filter { val r = it.reach; it.x + r[0] < 0 || it.y + r[2] < 0 || it.x + r[1] > bw || it.y + r[3] > bd || it.height > (profile?.height ?: 250f) } }
 
-    fun toProject(): Project3mf {
+    /**
+     * The project as saved (every plate, objects placed where Orca lays plates side by side, plates recorded for other
+     * slicers too), or [forSlice]: the current plate alone, on its own bed.
+     */
+    fun toProject(forSlice: Boolean = false): Project3mf {
+        val (bw, bd) = bed
+        val plates = if (forSlice) listOf(currentPlate) else plateNames.indices.toList()
         val m = (manifest ?: app.library.newManifest(name, app.version)).let { base ->
             val p = printer()
             base.copy(name = name, revision = base.revision + if (dirty || manifest == null) 1 else 0,
@@ -589,8 +665,9 @@ class PrepareState(private val app: AppState) {
                     unknown = base.printer?.unknown ?: org.json.JSONObject(), profileId = profileId,
                     family = p?.config?.identity?.family?.id ?: profile?.familyHint,
                     nozzleDiameters = machineVariant()?.let { m -> PrinterSetup.nozzles(machineJson()).map { it.toDoubleOrNull() ?: 0.4 } } ?: base.printer?.nozzleDiameters.orEmpty()),
-                plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList(), settings = it.settings.toMap()) },
-                    base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
+                plates = plates.mapIndexed { n, i -> ProjectManifest.PlateEntry(n + 1, plateNames[i], plateItems(i).map {
+                    ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList(), settings = it.settings.toMap()) },
+                    base.plates.getOrNull(i)?.unknown ?: org.json.JSONObject()) },
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(currentProcess()?.let { "process:${it.id}" } ?: preset.name.lowercase(),
                     mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + (if (library() == null) preset.overrides else emptyMap()) + overrides +
@@ -600,8 +677,13 @@ class PrepareState(private val app: AppState) {
         // PrusaSlicer's ColorMix sidecar is written from the current virtual extruders (and dropped when there are none).
         val files = if (colorMix.isEmpty()) passthrough - PrusaColorMix.SIDECAR
             else passthrough + (PrusaColorMix.SIDECAR to PrusaColorMix.sidecar(materials().map { it.colorHex ?: "#FFFFFF" }, colorMix.toList()).toByteArray())
-        return Project3mf(items.map { ModelObject(it.id, it.name, it.mesh, it.placement()) }, metadata + ("Title" to name) + ("Application" to "Nozzle It All ${app.version}"),
-            m, files)
+        val objects = plates.flatMap { i ->
+            val (ox, oy) = if (forSlice) 0.0 to 0.0 else Plates.origin(i, plateNames.size, bw.toDouble(), bd.toDouble())
+            plateItems(i).map { ModelObject(it.id, it.name, it.mesh, Transform(it.placement().m.copyOf().also { t -> t[9] += ox; t[10] += oy }),
+                it.slot, it.settings.toMap(), if (forSlice) 0 else i) }
+        }
+        return Project3mf(objects, metadata + ("Title" to name) + ("Application" to "Nozzle It All ${app.version}"),
+            m, files, plateNames = if (forSlice || plateNames.size < 2) emptyList() else plateNames.toList())
     }
 
     fun save(): File {
@@ -614,10 +696,10 @@ class PrepareState(private val app: AppState) {
 
     fun slice(scope: kotlinx.coroutines.CoroutineScope) {
         val bin = SliceEngine.locateEngine() ?: run { slice = SliceState.Failed("The slicing engine isn't installed with this copy of Nozzle It All. Reinstall the Desktop package."); return }
-        if (items.isEmpty()) { slice = SliceState.Failed("Add a model to the plate first."); return }
+        if (plateItems().isEmpty()) { slice = SliceState.Failed("Add a model to ${plateNames.getOrNull(currentPlate) ?: "the plate"} first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
         val e = SliceEngine(bin, app.paths.slices).also { engine = it }
-        val req = SliceRequest(toProject(), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, flushMatrix = editedFlush(),
+        val req = SliceRequest(toProject(forSlice = true), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, flushMatrix = editedFlush(),
             extraOverrides = printerOverrides() + (overrides.toMap() - FLUSH_KEY) +
             (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
             virtualExtruders = colorMix.takeIf { it.isNotEmpty() }?.let { PrusaColorMix.sidecar(materials().map { m -> m.colorHex ?: "#FFFFFF" }, it.toList()) })

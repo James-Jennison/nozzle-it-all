@@ -144,7 +144,11 @@ export function toProject(): Project3mf {
     ...base, name: s.name, revision: base.revision + (s.dirty || !s.manifest ? 1 : 0), modifiedAtMillis: Date.now(),
     modifiedBy: { app: 'Nozzle It All', platform: 'web', version: APP_VERSION },
     printer: { ...(base.printer ?? {}), model: s.profile.model, profileId: s.profile.id, family: printer?.family ?? s.profile.family, printerId: printer?.id ?? base.printer?.printerId },
-    plates: [{ ...(base.plates[0] ?? {}), index: 1, name: base.plates[0]?.name ?? 'Plate 1', objects: s.items.map((i) => ({ ...(base.plates[0]?.objects.find((o) => o.objectId === i.id) ?? {}), objectId: i.id, name: i.name, materialSlot: i.slot })) }],
+    // A project's plates are kept as they came (the desktop's multi-plate projects): each object stays on its plate, new ones
+    // join the first. The Web App has no plate list yet: every object is on its one bed, other plates' at their Orca-layout places.
+    plates: (base.plates.length ? base.plates : [{ index: 1, name: 'Plate 1', objects: [] }]).map((pl, n) => ({ ...pl, index: n + 1, name: pl.name ?? `Plate ${n + 1}`,
+      objects: s.items.filter((i) => { const home = base.plates.findIndex((b) => b.objects.some((o) => o.objectId === i.id)); return (home < 0 ? 0 : home) === n; })
+        .map((i) => ({ ...(pl.objects.find((o) => o.objectId === i.id) ?? {}), objectId: i.id, name: i.name, materialSlot: i.slot })) })),
     materials: s.slots,
     settings: { ...base.settings, preset: s.preset, overrides: { ...presetOverrides, sparse_infill_density: `${s.infill}%`, enable_support: s.supports ? '1' : '0', ...s.advanced } },
   };

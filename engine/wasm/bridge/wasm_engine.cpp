@@ -32,6 +32,7 @@ struct Request {
     std::vector<std::string> profiles;
     std::vector<std::pair<std::string, std::string>> overrides;
     std::vector<std::tuple<std::string, engine::ModelTransform, int>> objects;
+    std::vector<std::tuple<size_t, std::string, std::string>> object_settings;
 };
 
 Request parse(const char* text) {
@@ -51,9 +52,13 @@ Request parse(const char* text) {
             engine::ModelTransform t;
             t.offset_x_mm = std::stod(f[2]); t.offset_y_mm = std::stod(f[3]); t.rotation_z_deg = std::stod(f[4]); t.scale = std::stod(f[5]);
             r.objects.emplace_back(f[1], t, std::stoi(f[6]));
+        } else if (f[0] == "object_set" && (f.size() == 4 || f.size() == 3)) {
+            r.object_settings.emplace_back(std::stoul(f[1]), f[2], f.size() == 4 ? f[3] : "");
         } else throw std::runtime_error("Unrecognised request line: " + f[0]);
     }
     if (r.out.empty() || r.objects.empty() || r.profiles.empty()) throw std::runtime_error("The slice request is incomplete.");
+    for (const auto& s : r.object_settings)
+        if (std::get<0>(s) < 1 || std::get<0>(s) > r.objects.size()) throw std::runtime_error("object_set names an object that isn't in the request.");
     return r;
 }
 } // namespace
@@ -75,7 +80,9 @@ EMSCRIPTEN_KEEPALIVE int nz_slice_start(const char* request) {
     std::thread([text]() {
         try {
             Request r = parse(text.c_str());
-            engine::slice_multi_object(r.objects, r.out, r.profiles, r.overrides);
+            std::vector<engine::ObjectExtras> extras(r.objects.size());
+            for (const auto& [n, key, value] : r.object_settings) extras[n - 1].settings.emplace_back(key, value);
+            engine::slice_multi_object(r.objects, r.out, r.profiles, r.overrides, extras);
             g_state = 2;
         } catch (const engine::SliceCancelled&) {
             g_state = 4;

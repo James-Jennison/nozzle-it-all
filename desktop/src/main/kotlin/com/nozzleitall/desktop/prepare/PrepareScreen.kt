@@ -326,6 +326,8 @@ private fun StepObjects(state: AppState) {
             }
             ObjectRow("Position (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("X", s.x) { s.x = it; p.changed() }; ObjectNumber("Y", s.y) { s.y = it; p.changed() } } }
             ObjectRow("Turn and size") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() }; ObjectNumber("%", s.scale * 100) { v -> if (v > 0) { s.scale = v / 100; p.changed() } } } }
+            val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
+            ObjectSettingsSection(p, s, profileValues)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.duplicateSelected() }.padding(4.dp))
                 Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.removeSelected() }.padding(4.dp))

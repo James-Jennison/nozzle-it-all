@@ -431,3 +431,27 @@ interchange).
   - `site-src/printer_models.json` (written by the generator) was not regenerated.
   - Nothing here has run against a real Centauri Carbon, Centauri Carbon 2 or CANVAS.
 - **Touches:** Android slicing-model catalog, Add printer / Edit printer, slicing, Moonraker uploads, printer dashboard.
+
+## P-0017 — per-object print settings (ported)
+
+- **Upstream:** Snapmaker Orca `cbf7bbb0b3` (AGPL-3.0): `src/slic3r/GUI/GUI_Factories.cpp` `SettingsFactory`
+  (`OBJECT_CATEGORY_SETTINGS`, `PART_CATEGORY_SETTINGS`, `get_visible_options(category, false)`, `get_options(false)`: the
+  object menu's categories and order, and that any object or region option may be set on one object);
+  `src/libslic3r/Format/bbs_3mf.cpp` (an object's config is written as `model_settings.config` object metadata beside
+  `name`, `module` and `extruder`).
+- **Imported:** the engine request takes `object_set\t<object>\t<key>\t<value>` lines (desktop CLI and the browser
+  engine's parser); the shared engine sets them on that `ModelObject::config`, refusing keys that aren't object or region
+  options. `nozzle-engine --schema` marks those keys `perObject`. The project manifest keeps each object's `settings`;
+  Orca/Bambu 3MFs' object settings are read on open. The desktop's Objects card edits the selected object's settings
+  (upstream's menu by category, each starting from the plate's value, reset removes it).
+- **Test evidence:** ObjectSettingsTest (a two-cube plate where one cube has 100 % infill and 5 walls uses clearly more
+  filament; an invalid key is refused), ObjectSettingsManifestTest, PaintTest (Bambu object metadata read as settings).
+- **Known divergence:**
+  - Per-part settings, modifiers and height ranges aren't editable yet (the part list exists upstream).
+  - Nozzle doesn't write `model_settings.config`, so another slicer opening a Nozzle-saved project doesn't see its
+    per-object settings (Nozzle's manifest keeps them).
+  - Adding a single model from an Orca 3MF (rather than opening it as a project) doesn't carry its object settings.
+  - The Web App and Android don't edit or send per-object settings yet (the browser engine's parser accepts them once
+    rebuilt).
+- **Touches:** Prepare objects, project format, slicing on the desktop.
+

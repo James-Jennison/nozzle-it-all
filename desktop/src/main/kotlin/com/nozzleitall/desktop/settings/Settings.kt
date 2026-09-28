@@ -22,6 +22,8 @@ data class SettingDef(
     val key: String, val scope: Scope, val type: String, val label: String, val help: String?, val units: String?,
     val min: Double?, val max: Double?, val mode: String, val choices: List<Choice>, val openChoices: Boolean,
     val default: String?, val multiline: Boolean, val code: Boolean, val readonly: Boolean, val nullable: Boolean = false,
+    /** Settable for one object (the engine's object and region options). */
+    val perObject: Boolean = false,
 ) {
     /** Vector options hold one value per extruder or filament slot; numbers are edited as a comma-separated list. */
     val isList get() = type in LIST_TYPES
@@ -128,7 +130,7 @@ class SettingsCatalog(val all: List<SettingDef>, val groups: List<SettingGroup>,
                     o.optString("tooltip").ifBlank { null }, o.optString("units").ifBlank { null },
                     if (o.has("min")) o.getDouble("min") else null, if (o.has("max")) o.getDouble("max") else null,
                     o.optString("mode", "advanced"), choices, o.optBoolean("openChoices"), if (o.has("default")) o.getString("default") else null,
-                    o.optBoolean("multiline"), o.optBoolean("code"), o.optBoolean("readonly"), o.optBoolean("nullable"))
+                    o.optBoolean("multiline"), o.optBoolean("code"), o.optBoolean("readonly"), o.optBoolean("nullable"), o.optBoolean("perObject"))
             }.distinctBy { it.scope to it.key } // the engine lists a few printer keys twice
             val hidden = layout.getJSONArray("hidden").strings().map { Regex(it) }
             val rules = layout.getJSONArray("groups").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }

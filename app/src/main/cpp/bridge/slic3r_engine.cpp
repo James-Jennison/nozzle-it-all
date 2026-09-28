@@ -299,6 +299,16 @@ void apply_object_extras(Slic3r::ModelObject* object, const ObjectExtras& extras
     if (object == nullptr) return;
     apply_paint_strokes(object, parse_strokes(extras.paint_strokes));
     apply_volume_specs(object, extras.volume_specs);
+    // Per-object settings: the options Orca's object list offers for an object (region and object options).
+    static const Slic3r::PrintObjectConfig object_options;
+    static const Slic3r::PrintRegionConfig region_options;
+    for (const auto& [key, value] : extras.settings) {
+        if (object_options.option(key) == nullptr && region_options.option(key) == nullptr)
+            throw std::runtime_error("\"" + key + "\" can't be set for one object.");
+        Slic3r::ConfigSubstitutionContext ctx(Slic3r::ForwardCompatibilitySubstitutionRule::Disable);
+        try { object->config.set_deserialize(key, value, ctx); }
+        catch (const std::exception& e) { throw std::runtime_error("Bad value for \"" + key + "\" on " + object->name + ": " + e.what()); }
+    }
 }
 
 

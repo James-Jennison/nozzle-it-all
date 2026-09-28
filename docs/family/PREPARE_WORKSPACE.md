@@ -31,13 +31,13 @@ The survey behind this list, with sources and engine support per feature, is
 |---|---|---|
 | Settings | Every engine setting, searchable, in Nozzle's own groups, generated from the engine's own metadata (`nozzle-engine --schema` → schemas/slicing/settings-schema.json, grouped by settings-groups.json) | **Done**: every setting in dense tabs (567 on the Snapmaker Orca engine base, in 28 groups), saved per project, proven to reach the engine |
 | Engine input | Whole-project slice request (the 3MF with parts, per-object settings, modifiers, paint, height ranges, layer-height profile) | Next: everything below depends on it |
-| Objects | Per-object and per-part settings, modifiers, negative volumes, multi-part objects, split | Planned |
+| Objects | Per-object and per-part settings, modifiers, negative volumes, multi-part objects, split | **Per-object settings done on the desktop** (upstream's per-object menu, saved per project, read from Orca/Bambu 3MFs, applied by the engine per object; P-0017). Per-part settings, modifiers, negative volumes, split: planned |
 | Plate | Multi-plate, auto-orient / lay flat, engine arrange, mesh repair report, measure, cut, text/SVG emboss | Planned |
 | Painting | Supports, seams, colour; fuzzy skin later | Planned |
 | Layers | Variable layer height, height-range modifiers, per-layer pause and colour change on one Z strip | Planned |
 | Preview | Feature types, speed/flow/temperature/fan colouring, per-layer times, tool changes | Planned |
 | Colour | Painted and multi-part 3MFs from Bambu Studio, Orca and PrusaSlicer: paint kept per triangle, shown on the plate, file filaments matched to slots (editable), sliced through libslic3r's own 3MF importer | **Done** |
-| Materials | Full Spectrum colour mixing previews in the Filament card (**done**); mixed filament as a printable slot, prime tower, flush volumes (capability-gated) | Planned |
+| Materials | Full Spectrum colour mixing previews in the Filament card (**done**); flushing volumes from colours, each printer's own slicer's way, with the Flushing volumes window (**done**, P-0015); mixed filament as a printable slot, prime tower (capability-gated) | Partly done |
 | Calibration | Flow, pressure advance, temperature, then retraction and max volumetric speed, each ending by saving into the material profile | Planned |
 | Profiles | User profiles over the shared 376, inheritance, compare, unsaved-changes handling, bundle import/export | Planned |
 | History | Undo/redo with a visible history, autosave and crash recovery | Planned (needed before painting and modifiers) |

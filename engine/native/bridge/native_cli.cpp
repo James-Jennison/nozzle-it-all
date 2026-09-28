@@ -18,6 +18,8 @@
 //   profile\t<path>              (repeatable, in load order: machine, process, filament...)
 //   set\t<key>\t<value>          (repeatable config override)
 //   object\t<model path>\t<x mm>\t<y mm>\t<rotation z deg>\t<scale>\t<tool index, 1-based, 0 = default>
+//   object_set\t<object number, 1-based, in object line order>\t<key>\t<value>
+//                                (repeatable) a per-object print setting, as Orca's object list sets them
 //   virtual_extruders\t<path>    (optional, at most once) PrusaSlicer 2.9.6 virtual extruders, a JSON file in the
 //                                Metadata/Prusa_Slicer_full_spectrum.json format; a tool index or painted state equal
 //                                to a virtual id then prints by PrusaSlicer's layer cycle
@@ -58,6 +60,7 @@ struct Request {
     std::vector<std::string> profiles;
     std::vector<std::pair<std::string, std::string>> overrides;
     std::vector<std::tuple<std::string, engine::ModelTransform, int>> objects;
+    std::vector<std::tuple<size_t, std::string, std::string>> object_settings;
     std::string virtual_extruders_path;
 };
 
@@ -83,12 +86,18 @@ Request parse(const std::string& text) {
                 t.offset_x_mm = std::stod(f[2]); t.offset_y_mm = std::stod(f[3]); t.rotation_z_deg = std::stod(f[4]); t.scale = std::stod(f[5]);
                 r.objects.emplace_back(f[1], t, std::stoi(f[6]));
             } catch (const std::logic_error&) { throw BadRequest("Bad number in object line: " + line); }
+        } else if (f[0] == "object_set" && (f.size() == 4 || f.size() == 3)) {
+            size_t n = 0;
+            try { n = std::stoul(f[1]); } catch (const std::logic_error&) { throw BadRequest("Bad object number in object_set line: " + line); }
+            r.object_settings.emplace_back(n, f[2], f.size() == 4 ? f[3] : "");
         } else if (f[0] == "virtual_extruders" && f.size() == 2) {
             if (!r.virtual_extruders_path.empty()) throw BadRequest("Only one virtual_extruders line is allowed.");
             r.virtual_extruders_path = f[1];
         } else throw BadRequest("Unrecognised request line: " + f[0]);
     }
     if (r.out.empty() || r.objects.empty() || r.profiles.empty()) throw BadRequest("The slice request is incomplete.");
+    for (const auto& s : r.object_settings)
+        if (std::get<0>(s) < 1 || std::get<0>(s) > r.objects.size()) throw BadRequest("object_set names an object that isn't in the request.");
     // The shared pipeline skips a profile path it cannot read; here a missing input is a request error instead.
     auto readable = [](const std::string& p) { std::ifstream f(p, std::ios::binary); return f.good(); };
     for (const auto& p : r.profiles) if (!readable(p)) throw BadRequest("Cannot read profile " + p);
@@ -203,6 +212,9 @@ int dump_schema() {
             if (d->multiline) std::cout << ",\"multiline\":true";
             if (d->is_code) std::cout << ",\"code\":true";
             if (d->nullable) std::cout << ",\"nullable\":true";
+            // Settable for one object (Orca's object list: SettingsFactory::get_options(false), region and object options).
+            static const PrintObjectConfig object_options; static const PrintRegionConfig region_options;
+            if (std::string(scope) == "process" && (object_options.option(key) != nullptr || region_options.option(key) != nullptr)) std::cout << ",\"perObject\":true";
             if (!d->enum_values.empty()) {
                 std::cout << ",\"choices\":[";
                 for (size_t i = 0; i < d->enum_values.size(); ++i)
@@ -287,7 +299,9 @@ int main(int argc, char** argv) {
     std::string message;
     std::thread worker([&]() {
         try {
-            engine::slice_multi_object(req.objects, req.out, req.profiles, req.overrides, {}, virtual_extruders_json);
+            std::vector<engine::ObjectExtras> extras(req.objects.size());
+            for (const auto& [n, key, value] : req.object_settings) extras[n - 1].settings.emplace_back(key, value);
+            engine::slice_multi_object(req.objects, req.out, req.profiles, req.overrides, extras, virtual_extruders_json);
         } catch (const engine::SliceCancelled&) {
             code = 3; message = "Slicing cancelled";
         } catch (const std::exception& e) {

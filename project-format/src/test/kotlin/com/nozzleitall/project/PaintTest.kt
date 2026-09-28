@@ -63,7 +63,8 @@ class PaintTest {
 <metadata name="Application">BambuStudio-02.03.01.51</metadata><resources>
 <object id="2" type="model"><components><component p:path="/3D/Objects/o.model" objectid="1"/><component p:path="/3D/Objects/o.model" objectid="3"/></components></object>
 </resources><build><item objectid="2" transform="1 0 0 0 1 0 0 0 1 100 100 0"/></build></model>"""
-        val settings = """<?xml version="1.0" encoding="UTF-8"?><config><object id="2"><metadata key="name" value="Pangolin"/><metadata key="extruder" value="1"/>
+        val settings = """<?xml version="1.0" encoding="UTF-8"?><config><object id="2"><metadata key="name" value="Pangolin"/><metadata key="module" value="m"/><metadata key="extruder" value="1"/>
+<metadata key="sparse_infill_density" value="35%"/><metadata key="wall_loops" value="4"/>
 <part id="1" subtype="normal_part"><metadata key="extruder" value="1"/></part><part id="3" subtype="normal_part"><metadata key="extruder" value="3"/></part></object></config>"""
         val filaments = """{"filament_colour":["#F7E6DE","#9D432C","#000000"],"filament_type":["PLA","PLA","PLA"],"filament_settings_id":["Bambu PLA Basic @BBL X1C","Bambu PLA Basic @BBL X1C","Generic PLA"]}"""
         val p = ThreeMf.read(ByteArrayInputStream(zip("3D/3dmodel.model" to root, "3D/Objects/o.model" to part, "Metadata/model_settings.config" to settings,
@@ -71,6 +72,8 @@ class PaintTest {
         val o = p.objects.single()
         assertEquals("Pangolin", o.name)
         assertEquals(1, o.filament)
+        // The object's own settings (Orca writes ModelObject::config as object metadata), without name, module and extruder.
+        assertEquals(mapOf("sparse_infill_density" to "35%", "wall_loops" to "4"), o.settings)
         assertEquals(listOf("8", null, "0C"), o.mesh.paint!!.toList()) // painted, the object's own, the filament-3 part
         assertEquals(listOf("#F7E6DE", "#9D432C", "#000000"), p.filaments.map { it.colorHex })
         assertFalse("model_settings.config" in p.passthrough.keys.joinToString())
@@ -126,5 +129,20 @@ class StoredEntryTest {
         le(out, 0x06054b50, 4); le(out, 0, 2); le(out, 0, 2); le(out, entries.size.toLong(), 2); le(out, entries.size.toLong(), 2)
         le(out, cd.size.toLong(), 4); le(out, cdOffset, 4); le(out, 0, 2)
         return out.toByteArray()
+    }
+}
+
+/** An object's own settings are kept in the manifest and come back as they were saved. */
+class ObjectSettingsManifestTest {
+    @Test fun objectSettingsRoundTrip() {
+        val producer = ProjectManifest.Producer("t", "desktop", "t")
+        val m = ProjectManifest("p", 1, "n", producer, producer, 1, ProjectManifest.PrinterTarget("Snapmaker U1"),
+            listOf(ProjectManifest.PlateEntry(1, "Plate 1", listOf(ProjectManifest.ObjectEntry(1, "cube", 1, settings = mapOf("wall_loops" to "5", "sparse_infill_density" to "100%"))))))
+        val back = ProjectManifest.parse(m.toJson().toString())
+        assertEquals(mapOf("wall_loops" to "5", "sparse_infill_density" to "100%"), back.plates.single().objects.single().settings)
+        assertFalse(back.plates.single().objects.single().unknown.has("settings"))
+        // An object without settings writes none.
+        val plain = ProjectManifest.parse(m.copy(plates = listOf(ProjectManifest.PlateEntry(1, "Plate 1", listOf(ProjectManifest.ObjectEntry(1, "cube", 1))))).toJson().toString())
+        assertTrue(plain.plates.single().objects.single().settings.isEmpty())
     }
 }

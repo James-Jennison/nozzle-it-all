@@ -22,7 +22,9 @@ private const val FLUSH_KEY = "flush_volumes_matrix"
  * and [sources] describes those filaments as the file had them.
  */
 class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, rotZ: Float = 0f, scale: Float = 1f, slot: Int = 1,
-               paintSlots: List<Int> = emptyList(), val sources: List<SourceFilament> = emptyList()) {
+               paintSlots: List<Int> = emptyList(), val sources: List<SourceFilament> = emptyList(), settings: Map<String, String> = emptyMap()) {
+    /** The object's own print settings (Orca's per-object settings), engine keys to serialized values. */
+    val settings = androidx.compose.runtime.mutableStateMapOf<String, String>().apply { putAll(settings) }
     var name by mutableStateOf(name); var x by mutableStateOf(x); var y by mutableStateOf(y)
     var rotZ by mutableStateOf(rotZ); var scale by mutableStateOf(scale); var slot by mutableStateOf(slot)
     val paintSlots = androidx.compose.runtime.mutableStateListOf<Int>().apply { addAll(paintSlots) }
@@ -384,7 +386,8 @@ class PrepareState(private val app: AppState) {
         // PrusaSlicer's virtual extruders, when the project has them (its own sidecar, kept as it is).
         p.passthrough[PrusaColorMix.SIDECAR]?.let { PrusaColorMix.readSidecar(it) }?.let { (_, list) -> setColorMix(list) }
         val entries = p.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
-        p.objects.forEach { o -> addFromPlacement(o, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments) }
+        p.objects.forEach { o -> addFromPlacement(o, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments,
+            ObjectSettings.usable(entries[o.id]?.settings?.takeIf { it.isNotEmpty() } ?: o.settings)) }
         p.manifest?.settings?.preset?.let { key ->
             if (key.startsWith("process:")) processId = key.removePrefix("process:")
             else QualityPreset.entries.firstOrNull { it.name.equals(key, true) }?.let { preset = it } }
@@ -412,13 +415,13 @@ class PrepareState(private val app: AppState) {
     }
 
     /** Reverses [PrepItem.placement] for a mesh loaded from a 3MF: recovers bed position, Z rotation and uniform scale. */
-    private fun addFromPlacement(o: ModelObject, slot: Int, paintSlots: List<Int>, sources: List<SourceFilament>) {
+    private fun addFromPlacement(o: ModelObject, slot: Int, paintSlots: List<Int>, sources: List<SourceFilament>, settings: Map<String, String> = emptyMap()) {
         val m = o.placement.m
         val scale = sqrt(m[0] * m[0] + m[1] * m[1]).toFloat().takeIf { it > 0 } ?: 1f
         val rot = Math.toDegrees(atan2(m[1], m[0])).toFloat()
         val b = o.mesh.bounds(); val cx = (b[0] + b[3]) / 2.0; val cy = (b[1] + b[4]) / 2.0
         val p = o.placement.apply(cx, cy, 0.0)
-        val item = PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot, paintSlots, sources)
+        val item = PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot, paintSlots, sources, settings)
         // A painted model from another slicer (or saved before colours were mapped) gets its colours matched to the slots.
         if (item.painted.isNotEmpty() && item.paintSlots.size < item.painted.max()) matchColours(item, o.filament)
         items += item
@@ -469,7 +472,7 @@ class PrepareState(private val app: AppState) {
         item.paintSlots[n - 1] = slot; changed()
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources); arrange(); changed() } }
+    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap()); arrange(); changed() } }
     fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
     fun changed() { dirty = true; invalidateSlice() }
     private fun invalidateSlice() { if (slice !is SliceState.Running) { slice = SliceState.Idle; showPreview = false } }
@@ -505,7 +508,7 @@ class PrepareState(private val app: AppState) {
                     unknown = base.printer?.unknown ?: org.json.JSONObject(), profileId = profileId,
                     family = p?.config?.identity?.family?.id ?: profile?.familyHint,
                     nozzleDiameters = machineVariant()?.let { m -> PrinterSetup.nozzles(machineJson()).map { it.toDoubleOrNull() ?: 0.4 } } ?: base.printer?.nozzleDiameters.orEmpty()),
-                plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList()) },
+                plates = listOf(ProjectManifest.PlateEntry(1, base.plates.firstOrNull()?.name ?: "Plate 1", items.map { ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList(), settings = it.settings.toMap()) },
                     base.plates.firstOrNull()?.unknown ?: org.json.JSONObject())),
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(currentProcess()?.let { "process:${it.id}" } ?: preset.name.lowercase(),

@@ -119,7 +119,7 @@ private fun GroupHeader(g: SettingGroup) {
 
 /** One setting: label (help on hover), the value with its units, and a reset mark when it differs from the base. */
 @Composable
-private fun DenseRow(s: SettingDef, value: String?, base: String?, changed: Boolean, onSet: (String?) -> Unit) {
+internal fun DenseRow(s: SettingDef, value: String?, base: String?, changed: Boolean, onSet: (String?) -> Unit) {
     val c = Nz.colors
     Row(Modifier.fillMaxWidth().heightIn(min = 34.dp).padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(3.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(if (changed) c.accent else c.surface))

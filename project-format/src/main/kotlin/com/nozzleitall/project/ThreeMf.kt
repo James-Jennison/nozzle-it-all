@@ -53,7 +53,9 @@ data class Transform(val m: DoubleArray = doubleArrayOf(1.0, 0.0, 0.0, 0.0, 1.0,
  * One printable object: a name, a mesh already flattened from any components, and its placement on the plate. [filament]
  * is the file's own 1-based filament for the object (what unpainted areas print with), when the file says.
  */
-data class ModelObject(val id: Int, val name: String, val mesh: Mesh, val placement: Transform = Transform(), val filament: Int? = null)
+/** [settings]: the object's own print settings from another slicer's 3MF (Orca/Bambu object metadata), engine keys to values. */
+data class ModelObject(val id: Int, val name: String, val mesh: Mesh, val placement: Transform = Transform(), val filament: Int? = null,
+                       val settings: Map<String, String> = emptyMap())
 
 /**
  * A project as stored on disk: objects, the model-level 3MF metadata, the Nozzle manifest (null for a plain 3MF from
@@ -219,7 +221,7 @@ object ThreeMf {
             for (i in ps.indices) if (ps[i] == plain) ps[i] = null
             val name = parts.name(id) ?: objectsIn(path)[id]?.getAttribute("name")?.ifBlank { null } ?: "Object ${index + 1}"
             val paint = if (ps.any { it != null }) ps.toTypedArray() else null
-            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray(), paint), Transform.parse(item.getAttribute("transform")), own)
+            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray(), paint), Transform.parse(item.getAttribute("transform")), own, parts.settings(id))
         }
         var manifest: ProjectManifest? = null
         var problem: String? = null
@@ -334,15 +336,22 @@ object ThreeMf {
         private val objects: Map<Int, Int> = emptyMap(),
         private val parts: Map<Pair<Int, Int>, Int> = emptyMap(),
         private val ranges: Map<Int, List<Triple<Int, Int, Int>>> = emptyMap(),
+        private val settings: Map<Int, Map<String, String>> = emptyMap(),
     ) {
+        /** The object's own print settings: Orca writes every key of ModelObject::config as object metadata (bbs_3mf.cpp). */
+        fun settings(obj: Int) = settings[obj].orEmpty()
         fun name(obj: Int) = names[obj]
         fun objectFilament(obj: Int) = objects[obj]
         fun partFilament(obj: Int, part: Int) = parts[obj to part]
         fun rangeFilament(obj: Int): (Int) -> Int? { val r = ranges[obj] ?: return { null }; return { tri -> r.firstOrNull { tri in it.first..it.second }?.third } }
 
         companion object {
+            /** Object metadata that isn't a print setting (bbs_3mf.cpp writes these beside the config keys). */
+            private val objectMetadata = setOf("name", "module", "extruder")
+
             fun read(entries: Map<String, ByteArray>): PartSettings {
                 val names = HashMap<Int, String>(); val objects = HashMap<Int, Int>(); val parts = HashMap<Pair<Int, Int>, Int>(); val ranges = HashMap<Int, MutableList<Triple<Int, Int, Int>>>()
+                val settings = HashMap<Int, Map<String, String>>()
                 fun meta(e: Element, key: String) = children(e, "metadata").firstOrNull { it.getAttribute("key") == key }?.getAttribute("value")
                 for (path in listOf("Metadata/model_settings.config", "Metadata/Slic3r_PE_model.config")) {
                     val doc = entries[path]?.let { runCatching { parseXml(it) }.getOrNull() } ?: continue
@@ -351,6 +360,9 @@ object ThreeMf {
                         // Orca and Bambu name an object after the file it came from ("Pangolin.stl"); the name is enough.
                         meta(o, "name")?.replace(Regex("\\.(stl|obj|3mf|step|stp|amf)$", RegexOption.IGNORE_CASE), "")?.ifBlank { null }?.let { names[id] = it }
                         meta(o, "extruder")?.toIntOrNull()?.takeIf { it > 0 }?.let { objects[id] = it }
+                        // Orca/Bambu only: PrusaSlicer's object keys are PrusaSlicer's own option names.
+                        if (path == "Metadata/model_settings.config") children(o, "metadata").associate { it.getAttribute("key") to it.getAttribute("value") }
+                            .filterKeys { it.isNotBlank() && it !in objectMetadata }.takeIf { it.isNotEmpty() }?.let { settings[id] = it }
                         children(o, "part").forEach { p -> p.getAttribute("id").toIntOrNull()?.let { pid -> meta(p, "extruder")?.toIntOrNull()?.takeIf { it > 0 }?.let { parts[id to pid] = it } } }
                         children(o, "volume").forEach { v ->
                             val first = v.getAttribute("firstid").toIntOrNull(); val last = v.getAttribute("lastid").toIntOrNull()
@@ -359,7 +371,7 @@ object ThreeMf {
                         }
                     }
                 }
-                return PartSettings(names, objects, parts, ranges)
+                return PartSettings(names, objects, parts, ranges, settings)
             }
         }
     }

@@ -60,7 +60,9 @@ void slice_bambu_bundle(const std::string& input_model_path,
 // slic3r_engine.cpp's own header comment on the bundle_model() tail these two share.
 // Phase 9d: per-object paint strokes and modifier/blocker volumes, in the text formats ObjectExtras.kt writes.
 // Parallel to the objects vector (empty string = none).
-struct ObjectExtras { std::string paint_strokes; std::string volume_specs; };
+// settings: per-object print settings (key, value), as Orca's object list sets them on ModelObject::config; only keys of
+// PrintObjectConfig or PrintRegionConfig are accepted (SettingsFactory::get_options(false)), anything else is an error.
+struct ObjectExtras { std::string paint_strokes; std::string volume_specs; std::vector<std::pair<std::string, std::string>> settings; };
 
 void slice_multi_object_bambu_bundle(const std::vector<std::pair<std::string, ModelTransform>>& objects,
                                       const std::string& output_bundle_path,

@@ -199,6 +199,11 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 val x = cx * m[0] + cy * m[3] + m[9]; val y = cx * m[1] + cy * m[4] + m[10]
                 val tool = if (slots.size > 1) objectSlots[o.id] ?: 1 else 0
                 lines += "object\t${stl.absolutePath}\t${x - bedW / 2}\t${y - bedD / 2}\t$rot\t$scale\t$tool"
+                // The object's own settings (Orca's per-object settings), after the whole-plate ones.
+                entries[o.id]?.settings?.toSortedMap()?.forEach { (k, v) ->
+                    require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
+                    lines += "object_set\t${i + 1}\t$k\t$v"
+                }
             }
             return lines.joinToString("\n") + "\n"
         }

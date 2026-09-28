@@ -11,6 +11,12 @@
       "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
       "date": "2026-09-28",
       "note": "Level 2 run on the owner's PAXX U1, owner at the printer: upload (SHA-256 verified), listing and delete. Built from 0b6d902. Extra cleanup approval prompt had no effect (fixed in acadaab)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
+      "date": "2026-09-28",
+      "note": "Level 1 rerun on the owner's PAXX U1 with the build (8f16e36) that reads loaded filament per toolhead; owner confirmed all four toolheads match."
     }
   ],
   "format": "nozzle.evidence-acceptance",

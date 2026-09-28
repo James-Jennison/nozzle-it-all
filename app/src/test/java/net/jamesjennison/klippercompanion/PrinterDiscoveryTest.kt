@@ -22,6 +22,12 @@ class PrinterDiscoveryTest {
         assertEquals("a blank hostname falls back to the address", "10.0.0.7", PrinterDiscovery.classifyMoonraker("", "", "", "10.0.0.7").name)
     }
 
+    @Test fun onlyTheU1TypesImplyASlicingProfile() {
+        assertEquals(SlicingPrinterModel.SNAPMAKER_U1, PrinterDiscovery.defaultSlicingModel(PrinterKind.SNAPMAKER_U1))
+        assertEquals(SlicingPrinterModel.SNAPMAKER_U1, PrinterDiscovery.defaultSlicingModel(PrinterKind.SNAPMAKER_U1_PAXX))
+        PrinterKind.entries.filter { it != PrinterKind.SNAPMAKER_U1 && it != PrinterKind.SNAPMAKER_U1_PAXX }.forEach { assertNull(it.name, PrinterDiscovery.defaultSlicingModel(it)) }
+    }
+
     @Test fun theExtendedConfigFolderMarksPaxxFirmware() {
         // Shape of the owner's PAXX U1's server/files/list?root=config result.
         val paxx = org.json.JSONArray("""[{"path":"snapmaker/print_task.json"},{"path":"extended/extended2.cfg"},{"path":"printer.cfg"}]""")

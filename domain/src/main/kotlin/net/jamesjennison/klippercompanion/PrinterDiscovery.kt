@@ -36,6 +36,16 @@ object PrinterDiscovery {
         }
     }
 
+    /**
+     * The slicing profile a printer type implies on its own, when there is exactly one: both U1 firmwares use the
+     * Snapmaker U1 pack. Null for every other type (Generic Klipper covers many printers; a COSMOS Centauri Carbon is
+     * chosen by its profile and confirmed by a firmware read).
+     */
+    fun defaultSlicingModel(kind: PrinterKind): SlicingPrinterModel? = when (kind) {
+        PrinterKind.SNAPMAKER_U1, PrinterKind.SNAPMAKER_U1_PAXX -> SlicingPrinterModel.SNAPMAKER_U1
+        else -> null
+    }
+
     fun isU1Version(softwareVersion: String): Boolean = U1_VERSION.matches(softwareVersion.trim())
 
     /**

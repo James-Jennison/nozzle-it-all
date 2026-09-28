@@ -37,6 +37,8 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
     var serial by remember { mutableStateOf("") }
     var kind by remember { mutableStateOf(PrinterKind.GENERIC_KLIPPER) }
     var slicingModel by remember { mutableStateOf<SlicingPrinterModel?>(null) }
+    // Set once the person picks a profile themselves (including "None"); a type's default never overrides that.
+    var slicingModelChosen by remember { mutableStateOf(false) }
     var customMachine by remember { mutableStateOf<CustomMachine?>(null) }
     var customMachineError by remember { mutableStateOf<String?>(null) }
     var showKey by remember { mutableStateOf(false) }
@@ -167,7 +169,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 WizardStep.SLICING_PROFILE -> {
                     Text("Step 2 of 4: slicing profile", style = MaterialTheme.typography.labelLarge)
                     Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.", style=MaterialTheme.typography.bodySmall)
-                    SlicingModelPicker(slicingModel) { slicingModel = it }
+                    SlicingModelPicker(slicingModel) { slicingModel = it; slicingModelChosen = true }
                     CustomMachineEditor(slicingModel, customMachine) { value, problem -> customMachine = value; customMachineError = problem }
                     ElegooProfiles.connectionProblem(slicingModel, kind)?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("wizard-elegoo-profile-problem")) }
                 }
@@ -195,6 +197,9 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 normalizedAddressResult = normalized
                 // Adding a printer is a fresh trust decision: an old pin (say from an abandoned attempt, or a printer that was reset) must not block it.
                 if(kind == PrinterKind.BAMBU_LAB && serial.isNotBlank()) BambuCertPins.store.forget(serial.trim())
+                // Typing the address and picking the type (instead of tapping a scan result) used to leave the profile empty
+                // even for a U1, where only one profile fits.
+                if(slicingModel == null && !slicingModelChosen) slicingModel = PrinterDiscovery.defaultSlicingModel(kind)
                 step = WizardStep.SLICING_PROFILE
             }, enabled = address.isNotBlank(), modifier = Modifier.testTag("wizard-next-1")) { Text("Next") }
             WizardStep.SLICING_PROFILE -> Button({ step = if(ElegooProfiles.isCosmos(slicingModel)) WizardStep.FIRMWARE_CONFIRM else WizardStep.CONNECTIVITY_TEST }, enabled = customMachineError == null && ElegooProfiles.connectionProblem(slicingModel, kind) == null, modifier = Modifier.testTag("wizard-next-2")) { Text("Next") }

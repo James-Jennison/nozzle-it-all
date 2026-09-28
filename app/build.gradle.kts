@@ -22,6 +22,7 @@ android {
   // 2023) and the only ABI the vendored slicing engine's dependencies were built for. NDK
   // 27.1.12297006 (pinned below) matches what that engine was built and verified with.
   ndk { abiFilters += "arm64-v8a" }
+  manifestPlaceholders["appLabel"] = "Nozzle It All"
   // Phase 10: optional MyMiniFactory developer credentials, supplied by the owner at build time (never committed).
   // MMF_API_KEY enables Discover browsing; MMF_CLIENT_KEY enables sign-in (file downloads). Empty = the user enters their own in Discover.
   buildConfigField("String", "MMF_API_KEY", "\"${providers.gradleProperty("MMF_API_KEY").orElse(providers.environmentVariable("MMF_API_KEY")).getOrElse("")}\"")
@@ -85,7 +86,9 @@ android {
  buildTypes {
   // -PnozzleIdSuffix=.something installs a debug build beside the real app (its own application ID and data), for
   // on-device tests that must never replace or uninstall the installed app and its saved printers.
-  debug { providers.gradleProperty("nozzleIdSuffix").orNull?.let { applicationIdSuffix = it; versionNameSuffix = it } }
+  // -PnozzleAppLabel="Nozzle It All - Testing" gives such a build its own launcher name. Debug only: release is always "Nozzle It All".
+  debug { providers.gradleProperty("nozzleIdSuffix").orNull?.let { applicationIdSuffix = it; versionNameSuffix = it }
+   providers.gradleProperty("nozzleAppLabel").orNull?.let { manifestPlaceholders["appLabel"] = it } }
   release {
    isMinifyEnabled = true; isShrinkResources = true
    proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

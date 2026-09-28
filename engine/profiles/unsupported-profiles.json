@@ -1,11 +1,11 @@
 {
-  "why": "Printer profiles Nozzle It All doesn't offer yet. Since nozzle-engine e23c0df (docs/upstream/PROVENANCE.md P-0023) the engine slices all six (upstream OrcaSlicer's multi-extruder / multi-nozzle system is ported), but none has been printed on a real machine, and on the two-extruder models Nozzle It All doesn't yet choose which extruder each filament uses (filament_map). Owner decision 2026-09-27: hidden until tested on a real machine.",
+  "why": "Printer profiles Nozzle It All doesn't offer yet. Since nozzle-engine e23c0df (docs/upstream/PROVENANCE.md P-0023, P-0024) the engine slices all six (upstream OrcaSlicer's multi-extruder / multi-nozzle system is ported), but none has been printed on a real machine. On the two-extruder models filaments go to extruders by upstream's default rule (filament i on extruder i, the rest on the master extruder); the app has no per-filament choice yet. Owner decision 2026-09-27: hidden until tested on a real machine.",
   "profiles": {
-    "bambu_h2c": "slices; not yet printed on a real machine; Nozzle It All doesn't assign filaments to extruders yet (filament_map); nozzle-rack assignment is static (upstream's grouping engine not ported)",
-    "bambu_h2d": "slices; not yet printed on a real machine; Nozzle It All doesn't assign filaments to extruders yet (filament_map)",
-    "bambu_h2d_pro": "slices; not yet printed on a real machine; Nozzle It All doesn't assign filaments to extruders yet (filament_map)",
+    "bambu_h2c": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet); nozzle-rack assignment is static (upstream's grouping engine not ported)",
+    "bambu_h2d": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet)",
+    "bambu_h2d_pro": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet)",
     "bambu_h2s": "slices; not yet printed on a real machine",
     "bambu_p2s": "slices; not yet printed on a real machine",
-    "bambu_x2d": "slices; not yet printed on a real machine; Nozzle It All doesn't assign filaments to extruders yet (filament_map)"
+    "bambu_x2d": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet)"
   }
 }

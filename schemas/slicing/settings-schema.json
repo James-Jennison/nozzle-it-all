@@ -8295,7 +8295,7 @@
  "source": {
   "engine": "libslic3r (nozzle-engine)",
   "repo": "https://github.com/James-Jennison/nozzle-engine.git",
-  "commit": "e23c0df67b36854f52b6e57fd33c62bdd2831634",
+  "commit": "25ca1a2b6e66e1e3ebb6d77c841b7ab6a0dcb7af",
   "licence": "AGPL-3.0"
  }
 }

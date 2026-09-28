@@ -13,7 +13,7 @@ object OpenSourceNotice {
     const val ENGINE_NAME = "nozzle-engine"
     const val ENGINE_SOURCE_URL = "https://github.com/James-Jennison/nozzle-engine"
     /** Must equal `base.commit` in engine/fork/ENGINE_PIN.json (a unit test enforces it). */
-    const val ENGINE_COMMIT = "e23c0df67b36854f52b6e57fd33c62bdd2831634"
+    const val ENGINE_COMMIT = "25ca1a2b6e66e1e3ebb6d77c841b7ab6a0dcb7af"
     const val ENGINE_PIN_URL = "$APP_SOURCE_URL/blob/main/engine/fork/ENGINE_PIN.json"
     const val ENGINE_COMMIT_URL = "$ENGINE_SOURCE_URL/tree/$ENGINE_COMMIT"
     /** Every change made to the slicer since OrcaSlicer, one commit each. */

@@ -15,8 +15,8 @@ credentials; they stay on your phone.
 
 ## Running it
 
-1. **Turn Test Mode on (once per phone):** Settings → About & credits → tap the version line 7 times quickly. A note
-   confirms "Test Mode is on"; the same taps turn it off. It is hidden from everyone who doesn't do this.
+1. **Turn Test Mode on (once per phone):** in Settings, tap "Nozzle It All <version>" under Diagnostics (or the version
+   line in About & credits) 7 times quickly. A message confirms "Test Mode is on"; the same taps turn it off. It is hidden from everyone who doesn't do this.
    Then **Settings → Test Mode.** It opens in its own window with a "TEST MODE" banner. Closing it keeps the run; you
    can resume later.
 2. **Choose the printer.** Test Mode reads it (read-only) and shows model, firmware family and version, adapter,

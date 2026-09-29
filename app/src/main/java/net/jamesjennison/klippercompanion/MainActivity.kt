@@ -288,10 +288,19 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     var creditsOpen by remember { mutableStateOf(false) }
     // Test Mode (Nozzle Test Grid): a separate full-screen window; it never shares the dashboard's connection or pending command.
     var testModeOpen by rememberSaveable { mutableStateOf(false) }
-    // Hidden until an invited tester turns it on (TestModeAccess): 7 quick taps on the version in About & credits.
+    // Hidden until an invited tester turns it on (TestModeAccess): 7 quick taps on a version line (Settings → Diagnostics or About & credits).
     var testModeEnabled by remember { mutableStateOf(net.jamesjennison.klippercompanion.testgrid.TestModeAccess.isEnabled(context)) }
     val versionTaps = remember { net.jamesjennison.klippercompanion.testgrid.TestModeAccess.TapCounter() }
     var testModeNote by remember { mutableStateOf<String?>(null) }
+    // Either version line (Settings → Diagnostics, or About & credits) counts toward the same 7 taps.
+    fun tapVersion() {
+        if(versionTaps.tap()) {
+            testModeEnabled = !testModeEnabled
+            net.jamesjennison.klippercompanion.testgrid.TestModeAccess.setEnabled(context, testModeEnabled)
+            testModeNote = if(testModeEnabled) "Test Mode is on: it's in Settings, next to About & credits." else "Test Mode is off."
+            android.widget.Toast.makeText(context, testModeNote, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     var backupStep by remember { mutableStateOf(BackupStep.NONE) }
     var backupPassphrase by remember { mutableStateOf("") }
     var backupMessage by remember { mutableStateOf<String?>(null) }
@@ -502,13 +511,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         OpenSourceNotice.links.forEachIndexed { i, (label, url) ->
                             TextButton({ runCatching { uriHandler.openUri(url) } }, modifier = Modifier.testTag("source-link-$i")) { Text(label, style = MaterialTheme.typography.bodySmall) }
                         }
-                        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.testTag("about-version").clickable {
-                            if(versionTaps.tap()) {
-                                testModeEnabled = !testModeEnabled
-                                net.jamesjennison.klippercompanion.testgrid.TestModeAccess.setEnabled(context, testModeEnabled)
-                                testModeNote = if(testModeEnabled) "Test Mode is on: it's in Settings, next to About & credits." else "Test Mode is off."
-                            }
-                        })
+                        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.testTag("about-version").clickable { tapVersion() })
                         testModeNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("test-mode-note")) }
                     } },
                     confirmButton = { TextButton({ creditsOpen = false }, modifier = Modifier.testTag("credits-close")) { Text("Close") } })
@@ -890,7 +893,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             if(tab == 4) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Diagnostics", style = MaterialTheme.typography.titleMedium)
-                    Text("Nozzle It All 0.1.0", style = MaterialTheme.typography.bodyMedium)
+                    Text("Nozzle It All ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("diagnostics-version").clickable { tapVersion() })
                     Text("Android ${Build.VERSION.RELEASE} · ${Build.MODEL}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Local network only — no cloud account, no telemetry.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

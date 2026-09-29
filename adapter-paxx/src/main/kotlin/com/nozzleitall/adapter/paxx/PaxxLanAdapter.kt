@@ -76,6 +76,7 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
     private val m = MoonrakerLan(config.identity.address, config.secret, eventListener)
     private val route = routeFor(m.base.host)
     override val identity = config.identity
+    private val isU1 = config.identity.family == PrinterFamily.PAXX_U1 || config.identity.family == PrinterFamily.STOCK_U1
 
     override fun status(): PrinterStatus = try {
         val server = m.get("server/info") as JSONObject
@@ -150,7 +151,10 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
             when (action) {
                 is PrinterAction.StartJob -> {
                     val path = U1Protocol.validateRemotePath(action.remotePath)
-                    if (action.toolheadMap.isNotEmpty()) { val body = U1Protocol.startLocalPrintBody(path, action.toolheadMap); { m.post("server/files/start_local_print", body = body) } }
+                    // A U1 (PAXX or stock) starts as Snapmaker's own slicer does, with bed leveling on; other Klipper printers
+                    // start the file as it is and have no toolhead map to apply.
+                    if (isU1) { val body = U1Protocol.startLocalPrintBody(path, action.toolheadMap); { m.startLocalPrint(body) } }
+                    else if (action.toolheadMap.isNotEmpty()) return ActionOutcome.Rejected("This printer takes its toolheads from the file; it has no toolhead map to set at start.")
                     else { { m.post("printer/print/start", mapOf("filename" to path)) } }
                 }
                 PrinterAction.Pause -> { { m.post("printer/print/pause") } }

@@ -154,11 +154,18 @@ object U1Protocol {
         return "SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER=$toolhead VENDOR=\"${clean(m.vendor)}\" FILAMENT_TYPE=\"${clean(m.type)}\" FILAMENT_SUBTYPE=\"${clean(m.subType)}\" FILAMENT_COLOR_RGBA=${rgb.substring(1)}FF" + if (force) " FORCE=1" else ""
     }
 
-    fun startLocalPrintBody(path: String, toolheadMap: List<Int>): JSONObject {
+    /**
+     * Params of `server.files.start_local_print`. `bed_level` on makes the U1's Moonraker start the file with
+     * `SDCARD_PRINT_FILE_WITH_PARAMETERS BED_LEVEL="1"`, which sets `print_task_config.auto_bed_leveling`; the firmware runs
+     * the start G-code's adaptive `BED_MESH_CALIBRATE` only when that is set (Snapmaker/u1-moonraker a308cfa). Without it
+     * the U1 keeps its last value and can skip the mesh; found on a real PAXX U1.
+     */
+    fun startLocalPrintBody(path: String, toolheadMap: List<Int>, bedLevel: Boolean = true): JSONObject {
         require(toolheadMap.size <= LOGICAL_FILAMENTS) { "The U1 supports at most $LOGICAL_FILAMENTS filaments per print." }
         toolheadMap.forEachIndexed { i, t -> require(t == -1 || t in 0 until PHYSICAL_TOOLHEADS) { "Filament ${i + 1} is mapped to a toolhead the U1 does not have." } }
         val pairs = toolheadMap.withIndex().filter { it.value >= 0 }.joinToString(",") { "[${it.index},${it.value}]" }
-        return JSONObject().put("path", path).put("print_plate", 1).apply { if (pairs.isNotEmpty()) put("options", JSONObject().put("map_table", "[$pairs]")) }
+        val options = JSONObject().apply { if (bedLevel) put("bed_level", 1); if (pairs.isNotEmpty()) put("map_table", "[$pairs]") }
+        return JSONObject().put("path", path).put("print_plate", 1).put("options", options)
     }
 
     private val stockElegoo = Regex("""^\s*(M729|M8213)\b""", RegexOption.IGNORE_CASE)

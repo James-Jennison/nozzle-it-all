@@ -75,7 +75,6 @@ class FakeMoonraker(var paxx: Boolean = true) : AutoCloseable {
         "/webcam/snapshot.jpg" -> 200 to "JPEGDATA"
         "/printer/gcode/script" -> gcodeReply(q["script"] ?: "")
         "/printer/print/pause", "/printer/print/resume", "/printer/print/cancel", "/printer/print/start" -> ok("ok")
-        "/server/files/start_local_print" -> ok("ok")
         "/server/files/upload" -> {
             val name = Regex("filename=\"([^\"]+)\"").find(String(body, Charsets.ISO_8859_1))?.groupValues?.get(1) ?: "unknown"
             uploaded[name] = body.size

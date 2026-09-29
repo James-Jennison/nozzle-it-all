@@ -25,7 +25,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite bambu-lan 1.1.0).",
+      "note": "No physical evidence yet (fixture suite bambu-lan 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Bambu Lab",
@@ -55,7 +55,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0).",
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -85,7 +85,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0).",
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -115,7 +115,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.1.0).",
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -145,7 +145,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.1.0).",
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -175,7 +175,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite generic-klipper 1.1.0).",
+      "note": "No physical evidence yet (fixture suite generic-klipper 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -205,7 +205,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite octoprint 1.1.0).",
+      "note": "No physical evidence yet (fixture suite octoprint 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -235,7 +235,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite prusalink 1.1.0).",
+      "note": "No physical evidence yet (fixture suite prusalink 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Prusa",
@@ -543,7 +543,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",
@@ -573,7 +573,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.2.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",

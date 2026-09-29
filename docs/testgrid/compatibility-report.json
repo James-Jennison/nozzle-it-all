@@ -260,9 +260,9 @@
       "grades": {
         "controls": "UNVERIFIED",
         "file_transfer": "UNVERIFIED",
-        "monitoring": "PASS (unreviewed)",
-        "physical_print": "SKIPPED (unreviewed)",
-        "slicing": "PASS (unreviewed)"
+        "monitoring": "PASS",
+        "physical_print": "SKIPPED",
+        "slicing": "PASS"
       },
       "history": [
         {
@@ -331,7 +331,7 @@
             "slicing": "PASS"
           },
           "kind": "physical",
-          "review": "unreviewed",
+          "review": "accepted",
           "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
           "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
@@ -361,11 +361,11 @@
         "slicing": "9eefd62b-745a-48e9-8102-873ba743aa2b"
       },
       "grades": {
-        "controls": "PARTIAL (unreviewed)",
-        "file_transfer": "PASS (unreviewed)",
-        "monitoring": "PASS (unreviewed)",
-        "physical_print": "SKIPPED (unreviewed)",
-        "slicing": "PASS (unreviewed)"
+        "controls": "PARTIAL",
+        "file_transfer": "PASS",
+        "monitoring": "PASS",
+        "physical_print": "SKIPPED",
+        "slicing": "PASS"
       },
       "history": [
         {
@@ -434,7 +434,7 @@
             "slicing": "PASS"
           },
           "kind": "physical",
-          "review": "unreviewed",
+          "review": "accepted",
           "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
           "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",

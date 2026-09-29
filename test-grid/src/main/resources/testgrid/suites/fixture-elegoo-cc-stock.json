@@ -5,7 +5,7 @@
     0
   ],
   "id": "elegoo-centauri-carbon-stock",
-  "suiteVersion": "1.4.0",
+  "suiteVersion": "1.5.0",
   "title": "Elegoo printer on Elegoo stock firmware",
   "description": "For external testers with an Elegoo printer on unmodified firmware (Centauri Carbon over SDCP, Centauri Carbon 2 over MQTT), with or without CANVAS. Not COSMOS, not OpenCentauri-patched. Heaters, homing and moves aren't available through Nozzle on these printers, so they aren't tested. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
@@ -719,6 +719,9 @@
       "scope": "multi_material",
       "safetyLevel": 4,
       "description": "Kept apart from single-material acceptance: this grades material and tool changes only.",
+      "requiredCapabilities": [
+        "upload_and_start"
+      ],
       "requiredHardware": [
         "canvas"
       ],

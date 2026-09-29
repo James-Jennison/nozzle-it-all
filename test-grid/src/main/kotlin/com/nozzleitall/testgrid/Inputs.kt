@@ -172,7 +172,8 @@ object GcodeScan {
     }
 
     /** Evaluates one scan_gcode check. Returns null when it passes, or why it fails. */
-    fun evaluate(check: JSONObject, s: GcodeSummary, profile: ProfileInfo?): String? = when (check.optString("check")) {
+    /** [slots]: tool or filament slots the printer's saved profile declares (CFS, CANVAS, an MMU: one nozzle, several slots). */
+    fun evaluate(check: JSONObject, s: GcodeSummary, profile: ProfileInfo?, slots: Int = 1): String? = when (check.optString("check")) {
         "non_empty" -> if (s.extrusionMoves > 0) null else "The G-code has no extruding moves."
         "no_stock_elegoo_commands" -> s.stockElegooCommand?.let { "The G-code contains ${it}, an Elegoo stock-firmware command. Klipper lacks it and COSMOS 26.07+ emergency-stops on it: this file must never be sent to a Moonraker printer." }
         "requires_macro" -> check.optString("macro").uppercase().let { m -> if (m in s.macros) null else "The start/end G-code never calls $m, which this firmware's profile requires (legacy or wrong start G-code)." }
@@ -197,8 +198,9 @@ object GcodeScan {
                 else "The model's centre is offset by (%.1f, %.1f) mm from the bed centre (tolerance %.1f mm).".format(java.util.Locale.ROOT, dx, dy, tol)
             }
         }
-        // Without an explicit "max", the limit is the profile's own tool count (its nozzles; a Prusa XL 5T has five).
-        "max_tool_index" -> (if (check.has("max")) check.optInt("max", 0) else ((profile?.nozzleDiameters?.size ?: 1).coerceAtLeast(1) - 1)).let { max -> s.toolsUsed.filter { it > max }.takeIf { it.isNotEmpty() }?.let { "The G-code selects T${it.joinToString(", T")}, beyond T$max." } }
+        // Without an explicit "max", the limit is the printer's own slot count: its nozzles (Prusa XL 5T: five) or the
+        // filament slots one nozzle is fed from (CFS, CANVAS, MMU), whichever is larger.
+        "max_tool_index" -> (if (check.has("max")) check.optInt("max", 0) else (maxOf(profile?.nozzleDiameters?.size ?: 1, slots).coerceAtLeast(1) - 1)).let { max -> s.toolsUsed.filter { it > max }.takeIf { it.isNotEmpty() }?.let { "The G-code selects T${it.joinToString(", T")}, beyond T$max." } }
         "uses_tools" -> check.optInt("count", 1).let { n -> if (s.toolsUsed.size >= n) null else "The G-code selects ${s.toolsUsed.size} tool(s); at least $n are expected." }
         else -> "Unknown check \"${check.optString("check")}\"."
     }

@@ -43,7 +43,10 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         PRUSA_MK4S(PrinterKind.PRUSA_LINK, "Prusa", "MK4S", "", "", false, false, SlicingPrinterModel.PRUSA_MK4S),
         OCTOPRINT(PrinterKind.OCTOPRINT, "Generic", "OctoPrint printer", "", "", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
         ELEGOO_CC_STOCK(PrinterKind.ELEGOO, "Elegoo", "Centauri Carbon", "", "", false, true, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_CANVAS, 4),
-        PRUSA_XL_5T(PrinterKind.PRUSA_LINK, "Prusa", "XL 5T", "", "", false, false, SlicingPrinterModel.PRUSA_XL_5T, 5);
+        PRUSA_XL_5T(PrinterKind.PRUSA_LINK, "Prusa", "XL 5T", "", "", false, false, SlicingPrinterModel.PRUSA_XL_5T, 5),
+        // Start is gated off for these kinds in the app (startVerifiedFor), so their suites' print tests are blocked.
+        CREALITY_K2(PrinterKind.CREALITY, "Creality", "K2", "", "", false, false, SlicingPrinterModel.CREALITY_K2, 4),
+        FLASHFORGE_AD5X(PrinterKind.FLASHFORGE, "Flashforge", "AD5X", "", "", false, false, SlicingPrinterModel.FLASHFORGE_AD5X, 4);
 
         companion object { fun parse(s: String) = entries.firstOrNull { it.name.equals(s.replace('-', '_'), ignoreCase = true) } }
     }
@@ -91,6 +94,7 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     override fun materialSlots(): List<String> = when {
         preset.afc -> listOf("lane1: PLA white", "lane2: PLA black", "lane3: PETG orange", "lane4: empty")
         preset.printerKind == PrinterKind.BAMBU_LAB -> listOf("AMS 1 slot 1: PLA white", "AMS 1 slot 2: PLA black")
+        preset.printerKind == PrinterKind.CREALITY || preset.printerKind == PrinterKind.FLASHFORGE -> listOf("slot 1: PLA white", "slot 2: PLA black", "slot 3: empty", "slot 4: empty")
         preset.printerKind == PrinterKind.SNAPMAKER_U1_PAXX || preset.printerKind == PrinterKind.SNAPMAKER_U1 -> listOf("T0: PLA", "T1: PLA", "T2: PLA", "T3: PLA")
         else -> throw UnsupportedByTarget("This printer reports no material slots.")
     }

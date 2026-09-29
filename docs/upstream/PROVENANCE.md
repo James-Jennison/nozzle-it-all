@@ -783,3 +783,22 @@ interchange).
   always sends `A0 F0`; purging uses the app's flush matrix instead of PrusaSlicer's `multimaterial_purging`.
 - **Touches:** slicing profiles (Prusa), printer catalogue, website printer list.
 
+
+## P-0032 — multi-colour slicing for Creality CFS, Anycubic ACE and Flashforge IFS printers
+
+- **Upstream:** the packs are upstream OrcaSlicer's own (flattened, `824b216f`); the two pack changes follow CrealityPrint
+  (local checkout, `resources/profiles/Creality/`).
+- **Imported:** nothing new; `scripts/bundle_vendor_profiles.py` gains `fix_changers`, applied to six Creality packs.
+- **Change:** `FilamentChangers` gives four filament slots (one unit) to the Creality CFS printers (K2, K2 Plus, K2 Pro,
+  K2 SE, Hi, K1 / K1C / K1 SE / K1 Max CFS-C), the Anycubic ACE printers (Kobra 3, 3 Max, S1, S1 Max, X) and the
+  Flashforge AD5X (IFS). Their firmware swaps on the plain `T<n>` the engine emits after the packs' own templates.
+  Pack changes: K2, K2 Pro and K2 SE purge into the CFS chute (`purge_in_prime_tower` 0, as CrealityPrint and as the K2
+  Plus and Hi already did); the K1, K1C and K1 SE CFS-C templates drop their `G1 X0 Y245` park, past the 220 mm bed
+  (CrealityPrint parks at the tower's outer wall, where the engine's tower already leaves the nozzle; the K1 Max keeps it).
+- **Test evidence:** desktop engine (nozzle-engine 9a9f231) on gthost, two cubes on slots 1 and 2 with four filaments:
+  K2, K1 CFS-C, Kobra 3, Kobra S1 and AD5X slice with `T` changes, no `M600` and a prime tower; the K1 CFS-C's
+  furthest Y is 223.4 (was 245 at every change).
+- **Known divergence:** not verified on hardware. Which physical slot each filament uses is set on the printer; sending
+  the mapping at print start (CFS websocket `colorMatch`, Flashforge `materialMappings`, Anycubic) is separate work. The
+  Qidi Box is not included: its packs rely on OrcaSlicer's type-1 wipe tower, which this engine does not select yet.
+- **Touches:** slicing (multi-material), six Creality slicing packs.

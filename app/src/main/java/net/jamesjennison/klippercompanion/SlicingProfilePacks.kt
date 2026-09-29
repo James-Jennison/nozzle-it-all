@@ -8,7 +8,8 @@ import java.io.File
 // applies to a given printer. Kept separate from SlicingPrinterModel itself so the mapping from
 // "what kind of printer" to "which asset files" is one obvious place, not scattered.
 // filamentSlots: the pack's filament slot count when machine.json can't say it (the CANVAS packs: one nozzle fed by four
-// lanes - ElegooProfiles.filamentSlots; Bambu printers with an AMS - BambuAms.filamentSlots; Prusa MMU3 - PrusaMmu);
+// lanes - ElegooProfiles.filamentSlots; Bambu printers with an AMS - BambuAms.filamentSlots; Prusa MMU3 - PrusaMmu;
+// CFS, ACE, IFS - FilamentChangers);
 // null means machine.json's own count (ToolSlots.kt's parseToolCount).
 internal data class SlicingProfilePack(val assetDir: String, val cosmosGeneration: CosmosProfileGeneration? = null, val custom: CustomMachine? = null, val filamentSlots: Int? = null) {
     val machinePath get() = "$assetDir/machine.json"
@@ -33,9 +34,10 @@ internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: Co
             else null
         ElegooProfileFirmware.ELEGOO_STOCK -> SlicingProfilePack(dir, filamentSlots = ElegooProfiles.filamentSlots(model))
         // Every other model is one row of the generated catalog (scripts/bundle_vendor_profiles.py).
-        // Bambu printers that take an AMS get its slots (BambuAms), Prusa printers with an MMU3 its five (PrusaMmu).
+        // Bambu printers that take an AMS get its slots (BambuAms), Prusa printers with an MMU3 its five (PrusaMmu), Creality
+        // CFS, Anycubic ACE and Flashforge IFS printers four (FilamentChangers).
         // A custom machine's declared filament changer lanes (Klipper AFC, Happy Hare, ...) come first.
-        null -> SlicingProfilePack(dir, custom = custom, filamentSlots = custom?.filamentSlots ?: BambuAms.filamentSlots(model) ?: PrusaMmu.filamentSlots(model))
+        null -> SlicingProfilePack(dir, custom = custom, filamentSlots = custom?.filamentSlots ?: BambuAms.filamentSlots(model) ?: PrusaMmu.filamentSlots(model) ?: FilamentChangers.filamentSlots(model))
     }
 }
 

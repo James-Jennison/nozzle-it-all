@@ -1,7 +1,8 @@
 # Nozzle Test Grid
 
 Invite-only, local-first hardware acceptance: trusted printer owners run standard Nozzle It All suites on their own
-printers in the app's **Test Mode** (Settings → Test Mode) and return redacted, reproducible evidence bundles.
+printers in the app's **Test Mode** (hidden until turned on: Settings → About & credits → tap the version 7 times; then
+Settings → Test Mode) and return redacted, reproducible evidence bundles.
 Maintainers verify them and build a compatibility matrix that grades each printer configuration separately on slicing,
 file transfer, monitoring, controls and physical printing.
 

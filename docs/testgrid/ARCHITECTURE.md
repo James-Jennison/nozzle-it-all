@@ -27,7 +27,7 @@ Related documents:
 | Acceptance model | `test-grid/.../AcceptanceModel.kt`, `resources/testgrid/models/` | Reproducible STL generator and hash-verified bundled models |
 | Simulation | `test-grid/.../Simulated.kt`, `Scripted.kt` | Simulated printer and slicer; scripted operator for simulated runs only |
 | CLI | `test-grid/.../cli/Main.kt` (`./gradlew -q :test-grid:cli --args=...`) | Suites, validation, instructions, simulated runs, verify, preview, store, report |
-| Test Mode (Android) | `app/.../testgrid/` | UI, Android target over the app's existing printer paths, real-engine slicer |
+| Test Mode (Android) | `app/.../testgrid/` | UI, Android target over the app's existing printer paths, real-engine slicer; hidden until turned on per device (`TestModeAccess`: 7 taps on the version in About & credits) |
 
 `:test-grid` is plain JVM Kotlin with no Android, network client or UI dependency (a Gradle check enforces it). It
 depends on `:domain` so printer rules have one source: firmware identity and the COSMOS profile-generation check

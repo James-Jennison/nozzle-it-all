@@ -1,7 +1,7 @@
 # Snapmaker U1 on PAXX extended firmware
 
-Suite `paxx-u1` version 1.2.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `847c3f9070ac5f2b933bd3824a4dc43049af02f3b37d0df386aaf7b41fd8a054`.
+Suite `paxx-u1` version 1.3.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `bfbc102d0c0445c3cdb04bb410c8cead3a029885e3607bfdccb93771ad5df4c6`.
 
 Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.
 

@@ -603,6 +603,18 @@ class RunSession private constructor(
         else -> null
     }
 
+    /**
+     * The profile a slice or profile-match step uses: `params.profileWith` names a profile for detected hardware (the
+     * first listed that this printer has), otherwise `params.profile`. A Centauri Carbon with CANVAS needs the COSMOS AFC
+     * profile even for single-material prints: COSMOS's PRINT_START takes the lane from its TOOL parameter and warns
+     * without it (found on the owner's CANVAS printer).
+     */
+    private fun profileFor(p: JSONObject): String {
+        val hw = record.target.optJSONObject("hardware")
+        val with = p.optJSONObject("profileWith")
+        return with?.keys()?.asSequence()?.sorted()?.firstOrNull { hw?.optBoolean(it) == true }?.let { with.getString(it) } ?: p.optString("profile")
+    }
+
     private fun markDeleted(path: String) { (0 until uploads().length()).map { uploads().getJSONObject(it) }.filter { it.optString("remotePath") == path }.forEach { it.put("deleted", true) } }
 
     private fun uploadName(step: Step) = "nozzle-testgrid-${suite.id}-${step.params.optString("fromTest").ifBlank { "run" }}.gcode".replace(Regex("[^a-z0-9._-]"), "-")
@@ -656,7 +668,7 @@ class RunSession private constructor(
             }
             StepKind.SLICE -> {
                 val sl = slicer ?: throw UnsupportedByTarget("No slicer is available on this platform.")
-                val profile = sl.profile(p.optString("profile"))
+                val profile = sl.profile(profileFor(p))
                 val parts = env.models.materialize(p.optString("model"), File(env.workDir, "models"))
                 val out = "nozzle-testgrid-${suite.id}-${test.id}".replace(Regex("[^a-z0-9._-]"), "-")
                 s.data.put("profile", JSONObject().put("id", profile.id).put("name", profile.name).put("sha256", profile.sha256))
@@ -713,7 +725,7 @@ class RunSession private constructor(
                 else StepStatus.FAILED to "Firmware reads as ${c.family} (${c.detail}), not $want. Results for one firmware family are never evidence for another."
             }
             StepKind.PROFILE_MATCH -> {
-                val id = p.optString("profile")
+                val id = profileFor(p)
                 val model = SlicingModelCatalog.all.firstOrNull { it.assetDir == id }?.model ?: return StepStatus.FAILED to "Profile $id is not a bundled profile."
                 s.data.put("profile", id).put("slicingModel", model.name)
                 val problem = ElegooProfiles.connectionProblem(model, printer().description.printerKind)

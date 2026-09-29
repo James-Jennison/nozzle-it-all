@@ -777,6 +777,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         val creality = capabilities.transport == PrinterTransport.CREALITY
                         Text(if(creality) "Creality printer" else "Flashforge printer", style=MaterialTheme.typography.titleSmall)
                         Text("Here a ${if(creality) "Creality K1, K2 or Hi" else "Flashforge AD5X or Adventurer 5M"} offers live status and temperatures (read-only), its ${if(creality) "CFS" else "IFS"} slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        if(!creality) Text("An older Flashforge saved without a serial number and access code (Adventurer 3 / 4, Creator, Guider) uses its port-8899 connection instead: Nozzle It All only checks it answers, and doesn't read its state yet.")
                         OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text(if(creality) "CFS slots" else "IFS slots")}
                     } } }
                     else if(capabilities.transport == PrinterTransport.DUET) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

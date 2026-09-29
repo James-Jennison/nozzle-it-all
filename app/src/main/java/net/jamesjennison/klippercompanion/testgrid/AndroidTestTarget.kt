@@ -78,7 +78,8 @@ class AndroidTestTarget(
             PrinterTransport.PRUSA_LINK -> "android-prusalink" to "prusalink-http"
             PrinterTransport.OCTOPRINT -> "android-octoprint" to "octoprint-http"
             PrinterTransport.CREALITY -> "android-creality-lan" to "creality-websocket"
-            PrinterTransport.FLASHFORGE -> "android-flashforge-lan" to "flashforge-http"
+            PrinterTransport.FLASHFORGE -> if (net.jamesjennison.klippercompanion.FlashforgeLegacy.usesLegacy(p.serial, p.apiKey))
+                "android-flashforge-legacy" to com.nozzleitall.testgrid.FirmwareFamilies.LEGACY_FLASHFORGE_PROTOCOL else "android-flashforge-lan" to "flashforge-http"
             PrinterTransport.DUET -> "android-duet" to "duet-http"
             PrinterTransport.ULTIMAKER -> "android-ultimaker" to "ultimaker-http"
         }

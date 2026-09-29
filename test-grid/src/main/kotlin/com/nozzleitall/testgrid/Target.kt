@@ -180,8 +180,12 @@ object FirmwareFamilies {
     const val OCTOPRINT = "octoprint"
     const val CREALITY = "creality-lan"
     const val FLASHFORGE = "flashforge-lan"
+    const val FLASHFORGE_LEGACY = "flashforge-legacy"
     const val DUET = "duet-rrf"
     const val ULTIMAKER = "ultimaker-lan"
+
+    /** TargetDescription.protocol of a Flashforge on the legacy console (AndroidTestTarget.adapterFor). */
+    const val LEGACY_FLASHFORGE_PROTOCOL = "flashforge-tcp"
 
     data class Classified(val family: String, val kind: PrinterKind, val slicingModel: SlicingPrinterModel?, val hardware: Map<String, Boolean>, val detail: String)
 
@@ -217,7 +221,10 @@ object FirmwareFamilies {
         PrinterTransport.OCTOPRINT -> Classified(OCTOPRINT, PrinterKind.OCTOPRINT, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "OctoPrint")
         // A CFS / IFS is one nozzle fed from several slots; its slots come from the saved profile's pack (FilamentChangers).
         PrinterTransport.CREALITY -> Classified(CREALITY, PrinterKind.CREALITY, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Creality LAN (port 9999)")
-        PrinterTransport.FLASHFORGE -> Classified(FLASHFORGE, PrinterKind.FLASHFORGE, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Flashforge local API (port 8898)")
+        // Upstream's split: a profile without serial + access code is the legacy port-8899 console, graded as its own family.
+        PrinterTransport.FLASHFORGE -> if (description.protocol == LEGACY_FLASHFORGE_PROTOCOL)
+            Classified(FLASHFORGE_LEGACY, PrinterKind.FLASHFORGE, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Flashforge legacy console (port 8899)")
+        else Classified(FLASHFORGE, PrinterKind.FLASHFORGE, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Flashforge local API (port 8898)")
         // One family for standalone RepRapFirmware and Duet Software Framework: the app chooses between them per request, as upstream does.
         PrinterTransport.DUET -> Classified(DUET, PrinterKind.DUET, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Duet / RepRapFirmware (rr_* or DSF REST)")
         PrinterTransport.ULTIMAKER -> Classified(ULTIMAKER, PrinterKind.ULTIMAKER, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "UltiMaker LAN API (/api/v1, /cluster-api/v1)")

@@ -82,6 +82,8 @@ import androidx.compose.ui.unit.dp
                 visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
             Text("Both are on the printer's own network settings screen. Nozzle It All reads its status and IFS slots and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
+            // Upstream OrcaSlicer's own split (FlashforgeLegacy.usesLegacy): either field blank means the legacy console.
+            Text("An older Flashforge (Adventurer 3 / 4, Creator, Guider): leave both blank. Nozzle It All then uses its older port-8899 connection, which only checks the printer answers (its state isn't read yet).",style=MaterialTheme.typography.bodySmall)
         } else if(kind==PrinterKind.DUET) {
             OutlinedTextField(address,{address=it},label={Text("Duet address")},placeholder={Text("192.168.1.50 or duet.local")},singleLine=true)
             // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
@@ -122,7 +124,7 @@ import androidx.compose.ui.unit.dp
             FilterChip(kind==PrinterKind.OCTOPRINT,{kind=PrinterKind.OCTOPRINT},label={Text("OctoPrint")},modifier=Modifier.testTag("kind-octoprint"))
             FilterChip(kind==PrinterKind.ELEGOO,{kind=PrinterKind.ELEGOO},label={Text("Elegoo")},modifier=Modifier.testTag("kind-elegoo"))
             FilterChip(kind==PrinterKind.CREALITY,{kind=PrinterKind.CREALITY},label={Text("Creality (K1 / K2 / Hi)")},modifier=Modifier.testTag("kind-creality"))
-            FilterChip(kind==PrinterKind.FLASHFORGE,{kind=PrinterKind.FLASHFORGE},label={Text("Flashforge (AD5X / 5M)")},modifier=Modifier.testTag("kind-flashforge"))
+            FilterChip(kind==PrinterKind.FLASHFORGE,{kind=PrinterKind.FLASHFORGE},label={Text("Flashforge")},modifier=Modifier.testTag("kind-flashforge"))
             FilterChip(kind==PrinterKind.DUET,{kind=PrinterKind.DUET},label={Text("Duet (RepRapFirmware)")},modifier=Modifier.testTag("kind-duet"))
             FilterChip(kind==PrinterKind.ULTIMAKER,{kind=PrinterKind.ULTIMAKER},label={Text("UltiMaker (3 / S-series)")},modifier=Modifier.testTag("kind-ultimaker"))
         }

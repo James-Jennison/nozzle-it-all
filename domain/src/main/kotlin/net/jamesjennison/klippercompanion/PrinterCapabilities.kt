@@ -163,7 +163,8 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
  */
 fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
     PrinterKind.CREALITY -> CrealityCfs.START_VERIFIED
-    PrinterKind.FLASHFORGE -> FlashforgeIfs.START_VERIFIED
+    // Either Flashforge protocol (FlashforgeIfs: port 8898; FlashforgeLegacy: port 8899) may serve a FLASHFORGE profile.
+    PrinterKind.FLASHFORGE -> FlashforgeIfs.START_VERIFIED && FlashforgeLegacy.START_VERIFIED
     PrinterKind.DUET -> DuetRrf.START_VERIFIED
     PrinterKind.ULTIMAKER -> UltiMakerApi.START_VERIFIED
     else -> true

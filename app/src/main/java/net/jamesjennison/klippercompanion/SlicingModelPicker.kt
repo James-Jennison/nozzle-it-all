@@ -58,6 +58,14 @@ fun SlicingModelPicker(selected: SlicingPrinterModel?, onSelect: (SlicingPrinter
     val searching = query.isNotBlank()
     val selectedVendor = selected?.let { SlicingModelCatalog.info(it).vendor }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // The current choice first: with ~60 manufacturers below, a line at the bottom went unseen (found testing the
+        // Add printer wizard on a real U1, where the scan had already chosen the profile).
+        if (selected != null) {
+            val info = SlicingModelCatalog.info(selected)
+            Text("Selected: ${info.label}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.testTag("slicing-model-selected"))
+            if (!info.verifiedOnHardware) Text("Bundled profile, not yet confirmed on a real ${info.label}: watch the first print.", style = MaterialTheme.typography.bodySmall)
+        } else Text("Selected: none", style = MaterialTheme.typography.titleSmall, modifier = Modifier.testTag("slicing-model-selected"))
         OutlinedTextField(
             query, { query = it.take(40) }, label = { Text("Search printer models") }, singleLine = true,
             modifier = Modifier.fillMaxWidth().testTag("slicing-model-search"),
@@ -77,12 +85,5 @@ fun SlicingModelPicker(selected: SlicingPrinterModel?, onSelect: (SlicingPrinter
             }
         }
         if (groups.isEmpty()) Text("No printer model matches \"$query\".", style = MaterialTheme.typography.bodySmall)
-        selected?.let {
-            val info = SlicingModelCatalog.info(it)
-            Text(
-                "Selected: ${info.label}." + if (info.verifiedOnHardware) "" else " Bundled profile, not yet confirmed on a real ${info.label}: watch the first print.",
-                style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("slicing-model-selected"),
-            )
-        }
     }
 }

@@ -18,3 +18,10 @@ the slicing-profile claim for that model. A report of a problem is never discard
 * Record each model's outcome in `docs/WORK_ORDER.md` under the hardware-testing entry so the promotion count is auditable.
 * Bambu reports include the discovery model string; use it to add automatic model preselection (WO-43 follow-up).
 * Stock-firmware Snapmaker U1 reports are the only way to verify Bespok3d (enrollment stays opt-in and advanced).
+
+## Nozzle Test Grid
+
+Invited testers can instead run a standard suite in the app's Test Mode and send a redacted, content-hashed evidence
+bundle that grades slicing, file transfer, monitoring, controls and physical printing separately, per firmware family.
+See [testgrid/README.md](testgrid/README.md). Accepted bundles are the preferred evidence for promotion; the
+two-report rule above still applies per configuration and per category.

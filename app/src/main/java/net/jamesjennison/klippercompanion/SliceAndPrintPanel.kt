@@ -338,7 +338,7 @@ import java.io.File
                                 execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest=PrusaLinkPrintRequest(gcode, filename),
                                     allowedStates=setOf("standby","complete","cancelled","error")), state.generation)
                             }
-                            else -> execute(Moonraker.start(filename), state.generation)
+                            else -> execute(Moonraker.start(filename, state.kindFor(state.address)), state.generation)
                         }
                         close()
                     }, enabled=!working && error==null && stagedFilename!=null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-and-print-confirm")) { Text("Start print") }

@@ -1,0 +1,553 @@
+{
+  "duplicates": [],
+  "format": "nozzle.compatibility-report",
+  "rejected": [],
+  "rows": [
+    {
+      "adapter": "android-bambu-lan",
+      "current": null,
+      "firmware": {
+        "family": "bambu-lan",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite bambu-lan 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Bambu Lab",
+        "model": "X1 Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "cosmos",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "cosmos",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-elegoo-sdcp",
+      "current": null,
+      "firmware": {
+        "family": "elegoo-stock",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-elegoo-sdcp",
+      "current": null,
+      "firmware": {
+        "family": "opencentauri-patched",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Elegoo",
+        "model": "Centauri Carbon"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "klipper",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite generic-klipper 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "Klipper"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-octoprint",
+      "current": null,
+      "firmware": {
+        "family": "octoprint",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite octoprint 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "OctoPrint printer"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-prusalink",
+      "current": null,
+      "firmware": {
+        "family": "prusalink",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite prusalink 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Prusa",
+        "model": "MK4S"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+      "firmware": {
+        "family": "paxx-extended",
+        "version": "1.6.0.267_20260815150420"
+      },
+      "gradeSources": {
+        "controls": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "file_transfer": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "monitoring": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "physical_print": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "slicing": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "PASS",
+        "physical_print": "PASS",
+        "slicing": "PASS"
+      },
+      "history": [
+        {
+          "bundleDigest": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3",
+          "completedAt": 1790638100919,
+          "contentDigest": "ea5cc48ea9bd26a3c5aa26d0bf561a0c2aeccd0d9084ed5eac5f4b48554247be",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "FAIL",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+          "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
+          "completedAt": 1790638739136,
+          "contentDigest": "3d43c728cc833f6106e5e7a55fced84c1b2e06ea2a2ebac24b3084c245035b9c",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "FAIL",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
+          "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
+          "completedAt": 1790639492317,
+          "contentDigest": "e0045f6512537e8179075e188f920d25aca2dce2b9d63b39e3aee34db347d8e7",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
+          "source": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
+          "completedAt": 1790640086654,
+          "contentDigest": "c6bc0f26a26efbd8c0198b1de16066cd270fb536b7055c52d23d07dad08bafbf",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
+          "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
+          "completedAt": 1790649307644,
+          "contentDigest": "af06d09e6d01d78f313afdcb90673f6ca1ce620c8ae0ddf4111a6b4ee12d32eb",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "PASS",
+            "physical_print": "PASS",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+          "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": null
+        }
+      ],
+      "note": "",
+      "nozzleVersion": "0.1.0.testgrid",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+      "firmware": {
+        "family": "paxx-extended",
+        "version": "1.6.0.267_20260815150420"
+      },
+      "gradeSources": {
+        "controls": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "file_transfer": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "monitoring": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "physical_print": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+        "slicing": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+      },
+      "grades": {
+        "controls": "PARTIAL",
+        "file_transfer": "PASS",
+        "monitoring": "PASS",
+        "physical_print": "FAIL",
+        "slicing": "PASS"
+      },
+      "history": [
+        {
+          "bundleDigest": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3",
+          "completedAt": 1790638100919,
+          "contentDigest": "ea5cc48ea9bd26a3c5aa26d0bf561a0c2aeccd0d9084ed5eac5f4b48554247be",
+          "grades": {
+            "controls": "SKIPPED",
+            "file_transfer": "PARTIAL",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
+          "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
+          "completedAt": 1790638739136,
+          "contentDigest": "3d43c728cc833f6106e5e7a55fced84c1b2e06ea2a2ebac24b3084c245035b9c",
+          "grades": {
+            "controls": "SKIPPED",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
+          "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
+          "completedAt": 1790639492317,
+          "contentDigest": "e0045f6512537e8179075e188f920d25aca2dce2b9d63b39e3aee34db347d8e7",
+          "grades": {
+            "controls": "SKIPPED",
+            "file_transfer": "PARTIAL",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
+          "source": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
+          "completedAt": 1790640086654,
+          "contentDigest": "c6bc0f26a26efbd8c0198b1de16066cd270fb536b7055c52d23d07dad08bafbf",
+          "grades": {
+            "controls": "PARTIAL",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
+          "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        },
+        {
+          "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
+          "completedAt": 1790649307644,
+          "contentDigest": "af06d09e6d01d78f313afdcb90673f6ca1ce620c8ae0ddf4111a6b4ee12d32eb",
+          "grades": {
+            "controls": "PARTIAL",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "FAIL",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+          "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.0.0",
+          "supersededBy": null
+        }
+      ],
+      "note": "",
+      "nozzleVersion": "0.1.0.testgrid",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "snapmaker-stock",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-moonraker",
+      "current": null,
+      "firmware": {
+        "family": "snapmaker-stock",
+        "version": "—"
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Snapmaker",
+        "model": "U1"
+      },
+      "scope": "single_material"
+    }
+  ],
+  "version": [
+    1,
+    0
+  ]
+}

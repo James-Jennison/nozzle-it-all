@@ -7,3 +7,6 @@ artifacts/
 *.jks
 *.keystore
 dist/
+
+# Test Grid evidence bundles live in the external store (docs/testgrid/evidence/README.md); only index.json is committed.
+docs/testgrid/evidence/bundles/*.zip

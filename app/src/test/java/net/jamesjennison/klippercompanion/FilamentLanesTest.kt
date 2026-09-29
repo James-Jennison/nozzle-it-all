@@ -31,6 +31,31 @@ class FilamentLanesTest {
         assertEquals(240, lanes[1].nozzleTempC)
     }
 
+    // Shaped as the U1 reports print_task_config (adapter-paxx U1ProtocolTest's recorded data): 32 logical entries, the
+    // first four physical; unloaded toolheads carry leftover values that must not be shown.
+    private val u1TaskConfig = JSONObject()
+        .put("filament_exist", org.json.JSONArray(listOf(true, false, true, true) + List(28) { false }))
+        .put("filament_vendor", org.json.JSONArray(listOf("Snapmaker", "Snapmaker", "Generic", "NONE") + List(28) { "NONE" }))
+        .put("filament_type", org.json.JSONArray(listOf("pla", "PETG", "PLA", "") + List(28) { "" }))
+        .put("filament_sub_type", org.json.JSONArray(listOf("Basic", "", "Silk", "") + List(28) { "" }))
+        .put("filament_color_rgba", org.json.JSONArray(listOf("FF0000FF", "00FF00FF", "#0000ff", "") + List(28) { "" }))
+        .put("filament_official", org.json.JSONArray(listOf(true, true, false, false) + List(28) { false }))
+
+    @Test fun u1ToolheadsBecomeSlotsWithTheirLoadedMaterial() {
+        val status = FilamentLanes.read(null, JSONObject().put("print_task_config", u1TaskConfig).put("toolhead", JSONObject().put("extruder", "extruder2")))
+        assertEquals("Snapmaker U1 toolheads", status.source)
+        val s = status.slots
+        assertEquals(listOf(0, 1, 2, 3), s.map { it.tool })
+        assertEquals(listOf("T0", "T1", "T2", "T3"), s.map { it.name })
+        assertEquals(listOf("PLA", null, "PLA", "LOADED (TYPE NOT REPORTED)"), s.map { it.material })
+        assertEquals(listOf("#FF0000", null, "#0000FF", null), s.map { it.colorHex })
+        assertEquals(listOf("Snapmaker PLA", "Empty", "Generic PLA", "LOADED (TYPE NOT REPORTED)"), s.map { it.label })
+        assertEquals(listOf(false, false, true, false), s.map { it.active })
+        // AFC lanes, where present, still win (a COSMOS printer never reports print_task_config).
+        assertEquals("Filament changer lanes (AFC)", FilamentLanes.read(JSONObject().put("value", canvas), JSONObject().put("print_task_config", u1TaskConfig)).source)
+        assertNull(FilamentLanes.fromU1TaskConfig(JSONObject(), null))
+    }
+
     @Test fun lanesWithoutAToolAreSkippedAsUpstreamDoes() {
         val v = JSONObject().put("lane1", afcLane("", "#FF0000", "PLA")).put("lane2", JSONObject(afcLane("1", "#00FF00", "PLA").toString()).put("lane", 1))
         assertNull(FilamentLanes.fromLaneData(JSONObject().put("value", v)))

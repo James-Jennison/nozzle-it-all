@@ -52,6 +52,7 @@ table{border-collapse:collapse;width:100%}
 th,td{text-align:left;padding:.7em .6em;border-bottom:1px solid var(--line);vertical-align:top}
 th{font-weight:600;color:var(--muted);font-size:.9rem}
 .tablewrap{overflow-x:auto}
+.mlabel{display:none}
 .callout{border-left:4px solid var(--accent);background:var(--surface);padding:14px 18px;border-radius:0 12px 12px 0;margin:1.2em 0}
 .fine{font-size:.85rem;color:var(--muted)}
 code{font:.92em ui-monospace,"IBM Plex Mono",monospace;background:var(--surface2);padding:.1em .35em;border-radius:5px}
@@ -67,4 +68,5 @@ code{font:.92em ui-monospace,"IBM Plex Mono",monospace;background:var(--surface2
  table.stack tr{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
  table.stack th,table.stack td{border:0;padding:.25em 0}
  table.stack th[scope=row]{font:600 1.1rem "Space Grotesk",sans-serif;color:var(--text)}
+ .mlabel{display:inline}
 }

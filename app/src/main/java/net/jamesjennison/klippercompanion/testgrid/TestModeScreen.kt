@@ -111,6 +111,7 @@ private fun kindLabel(k: net.jamesjennison.klippercompanion.PrinterKind) = when 
     net.jamesjennison.klippercompanion.PrinterKind.ELEGOO -> "Elegoo (LAN)"
     net.jamesjennison.klippercompanion.PrinterKind.CREALITY -> "Creality (LAN)"
     net.jamesjennison.klippercompanion.PrinterKind.FLASHFORGE -> "Flashforge (LAN)"
+    net.jamesjennison.klippercompanion.PrinterKind.DUET -> "Duet (RepRapFirmware)"
 }
 
 private fun familyLabel(f: String) = when (f) {
@@ -125,6 +126,7 @@ private fun familyLabel(f: String) = when (f) {
     com.nozzleitall.testgrid.FirmwareFamilies.OCTOPRINT -> "OctoPrint"
     com.nozzleitall.testgrid.FirmwareFamilies.CREALITY -> "Creality LAN"
     com.nozzleitall.testgrid.FirmwareFamilies.FLASHFORGE -> "Flashforge local API"
+    com.nozzleitall.testgrid.FirmwareFamilies.DUET -> "Duet / RepRapFirmware"
     else -> f
 }
 

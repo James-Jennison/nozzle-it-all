@@ -9,7 +9,9 @@ import java.util.Locale
 // CREALITY = a Creality K1 / K2 / Hi on Creality's own firmware (port-9999 websocket, CFS slots; CrealityCfs).
 // FLASHFORGE = a Flashforge AD5X / Adventurer 5M on its local HTTP API (port 8898, IFS slots; FlashforgeIfs): serial
 // (PrinterProfile.serial) + access code (PrinterProfile.apiKey).
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE }
+// DUET = a Duet board on RepRapFirmware, standalone (rr_* API) or with Duet Software Framework (/machine REST API; DuetRrf):
+// board password in PrinterProfile.apiKey, blank for RepRapFirmware's default.
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing

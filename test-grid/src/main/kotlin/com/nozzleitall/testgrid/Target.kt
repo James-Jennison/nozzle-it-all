@@ -180,6 +180,7 @@ object FirmwareFamilies {
     const val OCTOPRINT = "octoprint"
     const val CREALITY = "creality-lan"
     const val FLASHFORGE = "flashforge-lan"
+    const val DUET = "duet-rrf"
 
     data class Classified(val family: String, val kind: PrinterKind, val slicingModel: SlicingPrinterModel?, val hardware: Map<String, Boolean>, val detail: String)
 
@@ -216,6 +217,8 @@ object FirmwareFamilies {
         // A CFS / IFS is one nozzle fed from several slots; its slots come from the saved profile's pack (FilamentChangers).
         PrinterTransport.CREALITY -> Classified(CREALITY, PrinterKind.CREALITY, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Creality LAN (port 9999)")
         PrinterTransport.FLASHFORGE -> Classified(FLASHFORGE, PrinterKind.FLASHFORGE, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Flashforge local API (port 8898)")
+        // One family for standalone RepRapFirmware and Duet Software Framework: the app chooses between them per request, as upstream does.
+        PrinterTransport.DUET -> Classified(DUET, PrinterKind.DUET, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Duet / RepRapFirmware (rr_* or DSF REST)")
     }
 }
 

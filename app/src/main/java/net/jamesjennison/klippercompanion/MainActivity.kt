@@ -779,6 +779,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("Here a ${if(creality) "Creality K1, K2 or Hi" else "Flashforge AD5X or Adventurer 5M"} offers live status and temperatures (read-only), its ${if(creality) "CFS" else "IFS"} slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
                         OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text(if(creality) "CFS slots" else "IFS slots")}
                     } } }
+                    else if(capabilities.transport == PrinterTransport.DUET) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Duet printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a Duet on RepRapFirmware offers a connection check and uploading a sliced file to 0:/gcodes. Nozzle It All doesn't read its state, temperatures or progress yet (the slicer code this connection is ported from doesn't). Start the print on the printer's screen or in Duet Web Control: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet.")
+                    } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")

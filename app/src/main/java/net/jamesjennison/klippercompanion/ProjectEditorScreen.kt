@@ -466,7 +466,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // Link need this screen's Moonraker-only LiveFileChanges upload step below.
     val bambuTarget = profile?.kind == PrinterKind.BAMBU_LAB
     val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT || profile?.kind == PrinterKind.ELEGOO ||
-        profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE // all take plain G-code uploaded and started in one request (Creality/Flashforge: upload, start gated)
+        profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE || profile?.kind == PrinterKind.DUET // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet: upload, start gated)
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).
@@ -981,7 +981,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             prusaTarget -> {
                                 val gcode = sliced ?: return@Button
                                 execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest = PrusaLinkPrintRequest(gcode, filename),
-                                    allowedStates = setOf("standby", "complete", "cancelled", "error")), state.generation)
+                                    allowedStates = sendAllowedStates(profile.kind)), state.generation)
                             }
                             else -> execute(Moonraker.start(filename, state.kindFor(state.address)), state.generation)
                         }

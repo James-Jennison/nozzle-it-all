@@ -66,7 +66,7 @@ class AndroidTestTarget(
         private val NOT_SENT = listOf("Nothing was sent", BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED, BambuPrintProtocol.DYNAMIC_NOZZLE_MAP_NOT_SUPPORTED,
             "Match each filament", "is sliced for the", "which the printer reports empty", "sliced file is missing",
             "The printer is ", "password", "API key", "access code",
-            // Creality / Flashforge while their start is gated off: the file is uploaded, no print starts.
+            // Creality / Flashforge / Duet while their start is gated off: the file is uploaded, no print starts.
             "isn't verified on real hardware yet")
         /** Wording for a definite refusal by the printer after the request went out: nothing is running. */
         private val REFUSED = listOf("rejected the print command", "did not start it", "Could not upload", "(HTTP ")
@@ -79,6 +79,7 @@ class AndroidTestTarget(
             PrinterTransport.OCTOPRINT -> "android-octoprint" to "octoprint-http"
             PrinterTransport.CREALITY -> "android-creality-lan" to "creality-websocket"
             PrinterTransport.FLASHFORGE -> "android-flashforge-lan" to "flashforge-http"
+            PrinterTransport.DUET -> "android-duet" to "duet-http"
         }
     }
 

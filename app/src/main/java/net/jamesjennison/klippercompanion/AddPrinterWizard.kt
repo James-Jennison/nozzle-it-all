@@ -134,6 +134,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.ELEGOO, {kind=PrinterKind.ELEGOO}, label={Text("Elegoo")}, modifier=Modifier.testTag("wizard-kind-elegoo"))
                         FilterChip(kind==PrinterKind.CREALITY, {kind=PrinterKind.CREALITY}, label={Text("Creality (K1 / K2 / Hi)")}, modifier=Modifier.testTag("wizard-kind-creality"))
                         FilterChip(kind==PrinterKind.FLASHFORGE, {kind=PrinterKind.FLASHFORGE}, label={Text("Flashforge (AD5X / 5M)")}, modifier=Modifier.testTag("wizard-kind-flashforge"))
+                        FilterChip(kind==PrinterKind.DUET, {kind=PrinterKind.DUET}, label={Text("Duet (RepRapFirmware)")}, modifier=Modifier.testTag("wizard-kind-duet"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -164,6 +165,12 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                             visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
                         Text("Serial number and access code are both on the printer's own network settings screen; Flashforge's local API needs both. You start the print on the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.DUET) {
+                        OutlinedTextField(address, {address=it}, label={Text("Duet address")}, placeholder={Text("192.168.1.50 or duet.local")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Board password (optional)")}, singleLine=true, modifier=Modifier.testTag("wizard-duet-password"),
+                            visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+                        Text("A Duet on RepRapFirmware, standalone or with Duet Software Framework. Only enter a password if the board has one (M551). Nozzle It All checks the board is reachable and uploads sliced files; you start the print on the printer's screen or Duet Web Control (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),

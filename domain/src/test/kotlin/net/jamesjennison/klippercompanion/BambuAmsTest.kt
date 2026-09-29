@@ -16,6 +16,6 @@ class BambuAmsTest {
     }
 
     @Test fun anAmsPrinterIsAFilamentSwapMachine() {
-        assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(SlicingPrinterModel.BAMBU_X1_CARBON, BambuAms.SLOTS_PER_UNIT))
+        assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(nozzleCount = 1, slotCount = BambuAms.SLOTS_PER_UNIT))
     }
 }

@@ -77,7 +77,7 @@ class ElegooProfilesTest {
             assertEquals(1, parseToolCount(machine(m))) // one nozzle...
             assertEquals(4, pack.toolCountOf(machine(m))) // ...fed by four CANVAS lanes
             assertEquals("the desktop's count", index.getValue(SlicingModelCatalog.info(m).assetDir).getInt("tools"), pack.toolCountOf(machine(m)))
-            assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(m, 4))
+            assertEquals(MultiToolFamily.FILAMENT_SWAP, pack.toolSetupOf(machine(m)).family)
         }
         // Unchanged: the plain COSMOS pack has one slot and other models still take a custom machine.
         assertEquals(1, slicingProfilePack(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, CosmosProfileGeneration.CURRENT)!!.toolCountOf(machine(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON)))

@@ -8,14 +8,17 @@ class MultiMaterialTest {
     private fun m(id: String, type: String, nozzle: Int? = 210, bed: Int? = 60) = MaterialProfile(id, id, type, tempNozzleC = nozzle, tempBedC = bed, source = MaterialSource.BUNDLED)
     private val toolchanger = MultiToolFamily.TOOLCHANGER
 
-    @Test fun familyFollowsTheMachineNotJustTheToolCount() {
-        assertEquals(MultiToolFamily.SINGLE, multiToolFamily(SlicingPrinterModel.SNAPMAKER_U1, 1))
-        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(SlicingPrinterModel.SNAPMAKER_U1, 4))
-        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(SlicingPrinterModel.PRUSA_XL_5T, 5))
-        // A single-nozzle Prusa (MK4 + MMU) feeds one nozzle from several spools, so it is a filament swap, not tools.
-        assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(SlicingPrinterModel.PRUSA_GENERIC, 5))
-        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(null, 3)) // unknown printer keeps the previous default
-        assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(SlicingPrinterModel.BAMBU_GENERIC, 4))
+    @Test fun familyFollowsNozzlesAndSlots() {
+        assertEquals(MultiToolFamily.SINGLE, multiToolFamily(nozzleCount = 1, slotCount = 1))
+        assertEquals(MultiToolFamily.SINGLE, multiToolFamily(nozzleCount = 4, slotCount = 1))
+        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(nozzleCount = 4, slotCount = 4)) // Snapmaker U1
+        assertEquals(MultiToolFamily.TOOLCHANGER, multiToolFamily(nozzleCount = 2, slotCount = 2)) // IDEX, Bambu H2D
+        // One nozzle fed from several spools (AMS, CFS, ACE, MMU3, CANVAS): a filament swap, not tools.
+        assertEquals(MultiToolFamily.FILAMENT_SWAP, multiToolFamily(nozzleCount = 1, slotCount = 5))
+        // More spools than nozzles (a dual-nozzle printer with an AMS): spools share a nozzle.
+        assertEquals(MultiToolFamily.MIXED, multiToolFamily(nozzleCount = 2, slotCount = 8))
+        assertTrue(MultiToolFamily.MIXED.sharesNozzle && MultiToolFamily.FILAMENT_SWAP.sharesNozzle)
+        assertFalse(MultiToolFamily.TOOLCHANGER.sharesNozzle || MultiToolFamily.SINGLE.sharesNozzle)
     }
 
     @Test fun compatibleMaterialsProduceNoWarnings() {
@@ -58,7 +61,7 @@ class MultiMaterialTest {
         assertEquals(2468.08, s.filamentUsedMm!!, 0.01); assertEquals(100, s.toolchanges); assertEquals(listOf(0, 1), s.toolsUsed)
         assertEquals(listOf(3.70, 3.66, 0.0, 0.0), s.perToolGrams)
         assertEquals(100 * 84 / 1000.0 * 1.24, s.estimatedPurgeGrams()!!, 1e-6)
-        assertNull(s.purgeNote(MultiToolFamily.FILAMENT_SWAP)); assertTrue(s.purgeNote(MultiToolFamily.TOOLCHANGER)!!.contains("Independent tools"))
+        assertNull(s.purgeNote(MultiToolFamily.FILAMENT_SWAP)); assertTrue(s.purgeNote(MultiToolFamily.TOOLCHANGER)!!.contains("primes"))
         val noTower = GcodeStatsParser.parse(File.createTempFile("stat2", ".gcode").apply { writeText("; total filament change = 12\n; enable_prime_tower = 0\n") })
         assertEquals(0.0, noTower.estimatedPurgeGrams()!!, 0.0); assertTrue(noTower.purgeNote(MultiToolFamily.FILAMENT_SWAP)!!.contains("No prime tower"))
         assertNull(GcodeStatsParser.parse(File.createTempFile("stat3", ".gcode").apply { writeText("; total filament change = 3\n") }).estimatedPurgeGrams()) // no matrix to estimate from
@@ -72,9 +75,17 @@ class MultiMaterialTest {
     }
 
     @Test fun towerAndFlushControlsAreOnlyOfferedWhereTheyDoSomething() {
-        val towerKeys = listOf("enable_prime_tower", "prime_tower_width", "flush_multiplier", "flush_into_infill", "flush_into_objects", "flush_into_support")
-        for (family in listOf(null, MultiToolFamily.SINGLE, MultiToolFamily.TOOLCHANGER)) assertTrue(family.toString(), SettingsCatalog.visible(SettingTier.EXPERT, "", family).none { it.key in towerKeys })
-        assertEquals(towerKeys.toSet(), SettingsCatalog.visible(SettingTier.EXPERT, "", MultiToolFamily.FILAMENT_SWAP).map { it.key }.filter { it in towerKeys }.toSet())
+        val tower = setOf("enable_prime_tower", "prime_tower_width")
+        val flush = setOf("flush_multiplier", "flush_into_infill", "flush_into_objects", "flush_into_support")
+        fun shown(family: MultiToolFamily?) = SettingsCatalog.visible(SettingTier.EXPERT, "", family).map { it.key }.filter { it in tower + flush }.toSet()
+        for (family in listOf(null, MultiToolFamily.SINGLE)) assertEquals(family.toString(), emptySet<String>(), shown(family))
+        // Toolchangers prime each tool on the tower after a change (P-0027): the tower, but nothing is flushed.
+        assertEquals(tower, shown(MultiToolFamily.TOOLCHANGER))
+        for (family in listOf(MultiToolFamily.FILAMENT_SWAP, MultiToolFamily.MIXED)) assertEquals(family.toString(), tower + flush, shown(family))
+    }
+    @Test fun toolchangerPurgeNotesSayWhatTheTowerDoes() {
+        val noTower = GcodeStatsParser.parse(File.createTempFile("toolchanger", ".gcode").apply { writeText("; total filament change = 12\n; enable_prime_tower = 0\n") })
+        assertTrue(noTower.purgeNote(MultiToolFamily.TOOLCHANGER)!!.contains("prime each tool"))
     }
 
     @Test fun previewTracksToolChangesAndTagsSegmentsWithTheirTool() {

@@ -17,8 +17,12 @@ sealed class SettingType {
 
 data class SettingDef(
     val key: String, val label: String, val group: String, val tier: SettingTier, val type: SettingType, val help: String,
-    // Set for controls that only do something on one kind of multi-tool machine (verified against the engine).
+    // Set for controls that only do something on one kind of multi-tool machine (verified against the engine). FILAMENT_SWAP
+    // controls (flushing) also show for MIXED machines, whose spools share a nozzle too.
     val onlyFor: MultiToolFamily? = null,
+    // Set for controls that do something on any multi-tool machine and nothing on a single-material one (the prime tower:
+    // spools sharing a nozzle flush into it, and toolchangers prime each tool on it after a change).
+    val multiToolOnly: Boolean = false,
 )
 
 object SettingsCatalog {
@@ -51,8 +55,8 @@ object SettingsCatalog {
         SettingDef("brim_width", "Brim width", "Adhesion", SettingTier.BASIC, SettingType.Decimal(0.0, 30.0, "mm"), "Flat ring around the first layer that keeps parts from lifting."),
         SettingDef("skirt_loops", "Skirt loops", "Adhesion", SettingTier.ADVANCED, SettingType.IntRange(0, 10), "Loops printed around (not touching) the part to prime the nozzle."),
 
-        SettingDef("enable_prime_tower", "Prime tower", "Multi-material", SettingTier.ADVANCED, SettingType.Toggle, "Purges the nozzle between tool or colour changes.", onlyFor = MultiToolFamily.FILAMENT_SWAP),
-        SettingDef("prime_tower_width", "Prime tower width", "Multi-material", SettingTier.EXPERT, SettingType.IntRange(10, 100, "mm"), "Width of the prime tower that purges the nozzle between tool changes.", onlyFor = MultiToolFamily.FILAMENT_SWAP),
+        SettingDef("enable_prime_tower", "Prime tower", "Multi-material", SettingTier.ADVANCED, SettingType.Toggle, "Purges or primes the nozzle between tool or colour changes.", multiToolOnly = true),
+        SettingDef("prime_tower_width", "Prime tower width", "Multi-material", SettingTier.EXPERT, SettingType.IntRange(10, 100, "mm"), "Width of the prime tower that purges or primes the nozzle between tool changes.", multiToolOnly = true),
         SettingDef("flush_multiplier", "Flush multiplier", "Multi-material", SettingTier.EXPERT, SettingType.Decimal(0.0, 3.0), "Scales the material flushed at every change: lower wastes less but risks colour bleed, higher is cleaner.", onlyFor = MultiToolFamily.FILAMENT_SWAP),
         SettingDef("flush_into_infill", "Flush into infill", "Multi-material", SettingTier.EXPERT, SettingType.Toggle, "Purges into the model's own infill instead of the tower, saving material.", onlyFor = MultiToolFamily.FILAMENT_SWAP),
         SettingDef("flush_into_objects", "Flush into objects", "Multi-material", SettingTier.EXPERT, SettingType.Toggle, "Purges into other objects on the plate.", onlyFor = MultiToolFamily.FILAMENT_SWAP),
@@ -69,7 +73,7 @@ object SettingsCatalog {
     /** Everything at or below [tier]'s disclosure level (Basic < Advanced < Expert), filtered by a free-text query. */
     fun visible(tier: SettingTier, query: String = "", family: MultiToolFamily? = null): List<SettingDef> {
         val q = query.trim().lowercase()
-        return all.filter { it.tier.ordinal <= tier.ordinal && (it.onlyFor == null || it.onlyFor == family) && (q.isEmpty() || listOf(it.label, it.key, it.group, it.help).any { s -> s.lowercase().contains(q) }) }
+        return all.filter { it.tier.ordinal <= tier.ordinal && (it.onlyFor == null || it.onlyFor == family || (it.onlyFor == MultiToolFamily.FILAMENT_SWAP && family?.sharesNozzle == true)) && (!it.multiToolOnly || (family != null && family != MultiToolFamily.SINGLE)) && (q.isEmpty() || listOf(it.label, it.key, it.group, it.help).any { s -> s.lowercase().contains(q) }) }
     }
 
     /** The exact config string for a user-entered [raw] value, or null if it is invalid for this setting. */

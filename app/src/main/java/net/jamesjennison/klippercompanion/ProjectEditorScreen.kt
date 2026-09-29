@@ -224,14 +224,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // printer keeps exactly today's single-material-per-project UX unchanged, not a hidden
     // no-op control (§20).
     var toolCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
+    var nozzleCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
     LaunchedEffect(profile?.slicingModel, profile?.customMachine) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         try {
             bedShape = withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
             machineLimits = withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
             filamentRange = withContext(Dispatchers.IO) { filamentTemperatureRangeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
-            toolCount = withContext(Dispatchers.IO) { toolCountFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) } ?: 1
-        } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1 }
+            val setup = withContext(Dispatchers.IO) { toolSetupFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
+            toolCount = setup?.slots ?: 1; nozzleCount = setup?.nozzles ?: 1
+        } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1; nozzleCount = 1 }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
     // WO-30 follow-up (owner: "too much text/settings visible at once"): the EDIT stage's plate,
@@ -824,21 +826,21 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     // already carries its own real material + tool assignment,
                                     // tap "Assign" on a row to change it.
                                     Text("$toolCount real tool slots on ${profile?.label ?: "this printer"} - tap \"Assign\" on an object above to pick its material and tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-multitool-hint"))
-                                    val family = multiToolFamily(profile?.slicingModel, toolCount)
+                                    val family = multiToolFamily(nozzleCount, toolCount)
                                     val assigned = objects.mapNotNull { it.material() }
                                     val toolWarnings = MaterialCompatibility.warnings(assigned, family)
                                     val primeTowerOn = advancedOverrides["enable_prime_tower"]?.let { it == "1" }
                                     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-multimaterial")) {
                                         Text(family.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("project-multimaterial-family"))
                                         Text(family.explanation, style = MaterialTheme.typography.bodySmall)
-                                        if (family == MultiToolFamily.FILAMENT_SWAP) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Switch(primeTowerOn ?: true, { advancedOverrides = advancedOverrides + ("enable_prime_tower" to if (it) "1" else "0") }, modifier = Modifier.testTag("project-prime-tower"))
-                                                Text(" Prime tower" + if (primeTowerOn == null) " (profile default)" else "", style = MaterialTheme.typography.bodyMedium)
-                                            }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Switch(primeTowerOn ?: true, { advancedOverrides = advancedOverrides + ("enable_prime_tower" to if (it) "1" else "0") }, modifier = Modifier.testTag("project-prime-tower"))
+                                            Text(" Prime tower" + if (primeTowerOn == null) " (profile default)" else "", style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        if (family.sharesNozzle) {
                                             Text("Flush amount and where to flush: Settings > Multi-material.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         } else {
-                                            Text("No prime tower or flush settings here: this engine does not purge on independent-tool machines (checked on the Snapmaker U1 profile - turning the tower on changes nothing).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-no-purge-note"))
+                                            Text("No flushing between colours on independent tools: the prime tower only primes each tool after a change and catches ooze from the idle nozzles.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-no-purge-note"))
                                         }
                                         toolWarnings.forEachIndexed { k, w -> Text("⚠ $w", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-multimaterial-warning-$k")) }
                                     }
@@ -877,7 +879,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
                                     Text("Brim (bed adhesion)")
                                 }
-                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", multiToolFamily(profile?.slicingModel, toolCount), { advancedOverrides = it })
+                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", multiToolFamily(nozzleCount, toolCount), { advancedOverrides = it })
                                 validationIssues.forEach { issue ->
                                     Text(
                                         issue.message,
@@ -937,8 +939,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.testTag("project-slice-multimaterial")) {
                                 Text("Toolchanges: ${st.toolchanges ?: slicedToolpath?.toolChanges?.size ?: 0}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-toolchanges"))
                                 Text(st.toolsUsed.joinToString("  ·  ") { t -> "T${t + 1} ${"%.1f".format(st.perToolGrams.getOrElse(t) { 0.0 })} g" }, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-pertool"))
-                                st.estimatedPurgeGrams()?.takeIf { multiToolFamily(profile?.slicingModel, toolCount) != MultiToolFamily.TOOLCHANGER }?.let { Text("Estimated purge waste: ${"%.1f".format(it)} g (estimate)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-purge")) }
-                                st.purgeNote(multiToolFamily(profile?.slicingModel, toolCount))?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-slice-purge-note")) }
+                                st.estimatedPurgeGrams()?.takeIf { multiToolFamily(nozzleCount, toolCount) != MultiToolFamily.TOOLCHANGER }?.let { Text("Estimated purge waste: ${"%.1f".format(it)} g (estimate)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-purge")) }
+                                st.purgeNote(multiToolFamily(nozzleCount, toolCount))?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-slice-purge-note")) }
                             }
                         }
                         val toolMaterials = (1..toolCount.coerceAtLeast(1)).map { slot -> objects.firstOrNull { (it.toolSlotIndex ?: 1) == slot }?.material() }

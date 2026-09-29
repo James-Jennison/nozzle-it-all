@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -74,7 +74,7 @@ data class PrinterCapabilities(
     // "Favorite macros" section already uses, not a static assumption.
     val supportsFilamentLoadUnload: Boolean = false,
     // False for a connection whose upstream print host reads no printer state at all (Duet: OrcaSlicer's Duet.cpp only
-    // checks the board answers), so its snapshot is "reachable, state unknown". See sendAllowedStates.
+    // checks the board answers; Repetier-Server: Repetier.cpp reads only printer slugs), so its snapshot is "reachable, state unknown". See sendAllowedStates.
     val readsPrinterState: Boolean = true,
 )
 
@@ -154,11 +154,19 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )
+    // Repetier-Server (RepetierPrinterService): a reachability check (upstream OrcaSlicer's Repetier host reads no printer
+    // state) and uploading a sliced file to the server's model library, which never prints. Starting it is refused until
+    // RepetierServer.START_VERIFIED; pause / stop aren't built. Built from OrcaSlicer's source only.
+    PrinterKind.REPETIER -> PrinterCapabilities(
+        transport = PrinterTransport.REPETIER, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
+    )
 }
 
 /**
  * Whether Nozzle It All may start a print on this kind of printer. False while a kind's start is gated off until it has
- * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED): sending a
+ * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED, RepetierServer.START_VERIFIED): sending a
  * sliced file to one then uploads it (an UltiMaker: sends nothing), and the person starts it on the printer's screen.
  */
 fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
@@ -167,6 +175,7 @@ fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
     PrinterKind.FLASHFORGE -> FlashforgeIfs.START_VERIFIED && FlashforgeLegacy.START_VERIFIED
     PrinterKind.DUET -> DuetRrf.START_VERIFIED
     PrinterKind.ULTIMAKER -> UltiMakerApi.START_VERIFIED
+    PrinterKind.REPETIER -> RepetierServer.START_VERIFIED
     else -> true
 }
 

@@ -96,6 +96,14 @@ import androidx.compose.ui.unit.dp
             // The issued id goes in serial, the key in the encrypted apiKey slot - see printerServiceFor's comment.
             UltiMakerPairing(address, serial, apiKey) { id, key -> serial = id; apiKey = key }
             Text("A networked UltiMaker (3, S3, S5, S7). Nozzle It All reads its state and job progress. Sending prints from here isn't verified on a real printer yet, and an UltiMaker prints every job it is sent, so nothing is sent: print from the printer's screen.",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.REPETIER) {
+            OutlinedTextField(address,{address=it},label={Text("Repetier-Server address")},placeholder={Text("192.168.1.60:3344")},singleLine=true)
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("API key")},singleLine=true,modifier=Modifier.testTag("repetier-key"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+            OutlinedTextField(serial,{serial=it.take(40)},label={Text("Printer slug (blank if the server has one printer)")},singleLine=true,modifier=Modifier.testTag("repetier-slug"))
+            Text("Nozzle It All checks the server answers and stores sliced files in its model library; start the print from Repetier-Server or the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
         } else if(kind==PrinterKind.PRUSA_LINK) {
             OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
             Text("The address shown on the printer's own screen under Settings > Network, with no http:// prefix.",style=MaterialTheme.typography.bodySmall)
@@ -114,7 +122,7 @@ import androidx.compose.ui.unit.dp
             Text("Only needed if Moonraker requires authentication; copy it from Fluidd's or Mainsail's settings.",style=MaterialTheme.typography.bodySmall)
         }
         Text("Printer type",style=MaterialTheme.typography.labelLarge)
-        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear: stock U1 firmware shows Bespok3d, PAXX firmware shows multiACE. Bambu Lab, Prusa Link, OctoPrint, Elegoo, Creality, Flashforge, Duet and UltiMaker are different protocols entirely, with their own fields above.",style=MaterialTheme.typography.bodySmall)
+        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear: stock U1 firmware shows Bespok3d, PAXX firmware shows multiACE. Bambu Lab, Prusa Link, OctoPrint, Elegoo, Creality, Flashforge, Duet, UltiMaker and Repetier-Server are different protocols entirely, with their own fields above.",style=MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             FilterChip(kind==PrinterKind.GENERIC_KLIPPER,{kind=PrinterKind.GENERIC_KLIPPER},label={Text("Generic Klipper")})
             FilterChip(kind==PrinterKind.SNAPMAKER_U1,{kind=PrinterKind.SNAPMAKER_U1},label={Text("Snapmaker U1 (stock)")},modifier=Modifier.testTag("kind-u1-stock"))
@@ -127,6 +135,7 @@ import androidx.compose.ui.unit.dp
             FilterChip(kind==PrinterKind.FLASHFORGE,{kind=PrinterKind.FLASHFORGE},label={Text("Flashforge")},modifier=Modifier.testTag("kind-flashforge"))
             FilterChip(kind==PrinterKind.DUET,{kind=PrinterKind.DUET},label={Text("Duet (RepRapFirmware)")},modifier=Modifier.testTag("kind-duet"))
             FilterChip(kind==PrinterKind.ULTIMAKER,{kind=PrinterKind.ULTIMAKER},label={Text("UltiMaker (3 / S-series)")},modifier=Modifier.testTag("kind-ultimaker"))
+            FilterChip(kind==PrinterKind.REPETIER,{kind=PrinterKind.REPETIER},label={Text("Repetier-Server")},modifier=Modifier.testTag("kind-repetier"))
         }
         // WO-13: which bundled slicer profile family this printer needs, if any. Deliberately
         // separate from "printer type" above - the U1 and a Centauri Carbon both speak

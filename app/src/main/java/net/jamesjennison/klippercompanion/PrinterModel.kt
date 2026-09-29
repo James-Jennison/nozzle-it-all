@@ -72,6 +72,8 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     PrinterKind.DUET -> DuetPrinterService(address, profile.apiKey)
     // An UltiMaker's pairing id (not a secret: it goes in the auth/check URL) in serial, its key in the encrypted apiKey slot.
     PrinterKind.ULTIMAKER -> UltiMakerPrinterService(address, profile.serial, profile.apiKey)
+    // Repetier-Server's API key in the encrypted apiKey slot; the server's printer slug (not a secret) in serial.
+    PrinterKind.REPETIER -> RepetierPrinterService(address, profile.apiKey, profile.serial)
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER

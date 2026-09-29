@@ -183,6 +183,7 @@ object FirmwareFamilies {
     const val FLASHFORGE_LEGACY = "flashforge-legacy"
     const val DUET = "duet-rrf"
     const val ULTIMAKER = "ultimaker-lan"
+    const val REPETIER = "repetier-server"
 
     /** TargetDescription.protocol of a Flashforge on the legacy console (AndroidTestTarget.adapterFor). */
     const val LEGACY_FLASHFORGE_PROTOCOL = "flashforge-tcp"
@@ -228,6 +229,8 @@ object FirmwareFamilies {
         // One family for standalone RepRapFirmware and Duet Software Framework: the app chooses between them per request, as upstream does.
         PrinterTransport.DUET -> Classified(DUET, PrinterKind.DUET, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Duet / RepRapFirmware (rr_* or DSF REST)")
         PrinterTransport.ULTIMAKER -> Classified(ULTIMAKER, PrinterKind.ULTIMAKER, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "UltiMaker LAN API (/api/v1, /cluster-api/v1)")
+        // The server's firmware behind it isn't visible over upstream's API; one family for Repetier-Server.
+        PrinterTransport.REPETIER -> Classified(REPETIER, PrinterKind.REPETIER, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Repetier-Server")
     }
 }
 

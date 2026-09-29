@@ -58,6 +58,17 @@ class Redactor(literals: Collection<String> = emptyList(), publicTerms: Collecti
      */
     private val literals: List<String> = literals.map { it.trim() }.filter { it.length >= 3 }.distinct()
         .filter { lit -> publicTerms.none { it.contains(lit, ignoreCase = true) } }.sortedByDescending { it.length }
+
+    /**
+     * Each literal matches only where it stands on its own: not inside a longer run of letters and digits. A printer
+     * saved as "CC1" otherwise masked the "cc1" inside a snapshot's SHA-256 and corrupted the hash (found on the
+     * owner's COSMOS level-3 run).
+     */
+    private val literalPatterns: List<Pair<String, Regex>> = this.literals.map { lit ->
+        val before = if (lit.first().isLetterOrDigit()) "(?<![A-Za-z0-9])" else ""
+        val after = if (lit.last().isLetterOrDigit()) "(?![A-Za-z0-9])" else ""
+        lit to Regex(before + Regex.escape(lit) + after, RegexOption.IGNORE_CASE)
+    }
     val counts: MutableMap<String, Int> = sortedMapOf()
 
     private fun count(rule: String, n: Int) { if (n > 0) counts[rule] = (counts[rule] ?: 0) + n }
@@ -71,11 +82,7 @@ class Redactor(literals: Collection<String> = emptyList(), publicTerms: Collecti
 
     fun text(input: String): String {
         var s = input
-        literals.forEach { lit ->
-            var n = 0; var i = s.indexOf(lit, ignoreCase = true)
-            while (i >= 0) { n++; i = s.indexOf(lit, i + lit.length, ignoreCase = true) }
-            if (n > 0) { s = s.replace(lit, "[private]", ignoreCase = true); count("known-private-value", n) }
-        }
+        literalPatterns.forEach { (_, re) -> s = sub(s, "known-private-value", re) { "[private]" } }
         s = sub(s, "private-key", PRIVATE_KEY) { "[private-key]" }
         s = sub(s, "auth-header", HEADER) { "${it.groupValues[1]}${it.groupValues[2]}[redacted]" }
         s = sub(s, "auth-token", SCHEME_TOKEN) { "${it.groupValues[1]} [redacted]" }
@@ -143,7 +150,7 @@ class Redactor(literals: Collection<String> = emptyList(), publicTerms: Collecti
      */
     fun leaks(output: String): List<String> {
         val found = mutableListOf<String>()
-        literals.forEach { if (output.contains(it, ignoreCase = true)) found += "a known private value (${it.length} characters)" }
+        literalPatterns.forEach { (lit, re) -> if (re.containsMatchIn(output)) found += "a known private value (${lit.length} characters)" }
         if (PRIVATE_KEY.containsMatchIn(output)) found += "private key material"
         if (HEADER_LEAK.containsMatchIn(output)) found += "an authentication header"
         if (JWT.containsMatchIn(output)) found += "a token"

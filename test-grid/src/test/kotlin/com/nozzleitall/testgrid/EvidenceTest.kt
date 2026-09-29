@@ -224,4 +224,15 @@ class EvidenceTest {
         assertFalse(out, out.contains("192.168.1.50") || out.contains("k3y-abcdef") || out.contains("Workshop CC"))
         assertTrue(r.leaks(out).isEmpty())
     }
+
+    @Test fun aPrivateNameIsNotMaskedInsideAHashOrLongerWord() {
+        // Found on the owner's COSMOS level-3 run: the printer's name "CC1" masked the "cc1" inside a snapshot SHA-256.
+        val r = Redactor(listOf("CC1", "http://192.168.1.50:7125"))
+        val hash = "425510aed641434b4c6d66a4a327181b3b6fb0e96e6f93386cc159f79e56d56c"
+        val out = r.text("snapshot $hash from CC1 (cc1) at http://192.168.1.50:7125/webcam; CC1printer stays")
+        assertTrue(out, out.contains(hash))
+        assertTrue(out, out.contains("from [private] ([private])") && !out.contains("192.168.1.50"))
+        assertTrue(r.leaks(out).isEmpty())
+        assertFalse(r.leaks("still from CC1.").isEmpty())
+    }
 }

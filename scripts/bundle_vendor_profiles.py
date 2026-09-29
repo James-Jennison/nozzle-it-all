@@ -37,6 +37,13 @@ ADDED = [
     ("ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS", "Elegoo Centauri Carbon + CANVAS (OpenCentauri COSMOS)", "ELEGOO", "elegoo_centauri_carbon_cosmos_afc", False),
     ("ELEGOO_CENTAURI_CARBON_CANVAS", "Elegoo Centauri Carbon + CANVAS (Elegoo firmware)", "ELEGOO", "elegoo_centauri_carbon_canvas", False),
     ("ELEGOO_CENTAURI_CARBON_2_CANVAS", "Elegoo Centauri Carbon 2 + CANVAS (Elegoo firmware)", "ELEGOO", "elegoo_centauri_carbon_2_canvas", False),
+    # Prusa MMU3 (P-0031): CORE One from upstream OrcaSlicer (flattened as the other Prusa packs), MK4S / MK3.9 / MK3.5
+    # generated from their non-MMU packs and PrusaSlicer's MMU3 presets by scripts/prusa_mmu3/make_prusa_mmu3_packs.py.
+    # Five filament slots through one nozzle (PrusaMmu.filamentSlots).
+    ("PRUSA_CORE_ONE_MMU3", "Prusa CORE One + MMU3", "PRUSA", "prusa_core_one_mmu3", False),
+    ("PRUSA_MK4S_MMU3", "Prusa MK4S + MMU3", "PRUSA", "prusa_mk4s_mmu3", False),
+    ("PRUSA_MK3_9_MMU3", "Prusa MK3.9 + MMU3", "PRUSA", "prusa_mk3_9_mmu3", False),
+    ("PRUSA_MK3_5_MMU3", "Prusa MK3.5 + MMU3", "PRUSA", "prusa_mk3_5_mmu3", False),
 ]
 
 # Prusa: explicit picks (Orca's names are irregular). (id, label, machine, process, filament)

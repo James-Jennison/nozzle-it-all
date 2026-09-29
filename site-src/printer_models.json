@@ -187,6 +187,22 @@
      "verified": false
     },
     {
+     "label": "Prusa CORE One + MMU3",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK4S + MMU3",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK3.9 + MMU3",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK3.5 + MMU3",
+     "verified": false
+    },
+    {
      "label": "Prusa XL 5T (five tools)",
      "verified": false
     }

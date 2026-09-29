@@ -743,5 +743,25 @@ interchange).
   SlicingProfilePacksDeviceTest checks a two-tool COSMOS slice defines the tower and covers its extrusions.
 - **Known divergence:** Klipper G-code with a wipe tower gains one object line; Mainsail/Fluidd list a `wipe_tower`
   object. No upstream slicer checked defines the tower. `Print::first_layer_wipe_tower_corners()` still assumes a
-  `prime_tower_width` rectangle (wrong for rib walls; upstream Orca tracks the real bbox) and is a follow-up.
+  `prime_tower_width` rectangle (wrong for rib walls; upstream Orca tracks the real bbox); fixed in P-0030.
 - **Touches:** Klipper G-code header (object definitions), printers' adaptive bed meshing.
+
+## P-0030 — the wipe tower's real outline (upstream OrcaSlicer)
+
+- **Upstream:** nozzle-engine `9a9f2319d89a3d0f7396c5b228c1d6bc6f03559f` (`engine/fork/ENGINE_PIN.json`, James-Jennison/nozzle-engine pull 7):
+  `2b7b6cf` (P-0029) plus two commits. Ported from upstream OrcaSlicer's `WipeTower2::get_bbx()` / `get_rib_offset()`,
+  `WipeTowerData::bbx` / `rib_offset` and their users.
+- **Imported:** nothing into this repository.
+- **Engine change:** `WipeTower2` records its real first-layer bounding box (outermost brim loop, or the wall) and, for a
+  rib wall, the rib offset that puts the protruding first-layer corner at `wipe_tower_x/y` (Snapmaker Orca had it
+  commented out; upstream re-enabled it). `first_layer_wipe_tower_corners()` (first-layer hull, adaptive-mesh
+  placeholders, skirt), the tower/object collision check, the extrusion-extents helper, `wipe_tower_center_pos`, the
+  preview/conflict tower and the Klipper `wipe_tower` object all use that placement.
+- **Test evidence:** desktop CLI, two cubes on two filaments. Centauri Carbon (rib wall, `wipe_tower_x/y` 15/220, brim
+  3): the tower now prints from X 11.8 / Y 216.8 (the brim; the wall starts at 15/220), before from X 9.8 / Y 214.7 (the
+  wall 5 mm past its position); the Klipper `wipe_tower` object still encloses every tower extrusion. U1 (rectangle):
+  G-code byte-identical. Golden outputs unchanged. SlicingProfilePacksDeviceTest checks the tower reaches past its
+  configured corner by no more than its brim.
+- **Known divergence:** rib-wall multi-colour prints place the tower ~2–5 mm differently (as upstream). Upstream's
+  compacted-tower checks, which also read the box, are not in this engine.
+- **Touches:** multi-material wipe tower placement (rib wall), first-layer hull and placeholders, collision checks.

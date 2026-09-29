@@ -7,8 +7,8 @@ configurations without physical evidence are UNVERIFIED. "(unreviewed)" means no
 | Printer | Firmware | Nozzle build | Adapter | Scope | Slicing | File transfer | Monitoring | Controls | Physical printing | Current evidence |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Bambu Lab X1 Carbon | bambu-lan | — | android-bambu-lan | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite bambu-lan 1.2.0). |
-| Elegoo Centauri Carbon | cosmos | — | android-moonraker | Multi-material / tool changing | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (reference suite cosmos-centauri-carbon 1.2.0). |
-| Elegoo Centauri Carbon | cosmos | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (reference suite cosmos-centauri-carbon 1.2.0). |
+| Elegoo Centauri Carbon | cosmos Release - 26.09.0 | 0.1.0.testgrid | android-moonraker | Multi-material / tool changing | PASS | UNVERIFIED | PASS | UNVERIFIED | SKIPPED | physical run `9a06437f` (cosmos-centauri-carbon 1.2.0), bundle `7134a20862d8` |
+| Elegoo Centauri Carbon | cosmos Release - 26.09.0 | 0.1.0.testgrid | android-moonraker | Single material | PASS | PARTIAL | PASS | SKIPPED | SKIPPED | physical run `9a06437f` (cosmos-centauri-carbon 1.2.0), bundle `7134a20862d8` |
 | Elegoo Centauri Carbon | elegoo-stock | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.2.0). |
 | Elegoo Centauri Carbon | opencentauri-patched | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite opencentauri-patched 1.2.0). |
 | Generic Klipper | klipper | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite generic-klipper 1.2.0). |
@@ -22,6 +22,18 @@ configurations without physical evidence are UNVERIFIED. "(unreviewed)" means no
 ## History
 
 Every run is kept. For each category the matrix shows the newest run that graded it; a newer run that skipped a category leaves the earlier result in place. Superseded runs and their bundle digests remain here.
+
+### Elegoo Centauri Carbon · cosmos Release - 26.09.0 · Nozzle 0.1.0.testgrid · android-moonraker · Multi-material / tool changing
+
+| Run | Kind | Suite | Completed (UTC) | Slicing | File transfer | Monitoring | Controls | Physical printing | Review | Status | Bundle digest | Source |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `9a06437f` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:28:29.434Z | PASS | UNVERIFIED | PASS | UNVERIFIED | SKIPPED | accepted | current | `7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e` | 7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip |
+
+### Elegoo Centauri Carbon · cosmos Release - 26.09.0 · Nozzle 0.1.0.testgrid · android-moonraker · Single material
+
+| Run | Kind | Suite | Completed (UTC) | Slicing | File transfer | Monitoring | Controls | Physical printing | Review | Status | Bundle digest | Source |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `9a06437f` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:28:29.434Z | PASS | PARTIAL | PASS | SKIPPED | SKIPPED | accepted | current | `7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e` | 7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip |
 
 ### Snapmaker U1 · paxx-extended 1.6.0.267_20260815150420 · Nozzle 0.1.0.testgrid · android-moonraker · Multi-material / tool changing
 

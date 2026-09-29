@@ -41,6 +41,12 @@
       "bundleDigest": "cc752caddf5c6862142bda44c6e4cc41fdf00e193c593aaba8749fa48dd3ae01",
       "date": "2026-09-29",
       "note": "Level 2 run on the owner's PAXX U1, built from b478c73 (paxx-u1 1.2.0). Every test up to level 2 PASS. First run of the delete_leftovers cleanup on hardware: approved once, deleted the two earlier Test Grid files; only the loaded print file remained."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e",
+      "date": "2026-09-29",
+      "note": "Level 1 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from 9d6860e (cosmos-centauri-carbon 1.2.0). Every test up to level 1 PASS: identity, status, camera, single and two-tool slicing with the COSMOS AFC profile, profile match, stock profile refused, upload guard (M729/M8213), four CANVAS lanes confirmed by the owner. First physical COSMOS evidence."
     }
   ],
   "format": "nozzle.evidence-acceptance",

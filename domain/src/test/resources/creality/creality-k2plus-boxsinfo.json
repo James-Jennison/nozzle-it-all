@@ -1,0 +1,13 @@
+{"boxsInfo":{
+  "name":"MF003",
+  "materialBoxs":[
+    {"id":1,"state":1,"type":0,
+     "materials":[
+       {"id":0,"state":2,"vendor":"Creality","type":"PLA","name":"Hyper PLA","color":"#0112233","selected":0},
+       {"id":1,"state":1,"vendor":"Creality","type":"PLA","name":"Hyper PLA","color":"#0445566","selected":1},
+       {"id":2,"state":2,"vendor":"Creality","type":"PETG","name":"Hyper PETG","color":"#0778899","selected":0},
+       {"id":3,"state":0,"vendor":"","type":"","name":"","color":"#0000000","selected":0}]},
+    {"id":3,"state":1,"type":0,
+     "materials":[
+       {"id":0,"state":2,"vendor":"Creality","type":"ABS","name":"Hyper ABS","color":"#0AABBCC","selected":0}]}
+  ]}}

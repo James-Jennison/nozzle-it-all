@@ -831,3 +831,23 @@ interchange).
   Creality printers are not supported; the start path (idle gate, upload listing wait, pushed-state confirmation) has never
   run. The file-tool -> slot map is one-to-one (T n -> slot n) until the UI can pass a chosen map.
 - **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard), Test Grid classification.
+
+## P-0034 — wipe_tower_type: Qidi Box printers get the BBS wipe tower, and slice multi-colour
+
+- **Upstream:** nozzle-engine `cedbf252e94d357d0d41795da59aebe2e4eb8e14` (`engine/fork/ENGINE_PIN.json`, James-Jennison/nozzle-engine
+  pull 8): `9a9f231` (P-0030) plus upstream OrcaSlicer's `wipe_tower_type` option (4 commits) and the golden outputs.
+- **Imported:** nothing into this repository beyond the pin.
+- **Engine change:** the `wipe_tower_type` printer option and `Print::wipe_tower_type()` (Bambu always type 1, others the
+  option, default type 2). Every wipe-tower decision uses it instead of `is_BBL_printer()`, so the 12 Qidi packs, which set
+  `type1`, get the BBS tower instead of the Prusa-style one. The engine used to ignore the key, which gave a double
+  purge and Prusa ramming and tube moves before the Box's own `CUT_FILAMENT`. Also: no null dereference of the priming
+  list on a type-1 non-Bambu printer; `WipeTowerData::clear()` resets `height`; the BBS path retracts, lifts and travels
+  to the tower when `change_filament_gcode` is empty; the BBS tower writes the printer's own G-code tags.
+- **App change:** `FilamentChangers` gives the Qidi Box printers (Q2, Q2C, X-Plus 4, X-Max 4, X-Plus 5) four slots.
+- **Test evidence:** on gthost, all 383 packs slice single-colour byte-identically to 9a9f231 apart from the new
+  `; wipe_tower_type = ...` config line. Two-colour Qidi Q2 and X-Plus 4 have no Prusa ramming (310 → 7 ramming
+  references, as on Bambu) and one `CUT_FILAMENT` per change. A Bambu X1C two-colour slice is byte-identical. Engine CI
+  on gthost (run 36632934268).
+- **Known divergence:** not verified on a Qidi printer. The type-1 tower is this engine's BBS generator, not upstream's
+  newer BBS 2.x one.
+- **Touches:** slicing (multi-material, wipe tower), settings schema (new option).

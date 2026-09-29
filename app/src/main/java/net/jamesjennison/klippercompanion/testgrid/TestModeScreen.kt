@@ -4,8 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,14 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -52,6 +48,7 @@ import com.nozzleitall.testgrid.ModelLibrary
 import com.nozzleitall.testgrid.Pending
 import com.nozzleitall.testgrid.ResultState
 import com.nozzleitall.testgrid.SafetyLevel
+import com.nozzleitall.testgrid.SimulatedPrinter
 import com.nozzleitall.testgrid.TargetKind
 import net.jamesjennison.klippercompanion.PrinterProfile
 
@@ -104,7 +101,48 @@ fun TestModeScreen(profiles: List<PrinterProfile>, close: () -> Unit) {
     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(title, style = MaterialTheme.typography.titleMedium); content() } }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+private fun kindLabel(k: net.jamesjennison.klippercompanion.PrinterKind) = when (k) {
+    net.jamesjennison.klippercompanion.PrinterKind.GENERIC_KLIPPER -> "Klipper / Moonraker"
+    net.jamesjennison.klippercompanion.PrinterKind.SNAPMAKER_U1_PAXX -> "Snapmaker U1 (PAXX)"
+    net.jamesjennison.klippercompanion.PrinterKind.SNAPMAKER_U1 -> "Snapmaker U1 (stock)"
+    net.jamesjennison.klippercompanion.PrinterKind.BAMBU_LAB -> "Bambu Lab (LAN)"
+    net.jamesjennison.klippercompanion.PrinterKind.PRUSA_LINK -> "PrusaLink"
+    net.jamesjennison.klippercompanion.PrinterKind.OCTOPRINT -> "OctoPrint"
+    net.jamesjennison.klippercompanion.PrinterKind.ELEGOO -> "Elegoo (LAN)"
+}
+
+private fun familyLabel(f: String) = when (f) {
+    com.nozzleitall.testgrid.FirmwareFamilies.PAXX -> "PAXX extended firmware"
+    com.nozzleitall.testgrid.FirmwareFamilies.SNAPMAKER_STOCK -> "Snapmaker stock firmware"
+    com.nozzleitall.testgrid.FirmwareFamilies.COSMOS -> "OpenCentauri COSMOS"
+    com.nozzleitall.testgrid.FirmwareFamilies.KLIPPER -> "Klipper"
+    com.nozzleitall.testgrid.FirmwareFamilies.ELEGOO_STOCK -> "Elegoo stock firmware"
+    com.nozzleitall.testgrid.FirmwareFamilies.OPENCENTAURI_PATCHED -> "OpenCentauri-patched stock firmware"
+    com.nozzleitall.testgrid.FirmwareFamilies.BAMBU -> "Bambu Lab LAN mode"
+    com.nozzleitall.testgrid.FirmwareFamilies.PRUSALINK -> "PrusaLink"
+    com.nozzleitall.testgrid.FirmwareFamilies.OCTOPRINT -> "OctoPrint"
+    else -> f
+}
+
+private val CAPABILITY_WORDS = linkedMapOf(
+    "upload_job" to "upload files", "upload_and_start" to "send and print", "start_print" to "start prints",
+    "pause_print" to "pause", "resume_print" to "resume", "cancel_print" to "cancel", "temperatures" to "set temperatures",
+    "motion" to "move and home", "camera" to "camera", "files" to "list files", "material_state" to "read loaded materials",
+    "multi_material" to "multi-material", "firmware_identity" to "read firmware", "status" to "status and temperatures")
+
+private val HARDWARE_WORDS = mapOf("multi_tool" to "four toolheads", "canvas" to "CANVAS (4 lanes)", "extended_firmware" to "PAXX extended config")
+
+/** A tappable full-width row with a radio mark: the pattern for every one-of-many choice in Test Mode. */
+@Composable private fun ChoiceRow(selected: Boolean, title: String, detail: String?, tag: String, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton, onClick = onClick).padding(vertical = 6.dp).testTag(tag), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected, null)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
+}
+
 @Composable private fun TargetStep(c: TestModeController, s: TestModeState) {
     if (s.resumable) Section("An unfinished run is saved") {
         Text("Resuming never repeats a command: one that was in flight when Nozzle stopped is recorded as an unknown outcome for you to check.", style = MaterialTheme.typography.bodySmall)
@@ -113,36 +151,56 @@ fun TestModeScreen(profiles: List<PrinterProfile>, close: () -> Unit) {
             OutlinedButton({ c.discardSaved() }, modifier = Modifier.testTag("discard-run")) { Text("Discard it") }
         }
     }
-    Section("1. Choose the printer to test") {
-        c.targets.forEachIndexed { i, t ->
-            val selected = s.target == t
-            FilterChip(selected, { c.selectTarget(t) }, label = { Text(t.title) }, modifier = Modifier.testTag("target-$i"))
+    val options = c.targets
+    val saved = options.withIndex().filter { it.value is TargetOption.Saved }
+    val simulated = options.withIndex().filter { it.value is TargetOption.Simulated }
+    var showSimulated by remember { mutableStateOf(s.target is TargetOption.Simulated || saved.isEmpty()) }
+    Section("1. Which printer?") {
+        if (saved.isEmpty()) Text("No printers are saved in this app yet. Add one from the dashboard, or practise with a simulated printer.", style = MaterialTheme.typography.bodySmall)
+        saved.forEach { (i, t) ->
+            val p = (t as TargetOption.Saved).profile
+            ChoiceRow(s.target == t, p.label, kindLabel(p.kind) + (p.slicingModel?.let { m -> " · " + net.jamesjennison.klippercompanion.SlicingModelCatalog.info(m).label } ?: ""), "target-$i") { c.selectTarget(t) }
         }
-        Text("Simulated printers exercise Test Mode without hardware. Their results are marked simulated and never count as evidence for any printer.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton({ showSimulated = !showSimulated }, modifier = Modifier.testTag("show-simulated")) {
+            Text(if (showSimulated) "Hide simulated printers" else "Practise with a simulated printer")
+        }
+        if (showSimulated) {
+            Text("A simulated printer runs the whole flow on this phone. Its results are marked simulated and never count as evidence.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            simulated.forEach { (i, t) ->
+                val preset = (t as TargetOption.Simulated).preset
+                ChoiceRow(s.target == t, "${preset.manufacturer} ${preset.model}", "Simulated · " + familyLabel(com.nozzleitall.testgrid.FirmwareFamilies.classify(
+                    SimulatedPrinter(preset).description, SimulatedPrinter(preset).identity()).family) + if (preset.afc) " · CANVAS" else "", "target-$i") { c.selectTarget(t) }
+            }
+        }
     }
     if (TestModeController.needsDeclaration(s.target)) Section("Which firmware does this Centauri Carbon run?") {
-        Text("Elegoo's LAN protocol doesn't say whether the firmware is stock or OpenCentauri-patched. They are graded separately.", style = MaterialTheme.typography.bodySmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TestModeController.ELEGOO_DECLARABLE.forEach { f -> FilterChip(s.declaredFamily == f, { s.target?.let { c.selectTarget(it, f) } }, label = { Text(f) }) }
-        }
+        Text("Elegoo's LAN protocol doesn't report whether the firmware is stock or OpenCentauri-patched. They are graded separately.", style = MaterialTheme.typography.bodySmall)
+        TestModeController.ELEGOO_DECLARABLE.forEach { f -> ChoiceRow(s.declaredFamily == f, familyLabel(f), null, "declare-$f") { s.target?.let { c.selectTarget(it, f) } } }
     }
-    val snap = s.snapshot ?: return
-    Section("2. Verify it") {
-        Row { Text("Model ", fontWeight = FontWeight.Bold); Text("${snap.description.manufacturer} ${snap.description.model}") }
-        Row { Text("Firmware ", fontWeight = FontWeight.Bold); Text("${snap.classified.family} · ${snap.identity?.firmware?.let { "${it.app.ifBlank { "(no app name)" }} ${it.version}" } ?: "not reported"}", modifier = Modifier.testTag("target-firmware")) }
-        Text(snap.classified.detail, style = MaterialTheme.typography.bodySmall)
-        Row { Text("Adapter ", fontWeight = FontWeight.Bold); Text("${snap.description.adapter} (${snap.description.protocol})") }
-        Row { Text("Status ", fontWeight = FontWeight.Bold); Text(snap.status?.let { "${it.state}${if (it.ready) "" else " (not ready)"} · nozzle ${it.nozzle} °C · bed ${it.bed} °C" } ?: "unreadable") }
-        Text("Capabilities", fontWeight = FontWeight.Bold)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { snap.capabilities.sorted().forEach { AssistChip({}, label = { Text(it) }) } }
-        snap.classified.hardware.filterValues { it }.keys.takeIf { it.isNotEmpty() }?.let { Text("Detected hardware: ${it.joinToString()}") }
-        snap.problems.forEach { Text(it, color = MaterialTheme.colorScheme.error) }
-        if (snap.description.kind == TargetKind.PHYSICAL) Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(s.targetConfirmed, { c.confirmTarget(it) }, modifier = Modifier.testTag("confirm-target"))
+    if (s.target == null) return
+    val snap = s.snapshot
+    Section("2. Is this the right printer?") {
+        if (snap == null) { Text(if (s.busy) "Checking the printer…" else "Couldn't read the printer.", style = MaterialTheme.typography.bodyMedium); return@Section }
+        val ok = snap.problems.isEmpty()
+        Text("${snap.description.manufacturer} ${snap.description.model}", style = MaterialTheme.typography.titleMedium)
+        Text(familyLabel(snap.classified.family) + (snap.identity?.firmware?.version?.takeIf { it.isNotBlank() }?.let { " $it" } ?: "") + if (ok) "  ✓ identified" else "",
+            style = MaterialTheme.typography.bodyMedium, color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, modifier = Modifier.testTag("target-firmware"))
+        snap.status?.let { st -> Text("${st.state.replaceFirstChar { it.uppercase() }}${if (st.ready) "" else " (not ready)"} · nozzle ${st.nozzle?.let { "%.0f".format(it) } ?: "—"} °C · bed ${st.bed?.let { "%.0f".format(it) } ?: "—"} °C",
+            style = MaterialTheme.typography.bodySmall) } ?: Text("Status couldn't be read.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        snap.classified.hardware.filterValues { it }.keys.mapNotNull { HARDWARE_WORDS[it] }.takeIf { it.isNotEmpty() }?.let { Text("Detected: ${it.joinToString(", ")}", style = MaterialTheme.typography.bodySmall) }
+        snap.problems.forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        var details by remember(snap) { mutableStateOf(false) }
+        TextButton({ details = !details }, modifier = Modifier.testTag("target-details")) { Text(if (details) "Hide details" else "Details") }
+        if (details) {
+            Text("Connection: ${snap.description.adapter} (${snap.description.protocol})", style = MaterialTheme.typography.bodySmall)
+            Text("Nozzle can: " + CAPABILITY_WORDS.filterKeys { it in snap.capabilities }.values.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+            Text(snap.classified.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (snap.description.kind == TargetKind.PHYSICAL) Row(Modifier.fillMaxWidth().selectable(s.targetConfirmed, role = Role.Checkbox) { c.confirmTarget(!s.targetConfirmed) }, verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(s.targetConfirmed, null, modifier = Modifier.testTag("confirm-target"))
             Text("This is the printer in front of me, and I own it.")
         }
-        Button({ c.toSuites() }, enabled = !s.busy && snap.problems.isEmpty() && (snap.description.kind == TargetKind.SIMULATED || s.targetConfirmed), modifier = Modifier.testTag("to-suites")) { Text("Choose a test suite") }
+        Button({ c.toSuites() }, enabled = !s.busy && ok && (snap.description.kind == TargetKind.SIMULATED || s.targetConfirmed), modifier = Modifier.testTag("to-suites")) { Text("Continue") }
     }
 }
 
@@ -363,7 +421,6 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
     OutlinedButton({ tries++ }, modifier = Modifier.testTag("refresh-shown")) { Text("Refresh") }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun ObservationCard(c: TestModeController, p: Pending.Observation, s: TestModeState) {
     val busy = s.busy
     var value by remember(p.step.id) { mutableStateOf("") }
@@ -373,9 +430,9 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
         Text(params.optString("question"), fontWeight = FontWeight.Bold, modifier = Modifier.testTag("observation-question"))
         ShownReading(c, p, s)
         when (params.optString("response")) {
-            "yes_no" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("yes", "no").forEach { v -> FilterChip(value == v, { value = v }, label = { Text(v) }, modifier = Modifier.testTag("answer-$v")) } }
-            "pass_partial_fail" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("pass", "partial", "fail").forEach { v -> FilterChip(value == v, { value = v }, label = { Text(v) }, modifier = Modifier.testTag("answer-$v")) } }
-            "choice" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { (0 until (params.optJSONArray("choices")?.length() ?: 0)).map { params.getJSONArray("choices").getString(it) }.forEach { v -> FilterChip(value == v, { value = v }, label = { Text(v) }) } }
+            "yes_no" -> Column { listOf("yes", "no").forEach { v -> ChoiceRow(value == v, v.replaceFirstChar { it.uppercase() }, null, "answer-$v") { value = v } } }
+            "pass_partial_fail" -> Column { listOf("pass" to "Pass", "partial" to "Partly", "fail" to "Fail").forEach { (v, l) -> ChoiceRow(value == v, l, null, "answer-$v") { value = v } } }
+            "choice" -> Column { (0 until (params.optJSONArray("choices")?.length() ?: 0)).map { params.getJSONArray("choices").getString(it) }.forEach { v -> ChoiceRow(value == v, v.replaceFirstChar { it.uppercase() }, null, "answer-$v") { value = v } } }
             "number" -> OutlinedTextField(value, { value = it }, label = { Text("Measured value" + (params.optString("unit").takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.testTag("answer-number"))
             else -> OutlinedTextField(value, { value = it }, label = { Text("What you saw") }, modifier = Modifier.fillMaxWidth().testTag("answer-text"))

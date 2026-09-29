@@ -765,3 +765,21 @@ interchange).
 - **Known divergence:** rib-wall multi-colour prints place the tower ~2–5 mm differently (as upstream). Upstream's
   compacted-tower checks, which also read the box, are not in this engine.
 - **Touches:** multi-material wipe tower placement (rib wall), first-layer hull and placeholders, collision checks.
+
+## P-0031 — Prusa MMU3 slicing packs (CORE One, MK4S, MK3.9, MK3.5)
+
+- **Upstream:** OrcaSlicer `5298e49d` (Prusa vendor 02.04.00.08: `Prusa CORE One MMU3 0.4 nozzle` and its process and
+  filament) and PrusaSlicer `30ef59195e0f` (3.0.0-alpha12, `resources/presets/prusa-research-fff/PrusaResearch/`:
+  `preset-printer-mk4.yaml` MK4S/MK3.9 MMU3 variants, `preset-printer-mk35.yaml` MK3.5 MMU3, `vendor.yaml` MMU3 feeders).
+- **Imported:** four packs under `app/src/main/assets/slicer_profiles/prusa_*_mmu3/`; the generator and its PrusaSlicer
+  preset evaluator under `scripts/prusa_mmu3/` (see its REPORT.md for every changed key and source).
+- **Change:** multi-colour slicing for Prusa printers with an MMU3. Five filament slots through one nozzle
+  (`PrusaMmu.filamentSlots`), filament-swap family. No engine change.
+- **Test evidence:** desktop engine (nozzle-engine 9a9f231) on gthost, two cubes on slots 1 and 2 with five filaments:
+  every pack slices with 102 `Tn` changes, a prime tower on every layer, no `M600`, and its own `M862.3` printer check;
+  MK4S shows PrusaSlicer's MMU ramming (`M104` -20 C, `M591 S0`, `G4 S1.5`), MK3.5 its own (`M900 K0`). The
+  SlicingProfilePacksDeviceTest checks the same through the app's multi-tool path.
+- **Known divergence:** not verified on hardware (testers will print them). The start G-code's abrasive/high-flow check
+  always sends `A0 F0`; purging uses the app's flush matrix instead of PrusaSlicer's `multimaterial_purging`.
+- **Touches:** slicing profiles (Prusa), printer catalogue, website printer list.
+

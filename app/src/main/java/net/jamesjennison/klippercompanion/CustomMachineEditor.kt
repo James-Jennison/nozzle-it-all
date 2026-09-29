@@ -10,6 +10,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,11 +47,12 @@ private fun Double.fieldText(): String = if (this == Math.rint(this)) toLong().t
  * Optional per-printer overrides for the slicing profile (bed size and origin, height, start/end G-code) for machines
  * that match no bundled model, such as custom-built printers. [onChange] reports the current value (null = off) and a
  * problem message when the entries are not usable, so the caller can block Save. Not offered for the COSMOS Centauri
- * Carbon, whose pack is never overridden.
+ * Carbon, whose pack is never overridden. [detectLanes], when given, reads the saved printer's filament changer lanes
+ * (read-only) to fill in the lane count.
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun CustomMachineEditor(model: SlicingPrinterModel?, current: CustomMachine?, onChange: (CustomMachine?, String?) -> Unit) {
+fun CustomMachineEditor(model: SlicingPrinterModel?, current: CustomMachine?, detectLanes: (((Result<Int>) -> Unit) -> Unit)? = null, onChange: (CustomMachine?, String?) -> Unit) {
     if (model == null || ElegooProfiles.firmwareFor(model) != null) return
     val context = LocalContext.current
     val base = remember(model) { defaultCustomMachine(model, context.applicationContext) } ?: return
@@ -62,17 +64,21 @@ fun CustomMachineEditor(model: SlicingPrinterModel?, current: CustomMachine?, on
     var center by remember(model) { mutableStateOf(start.originAtCenter) }
     var startGcode by remember(model) { mutableStateOf(start.startGcode) }
     var endGcode by remember(model) { mutableStateOf(start.endGcode) }
+    var lanes by remember(model) { mutableStateOf(start.filamentSlots?.toString().orEmpty()) }
+    var laneNote by remember(model) { mutableStateOf<String?>(null) }
+    var detecting by remember(model) { mutableStateOf(false) }
     val parsed = if (enabled) {
         val w = width.toDoubleOrNull(); val d = depth.toDoubleOrNull(); val h = height.toDoubleOrNull()
+        val slots = lanes.trim().takeIf { it.isNotEmpty() }?.let { it.toIntOrNull() ?: -1 }
         if (w == null || d == null || h == null) null to "Enter the bed width, depth and height as numbers."
-        else CustomMachine(w, d, h, center, startGcode, endGcode).let { it to it.problem() }
+        else CustomMachine(w, d, h, center, startGcode, endGcode, slots).let { it to it.problem() }
     } else null to null
     LaunchedEffect(enabled, parsed.first, parsed.second) { onChange(if (enabled) parsed.first else null, parsed.second) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Custom machine", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(enabled, { enabled = it }, modifier = Modifier.testTag("custom-machine-enable"))
-            Text("Use my own bed size and start/end G-code instead of the bundled profile's", style = MaterialTheme.typography.bodyMedium)
+            Text("Use my own bed size, start/end G-code or filament changer instead of the bundled profile's", style = MaterialTheme.typography.bodyMedium)
         }
         if (enabled) {
             Text(
@@ -94,6 +100,23 @@ fun CustomMachineEditor(model: SlicingPrinterModel?, current: CustomMachine?, on
             OutlinedTextField(endGcode, { endGcode = it.take(CustomMachine.MAX_GCODE_CHARS + 1) }, label = { Text("End G-code") }, minLines = 2, maxLines = 6,
                 supportingText = { Text("Runs after the print. Leave empty to keep the profile's own.") },
                 modifier = Modifier.fillMaxWidth().testTag("custom-machine-end"))
+            OutlinedTextField(lanes, { lanes = it.filter(Char::isDigit).take(2); laneNote = null }, label = { Text("Filament changer lanes") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                supportingText = { Text("For a changer that feeds this nozzle through Klipper's T commands (Box Turtle / AFC, ERCF or Tradrack with Happy Hare, ...). Leave empty for none. With lanes, objects can be given different filaments and each change is a plain T command.") },
+                modifier = Modifier.fillMaxWidth().testTag("custom-machine-lanes"))
+            if (detectLanes != null) {
+                TextButton({
+                    detecting = true; laneNote = null
+                    detectLanes { result ->
+                        detecting = false
+                        result.onSuccess { n ->
+                            if (n >= CustomMachine.MIN_FILAMENT_SLOTS) { lanes = n.coerceAtMost(CustomMachine.MAX_FILAMENT_SLOTS).toString(); laneNote = "Found $n lanes on the printer." }
+                            else laneNote = "The printer reports no filament changer lanes (AFC or Happy Hare)."
+                        }.onFailure { laneNote = "Couldn't read the printer: ${it.message ?: "no reply"}" }
+                    }
+                }, enabled = !detecting, modifier = Modifier.testTag("custom-machine-detect-lanes")) { Text(if (detecting) "Reading the printer..." else "Detect from printer") }
+                laneNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("custom-machine-lanes-note")) }
+            }
             parsed.second?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("custom-machine-error")) }
         }
     }

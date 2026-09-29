@@ -11,6 +11,10 @@ import java.util.Locale
  * process settings are derived from it, so changing it here would quietly break them.
  *
  * A blank start/end G-code means "keep the profile's own".
+ *
+ * [filamentSlots]: the lanes of a filament changer that feeds the one nozzle through Klipper's T commands (Armored
+ * Turtle AFC / Box Turtle, Happy Hare / ERCF, Tradrack, ...); null when there is none. With lanes the pack slices
+ * multi-colour: one nozzle, that many slots, and each change is the plain T<n> the changer's macros implement.
  */
 data class CustomMachine(
     val bedWidthMm: Double,
@@ -19,12 +23,13 @@ data class CustomMachine(
     val originAtCenter: Boolean = false,
     val startGcode: String = "",
     val endGcode: String = "",
+    val filamentSlots: Int? = null,
 ) {
     /** A plain-language reason this cannot be used, or null when it is fine. */
-    fun problem(): String? = validate(bedWidthMm, bedDepthMm, maxHeightMm, startGcode, endGcode)
+    fun problem(): String? = validate(bedWidthMm, bedDepthMm, maxHeightMm, startGcode, endGcode, filamentSlots)
 
     fun toJson(): JSONObject = JSONObject().put("w", bedWidthMm).put("d", bedDepthMm).put("h", maxHeightMm)
-        .put("center", originAtCenter).put("start", startGcode).put("end", endGcode)
+        .put("center", originAtCenter).put("start", startGcode).put("end", endGcode).apply { filamentSlots?.let { put("slots", it) } }
 
     companion object {
         const val MIN_BED_MM = 50.0
@@ -32,14 +37,18 @@ data class CustomMachine(
         const val MIN_HEIGHT_MM = 20.0
         const val MAX_HEIGHT_MM = 1000.0
         const val MAX_GCODE_CHARS = 4000
+        const val MIN_FILAMENT_SLOTS = 2
+        const val MAX_FILAMENT_SLOTS = 16
 
-        fun validate(width: Double, depth: Double, height: Double, start: String, end: String): String? {
+        fun validate(width: Double, depth: Double, height: Double, start: String, end: String, filamentSlots: Int? = null): String? {
             if (!width.isFinite() || !depth.isFinite() || width !in MIN_BED_MM..MAX_BED_MM || depth !in MIN_BED_MM..MAX_BED_MM)
                 return "Bed width and depth must each be between ${MIN_BED_MM.toInt()} and ${MAX_BED_MM.toInt()} mm."
             if (!height.isFinite() || height !in MIN_HEIGHT_MM..MAX_HEIGHT_MM)
                 return "Maximum height must be between ${MIN_HEIGHT_MM.toInt()} and ${MAX_HEIGHT_MM.toInt()} mm."
             if (start.length > MAX_GCODE_CHARS || end.length > MAX_GCODE_CHARS) return "Start and end G-code are each limited to $MAX_GCODE_CHARS characters."
             if (start.any { it == '\u0000' } || end.any { it == '\u0000' }) return "G-code cannot contain control characters."
+            if (filamentSlots != null && filamentSlots !in MIN_FILAMENT_SLOTS..MAX_FILAMENT_SLOTS)
+                return "A filament changer needs between $MIN_FILAMENT_SLOTS and $MAX_FILAMENT_SLOTS lanes."
             return null
         }
 
@@ -47,7 +56,7 @@ data class CustomMachine(
         fun fromJson(o: JSONObject?): CustomMachine? {
             o ?: return null
             val c = CustomMachine(o.optDouble("w", Double.NaN), o.optDouble("d", Double.NaN), o.optDouble("h", Double.NaN),
-                o.optBoolean("center"), o.optString("start"), o.optString("end"))
+                o.optBoolean("center"), o.optString("start"), o.optString("end"), if (o.has("slots")) o.optInt("slots") else null)
             return c.takeIf { it.problem() == null }
         }
     }
@@ -76,5 +85,12 @@ fun applyCustomMachine(machineJson: String, c: CustomMachine): String {
     if (o.has("bed_exclude_area")) o.put("bed_exclude_area", JSONArray().put("0x0"))
     if (c.startGcode.isNotBlank()) o.put("machine_start_gcode", c.startGcode.replace("\r\n", "\n").replace('\r', '\n'))
     if (c.endGcode.isNotBlank()) o.put("machine_end_gcode", c.endGcode.replace("\r\n", "\n").replace('\r', '\n'))
+    // A filament changer's lanes feed the one nozzle: a single-extruder multi-material machine whose changes are the plain
+    // T<n> the changer's Klipper macros implement. An empty change_filament_gcode makes the engine emit exactly that; a
+    // template such as the generic profiles' M600 would pause for a manual swap at every change on top of it.
+    if (c.filamentSlots != null) {
+        o.put("single_extruder_multi_material", "1")
+        o.put("change_filament_gcode", "")
+    }
     return o.toString(4)
 }

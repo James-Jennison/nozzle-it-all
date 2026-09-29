@@ -199,4 +199,32 @@ class SlicingProfilePacksDeviceTest {
         // The extra object line still goes through the preview parser.
         assertTrue(out.inputStream().buffered().use { GcodePreview.parse(it) }.segments.isNotEmpty())
     }
+
+    // P-0031: every Prusa MMU3 pack slices a two-colour print through the app's multi-tool path: five slots from
+    // PrusaMmu, a T1 change (the firmware drives the MMU3 on Tn, never an M600 pause), a prime tower, and the printer
+    // model check for its own printer.
+    @Test fun prusaMmu3PacksSliceTwoColoursWithToolChangesAndATower() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        fun cube(name: String) = File(appContext.cacheDir, name).also { f -> testContext.assets.open("cube.stl").use { it.copyTo(f.outputStream()) } }
+        val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+        for ((model, printerCheck) in listOf(SlicingPrinterModel.PRUSA_CORE_ONE_MMU3 to "COREONE", SlicingPrinterModel.PRUSA_MK4S_MMU3 to "MK4S",
+                SlicingPrinterModel.PRUSA_MK3_9_MMU3 to "MK3.9", SlicingPrinterModel.PRUSA_MK3_5_MMU3 to "MK3.5")) {
+            val pack = slicingProfilePack(model, null)!!
+            val setup = pack.toolSetupOf(pack.machineText(appContext))
+            assertEquals("$model: one nozzle, five MMU3 slots", ToolSetup(nozzles = 1, slots = PrusaMmu.MMU3_SLOTS), setup)
+            assertEquals(MultiToolFamily.FILAMENT_SWAP, setup.family)
+            val paths = pack.materialize(appContext)
+            val overrides = MultiToolFilamentConfig.overridesFor(parseBaseFilamentDiameter(File(paths[2]).readText()),
+                listOf(pla.copy(colorHex = "#FF0000"), pla.copy(colorHex = "#00FF00")) + List(PrusaMmu.MMU3_SLOTS - 2) { null }, pla)
+            val a = cube("mmu3-a.stl"); val b = cube("mmu3-b.stl"); val out = File(appContext.cacheDir, "mmu3-${model.name}.gcode").also { it.delete() }
+            NativeEngine.nativeSliceMultiObject(arrayOf(a.absolutePath, b.absolutePath), doubleArrayOf(-30.0, 30.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 1.0), intArrayOf(1, 2),
+                out.absolutePath, paths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+            val gcode = out.readText()
+            assertTrue("$model: switches to the second MMU3 slot", Regex("(?m)^T1\\b").containsMatchIn(gcode))
+            assertFalse("$model: no manual filament change pauses", Regex("(?m)^M600\\b").containsMatchIn(gcode))
+            assertTrue("$model: prints a prime tower", gcode.contains(";TYPE:Prime tower"))
+            assertTrue("$model: checks it runs on a $printerCheck", gcode.contains("M862.3 P \"$printerCheck\""))
+        }
+    }
 }

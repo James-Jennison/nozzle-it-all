@@ -3801,6 +3801,24 @@
    "family": "prusa"
   },
   {
+   "id": "prusa_core_one_mmu3",
+   "vendor": "Prusa",
+   "model": "Prusa CORE One MMU3",
+   "name": "Prusa CORE One MMU3 0.4 nozzle",
+   "bed": [
+    250.0,
+    220.0
+   ],
+   "height": 270.0,
+   "tools": 5,
+   "nozzle": 0.4,
+   "gcodeFlavor": "marlin2",
+   "outputs": [
+    "gcode"
+   ],
+   "family": "prusa"
+  },
+  {
    "id": "prusa_generic",
    "vendor": "Prusa",
    "model": "Prusa MK4",
@@ -3873,6 +3891,42 @@
    "family": "prusa"
   },
   {
+   "id": "prusa_mk3_5_mmu3",
+   "vendor": "Prusa",
+   "model": "Prusa MK3.5 MMU3",
+   "name": "Prusa MK3.5 MMU3 0.4 nozzle",
+   "bed": [
+    250.0,
+    210.0
+   ],
+   "height": 210.0,
+   "tools": 5,
+   "nozzle": 0.4,
+   "gcodeFlavor": "marlin2",
+   "outputs": [
+    "gcode"
+   ],
+   "family": "prusa"
+  },
+  {
+   "id": "prusa_mk3_9_mmu3",
+   "vendor": "Prusa",
+   "model": "Prusa MK3.9 MMU3",
+   "name": "Prusa MK3.9 MMU3 0.4 nozzle",
+   "bed": [
+    250.0,
+    210.0
+   ],
+   "height": 220.0,
+   "tools": 5,
+   "nozzle": 0.4,
+   "gcodeFlavor": "marlin2",
+   "outputs": [
+    "gcode"
+   ],
+   "family": "prusa"
+  },
+  {
    "id": "prusa_mk3s",
    "vendor": "Prusa",
    "model": "Prusa MK3S",
@@ -3901,6 +3955,24 @@
    ],
    "height": 220.0,
    "tools": 1,
+   "nozzle": 0.4,
+   "gcodeFlavor": "marlin2",
+   "outputs": [
+    "gcode"
+   ],
+   "family": "prusa"
+  },
+  {
+   "id": "prusa_mk4s_mmu3",
+   "vendor": "Prusa",
+   "model": "Prusa MK4S MMU3",
+   "name": "Prusa MK4S MMU3 0.4 nozzle",
+   "bed": [
+    250.0,
+    210.0
+   ],
+   "height": 220.0,
+   "tools": 5,
    "nozzle": 0.4,
    "gcodeFlavor": "marlin2",
    "outputs": [

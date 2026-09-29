@@ -13,7 +13,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String?, detectFirmware: ((String, (Result<FirmwareIdentity>)->Unit)->Unit)? = null, setCustomMachine: (String, CustomMachine?) -> Unit = { _, _ -> }) {
+@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String?, detectFirmware: ((String, (Result<FirmwareIdentity>)->Unit)->Unit)? = null, setCustomMachine: (String, CustomMachine?) -> Unit = { _, _ -> }, detectLanes: ((String, (Result<Int>)->Unit)->Unit)? = null) {
     var name by remember(profile) { mutableStateOf(profile.name) }
     var address by remember(profile) { mutableStateOf(profile.address) }
     // For a BAMBU_LAB profile this same field holds the access code from the printer's own screen -
@@ -105,7 +105,9 @@ import androidx.compose.ui.unit.dp
         Text("Slicing profile",style=MaterialTheme.typography.labelLarge)
         Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.",style=MaterialTheme.typography.bodySmall)
         SlicingModelPicker(slicingModel) { slicingModel = it }
-        CustomMachineEditor(slicingModel, profile.customMachine) { value, problem -> customMachine = value; customMachineError = problem }
+        // Lanes are read from the saved printer, so only for a saved Klipper printer (AFC and Happy Hare live in Moonraker).
+        val laneDetector = detectLanes?.takeIf { profile.kind == PrinterKind.GENERIC_KLIPPER }?.let { d -> { cb: (Result<Int>) -> Unit -> d(profile.address, cb) } }
+        CustomMachineEditor(slicingModel, profile.customMachine, laneDetector) { value, problem -> customMachine = value; customMachineError = problem }
         // COSMOS's real hard-e-stop risk (FirmwareIdentity.kt) is why this is a live read, not a
         // typed field: only ever set by detectFirmware actually reaching the printer, never guessed.
         ElegooProfiles.connectionProblem(slicingModel,kind)?.let { Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall,modifier=Modifier.testTag("elegoo-profile-problem")) }

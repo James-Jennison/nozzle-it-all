@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 
 /**
- * Test Mode is for invited testers, so it is hidden until turned on: tapping the version line in About & credits
+ * Test Mode is for invited testers, so it is hidden until turned on: tapping a version line (Settings → Diagnostics, or About & credits)
  * [TAPS] times within [WINDOW_MS] toggles it. Stored per device; nothing else changes for a user who never does this.
  */
 object TestModeAccess {

@@ -25,7 +25,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite bambu-lan 1.0.0).",
+      "note": "No physical evidence yet (fixture suite bambu-lan 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Bambu Lab",
@@ -55,7 +55,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.0.0).",
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -85,7 +85,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.0.0).",
+      "note": "No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -115,7 +115,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.0.0).",
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -145,7 +145,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.0.0).",
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -175,7 +175,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite generic-klipper 1.0.0).",
+      "note": "No physical evidence yet (fixture suite generic-klipper 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -205,7 +205,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite octoprint 1.0.0).",
+      "note": "No physical evidence yet (fixture suite octoprint 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -235,7 +235,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite prusalink 1.0.0).",
+      "note": "No physical evidence yet (fixture suite prusalink 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Prusa",
@@ -260,9 +260,9 @@
       "grades": {
         "controls": "UNVERIFIED",
         "file_transfer": "UNVERIFIED",
-        "monitoring": "PASS (unreviewed)",
-        "physical_print": "PASS (unreviewed)",
-        "slicing": "PASS (unreviewed)"
+        "monitoring": "PASS",
+        "physical_print": "PASS",
+        "slicing": "PASS"
       },
       "history": [
         {
@@ -349,7 +349,7 @@
             "slicing": "PASS"
           },
           "kind": "physical",
-          "review": "unreviewed",
+          "review": "accepted",
           "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
           "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
@@ -379,11 +379,11 @@
         "slicing": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
       },
       "grades": {
-        "controls": "PARTIAL (unreviewed)",
-        "file_transfer": "PASS (unreviewed)",
-        "monitoring": "PASS (unreviewed)",
-        "physical_print": "FAIL (unreviewed)",
-        "slicing": "PASS (unreviewed)"
+        "controls": "PARTIAL",
+        "file_transfer": "PASS",
+        "monitoring": "PASS",
+        "physical_print": "FAIL",
+        "slicing": "PASS"
       },
       "history": [
         {
@@ -470,7 +470,7 @@
             "slicing": "PASS"
           },
           "kind": "physical",
-          "review": "unreviewed",
+          "review": "accepted",
           "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
           "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
@@ -507,7 +507,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.0.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",
@@ -537,7 +537,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.0.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",

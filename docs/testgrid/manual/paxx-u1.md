@@ -1,7 +1,7 @@
 # Snapmaker U1 on PAXX extended firmware
 
-Suite `paxx-u1` version 1.0.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `5a3fbcd3d71178dc9f28bff26db6d6aef0cea0d8bdd2ea86f03b11c722addf9d`.
+Suite `paxx-u1` version 1.1.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `5c9473bdee137bf4bd0c3af684a86f742ba54b811f9f3ba45e7a8011998409de`.
 
 Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.
 
@@ -180,11 +180,11 @@ Steps:
 7. Nozzle watches status until `complete`, up to 14400 s.
 8. **You answer:** Did the print finish without you having to intervene? (yes/no)
 9. **You answer:** Where on the bed did the model print? (centre / off centre / partly off the bed)
-10. **You answer:** Measure the tower's outside width along X with calipers. (number in mm; accepted 19.75 to 20.25)
-11. **You answer:** Measure the tower's outside width along Y. (number in mm; accepted 19.75 to 20.25)
-12. **You answer:** Measure the square hole's width. (number in mm; accepted 7.7 to 8.3)
-13. **You answer:** Measure the tower's total height, including the base plate. (number in mm; accepted 10.35 to 10.85)
-14. **You answer:** Measure the thin wall's thickness. (number in mm; accepted 1.0 to 1.4)
+10. **You answer:** Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25. (number in mm; accepted 19.75 to 20.25)
+11. **You answer:** Tower width along Y: across the outside of the tower, at right angles to X. Target 20.0 mm; passes 19.75 to 20.25. (number in mm; accepted 19.75 to 20.25)
+12. **You answer:** Square hole through the middle of the tower: its width, across the middle, with the calipers' inside jaws. Target 8.0 mm; passes 7.7 to 8.3. (number in mm; accepted 7.7 to 8.3)
+13. **You answer:** Total height, with calipers: from the bottom of the base plate to the top of the tower. Target 10.6 mm; passes 10.35 to 10.85. A ruler can't resolve this: without calipers choose Can't observe this. (number in mm; accepted 10.35 to 10.85)
+14. **You answer:** Thin wall thickness, with calipers: the single 20 mm-long fin standing on its own, not the tower's walls. Target 1.2 mm; passes 1.0 to 1.4. Without calipers choose Can't observe this. (number in mm; accepted 1.0 to 1.4)
 15. **You answer:** Look under the bridge deck: straight strands across the 18 mm gap, no drooping or failed strands? (pass/partial/fail)
 16. **You attach:** Photo of the bridge underside (evidence `bridge`).
 17. **You answer:** Between the two tall pillars: no strings, or only a few fine wisps that brush off? (pass/partial/fail)

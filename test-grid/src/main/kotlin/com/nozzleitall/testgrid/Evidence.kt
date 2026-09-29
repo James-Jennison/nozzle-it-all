@@ -68,6 +68,21 @@ class EvidenceBundle(val files: Map<String, ByteArray>) {
 }
 
 /**
+ * The run's public vocabulary for [Redactor]: words the bundle states on purpose, taken only from the reviewed suite and
+ * Nozzle's own names (never from what the printer reports), so a private value that happens to equal one of them is
+ * not masked across the whole bundle.
+ */
+object PublicVocabulary {
+    fun of(suite: Suite): Set<String> = buildSet {
+        add(suite.id); add(suite.title)
+        with(suite.target) { add(manufacturer); add(model); add(firmwareFamily); addAll(firmwareVariants); add(adapter); add(protocol); slicingProfile?.let(::add) }
+        suite.tests.forEach { add(it.id); add(it.title) }
+        StepKind.entries.forEach { add(it.id) }
+        Category.entries.forEach { add(it.id); add(it.label) }
+    }.filter { it.isNotBlank() }.toSet()
+}
+
+/**
  * Builds a bundle from a completed run. Only named fields leave the device: the target's address, saved name and
  * credentials are never copied, and every string goes through the [Redactor]. If anything private survives, the build
  * fails rather than export it.

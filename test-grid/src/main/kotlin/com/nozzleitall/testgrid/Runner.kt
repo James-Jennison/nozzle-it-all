@@ -97,6 +97,7 @@ class RunSession private constructor(
                   maxLevel: SafetyLevel, supersedes: List<String> = emptyList()): RunSession {
             val problems = TargetCheck.mismatches(suite, snapshot, env.producer.version)
             if (problems.isNotEmpty()) throw RunRefused(problems.joinToString("\n"))
+            if (maxLevel < suite.minSafetyLevel) throw RunRefused("Nothing in ${suite.title} runs at ${maxLevel.label}; its first tests need ${suite.minSafetyLevel.label}.")
             val now = env.clock()
             val record = RunRecord(env.newId(), suite.id, suite.version, suite.digest, maxLevel.level, target.description.kind,
                 snapshotJson(snapshot), now, suite.tests.map { t ->

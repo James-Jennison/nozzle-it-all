@@ -76,7 +76,10 @@ attachment missing).
 
 Applied by `Redactor` to every string in `evidence.json`, to the log and to text attachments. The redactor is given
 the run's known-private values (printer address and host, saved name, API key/access code, serial, hostname read from
-the printer, app-private paths), which are masked wherever they appear as `[private]`. Then:
+the printer, app-private paths), which are masked wherever they appear as `[private]`. A value that is part of the
+run's public vocabulary (the suite's id, title, maker, model and firmware family, test titles, step and category names;
+never text the printer reported) is not masked: a printer saved as "cosmos" would otherwise erase "cosmos" from the
+suite id and firmware family. Then:
 
 | Rule | Replacement |
 |---|---|

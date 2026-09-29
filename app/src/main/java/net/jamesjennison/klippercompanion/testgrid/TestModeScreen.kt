@@ -21,7 +21,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -152,67 +151,124 @@ fun TestModeScreen(profiles: List<PrinterProfile>, close: () -> Unit) {
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { u -> runCatching { context.contentResolver.openInputStream(u)?.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()?.let { c.importSuite(it) } }
     }
-    val kind = s.snapshot?.description?.printerKind
+    val snap = s.snapshot
+    // "For this printer": the verified printer type and firmware family both match. Everything else is for other printers.
+    val (matching, others) = s.suites.partition { snap != null && it.target.firmwareFamily == snap.classified.family &&
+        (it.target.printerKinds.isEmpty() || snap.description.printerKind.name in it.target.printerKinds) }
+    var showOthers by remember { mutableStateOf(false) }
     Section("3. Choose a suite") {
-        val (matching, others) = s.suites.partition { kind != null && (it.target.printerKinds.isEmpty() || kind.name in it.target.printerKinds) }
-        (matching + others).forEachIndexed { i, suite ->
-            Card(colors = CardDefaults.cardColors(containerColor = if (s.suite == suite) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(suite.title, fontWeight = FontWeight.Bold)
-                    Text("${suite.id} ${suite.version} · ${suite.coverage.id}${if (suite.id in s.importedSuiteIds) " · imported" else ""} · up to ${suite.maxSafetyLevel.label}", style = MaterialTheme.typography.bodySmall)
-                    TextButton({ c.selectSuite(suite) }, modifier = Modifier.testTag("suite-${suite.id}")) { Text(if (suite in matching) "Use this suite" else "Check against this printer") }
+        if (matching.isEmpty()) Text("No bundled suite matches this printer (${snap?.classified?.family}). You can import one a maintainer sent you.", style = MaterialTheme.typography.bodySmall)
+        matching.forEach { suite ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(suite.title, style = MaterialTheme.typography.titleMedium)
+                    Text(suiteSummary(suite), style = MaterialTheme.typography.bodySmall)
+                    Text(if (suite.coverage == com.nozzleitall.testgrid.Coverage.REFERENCE) "Reference suite" else "Community suite: results stay unverified until accepted"
+                        + if (suite.id in s.importedSuiteIds) " · imported" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button({ c.selectSuite(suite) }, enabled = !s.busy, modifier = Modifier.testTag("suite-${suite.id}")) { Text("Use this suite") }
                 }
             }
-            if (i == matching.size - 1 && others.isNotEmpty()) HorizontalDivider()
         }
-        OutlinedButton({ importer.launch(arrayOf("application/json", "text/plain", "*/*")) }, modifier = Modifier.testTag("import-suite")) { Text("Import a suite (JSON)") }
+        if (others.isNotEmpty()) TextButton({ showOthers = !showOthers }, modifier = Modifier.testTag("other-suites")) {
+            Text(if (showOthers) "Hide suites for other printers" else "Show ${others.size} suites for other printers")
+        }
+        if (showOthers) others.forEach { suite ->
+            Row(Modifier.fillMaxWidth().selectable(s.suite == suite, role = Role.Button) { c.selectSuite(suite) }.padding(vertical = 8.dp).testTag("suite-${suite.id}")) {
+                Column(Modifier.weight(1f)) {
+                    Text(suite.title, style = MaterialTheme.typography.bodyMedium)
+                    Text("For ${suite.target.manufacturer} ${suite.target.model} on ${suite.target.firmwareFamily}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
         if (s.mismatches.isNotEmpty()) Column(Modifier.testTag("suite-mismatch")) {
-            Text("This suite can't run on this printer:", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-            s.mismatches.forEach { Text("• $it", color = MaterialTheme.colorScheme.error) }
+            Text("${s.suite?.title} can't run on this printer:", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+            s.mismatches.forEach { Text("• $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
-        TextButton({ c.back() }) { Text("Back") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton({ c.back() }) { Text("Back") }
+            TextButton({ importer.launch(arrayOf("application/json", "text/plain", "*/*")) }, modifier = Modifier.testTag("import-suite")) { Text("Import a suite file") }
+        }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+private fun suiteSummary(suite: com.nozzleitall.testgrid.Suite): String {
+    val cats = com.nozzleitall.testgrid.Category.entries.filter { c -> suite.tests.any { it.category == c } }.joinToString(", ") { it.label.lowercase() }
+    return "${suite.tests.size} tests · $cats"
+}
+
+/** What each level adds, in the words an operator decides by. */
+private fun levelAdds(l: SafetyLevel): String = when (l) {
+    SafetyLevel.SOFTWARE -> "slicing and G-code checks on this phone"
+    SafetyLevel.READ_ONLY -> "reads status, camera and files; nothing changes"
+    SafetyLevel.REVERSIBLE_FILES -> "uploads one test file, then deletes it"
+    SafetyLevel.SUPERVISED_CONTROLS -> "low heat, homing and a small move, at the printer"
+    SafetyLevel.PHYSICAL_PRINT -> "full prints, pause, resume and cancel"
+}
+
 @Composable private fun PlanStep(c: TestModeController, s: TestModeState) {
     val suite = s.suite ?: return
     val models = remember { runCatching { ModelLibrary.fromResources() }.getOrNull() }
-    Section("4. Review the plan") {
+    val running = suite.tests.filter { it.safetyLevel <= s.maxLevel }
+    val skipped = suite.tests.filter { it.safetyLevel > s.maxLevel }
+    Section("4. How far to go") {
         Text(suite.title, fontWeight = FontWeight.Bold)
-        Text(suite.description, style = MaterialTheme.typography.bodySmall)
-        Text("Highest safety level to allow in this run", fontWeight = FontWeight.Bold)
         Column(Modifier.testTag("safety-levels")) {
             SafetyLevel.entries.filter { it <= suite.maxSafetyLevel }.forEach { l ->
-                Row(Modifier.fillMaxWidth().selectable(s.maxLevel == l, role = Role.RadioButton) { c.setMaxLevel(l) }.testTag("level-${l.level}"), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(s.maxLevel == l, null); Text(l.label)
+                val n = suite.tests.count { it.safetyLevel <= l }
+                Row(Modifier.fillMaxWidth().selectable(s.maxLevel == l, role = Role.RadioButton) { c.setMaxLevel(l) }.padding(vertical = 4.dp).testTag("level-${l.level}"), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(s.maxLevel == l, null)
+                    Column(Modifier.weight(1f)) {
+                        Text("Level ${l.level} · $n tests", style = MaterialTheme.typography.bodyMedium, fontWeight = if (s.maxLevel == l) FontWeight.Bold else FontWeight.Normal)
+                        Text(levelAdds(l), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
-        Text("Tests above this level are recorded as skipped, never as passed.", style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextButton({ c.back() }) { Text("Back") }
+            Button({ c.start() }, enabled = !s.busy, modifier = Modifier.testTag("start-run")) { Text("Start run · ${running.size} tests") }
+        }
+        Text("Every step that changes the printer waits for your approval. Tests above the chosen level are recorded as skipped, never as passed.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    suite.tests.forEach { t ->
-        val inRun = t.safetyLevel <= s.maxLevel
-        Section("${t.title}${if (inRun) "" else " (skipped at this level)"}") {
-            Text("${t.category.label} · ${t.scope.label} · ${t.safetyLevel.label}${if (t.mutatesPrinterState) " · changes the printer" else ""}", style = MaterialTheme.typography.bodySmall)
+    Section("Will run (${running.size})") { running.forEach { PlanTestRow(it, models, true) } }
+    if (skipped.isNotEmpty()) Section("Skipped at this level (${skipped.size})") { skipped.forEach { PlanTestRow(it, models, false) } }
+}
+
+/** One test, collapsed to a line; tap to see every step it will take. */
+@Composable private fun PlanTestRow(t: com.nozzleitall.testgrid.TestCase, models: ModelLibrary?, runs: Boolean) {
+    var open by remember(t.id) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().selectable(open, role = Role.Button) { open = !open }.padding(vertical = 6.dp).testTag("plan-${t.id}")) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (open) "▾ " else "▸ ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(t.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = if (runs) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("L${t.safetyLevel.level}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text(t.category.label + (if (t.scope == com.nozzleitall.testgrid.MaterialScope.MULTI) " · multi-material" else "") + (if (t.mutatesPrinterState) " · changes the printer" else ""),
+            style = MaterialTheme.typography.labelSmall, color = if (t.mutatesPrinterState) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 18.dp))
+        if (open) Column(Modifier.padding(start = 18.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (t.preconditions.isNotEmpty()) Text("Before: " + t.preconditions.joinToString(" · ") { it.text }, style = MaterialTheme.typography.bodySmall)
             t.steps.forEachIndexed { i, st -> Text("${i + 1}. " + ManualInstructions.describe(st, models).replace("**", ""), style = MaterialTheme.typography.bodySmall,
                 color = if (st.kind?.consequential == true) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface) }
             if (t.cleanup.isNotEmpty()) Text("Cleanup: " + t.cleanup.joinToString(" · ") { ManualInstructions.describe(it, models).replace("**", "") }, style = MaterialTheme.typography.bodySmall)
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        TextButton({ c.back() }) { Text("Back") }
-        Button({ c.start() }, enabled = !s.busy, modifier = Modifier.testTag("start-run")) { Text("Start run") }
-    }
 }
 
 @Composable private fun RunStep(c: TestModeController, s: TestModeState) {
     val session = c.session ?: return
-    Section("Run ${session.record.runId.take(8)} · ${session.suite.id}") {
-        session.suite.tests.forEach { t ->
-            val r = session.record.test(t.id) ?: return@forEach
-            val active = session.record.tests.getOrNull(session.record.cursor)?.testId == t.id && !r.state.terminal
+    var showAll by remember { mutableStateOf(false) }
+    val records = session.suite.tests.mapNotNull { t -> session.record.test(t.id)?.let { t to it } }
+    val done = records.count { it.second.state.terminal }
+    val current = records.firstOrNull { (_, r) -> session.record.tests.getOrNull(session.record.cursor)?.testId == r.testId && !r.state.terminal }
+    Section("${session.suite.title}") {
+        Text("$done of ${records.size} tests done" + (current?.let { " · now: ${it.first.title}" } ?: ""), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("run-progress"))
+        LinearProgressIndicator({ if (records.isEmpty()) 0f else done.toFloat() / records.size }, Modifier.fillMaxWidth())
+        val problems = records.filter { it.second.state.terminal && it.second.result in setOf(ResultState.FAIL, ResultState.BLOCKED, ResultState.UNVERIFIED) }
+        problems.forEach { (t, r) -> Text("${r.result.name}: ${t.title}", style = MaterialTheme.typography.bodySmall, color = if (r.result == ResultState.FAIL) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
+        TextButton({ showAll = !showAll }, modifier = Modifier.testTag("show-all-tests")) { Text(if (showAll) "Hide test list" else "Show all tests") }
+        if (showAll) records.forEach { (t, r) ->
+            val active = current?.second === r
             Row(Modifier.fillMaxWidth().testTag("result-${t.id}")) {
                 Text(if (active) "▶ " else "  ", fontFamily = FontFamily.Monospace)
                 Text(t.title, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)

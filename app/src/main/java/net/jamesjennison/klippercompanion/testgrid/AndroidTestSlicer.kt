@@ -40,7 +40,8 @@ fun assetProfile(context: Context, id: String): ProfileInfo {
  * other slice: a COSMOS profile is sliced only after a live read confirms COSMOS and the matching profile generation.
  * [printer] is the saved printer the suite targets; only its slicing model is replaced by the suite's profile.
  */
-class AndroidTestSlicer(private val context: Context, private val printer: PrinterProfile) : TestSlicer {
+class AndroidTestSlicer(private val context: Context, private val printer: PrinterProfile,
+                        private val liveSlots: () -> List<net.jamesjennison.klippercompanion.FilamentSlot> = { emptyList() }) : TestSlicer {
     override val simulated = false
     override fun profile(id: String): ProfileInfo = assetProfile(context, id)
 
@@ -58,8 +59,11 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
                 val slots = slicingProfilePack(model, CosmosProfileGeneration.CURRENT.takeIf { ElegooProfiles.isCosmos(model) }, profile.customMachine)?.readToolCount(context) ?: 1
                 if (tools.any { it !in 1..slots }) return@runBlocking SliceOutcome.Failed("This model needs tools ${tools.distinct().sorted()}, but the profile has $slots tool slot(s).")
                 val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+                // Each slot takes the colour the printer reports as loaded there, so the flush volumes between colours are
+                // worked out for what is actually printed (with generic white everywhere, black to cyan bled on a CANVAS print).
+                val colours = liveSlots().associate { it.tool + 1 to it.colorHex?.takeIf { c -> c.isNotBlank() } }
                 SlicingCoordinator.sliceProject(context, request.parts.mapIndexed { i, p -> p.first to ModelTransform(offsets[i].first.toFloat(), offsets[i].second.toFloat()) }, profile,
-                    toolSlotIndices = tools, slotMaterials = if (slots > 1) (1..slots).map { if (it in tools) pla else null } else emptyList(), outputTag = "testgrid")
+                    toolSlotIndices = tools, slotMaterials = if (slots > 1) (1..slots).map { if (it in tools) pla.copy(colorHex = colours[it] ?: pla.colorHex) else null } else emptyList(), outputTag = "testgrid")
             }
         }
         return when (outcome) {

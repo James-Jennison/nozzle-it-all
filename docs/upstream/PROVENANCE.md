@@ -851,3 +851,55 @@ interchange).
 - **Known divergence:** not verified on a Qidi printer. The type-1 tower is this engine's BBS generator, not upstream's
   newer BBS 2.x one.
 - **Touches:** slicing (multi-material, wipe tower), settings schema (new option).
+
+## P-0035 — Duet, UltiMaker, older Flashforge and Repetier-Server connections (ported, not copied)
+
+- **Upstream:** OrcaSlicer `5298e49d` (local checkout, AGPL-3.0): `src/slic3r/Utils/Duet.cpp` / `.hpp`, `UltiMaker.cpp` /
+  `.hpp`, `Flashforge.cpp` / `.hpp` with `TCPConsole.cpp` / `.hpp`, and `Repetier.cpp` / `.hpp`; compared with SuperSlicer's
+  `Duet.cpp` and `Repetier.cpp` (PrusaSlicer lineage). UltiMaker status only: Cura `72521b7` (local checkout, LGPL-3.0),
+  `plugins/UM3NetworkPrinting` (`Network/ClusterApiClient.py`, `Models/Http/ClusterPrinterStatus.py`,
+  `ClusterPrintJobStatus.py`, `UltimakerNetworkedPrinterOutputDevice.py`, `resources/qml/MonitorPrintJobProgressBar.qml`,
+  `MonitorPrinterCard.qml`) and `cura/PrinterOutput/Models/PrintJobOutputModel.py`: UltiMaker's own slicer, used because
+  Orca's UltiMaker host reads no state.
+- **Imported:** nothing copied. The wire rules, re-implemented in Kotlin with file:line citations:
+  - `DuetRrf`: which API (`rr_connect?password=<pw or reprap>&time=...`, then the DSF `machine/status` probe), curl's
+    escaping, the `err` rule, RRF `rr_upload` (raw POST body) / DSF `PUT machine/file/gcodes/<name>` (201 only),
+    `rr_disconnect`, and the M32 / M37 start (`rr_gcode`, `machine/code`).
+  - `UltiMakerApi`: the variant check, pairing (`auth/request` -> approve on the printer -> `auth/check/<id>` ->
+    `auth/verify` with HTTP Digest), the Griffin header clean-up and `;PRINT.TIME`, the `print_job` upload; status from
+    Cura's cluster-API reads (`/cluster-api/v1/printers`, `/print_jobs`, job matched by `printer_uuid` / `assigned_to`,
+    progress `time_elapsed / time_total`, Cura's state names).
+  - `FlashforgeLegacy`: upstream's split (both serial and access code -> port-8898 API, else the port-8899 console), the
+    `~M` command texts byte for byte, TCPConsole's framing (`\n` after each command, read until a line is `ok`, raw data)
+    and timeouts, connect (`~M601 S1`, `~M115`, `~M650` / `~M640`, `~M119`), upload (`~M28 <bytes> 0:/user/<name>`,
+    4096-byte pieces, `~M29` on a new connection 3 s later), `~M23`, and the byte-wise file-name rule.
+  - `RepetierServer`: `X-Api-Key`, `printer/info` identification (validate_repetier), `printer/list` slugs and `error`,
+    `printer/model/<slug>` upload (`a=upload` + `filename`) and `printer/job/<slug>` (`name`, `autostart=true`).
+- **Change:** `PrinterKind.DUET` (`DuetPrinterService`, board password in the encrypted apiKey slot),
+  `PrinterKind.ULTIMAKER` (`UltiMakerPrinterService`; pairing id in `serial`, key in apiKey; `UltiMakerPairing` composable
+  in Edit printer and the wizard), `PrinterKind.REPETIER` (`RepetierPrinterService`; API key in apiKey, printer slug in
+  `serial`), and `PrinterKind.FLASHFORGE` without both credentials -> `FlashforgeLegacyPrinterService`. New transports,
+  chips, Control-tab cards, Test Mode labels, Test Grid families `duet-rrf`, `ultimaker-lan`, `flashforge-legacy`,
+  `repetier-server`. `PrinterCapabilities.readsPrinterState` (false for Duet and Repetier) and `sendAllowedStates`: an
+  upload-only send may go out in the "unknown" state only while that kind's start is gated.
+- **Gated (all four `START_VERIFIED` false; `startVerifiedFor` false for DUET, ULTIMAKER, REPETIER and FLASHFORGE, so
+  the Test Grid declares no `upload_and_start`):** Duet M32 / M37 (upload never starts on a Duet); UltiMaker `print_job`
+  (an UltiMaker prints every job it is sent, so **nothing** is sent: refused before any request); Flashforge legacy
+  `~M23` (upload is `~M28` / data / `~M29` only); Repetier `printer/job` with `autostart=true` (upload goes to the model
+  library, which never prints). Refusals contain "isn't verified on real hardware yet". Never sent at all: pause, resume,
+  cancel / abort / stop, homing, jogging, temperatures, arbitrary G-code (not built for these kinds).
+- **Test evidence:** unit tests only (DuetRrfTest, UltiMakerApiTest, FlashforgeLegacyTest, RepetierServerTest in :domain;
+  DuetPrinterServiceTest, UltiMakerPrinterServiceTest, RepetierPrinterServiceTest against a local MockWebServer and
+  FlashforgeLegacyServiceTest against a fake TCP printer on 127.0.0.1, in :app). All fixtures are constructed from the
+  upstream code, not captured: nothing here has met a real printer.
+- **Known divergence / to verify on hardware:** upstream reads no state for Duet, Repetier-Server or the Flashforge
+  console (`~M105` / `~M27` are declared, never used), so these show "unknown"; the Flashforge console isn't "ready", so
+  the app's send button stays off for it. Orca's UltiMaker variant check accepts only UltiMaker 3 and S5 (not enforced
+  here); its UltiMaker `connect` / `start_print` / `rr_disconnect` are Duet copies an UltiMaker doesn't serve (not ported);
+  a file without `;START_OF_HEADER` is refused instead of being uploaded empty; its `auth/request` third field (named
+  "OrcaSlicer") isn't sent. The Flashforge console stops before `~M28` when its connect fails (upstream carries on), and
+  always uses `~M650` (upstream picks `~M640` for a Klipper-flavoured profile). Duet `rr_upload` goes out as
+  `application/x-www-form-urlencoded` like curl's POSTFIELDS; RRF's `rr_gcode` quotes are percent-encoded by OkHttp. A
+  Repetier server with several printers needs its slug entered. No discovery for any of the four.
+- **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard, UltiMaker pairing),
+  Test Grid classification.

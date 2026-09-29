@@ -54,8 +54,11 @@ class BambuMultiColourDeviceTest {
 
     @Test fun twoObjectsOnTwoAmsSlotsSwitchSlotsAndListBothFilaments() {
         val bundle = slice("ams-two.gcode.3mf", intArrayOf(1, 2))
-        val switches = amsSwitches(entry(bundle, "Metadata/plate_1.gcode"))
+        val gcode = entry(bundle, "Metadata/plate_1.gcode")
+        val switches = amsSwitches(gcode)
         assertTrue("expected AMS slots 0 and 1 in the G-code, got $switches", switches.containsAll(setOf("0", "1")))
+        // Per-object assignment must keep the profile's prime tower (P-0027: it used to be switched off).
+        assertTrue("expected the prime tower to stay on", gcode.contains("; enable_prime_tower = 1"))
         val sliceInfo = entry(bundle, "Metadata/slice_info.config")
         val filaments = Regex("<filament [^>]*>").findAll(sliceInfo).map { it.value }.toList()
         assertEquals("expected two used filaments in slice_info: $filaments", 2, filaments.size)

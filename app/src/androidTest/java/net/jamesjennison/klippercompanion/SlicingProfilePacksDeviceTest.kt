@@ -151,6 +151,8 @@ class SlicingProfilePacksDeviceTest {
         assertTrue(toolpath.toolChanges.size > 10)
         val stats = GcodeStatsParser.parse(out)
         assertTrue("both tools extrude: ${stats.perToolGrams}", stats.toolsUsed.containsAll(listOf(0, 1)))
-        assertEquals("the engine keeps the prime tower off on independent-tool machines, even though the XL process profile enables it", false, stats.primeTower)
+        // The XL process profile enables the prime tower, and a two-tool print keeps it (P-0027: per-object assignment used
+        // to count as one filament and switch it off).
+        assertEquals("the XL's prime tower is printed for a two-tool print", true, stats.primeTower)
     }
 }

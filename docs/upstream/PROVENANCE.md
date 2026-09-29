@@ -686,3 +686,19 @@ interchange).
   Helix's wire format only; it has never reached a printer.
 - **Test evidence:** listed in the commit.
 - **Touches:** Bambu printer screen (AMS slots), Bambu print command (unchanged on the wire while gated).
+
+## P-0027 — per-object filament assignment keeps the prime tower
+
+- **Upstream:** nozzle-engine `d17bfe544723a4c39fde05b260609a6811233975` (`engine/fork/ENGINE_PIN.json`, James-Jennison/nozzle-engine pull 4):
+  `c8e5a4d` (P-0025) plus one commit.
+- **Imported:** nothing into this repository.
+- **Engine change:** a per-object filament assignment now also sets the object's `extruder`, as upstream's object list
+  does. Before, `Print::apply` counted every per-object assignment as one filament and switched the prime tower off, so
+  multi-colour prints assigned per object (CANVAS, Snapmaker U1, Bambu AMS) had no prime tower. Found by the Test Grid
+  on the owner's Centauri Carbon + CANVAS: a two-colour print with no tower, and the colours bled.
+- **Test evidence:** desktop CLI, two cubes on filaments 1 and 2: Centauri Carbon COSMOS CANVAS, U1 and X1 Carbon now
+  print a tower (before: `enable_prime_tower = 0`, none); two cubes on one filament still print none. Engine CI on
+  gthost (run 36577444466) and this repository's checks are listed in the commit.
+- **Known divergence:** multi-colour prints assigned per object gain the prime tower their profile asks for (more
+  filament, longer prints); single-filament prints are unchanged.
+- **Touches:** slicing (multi-material, per-object assignment).

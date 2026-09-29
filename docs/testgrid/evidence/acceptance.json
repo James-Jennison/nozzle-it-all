@@ -47,6 +47,12 @@
       "bundleDigest": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e",
       "date": "2026-09-29",
       "note": "Level 1 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from 9d6860e (cosmos-centauri-carbon 1.2.0). Every test up to level 1 PASS: identity, status, camera, single and two-tool slicing with the COSMOS AFC profile, profile match, stock profile refused, upload guard (M729/M8213), four CANVAS lanes confirmed by the owner. First physical COSMOS evidence."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
+      "date": "2026-09-29",
+      "note": "Level 3 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from 9d6860e (cosmos-centauri-carbon 1.2.0). Every test up to level 3 PASS: upload (SHA-256 verified), listing and delete; nozzle 60 C, bed 40 C, G28, Z +5 mm, heaters off. Accepted with a correction: the camera snapshot's recorded SHA-256 had 'cc1' masked (the printer is saved as CC1; fixed in #14)."
     }
   ],
   "format": "nozzle.evidence-acceptance",

@@ -186,7 +186,8 @@ class ReportTest {
         val r = ReportBuilder.build(listOf("a.zip" to a.zip(), "b.zip" to b.zip()), emptyList())
         val row = row(r, FirmwareFamilies.PAXX)
         assertEquals(l1, row.current!!.runId)
-        assertEquals(l2, row.sources[Category.FILE_TRANSFER]!!.runId)
+        // File transfer: the transfer test's result comes from the level-2 run, the upload guard's from the newer level-1 run.
+        assertEquals(listOf(l1, l2), row.contributors[Category.FILE_TRANSFER]!!.map { it.runId })
         assertEquals("PASS (unreviewed)", ReportBuilder.cell(row, Category.FILE_TRANSFER))
         assertEquals(l1, row.sources[Category.MONITORING]!!.runId)
         assertNull(row.history.single { it.runId == l2 }.supersededBy)

@@ -51,12 +51,18 @@ simulated run never becomes current over a physical run.
 
 - Every verified bundle is kept in its row's history with run id, kind, suite and version, completion time, grades,
   review status, bundle digest and source file name.
-- Each **category** shows the newest physical run, not rejected by a maintainer, that ran tests in it, unless an
-  older run ran strictly more of that category's tests (its tests other than SKIPPED or UNVERIFIED are a superset).
-  With no physical run, the newest simulated one is shown, as UNVERIFIED. So a level-1 rerun (upload guard only) does
-  not displace an earlier level-2 file-transfer result, while a newer run covering the same tests always does, even
-  when it fails. When a row's cells come from different runs, each cell
-  names its run, and the JSON report lists `gradeSources`.
+- Each **category** is graded from each of its tests' newest actual result across the row's physical runs that no
+  maintainer rejected ("actual" means anything but SKIPPED or UNVERIFIED; a test no run has actually run counts as
+  SKIPPED), with the usual category rule. With no physical run, the row is UNVERIFIED. So a level-1 rerun (upload
+  guard only) does not displace an earlier level-2 transfer result, a level-4 run that carried earlier passes over
+  (below) is graded together with the run that passed them, and a newer result for the same test always replaces the
+  older one, even when it fails. Each cell names the runs it uses when there is more than one; the JSON report lists
+  them under `gradeRuns` (and the newest under `gradeSources`).
+- **Carried passes:** Test Mode offers not to repeat tests that passed in an earlier run of the same suite, on the
+  same printer (a key kept on the phone), firmware version and Nozzle version, when the test's own definition is
+  unchanged (`Suite.testDigest`). A test a running test takes files from (a slice or an upload) always runs again. A
+  carried test is recorded as SKIPPED with `carriedFrom` (run id, time, bundle digest); it never counts as a result
+  of the new run.
 - A newer run supersedes older ones for the categories it graded. A run can also name the runs it supersedes
   (`run.supersedes`). The older run stays in history marked "superseded by …", with its digest. Nothing is ever
   deleted or overwritten; `EvidenceStore` files bundles under their bundle digest and refuses to overwrite.

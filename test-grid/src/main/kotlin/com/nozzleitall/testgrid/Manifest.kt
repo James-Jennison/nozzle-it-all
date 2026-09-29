@@ -101,6 +101,13 @@ data class Suite(
     val source: String,
 ) {
     val maxSafetyLevel: SafetyLevel get() = tests.maxOfOrNull { it.safetyLevel } ?: SafetyLevel.SOFTWARE
+    /** SHA-256 of one test's canonical JSON as read: a test whose definition changed never carries an earlier pass. */
+    fun testDigest(id: String): String {
+        val tests = org.json.JSONObject(source).optJSONArray("tests") ?: return ""
+        val o = (0 until tests.length()).map { tests.getJSONObject(it) }.firstOrNull { it.optString("id") == id } ?: return ""
+        return Canon.sha256(Canon.write(o).toByteArray(Charsets.UTF_8))
+    }
+
     /** The lowest level at which any test runs; a run limited below it would run nothing. */
     val minSafetyLevel: SafetyLevel get() = tests.minOfOrNull { it.safetyLevel } ?: SafetyLevel.SOFTWARE
     fun test(id: String): TestCase? = tests.firstOrNull { it.id == id }

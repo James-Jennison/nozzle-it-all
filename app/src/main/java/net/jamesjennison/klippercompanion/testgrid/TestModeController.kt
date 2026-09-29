@@ -61,6 +61,10 @@ data class TestModeState(
     val bundle: EvidenceBundle? = null,
     val exported: String? = null,
     val resumable: Boolean = false,
+    /** Tests of the chosen suite that already passed on this printer, firmware and Nozzle version (CarryOver). */
+    val carryAvailable: Map<String, com.nozzleitall.testgrid.PriorPass> = emptyMap(),
+    /** Which of them the operator lets stand instead of running again (all, until they untick one). */
+    val carryChosen: Set<String> = emptySet(),
 )
 
 /**
@@ -78,6 +82,20 @@ class TestModeController private constructor(private val context: Context) {
     private val lock = Mutex()
     private val runDir = File(context.filesDir, "testgrid/active")
     private val metaFile = File(runDir, "meta.json")
+    /** Summaries of finished physical runs on this device, for carrying passes over; never exported. */
+    private val historyFile = File(context.filesDir, "testgrid/history.json")
+
+    private fun history(): List<com.nozzleitall.testgrid.CarryOver.RunSummary> = runCatching {
+        org.json.JSONArray(historyFile.readText()).let { a -> (0 until a.length()).mapNotNull { runCatching { com.nozzleitall.testgrid.CarryOver.RunSummary.fromJson(a.getJSONObject(it)) }.getOrNull() } }
+    }.getOrDefault(emptyList())
+
+    private fun remember(summary: com.nozzleitall.testgrid.CarryOver.RunSummary) {
+        val all = (history().filter { it.runId != summary.runId } + summary).sortedByDescending { it.completedAt }.take(200)
+        historyFile.parentFile?.mkdirs()
+        val tmp = File(historyFile.parentFile, "history.json.tmp")
+        tmp.writeText(org.json.JSONArray(all.map { it.toJson() }).toString())
+        tmp.renameTo(historyFile)
+    }
     private var target: TestTarget? = null
     /** Simulated printers run on simulated time, so a simulated print doesn't take hours. */
     private val simulatedClock = com.nozzleitall.testgrid.VirtualClock()
@@ -137,10 +155,15 @@ class TestModeController private constructor(private val context: Context) {
     fun selectSuite(suite: Suite) {
         val snap = _state.value.snapshot ?: return
         val mismatches = TargetCheck.mismatches(suite, snap, net.jamesjennison.klippercompanion.BuildConfig.VERSION_NAME)
-        update { it.copy(suite = suite, mismatches = mismatches, maxLevel = suite.minSafetyLevel, phase = if (mismatches.isEmpty()) TestModePhase.REVIEW_PLAN else it.phase) }
+        val option = _state.value.target
+        val carry = if (option is TargetOption.Saved) com.nozzleitall.testgrid.CarryOver.eligible(history(), suite, snap, option.profile.address, net.jamesjennison.klippercompanion.BuildConfig.VERSION_NAME) else emptyMap()
+        update { it.copy(suite = suite, mismatches = mismatches, maxLevel = suite.minSafetyLevel, carryAvailable = carry, carryChosen = carry.keys,
+            phase = if (mismatches.isEmpty()) TestModePhase.REVIEW_PLAN else it.phase) }
     }
 
     fun setMaxLevel(level: SafetyLevel) = update { it.copy(maxLevel = level) }
+
+    fun setCarry(testId: String, skip: Boolean) = update { it.copy(carryChosen = if (skip) it.carryChosen + testId else it.carryChosen - testId) }
 
     fun start() {
         val st = _state.value
@@ -150,7 +173,8 @@ class TestModeController private constructor(private val context: Context) {
             runDir.deleteRecursively(); runDir.mkdirs()
             val env = AndroidTestEnvironment.create(context, File(runDir, "work"), simulatedEngine = option is TargetOption.Simulated, clock = simulatedClock.takeIf { option is TargetOption.Simulated })
             val t = target ?: buildTarget(option, st.declaredFamily).also { target = it }
-            val s = RunSession.start(suite, t, snap, buildSlicer(option), env, RunJournal(runDir), st.maxLevel)
+            val s = RunSession.start(suite, t, snap, buildSlicer(option), env, RunJournal(runDir), st.maxLevel,
+                carried = st.carryAvailable.filterKeys { it in st.carryChosen })
             metaFile.writeText(JSONObject().put("suite", JSONObject(suite.source)).put("imported", suite.id in st.importedSuiteIds)
                 .put("target", when (option) { is TargetOption.Saved -> JSONObject().put("type", "saved").put("address", option.profile.address); is TargetOption.Simulated -> JSONObject().put("type", "simulated").put("preset", option.preset.name) })
                 .putOpt("declaredFamily", st.declaredFamily).toString())
@@ -215,6 +239,9 @@ class TestModeController private constructor(private val context: Context) {
         val env = AndroidTestEnvironment.create(context, File(runDir, "work"), simulatedEngine = t.description.kind == com.nozzleitall.testgrid.TargetKind.SIMULATED)
         val redactor = Redactor(t.localSecrets() + context.filesDir.absolutePath + context.cacheDir.absolutePath + runDir.absolutePath, PublicVocabulary.of(s.suite))
         val bundle = EvidenceBuilder.build(s, env, redactor, RunJournal(runDir)::attachment)
+        (_state.value.target as? TargetOption.Saved)?.let { o ->
+            com.nozzleitall.testgrid.CarryOver.summarize(s, bundle.bundleDigest, o.profile.address, net.jamesjennison.klippercompanion.BuildConfig.VERSION_NAME)?.let { runCatching { remember(it) } }
+        }
         update { it.copy(phase = TestModePhase.REVIEW_EVIDENCE, bundle = bundle) }
     }
 

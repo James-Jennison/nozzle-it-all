@@ -79,7 +79,8 @@ the run's known-private values (printer address and host, saved name, API key/ac
 the printer, app-private paths), which are masked wherever they appear as `[private]`. A value that is part of the
 run's public vocabulary (the suite's id, title, maker, model and firmware family, test titles, step and category names;
 never text the printer reported) is not masked: a printer saved as "cosmos" would otherwise erase "cosmos" from the
-suite id and firmware family. Then:
+suite id and firmware family. A value is masked only where it stands on its own, never inside a longer run of letters
+and digits (a printer saved as "CC1" must not alter a SHA-256 that contains "cc1"). Then:
 
 | Rule | Replacement |
 |---|---|

@@ -74,11 +74,20 @@ class SlicingModelCatalogTest {
         assertTrue(groupedSlicingModels("zzzz-none").isEmpty())
     }
 
-    @Test fun everyBambuModelIsAFilamentSwapMachine() {
+    // Single-nozzle Bambu printers feed one nozzle from the AMS; the dual-nozzle ones (H2D, H2C, X2D) have one slot per
+    // nozzle in their packs today, so they are independent tools.
+    @Test fun bambuFamiliesFollowEachPacksNozzlesAndSlots() {
         SlicingModelCatalog.all.filter { it.vendor == SlicingVendor.BAMBU }.forEach {
-            assertEquals(it.label, MultiToolFamily.FILAMENT_SWAP, multiToolFamily(it.model, 4))
+            val pack = slicingProfilePack(it.model, null) ?: return@forEach
+            val setup = pack.toolSetupOf(File(assets, "${it.assetDir}/machine.json").readText())
+            val expected = when {
+                setup.slots <= 1 -> MultiToolFamily.SINGLE
+                setup.nozzles > 1 -> MultiToolFamily.TOOLCHANGER
+                else -> MultiToolFamily.FILAMENT_SWAP
+            }
+            assertEquals(it.label, expected, setup.family)
         }
-        assertEquals(MultiToolFamily.SINGLE, multiToolFamily(SlicingPrinterModel.BAMBU_P1S, 1))
+        assertEquals(MultiToolFamily.FILAMENT_SWAP, slicingProfilePack(SlicingPrinterModel.BAMBU_X1_CARBON, null)!!.toolSetupOf(File(assets, "bambu_x1_carbon/machine.json").readText()).family)
     }
 
     @Test fun profilesTheEngineCannotSliceAreNeverOffered() {

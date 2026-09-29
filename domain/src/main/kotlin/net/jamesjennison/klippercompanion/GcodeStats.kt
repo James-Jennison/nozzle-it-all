@@ -39,7 +39,8 @@ data class GcodeStats(
     /** What the owner should know about purging for this print, depending on how the machine changes material. */
     fun purgeNote(family: MultiToolFamily): String? = when {
         (toolchanges ?: 0) <= 0 -> null
-        family == MultiToolFamily.TOOLCHANGER -> "Independent tools: nothing is purged at toolchanges (each tool keeps its own nozzle), so there is no purge waste to estimate."
+        family == MultiToolFamily.TOOLCHANGER && primeTower == false -> "No prime tower: each tool starts printing straight after a change, so an idle nozzle's ooze and a thin first line can show (turn on Prime tower in Settings to prime each tool)."
+        family == MultiToolFamily.TOOLCHANGER -> "Independent tools: nothing is flushed between colours; each tool primes a small amount on the prime tower after a change (the profile's prime volume), so the flush estimate doesn't apply."
         primeTower == false -> "No prime tower: nothing is purged at toolchanges, so colours can bleed at each change (turn on Prime tower in Settings to purge)."
         else -> null
     }

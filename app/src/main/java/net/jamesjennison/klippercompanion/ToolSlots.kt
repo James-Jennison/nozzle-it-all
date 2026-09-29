@@ -17,25 +17,28 @@ enum class ToolCapability { SINGLE_EXTRUDER, INDEPENDENT_TOOL, AMS_SLOT }
 
 data class ToolSlot(val index: Int, val capability: ToolCapability)
 
-// machine.json's extruder_colour (a real, per-extruder array - confirmed against this app's own
-// bundled profiles, e.g. slicer_profiles/snapmaker_u1/machine.json declaring 4 real entries,
-// vs. every single-extruder profile declaring exactly 1) is OrcaSlicer's own authoritative
-// per-machine extruder count - the same array nozzle_diameter/extruder_offset are always kept in
-// lockstep with in every bundled profile. Falls back to 1 (single extruder) when absent/malformed
-// rather than guessing higher - a missing/broken declaration must never be read as "more tools
-// than this printer really has." Pure (no Context/AssetManager), matching parseBedShape's own
-// testable-without-a-device convention.
-internal fun parseToolCount(machineJson: String): Int {
-    val obj = org.json.JSONObject(machineJson)
-    val colors = obj.optJSONArray("extruder_colour")?.length() ?: 0
-    // The Prusa XL 5T profile declares a single extruder_colour but five nozzle_diameter entries - the larger of the
-    // two arrays is the machine's real extruder count.
-    val nozzles = obj.optJSONArray("nozzle_diameter")?.length() ?: 0
-    return maxOf(colors, nozzles).takeIf { it > 0 } ?: 1
-}
+// machine.json's physical extruder count: its nozzle_diameter entries, one per nozzle in every bundled profile (the Prusa
+// XL 5T declares five nozzle_diameter entries but a single extruder_colour). extruder_colour is display colour, not
+// hardware, and is sometimes stored as one string. Spools fed through one nozzle (CANVAS, AMS) come from the pack's
+// filamentSlots instead (toolCountOf). Falls back to 1 when absent or
+// malformed rather than guessing higher - a missing or broken declaration must never read as more tools than the
+// printer has. Pure (no Context/AssetManager), matching parseBedShape's testable-without-a-device convention.
+internal fun parseToolCount(machineJson: String): Int =
+    (org.json.JSONObject(machineJson).optJSONArray("nozzle_diameter")?.length() ?: 0).takeIf { it > 0 } ?: 1
 
 internal fun SlicingProfilePack.readToolCount(context: Context): Int =
     toolCountOf(machineText(context))
+
+/** A pack's nozzles and filament slots: what multiToolFamily and toolSlotsFor decide from. */
+data class ToolSetup(val nozzles: Int, val slots: Int) {
+    val family: MultiToolFamily get() = multiToolFamily(nozzles, slots)
+}
+
+internal fun SlicingProfilePack.toolSetupOf(machineJson: String): ToolSetup =
+    ToolSetup(parseToolCount(machineJson), toolCountOf(machineJson))
+
+internal fun toolSetupFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context, custom: CustomMachine? = null): ToolSetup? =
+    slicingProfilePack(model, cosmosGeneration, custom)?.let { it.toolSetupOf(it.machineText(context)) }
 
 // The pack's real slot count: machine.json's extruder count, or the pack's declared filament slots when larger (CANVAS:
 // one nozzle, four lanes - see SlicingProfilePack.filamentSlots). Pure, so SlicingCoordinator and tests share it.
@@ -48,18 +51,14 @@ internal fun SlicingProfilePack.toolCountOf(machineJson: String): Int =
 internal fun toolCountFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context, custom: CustomMachine? = null): Int? =
     slicingProfilePack(model, cosmosGeneration, custom)?.readToolCount(context)
 
-// A single-extruder machine's one real slot is never AMS/toolchanger-shaped - real signal, not
-// invented. A multi-slot machine could in principle be either INDEPENDENT_TOOL (a real physical
-// toolchanger, e.g. Snapmaker U1/multiACE, Prusa XL) or AMS_SLOT (filament-swap-through-one-
-// nozzle, e.g. a future multi-slot Bambu profile) - this app has no bundled profile today whose
-// own machine.json distinguishes the two (OrcaSlicer's config format doesn't carry that
-// distinction either; it only declares *how many* extruder identities exist, not the physical
-// mechanism behind them), so toolSlotsFor conservatively reports INDEPENDENT_TOOL for every
-// multi-slot case until a real per-model override is needed - not asserted as always correct,
-// just the only real signal available today.
-internal fun toolSlotsFor(toolCount: Int): List<ToolSlot> =
-    if (toolCount <= 1) listOf(ToolSlot(0, ToolCapability.SINGLE_EXTRUDER))
-    else (0 until toolCount).map { ToolSlot(it, ToolCapability.INDEPENDENT_TOOL) }
+// Each slot's capability, from the same decision as multiToolFamily: one nozzle per slot is an independent tool
+// (toolchanger, IDEX); on a machine whose spools share a nozzle (AMS, CFS, ACE, MMU3, CANVAS) every slot is a
+// filament-swap slot.
+internal fun toolSlotsFor(setup: ToolSetup): List<ToolSlot> = when (setup.family) {
+    MultiToolFamily.SINGLE -> listOf(ToolSlot(0, ToolCapability.SINGLE_EXTRUDER))
+    MultiToolFamily.TOOLCHANGER -> (0 until setup.slots).map { ToolSlot(it, ToolCapability.INDEPENDENT_TOOL) }
+    MultiToolFamily.FILAMENT_SWAP, MultiToolFamily.MIXED -> (0 until setup.slots).map { ToolSlot(it, ToolCapability.AMS_SLOT) }
+}
 
 // Phase 8 follow-up (§11, §16, WO-27): the bundled filament.json's own real filament_diameter
 // value (every bundled profile's own actual choice, e.g. "1.75" - not a hardcoded assumption).

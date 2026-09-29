@@ -35,6 +35,12 @@
       "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
       "date": "2026-09-28",
       "note": "Level 4 rerun on the owner's PAXX U1 with calipers, owner at the printer, built from ca84486 (paxx-u1 1.1.0). Every test PASS: towers 20.0/20.0, hole 8.0, height 10.43, wall 1.27 mm; homing confirmed from printer state after the G28 reply was lost. Supersedes 58f24794 for physical printing."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "cc752caddf5c6862142bda44c6e4cc41fdf00e193c593aaba8749fa48dd3ae01",
+      "date": "2026-09-29",
+      "note": "Level 2 run on the owner's PAXX U1, built from b478c73 (paxx-u1 1.2.0). Every test up to level 2 PASS. First run of the delete_leftovers cleanup on hardware: approved once, deleted the two earlier Test Grid files; only the loaded print file remained."
     }
   ],
   "format": "nozzle.evidence-acceptance",

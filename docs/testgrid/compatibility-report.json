@@ -245,17 +245,17 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+      "current": "5624aa6e-7943-429a-ad8d-22030546dbfb",
       "firmware": {
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
       },
       "gradeSources": {
-        "controls": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
-        "file_transfer": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
-        "monitoring": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "controls": "5624aa6e-7943-429a-ad8d-22030546dbfb",
+        "file_transfer": "5624aa6e-7943-429a-ad8d-22030546dbfb",
+        "monitoring": "5624aa6e-7943-429a-ad8d-22030546dbfb",
         "physical_print": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
-        "slicing": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+        "slicing": "5624aa6e-7943-429a-ad8d-22030546dbfb"
       },
       "grades": {
         "controls": "UNVERIFIED",
@@ -281,7 +281,7 @@
           "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
           "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
@@ -299,7 +299,7 @@
           "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
           "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
@@ -317,7 +317,7 @@
           "runId": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
           "source": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
@@ -335,7 +335,7 @@
           "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
           "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
@@ -353,7 +353,7 @@
           "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
           "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
@@ -372,6 +372,24 @@
           "source": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214.nozzle-evidence.zip",
           "suite": "paxx-u1 1.1.0",
           "supersededBy": null
+        },
+        {
+          "bundleDigest": "cc752caddf5c6862142bda44c6e4cc41fdf00e193c593aaba8749fa48dd3ae01",
+          "completedAt": 1790680173938,
+          "contentDigest": "da2e8cb9567cd77ede61de5a4d498984f0330c1ae409f519aae45bb0905943c3",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "5624aa6e-7943-429a-ad8d-22030546dbfb",
+          "source": "cc752caddf5c6862142bda44c6e4cc41fdf00e193c593aaba8749fa48dd3ae01.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.2.0",
+          "supersededBy": null
         }
       ],
       "note": "",
@@ -384,17 +402,17 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+      "current": "5624aa6e-7943-429a-ad8d-22030546dbfb",
       "firmware": {
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
       },
       "gradeSources": {
         "controls": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
-        "file_transfer": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
-        "monitoring": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "file_transfer": "5624aa6e-7943-429a-ad8d-22030546dbfb",
+        "monitoring": "5624aa6e-7943-429a-ad8d-22030546dbfb",
         "physical_print": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
-        "slicing": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+        "slicing": "5624aa6e-7943-429a-ad8d-22030546dbfb"
       },
       "grades": {
         "controls": "PASS",
@@ -420,7 +438,7 @@
           "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
           "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
@@ -438,7 +456,7 @@
           "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
           "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
@@ -456,7 +474,7 @@
           "runId": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
           "source": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
@@ -474,7 +492,7 @@
           "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
           "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
@@ -492,7 +510,7 @@
           "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
           "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+          "supersededBy": "5624aa6e-7943-429a-ad8d-22030546dbfb"
         },
         {
           "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
@@ -510,6 +528,24 @@
           "runId": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
           "source": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214.nozzle-evidence.zip",
           "suite": "paxx-u1 1.1.0",
+          "supersededBy": null
+        },
+        {
+          "bundleDigest": "cc752caddf5c6862142bda44c6e4cc41fdf00e193c593aaba8749fa48dd3ae01",
+          "completedAt": 1790680173938,
+          "contentDigest": "da2e8cb9567cd77ede61de5a4d498984f0330c1ae409f519aae45bb0905943c3",
+          "grades": {
+            "controls": "SKIPPED",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "5624aa6e-7943-429a-ad8d-22030546dbfb",
+          "source": "cc752caddf5c6862142bda44c6e4cc41fdf00e193c593aaba8749fa48dd3ae01.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.2.0",
           "supersededBy": null
         }
       ],

@@ -6,18 +6,18 @@ configurations without physical evidence are UNVERIFIED. "(unreviewed)" means no
 
 | Printer | Firmware | Nozzle build | Adapter | Scope | Slicing | File transfer | Monitoring | Controls | Physical printing | Current evidence |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Bambu Lab X1 Carbon | bambu-lan | — | android-bambu-lan | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite bambu-lan 1.1.0). |
-| Elegoo Centauri Carbon | cosmos | — | android-moonraker | Multi-material / tool changing | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0). |
-| Elegoo Centauri Carbon | cosmos | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (reference suite cosmos-centauri-carbon 1.1.0). |
-| Elegoo Centauri Carbon | elegoo-stock | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.1.0). |
-| Elegoo Centauri Carbon | opencentauri-patched | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite opencentauri-patched 1.1.0). |
-| Generic Klipper | klipper | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite generic-klipper 1.1.0). |
-| Generic OctoPrint printer | octoprint | — | android-octoprint | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite octoprint 1.1.0). |
-| Prusa MK4S | prusalink | — | android-prusalink | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite prusalink 1.1.0). |
+| Bambu Lab X1 Carbon | bambu-lan | — | android-bambu-lan | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite bambu-lan 1.2.0). |
+| Elegoo Centauri Carbon | cosmos | — | android-moonraker | Multi-material / tool changing | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (reference suite cosmos-centauri-carbon 1.2.0). |
+| Elegoo Centauri Carbon | cosmos | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (reference suite cosmos-centauri-carbon 1.2.0). |
+| Elegoo Centauri Carbon | elegoo-stock | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.2.0). |
+| Elegoo Centauri Carbon | opencentauri-patched | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite opencentauri-patched 1.2.0). |
+| Generic Klipper | klipper | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite generic-klipper 1.2.0). |
+| Generic OctoPrint printer | octoprint | — | android-octoprint | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite octoprint 1.2.0). |
+| Prusa MK4S | prusalink | — | android-prusalink | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite prusalink 1.2.0). |
 | Snapmaker U1 | paxx-extended 1.6.0.267_20260815150420 | 0.1.0.testgrid | android-moonraker | Multi-material / tool changing | PASS | UNVERIFIED | PASS | UNVERIFIED | PASS | physical run `2da1f8f0` (paxx-u1 1.1.0), bundle `2d3afb851e9f` |
 | Snapmaker U1 | paxx-extended 1.6.0.267_20260815150420 | 0.1.0.testgrid | android-moonraker | Single material | PASS | PASS | PASS | PASS | PASS | physical run `2da1f8f0` (paxx-u1 1.1.0), bundle `2d3afb851e9f` |
-| Snapmaker U1 | snapmaker-stock | — | android-moonraker | Multi-material / tool changing | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0). |
-| Snapmaker U1 | snapmaker-stock | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite snapmaker-u1-stock 1.1.0). |
+| Snapmaker U1 | snapmaker-stock | — | android-moonraker | Multi-material / tool changing | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite snapmaker-u1-stock 1.2.0). |
+| Snapmaker U1 | snapmaker-stock | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite snapmaker-u1-stock 1.2.0). |
 
 ## History
 

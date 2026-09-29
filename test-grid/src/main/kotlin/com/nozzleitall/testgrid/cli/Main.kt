@@ -43,6 +43,8 @@ Commands:
   verify <bundle.zip>...               Verify integrity and completeness.
   preview <bundle.zip>                 Print exactly what a bundle contains.
   store-add --store <dir> <bundle.zip>...  File verified bundles under their digest (never overwrites).
+  index --bundles <dir> --location <text> --out <index.json>
+                                       List every verified bundle (digest, size, run, suite, level, printer) and where it is kept.
   report --bundles <dir|zip>... [--ledger acceptance.json] [--markdown out.md] [--json out.json]
                                        Build the compatibility matrix from bundles plus the bundled suites.
 
@@ -61,6 +63,7 @@ fun main(args: Array<String>) {
             "verify" -> verify(a.drop(1))
             "preview" -> preview(a.drop(1))
             "store-add" -> storeAdd(a.drop(1))
+            "index" -> index(a.drop(1))
             "report" -> report(a.drop(1))
             else -> { System.err.println("Unknown command ${a.first()}.\n\n$USAGE"); 2 }
         }
@@ -198,4 +201,28 @@ private fun report(a: List<String>): Int {
     opt(a, "--markdown")?.let { File(it).apply { absoluteFile.parentFile.mkdirs() }.writeText(md); println("Wrote $it") } ?: print(md)
     opt(a, "--json")?.let { File(it).apply { absoluteFile.parentFile.mkdirs() }.writeBytes(Canon.bytes(ReportBuilder.json(report))); println("Wrote $it") }
     return if (report.rejected.isEmpty()) 0 else 3
+}
+
+/** The committed record of the evidence store: bundles themselves may live outside git (photo bundles are megabytes). */
+private fun index(a: List<String>): Int {
+    val dir = File(opt(a, "--bundles") ?: throw IllegalArgumentException("--bundles is required"))
+    val location = opt(a, "--location") ?: throw IllegalArgumentException("--location is required")
+    val out = File(opt(a, "--out") ?: throw IllegalArgumentException("--out is required"))
+    val rows = dir.listFiles { f -> f.name.endsWith(".zip") }!!.sortedBy { it.name }.mapNotNull { f ->
+        when (val r = BundleReader.read(f.readBytes())) {
+            is BundleReader.Result.Invalid -> { println("SKIP ${f.name}: ${r.reasons.first()}"); null }
+            is BundleReader.Result.Valid -> {
+                val e = r.bundle.evidence; val run = e.getJSONObject("run"); val t = e.getJSONObject("target")
+                mapOf("bundleDigest" to r.bundle.bundleDigest, "contentDigest" to r.bundle.contentDigest, "file" to f.name, "bytes" to f.length(),
+                    "runId" to run.optString("runId"), "completedAt" to run.optLong("completedAt"), "maxSafetyLevel" to run.optInt("maxSafetyLevel"),
+                    "suite" to "${e.getJSONObject("suite").optString("id")} ${e.getJSONObject("suite").optString("version")}",
+                    "printer" to "${t.optString("manufacturer")} ${t.optString("model")}", "firmwareFamily" to t.getJSONObject("firmware").optString("family"),
+                    "kind" to t.optString("kind"), "attachments" to r.bundle.files.keys.count { it.startsWith("attachments/") }, "location" to location)
+            }
+        }
+    }
+    out.absoluteFile.parentFile.mkdirs()
+    out.writeBytes(Canon.bytes(mapOf("format" to "nozzle.evidence-index", "version" to listOf(1, 0), "bundles" to rows)))
+    println("Wrote ${out.path}: ${rows.size} bundles")
+    return 0
 }

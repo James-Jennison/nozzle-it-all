@@ -33,6 +33,10 @@ data class LiveIdentity(val firmware: FirmwareIdentity?, val hostname: String, v
 data class StatusReading(
     val state: String, val ready: Boolean, val nozzle: Double?, val nozzleTarget: Double?, val bed: Double?, val bedTarget: Double?,
     val progress: Float?, val filename: String, val observedAtMillis: Long,
+    /** Klipper's toolhead.homed_axes ("xyz" when fully homed); null when the connection can't report it. */
+    val homedAxes: String? = null,
+    /** Toolhead position X, Y, Z in mm; null when not reported. */
+    val position: List<Double>? = null,
 ) {
     val idle: Boolean get() = ready && state in IDLE_STATES
 

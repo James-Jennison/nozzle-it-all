@@ -5,7 +5,7 @@
     0
   ],
   "id": "octoprint",
-  "suiteVersion": "1.0.0",
+  "suiteVersion": "1.1.0",
   "title": "Printer through OctoPrint",
   "description": "For testers with a printer behind OctoPrint. One OctoPrint result covers only that printer, firmware and OctoPrint setup. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
@@ -181,7 +181,7 @@
           "id": "tower-x",
           "kind": "observe",
           "params": {
-            "question": "Measure the tower's outside width along X.",
+            "question": "Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25.",
             "response": "number",
             "unit": "mm"
           },

@@ -6,7 +6,7 @@ the format and the workflow; they are not evidence for any printer, and every gr
 | File | How it was made |
 |---|---|
 | `simulated-paxx-u1.nozzle-evidence.zip` | `simulate --suite paxx-u1 --preset PAXX_U1 --level 4`: every test recorded PASS by the simulation |
-| `simulated-cosmos-lost-reply.nozzle-evidence.zip` | `simulate --suite cosmos-centauri-carbon --preset COSMOS_CC --level 4 --fault lost_ack:home`: the homing reply is "lost", so `controls-idle` is OUTCOME_UNKNOWN (UNVERIFIED), reviewed, never resent; CANVAS tests SKIPPED (no AFC detected) |
+| `simulated-cosmos-lost-reply.nozzle-evidence.zip` | `simulate --suite cosmos-centauri-carbon --preset COSMOS_CC --level 4 --fault lost_ack:home`: the homing reply is "lost", so `controls-idle` is OUTCOME_UNKNOWN (UNVERIFIED), reviewed, never resent; CANVAS tests SKIPPED (no AFC detected). Made before lost-reply confirmation existed: the same run today confirms the homing from the printer's homed axes and passes it; `--fault lost_ack_noeffect:home` reproduces an unknown outcome |
 | `compatibility-report.md`, `.json` | `report` over those two bundles plus a deliberately tampered copy of the first (`tampered-copy.nozzle-evidence.zip`, not kept), which is listed under "Bundles not used" |
 
 ```bash

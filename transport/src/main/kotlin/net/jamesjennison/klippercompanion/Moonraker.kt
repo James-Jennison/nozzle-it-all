@@ -253,6 +253,14 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
      * family before a suite runs. A part that can't be read reads as absent, which never classifies a printer as PAXX or
      * CANVAS by mistake.
      */
+    /** Read-only: which axes are homed ("xyz") and where the toolhead is. Test Mode uses it to confirm a move whose reply was lost. */
+    fun toolheadPosition(): Pair<String, List<Double>> {
+        val t = (request("printer/objects/query", mapOf("toolhead" to "homed_axes,position")) as? JSONObject)?.optJSONObject("status")?.optJSONObject("toolhead")
+            ?: throw ApiFailure("Toolhead state unavailable.")
+        val pos = t.optJSONArray("position")?.let { a -> (0 until minOf(3, a.length())).map { a.optDouble(it) } }.orEmpty()
+        return t.optString("homed_axes") to pos
+    }
+
     fun discoveryDetails(): MoonrakerDiscoveryDetails {
         val info = request("printer/info") as? JSONObject ?: throw ApiFailure("Printer information unavailable.")
         val paxx = try { PrinterDiscovery.hasExtendedConfig(request("server/files/list", mapOf("root" to "config")) as? JSONArray) } catch (e: Exception) { false }

@@ -23,7 +23,8 @@ class VirtualClock(@Volatile private var t: Long = System.currentTimeMillis()) {
  * (see FirmwareIdentity.kt); its address, hostname and key are deliberately realistic so redaction is exercised.
  *
  * [faults]: "lost_ack:<step kind>" performs the action but reports an unknown outcome (a reply lost after the printer
- * acted); "reject:<step kind>" refuses it; "guard_disabled" makes uploadPreflight accept anything (a broken guard).
+ * acted); "lost_ack_noeffect:<step kind>" reports an unknown outcome without acting (the request never arrived);
+ * "reject:<step kind>" refuses it; "guard_disabled" makes uploadPreflight accept anything (a broken guard).
  */
 class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = System::currentTimeMillis, val faults: MutableSet<String> = mutableSetOf()) : TestTarget {
     enum class Preset(val printerKind: PrinterKind, val manufacturer: String, val model: String, val app: String, val version: String,
@@ -51,6 +52,8 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     private var progress = 0f
     private var loaded = ""
     private var uploads = 0
+    private var homedAxes = ""
+    private val position = doubleArrayOf(0.0, 0.0, 0.0)
     private val files = sortedSetOf("benchy.gcode")
 
     override fun identity() = LiveIdentity(FirmwareIdentity(preset.app, preset.version), hostname, preset.paxx, preset.afc)
@@ -59,7 +62,7 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         if (state == "printing") { progress = (progress + 0.1f).coerceAtMost(1f); if (progress >= 1f) { state = "complete"; nozzleTarget = 0.0; bedTarget = 0.0 } }
         nozzle = if (nozzleTarget > 0) nozzleTarget else 24.0
         bed = if (bedTarget > 0) bedTarget else 23.0
-        return StatusReading(state, true, nozzle, nozzleTarget, bed, bedTarget, progress, loaded, clock())
+        return StatusReading(state, true, nozzle, nozzleTarget, bed, bedTarget, progress, loaded, clock(), homedAxes, position.toList())
     }
 
     override fun declaredCapabilities() = CapabilityNames.declared(preset.printerKind, FirmwareFamilies.classify(description, identity()).hardware)
@@ -100,9 +103,11 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
             is ControlAction.StartPrint -> "start_print"; ControlAction.Pause -> "pause"; ControlAction.Resume -> "resume"; ControlAction.Cancel -> "cancel"
         }
         if ("reject:$kind" in faults) return CommandOutcome.Rejected("Printer answered HTTP 400 for $kind at $address", sent = true)
+        if ("lost_ack_noeffect:$kind" in faults) return CommandOutcome.Unknown("No reply from $address/printer/gcode/script within 10 s (Authorization: Bearer $apiKey)")
         when (action) {
             is ControlAction.SetTemperature -> if (action.heater == "bed") bedTarget = action.celsius.toDouble() else nozzleTarget = action.celsius.toDouble()
-            ControlAction.Home, is ControlAction.Jog -> {}
+            ControlAction.Home -> { homedAxes = "xyz"; position.fill(0.0) }
+            is ControlAction.Jog -> { val i = "XYZ".indexOf(action.axis); if (i >= 0) position[i] += action.mm }
             is ControlAction.StartPrint -> { if (action.remotePath !in files) return CommandOutcome.Rejected("File not found: ${action.remotePath}", sent = true); state = "printing"; progress = 0f; loaded = action.remotePath }
             ControlAction.Pause -> state = "paused"
             ControlAction.Resume -> state = "printing"

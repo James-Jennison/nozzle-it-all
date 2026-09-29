@@ -33,19 +33,24 @@ Check, at least:
 
 ## 3. File and record the decision
 
-```bash
-./gradlew -q :test-grid:cli --args="store-add --store docs/testgrid/evidence/bundles received/bundle.zip"
-```
-
-The store names the file after its bundle digest and never overwrites. Then add an entry to
-`docs/testgrid/evidence/acceptance.json`: under `accepted` with `bundleDigest`, `acceptedBy`, `date` and a short
-`note`; or under `rejected` with a `reason`. Commit both; never edit or delete a stored bundle.
-
-## 4. Rebuild the report
+On GTHost, file the bundle in the evidence store (named after its bundle digest, never overwritten):
 
 ```bash
-./gradlew -q :test-grid:cli --args="report --bundles docs/testgrid/evidence/bundles --ledger docs/testgrid/evidence/acceptance.json --markdown docs/testgrid/COMPATIBILITY_REPORT.md --json docs/testgrid/compatibility-report.json"
+./gradlew -q :test-grid:cli --args="store-add --store $HOME/testgrid-evidence/bundles received/bundle.zip"
 ```
+
+Then add an entry to `docs/testgrid/evidence/acceptance.json`: under `accepted` with `bundleDigest`, `acceptedBy`, `date`
+and a short `note`; or under `rejected` with a `reason`. Record any correction beside the bundle in
+`docs/testgrid/evidence/README.md`; never edit or delete a stored bundle.
+
+## 4. Rebuild the index and report
+
+```bash
+./gradlew -q :test-grid:cli --args="index --bundles $HOME/testgrid-evidence/bundles --location gthost-build01:~/testgrid-evidence/bundles --out docs/testgrid/evidence/index.json"
+./gradlew -q :test-grid:cli --args="report --bundles $HOME/testgrid-evidence/bundles --ledger docs/testgrid/evidence/acceptance.json --markdown docs/testgrid/COMPATIBILITY_REPORT.md --json docs/testgrid/compatibility-report.json"
+```
+
+Commit the index, ledger and report (not the bundles).
 
 Promotion to "Verified on hardware" elsewhere (site printers page, `SlicingModelCatalog.verifiedOnHardware`,
 `PrinterCapabilities.verifiedOnRealHardware`) stays a separate, deliberate edit under the rules in

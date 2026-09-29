@@ -23,6 +23,12 @@
       "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
       "date": "2026-09-28",
       "note": "Level 3 run on the owner's PAXX U1, owner at the printer: nozzle 60 C and off, bed 40 C and off, G28, Z +5 mm, heaters off in cleanup; each step approved and confirmed."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
+      "date": "2026-09-28",
+      "note": "Level 4 run on the owner's PAXX U1, owner at the printer. Accepted with corrections: height and thin wall were ruler estimates (remeasured 10.4 mm and 1.1 mm, in tolerance); homing physically worked (G28 reply lost). Physical printing FAIL stands in this bundle until a caliper-measured run supersedes it."
     }
   ],
   "format": "nozzle.evidence-acceptance",

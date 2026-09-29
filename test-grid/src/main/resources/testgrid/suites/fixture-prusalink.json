@@ -5,7 +5,7 @@
     0
   ],
   "id": "prusalink",
-  "suiteVersion": "1.0.0",
+  "suiteVersion": "1.1.0",
   "title": "Prusa printer through PrusaLink",
   "description": "For testers with a PrusaLink printer (MK4S profile shown; other models are separate configurations). Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
@@ -181,7 +181,7 @@
           "id": "tower-x",
           "kind": "observe",
           "params": {
-            "question": "Measure the tower's outside width along X.",
+            "question": "Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25.",
             "response": "number",
             "unit": "mm"
           },

@@ -5,7 +5,7 @@
     0
   ],
   "id": "elegoo-centauri-carbon-stock",
-  "suiteVersion": "1.0.0",
+  "suiteVersion": "1.1.0",
   "title": "Elegoo Centauri Carbon on Elegoo stock firmware",
   "description": "For external testers with an unmodified Centauri Carbon, reached over Elegoo's SDCP LAN protocol. Not COSMOS, not OpenCentauri-patched. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
@@ -186,7 +186,7 @@
           "id": "tower-x",
           "kind": "observe",
           "params": {
-            "question": "Measure the tower's outside width along X.",
+            "question": "Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25.",
             "response": "number",
             "unit": "mm"
           },

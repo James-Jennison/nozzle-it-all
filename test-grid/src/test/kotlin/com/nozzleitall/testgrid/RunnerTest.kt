@@ -142,7 +142,7 @@ class RunnerTest {
 
     @Test fun anUnknownOutcomeIsNeverRetriedAndBlocksEverythingUntilReviewed() {
         val clock = Support.Clock()
-        val sim = SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now, mutableSetOf("lost_ack:set_temperature"))
+        val sim = SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now, mutableSetOf("lost_ack_noeffect:set_temperature"))
         val t = Counting(sim)
         val st = Support.start("paxx-u1", t, clock)
         val s = st.session
@@ -179,7 +179,7 @@ class RunnerTest {
     @Test fun aStaleReadingCannotResolveAnUnknownOutcome() {
         val clock = Support.Clock()
         // The printer's own clock lags: its readings predate the unknown outcome.
-        val sim = SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, { 1L }, mutableSetOf("lost_ack:set_temperature"))
+        val sim = SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, { 1L }, mutableSetOf("lost_ack_noeffect:set_temperature"))
         val st = Support.start("paxx-u1", sim, clock)
         var p = st.session.proceed()
         while (p !is Pending.UnknownReview) p = when (p) {
@@ -423,5 +423,52 @@ class RunnerTest {
         assertEquals(1, t.deleted.size)
         assertEquals(StepStatus.SKIPPED, st.session.record.test("transfer")!!.step("cleanup-delete")!!.status)
         assertNull(st.session.record.test("transfer")!!.step("cleanup-delete")!!.confirmation)
+    }
+
+    @Test fun aLostReplyIsConfirmedFromThePrintersStateWhenItCanBe() {
+        // Found on the real U1: G28 homed but its reply timed out. The printer's own state proves it; nothing is resent.
+        val clock = Support.Clock()
+        val t = Counting(SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now, mutableSetOf("lost_ack:home", "lost_ack:set_temperature", "lost_ack:jog")))
+        val st = Support.start("paxx-u1", t, clock, level = SafetyLevel.SUPERVISED_CONTROLS)
+        Support.drive(st.session) { fail("no outcome should stay unknown: ${it.record.unknown}") }
+        val rec = st.session.record.test("controls-idle")!!
+        assertEquals(ResultState.PASS, rec.result)
+        listOf("heat-nozzle", "home", "jog-z").forEach { id ->
+            val step = rec.step(id)!!
+            assertEquals(id, StepStatus.PASSED, step.status)
+            assertTrue(step.detail, step.detail.contains("reply was lost") && step.detail.contains("confirms"))
+            assertTrue(step.data.has("confirmedByState"))
+        }
+        assertTrue(rec.step("home")!!.detail.contains("all axes now homed"))
+        assertTrue(rec.step("jog-z")!!.detail.contains("Z moved from 0.00 to 5.00"))
+        assertEquals(1, t.performed.count { it == ControlAction.Home })
+    }
+
+    @Test fun aLostReplyWithoutProofStaysUnknown() {
+        val clock = Support.Clock()
+        val t = Counting(SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now, mutableSetOf("lost_ack_noeffect:home")))
+        val st = Support.start("paxx-u1", t, clock, level = SafetyLevel.SUPERVISED_CONTROLS)
+        var reviewed = 0
+        Support.drive(st.session) { reviewed++; it.reviewUnknown("checked") }
+        assertEquals(1, reviewed)
+        assertEquals(StepStatus.OUTCOME_UNKNOWN, st.session.record.test("controls-idle")!!.step("home")!!.status)
+        assertEquals(1, t.performed.count { it == ControlAction.Home })
+    }
+
+    @Test fun cleanupSaysPlainlyWhenAFinishedPrintKeepsItsFileLoaded() {
+        val clock = Support.Clock()
+        val st = Support.start("paxx-u1", SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now), clock)
+        val loadedAware = object : TestTarget by st.target {
+            override fun delete(remotePath: String): TransferOutcome =
+                if (status().filename == remotePath) TransferOutcome.Refused("The source is still loaded by the printer. Choose another file.") else st.target.delete(remotePath)
+        }
+        // Re-run the same suite against a target that refuses to delete the loaded file, as LiveFileChanges does.
+        val work = Support.tmp()
+        val s = RunSession.start(Support.suite("paxx-u1"), loadedAware, TargetCheck.inspect(loadedAware), SimulatedSlicer(Support.profiles(), work), Support.env(work, clock), null, SafetyLevel.PHYSICAL_PRINT)
+        Support.drive(s)
+        val step = s.record.test("print-single")!!.cleanup.single()
+        assertEquals(StepStatus.SKIPPED, step.status)
+        assertTrue(step.detail, step.detail.startsWith("Left on the printer"))
+        assertTrue(step.data.has("leftOnPrinter"))
     }
 }

@@ -771,7 +771,11 @@ class RunSession private constructor(
                 val up = latestUpload(step)?.takeIf { !it.optBoolean("deleted") } ?: return StepStatus.SKIPPED to "Nothing uploaded by this run is left to delete."
                 when (val r = printer().delete(up.getString("remotePath"))) {
                     is TransferOutcome.Verified -> { up.put("deleted", true); StepStatus.PASSED to "Deleted and verified absent." }
-                    is TransferOutcome.Refused -> (if (r.sent) StepStatus.FAILED else StepStatus.BLOCKED) to r.reason
+                    // A finished print keeps its file loaded, and the app never deletes a loaded file (found on the level-4 run).
+                    is TransferOutcome.Refused -> if (!r.sent && runCatching { printer().status().filename }.getOrNull() == up.getString("remotePath")) {
+                        s.data.put("leftOnPrinter", up.getString("remotePath"))
+                        StepStatus.SKIPPED to "Left on the printer: it still has ${up.getString("remotePath")} loaded from the print, and Nozzle never deletes a loaded file. Delete it on the printer once another file is loaded."
+                    } else (if (r.sent) StepStatus.FAILED else StepStatus.BLOCKED) to r.reason
                     is TransferOutcome.Unknown -> StepStatus.OUTCOME_UNKNOWN to r.reason
                 }
             }
@@ -784,10 +788,52 @@ class RunSession private constructor(
                 when (val r = printer().perform(action)) {
                     CommandOutcome.Accepted -> StepStatus.PASSED to "The printer acknowledged: ${action.describe()}"
                     is CommandOutcome.Rejected -> (if (r.sent) StepStatus.FAILED else StepStatus.BLOCKED) to r.reason
-                    is CommandOutcome.Unknown -> StepStatus.OUTCOME_UNKNOWN to r.reason
+                    is CommandOutcome.Unknown -> confirmByState(action, fresh, s)?.let { StepStatus.PASSED to "The printer's reply was lost (${r.reason.take(80)}), but its state confirms it: $it" }
+                        ?: (StepStatus.OUTCOME_UNKNOWN to r.reason)
                 }
             }
             StepKind.OBSERVE, StepKind.ATTACH -> throw IllegalStateException("Operator steps are not executed automatically.")
+        }
+    }
+
+    /**
+     * After a lost reply, looks for proof in the printer's own state that [action] took effect, polling for up to three
+     * minutes (a homing move can outlast the reply). Read-only; the command is never resent. Found on the level-3 run on the
+     * real U1: G28 homed the printer but its reply timed out, and the test was recorded as unknown although the printer
+     * could have shown the result. Null when nothing proves it; the outcome then stays unknown.
+     */
+    private fun confirmByState(action: ControlAction, before: StatusReading, s: StepRecord): String? {
+        val deadline = now() + 180_000
+        while (true) {
+            val r = try { printer().status() } catch (e: Exception) { null }
+            val proof = r?.let { stateProof(action, before, it) }
+            if (proof != null) {
+                s.data.put("confirmedByState", JSONObject().put("state", r.state).put("nozzleTarget", r.nozzleTarget).put("bedTarget", r.bedTarget)
+                    .put("homedAxes", r.homedAxes).put("position", r.position?.let { JSONArray(it) }).put("observedAt", r.observedAtMillis))
+                log("Reply lost; confirmed by printer state: $proof")
+                return proof
+            }
+            if (now() >= deadline || interruptRequest != null) return null
+            env.sleep(3000)
+        }
+    }
+
+    private fun stateProof(a: ControlAction, before: StatusReading, r: StatusReading): String? {
+        fun homed(h: String?) = h != null && "x" in h && "y" in h && "z" in h
+        return when (a) {
+            is ControlAction.SetTemperature -> (if (a.heater == "bed") r.bedTarget else r.nozzleTarget)
+                ?.takeIf { kotlin.math.abs(it - a.celsius) < 0.5 }?.let { "the ${a.heater} target reads ${"%.0f".format(java.util.Locale.ROOT, it)} °C" }
+            // Only proof when the axes were not all homed before the command: otherwise nothing distinguishes a new homing.
+            ControlAction.Home -> if (before.homedAxes != null && !homed(before.homedAxes) && homed(r.homedAxes) && r.idle)
+                "all axes now homed (homed axes were \"${before.homedAxes}\")" else null
+            is ControlAction.Jog -> {
+                val i = "XYZ".indexOf(a.axis); val b = before.position?.getOrNull(i); val p = r.position?.getOrNull(i)
+                if (i >= 0 && b != null && p != null && kotlin.math.abs((p - b) - a.mm) < 0.05 && r.idle) "${a.axis} moved from ${"%.2f".format(java.util.Locale.ROOT, b)} to ${"%.2f".format(java.util.Locale.ROOT, p)} mm" else null
+            }
+            is ControlAction.StartPrint -> if (r.state in setOf("printing", "paused", "complete") && r.filename == a.remotePath) "the printer is ${r.state} ${a.remotePath}" else null
+            ControlAction.Pause -> if (r.state == "paused") "the printer is paused" else null
+            ControlAction.Resume -> if (r.state == "printing" && before.state == "paused") "the printer is printing again" else null
+            ControlAction.Cancel -> if (r.state == "cancelled") "the print is cancelled" else null
         }
     }
 

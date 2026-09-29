@@ -82,7 +82,9 @@ class AndroidTestTarget(
 
     override fun status(): StatusReading = service { s ->
         val snap = s.snapshot()
-        StatusReading(snap.state, snap.ready, snap.nozzle, snap.nozzleTarget, snap.bed, snap.bedTarget, snap.progress, snap.filename, clock())
+        val toolhead = if (moonraker) runCatching { (s as? Moonraker)?.toolheadPosition() }.getOrNull() else null
+        StatusReading(snap.state, snap.ready, snap.nozzle, snap.nozzleTarget, snap.bed, snap.bedTarget, snap.progress, snap.filename, clock(),
+            toolhead?.first, toolhead?.second?.takeIf { it.size == 3 })
     }
 
     override fun declaredCapabilities(): Set<String> = CapabilityNames.declared(profile.kind)

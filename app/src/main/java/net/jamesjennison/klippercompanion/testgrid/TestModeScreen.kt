@@ -434,6 +434,7 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
             "pass_partial_fail" -> Column { listOf("pass" to "Pass", "partial" to "Partly", "fail" to "Fail").forEach { (v, l) -> ChoiceRow(value == v, l, null, "answer-$v") { value = v } } }
             "choice" -> Column { (0 until (params.optJSONArray("choices")?.length() ?: 0)).map { params.getJSONArray("choices").getString(it) }.forEach { v -> ChoiceRow(value == v, v.replaceFirstChar { it.uppercase() }, null, "answer-$v") { value = v } } }
             "number" -> OutlinedTextField(value, { value = it }, label = { Text("Measured value" + (params.optString("unit").takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")) },
+                placeholder = { Text("with decimals, e.g. 10.58") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.testTag("answer-number"))
             else -> OutlinedTextField(value, { value = it }, label = { Text("What you saw") }, modifier = Modifier.fillMaxWidth().testTag("answer-text"))
         }

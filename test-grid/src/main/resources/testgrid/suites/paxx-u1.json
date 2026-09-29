@@ -5,7 +5,7 @@
     0
   ],
   "id": "paxx-u1",
-  "suiteVersion": "1.0.0",
+  "suiteVersion": "1.1.0",
   "title": "Snapmaker U1 on PAXX extended firmware",
   "description": "Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.",
   "coverage": "reference",
@@ -627,7 +627,7 @@
           "id": "tower-x",
           "kind": "observe",
           "params": {
-            "question": "Measure the tower's outside width along X with calipers.",
+            "question": "Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25.",
             "response": "number",
             "unit": "mm"
           },
@@ -640,7 +640,7 @@
           "id": "tower-y",
           "kind": "observe",
           "params": {
-            "question": "Measure the tower's outside width along Y.",
+            "question": "Tower width along Y: across the outside of the tower, at right angles to X. Target 20.0 mm; passes 19.75 to 20.25.",
             "response": "number",
             "unit": "mm"
           },
@@ -653,7 +653,7 @@
           "id": "hole",
           "kind": "observe",
           "params": {
-            "question": "Measure the square hole's width.",
+            "question": "Square hole through the middle of the tower: its width, across the middle, with the calipers' inside jaws. Target 8.0 mm; passes 7.7 to 8.3.",
             "response": "number",
             "unit": "mm"
           },
@@ -666,7 +666,7 @@
           "id": "height",
           "kind": "observe",
           "params": {
-            "question": "Measure the tower's total height, including the base plate.",
+            "question": "Total height, with calipers: from the bottom of the base plate to the top of the tower. Target 10.6 mm; passes 10.35 to 10.85. A ruler can't resolve this: without calipers choose Can't observe this.",
             "response": "number",
             "unit": "mm"
           },
@@ -679,7 +679,7 @@
           "id": "wall",
           "kind": "observe",
           "params": {
-            "question": "Measure the thin wall's thickness.",
+            "question": "Thin wall thickness, with calipers: the single 20 mm-long fin standing on its own, not the tower's walls. Target 1.2 mm; passes 1.0 to 1.4. Without calipers choose Can't observe this.",
             "response": "number",
             "unit": "mm"
           },

@@ -5,7 +5,7 @@
     0
   ],
   "id": "bambu-lan",
-  "suiteVersion": "1.0.0",
+  "suiteVersion": "1.1.0",
   "title": "Bambu Lab printer in LAN mode",
   "description": "For testers with a Bambu Lab printer in LAN-only mode. Bambu printers take a .gcode.3mf bundle; the transfer and print tests stay BLOCKED in Test Mode until that path is implemented there. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
@@ -181,7 +181,7 @@
           "id": "tower-x",
           "kind": "observe",
           "params": {
-            "question": "Measure the tower's outside width along X.",
+            "question": "Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25.",
             "response": "number",
             "unit": "mm"
           },

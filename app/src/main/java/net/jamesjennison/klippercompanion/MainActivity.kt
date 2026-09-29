@@ -824,7 +824,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Text("${job.status} · ${formatDuration(job.duration)} · ${formatMaterial(job.filamentMm)}")
                                 job.started?.takeIf { it < 253402300799.0 }?.let { Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date((it*1000).toLong()))) }
                                 val again = Reprint.resolve(job.filename, state.catalog.files)
-                                if(again != null) OutlinedButton({pending=Moonraker.start(again) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error"),modifier=Modifier.testTag("reprint:${job.id}")){Text("Reprint",maxLines=1)}
+                                if(again != null) OutlinedButton({pending=Moonraker.start(again, state.kindFor(state.address)) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error"),modifier=Modifier.testTag("reprint:${job.id}")){Text("Reprint",maxLines=1)}
                                 else Text("File no longer on the printer",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                         }
@@ -855,7 +855,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton({workspace.download(state.address,file,state.apiKeyFor(state.address));uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected&&!workspace.loading){Text("Download / preview")}
                                     OutlinedButton({selectFile(file);uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected,modifier=Modifier.testTag("details:$file")){Text("Details")}
-                                    OutlinedButton({pending=Moonraker.start(file) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error")){Text("Start print")}
+                                    OutlinedButton({pending=Moonraker.start(file, state.kindFor(state.address)) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error")){Text("Start print")}
                                 }
                             } }
                         }

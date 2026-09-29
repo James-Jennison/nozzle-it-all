@@ -980,7 +980,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                 execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest = PrusaLinkPrintRequest(gcode, filename),
                                     allowedStates = setOf("standby", "complete", "cancelled", "error")), state.generation)
                             }
-                            else -> execute(Moonraker.start(filename), state.generation)
+                            else -> execute(Moonraker.start(filename, state.kindFor(state.address)), state.generation)
                         }
                         close()
                     }, enabled = !working && sliceError == null && stagedFilename != null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-and-print-confirm")) { Text("Start print") }

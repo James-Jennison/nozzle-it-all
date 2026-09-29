@@ -147,13 +147,14 @@ class AndroidTestTarget(
                 ControlAction.Home -> PrinterCommand("Home all axes", "printer/gcode/script", mapOf("script" to "G28"))
                 is ControlAction.Jog -> PrinterCommand("Jog ${action.axis}", "printer/gcode/script",
                     mapOf("script" to "G91\nG1 ${action.axis}${"%.2f".format(java.util.Locale.ROOT, action.mm)} F3000\nG90"))
-                is ControlAction.StartPrint -> Moonraker.start(action.remotePath)
+                is ControlAction.StartPrint -> Moonraker.start(action.remotePath, profile.kind)
                 ControlAction.Pause -> PrinterCommand("Pause print", "printer/print/pause", allowedStates = setOf("printing"))
                 ControlAction.Resume -> PrinterCommand("Resume print", "printer/print/resume", allowedStates = setOf("paused"))
                 ControlAction.Cancel -> PrinterCommand("Cancel print", "printer/print/cancel", allowedStates = setOf("printing", "paused"))
             }
         } catch (e: Exception) { return@moonraker CommandOutcome.Rejected(e.message ?: "Refused before sending.", sent = false) }
         try { m.command(command); CommandOutcome.Accepted }
+        catch (e: net.jamesjennison.klippercompanion.U1StartRefused) { CommandOutcome.Rejected(e.message ?: "The printer refused to start.", sent = true) }
         catch (e: Exception) { CommandOutcome.Unknown("${e.message ?: e.javaClass.simpleName}. The printer may have received the command; check it before continuing.") }
     }
 

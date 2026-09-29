@@ -57,6 +57,22 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
                 stats?.optJSONObject("info")?.optInt("total_layer")?.takeIf { it > 0 }, active)
         }
         fun start(file: String) = PrinterCommand("Start $file", "printer/print/start", mapOf("filename" to file), setOf("standby", "complete", "cancelled", "error"))
+
+        /**
+         * How a print is started on [kind]. A Snapmaker U1 (stock or PAXX) starts through Snapmaker's own
+         * `server.files.start_local_print` with `bed_level` on, as Snapmaker's slicer does: the U1's Moonraker turns each
+         * option into a parameter of `SDCARD_PRINT_FILE_WITH_PARAMETERS`, which sets `print_task_config.auto_bed_leveling`,
+         * and the firmware runs the start G-code's adaptive `BED_MESH_CALIBRATE` only when that is set (Snapmaker/u1-moonraker
+         * a308cfa, snapmakercloud.py and klippy_apis.start_print_advanced). A plain `printer/print/start` left it at the
+         * printer's last value; found on a real PAXX U1, where the adaptive mesh was skipped. Every other printer: [start].
+         */
+        fun start(file: String, kind: PrinterKind): PrinterCommand =
+            if (kind == PrinterKind.SNAPMAKER_U1 || kind == PrinterKind.SNAPMAKER_U1_PAXX)
+                PrinterCommand("Start $file", U1_START_LOCAL_PRINT, mapOf("filename" to file, "bed_level" to "1"), setOf("standby", "complete", "cancelled", "error"))
+            else start(file)
+
+        /** Marks the U1 start in a PrinterCommand; sent as JSON-RPC on Moonraker's websocket (the U1 refuses it over HTTP). */
+        const val U1_START_LOCAL_PRINT = "server/files/start_local_print"
         fun macro(name: String): PrinterCommand = MoonrakerRules.macro(name)
     }
     private fun url(path: String, args: Map<String, String> = emptyMap()): HttpUrl {
@@ -369,12 +385,47 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
         }
     }
     override fun command(command: PrinterCommand) {
+        if (command.path == U1_START_LOCAL_PRINT) { startLocalPrint(command); return }
         // No retries or redirects: lost acknowledgement leaves the result unknown.
         val result = request(command.path, command.arguments, mutate = true, httpClient = commandClient)
         if (result != "ok") throw ApiFailure("Unrecognized command acknowledgement; inspect printer state.")
     }
+    /**
+     * The U1's start_local_print, as one JSON-RPC request on Moonraker's websocket, sent once. The U1 scans the file's
+     * metadata before starting, so the reply can take a while. A reply with an error, or `state` other than success,
+     * means the printer refused ([U1StartRefused]); no reply leaves the outcome unknown (ApiFailure), never retried.
+     */
+    private fun startLocalPrint(command: PrinterCommand) {
+        val file = command.arguments["filename"]?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("No file to start.")
+        val id = java.security.SecureRandom().nextInt(Int.MAX_VALUE)
+        val options = JSONObject().apply { command.arguments["bed_level"]?.toIntOrNull()?.let { put("bed_level", it) } }
+        val request = JSONObject().put("jsonrpc", "2.0").put("method", "server.files.start_local_print").put("id", id)
+            .put("params", JSONObject().put("path", file).put("print_plate", 1).put("options", options))
+        val reply = java.util.concurrent.ArrayBlockingQueue<Result<JSONObject>>(1)
+        val socket = commandClient.newWebSocket(Request.Builder().url(base.resolve("websocket")!!).build(), object : okhttp3.WebSocketListener() {
+            override fun onOpen(webSocket: okhttp3.WebSocket, response: okhttp3.Response) { webSocket.send(request.toString()) }
+            override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
+                val msg = try { JSONObject(text) } catch (e: org.json.JSONException) { return }
+                if (msg.optInt("id", -1) == id) reply.offer(Result.success(msg))
+            }
+            override fun onFailure(webSocket: okhttp3.WebSocket, t: Throwable, response: okhttp3.Response?) {
+                reply.offer(Result.failure(if (response?.code == 401 || response?.code == 403) U1StartRefused("Moonraker requires authentication for this printer.") else t))
+            }
+        })
+        try {
+            val msg = reply.poll(90, java.util.concurrent.TimeUnit.SECONDS)?.getOrElse { throw ApiFailure("Lost the connection while starting the print (${it.message}); check the printer before trying again.") }
+                ?: throw ApiFailure("No reply from the printer within 90 s; check whether the print started before trying again.")
+            msg.optJSONObject("error")?.let { throw U1StartRefused("The printer refused to start: ${it.optString("message", "error")}") }
+            val result = msg.optJSONObject("result") ?: throw ApiFailure("Unrecognized reply to the print start; check the printer.")
+            if (result.optString("state") != "success") throw U1StartRefused("The printer refused to start: ${result.optString("message", result.optString("state"))}")
+        } finally { socket.close(1000, null) }
+    }
+
     override fun close() { client.dispatcher.cancelAll(); client.connectionPool.evictAll(); commandClient.dispatcher.cancelAll(); commandClient.connectionPool.evictAll() }
 }
 
 /** See [Moonraker.discoveryDetails]. */
 data class MoonrakerDiscoveryDetails(val hostname: String, val paxxExtendedConfig: Boolean, val afc: Boolean)
+
+/** The U1 answered a start request with a refusal: nothing started. Distinct from a lost reply (outcome unknown). */
+class U1StartRefused(message: String) : IOException(message)

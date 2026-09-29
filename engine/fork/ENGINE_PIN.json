@@ -2,7 +2,7 @@
   "base": {
     "name": "nozzle-engine",
     "repo": "https://github.com/James-Jennison/nozzle-engine.git",
-    "commit": "d746c1b1c145b6e1027cb31af6b1155cc788a77a",
+    "commit": "2b7b6cffaae4364ff38e7c3e5d8a79a50dacab5e",
     "local_checkout": "/mnt/faststorage/Test Slicer/engine",
     "licence": "AGPL-3.0"
   },

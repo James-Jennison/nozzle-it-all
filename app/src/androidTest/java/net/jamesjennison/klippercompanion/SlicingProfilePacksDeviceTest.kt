@@ -155,4 +155,42 @@ class SlicingProfilePacksDeviceTest {
         // to count as one filament and switch it off).
         assertEquals("the XL's prime tower is printed for a two-tool print", true, stats.primeTower)
     }
+
+    // P-0029: on Klipper the wipe tower is defined as an object, so an adaptive bed mesh (COSMOS's BED_MESH_CALIBRATE
+    // ADAPTIVE=1) probes under it too. The owner's two-colour COSMOS print lost its tower: the mesh covered only the
+    // objects, and the bed's corner under the tower was lower. The defined area must cover every tower extrusion.
+    @Test fun aTwoToolCosmosSliceDefinesTheWipeTowerForTheAdaptiveBedMesh() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        fun cube(name: String) = File(appContext.cacheDir, name).also { f -> testContext.assets.open("cube.stl").use { it.copyTo(f.outputStream()) } }
+        val a = cube("cc-a.stl"); val b = cube("cc-b.stl"); val out = File(appContext.cacheDir, "cc-two-tool.gcode").also { it.delete() }
+        val pack = slicingProfilePack(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, CosmosProfileGeneration.CURRENT)!!
+        val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+        val overrides = MultiToolFilamentConfig.overridesFor(1.75, listOf(pla.copy(colorHex = "#FF0000"), pla.copy(colorHex = "#00FF00")), pla)
+        NativeEngine.nativeSliceMultiObject(arrayOf(a.absolutePath, b.absolutePath), doubleArrayOf(-30.0, 30.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 1.0), intArrayOf(1, 2),
+            out.absolutePath, pack.materialize(appContext).toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+        val gcode = out.readText()
+        assertTrue("the prime tower is printed", gcode.contains(";TYPE:Prime tower"))
+        val define = Regex("(?m)^EXCLUDE_OBJECT_DEFINE NAME=wipe_tower .*POLYGON=(\\[.*\\])$").find(gcode)
+            ?: throw AssertionError("expected the wipe tower to be defined as a Klipper object")
+        val corners = Regex("\\[(-?[0-9.]+),(-?[0-9.]+)\\]").findAll(define.groupValues[1]).map { it.groupValues[1].toDouble() to it.groupValues[2].toDouble() }.toList()
+        val minX = corners.minOf { it.first } - 0.5; val maxX = corners.maxOf { it.first } + 0.5
+        val minY = corners.minOf { it.second } - 0.5; val maxY = corners.maxOf { it.second } + 0.5
+        // Every extruding move of the tower lies inside the defined area.
+        var inTower = false; var x = 0.0; var y = 0.0; var checked = 0
+        for (line in gcode.lineSequence()) {
+            if (line.startsWith(";TYPE:")) inTower = line == ";TYPE:Prime tower"
+            if (!line.startsWith("G1")) continue
+            Regex("X(-?[0-9.]+)").find(line)?.let { x = it.groupValues[1].toDouble() }
+            Regex("Y(-?[0-9.]+)").find(line)?.let { y = it.groupValues[1].toDouble() }
+            val e = Regex("E(-?[0-9.]+)").find(line)?.groupValues?.get(1)?.toDouble() ?: 0.0
+            if (inTower && e > 0 && (line.contains('X') || line.contains('Y'))) {
+                assertTrue("tower extrusion at ($x, $y) is outside the defined area x $minX..$maxX y $minY..$maxY", x in minX..maxX && y in minY..maxY)
+                checked++
+            }
+        }
+        assertTrue("expected tower extrusions to check, found $checked", checked > 50)
+        // The extra object line still goes through the preview parser.
+        assertTrue(out.inputStream().buffered().use { GcodePreview.parse(it) }.segments.isNotEmpty())
+    }
 }

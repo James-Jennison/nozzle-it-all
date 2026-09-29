@@ -5,7 +5,7 @@
     0
   ],
   "id": "paxx-u1",
-  "suiteVersion": "1.1.0",
+  "suiteVersion": "1.2.0",
   "title": "Snapmaker U1 on PAXX extended firmware",
   "description": "Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.",
   "coverage": "reference",
@@ -342,6 +342,11 @@
           "params": {
             "fromTest": "slice-single"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         }
       ],
       "requiresOperatorConfirmation": true,
@@ -766,6 +771,11 @@
           "params": {
             "fromTest": "slice-single"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         }
       ],
       "requiresOperatorConfirmation": true,
@@ -925,6 +935,11 @@
           "params": {
             "fromTest": "slice-single"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         },
         {
           "id": "cleanup-nozzle",
@@ -1177,6 +1192,11 @@
           "params": {
             "fromTest": "multi-slice"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         }
       ],
       "requiresOperatorConfirmation": true,

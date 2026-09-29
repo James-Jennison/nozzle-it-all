@@ -466,9 +466,75 @@ class RunnerTest {
         val work = Support.tmp()
         val s = RunSession.start(Support.suite("paxx-u1"), loadedAware, TargetCheck.inspect(loadedAware), SimulatedSlicer(Support.profiles(), work), Support.env(work, clock), null, SafetyLevel.PHYSICAL_PRINT)
         Support.drive(s)
-        val step = s.record.test("print-single")!!.cleanup.single()
+        val step = s.record.test("print-single")!!.step("cleanup-delete")!!
         assertEquals(StepStatus.SKIPPED, step.status)
         assertTrue(step.detail, step.detail.startsWith("Left on the printer"))
         assertTrue(step.data.has("leftOnPrinter"))
+    }
+
+    private fun seed(sim: SimulatedPrinter, name: String): String =
+        (sim.upload(File.createTempFile("seed", ".gcode").apply { writeText("G28\n"); deleteOnExit() }, name) as TransferOutcome.Verified).remotePath
+
+    @Test fun leftoverTestFilesAreDeletedAfterApprovalAndOnlyTheLoadedOneStays() {
+        // Found on the real U1: every print left its file behind, because a finished print keeps its file loaded.
+        val clock = Support.Clock()
+        val sim = SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now)
+        val old = seed(sim, "nozzle-testgrid-paxx-u1-slice-single.gcode")
+        val mine = seed(sim, "my-part.gcode")
+        val t = Counting(sim)
+        val st = Support.start("paxx-u1", t, clock)
+        val approvals = mutableListOf<Pair<String, String>>()
+        var p = st.session.proceed()
+        while (p !is Pending.Finished) p = when (p) {
+            is Pending.Preconditions -> st.session.answerPreconditions(p.test.preconditions.associate { it.id to true })
+            is Pending.Observation -> st.session.observe(p.step.id, ScriptedOperator.defaultAnswer(p.step))
+            is Pending.Attachment -> st.session.attach(p.step.id, ScriptedOperator.placeholderPng(), "image/png")
+            is Pending.Confirmation -> { if (p.step.id == "cleanup-leftovers") approvals += "${p.test.id}" to p.action; st.session.approve(p.step.id) }
+            else -> fail("unexpected $p").let { p }
+        }
+        st.session.record.tests.forEach { assertEquals(it.testId + " " + it.reason, ResultState.PASS, it.result) }
+        // The first cleanup names the earlier run's file, and nothing that isn't a Test Grid file.
+        assertEquals("transfer", approvals.first().first)
+        assertTrue(approvals.first().second, approvals.first().second.contains(old) && !approvals.first().second.contains(mine))
+        val loaded = sim.status().filename
+        val testFiles = sim.files().filter { RunSession.LEFTOVER.matches(it) }
+        assertEquals("only the file still loaded from the last print stays", listOf(loaded), testFiles)
+        assertTrue(mine in sim.files()); assertTrue("benchy.gcode" in sim.files())
+        assertTrue("never asks the printer to delete anything that isn't a Test Grid file", t.deleted.none { it == mine || it == "benchy.gcode" })
+    }
+
+    @Test fun nothingLeftOverIsSkippedWithoutAsking() {
+        val clock = Support.Clock()
+        val t = Counting(SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now))
+        val st = Support.start("paxx-u1", t, clock, level = SafetyLevel.REVERSIBLE_FILES)
+        Support.drive(st.session)
+        val step = st.session.record.test("transfer")!!.step("cleanup-leftovers")!!
+        assertEquals(StepStatus.SKIPPED, step.status)
+        assertNull(step.confirmation)
+        assertEquals(1, t.deleted.size)
+    }
+
+    @Test fun anApprovalIsNeverWidenedToFilesThatAppearedAfterIt() {
+        val clock = Support.Clock()
+        val sim = SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now)
+        val old = seed(sim, "nozzle-testgrid-earlier.gcode")
+        val t = Counting(sim)
+        val st = Support.start("paxx-u1", t, clock, level = SafetyLevel.REVERSIBLE_FILES)
+        var p = st.session.proceed()
+        var late = ""
+        while (p !is Pending.Finished) p = when (p) {
+            is Pending.Preconditions -> st.session.answerPreconditions(p.test.preconditions.associate { it.id to true })
+            is Pending.Observation -> st.session.observe(p.step.id, ScriptedOperator.defaultAnswer(p.step))
+            is Pending.Confirmation -> {
+                if (p.step.id == "cleanup-leftovers") { assertTrue(p.action.contains(old)); late = seed(sim, "nozzle-testgrid-later.gcode") }
+                st.session.approve(p.step.id)
+            }
+            else -> fail("unexpected $p").let { p }
+        }
+        assertTrue(old !in sim.files())
+        assertTrue("a file that appeared after the approval stays", late.isNotEmpty() && late in sim.files())
+        val step = st.session.record.test("transfer")!!.step("cleanup-leftovers")!!
+        assertEquals(StepStatus.PASSED, step.status)
+        assertEquals(listOf(old), (0 until step.data.getJSONArray("deleted").length()).map { step.data.getJSONArray("deleted").getString(it) })
     }
 }

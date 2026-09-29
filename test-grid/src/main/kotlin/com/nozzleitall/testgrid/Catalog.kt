@@ -87,6 +87,7 @@ object ManualInstructions {
             StepKind.MONITOR -> "Nozzle watches status until `${p.optString("until")}`${p.optString("heater").takeIf { it.isNotBlank() }?.let { " ($it ${p.optInt("celsius")} °C)" } ?: ""}, up to ${s.timeoutSeconds ?: 60} s."
             StepKind.UPLOAD -> "Upload the sliced G-code under a unique `nozzle-testgrid-…` name; Nozzle verifies it by SHA-256. Nothing prints."
             StepKind.DELETE_UPLOADED -> "Delete the file this run uploaded (only that file)."
+            StepKind.DELETE_LEFTOVERS -> "Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays."
             StepKind.SET_TEMPERATURE -> ControlAction.SetTemperature(p.optString("heater"), p.optInt("celsius")).describe() + "."
             StepKind.HOME -> ControlAction.Home.describe()
             StepKind.JOG -> ControlAction.Jog(p.optString("axis").uppercase(), p.optDouble("mm")).describe() + "."

@@ -49,9 +49,9 @@ credentials; they stay on your phone.
      see; Test Mode reads the printer again. The command is never resent. Then you are offered the test's cleanup
      (for example heaters off), each step approved separately.
 6. **Review the evidence.** Every file that will be exported is shown in full. Check that nothing identifies you.
-7. **Send it.** Enter the tester code the maintainers gave you (once; the phone remembers it) and tap **Send to
-   Nozzle It All**; you get a receipt number. No code, or no internet? **Email it instead** opens your email app with
-   the bundle attached, addressed to support@nozzleitall.com. **Save a copy** keeps the file wherever you choose. Then
+7. **Send it.** Tap **Send to Nozzle It All**; you get a receipt number. The bundle carries a random tester ID the
+   app made for your phone, so your bundles can be grouped; it names no one. No internet? **Email it instead** opens
+   your email app with the bundle attached, addressed to support@nozzleitall.com. **Save a copy** keeps the file wherever you choose. Then
    **Done** removes the run from the phone.
 
 ## If something goes wrong

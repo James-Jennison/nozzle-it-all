@@ -533,13 +533,12 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
     }
     if (bundle != null) Section("6. Send it to Nozzle It All") {
         val context = androidx.compose.ui.platform.LocalContext.current
-        var code by remember { mutableStateOf(c.testerCode) }
-        Text("Sends this bundle, exactly as shown above, to the Nozzle It All maintainers. Nothing else from your phone is sent.",
-            style = MaterialTheme.typography.bodySmall)
+        val id = remember { c.testerId }
+        Text("Sends this bundle, exactly as shown above, to the Nozzle It All maintainers, with this phone's tester ID ($id). " +
+            "The ID is made by the app and names no one; nothing else from your phone is sent.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("tester-id"))
         if (s.submitted == null) {
-            OutlinedTextField(code, { code = it }, label = { Text("Your tester code") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("tester-code"))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button({ c.submit(code) }, enabled = !s.busy && code.isNotBlank(), modifier = Modifier.testTag("submit-bundle")) { Text("Send to Nozzle It All") }
+                Button({ c.submit() }, enabled = !s.busy, modifier = Modifier.testTag("submit-bundle")) { Text("Send to Nozzle It All") }
                 OutlinedButton({ c.emailBundle(context) }, enabled = !s.busy, modifier = Modifier.testTag("email-bundle")) { Text("Email it instead") }
             }
         }

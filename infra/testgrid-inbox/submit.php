@@ -3,16 +3,17 @@
 //
 // POST https://nozzleitall.com/testgrid/submit.php
 //   Content-Type: application/zip, body = the bundle exactly as exported
-//   X-Nozzle-Tester: the tester code the maintainers handed out (Test Mode is invite-only)
+//   X-Nozzle-Tester: the tester ID the app made for this phone (random, "t-" + 20 URL-safe characters; names no one)
 // Replies JSON: 201 {received, id, bundleDigest}; 200 when the same bundle was already received; 4xx {error}.
 //
 // Bundles are stored outside the web root, named by their SHA-256, never overwritten, with a small metadata file
-// (time, tester label, sizes, suite). No IP address or other request detail is kept. A bundle is only checked for
+// (time, tester ID, sizes, suite). No IP address or other request detail is kept. A bundle is only checked for
 // shape here; maintainers verify it with the Test Grid CLI (BundleReader) before accepting anything.
 declare(strict_types=1);
 
 const MAX_BYTES = 40 * 1024 * 1024;
 const MAX_PER_TESTER_PER_DAY = 30;
+const MAX_TOTAL_PER_DAY = 300;
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
@@ -24,28 +25,28 @@ $inbox = dirname($_SERVER['DOCUMENT_ROOT']) . '/testgrid-inbox';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') reply(405, ['error' => 'Send a bundle with POST.']);
 if (!is_dir("$inbox/bundles")) reply(503, ['error' => 'The inbox is not set up.']);
 
-// Tester codes: one per line, "code label"; lines starting with # are ignored. Removing a line revokes that code.
+// There is no login: the ID only groups a tester's bundles. An abused ID goes in blocked.txt (one per line).
 $given = trim((string)($_SERVER['HTTP_X_NOZZLE_TESTER'] ?? ''));
-$label = null;
-foreach (@file("$inbox/codes.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-    $line = trim($line);
-    if ($line === '' || $line[0] === '#') continue;
-    $parts = preg_split('/\s+/', $line, 2);
-    if ($given !== '' && hash_equals($parts[0], $given)) { $label = $parts[1] ?? 'tester'; break; }
+if (!preg_match('/^t-[A-Za-z0-9_-]{16,40}$/', $given)) reply(400, ['error' => 'This version of Nozzle It All did not send a tester ID.']);
+foreach (@file("$inbox/blocked.txt", FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+    if (hash_equals(trim($line), $given)) reply(403, ['error' => 'Bundles from this phone are no longer accepted. Email support@nozzleitall.com.']);
 }
-if ($label === null) reply(403, ['error' => 'Unknown tester code. Ask the Nozzle It All maintainers for yours.']);
+$label = $given;
 
 $length = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
 if ($length <= 0) reply(411, ['error' => 'The request had no bundle.']);
 if ($length > MAX_BYTES) reply(413, ['error' => 'The bundle is larger than 40 MB.']);
 
 $today = gmdate('Y-m-d');
-$count = 0;
+$count = 0; $total = 0;
 foreach (glob("$inbox/bundles/*.json") ?: [] as $meta) {
     $m = json_decode((string)file_get_contents($meta), true);
-    if (is_array($m) && ($m['tester'] ?? '') === $label && substr((string)($m['receivedAt'] ?? ''), 0, 10) === $today) $count++;
+    if (!is_array($m) || substr((string)($m['receivedAt'] ?? ''), 0, 10) !== $today) continue;
+    $total++;
+    if (($m['tester'] ?? '') === $label) $count++;
 }
-if ($count >= MAX_PER_TESTER_PER_DAY) reply(429, ['error' => 'Too many bundles today from this tester code. Try again tomorrow.']);
+if ($count >= MAX_PER_TESTER_PER_DAY) reply(429, ['error' => 'Too many bundles today from this phone. Try again tomorrow.']);
+if ($total >= MAX_TOTAL_PER_DAY) reply(429, ['error' => 'The inbox is full for today. Try again tomorrow, or email it instead.']);
 
 @mkdir("$inbox/tmp", 0750, true);
 $tmp = tempnam("$inbox/tmp", 'bundle');

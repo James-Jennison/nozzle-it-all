@@ -29,6 +29,12 @@
       "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
       "date": "2026-09-28",
       "note": "Level 4 run on the owner's PAXX U1, owner at the printer. Accepted with corrections: height and thin wall were ruler estimates (remeasured 10.4 mm and 1.1 mm, in tolerance); homing physically worked (G28 reply lost). Physical printing FAIL stands in this bundle until a caliper-measured run supersedes it."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
+      "date": "2026-09-28",
+      "note": "Level 4 rerun on the owner's PAXX U1 with calipers, owner at the printer, built from ca84486 (paxx-u1 1.1.0). Every test PASS: towers 20.0/20.0, hole 8.0, height 10.43, wall 1.27 mm; homing confirmed from printer state after the G28 reply was lost. Supersedes 58f24794 for physical printing."
     }
   ],
   "format": "nozzle.evidence-acceptance",

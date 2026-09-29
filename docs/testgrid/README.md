@@ -18,7 +18,7 @@ file transfer, monitoring, controls and physical printing.
 | [UNVERIFIED.md](UNVERIFIED.md) | which printer/firmware combinations have no physical evidence |
 | [manual/](manual/) | generated manual acceptance instructions for the PAXX U1 and COSMOS Centauri Carbon |
 | [examples/](examples/) | a simulated example bundle and the report built from it (simulated: grades nothing) |
-| [evidence/](evidence/) | the evidence store and acceptance ledger (empty until physical evidence exists) |
+| [evidence/](evidence/) | the evidence index, acceptance ledger and corrections (bundles are stored outside git) |
 
 Command-line tool (never contacts a printer):
 

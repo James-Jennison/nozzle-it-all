@@ -36,9 +36,9 @@ Two parts, one per tool or lane: four 10 × 40 × 3 mm stripes alternating betwe
 `c1338f179a8b254ce6deba0d3df288de8e5c65fe1f453f35e1e848210470b8b9`, part B
 `324aa51655b05ede6a1cb7872ce93ad63ae987bcb686f706cc88925284760946`.
 
-Not yet confirmed on a device: that the on-device engine keeps the two parts' own coordinates when they are sliced as
-one project (`SlicingCoordinator.sliceProject`) rather than re-arranging them. The multi-material slice test checks
-the result (`uses_tools`, `within_bed`), and the first physical multi-material run will show it.
+Confirmed on a device: the on-device engine keeps the two parts' own coordinates when they are sliced as one project
+(`SlicingCoordinator.sliceProject`); the owner's PAXX U1 printed the two-tool part as alternating stripes (bundles
+`58f24794` and `2d3afb85`, [evidence/README.md](evidence/README.md)).
 
 The 20 mm test cube (`site-src/assets/test-cube-20mm.stl`) remains the quick smoke-test part; it is not a Test Grid
 acceptance model. The owner's clean U1 print of that cube on 2026-09-28 is prior history, not Test Grid evidence.

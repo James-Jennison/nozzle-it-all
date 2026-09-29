@@ -134,6 +134,24 @@ def fix_bed_type(machine, process, filament):
     return None
 
 
+# Single-nozzle filament changers (P-0032). CrealityPrint purges the K2, K2 Pro and K2 SE's changes into the CFS chute, not
+# the tower (purge_in_prime_tower 0, like the K2 Plus and Hi already are). The K1-series CFS-C templates park at X0 Y245,
+# past a 220 mm bed; CrealityPrint parks at the tower's outer wall instead, where the engine's tower already leaves the
+# nozzle, so the park move is dropped (the K1 Max's 300 mm bed keeps it).
+CFS_PURGE_TO_CHUTE = {"Creality K2 0.4 nozzle", "Creality K2 Pro 0.4 nozzle", "Creality K2 SE 0.4 nozzle"}
+CFS_K1_OUT_OF_BED_PARK = {"Creality K1_CFS-C 0.4 nozzle", "Creality K1C_CFS-C 0.4 nozzle", "Creality K1 SE_CFS-C 0.4 nozzle"}
+K1_PARK_LINE = "G1 X0 Y245 F30000\n"
+
+
+def fix_changers(machine):
+    name, changed = machine.get("name"), False
+    if name in CFS_PURGE_TO_CHUTE and str(machine.get("purge_in_prime_tower")) != "0":
+        machine["purge_in_prime_tower"] = "0"; changed = True
+    if name in CFS_K1_OUT_OF_BED_PARK and K1_PARK_LINE in as_text(machine.get("change_filament_gcode")):
+        machine["change_filament_gcode"] = as_text(machine.get("change_filament_gcode")).replace(K1_PARK_LINE, ""); changed = True
+    return changed
+
+
 def write_pack(by_name, out_dir, machine, process, filament, filament_index=None):
     os.makedirs(out_dir, exist_ok=True)
     flats = {}
@@ -141,6 +159,7 @@ def write_pack(by_name, out_dir, machine, process, filament, filament_index=None
         flat = flatten(kind, name, filament_index if (kind == "filament" and filament_index is not None) else by_name)
         flat["name"] = name; flats[kind] = flat
     fix_layer_reset(flats["machine"]); fix_absolute_reset(flats["machine"]); fix_bed_type(flats["machine"], flats["process"], flats["filament"])
+    fix_changers(flats["machine"])
     for kind, flat in flats.items():
         with open(os.path.join(out_dir, f"{kind}.json"), "w") as f:
             json.dump(flat, f, indent=4); f.write("\n")

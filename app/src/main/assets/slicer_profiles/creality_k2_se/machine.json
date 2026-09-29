@@ -97,7 +97,7 @@
     "printable_area": "0x0,220x0,220x215,0x215",
     "printhost_authorization_type": "key",
     "printhost_ssl_ignore_revoke": "0",
-    "purge_in_prime_tower": "1",
+    "purge_in_prime_tower": "0",
     "support_multi_bed_types": "1",
     "thumbnails": "96x96,300x300",
     "thumbnails_format": "PNG",

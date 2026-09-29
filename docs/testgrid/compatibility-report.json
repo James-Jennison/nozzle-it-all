@@ -245,17 +245,17 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+      "current": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
       "firmware": {
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
       },
       "gradeSources": {
-        "controls": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "file_transfer": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "monitoring": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "physical_print": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "slicing": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        "controls": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "file_transfer": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "monitoring": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "physical_print": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "slicing": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
       },
       "grades": {
         "controls": "UNVERIFIED",
@@ -281,7 +281,7 @@
           "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
           "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
@@ -299,7 +299,7 @@
           "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
           "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
@@ -317,7 +317,7 @@
           "runId": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
           "source": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
@@ -335,7 +335,7 @@
           "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
           "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
@@ -353,6 +353,24 @@
           "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
           "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+        },
+        {
+          "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
+          "completedAt": 1790657161698,
+          "contentDigest": "dbbc6abc9c5ccf14e558dbc42f5a1fb1f6985f2502f84514219b54a239969d72",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "PASS",
+            "physical_print": "PASS",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+          "source": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.1.0",
           "supersededBy": null
         }
       ],
@@ -366,23 +384,23 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
+      "current": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
       "firmware": {
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
       },
       "gradeSources": {
-        "controls": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "file_transfer": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "monitoring": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "physical_print": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
-        "slicing": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+        "controls": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "file_transfer": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "monitoring": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "physical_print": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+        "slicing": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
       },
       "grades": {
-        "controls": "PARTIAL",
+        "controls": "PASS",
         "file_transfer": "PASS",
         "monitoring": "PASS",
-        "physical_print": "FAIL",
+        "physical_print": "PASS",
         "slicing": "PASS"
       },
       "history": [
@@ -402,7 +420,7 @@
           "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
           "source": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
@@ -420,7 +438,7 @@
           "runId": "d4e722c4-a5c5-4522-a6d2-637acc34dd4b",
           "source": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
@@ -438,7 +456,7 @@
           "runId": "ffbe615e-5926-4d34-a02b-db86d8493ae8",
           "source": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
@@ -456,7 +474,7 @@
           "runId": "9eefd62b-745a-48e9-8102-873ba743aa2b",
           "source": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
-          "supersededBy": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1"
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
         },
         {
           "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
@@ -474,6 +492,24 @@
           "runId": "66d521ad-4002-4b82-8c4b-25c7bc03d0c1",
           "source": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200.nozzle-evidence.zip",
           "suite": "paxx-u1 1.0.0",
+          "supersededBy": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+        },
+        {
+          "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
+          "completedAt": 1790657161698,
+          "contentDigest": "dbbc6abc9c5ccf14e558dbc42f5a1fb1f6985f2502f84514219b54a239969d72",
+          "grades": {
+            "controls": "PASS",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "PASS",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
+          "source": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214.nozzle-evidence.zip",
+          "suite": "paxx-u1 1.1.0",
           "supersededBy": null
         }
       ],

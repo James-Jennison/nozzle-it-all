@@ -1,14 +1,14 @@
 # Physically unverified configurations
 
-As of 2026-09-28 **no Test Grid bundle from physical hardware exists**, so every configuration below is UNVERIFIED in
-the Test Grid matrix, in every category. Earlier results recorded elsewhere (the owner's physical U1 cube print on
-2026-09-28, the M2 heater acceptance on the U1, the COSMOS live firmware reads) are prior history, not Test Grid
-evidence, and are not imported into it.
+Physical Test Grid evidence exists only for the Snapmaker U1 on PAXX extended firmware (Android Test Mode), from the
+owner's printer: see [COMPATIBILITY_REPORT.md](COMPATIBILITY_REPORT.md) for its grades and
+[evidence/README.md](evidence/README.md) for the bundles. Everything else below is UNVERIFIED in the Test Grid matrix, in
+every category. Results recorded elsewhere (the owner's U1 cube print, the M2 heater acceptance on the U1, the COSMOS
+live firmware reads) are prior history, not Test Grid evidence, and are not imported into it.
 
 | Configuration | Suite | Coverage | Who can supply evidence |
 |---|---|---|---|
-| Snapmaker U1 on PAXX extended firmware (android-moonraker) | `paxx-u1` | reference | the owner (manual steps: [manual/paxx-u1.md](manual/paxx-u1.md)) |
-| Snapmaker U1 on PAXX, multi-tool (four toolheads) | `paxx-u1` multi-material tests | reference | the owner |
+| Snapmaker U1 on PAXX, multi-tool: file transfer and controls | `paxx-u1` has no multi-material tests in these categories | reference | n/a (slicing, monitoring and printing have evidence) |
 | Elegoo Centauri Carbon on OpenCentauri COSMOS 26.07+ (android-moonraker) | `cosmos-centauri-carbon` | reference | the owner (manual steps: [manual/cosmos-centauri-carbon.md](manual/cosmos-centauri-carbon.md)) |
 | Centauri Carbon on COSMOS with CANVAS (AFC) | `cosmos-centauri-carbon` multi-material tests | reference | the owner, once CANVAS is fitted; skipped until AFC is detected |
 | Centauri Carbon on COSMOS older than 26.07.0 | none (legacy profile not bundled; the COSMOS suite fails its profile match by design) | n/a | n/a |
@@ -20,10 +20,10 @@ evidence, and are not imported into it.
 | Prusa via PrusaLink | `prusalink` | fixture | external testers; Test Mode v1 blocks transfer and print steps |
 | Generic Klipper/Moonraker (each model its own row) | `generic-klipper` | fixture | external testers |
 | OctoPrint | `octoprint` | fixture | external testers; Test Mode v1 blocks transfer and print steps |
-| Desktop adapters (`paxx-lan`, `moonraker`, …) | none: Test Mode is Android-only in v1 | n/a | n/a |
+| Desktop adapters (`paxx-lan`, `moonraker`, …) | none: Test Mode is Android-only in v1; a result on Android is not evidence for Desktop | n/a | n/a |
 
 The owner does not have a stock Centauri Carbon; stock and OpenCentauri-patched coverage must come from external
 testers. A COSMOS result is never evidence for either.
 
 Also unverified on a device (software, not hardware): Test Mode's instrumented UI test (`TestModeDeviceTest`) has
-been compiled but not run, and the multi-part placement noted in [ACCEPTANCE_MODEL.md](ACCEPTANCE_MODEL.md).
+been compiled but not run.

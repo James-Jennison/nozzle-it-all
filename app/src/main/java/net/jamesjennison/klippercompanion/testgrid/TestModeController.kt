@@ -239,8 +239,11 @@ class TestModeController private constructor(private val context: Context) {
         val env = AndroidTestEnvironment.create(context, File(runDir, "work"), simulatedEngine = t.description.kind == com.nozzleitall.testgrid.TargetKind.SIMULATED)
         val redactor = Redactor(t.localSecrets() + context.filesDir.absolutePath + context.cacheDir.absolutePath + runDir.absolutePath, PublicVocabulary.of(s.suite))
         val bundle = EvidenceBuilder.build(s, env, redactor, RunJournal(runDir)::attachment)
+        // Remembered now for carry-over; the bundle digest is filled in from the bundle actually exported (a finished run
+        // reopened in a newer build rebuilds its bundle, with a different digest).
         (_state.value.target as? TargetOption.Saved)?.let { o ->
-            com.nozzleitall.testgrid.CarryOver.summarize(s, bundle.bundleDigest, o.profile.address, net.jamesjennison.klippercompanion.BuildConfig.VERSION_NAME)?.let { runCatching { remember(it) } }
+            val exported = history().firstOrNull { it.runId == s.record.runId }?.bundleDigest
+            com.nozzleitall.testgrid.CarryOver.summarize(s, exported, o.profile.address, net.jamesjennison.klippercompanion.BuildConfig.VERSION_NAME)?.let { runCatching { remember(it) } }
         }
         update { it.copy(phase = TestModePhase.REVIEW_EVIDENCE, bundle = bundle) }
     }
@@ -249,6 +252,7 @@ class TestModeController private constructor(private val context: Context) {
         val b = _state.value.bundle ?: return
         work {
             context.contentResolver.openOutputStream(uri)?.use { it.write(b.zip()) } ?: throw IllegalStateException("Could not open the chosen file.")
+            session?.record?.runId?.let { id -> history().firstOrNull { it.runId == id }?.let { runCatching { remember(it.copy(bundleDigest = b.bundleDigest)) } } }
             update { it.copy(exported = b.bundleDigest) }
         }
     }

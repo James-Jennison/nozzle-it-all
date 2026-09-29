@@ -109,6 +109,8 @@ interface TestTarget {
     fun upload(file: File, requestedName: String): TransferOutcome
     fun delete(remotePath: String): TransferOutcome
     fun perform(action: ControlAction): CommandOutcome
+    /** How the printer's own job history records the last print of [remotePath] ("completed", "cancelled"...), or null. Read-only. */
+    fun jobResult(remotePath: String): String? = null
     /** Credentials, addresses, hostnames and names this target knows. The redactor masks every occurrence. */
     fun localSecrets(): Set<String>
 }

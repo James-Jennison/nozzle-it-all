@@ -73,6 +73,7 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
 
         /** Marks the U1 start in a PrinterCommand; sent as JSON-RPC on Moonraker's websocket (the U1 refuses it over HTTP). */
         const val U1_START_LOCAL_PRINT = "server/files/start_local_print"
+        private const val CONFIG_TEXT_MAX_BYTES = 256L * 1024
         fun macro(name: String): PrinterCommand = MoonrakerRules.macro(name)
     }
     private fun url(path: String, args: Map<String, String> = emptyMap()): HttpUrl {
@@ -233,9 +234,26 @@ class Moonraker(address: String, rawApiKey: String = "") : PrinterService, Conso
     // (no such namespace: Moonraker answers 404) reports no slots rather than an error.
     override fun filamentSlots(): FilamentSlotStatus {
         val objects = (request("printer/objects/query", mapOf("AFC" to "current_load", "mmu" to FilamentLanes.MMU_FIELDS,
-            "print_task_config" to FilamentLanes.U1_TASK_CONFIG_FIELDS, "toolhead" to "extruder")) as? JSONObject)?.optJSONObject("status")
+            "print_task_config" to FilamentLanes.U1_TASK_CONFIG_FIELDS, "toolhead" to "extruder") + QidiBox.QUERY_OBJECTS) as? JSONObject)?.optJSONObject("status")
+        // A Qidi Box: its slots name their filament and colour by number into the printer's dictionary file.
+        if (QidiBox.present(objects)) {
+            val dictionary = try { QidiFilamentDictionary.parse(configText(QidiFilamentDictionary.CONFIG_FILE)) } catch (e: Exception) { null }
+            QidiBox.slots(objects, dictionary)?.let { return FilamentSlotStatus(it, "Qidi Box") }
+        }
         val laneData = try { request("server/database/item", mapOf("namespace" to "lane_data")) as? JSONObject } catch (e: ApiFailure) { null }
         return FilamentLanes.read(laneData, objects)
+    }
+    /** A small text file from Moonraker's config root (read-only). */
+    private fun configText(filename: String): String {
+        val target = base.newBuilder().addPathSegments("server/files/config").addPathSegment(filename).build()
+        client.newCall(Request.Builder().url(target).build()).execute().use { response ->
+            if (!response.isSuccessful) throw ApiFailure("Could not read $filename (HTTP ${response.code}).")
+            val source = response.body?.source() ?: throw ApiFailure("Empty $filename.")
+            source.request(CONFIG_TEXT_MAX_BYTES + 1)
+            val raw = source.buffer.readByteArray()
+            if (raw.size > CONFIG_TEXT_MAX_BYTES) throw ApiFailure("$filename is too large.")
+            return String(raw, Charsets.UTF_8)
+        }
     }
     // Confirmed live against a real Elegoo Centauri Carbon running COSMOS: printer/info's "app"
     // field is "OpenCentauri Cosmos" and "software_version" is e.g. "Release - 26.08.0". A

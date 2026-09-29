@@ -702,3 +702,20 @@ interchange).
 - **Known divergence:** multi-colour prints assigned per object gain the prime tower their profile asks for (more
   filament, longer prints); single-filament prints are unchanged.
 - **Touches:** slicing (multi-material, per-object assignment).
+
+## P-0028 — thumbnails in the filament colours
+
+- **Upstream:** nozzle-engine `d746c1b1c145b6e1027cb31af6b1155cc788a77a` (`engine/fork/ENGINE_PIN.json`, James-Jennison/nozzle-engine pull 5):
+  `d17bfe5` (P-0027) plus three commits.
+- **Imported:** nothing into this repository.
+- **Engine change:** the headless thumbnail (embedded in the G-code and the Bambu bundle's plate image) drew every model
+  as one merged mesh in a fixed orange. It now draws each printable part in its filament's `filament_colour` (the part's
+  own filament, else its object's, else filament 1), and colour-painted areas in their painted filament's colour.
+  Modifiers and negative volumes are no longer drawn. Very dark colours are lifted to a dark grey so a black part stays
+  visible on a dark printer screen. Found by the owner on a Test Grid two-colour COSMOS print: its thumbnail was orange.
+- **Test evidence:** desktop CLI, two cubes on filaments 1 and 2 of a Centauri Carbon COSMOS: red and blue in the
+  thumbnail (before: both orange). Against d17bfe5 with the thumbnail blocks removed (including Qidi's `;gimage` /
+  `;simage`), all 380 bundled printers' G-code is identical; 356 golden hashes change because they embed a thumbnail.
+  BambuMultiColourDeviceTest now checks the plate thumbnail shows both filaments' colours.
+- **Known divergence:** thumbnails only; the printed G-code is unchanged.
+- **Touches:** printer-screen and file-list thumbnails (G-code and .gcode.3mf).

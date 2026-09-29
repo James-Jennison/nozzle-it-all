@@ -82,7 +82,7 @@ class FilamentLanesTest {
         assertTrue(FilamentLanes.slots(lanes).none { it.active })
     }
 
-    private class FakeMoonraker(var laneData: JSONObject?, var objects: JSONObject) : AutoCloseable {
+    private class FakeMoonraker(var laneData: JSONObject?, var objects: JSONObject, val configFiles: Map<String, String> = emptyMap()) : AutoCloseable {
         val server = MockWebServer()
         val paths = mutableListOf<String>()
         init {
@@ -93,7 +93,8 @@ class FilamentLanesTest {
                         "/printer/objects/query" -> MockResponse().setBody(JSONObject().put("result", JSONObject().put("eventtime", 1.0).put("status", objects)).toString())
                         "/server/database/item" -> laneData?.let { MockResponse().setBody(JSONObject().put("result", JSONObject().put("namespace", "lane_data").put("key", JSONObject.NULL).put("value", it)).toString()) }
                             ?: MockResponse().setResponseCode(404).setBody("""{"error":{"code":404,"message":"Namespace 'lane_data' not found"}}""")
-                        else -> MockResponse().setResponseCode(404)
+                        else -> configFiles[path.removePrefix("/server/files/config/")]?.takeIf { path.startsWith("/server/files/config/") }
+                            ?.let { MockResponse().setBody(it) } ?: MockResponse().setResponseCode(404)
                     }
                 }
             }
@@ -136,4 +137,40 @@ class FilamentLanesTest {
             } finally { dir.deleteRecursively() }
         }
     }
+
+    // Qidi Box (Q2, X-Plus 4, ...): fixtures built from OrcaSlicer's QidiPrinterAgent and QIDIStudio's readers (constructed,
+    // not captured from a printer).
+    private val qidiDictionary = "[colordict]\n1 = #FFFFFF\n3 = #FF0000\n\n[fila1]\nfilament = PLA\n[fila11]\nfilament = ABS\n# comment\n"
+    private fun qidiStatus(flat: Boolean): JSONObject {
+        val vars = JSONObject().put("box_count", 1).put("filament_slot0", 1).put("color_slot0", 3).put("vendor_slot0", 1)
+            .put("filament_slot2", 11).put("color_slot2", 1).put("last_load_slot", "slot2").put("enable_box", 1)
+        val status = JSONObject().put("save_variables", if (flat) vars else JSONObject().put("variables", vars))
+        listOf(0, 1, 0, null).forEachIndexed { i, b -> status.put("box_stepper slot$i", JSONObject().put("runout_button", b ?: JSONObject.NULL)) }
+        // Sensors for a second Box that box_count says isn't there.
+        status.put("box_stepper slot4", JSONObject().put("runout_button", 0))
+        return status
+    }
+
+    @Test fun qidiBoxSlotsFromNestedOrFlatSaveVariables() {
+        val dictionary = QidiFilamentDictionary.parse(qidiDictionary)
+        assertEquals(mapOf(1 to "PLA", 11 to "ABS"), dictionary.filaments); assertEquals("#FF0000", dictionary.colors[3])
+        for (flat in listOf(false, true)) {
+            val slots = QidiBox.slots(qidiStatus(flat), dictionary)!!
+            assertEquals("one Box, four slots", listOf(0, 1, 2, 3), slots.map { it.tool })
+            assertEquals(listOf("PLA", null, "ABS", null), slots.map { it.material })
+            assertEquals(listOf("#FF0000", null, "#FFFFFF", null), slots.map { it.colorHex })
+            assertEquals("QIDI", slots[0].vendor); assertTrue("last_load_slot feeds the nozzle", slots[2].active)
+            assertEquals("Box 1 · slot 3", slots[2].name)
+        }
+        // Without the dictionary the slots still show which hold filament.
+        assertEquals("LOADED (TYPE NOT REPORTED)", QidiBox.slots(qidiStatus(false), null)!![0].material)
+        assertNull("no Box", QidiBox.slots(JSONObject().put("save_variables", JSONObject()), null))
+    }
+
+    @Test fun moonrakerReadsAQidiBoxWithItsDictionary() =
+        FakeMoonraker(null, qidiStatus(false), mapOf(QidiFilamentDictionary.CONFIG_FILE to qidiDictionary)).use { fake ->
+            val s = Moonraker(fake.address).filamentSlots()
+            assertEquals("Qidi Box", s.source); assertEquals(listOf("PLA", null, "ABS", null), s.slots.map { it.material })
+            assertTrue(fake.paths.contains("/server/files/config/${QidiFilamentDictionary.CONFIG_FILE}"))
+        }
 }

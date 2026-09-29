@@ -198,7 +198,15 @@ object Attachments {
             val len = ((b[i + 2].toInt() and 0xFF) shl 8) or (b[i + 3].toInt() and 0xFF)
             if (len < 2 || i + 2 + len > b.size) throw IllegalArgumentException("The JPEG is malformed.")
             val keep = !(marker in 0xE1..0xEF || marker == 0xFE)
-            if (marker == 0xDA) { out.write(b, i, b.size - i); return out.toByteArray() }
+            if (marker == 0xDA) {
+                // Image data runs to the first EOI (inside it every 0xFF is stuffed or a restart marker). Anything after is
+                // appended by the phone - an Ultra HDR gain map, a Motion Photo's video - and is dropped: found on the first
+                // real bundle, where every photo carried a gain map with its own XMP.
+                var e = i + 2 + len
+                while (e + 1 < b.size && !(b[e] == 0xFF.toByte() && b[e + 1] == 0xD9.toByte())) e++
+                if (e + 1 >= b.size) throw IllegalArgumentException("The JPEG is truncated.")
+                out.write(b, i, e + 2 - i); return out.toByteArray()
+            }
             if (keep) out.write(b, i, 2 + len)
             i += 2 + len
         }

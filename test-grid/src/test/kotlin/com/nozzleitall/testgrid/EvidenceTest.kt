@@ -151,11 +151,14 @@ class EvidenceTest {
             write(byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0, (com.size + 2).toByte())); write(com)
             write(byteArrayOf(0xFF.toByte(), 0xDB.toByte(), 0, 4, 1, 2))
             write(byteArrayOf(0xFF.toByte(), 0xDA.toByte(), 0, 4, 9, 9, 7, 7, 0xFF.toByte(), 0xD9.toByte()))
+            // An appended second image (Ultra HDR gain map, Motion Photo) with metadata of its own.
+            write(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE1.toByte())); write("Exif GPS trailing-owner-jj ftypmp42".toByteArray())
         }.toByteArray()
         val clean = Attachments.sanitize(jpeg, "image/jpeg")
         assertTrue(clean.removedMetadata)
         val s = String(clean.bytes, Charsets.ISO_8859_1)
-        assertFalse(s.contains("GPS")); assertFalse(s.contains("jj"))
+        assertFalse(s.contains("GPS")); assertFalse(s.contains("jj")); assertFalse(s.contains("ftyp"))
+        assertEquals(0xD9.toByte(), clean.bytes.last())
         assertEquals("image/jpeg", Attachments.sniff(clean.bytes))
         try { Attachments.sanitize("not an image".toByteArray(), "image/gif"); org.junit.Assert.fail() } catch (e: IllegalArgumentException) {}
     }

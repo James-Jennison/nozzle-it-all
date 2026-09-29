@@ -2,15 +2,21 @@
 
 All commands run from the repository root. None of them contacts a printer.
 
-## 0. Collect
+## 0. Collect and review
 
 Testers send bundles from Test Mode to `https://nozzleitall.com/testgrid/submit.php` (stored on the web server in
 `/home/jamesjen/testgrid-inbox/bundles`, outside the web root, named by SHA-256, with the app-made tester ID; no IP
-address is kept) or by email to support@nozzleitall.com. `scripts/testgrid_fetch_inbox.sh` copies new inbox bundles to
-`gthost-build01:~/testgrid-evidence/incoming/` and verifies each. There is no login: the tester ID (made by the app,
-random) groups a phone's bundles; `scripts/deploy_testgrid_inbox.sh --block t-...` stops one that is abused. Limits:
-40 MB per bundle, 30 per tester ID and 300 in total per day. The endpoint itself is
-`infra/testgrid-inbox/`, deployed with `scripts/deploy_testgrid_inbox.sh --go`.
+address is kept) or by email to support@nozzleitall.com. There is no login: the tester ID (made by the app, random)
+groups a phone's bundles; `scripts/deploy_testgrid_inbox.sh --block t-...` stops one that is abused. Limits: 40 MB per
+bundle, 30 per tester ID and 300 in total per day.
+
+**Review page:** `https://nozzleitall.com/testgrid/review/` lists received bundles newest first, with every test's
+result, the tester's answers and measurements, the photos, and a file-hash check, and records **Accept** / **Reject**
+with a note. Set its password in your own terminal with `scripts/testgrid_review_password.sh` (only a bcrypt hash is
+stored). Then `python3 scripts/testgrid_process_inbox.py` files every accepted bundle into the GTHost store (verified by
+the CLI), adds each decision to `acceptance.json`, and rebuilds the index, the report and the website's
+`/compatibility/` page; commit, open a PR, and deploy the site. Emailed bundles go through the steps below by hand.
+The endpoint and review page live in `infra/testgrid-inbox/`, deployed with `scripts/deploy_testgrid_inbox.sh --go`.
 
 ## 1. Verify
 

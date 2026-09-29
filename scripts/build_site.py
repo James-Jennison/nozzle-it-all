@@ -70,10 +70,41 @@ def model_catalog():
     return "\n".join(out)
 
 
+FAMILY = {"paxx-extended": "PAXX extended firmware", "snapmaker-stock": "Snapmaker stock firmware", "cosmos": "OpenCentauri COSMOS",
+          "klipper": "Klipper", "elegoo-stock": "Elegoo stock firmware", "opencentauri-patched": "OpenCentauri-patched firmware",
+          "bambu-lan": "Bambu Lab LAN mode", "prusalink": "PrusaLink", "octoprint": "OctoPrint"}
+GRADE = {"PASS": ("verified", "Pass"), "PARTIAL": ("development", "Partial"), "FAIL": ("docs", "Fail"),
+         "SKIPPED": ("planned", "Not tested"), "UNVERIFIED": ("planned", "Not tested"), "BLOCKED": ("development", "Blocked")}
+CATEGORIES = [("slicing", "Slicing"), ("file_transfer", "File transfer"), ("monitoring", "Monitoring"), ("controls", "Controls"), ("physical_print", "Printing")]
+
+def compatibility():
+    """The Test Grid compatibility report (docs/testgrid/compatibility-report.json, built from accepted evidence) as a page."""
+    import html as h
+    data = json.loads((ROOT / "docs" / "testgrid" / "compatibility-report.json").read_text())
+    tested = [row for row in data["rows"] if row["history"]]
+    waiting = [row for row in data["rows"] if not row["history"]]
+    def cell(g, label):
+        cls, text = GRADE.get(g.split(" ")[0], ("planned", "Not tested"))
+        if "(unreviewed)" in g: text += " (not yet reviewed)"
+        return f'<td><span class="mlabel fine">{label}: </span><span class="badge {cls}">{text}</span></td>'
+    out = ['<div class="tablewrap"><table class="stack"><thead><tr><th scope="col">Printer, firmware and materials</th>'
+           + "".join(f'<th scope="col">{label}</th>' for _, label in CATEGORIES) + '</tr></thead><tbody>']
+    for row in sorted(tested, key=lambda r: (r["printer"]["manufacturer"], r["printer"]["model"], r["firmware"]["family"], r["scope"])):
+        fw = FAMILY.get(row["firmware"]["family"], row["firmware"]["family"]) + (f' {row["firmware"]["version"]}' if row["firmware"]["version"] not in ("", "—", "unreported") else "")
+        scope = "Single material" if row["scope"] == "single_material" else "Multi-material"
+        out.append(f'<tr><th scope="row">{h.escape(row["printer"]["manufacturer"] + " " + row["printer"]["model"])}<br><span class="fine">{h.escape(fw)} · {scope} · tested with Nozzle It All {h.escape(row["nozzleVersion"])}</span></th>'
+                   + "".join(cell(row["grades"].get(key, "UNVERIFIED"), label) for key, label in CATEGORIES) + '</tr>')
+    out.append('</tbody></table></div>')
+    names = sorted({f'{r["printer"]["manufacturer"]} {r["printer"]["model"]} ({FAMILY.get(r["firmware"]["family"], r["firmware"]["family"])})'.replace(" any model", "").replace(" any Klipper printer", " Klipper printers") for r in waiting})
+    out.append('<h2>Waiting for testers</h2><p>These printer and firmware combinations have a test suite in the app but no accepted results yet:</p><ul>'
+               + "".join(f'<li>{h.escape(n)}</li>' for n in names) + '</ul>')
+    return "\n".join(out)
+
+
 def render(r, meta, body, base):
     def sub(text):
         text = text.replace("{{github}}", r["github"]).replace("{{email}}", r["support_email"]).replace("{{updated}}", r["updated"])
-        text = text.replace("{{primary_cta}}", primary_cta(r)).replace("{{platform_cards}}", platform_cards(r)).replace("{{model_catalog}}", model_catalog() if "{{model_catalog}}" in text else "")
+        text = text.replace("{{primary_cta}}", primary_cta(r)).replace("{{platform_cards}}", platform_cards(r)).replace("{{model_catalog}}", model_catalog() if "{{model_catalog}}" in text else "").replace("{{compatibility}}", compatibility() if "{{compatibility}}" in text else "")
         text = re.sub(r"\{\{status:(\w+)\}\}", lambda m: badge(r, m.group(1)), text)
         return text
     page = base.replace("{{content}}", body)

@@ -6,10 +6,11 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
- * Ported from Helix's BambuPrintProtocolTest. Helix's two AMS lane-mapping
- * cases are gone with the AMS mapping itself: this app is single-material,
- * external-spool only, so the external-spool case below is the only mapping
- * there is.
+ * Ported from Helix's BambuPrintProtocolTest. The payload here is the one sent
+ * without an AMS mapping (single-material, external spool), which is what the
+ * app sends until BambuAms.AMS_PRINT_VERIFIED; the AMS mapping itself (one entry
+ * per project filament, AMS HT, both external holders, two nozzles) is tested
+ * in domain's BambuAmsMappingTest.
  */
 class BambuPrintProtocolTest {
 

@@ -43,6 +43,22 @@ class BambuMultiFilamentGuardTest {
         assertEquals(0, bambuBundleFilaments(gcode))
     }
 
+    // An H2C file sliced with the nozzle rack's dynamic map is refused before upload (BambuPrinterService.startPrint):
+    // the plate metadata that says so is read from the bundle's slice_info.
+    @Test fun readsTheDynamicNozzleMapFlagFromARealBundle() {
+        val file = File.createTempFile("guard", ".gcode.3mf").apply {
+            deleteOnExit()
+            ZipOutputStream(outputStream()).use { zip ->
+                zip.putNextEntry(ZipEntry("Metadata/slice_info.config"))
+                zip.write(sliceInfo(1).replace("<plate>\n", "<plate>\n    <metadata key=\"enable_filament_dynamic_map\" value=\"true\"/>\n").toByteArray())
+                zip.closeEntry()
+            }
+        }
+        assertTrue(BambuPrintProtocol.slicePlate(bambuBundleSliceInfo(file)!!).dynamicNozzleMap)
+        assertEquals(false, BambuPrintProtocol.slicePlate(bambuBundleSliceInfo(bundle(1))!!).dynamicNozzleMap)
+        assertEquals(null, bambuBundleSliceInfo(bundle(null)))
+    }
+
     @Test fun theRefusalSaysWhatToDoInstead() {
         assertTrue(BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED.contains("more than one filament"))
         assertTrue(BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED.contains("Bambu Studio"))

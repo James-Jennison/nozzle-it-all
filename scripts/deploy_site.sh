@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 HOST=website-vm-admin; ROOT=/home/jamesjen/nozzleitall.com
 python3 scripts/build_site.py --check
-FLAGS=(-a -v --exclude='mmf-auth/' --chmod=D750,F644 --chown=jamesjen:nobody -e ssh)
+FLAGS=(-a -v --exclude='mmf-auth/' --exclude='testgrid/' --chmod=D750,F644 --chown=jamesjen:nobody -e ssh)
 if [ "${1:-}" != "--go" ]; then rsync -n "${FLAGS[@]}" site/ "$HOST:$ROOT/"; echo "(dry run; pass --go to deploy)"; exit 0; fi
 TS=$(date -u +%Y%m%dT%H%MZ)
 ssh "$HOST" "mkdir -p /root/backups && tar czf /root/backups/nozzleitall-webroot-$TS.tgz -C /home/jamesjen nozzleitall.com && echo backup: /root/backups/nozzleitall-webroot-$TS.tgz"

@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only Test Mode's outgoing evidence bundle is shareable (TestModeController.emailBundle). -->
+<paths><cache-path name="testgrid-share" path="testgrid-share/"/></paths>

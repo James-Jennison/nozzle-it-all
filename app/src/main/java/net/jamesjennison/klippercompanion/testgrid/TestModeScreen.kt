@@ -531,9 +531,24 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
             }
         }
     }
-    if (bundle != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button({ exporter.launch("nozzle-evidence-${session?.suite?.id}-${bundle.bundleDigest.take(12)}.zip") }, enabled = !s.busy, modifier = Modifier.testTag("export-bundle")) { Text("Export bundle") }
-        OutlinedButton({ c.clearRun(); close() }, enabled = !s.busy, modifier = Modifier.testTag("clear-run")) { Text(if (s.exported != null) "Done: remove from this device" else "Discard without exporting") }
+    if (bundle != null) Section("6. Send it to Nozzle It All") {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var code by remember { mutableStateOf(c.testerCode) }
+        Text("Sends this bundle, exactly as shown above, to the Nozzle It All maintainers. Nothing else from your phone is sent.",
+            style = MaterialTheme.typography.bodySmall)
+        if (s.submitted == null) {
+            OutlinedTextField(code, { code = it }, label = { Text("Your tester code") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("tester-code"))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button({ c.submit(code) }, enabled = !s.busy && code.isNotBlank(), modifier = Modifier.testTag("submit-bundle")) { Text("Send to Nozzle It All") }
+                OutlinedButton({ c.emailBundle(context) }, enabled = !s.busy, modifier = Modifier.testTag("email-bundle")) { Text("Email it instead") }
+            }
+        }
+        s.submitted?.let { Text("Received by Nozzle It All: $it. Thank you.", color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("submitted")) }
+        s.submitError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("submit-error")) }
     }
-    s.exported?.let { Text("Exported bundle $it", color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("exported")) }
+    if (bundle != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton({ exporter.launch("nozzle-evidence-${session?.suite?.id}-${bundle.bundleDigest.take(12)}.zip") }, enabled = !s.busy, modifier = Modifier.testTag("export-bundle")) { Text("Save a copy") }
+        OutlinedButton({ c.clearRun(); close() }, enabled = !s.busy, modifier = Modifier.testTag("clear-run")) { Text(if (s.exported != null || s.submitted != null) "Done: remove from this device" else "Discard without sending") }
+    }
+    s.exported?.let { Text("Saved bundle $it", color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("exported")) }
 }

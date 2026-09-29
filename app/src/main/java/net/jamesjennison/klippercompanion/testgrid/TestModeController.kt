@@ -1,6 +1,9 @@
 package net.jamesjennison.klippercompanion.testgrid
 
 import android.content.Context
+import androidx.core.content.edit
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import com.nozzleitall.testgrid.EvidenceBuilder
 import com.nozzleitall.testgrid.EvidenceBundle
 import com.nozzleitall.testgrid.FirmwareFamilies
@@ -65,6 +68,9 @@ data class TestModeState(
     val carryAvailable: Map<String, com.nozzleitall.testgrid.PriorPass> = emptyMap(),
     /** Which of them the operator lets stand instead of running again (all, until they untick one). */
     val carryChosen: Set<String> = emptySet(),
+    /** Receipt of "Send to Nozzle It All": the inbox's id for the bundle, or the reason it wasn't received. */
+    val submitted: String? = null,
+    val submitError: String? = null,
 )
 
 /**
@@ -257,10 +263,55 @@ class TestModeController private constructor(private val context: Context) {
         }
     }
 
+    /** The tester code the maintainers handed out, remembered on this device after the first successful send. */
+    val testerCode: String get() = context.getSharedPreferences("testgrid", Context.MODE_PRIVATE).getString("tester_code", "").orEmpty()
+
+    /**
+     * "Send to Nozzle It All": posts the bundle exactly as previewed to the Test Grid inbox. Sent once per tap; the inbox
+     * names bundles by their content, so the same bundle sent twice is filed once.
+     */
+    fun submit(code: String) {
+        val b = _state.value.bundle ?: return
+        update { it.copy(submitError = null) }
+        work {
+            val request = okhttp3.Request.Builder().url(SUBMIT_URL).header("X-Nozzle-Tester", code.trim())
+                .post(b.zip().toRequestBody("application/zip".toMediaTypeOrNull())).build()
+            val client = okhttp3.OkHttpClient.Builder().callTimeout(3, java.util.concurrent.TimeUnit.MINUTES).build()
+            val (ok, message) = try {
+                client.newCall(request).execute().use { r ->
+                    val body = runCatching { JSONObject(r.body?.string().orEmpty()) }.getOrNull()
+                    if (r.isSuccessful && body?.optBoolean("received") == true) true to (body.optString("id") + if (body.optBoolean("duplicate")) " (already received)" else "")
+                    else false to (body?.optString("error")?.takeIf { it.isNotBlank() } ?: "The inbox answered HTTP ${r.code}.")
+                }
+            } catch (e: java.io.IOException) { false to "Couldn't reach nozzleitall.com (${e.message}). Nothing is lost: try again, or email it instead." }
+            if (ok) {
+                context.getSharedPreferences("testgrid", Context.MODE_PRIVATE).edit { putString("tester_code", code.trim()) }
+                update { it.copy(submitted = message, submitError = null) }
+            } else update { it.copy(submitError = message) }
+        }
+    }
+
+    /** "Email it instead": hands the bundle to the phone's email app, addressed to the Test Grid maintainers. */
+    fun emailBundle(activity: Context) {
+        val b = _state.value.bundle ?: return
+        val suite = session?.suite
+        val dir = File(context.cacheDir, "testgrid-share").apply { deleteRecursively(); mkdirs() }
+        val file = File(dir, "nozzle-evidence-${suite?.id}-${b.bundleDigest.take(12)}.zip").apply { writeBytes(b.zip()) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".testgrid.files", file)
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("application/zip")
+            .putExtra(android.content.Intent.EXTRA_EMAIL, arrayOf(SUBMIT_EMAIL))
+            .putExtra(android.content.Intent.EXTRA_SUBJECT, "Nozzle Test Grid bundle: ${suite?.title ?: "run"} (${b.bundleDigest.take(12)})")
+            .putExtra(android.content.Intent.EXTRA_TEXT, "Test Grid evidence bundle from Test Mode.\nSuite: ${suite?.id} ${suite?.version}\nBundle digest: ${b.bundleDigest}\n")
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        activity.startActivity(android.content.Intent.createChooser(send, "Email the bundle"))
+    }
+
     /** After export (or to abandon a finished run): removes the run from this device. */
     fun clearRun() { discardSaved() }
 
     companion object {
+        const val SUBMIT_URL = "https://nozzleitall.com/testgrid/submit.php"
+        const val SUBMIT_EMAIL = "support@nozzleitall.com"
         // Holds only the application context (see shared()), which lives as long as the process: not a leak.
         @android.annotation.SuppressLint("StaticFieldLeak")
         private var shared: TestModeController? = null

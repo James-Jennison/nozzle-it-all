@@ -30,7 +30,9 @@ credentials; they stay on your phone.
 4. **Review the plan.** Every step is listed with what it does. Choose the highest safety level you allow:
    0 slicing only, 1 read-only, 2 upload/delete one test file, 3 heaters to 60 °C / 40 °C, homing and a 5 mm move,
    4 printing. Tests above your choice are recorded as skipped. Only levels that run at least one test are offered:
-   on COSMOS even slicing reads the printer's firmware first, so its suite starts at level 1.
+   on COSMOS even slicing reads the printer's firmware first, so its suite starts at level 1. Tests that already
+   passed on this printer, firmware and Nozzle version are listed under "Already passed" and not repeated; untick one
+   to run it again. A slice or upload a later test needs always runs again.
 5. **Run.** Test Mode does the automatic steps itself and stops whenever it needs you:
    - **Preconditions:** tick only what is true now. "Not met" skips the test (recorded as blocked).
    - **Approve this step:** shows the exact action (for example "Heat the active nozzle to 60 °C") and the printer

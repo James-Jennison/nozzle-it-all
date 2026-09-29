@@ -32,14 +32,21 @@ data class RunEntry(
     val review: String, val supersedes: List<String>, var supersededBy: String? = null,
     /** Per category, the tests this run actually ran (anything but SKIPPED or UNVERIFIED). */
     val testsRun: Map<Category, Set<String>> = emptyMap(),
+    /** Each test this run actually ran, with its result. */
+    val results: Map<String, ResultState> = emptyMap(),
+    /** Per category, every test of this scope the run's suite has, run or not. */
+    val allTests: Map<Category, Set<String>> = emptyMap(),
 )
 
 /**
- * [current] is the newest eligible run; [sources] names, per category, the run whose grade the matrix shows: the newest
- * eligible run that actually graded that category. A later run that skipped a category (a lower safety level) does not
- * displace an earlier graded result for it (found filing a level-1 rerun after a level-2 run on the PAXX U1).
+ * [current] is the newest eligible run. Each category is graded from each of its tests' newest actual result across the
+ * row's eligible runs ([grades]); a test no run has actually run counts as SKIPPED. So a later run that skipped tests (a
+ * lower safety level, or tests carried over because they had already passed) never lowers an earlier graded result, and
+ * a newer result for the same test always replaces an older one. [contributors] lists, per category, the runs whose
+ * results that grade uses, newest first; [sources] is the newest of them.
  */
-data class Row(val key: RowKey, val current: RunEntry?, val history: List<RunEntry>, val note: String, val sources: Map<Category, RunEntry?> = emptyMap())
+data class Row(val key: RowKey, val current: RunEntry?, val history: List<RunEntry>, val note: String, val sources: Map<Category, RunEntry?> = emptyMap(),
+               val grades: Map<Category, ResultState> = emptyMap(), val contributors: Map<Category, List<RunEntry>> = emptyMap())
 
 data class CompatibilityReport(val rows: List<Row>, val rejected: List<Pair<String, List<String>>>, val duplicates: List<Pair<String, String>>)
 
@@ -80,13 +87,13 @@ object ReportBuilder {
                             if (kind == TargetKind.SIMULATED) ResultState.UNVERIFIED else raw
                         }
                         val tests = ev.objects("tests").filter { it.optString("scope") == scope.id }
-                        val testsRun = Category.entries.associateWith { c ->
-                            tests.filter { it.optString("category") == c.id && ResultState.parse(it.optString("result")) !in setOf(ResultState.SKIPPED, ResultState.UNVERIFIED, null) }
-                                .map { it.optString("id") }.toSet()
-                        }
+                        val ran = tests.filter { ResultState.parse(it.optString("result")) !in setOf(ResultState.SKIPPED, ResultState.UNVERIFIED, null) }
+                        val testsRun = Category.entries.associateWith { c -> ran.filter { it.optString("category") == c.id }.map { it.optString("id") }.toSet() }
+                        val results = ran.associate { it.optString("id") to ResultState.parse(it.optString("result"))!! }
+                        val allTests = Category.entries.associateWith { c -> tests.filter { it.optString("category") == c.id }.map { it.optString("id") }.toSet() }
                         entries.getOrPut(key) { mutableListOf() } += RunEntry(run.optString("runId"), b.bundleDigest, b.contentDigest, run.optLong("completedAt"), kind,
                             ev.getJSONObject("suite").optString("id"), ev.getJSONObject("suite").optString("version"), ev.getJSONObject("suite").optString("coverage"),
-                            source, cells, review, run.strings("supersedes"), testsRun = testsRun)
+                            source, cells, review, run.strings("supersedes"), testsRun = testsRun, results = results, allTests = allTests)
                     }
                 }
             }
@@ -98,28 +105,28 @@ object ReportBuilder {
             val eligible = history.filter { !it.review.startsWith("rejected") }
             val pool = eligible.filter { it.targetKind == TargetKind.PHYSICAL }.ifEmpty { eligible }
             val current = pool.lastOrNull()
-            // Per category: the newest run that covered it, unless an older run covered strictly more of its tests (a
-            // lower-level rerun doesn't replace a fuller earlier result; a newer run with at least the same coverage does).
-            val sources = Category.entries.associateWith { c ->
-                var chosen: RunEntry? = null
-                pool.asReversed().forEach { r ->
-                    val cov = r.testsRun[c].orEmpty()
-                    if (cov.isEmpty()) return@forEach
-                    val best = chosen?.testsRun?.get(c).orEmpty()
-                    if (chosen == null || (cov.containsAll(best) && cov.size > best.size)) chosen = r
-                }
-                chosen ?: current
+            // Per category: each test's newest actual result across the eligible runs; a test never actually run is SKIPPED.
+            val physical = current?.targetKind == TargetKind.PHYSICAL
+            val contributors = mutableMapOf<Category, List<RunEntry>>()
+            val grades = Category.entries.associateWith { c ->
+                val tests = pool.flatMap { it.allTests[c].orEmpty() }.toSortedSet()
+                if (tests.isEmpty() || !physical) return@associateWith ResultState.UNVERIFIED
+                val used = mutableListOf<RunEntry>()
+                val results = tests.map { t -> pool.lastOrNull { t in it.results }?.also { used += it }?.results?.get(t) ?: ResultState.SKIPPED }
+                contributors[c] = used.distinct().sortedByDescending { it.completedAt }
+                CategoryGrades.grade(results)
             }
+            val sources = Category.entries.associateWith { c -> contributors[c]?.firstOrNull() ?: current }
             history.forEach { old ->
                 old.supersededBy = history.firstOrNull { it.supersedes.contains(old.runId) }?.runId
-                    ?: if (old !== current && current != null && sources.values.none { it === old } && old.targetKind == current.targetKind && old.completedAt <= current.completedAt) current.runId else null
+                    ?: if (old !== current && current != null && contributors.values.none { l -> l.any { it === old } } && old.targetKind == current.targetKind && old.completedAt <= current.completedAt) current.runId else null
             }
             val note = when {
                 current == null -> "Every bundle for this configuration was rejected by a maintainer."
                 current.targetKind == TargetKind.SIMULATED -> "Simulated runs only: software exercised, hardware UNVERIFIED."
                 else -> ""
             }
-            Row(key, current, history, note, sources)
+            Row(key, current, history, note, sources, grades, contributors)
         }.toMutableList()
 
         // Configurations a suite covers but no bundle does: listed, every category UNVERIFIED.
@@ -136,9 +143,9 @@ object ReportBuilder {
     }
 
     fun cell(row: Row, c: Category): String {
-        val cur = row.sources[c] ?: row.current ?: return ResultState.UNVERIFIED.name
-        val r = cur.grades[c] ?: ResultState.UNVERIFIED
-        return if (cur.targetKind == TargetKind.PHYSICAL && cur.review == "unreviewed" && r != ResultState.UNVERIFIED) "${r.name} (unreviewed)" else r.name
+        val r = row.grades[c] ?: return ResultState.UNVERIFIED.name
+        val unreviewed = row.contributors[c].orEmpty().any { it.targetKind == TargetKind.PHYSICAL && it.review == "unreviewed" }
+        return if (unreviewed && r != ResultState.UNVERIFIED) "${r.name} (unreviewed)" else r.name
     }
 
     fun markdown(report: CompatibilityReport, title: String = "Nozzle Test Grid compatibility report"): String = buildString {
@@ -152,23 +159,23 @@ object ReportBuilder {
         appendLine("|" + "---|".repeat(6 + Category.entries.size))
         report.rows.forEach { r ->
             val fw = if (r.key.firmwareVersion == "—") r.key.firmwareFamily else "${r.key.firmwareFamily} ${r.key.firmwareVersion}"
-            val used = Category.entries.mapNotNull { r.sources[it] }.distinct()
+            val used = Category.entries.flatMap { r.contributors[it].orEmpty() }.distinct().sortedByDescending { it.completedAt }
             val ev = if (used.isEmpty()) r.note else used.joinToString("; ") { "${it.targetKind.id} run `${it.runId.take(8)}` (${it.suiteId} ${it.suiteVersion}), bundle `${it.bundleDigest.take(12)}`" }
-            fun shown(c: Category) = cell(r, c) + if (used.size > 1) " · `${r.sources[c]?.runId?.take(8)}`" else ""
+            fun shown(c: Category) = cell(r, c) + if (used.size > 1) r.contributors[c].orEmpty().joinToString("") { " · `${it.runId.take(8)}`" } else ""
             appendLine("| ${r.key.manufacturer} ${r.key.model} | $fw | ${r.key.nozzleVersion} | ${r.key.adapter} | ${r.key.scope.label} | " +
                 Category.entries.joinToString(" | ") { shown(it) } + " | $ev |")
         }
         val withHistory = report.rows.filter { it.history.isNotEmpty() }
         if (withHistory.isNotEmpty()) {
             appendLine(); appendLine("## History"); appendLine()
-            appendLine("Every run is kept. For each category the matrix shows the newest run that graded it; a newer run that skipped a category leaves the earlier result in place. Superseded runs and their bundle digests remain here.")
+            appendLine("Every run is kept. Each category in the matrix is graded from each of its tests' newest actual result across these runs, and names the runs used; a newer run that skipped tests (a lower level, or tests that had already passed) leaves the earlier results in place. Superseded runs and their bundle digests remain here.")
             withHistory.forEach { r ->
                 appendLine(); appendLine("### ${r.key.manufacturer} ${r.key.model} · ${r.key.firmwareFamily} ${r.key.firmwareVersion} · Nozzle ${r.key.nozzleVersion} · ${r.key.adapter} · ${r.key.scope.label}")
                 appendLine()
                 appendLine("| Run | Kind | Suite | Completed (UTC) | " + Category.entries.joinToString(" | ") { it.label } + " | Review | Status | Bundle digest | Source |")
                 appendLine("|" + "---|".repeat(8 + Category.entries.size))
                 r.history.forEach { h ->
-                    val shownFor = Category.entries.filter { r.sources[it] === h }
+                    val shownFor = Category.entries.filter { c -> r.contributors[c].orEmpty().any { it === h } }
                     val status = when {
                         h === r.current && shownFor.size == Category.entries.size -> "current"
                         shownFor.isNotEmpty() -> "current for ${shownFor.joinToString { it.label.lowercase() }}"
@@ -195,6 +202,7 @@ object ReportBuilder {
                 .put("nozzleVersion", r.key.nozzleVersion).put("adapter", r.key.adapter).put("scope", r.key.scope.id)
                 .put("grades", JSONObject(Category.entries.associate { it.id to cell(r, it) }))
                 .put("gradeSources", JSONObject(Category.entries.associate { it.id to (r.sources[it]?.runId ?: JSONObject.NULL) }))
+                .put("gradeRuns", JSONObject(Category.entries.associate { c -> c.id to JSONArray(r.contributors[c].orEmpty().map { it.runId }) }))
                 .put("current", r.current?.runId ?: JSONObject.NULL).put("note", r.note)
                 .put("history", JSONArray(r.history.map { h ->
                     JSONObject().put("runId", h.runId).put("kind", h.targetKind.id).put("suite", "${h.suiteId} ${h.suiteVersion}").put("completedAt", h.completedAt)

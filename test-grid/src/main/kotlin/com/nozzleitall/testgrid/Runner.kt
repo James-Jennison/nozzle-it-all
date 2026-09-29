@@ -94,7 +94,7 @@ class RunSession private constructor(
 
         /** Starts a new run. [snapshot] comes from TargetCheck.inspect and must have no mismatches for [suite]. */
         fun start(suite: Suite, target: TestTarget, snapshot: TargetSnapshot, slicer: TestSlicer?, env: Environment, journal: RunJournal?,
-                  maxLevel: SafetyLevel, supersedes: List<String> = emptyList()): RunSession {
+                  maxLevel: SafetyLevel, supersedes: List<String> = emptyList(), carried: Map<String, PriorPass> = emptyMap()): RunSession {
             val problems = TargetCheck.mismatches(suite, snapshot, env.producer.version)
             if (problems.isNotEmpty()) throw RunRefused(problems.joinToString("\n"))
             if (maxLevel < suite.minSafetyLevel) throw RunRefused("Nothing in ${suite.title} runs at ${maxLevel.label}; its first tests need ${suite.minSafetyLevel.label}.")
@@ -104,6 +104,8 @@ class RunSession private constructor(
                     TestRecord(t.id, steps = t.steps.map { StepRecord(it.id, it.kindId, "main") }.toMutableList(),
                         cleanup = t.cleanup.map { StepRecord(it.id, it.kindId, "cleanup") }.toMutableList())
                 }, supersedes = supersedes)
+            val carry = CarryOver.effective(suite, maxLevel, carried)
+            if (carry.isNotEmpty()) record.context.put("carried", JSONObject(carry.mapValues { it.value.toJson() }.toSortedMap()))
             return RunSession(suite, target, slicer, env, journal, record).also {
                 it.log("Run started: suite ${suite.id} ${suite.version}, highest level allowed ${maxLevel.level}, target ${target.description.kind.id} ${snapshot.classified.detail}")
                 it.save()
@@ -218,6 +220,8 @@ class RunSession private constructor(
 
     private fun skipReason(test: TestCase): String? = when {
         test.safetyLevel.level > record.maxLevel -> "Above the highest safety level chosen for this run (${test.safetyLevel.label})."
+        CarryOver.carriedFrom(record, test.id) != null -> CarryOver.carriedFrom(record, test.id)!!.let {
+            "Already passed in run ${it.runId.take(8)} (${java.time.Instant.ofEpochMilli(it.completedAt).toString().take(10)}${it.bundleDigest?.let { d -> ", bundle ${d.take(12)}" } ?: ""}); not repeated." }
         else -> test.requiredHardware.firstOrNull { record.target.optJSONObject("hardware")?.optBoolean(it) != true }
             ?.let { "Needs \"$it\" hardware, which was not detected on this printer. Multi-material results are never inferred from single-material ones." }
     }
@@ -226,7 +230,8 @@ class RunSession private constructor(
         test.unsupportedSteps.firstOrNull()?.let { return "Step ${it.id} uses \"${it.kindId}\", which needs a newer Nozzle It All." }
         test.dependsOn.forEach { d ->
             val r = record.test(d)?.result
-            if (r != ResultState.PASS && r != ResultState.PARTIAL) return "Depends on test $d, which is ${r ?: ResultState.UNVERIFIED}."
+            // A dependency that passed in an earlier run (carried over) counts as passed.
+            if (r != ResultState.PASS && r != ResultState.PARTIAL && CarryOver.carriedFrom(record, d) == null) return "Depends on test $d, which is ${r ?: ResultState.UNVERIFIED}."
         }
         val caps = record.target.strings("capabilities").toSet()
         val missing = test.requiredCapabilities.filter { it !in caps }

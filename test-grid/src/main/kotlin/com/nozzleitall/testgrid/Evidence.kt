@@ -111,7 +111,8 @@ object EvidenceBuilder {
             mapOf("id" to t.id, "title" to t.title, "category" to t.category.id, "scope" to t.scope.id, "safetyLevel" to t.safetyLevel.level,
                 "state" to r.state.name, "result" to r.result.name, "reason" to r.reason, "startedAt" to r.startedAt, "finishedAt" to r.finishedAt,
                 "preconditions" to r.preconditions, "expectedObservations" to t.expectedObservations,
-                "steps" to (r.steps + r.cleanup).map { s -> stepJson(s) }, "evidence" to evidence, "missingEvidence" to missing)
+                "steps" to (r.steps + r.cleanup).map { s -> stepJson(s) }, "evidence" to evidence, "missingEvidence" to missing) +
+                (CarryOver.carriedFrom(record, t.id)?.let { mapOf("carriedFrom" to it.toJson()) } ?: emptyMap())
         }
 
         // Grades per scope and category, from that category's own tests only.

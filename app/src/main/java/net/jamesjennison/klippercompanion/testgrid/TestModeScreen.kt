@@ -266,7 +266,10 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
 @Composable private fun PlanStep(c: TestModeController, s: TestModeState) {
     val suite = s.suite ?: return
     val models = remember { runCatching { ModelLibrary.fromResources() }.getOrNull() }
-    val running = suite.tests.filter { it.safetyLevel <= s.maxLevel }
+    // Tests that already passed here stand unless unticked; one whose files a later test uses runs again anyway.
+    val offered = s.carryAvailable.filterKeys { id -> suite.test(id)?.let { it.safetyLevel <= s.maxLevel } == true }
+    val carried = com.nozzleitall.testgrid.CarryOver.effective(suite, s.maxLevel, offered.filterKeys { it in s.carryChosen })
+    val running = suite.tests.filter { it.safetyLevel <= s.maxLevel && it.id !in carried }
     val skipped = suite.tests.filter { it.safetyLevel > s.maxLevel }
     Section("4. How far to go") {
         Text(suite.title, fontWeight = FontWeight.Bold)
@@ -289,6 +292,27 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
         }
         Text("Every step that changes the printer waits for your approval. Tests above the chosen level are recorded as skipped, never as passed.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (offered.isNotEmpty()) Section("Already passed (${carried.size} of ${offered.size} not repeated)") {
+        Text("These passed in an earlier run on this printer, firmware and Nozzle version. Untick one to run it again.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        suite.tests.filter { it.id in offered }.forEach { t ->
+            val prior = offered.getValue(t.id)
+            val chosen = t.id in s.carryChosen
+            Row(Modifier.fillMaxWidth().selectable(chosen, role = Role.Checkbox) { c.setCarry(t.id, !chosen) }.padding(vertical = 4.dp).testTag("carry-${t.id}"),
+                verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(chosen, null)
+                Column(Modifier.weight(1f)) {
+                    Text(t.title, style = MaterialTheme.typography.bodyMedium)
+                    val date = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(prior.completedAt))
+                    Text(when {
+                        !chosen -> "Runs again"
+                        t.id !in carried -> "Runs again: a later test in this run uses its files"
+                        else -> "Passed $date · not repeated"
+                    }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
     }
     Section("Will run (${running.size})") { running.forEach { PlanTestRow(it, models, true) } }
     if (skipped.isNotEmpty()) Section("Skipped at this level (${skipped.size})") { skipped.forEach { PlanTestRow(it, models, false) } }

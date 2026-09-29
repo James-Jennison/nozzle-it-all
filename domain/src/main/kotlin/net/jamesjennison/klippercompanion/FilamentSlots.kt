@@ -7,9 +7,15 @@ import org.json.JSONObject
  * One filament slot a printer reports: a filament-changer lane on a Klipper printer (FilamentLanes) or a CANVAS tray on an
  * Elegoo printer (ElegooPrinterService). [tool] is the 0-based T number the slot feeds, so slot `tool + 1` lines up with
  * the project's "Tool N" and the sliced file's T<n>.
+ *
+ * A Bambu AMS tray (BambuAmsTrays) is the exception: its [tool] is Bambu's global tray index (128+ for an AMS HT, 255/254
+ * for the external holders), not a T number, and it also says which unit it sits in ([unitKind], e.g. "AMS 2 Pro"),
+ * which nozzle that unit feeds ([extruder]: 0 the right or only nozzle, 1 the left, null none) and Bambu's short tray
+ * name ([shortName], "A1".."D4", "A" for an HT, "Ext"). Every other printer leaves those null.
  */
 data class FilamentSlot(val tool: Int, val material: String?, val colorHex: String?, val vendor: String? = null, val nozzleTempC: Int? = null,
-                        val active: Boolean = false, val name: String? = null) {
+                        val active: Boolean = false, val name: String? = null, val unitKind: String? = null, val extruder: Int? = null,
+                        val shortName: String? = null) {
     val loaded: Boolean get() = !material.isNullOrBlank()
     val label: String get() = listOfNotNull(vendor, material).joinToString(" ").ifBlank { "Empty" }
 }

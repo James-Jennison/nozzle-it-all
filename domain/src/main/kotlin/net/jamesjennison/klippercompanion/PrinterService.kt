@@ -98,8 +98,11 @@ data class BambuPrintRequest(
     val bedLeveling: Boolean = true,
     val flowCalibration: Boolean = true,
     val timelapse: Boolean = false,
-    /** Zero-based file tool -> global AMS lane (BambuAms.matchTrays). Only used once BambuAms.AMS_PRINT_VERIFIED. */
-    val toolToLane: Map<Int, Int> = emptyMap(),
+    /**
+     * Zero-based file tool -> the tray that feeds it (BambuAms.matchTrays over BambuAmsTrays.read). Only sent once
+     * BambuAms.AMS_PRINT_VERIFIED; until then a one-filament file prints from the external spool as it always has.
+     */
+    val amsMapping: Map<Int, BambuAmsTrays.BambuTray> = emptyMap(),
 )
 
 /**

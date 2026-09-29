@@ -153,16 +153,28 @@ class BambuPrinterService(
     }
 
     /**
-     * Uploads an already-sliced .gcode.3mf and asks the printer to print it.
-     * Single-material, external spool only - see BambuPrintProtocol's header.
+     * Uploads an already-sliced .gcode.3mf and asks the printer to print it. Without an AMS mapping (always, until
+     * BambuAms.AMS_PRINT_VERIFIED) that is single-material from the external spool - see BambuPrintProtocol's header.
      */
     private fun startPrint(request: BambuPrintRequest) {
+        val plate = bambuBundleSliceInfo(request.file)?.let(BambuPrintProtocol::slicePlate)
+        // An H2C dynamic-nozzle-map file needs a nozzle-mapping handshake this app doesn't do (BambuPrintProtocol).
+        if (plate?.dynamicNozzleMap == true) throw ApiFailure(BambuPrintProtocol.DYNAMIC_NOZZLE_MAP_NOT_SUPPORTED)
         // A multi-filament bundle needs an AMS mapping. Until one has been confirmed on a real printer
         // (BambuAms.AMS_PRINT_VERIFIED) it is refused before anything moves; after that, only with a mapping.
-        val multiFilament = bambuBundleFilaments(request.file) > 1
+        val used = plate?.filaments.orEmpty()
+        val multiFilament = used.size > 1
         if (multiFilament && !BambuAms.AMS_PRINT_VERIFIED) throw ApiFailure(BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED)
-        if (multiFilament && request.toolToLane.isEmpty()) throw ApiFailure("Match each filament in this file to an AMS tray before printing.")
-        val useAms = multiFilament && BambuAms.AMS_PRINT_VERIFIED
+        val mapped = BambuAms.AMS_PRINT_VERIFIED && request.amsMapping.isNotEmpty()
+        if (multiFilament && (!mapped || used.any { it.tool !in request.amsMapping })) throw ApiFailure("Match each filament in this file to an AMS tray before printing.")
+        // One entry per project filament (not a fixed four), checked against each filament's nozzle on a two-nozzle printer.
+        val dualNozzle = plate?.dualNozzle == true || request.amsMapping.values.any { it.extruder == BambuAmsTrays.DEPUTY_EXTRUDER }
+        val filamentMaps = plate?.filamentMaps.orEmpty()
+        val amsMapping: List<BambuAmsTrays.BambuTray?> = if (!mapped) emptyList() else {
+            BambuAms.mappingProblem(request.amsMapping, filamentMaps, dualNozzle)?.let { throw ApiFailure(it) }
+            val count = maxOf(plate?.projectFilamentCount ?: 0, (request.amsMapping.keys.maxOrNull() ?: -1) + 1)
+            List(count) { tool -> request.amsMapping[tool] }
+        }
         val remoteName = request.remoteName
         val md5 = md5Hex(request.file)
         try {
@@ -182,8 +194,9 @@ class BambuPrinterService(
                 bedLeveling = request.bedLeveling,
                 flowCalibration = request.flowCalibration,
                 timelapse = request.timelapse,
-                toolToLane = if (useAms) request.toolToLane else emptyMap(),
-                useAms = useAms,
+                amsMapping = amsMapping,
+                filamentMaps = filamentMaps,
+                dualNozzle = dualNozzle,
             )
         )
 
@@ -327,8 +340,11 @@ object BambuSnapshot {
 }
 
 /** How many filaments a `.gcode.3mf` bundle's slice_info lists; 0 for a plain G-code file or a bundle without one. */
-fun bambuBundleFilaments(file: File): Int = try {
+fun bambuBundleFilaments(file: File): Int = bambuBundleSliceInfo(file)?.let(BambuPrintProtocol::usedFilaments) ?: 0
+
+/** A `.gcode.3mf` bundle's `Metadata/slice_info.config`; null for a plain G-code file or a bundle without one. */
+fun bambuBundleSliceInfo(file: File): String? = try {
     java.util.zip.ZipFile(file).use { zip ->
-        zip.getEntry("Metadata/slice_info.config")?.let { entry -> zip.getInputStream(entry).bufferedReader().use { BambuPrintProtocol.usedFilaments(it.readText()) } } ?: 0
+        zip.getEntry("Metadata/slice_info.config")?.let { entry -> zip.getInputStream(entry).bufferedReader().use { it.readText() } }
     }
-} catch (_: java.util.zip.ZipException) { 0 }
+} catch (_: java.util.zip.ZipException) { null }

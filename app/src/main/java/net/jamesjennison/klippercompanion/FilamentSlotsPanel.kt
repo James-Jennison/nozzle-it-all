@@ -55,7 +55,8 @@ internal fun slotColor(hex: String?): Color? = hex?.removePrefix("#")?.takeIf { 
                 Row(Modifier.fillMaxWidth().testTag("filament-slot-${slot.tool + 1}"), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.size(16.dp).background(slotColor(slot.colorHex) ?: MaterialTheme.colorScheme.surfaceVariant, CircleShape))
-                        Text("Slot ${slot.tool + 1}" + if (slot.active) " · feeding" else "")
+                        // A Bambu tray's tool is Bambu's tray index (128+ for an AMS HT, 255/254 external), so it goes by its name.
+                        Text((slot.unitKind?.let { slot.name } ?: "Slot ${slot.tool + 1}") + if (slot.active) " · feeding" else "")
                     }
                     Text(if (slot.loaded) slot.label + (slot.nozzleTempC?.let { " · $it°C" } ?: "") else "Empty")
                 }

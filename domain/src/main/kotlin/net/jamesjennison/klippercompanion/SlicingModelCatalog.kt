@@ -33,7 +33,7 @@ object SlicingModelCatalog {
         SlicingModelInfo(SlicingPrinterModel.SNAPMAKER_U1, "Snapmaker U1", SlicingVendor.SNAPMAKER, "snapmaker_u1", true),
         SlicingModelInfo(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, "Elegoo Centauri Carbon (OpenCentauri COSMOS)", SlicingVendor.ELEGOO, "elegoo_centauri_carbon_cosmos", true),
         SlicingModelInfo(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_CANVAS, "Elegoo Centauri Carbon + CANVAS (Elegoo firmware)", SlicingVendor.ELEGOO, "elegoo_centauri_carbon_canvas", false),
-        SlicingModelInfo(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS, "Elegoo Centauri Carbon + CANVAS (OpenCentauri COSMOS)", SlicingVendor.ELEGOO, "elegoo_centauri_carbon_cosmos_afc", false),
+        SlicingModelInfo(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS, "Elegoo Centauri Carbon + CANVAS (OpenCentauri COSMOS)", SlicingVendor.ELEGOO, "elegoo_centauri_carbon_cosmos_afc", true),
         SlicingModelInfo(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS, "Elegoo Centauri Carbon 2 + CANVAS (Elegoo firmware)", SlicingVendor.ELEGOO, "elegoo_centauri_carbon_2_canvas", false),
         SlicingModelInfo(SlicingPrinterModel.BAMBU_GENERIC, "Bambu Lab A1", SlicingVendor.BAMBU, "bambu_generic", false),
         SlicingModelInfo(SlicingPrinterModel.BAMBU_A1_MINI, "Bambu Lab A1 mini", SlicingVendor.BAMBU, "bambu_a1_mini", false),

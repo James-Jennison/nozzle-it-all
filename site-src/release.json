@@ -1,6 +1,6 @@
 {
   "_comment": "Single source of truth for what the site may claim. States: active, released, development (built and being tested, not available to download or open), planned, deferred. A 'released' platform must have a url; the build refuses to render a launch/download button otherwise.",
-  "updated": "2026-09-26",
+  "updated": "2026-09-29",
   "github": "https://github.com/James-Jennison/nozzle-it-all",
   "support_email": "support@nozzleitall.com",
   "platforms": {

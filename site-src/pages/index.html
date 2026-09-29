@@ -19,8 +19,9 @@ path: /
  <section aria-labelledby="what">
   <h2 id="what">What it does</h2>
   <div class="grid">
-   <div class="card"><h3>Slice on your phone</h3><p>An on-device engine built from OrcaSlicer turns STL, 3MF and OBJ files into G-code, with a 3D plate, support painting and a layer-by-layer preview. Nothing is uploaded to a cloud slicer.</p></div>
+   <div class="card"><h3>Slice on your phone</h3><p>An on-device slicing engine turns STL, 3MF and OBJ files into G-code, with a 3D plate, support painting and a layer-by-layer preview. Nothing is uploaded to a cloud slicer.</p></div>
    <div class="card"><h3>Control from anywhere</h3><p>At home over Wi-Fi or away over mobile data, monitor temperatures and progress, start, pause and cancel prints, browse files and use the camera. Connect through Tailscale (recommended), Cloudflare Tunnel, OctoEverywhere or another private route you manage. <a href="/docs/#away-from-home">Set up remote access</a>.</p></div>
+   <div class="card"><h3>Print in more than one colour</h3><p>Slice multi-colour models for the U1's four toolheads, CANVAS, Bambu AMS, Prusa MMU3 and XL, Creality CFS, Anycubic ACE, Flashforge IFS, Qidi Box and Klipper filament changers, with a wipe tower and purge amounts worked out from the colours you have loaded. Tested on real printers so far: the U1 and the Centauri Carbon with CANVAS. <a href="/compatibility/">See the test results</a>.</p></div>
    <div class="card"><h3>Find something to print</h3><p>Browse free models from MyMiniFactory inside the app. The designer's credit is saved with every project you start from a model.</p></div>
    <div class="card"><h3>Alerts when it matters</h3><p>Optional background notifications when a print finishes, fails or a printer goes offline. Off until you turn them on.</p></div>
   </div>
@@ -30,14 +31,15 @@ path: /
   <h2 id="works">Works with</h2>
   <p><strong>Made first for the Snapmaker U1 with PAXX firmware.</strong> PAXX works entirely on your own network: no Snapmaker account, no cloud and no internet connection needed. Stock-firmware U1 printers are supported separately, and that support never gets in the way of PAXX.</p>
   <p>Some printer types are confirmed on real hardware and others are built from the vendors' published protocols. The <a href="/printers/">printers page</a> and the app say which is which, and we do not claim more than we have tested.</p>
-  <p><span class="badge verified">Verified on hardware</span> Klipper / Moonraker, Snapmaker U1 with PAXX firmware<br>
-  <span class="badge docs">Built from vendor docs</span> Bambu Lab (LAN mode), OctoPrint, PrusaLink</p>
+  <p><span class="badge verified">Verified on hardware</span> Klipper / Moonraker, Snapmaker U1 with PAXX firmware, Elegoo Centauri Carbon on OpenCentauri COSMOS (with CANVAS)<br>
+  <span class="badge docs">Not yet tested on a real printer</span> Bambu Lab (LAN mode), OctoPrint, PrusaLink, Snapmaker U1 (stock firmware), and, in the next update, Elegoo on Elegoo firmware, Creality and Flashforge</p>
+  <p>Printer owners test Nozzle It All on their own machines with the app's Test Mode; accepted results are on the <a href="/compatibility/">compatibility page</a>.</p>
  </section>
 
  <section aria-labelledby="privacy">
   <h2 id="privacy">Your printers stay yours</h2>
   <div class="callout">
-   <p><strong>No account. No analytics. No ads.</strong> The Android app talks to your printers directly over your own network, and to MyMiniFactory when you browse models. It sends nothing to us, and there is no Nozzle It All account or cloud service behind it. Nozzle It All for Desktop and Nozzle It All Web, both in development, are built the same way: they slice on your device and talk to your printers directly. <a href="/privacy/">Read the privacy policy</a>.</p>
+   <p><strong>No account. No analytics. No ads.</strong> The Android app talks to your printers directly over your own network, and to MyMiniFactory when you browse models. It sends nothing to us, except a hardware-test report that an invited tester chooses to send, and there is no Nozzle It All account or cloud service behind it. Nozzle It All for Desktop and Nozzle It All Web, both in development, are built the same way: they slice on your device and talk to your printers directly. <a href="/privacy/">Read the privacy policy</a>.</p>
   </div>
  </section>
 

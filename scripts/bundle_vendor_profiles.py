@@ -34,7 +34,7 @@ EXISTING = [
 # their folders are kept like EXISTING's: the Elegoo CANVAS packs (P-0011/P-0013 in docs/upstream/PROVENANCE.md). Each is
 # tied to one Elegoo firmware (ElegooProfiles.kt): the COSMOS AFC pack to COSMOS, the other two to Elegoo's own firmware.
 ADDED = [
-    ("ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS", "Elegoo Centauri Carbon + CANVAS (OpenCentauri COSMOS)", "ELEGOO", "elegoo_centauri_carbon_cosmos_afc", False),
+    ("ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS", "Elegoo Centauri Carbon + CANVAS (OpenCentauri COSMOS)", "ELEGOO", "elegoo_centauri_carbon_cosmos_afc", True),
     ("ELEGOO_CENTAURI_CARBON_CANVAS", "Elegoo Centauri Carbon + CANVAS (Elegoo firmware)", "ELEGOO", "elegoo_centauri_carbon_canvas", False),
     ("ELEGOO_CENTAURI_CARBON_2_CANVAS", "Elegoo Centauri Carbon 2 + CANVAS (Elegoo firmware)", "ELEGOO", "elegoo_centauri_carbon_2_canvas", False),
     # Prusa MMU3 (P-0031): CORE One from upstream OrcaSlicer (flattened as the other Prusa packs), MK4S / MK3.9 / MK3.5

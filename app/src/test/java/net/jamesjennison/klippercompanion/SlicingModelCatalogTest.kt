@@ -38,7 +38,9 @@ class SlicingModelCatalogTest {
 
     @Test fun onlyHardwareConfirmedModelsAreMarkedVerified() {
         assertEquals(
-            setOf(SlicingPrinterModel.SNAPMAKER_U1, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, SlicingPrinterModel.GENERIC_KLIPPER),
+            // COSMOS CANVAS: accepted Test Grid bundles 3e094a93 and b18cf044 printed two colours with this pack (2026-09-29).
+            setOf(SlicingPrinterModel.SNAPMAKER_U1, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, SlicingPrinterModel.GENERIC_KLIPPER,
+                SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS),
             SlicingModelCatalog.all.filter { it.verifiedOnHardware }.map { it.model }.toSet(),
         )
     }

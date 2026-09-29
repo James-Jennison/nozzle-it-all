@@ -3,6 +3,8 @@ package com.nozzleitall.testgrid
 import net.jamesjennison.klippercompanion.ElegooProfiles
 import net.jamesjennison.klippercompanion.FirmwareIdentity
 import net.jamesjennison.klippercompanion.PrinterKind
+import net.jamesjennison.klippercompanion.PrinterTransport
+import net.jamesjennison.klippercompanion.capabilitiesFor
 import net.jamesjennison.klippercompanion.SlicingPrinterModel
 import java.io.File
 import java.nio.ByteBuffer
@@ -29,13 +31,19 @@ class VirtualClock(@Volatile private var t: Long = System.currentTimeMillis()) {
  */
 class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = System::currentTimeMillis, val faults: MutableSet<String> = mutableSetOf()) : TestTarget {
     enum class Preset(val printerKind: PrinterKind, val manufacturer: String, val model: String, val app: String, val version: String,
-                      val paxx: Boolean, val afc: Boolean, val slicingModel: SlicingPrinterModel) {
+                      val paxx: Boolean, val afc: Boolean, val slicingModel: SlicingPrinterModel, val toolSlots: Int = 1) {
         PAXX_U1(PrinterKind.SNAPMAKER_U1_PAXX, "Snapmaker", "U1", "", "1.6.0.267_20260815150420", true, false, SlicingPrinterModel.SNAPMAKER_U1),
         STOCK_U1(PrinterKind.SNAPMAKER_U1, "Snapmaker", "U1", "", "1.6.0.267_20260815150420", false, false, SlicingPrinterModel.SNAPMAKER_U1),
         COSMOS_CC(PrinterKind.GENERIC_KLIPPER, "Elegoo", "Centauri Carbon", "OpenCentauri Cosmos", "Release - 26.08.0", false, false, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON),
         COSMOS_CC_CANVAS(PrinterKind.GENERIC_KLIPPER, "Elegoo", "Centauri Carbon", "OpenCentauri Cosmos", "Release - 26.08.0", false, true, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS),
         COSMOS_CC_LEGACY(PrinterKind.GENERIC_KLIPPER, "Elegoo", "Centauri Carbon", "OpenCentauri Cosmos", "Release - 26.06.2", false, false, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON),
-        GENERIC_KLIPPER(PrinterKind.GENERIC_KLIPPER, "Generic", "Klipper printer", "", "v0.12.0-437-g5b3c6c5b", false, false, SlicingPrinterModel.GENERIC_KLIPPER);
+        GENERIC_KLIPPER(PrinterKind.GENERIC_KLIPPER, "Generic", "Klipper printer", "", "v0.12.0-437-g5b3c6c5b", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
+        // Printers that take a file only together with a print start (send_and_start); no heaters, homing or moves via Nozzle.
+        BAMBU_P1S(PrinterKind.BAMBU_LAB, "Bambu Lab", "P1S", "", "", false, false, SlicingPrinterModel.BAMBU_P1S),
+        PRUSA_MK4S(PrinterKind.PRUSA_LINK, "Prusa", "MK4S", "", "", false, false, SlicingPrinterModel.PRUSA_MK4S),
+        OCTOPRINT(PrinterKind.OCTOPRINT, "Generic", "OctoPrint printer", "", "", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
+        ELEGOO_CC_STOCK(PrinterKind.ELEGOO, "Elegoo", "Centauri Carbon", "", "", false, true, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_CANVAS, 4),
+        PRUSA_XL_5T(PrinterKind.PRUSA_LINK, "Prusa", "XL 5T", "", "", false, false, SlicingPrinterModel.PRUSA_XL_5T, 5);
 
         companion object { fun parse(s: String) = entries.firstOrNull { it.name.equals(s.replace('-', '_'), ignoreCase = true) } }
     }
@@ -45,7 +53,7 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     private val apiKey = "sim-4f9c2e71d8a3b6f05e1a"
 
     override val description = TargetDescription(TargetKind.SIMULATED, preset.manufacturer, preset.model, preset.printerKind, "simulated", "simulated-moonraker",
-        "Simulated ${preset.model} ($hostname)", address, preset.slicingModel)
+        "Simulated ${preset.model} ($hostname)", address, preset.slicingModel, toolSlots = preset.toolSlots)
 
     private var state = "standby"
     private var nozzle = 24.0; private var nozzleTarget = 0.0
@@ -57,6 +65,8 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     private var homedAxes = ""
     private val position = doubleArrayOf(0.0, 0.0, 0.0)
     private val files = sortedSetOf("benchy.gcode")
+    /** Like the real connections for these printers: a file goes over only with a print start, and there is no file list. */
+    private val sendOnly = capabilitiesFor(preset.printerKind).transport != PrinterTransport.MOONRAKER
 
     override fun identity() = LiveIdentity(FirmwareIdentity(preset.app, preset.version), hostname, preset.paxx, preset.afc)
 
@@ -77,9 +87,10 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     override fun cameraSnapshot(camera: CameraInfo): ByteArray = ByteArray(2048).also { b ->
         byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()).copyInto(b); b[2046] = 0xFF.toByte(); b[2047] = 0xD9.toByte()
     }
-    override fun files(): List<String> = synchronized(this) { files.toList() }
+    override fun files(): List<String> = synchronized(this) { if (sendOnly) throw UnsupportedByTarget("This printer connection lists no files."); files.toList() }
     override fun materialSlots(): List<String> = when {
         preset.afc -> listOf("lane1: PLA white", "lane2: PLA black", "lane3: PETG orange", "lane4: empty")
+        preset.printerKind == PrinterKind.BAMBU_LAB -> listOf("AMS 1 slot 1: PLA white", "AMS 1 slot 2: PLA black")
         preset.printerKind == PrinterKind.SNAPMAKER_U1_PAXX || preset.printerKind == PrinterKind.SNAPMAKER_U1 -> listOf("T0: PLA", "T1: PLA", "T2: PLA", "T3: PLA")
         else -> throw UnsupportedByTarget("This printer reports no material slots.")
     }
@@ -87,7 +98,18 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     override fun uploadPreflight(file: File): String? =
         if ("guard_disabled" in faults) null else file.bufferedReader().useLines { ElegooProfiles.stockElegooCommand(it) }?.let { ElegooProfiles.stockElegooRefusal(it) }
 
+    @Synchronized override fun sendAndStart(file: File, requestedName: String): TransferOutcome {
+        if (!sendOnly) throw UnsupportedByTarget("This printer connection takes files through upload and start steps instead.")
+        if (state !in StatusReading.IDLE_STATES) return TransferOutcome.Refused("The printer is $state; start a print when it is ready.")
+        if ("reject:send_and_start" in faults) return TransferOutcome.Refused("The printer rejected the print command.", sent = true)
+        files += requestedName; state = "printing"; progress = 0f; loaded = requestedName
+        if ("lost_ack:send_and_start" in faults) return TransferOutcome.Unknown("The printer did not acknowledge the print command.")
+        if ("lost_ack_noeffect:send_and_start" in faults) { state = "standby"; loaded = ""; return TransferOutcome.Unknown("The printer did not acknowledge the print command.") }
+        return TransferOutcome.Verified(requestedName, Canon.sha256(file))
+    }
+
     @Synchronized override fun upload(file: File, requestedName: String): TransferOutcome {
+        if (sendOnly) throw UnsupportedByTarget("This printer takes a file only together with a print start.")
         uploadPreflight(file)?.let { return TransferOutcome.Refused(it) }
         if (state !in StatusReading.IDLE_STATES) return TransferOutcome.Refused("File changes require an idle, ready printer.")
         if ("reject:upload" in faults) return TransferOutcome.Refused("HTTP 400 from $address/server/files/upload", sent = true)
@@ -113,6 +135,8 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
             is ControlAction.SetTemperature -> "set_temperature"; ControlAction.Home -> "home"; is ControlAction.Jog -> "jog"
             is ControlAction.StartPrint -> "start_print"; ControlAction.Pause -> "pause"; ControlAction.Resume -> "resume"; ControlAction.Cancel -> "cancel"
         }
+        if (sendOnly && action !is ControlAction.Pause && action !is ControlAction.Resume && action !is ControlAction.Cancel)
+            return CommandOutcome.Rejected("Not available for this printer connection through Nozzle.", sent = false)
         if ("reject:$kind" in faults) return CommandOutcome.Rejected("Printer answered HTTP 400 for $kind at $address", sent = true)
         if ("lost_ack_noeffect:$kind" in faults) return CommandOutcome.Unknown("No reply from $address/printer/gcode/script within 10 s (Authorization: Bearer $apiKey)")
         when (action) {

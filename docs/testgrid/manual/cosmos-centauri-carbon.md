@@ -1,7 +1,7 @@
 # Elegoo Centauri Carbon on OpenCentauri COSMOS
 
-Suite `cosmos-centauri-carbon` version 1.3.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `fd46b3f935de0e00bf2dea29378b073bc2330f2970aa1e298035601fe647e57c`.
+Suite `cosmos-centauri-carbon` version 1.4.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `cbba9d1cfc02e7c996c35611d0f8ad8a49c4da81c3067bed9bdea2ef2056d562`.
 
 Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.
 

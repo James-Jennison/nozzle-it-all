@@ -121,7 +121,8 @@ class TestModeController private constructor(private val context: Context) {
     }
 
     private fun buildTarget(option: TargetOption, declaredFamily: String?): TestTarget = when (option) {
-        is TargetOption.Saved -> AndroidTestTarget(option.profile, context.cacheDir, declaredFamily)
+        is TargetOption.Saved -> AndroidTestTarget(option.profile, context.cacheDir, declaredFamily,
+            toolSlots = option.profile.slicingModel?.let { net.jamesjennison.klippercompanion.toolCountFor(it, option.profile.declaredCosmosProfileGeneration, context, option.profile.customMachine) } ?: 1)
         is TargetOption.Simulated -> SimulatedPrinter(option.preset, simulatedClock::now)
     }
 

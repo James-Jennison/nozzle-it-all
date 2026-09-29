@@ -88,10 +88,12 @@ data class GcodeSummary(
     /** Extents of extruding moves on the model itself (object feature types), excluding purge/prime lines. */
     val objectExtents: List<Double>?,
     val allExtents: List<Double>?,
+    /** Extents of everything the slicer prints (skirt, prime tower, model), after the printer's own start G-code. */
+    val printExtents: List<Double>? = allExtents,
     val toolsUsed: Set<Int>, val macros: Set<String>, val stockElegooCommand: String?, val maxZ: Double?,
 ) {
     fun toJson(): Map<String, Any?> = mapOf("sha256" to sha256, "bytes" to bytes, "lines" to lines, "extrusionMoves" to extrusionMoves,
-        "objectExtents" to objectExtents, "allExtents" to allExtents, "toolsUsed" to toolsUsed.sorted(), "maxZ" to maxZ,
+        "objectExtents" to objectExtents, "allExtents" to allExtents, "printExtents" to printExtents, "toolsUsed" to toolsUsed.sorted(), "maxZ" to maxZ,
         "macros" to macros.sorted().take(40), "stockElegooCommand" to stockElegooCommand)
 }
 
@@ -102,6 +104,16 @@ object GcodeScan {
     private val TOOL = Regex("""^T(\d{1,2})\b""")
     private val WORD = Regex("""^([A-Za-z_][A-Za-z0-9_]*)""")
 
+    /** A Bambu `.gcode.3mf` bundle is a zip; its plate G-code (Metadata/plate_N.gcode) is what gets checked. */
+    private fun readable(file: File): java.io.Reader {
+        val magic = file.inputStream().use { i -> ByteArray(2).also { i.read(it) } }
+        if (magic[0] != 'P'.code.toByte() || magic[1] != 'K'.code.toByte()) return file.bufferedReader()
+        val zip = java.util.zip.ZipFile(file)
+        val entry = zip.entries().asSequence().firstOrNull { Regex("""Metadata/plate_\d+\.gcode""").matches(it.name) }
+            ?: run { zip.close(); throw IllegalArgumentException("The bundle has no plate G-code (Metadata/plate_N.gcode).") }
+        return object : java.io.InputStreamReader(zip.getInputStream(entry), Charsets.UTF_8) { override fun close() { super.close(); zip.close() } }
+    }
+
     fun scan(file: File): GcodeSummary {
         var abs = true; var relE = false
         var x = 0.0; var y = 0.0; var z = 0.0; var e = 0.0
@@ -109,10 +121,10 @@ object GcodeScan {
         var lines = 0; var moves = 0
         // Moves before the first ";TYPE:" marker (start G-code purge and prime lines) are not the model. When a file has
         // type markers, only object feature types count; a file without any falls back to every extruding move.
-        val obj = Extents(); val untyped = Extents(); val all = Extents()
+        val obj = Extents(); val untyped = Extents(); val all = Extents(); val printed = Extents()
         val tools = sortedSetOf<Int>(); val macros = sortedSetOf<String>()
         var maxZ: Double? = null
-        file.bufferedReader().useLines { seq ->
+        readable(file).buffered().useLines { seq ->
             seq.forEach { raw ->
                 lines++
                 val trimmed = raw.trim()
@@ -137,7 +149,7 @@ object GcodeScan {
                         if (extruding && (nx != x || ny != y)) {
                             moves++
                             all.add(x, y); all.add(nx, ny)
-                            if (!sawType) { untyped.add(x, y); untyped.add(nx, ny) } else if (type in OBJECT_TYPES) { obj.add(x, y); obj.add(nx, ny) }
+                            if (!sawType) { untyped.add(x, y); untyped.add(nx, ny) } else { printed.add(x, y); printed.add(nx, ny); if (type in OBJECT_TYPES) { obj.add(x, y); obj.add(nx, ny) } }
                             maxZ = maxOf(maxZ ?: nz, nz)
                         }
                         x = nx; y = ny; z = nz
@@ -147,7 +159,7 @@ object GcodeScan {
             }
         }
         val stock = file.bufferedReader().useLines { ElegooProfiles.stockElegooCommand(it) }
-        return GcodeSummary(Canon.sha256(file), file.length(), lines, moves, if (sawType) obj.box() else untyped.box(), all.box(), tools, macros, stock, maxZ)
+        return GcodeSummary(Canon.sha256(file), file.length(), lines, moves, if (sawType) obj.box() else untyped.box(), all.box(), if (sawType) printed.box() else all.box(), tools, macros, stock, maxZ)
     }
 
     private fun arg(code: String, letter: Char): Double? =
@@ -165,7 +177,9 @@ object GcodeScan {
         "no_stock_elegoo_commands" -> s.stockElegooCommand?.let { "The G-code contains ${it}, an Elegoo stock-firmware command. Klipper lacks it and COSMOS 26.07+ emergency-stops on it: this file must never be sent to a Moonraker printer." }
         "requires_macro" -> check.optString("macro").uppercase().let { m -> if (m in s.macros) null else "The start/end G-code never calls $m, which this firmware's profile requires (legacy or wrong start G-code)." }
         "within_bed" -> {
-            val bed = profile?.bed; val ext = s.allExtents
+            // The printer's own start G-code may purge just off the declared area (a Prusa MK4S purges at Y -4); what
+            // the slicer prints (skirt, tower, model) must stay inside it.
+            val bed = profile?.bed; val ext = s.printExtents
             when {
                 bed == null -> "The profile has no printable area to check against."
                 ext == null -> "No extruding moves to check."
@@ -183,7 +197,8 @@ object GcodeScan {
                 else "The model's centre is offset by (%.1f, %.1f) mm from the bed centre (tolerance %.1f mm).".format(java.util.Locale.ROOT, dx, dy, tol)
             }
         }
-        "max_tool_index" -> check.optInt("max", 0).let { max -> s.toolsUsed.filter { it > max }.takeIf { it.isNotEmpty() }?.let { "The G-code selects T${it.joinToString(", T")}, beyond T$max." } }
+        // Without an explicit "max", the limit is the profile's own tool count (its nozzles; a Prusa XL 5T has five).
+        "max_tool_index" -> (if (check.has("max")) check.optInt("max", 0) else ((profile?.nozzleDiameters?.size ?: 1).coerceAtLeast(1) - 1)).let { max -> s.toolsUsed.filter { it > max }.takeIf { it.isNotEmpty() }?.let { "The G-code selects T${it.joinToString(", T")}, beyond T$max." } }
         "uses_tools" -> check.optInt("count", 1).let { n -> if (s.toolsUsed.size >= n) null else "The G-code selects ${s.toolsUsed.size} tool(s); at least $n are expected." }
         else -> "Unknown check \"${check.optString("check")}\"."
     }

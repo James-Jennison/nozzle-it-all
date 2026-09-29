@@ -25,6 +25,8 @@ data class TargetDescription(
     val slicingModel: SlicingPrinterModel?,
     /** For firmware the printer can't report (OpenCentauri-patched vs stock Elegoo): the operator's declaration. */
     val declaredFirmwareFamily: String? = null,
+    /** Tool or filament slots the saved slicing profile declares (a Prusa XL 5T: 5, CANVAS: 4); more than one means multi-material. */
+    val toolSlots: Int = 1,
 )
 
 /** A live, read-only identity reading. [hostname] is local-only. */
@@ -109,6 +111,11 @@ interface TestTarget {
     fun upload(file: File, requestedName: String): TransferOutcome
     fun delete(remotePath: String): TransferOutcome
     fun perform(action: ControlAction): CommandOutcome
+    /**
+     * Sends [file] and starts printing it in one request, as the app's "Send and print" does for printers that only take
+     * a file that way. Verified means the printer accepted and started it; the runner confirms a lost reply from state.
+     */
+    fun sendAndStart(file: File, requestedName: String): TransferOutcome = throw UnsupportedByTarget("This printer connection takes files through upload and start steps instead.")
     /** How the printer's own job history records the last print of [remotePath] ("completed", "cancelled"...), or null. Read-only. */
     fun jobResult(remotePath: String): String? = null
     /** Credentials, addresses, hostnames and names this target knows. The redactor masks every occurrence. */
@@ -188,17 +195,20 @@ object FirmwareFamilies {
                 else -> KLIPPER
             }
             val hardware = mapOf("canvas" to (family == COSMOS && identity?.afc == true),
-                "multi_tool" to (found.kind == PrinterKind.SNAPMAKER_U1 || found.kind == PrinterKind.SNAPMAKER_U1_PAXX),
+                "multi_tool" to (found.kind == PrinterKind.SNAPMAKER_U1 || found.kind == PrinterKind.SNAPMAKER_U1_PAXX || description.toolSlots > 1),
                 "extended_firmware" to (identity?.paxxExtendedConfig == true))
             Classified(family, found.kind, found.slicingModel, hardware, found.detail)
         }
         PrinterTransport.ELEGOO -> {
             val declared = description.declaredFirmwareFamily?.takeIf { it == OPENCENTAURI_PATCHED } ?: ELEGOO_STOCK
-            Classified(declared, PrinterKind.ELEGOO, description.slicingModel, emptyMap(), "Elegoo LAN printer (firmware family as declared by the operator)")
+            // The printer can't report CANVAS over its LAN protocol; the saved slicing profile says whether it has one.
+            val canvas = description.slicingModel?.name?.contains("CANVAS") == true
+            Classified(declared, PrinterKind.ELEGOO, description.slicingModel, mapOf("canvas" to canvas, "multi_tool" to (description.toolSlots > 1)), "Elegoo LAN printer (firmware family as declared by the operator)")
         }
         PrinterTransport.BAMBU_MQTT -> Classified(BAMBU, PrinterKind.BAMBU_LAB, description.slicingModel, emptyMap(), "Bambu Lab LAN mode")
-        PrinterTransport.PRUSA_LINK -> Classified(PRUSALINK, PrinterKind.PRUSA_LINK, description.slicingModel, emptyMap(), "PrusaLink")
-        PrinterTransport.OCTOPRINT -> Classified(OCTOPRINT, PrinterKind.OCTOPRINT, description.slicingModel, emptyMap(), "OctoPrint")
+        // Multi-material (Prusa XL 5T, an MMU, a toolchanger behind OctoPrint) comes from the saved profile's slots.
+        PrinterTransport.PRUSA_LINK -> Classified(PRUSALINK, PrinterKind.PRUSA_LINK, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "PrusaLink")
+        PrinterTransport.OCTOPRINT -> Classified(OCTOPRINT, PrinterKind.OCTOPRINT, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "OctoPrint")
     }
 }
 

@@ -74,8 +74,13 @@ Android Test Mode drives printers only through paths the app already uses and th
 | home, jog, start, pause, resume, cancel | the same `PrinterCommand`s the dashboard and JogPanel send |
 | slicing | `SlicingCoordinator` (the real engine, with its COSMOS live-firmware gate) |
 
-In Test Mode v1, transfer and control steps run over Moonraker only (PAXX U1, stock U1, COSMOS, other Klipper). On
-Bambu, PrusaLink, OctoPrint and Elegoo LAN connections those steps are BLOCKED with the reason, not simulated.
+Moonraker printers (PAXX U1, stock U1, COSMOS, other Klipper) get the full step set. Bambu LAN, PrusaLink, OctoPrint and
+Elegoo LAN printers take a file only together with a print start, so their suites use `send_and_start`, the app's own
+"Send and print" request (Bambu: a `.gcode.3mf` over FTPS, then MQTT; PrusaLink and OctoPrint: upload with print;
+Elegoo: upload, then start), and pause, resume and cancel through the printer's own service. Nozzle can't heat, home or
+move those printers, so those tests aren't in their suites. Fixture suites slice with the profile saved for the
+tester's printer (`@printer`), so one suite serves every model of a family; multi-material tests apply when that
+profile has more than one tool or filament slot.
 
 The PAXX U1 path is Android's direct Moonraker LAN client. It involves no Snapmaker cloud, account, Flutter component
 or the optional stock-U1 helper.

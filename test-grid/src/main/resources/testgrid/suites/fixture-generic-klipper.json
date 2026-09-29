@@ -5,14 +5,14 @@
     0
   ],
   "id": "generic-klipper",
-  "suiteVersion": "1.3.0",
+  "suiteVersion": "1.4.0",
   "title": "Generic Klipper/Moonraker printer",
   "description": "For testers with any other Klipper/Moonraker printer. One Klipper result proves only that printer model, kinematics and configuration: every model is its own row in the matrix. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
   "requiredNozzleVersion": "0.1.0",
   "target": {
     "manufacturer": "Generic",
-    "model": "Klipper",
+    "model": "any Klipper printer",
     "firmwareFamily": "klipper",
     "firmwareVariants": [
       "klipper"
@@ -22,7 +22,7 @@
     ],
     "adapter": "android-moonraker",
     "protocol": "moonraker-http",
-    "slicingProfile": "generic_klipper",
+    "slicingProfile": "@printer",
     "hardware": {},
     "notEquivalentTo": []
   },
@@ -181,7 +181,7 @@
           "kind": "slice",
           "params": {
             "model": "nozzle-acceptance-v1",
-            "profile": "generic_klipper"
+            "profile": "@printer"
           }
         },
         {
@@ -195,10 +195,6 @@
               },
               {
                 "check": "no_stock_elegoo_commands"
-              },
-              {
-                "check": "requires_macro",
-                "macro": "START_PRINT"
               },
               {
                 "check": "within_bed"
@@ -935,6 +931,200 @@
       "uncertainResultProhibitsRetry": true,
       "dependsOn": [
         "slice-single"
+      ]
+    },
+    {
+      "id": "multi-slice",
+      "title": "Slice the multi-material acceptance model",
+      "category": "slicing",
+      "scope": "multi_material",
+      "safetyLevel": 0,
+      "description": "Two-part model, one part per tool or lane.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-acceptance-mm-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-acceptance-mm-v1",
+            "profile": "@printer"
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "uses_tools",
+                "count": 2
+              },
+              {
+                "check": "max_tool_index"
+              },
+              {
+                "check": "within_bed"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code selects two tools",
+        "No stock-firmware commands"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "multi-print",
+      "title": "Print the multi-material acceptance model",
+      "category": "physical_print",
+      "scope": "multi_material",
+      "safetyLevel": 4,
+      "description": "Kept apart from single-material acceptance: this grades material and tool changes only.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        },
+        {
+          "id": "loaded",
+          "text": "Two different colours are loaded in the first two tools or lanes."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the multi-material G-code",
+          "params": {
+            "fromTest": "multi-slice"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "title": "Start the multi-material print",
+          "params": {
+            "fromTest": "multi-slice"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 1200
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "changes",
+          "kind": "observe",
+          "params": {
+            "question": "Did every tool or material change happen, with the right material in each stripe?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "bleed",
+          "kind": "observe",
+          "params": {
+            "question": "Colour bleed at the stripe boundaries:",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "stripes",
+            "prompt": "Photo of the finished stripes"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "All changes happen",
+        "Each stripe is the right material"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "stripes",
+          "kind": "photo",
+          "description": "The finished stripes from above"
+        }
+      ],
+      "timeout": {
+        "seconds": 18000,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded print file",
+          "params": {
+            "fromTest": "multi-slice"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "multi-slice"
       ]
     }
   ]

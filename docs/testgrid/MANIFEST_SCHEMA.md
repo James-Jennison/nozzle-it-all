@@ -76,7 +76,7 @@ The vocabulary is closed. There is no step that sends arbitrary G-code, runs a m
 | Kind | Level | Changes printer | Params / expect |
 |---|---|---|---|
 | `verify_model` | 0 | no | `model`: checks bundled model files against their published SHA-256 |
-| `slice` | 0 | no | `model`, `profile` (bundled pack id); optional `profileWith` `{hardware: profile}` used instead when that hardware is detected (a CANVAS Centauri Carbon slices with the COSMOS AFC profile) |
+| `slice` | 0 | no | `model`, `profile` (bundled pack id, or `@printer`: the profile saved for the tester's printer); optional `profileWith` `{hardware: profile}` used instead when that hardware is detected (a CANVAS Centauri Carbon slices with the COSMOS AFC profile) |
 | `scan_gcode` | 0 | no | `checks`: `non_empty`, `no_stock_elegoo_commands`, `requires_macro {macro}`, `within_bed`, `centered {toleranceMm}`, `max_tool_index {max}`, `uses_tools {count}` |
 | `upload_guard` | 1 | no | `fixture`: hands a known-unsafe file to the upload path's preflight; PASS only if it is refused naming the forbidden command |
 | `read_identity` | 1 | no | `expect.firmwareFamily` (defaults to the suite's) |
@@ -87,6 +87,7 @@ The vocabulary is closed. There is no step that sends arbitrary G-code, runs a m
 | `list_files` | 1 | no | `expect.uploaded` |
 | `read_material_slots` | 1 | no | `expect.min` |
 | `monitor` | 1 | no | `until`: `printing`, `paused`, `complete`, `idle`, `progress_increases`, `heater_reaches`, `heater_below` (+`heater`, `celsius`, `toleranceC`), `pollSeconds`; `timeoutSeconds` required |
+| `send_and_start` | 4 | yes | `fromTest`: sends that test's sliced file and starts printing it in one request, for printers that take files only that way (Bambu LAN, PrusaLink, OctoPrint, Elegoo LAN); a lost reply is confirmed from the printer's state or stays unknown |
 | `upload` | 2 | yes | `fromTest`: uploads that test's sliced G-code under a unique `nozzle-testgrid-…` name, verified by SHA-256 |
 | `delete_uploaded` | 2 | yes | deletes only a file this run uploaded |
 | `delete_leftovers` | 2 | yes | deletes earlier `nozzle-testgrid-*.gcode` files in the G-code root that the printer no longer has loaded and this run no longer needs; the approval names every file, nothing else is deleted, and it is skipped without asking when there are none |

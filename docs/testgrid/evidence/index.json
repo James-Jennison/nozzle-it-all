@@ -134,6 +134,21 @@
       "printer": "Elegoo Centauri Carbon",
       "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
       "suite": "cosmos-centauri-carbon 1.2.0"
+    },
+    {
+      "attachments": 4,
+      "bundleDigest": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc",
+      "bytes": 7854869,
+      "completedAt": 1790694380445,
+      "contentDigest": "3a9b53a93b144d10909d6fe862c652b282fb0dd26f1cd048a328ac41faea127d",
+      "file": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc.nozzle-evidence.zip",
+      "firmwareFamily": "cosmos",
+      "kind": "physical",
+      "location": "gthost-build01:~/testgrid-evidence/bundles",
+      "maxSafetyLevel": 4,
+      "printer": "Elegoo Centauri Carbon",
+      "runId": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+      "suite": "cosmos-centauri-carbon 1.2.0"
     }
   ],
   "format": "nozzle.evidence-index",

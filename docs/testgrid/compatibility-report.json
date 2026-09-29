@@ -10,6 +10,13 @@
         "family": "bambu-lan",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -25,7 +32,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite bambu-lan 1.2.0).",
+      "note": "No physical evidence yet (fixture suite bambu-lan 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Bambu Lab",
@@ -35,23 +42,36 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "d801028e-9d4f-4024-9c03-cac135666b39",
+      "current": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
       "firmware": {
         "family": "cosmos",
         "version": "Release - 26.09.0"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ],
+        "physical_print": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ],
+        "slicing": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ]
+      },
       "gradeSources": {
-        "controls": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "file_transfer": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "monitoring": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "physical_print": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "slicing": "d801028e-9d4f-4024-9c03-cac135666b39"
+        "controls": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "file_transfer": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "monitoring": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "physical_print": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "slicing": "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
       },
       "grades": {
         "controls": "UNVERIFIED",
         "file_transfer": "UNVERIFIED",
         "monitoring": "PASS",
-        "physical_print": "SKIPPED",
+        "physical_print": "FAIL",
         "slicing": "PASS"
       },
       "history": [
@@ -71,7 +91,7 @@
           "runId": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
           "source": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
-          "supersededBy": "d801028e-9d4f-4024-9c03-cac135666b39"
+          "supersededBy": "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
         },
         {
           "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
@@ -89,6 +109,24 @@
           "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
           "source": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
+          "supersededBy": "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        },
+        {
+          "bundleDigest": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc",
+          "completedAt": 1790694380445,
+          "contentDigest": "3a9b53a93b144d10909d6fe862c652b282fb0dd26f1cd048a328ac41faea127d",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "PASS",
+            "physical_print": "FAIL",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+          "source": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc.nozzle-evidence.zip",
+          "suite": "cosmos-centauri-carbon 1.2.0",
           "supersededBy": null
         }
       ],
@@ -102,23 +140,40 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "d801028e-9d4f-4024-9c03-cac135666b39",
+      "current": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
       "firmware": {
         "family": "cosmos",
         "version": "Release - 26.09.0"
       },
+      "gradeRuns": {
+        "controls": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ],
+        "file_transfer": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ],
+        "monitoring": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ],
+        "physical_print": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ],
+        "slicing": [
+          "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        ]
+      },
       "gradeSources": {
-        "controls": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "file_transfer": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "monitoring": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "physical_print": "d801028e-9d4f-4024-9c03-cac135666b39",
-        "slicing": "d801028e-9d4f-4024-9c03-cac135666b39"
+        "controls": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "file_transfer": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "monitoring": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "physical_print": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+        "slicing": "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
       },
       "grades": {
-        "controls": "PARTIAL",
+        "controls": "PASS",
         "file_transfer": "PASS",
         "monitoring": "PASS",
-        "physical_print": "SKIPPED",
+        "physical_print": "PASS",
         "slicing": "PASS"
       },
       "history": [
@@ -138,7 +193,7 @@
           "runId": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
           "source": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
-          "supersededBy": "d801028e-9d4f-4024-9c03-cac135666b39"
+          "supersededBy": "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
         },
         {
           "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
@@ -155,6 +210,24 @@
           "review": "accepted",
           "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
           "source": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip",
+          "suite": "cosmos-centauri-carbon 1.2.0",
+          "supersededBy": "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
+        },
+        {
+          "bundleDigest": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc",
+          "completedAt": 1790694380445,
+          "contentDigest": "3a9b53a93b144d10909d6fe862c652b282fb0dd26f1cd048a328ac41faea127d",
+          "grades": {
+            "controls": "PASS",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "PASS",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
+          "source": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
           "supersededBy": null
         }
@@ -174,6 +247,13 @@
         "family": "elegoo-stock",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -189,7 +269,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.2.0).",
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -204,6 +284,13 @@
         "family": "opencentauri-patched",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -219,7 +306,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.2.0).",
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -234,6 +321,13 @@
         "family": "klipper",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -249,7 +343,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite generic-klipper 1.2.0).",
+      "note": "No physical evidence yet (fixture suite generic-klipper 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -264,6 +358,13 @@
         "family": "octoprint",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -279,7 +380,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite octoprint 1.2.0).",
+      "note": "No physical evidence yet (fixture suite octoprint 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -294,6 +395,13 @@
         "family": "prusalink",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -309,7 +417,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite prusalink 1.2.0).",
+      "note": "No physical evidence yet (fixture suite prusalink 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Prusa",
@@ -323,6 +431,19 @@
       "firmware": {
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [
+          "5624aa6e-7943-429a-ad8d-22030546dbfb"
+        ],
+        "physical_print": [
+          "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+        ],
+        "slicing": [
+          "5624aa6e-7943-429a-ad8d-22030546dbfb"
+        ]
       },
       "gradeSources": {
         "controls": "5624aa6e-7943-429a-ad8d-22030546dbfb",
@@ -481,6 +602,23 @@
         "family": "paxx-extended",
         "version": "1.6.0.267_20260815150420"
       },
+      "gradeRuns": {
+        "controls": [
+          "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+        ],
+        "file_transfer": [
+          "5624aa6e-7943-429a-ad8d-22030546dbfb"
+        ],
+        "monitoring": [
+          "5624aa6e-7943-429a-ad8d-22030546dbfb"
+        ],
+        "physical_print": [
+          "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a"
+        ],
+        "slicing": [
+          "5624aa6e-7943-429a-ad8d-22030546dbfb"
+        ]
+      },
       "gradeSources": {
         "controls": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
         "file_transfer": "5624aa6e-7943-429a-ad8d-22030546dbfb",
@@ -638,6 +776,13 @@
         "family": "snapmaker-stock",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -653,7 +798,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.2.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",
@@ -668,6 +813,13 @@
         "family": "snapmaker-stock",
         "version": "—"
       },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
       "gradeSources": {
         "controls": null,
         "file_transfer": null,
@@ -683,7 +835,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.2.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.3.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",

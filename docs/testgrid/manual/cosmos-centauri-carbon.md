@@ -1,7 +1,7 @@
 # Elegoo Centauri Carbon on OpenCentauri COSMOS
 
-Suite `cosmos-centauri-carbon` version 1.2.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `0a43322426d36e4b82ec7c04812d5328446a7eeccb5634287e0b93fd075b3fa8`.
+Suite `cosmos-centauri-carbon` version 1.3.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `fd46b3f935de0e00bf2dea29378b073bc2330f2970aa1e298035601fe647e57c`.
 
 Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.
 
@@ -64,11 +64,11 @@ Expected:
 
 Category: **Slicing** · Scope: Single material · Level 1 · read-only discovery and telemetry · does not change printer state
 
-Slices the standard acceptance model on this device with the bundled profile and checks the result: it extrudes, stays inside the printable area, is centred, and uses this firmware's own start/end G-code. On this printer slicing a COSMOS profile first reads the live firmware (read-only) to confirm the COSMOS profile generation, so this test is level 1.
+Slices the standard acceptance model on this device with the bundled profile and checks the result: it extrudes, stays inside the printable area, is centred, and uses this firmware's own start/end G-code. On this printer slicing a COSMOS profile first reads the live firmware (read-only) to confirm the COSMOS profile generation, so this test is level 1. With CANVAS fitted it slices with the COSMOS AFC profile, which COSMOS requires for any print on a CANVAS printer.
 
 Steps:
 1. Nozzle checks the acceptance model `nozzle-acceptance-v1` against its published SHA-256.
-2. Nozzle slices `nozzle-acceptance-v1` with the bundled `elegoo_centauri_carbon_cosmos` profile on this device. Files: nozzle-acceptance-v1.stl (f91f4bad8515…).
+2. Nozzle slices `nozzle-acceptance-v1` with the bundled `elegoo_centauri_carbon_cosmos` profile on this device (`elegoo_centauri_carbon_cosmos_afc` when canvas is detected). Files: nozzle-acceptance-v1.stl (f91f4bad8515…).
 3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, requires macro, requires macro, within bed, centered.
 
 Expected:
@@ -83,7 +83,7 @@ Category: **Slicing** · Scope: Single material · Level 1 · read-only discover
 The bundled COSMOS profile is the 26.07.0+ generation; the live COSMOS version must need exactly that. An older COSMOS needs the legacy profile and is refused.
 
 Steps:
-1. Nozzle checks that profile `elegoo_centauri_carbon_cosmos` suits this printer's live firmware.
+1. Nozzle checks that profile `elegoo_centauri_carbon_cosmos` (`elegoo_centauri_carbon_cosmos_afc` when canvas is detected) suits this printer's live firmware.
 
 ## 6. The Elegoo stock-firmware profile is refused (`stock-profile-refused`)
 

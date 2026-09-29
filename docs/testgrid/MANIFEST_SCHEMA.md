@@ -76,11 +76,11 @@ The vocabulary is closed. There is no step that sends arbitrary G-code, runs a m
 | Kind | Level | Changes printer | Params / expect |
 |---|---|---|---|
 | `verify_model` | 0 | no | `model`: checks bundled model files against their published SHA-256 |
-| `slice` | 0 | no | `model`, `profile` (bundled pack id) |
+| `slice` | 0 | no | `model`, `profile` (bundled pack id); optional `profileWith` `{hardware: profile}` used instead when that hardware is detected (a CANVAS Centauri Carbon slices with the COSMOS AFC profile) |
 | `scan_gcode` | 0 | no | `checks`: `non_empty`, `no_stock_elegoo_commands`, `requires_macro {macro}`, `within_bed`, `centered {toleranceMm}`, `max_tool_index {max}`, `uses_tools {count}` |
 | `upload_guard` | 1 | no | `fixture`: hands a known-unsafe file to the upload path's preflight; PASS only if it is refused naming the forbidden command |
 | `read_identity` | 1 | no | `expect.firmwareFamily` (defaults to the suite's) |
-| `profile_match` | 1 | no | `profile`; `expect.refused: true` to prove a wrong-firmware profile is refused |
+| `profile_match` | 1 | no | `profile` (and optional `profileWith`, as for `slice`); `expect.refused: true` to prove a wrong-firmware profile is refused |
 | `read_status` | 1 | no | `expect.ready`, `expect.states`, `expect.temperatures` |
 | `check_capabilities` | 1 | no | `required` |
 | `list_cameras` / `camera_snapshot` | 1 | no | `expect.min` / `expect.minBytes`; URLs and images are never stored |

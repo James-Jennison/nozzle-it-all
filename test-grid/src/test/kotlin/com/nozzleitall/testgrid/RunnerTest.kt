@@ -548,4 +548,18 @@ class RunnerTest {
         catch (e: RunRefused) { assertTrue(e.message!!, e.message!!.contains("Nothing in")) }
         assertEquals(SafetyLevel.SOFTWARE, Support.suite("paxx-u1").minSafetyLevel)
     }
+
+    @Test fun aCanvasPrinterSlicesSingleMaterialWithTheAfcProfile() {
+        // Found on the owner's CANVAS printer: COSMOS warns (and picks the lane itself) when a print lacks TOOL=, which
+        // only the COSMOS AFC profile's start G-code passes.
+        fun profileUsed(preset: SimulatedPrinter.Preset): Pair<String, ResultState> {
+            val clock = Support.Clock()
+            val st = Support.start("cosmos-centauri-carbon", SimulatedPrinter(preset, clock::now), clock, level = SafetyLevel.READ_ONLY)
+            Support.drive(st.session)
+            val slice = st.session.record.test("slice-single")!!.step("slice")!!
+            return slice.data.getJSONObject("profile").getString("id") to st.session.record.test("profile-match")!!.result
+        }
+        assertEquals("elegoo_centauri_carbon_cosmos_afc" to ResultState.PASS, profileUsed(SimulatedPrinter.Preset.COSMOS_CC_CANVAS))
+        assertEquals("elegoo_centauri_carbon_cosmos" to ResultState.PASS, profileUsed(SimulatedPrinter.Preset.COSMOS_CC))
+    }
 }

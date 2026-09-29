@@ -67,17 +67,20 @@ object ManualInstructions {
     }
 
     /** One step in plain words, as the plan preview and the printed instructions show it. */
+    private fun withNote(p: org.json.JSONObject): String = p.optJSONObject("profileWith")?.let { w ->
+        w.keys().asSequence().sorted().joinToString("") { " (`${w.getString(it)}` when $it is detected)" } } ?: ""
+
     fun describe(s: Step, models: ModelLibrary?): String {
         val p = s.params
         val approve = if (s.kind?.consequential == true) "**Approve:** " else ""
         val text = when (s.kind) {
             StepKind.VERIFY_MODEL -> "Nozzle checks the acceptance model `${p.optString("model")}` against its published SHA-256."
-            StepKind.SLICE -> "Nozzle slices `${p.optString("model")}` with the bundled `${p.optString("profile")}` profile on this device." +
+            StepKind.SLICE -> "Nozzle slices `${p.optString("model")}` with the bundled `${p.optString("profile")}` profile on this device${withNote(p)}." +
                 (models?.let { m -> runCatching { m.entry(p.optString("model")).parts.joinToString { "${it.file} (${it.sha256.take(12)}…)" } }.getOrNull()?.let { " Files: $it." } } ?: "")
             StepKind.SCAN_GCODE -> "Nozzle checks the sliced G-code: " + (0 until (p.optJSONArray("checks")?.length() ?: 0)).joinToString { p.getJSONArray("checks").getJSONObject(it).optString("check").replace('_', ' ') } + "."
             StepKind.UPLOAD_GUARD -> "Nozzle hands the known-unsafe fixture `${p.optString("fixture")}` to the upload path and expects it to be refused before anything is sent."
             StepKind.READ_IDENTITY -> "Nozzle reads the firmware identity (read-only)."
-            StepKind.PROFILE_MATCH -> "Nozzle checks that profile `${p.optString("profile")}` suits this printer's live firmware."
+            StepKind.PROFILE_MATCH -> "Nozzle checks that profile `${p.optString("profile")}`${withNote(p)} suits this printer's live firmware."
             StepKind.READ_STATUS -> "Nozzle reads status and temperatures (read-only)."
             StepKind.CHECK_CAPABILITIES -> "Nozzle checks the declared capabilities."
             StepKind.LIST_CAMERAS -> "Nozzle lists cameras (URLs are not recorded)."

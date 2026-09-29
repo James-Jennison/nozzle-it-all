@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -146,17 +146,26 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
     )
+    // Networked UltiMaker (UltiMakerPrinterService): live state and job progress from the cluster API (Cura's reads), and
+    // pairing. An UltiMaker prints every job it is sent, so sending is refused outright until UltiMakerApi.START_VERIFIED;
+    // pause / resume / abort aren't built. Built from OrcaSlicer's and Cura's sources only.
+    PrinterKind.ULTIMAKER -> PrinterCapabilities(
+        transport = PrinterTransport.ULTIMAKER, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
 }
 
 /**
  * Whether Nozzle It All may start a print on this kind of printer. False while a kind's start is gated off until it has
- * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED): sending a sliced file to
- * one then uploads it, and the person starts it on the printer's screen.
+ * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED): sending a
+ * sliced file to one then uploads it (an UltiMaker: sends nothing), and the person starts it on the printer's screen.
  */
 fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
     PrinterKind.CREALITY -> CrealityCfs.START_VERIFIED
     PrinterKind.FLASHFORGE -> FlashforgeIfs.START_VERIFIED
     PrinterKind.DUET -> DuetRrf.START_VERIFIED
+    PrinterKind.ULTIMAKER -> UltiMakerApi.START_VERIFIED
     else -> true
 }
 

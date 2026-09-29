@@ -11,7 +11,9 @@ import java.util.Locale
 // (PrinterProfile.serial) + access code (PrinterProfile.apiKey).
 // DUET = a Duet board on RepRapFirmware, standalone (rr_* API) or with Duet Software Framework (/machine REST API; DuetRrf):
 // board password in PrinterProfile.apiKey, blank for RepRapFirmware's default.
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET }
+// ULTIMAKER = a networked UltiMaker (3 / S3 / S5 / S7; UltiMakerApi): status from the cluster API; the id / key the printer
+// issues on pairing in PrinterProfile.serial / PrinterProfile.apiKey. The UltiMaker 2 has no network and no kind.
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing

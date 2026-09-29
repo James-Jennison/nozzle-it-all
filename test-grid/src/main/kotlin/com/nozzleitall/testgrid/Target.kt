@@ -181,6 +181,7 @@ object FirmwareFamilies {
     const val CREALITY = "creality-lan"
     const val FLASHFORGE = "flashforge-lan"
     const val DUET = "duet-rrf"
+    const val ULTIMAKER = "ultimaker-lan"
 
     data class Classified(val family: String, val kind: PrinterKind, val slicingModel: SlicingPrinterModel?, val hardware: Map<String, Boolean>, val detail: String)
 
@@ -219,6 +220,7 @@ object FirmwareFamilies {
         PrinterTransport.FLASHFORGE -> Classified(FLASHFORGE, PrinterKind.FLASHFORGE, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Flashforge local API (port 8898)")
         // One family for standalone RepRapFirmware and Duet Software Framework: the app chooses between them per request, as upstream does.
         PrinterTransport.DUET -> Classified(DUET, PrinterKind.DUET, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Duet / RepRapFirmware (rr_* or DSF REST)")
+        PrinterTransport.ULTIMAKER -> Classified(ULTIMAKER, PrinterKind.ULTIMAKER, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "UltiMaker LAN API (/api/v1, /cluster-api/v1)")
     }
 }
 

@@ -783,6 +783,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("Duet printer", style=MaterialTheme.typography.titleSmall)
                         Text("Here a Duet on RepRapFirmware offers a connection check and uploading a sliced file to 0:/gcodes. Nozzle It All doesn't read its state, temperatures or progress yet (the slicer code this connection is ported from doesn't). Start the print on the printer's screen or in Duet Web Control: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet.")
                     } } }
+                    else if(capabilities.transport == PrinterTransport.ULTIMAKER) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("UltiMaker printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a networked UltiMaker offers its state and job progress (read-only; no temperatures over this connection). Sending, pausing and aborting prints from Nozzle It All aren't verified on a real printer yet, and an UltiMaker prints every job it is sent, so nothing is sent: print from the printer's screen. Pair it in Edit printer.")
+                    } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")

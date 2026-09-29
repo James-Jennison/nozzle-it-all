@@ -67,6 +67,8 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     PrinterKind.FLASHFORGE -> FlashforgePrinterService(address, profile.serial, profile.apiKey)
     // A Duet's board password (blank: RepRapFirmware's default) takes the same encrypted apiKey slot.
     PrinterKind.DUET -> DuetPrinterService(address, profile.apiKey)
+    // An UltiMaker's pairing id (not a secret: it goes in the auth/check URL) in serial, its key in the encrypted apiKey slot.
+    PrinterKind.ULTIMAKER -> UltiMakerPrinterService(address, profile.serial, profile.apiKey)
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER

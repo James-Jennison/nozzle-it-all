@@ -466,7 +466,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // Link need this screen's Moonraker-only LiveFileChanges upload step below.
     val bambuTarget = profile?.kind == PrinterKind.BAMBU_LAB
     val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT || profile?.kind == PrinterKind.ELEGOO ||
-        profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE || profile?.kind == PrinterKind.DUET // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet: upload, start gated)
+        profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE || profile?.kind == PrinterKind.DUET ||
+        profile?.kind == PrinterKind.ULTIMAKER // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet: upload, start gated; UltiMaker: nothing sent while gated)
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).

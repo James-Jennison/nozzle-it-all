@@ -215,4 +215,13 @@ class EvidenceTest {
         assertEquals(Canon.write(a), Canon.write(JSONObject(Canon.write(a))))
         assertEquals(Canon.contentDigest(JSONObject().put("x", 1).put("runId", "a").put("startedAt", 5)), Canon.contentDigest(JSONObject().put("x", 1).put("runId", "b")))
     }
+
+    @Test fun aPrivateNameThatIsAlsoAPublicWordDoesNotEraseTheBundle() {
+        // Found on the first COSMOS run: a Centauri Carbon saved as "cosmos" turned every "cosmos" into [private].
+        val r = Redactor(listOf("cosmos", "http://192.168.1.50:7125", "k3y-abcdef", "Workshop CC"), PublicVocabulary.of(Support.suite("cosmos-centauri-carbon")))
+        val out = r.text("suite cosmos-centauri-carbon, family cosmos, OpenCentauri COSMOS on Workshop CC at http://192.168.1.50:7125 key k3y-abcdef")
+        assertTrue(out, out.contains("cosmos-centauri-carbon") && out.contains("family cosmos") && out.contains("OpenCentauri COSMOS"))
+        assertFalse(out, out.contains("192.168.1.50") || out.contains("k3y-abcdef") || out.contains("Workshop CC"))
+        assertTrue(r.leaks(out).isEmpty())
+    }
 }

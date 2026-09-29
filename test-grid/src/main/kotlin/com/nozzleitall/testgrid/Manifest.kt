@@ -101,6 +101,8 @@ data class Suite(
     val source: String,
 ) {
     val maxSafetyLevel: SafetyLevel get() = tests.maxOfOrNull { it.safetyLevel } ?: SafetyLevel.SOFTWARE
+    /** The lowest level at which any test runs; a run limited below it would run nothing. */
+    val minSafetyLevel: SafetyLevel get() = tests.minOfOrNull { it.safetyLevel } ?: SafetyLevel.SOFTWARE
     fun test(id: String): TestCase? = tests.firstOrNull { it.id == id }
 
     companion object {

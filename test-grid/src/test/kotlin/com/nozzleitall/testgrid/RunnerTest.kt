@@ -537,4 +537,15 @@ class RunnerTest {
         assertEquals(StepStatus.PASSED, step.status)
         assertEquals(listOf(old), (0 until step.data.getJSONArray("deleted").length()).map { step.data.getJSONArray("deleted").getString(it) })
     }
+
+    @Test fun aRunLimitedBelowEveryTestIsRefused() {
+        // Found on the first COSMOS run: level 0 skipped all 14 tests, because even slicing reads the printer first.
+        val clock = Support.Clock()
+        val suite = Support.suite("cosmos-centauri-carbon")
+        assertEquals(SafetyLevel.READ_ONLY, suite.minSafetyLevel)
+        val sim = SimulatedPrinter(SimulatedPrinter.Preset.COSMOS_CC, clock::now)
+        try { RunSession.start(suite, sim, TargetCheck.inspect(sim), null, Support.env(Support.tmp(), clock), null, SafetyLevel.SOFTWARE); fail() }
+        catch (e: RunRefused) { assertTrue(e.message!!, e.message!!.contains("Nothing in")) }
+        assertEquals(SafetyLevel.SOFTWARE, Support.suite("paxx-u1").minSafetyLevel)
+    }
 }

@@ -3,6 +3,7 @@ package com.nozzleitall.testgrid.cli
 import com.nozzleitall.testgrid.AcceptanceLedger
 import com.nozzleitall.testgrid.AcceptanceModel
 import com.nozzleitall.testgrid.BundleReader
+import com.nozzleitall.testgrid.PublicVocabulary
 import com.nozzleitall.testgrid.Canon
 import com.nozzleitall.testgrid.EngineInfo
 import com.nozzleitall.testgrid.Environment
@@ -149,7 +150,7 @@ private fun simulate(a: List<String>): Int {
     val session = RunSession.start(suite, printer, snapshot, slicer, env, journal, level, opts(a, "--supersedes"))
     println("SIMULATED run ${session.record.runId}: suite ${suite.id} ${suite.version} against preset $preset (no printer is contacted)")
     ScriptedOperator(answers) { println("  $it") }.run(session, printer)
-    val bundle = EvidenceBuilder.build(session, env, Redactor(printer.localSecrets() + work.absolutePath), journal::attachment)
+    val bundle = EvidenceBuilder.build(session, env, Redactor(printer.localSecrets() + work.absolutePath, PublicVocabulary.of(session.suite)), journal::attachment)
     out.absoluteFile.parentFile.mkdirs(); out.writeBytes(bundle.zip())
     session.record.tests.forEach { println("  %-34s %-10s %s".format(it.testId, it.result, it.reason.take(110))) }
     println("Wrote ${out.path}\n  bundle digest  ${bundle.bundleDigest}\n  content digest ${bundle.contentDigest}")

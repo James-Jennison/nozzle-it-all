@@ -5,6 +5,7 @@ import com.nozzleitall.testgrid.EvidenceBuilder
 import com.nozzleitall.testgrid.EvidenceBundle
 import com.nozzleitall.testgrid.FirmwareFamilies
 import com.nozzleitall.testgrid.Pending
+import com.nozzleitall.testgrid.PublicVocabulary
 import com.nozzleitall.testgrid.Redactor
 import com.nozzleitall.testgrid.RunJournal
 import com.nozzleitall.testgrid.RunSession
@@ -136,7 +137,7 @@ class TestModeController private constructor(private val context: Context) {
     fun selectSuite(suite: Suite) {
         val snap = _state.value.snapshot ?: return
         val mismatches = TargetCheck.mismatches(suite, snap, net.jamesjennison.klippercompanion.BuildConfig.VERSION_NAME)
-        update { it.copy(suite = suite, mismatches = mismatches, maxLevel = SafetyLevel.SOFTWARE, phase = if (mismatches.isEmpty()) TestModePhase.REVIEW_PLAN else it.phase) }
+        update { it.copy(suite = suite, mismatches = mismatches, maxLevel = suite.minSafetyLevel, phase = if (mismatches.isEmpty()) TestModePhase.REVIEW_PLAN else it.phase) }
     }
 
     fun setMaxLevel(level: SafetyLevel) = update { it.copy(maxLevel = level) }
@@ -212,7 +213,7 @@ class TestModeController private constructor(private val context: Context) {
         val s = session ?: return
         val t = target ?: return
         val env = AndroidTestEnvironment.create(context, File(runDir, "work"), simulatedEngine = t.description.kind == com.nozzleitall.testgrid.TargetKind.SIMULATED)
-        val redactor = Redactor(t.localSecrets() + context.filesDir.absolutePath + context.cacheDir.absolutePath + runDir.absolutePath)
+        val redactor = Redactor(t.localSecrets() + context.filesDir.absolutePath + context.cacheDir.absolutePath + runDir.absolutePath, PublicVocabulary.of(s.suite))
         val bundle = EvidenceBuilder.build(s, env, redactor, RunJournal(runDir)::attachment)
         update { it.copy(phase = TestModePhase.REVIEW_EVIDENCE, bundle = bundle) }
     }

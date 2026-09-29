@@ -271,7 +271,8 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
     Section("4. How far to go") {
         Text(suite.title, fontWeight = FontWeight.Bold)
         Column(Modifier.testTag("safety-levels")) {
-            SafetyLevel.entries.filter { it <= suite.maxSafetyLevel }.forEach { l ->
+            // Only levels that run something: on COSMOS even slicing reads the printer first, so level 0 would run nothing.
+            SafetyLevel.entries.filter { it >= suite.minSafetyLevel && it <= suite.maxSafetyLevel }.forEach { l ->
                 val n = suite.tests.count { it.safetyLevel <= l }
                 Row(Modifier.fillMaxWidth().selectable(s.maxLevel == l, role = Role.RadioButton) { c.setMaxLevel(l) }.padding(vertical = 4.dp).testTag("level-${l.level}"), verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(s.maxLevel == l, null)
@@ -284,7 +285,7 @@ private fun levelAdds(l: SafetyLevel): String = when (l) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton({ c.back() }) { Text("Back") }
-            Button({ c.start() }, enabled = !s.busy, modifier = Modifier.testTag("start-run")) { Text("Start run · ${running.size} tests") }
+            Button({ c.start() }, enabled = !s.busy && running.isNotEmpty(), modifier = Modifier.testTag("start-run")) { Text("Start run · ${running.size} tests") }
         }
         Text("Every step that changes the printer waits for your approval. Tests above the chosen level are recorded as skipped, never as passed.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -12,7 +12,7 @@ import org.json.JSONObject
  *
  * Rules are versioned ([RULES_VERSION]); the bundle records the version and how many of each were applied.
  */
-class Redactor(literals: Collection<String> = emptyList()) {
+class Redactor(literals: Collection<String> = emptyList(), publicTerms: Collection<String> = emptyList()) {
     companion object {
         const val RULES_VERSION = 1
 
@@ -50,7 +50,14 @@ class Redactor(literals: Collection<String> = emptyList()) {
         )
     }
 
-    private val literals: List<String> = literals.map { it.trim() }.filter { it.length >= 3 }.distinct().sortedByDescending { it.length }
+    /**
+     * A known-private value that is itself part of the run's public vocabulary ([publicTerms]: the suite's id, title,
+     * maker, model and firmware family, never text the printer reported) hides nothing and would erase that vocabulary
+     * everywhere: a Centauri Carbon saved as "cosmos" turned every "cosmos" in its bundle into [private] (found on the
+     * first COSMOS run). Such values are not masked; the address, API key and any other name still are.
+     */
+    private val literals: List<String> = literals.map { it.trim() }.filter { it.length >= 3 }.distinct()
+        .filter { lit -> publicTerms.none { it.contains(lit, ignoreCase = true) } }.sortedByDescending { it.length }
     val counts: MutableMap<String, Int> = sortedMapOf()
 
     private fun count(rule: String, n: Int) { if (n > 0) counts[rule] = (counts[rule] ?: 0) + n }

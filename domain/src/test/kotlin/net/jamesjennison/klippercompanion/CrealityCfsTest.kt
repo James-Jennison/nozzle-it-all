@@ -134,6 +134,14 @@ class CrealityCfsTest {
         assertNull(CrealityCfs.pushedError(JSONObject("""{"err":{"errcode":0,"key":0}}""")))
     }
 
+    @Test fun identifiesAPrinterFromInfo() {
+        val found = PrinterDiscovery.parseCrealityInfo("""{"model":"F021","mac":"54:33:24:28:0C:DB","hostname":"K2-DB19"}""", "192.168.1.40")!!
+        assertEquals(PrinterKind.CREALITY, found.kind); assertEquals("K2-DB19", found.name); assertEquals(SlicingPrinterModel.CREALITY_K2, found.slicingModel)
+        assertEquals(SlicingPrinterModel.CREALITY_K1C, PrinterDiscovery.parseCrealityInfo("""{"model":"K1C","mac":"x"}""", "h")!!.slicingModel)
+        assertNull("mac is required", PrinterDiscovery.parseCrealityInfo("""{"model":"F021"}""", "h"))
+        assertNull(PrinterDiscovery.parseCrealityInfo("<html>", "h"))
+    }
+
     @Test fun fileNamesStaySafe() {
         assertEquals("my_cube__2_.gcode", CrealityCfs.safeFileName("my cube (2).gcode"))
         assertEquals("a.gcode", CrealityCfs.safeFileName("/x/y/a.gcode"))

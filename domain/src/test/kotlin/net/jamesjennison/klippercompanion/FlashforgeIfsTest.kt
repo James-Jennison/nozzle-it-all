@@ -93,6 +93,8 @@ class FlashforgeIfsTest {
         assertEquals("AD5X", found.name); assertEquals("SNMOMC9900001", found.serial)
         assertNull(FlashforgeIfs.parseDiscovery(reply.copyOf(0xC3)))
         assertNull(FlashforgeIfs.parseDiscovery(ByteArray(0xC4)))
+        val p = PrinterDiscovery.flashforge("192.168.1.60", found)
+        assertEquals(PrinterKind.FLASHFORGE, p.kind); assertEquals("SNMOMC9900001", p.serial); assertEquals(SlicingPrinterModel.FLASHFORGE_AD5X, p.slicingModel)
         assertEquals(20, FlashforgeIfs.DISCOVERY_MESSAGE.size)
     }
 

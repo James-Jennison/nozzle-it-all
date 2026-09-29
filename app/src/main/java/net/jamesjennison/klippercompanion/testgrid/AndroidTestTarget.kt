@@ -75,6 +75,8 @@ class AndroidTestTarget(
             PrinterTransport.BAMBU_MQTT -> "android-bambu-lan" to "mqtt-ftps"
             PrinterTransport.PRUSA_LINK -> "android-prusalink" to "prusalink-http"
             PrinterTransport.OCTOPRINT -> "android-octoprint" to "octoprint-http"
+            PrinterTransport.CREALITY -> "android-creality-lan" to "creality-websocket"
+            PrinterTransport.FLASHFORGE -> "android-flashforge-lan" to "flashforge-http"
         }
     }
 
@@ -118,7 +120,7 @@ class AndroidTestTarget(
         runCatching { service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots } }.getOrNull().orEmpty()
 
     override fun materialSlots(): List<String> {
-        if (!moonraker && profile.kind != PrinterKind.ELEGOO) throw UnsupportedByTarget("This connection reports no material slots.")
+        if (!moonraker && profile.kind !in setOf(PrinterKind.ELEGOO, PrinterKind.CREALITY, PrinterKind.FLASHFORGE)) throw UnsupportedByTarget("This connection reports no material slots.")
         val slots = service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots }.orEmpty().map { "${it.name ?: "slot ${it.tool + 1}"}: ${it.label}${it.colorHex?.let { c -> " $c" } ?: ""}${if (it.active) " (active)" else ""}" }
         if (slots.isNotEmpty()) return slots
         if (profile.kind == PrinterKind.SNAPMAKER_U1 || profile.kind == PrinterKind.SNAPMAKER_U1_PAXX) return moonraker { m -> m.toolStatus().tools.map { "toolhead $it" } }

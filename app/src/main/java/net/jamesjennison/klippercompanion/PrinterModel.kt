@@ -30,9 +30,11 @@ fun ScreenState.kindFor(address: String): PrinterKind = profiles.find { it.addre
 // Klipper-only panels build these; a BAMBU_LAB printer never reaches them because MainActivity
 // hides every control that needs one (BambuPrinterService implements none of the reader interfaces).
 fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
-// Filament slots: an Elegoo printer's CANVAS trays through its own service, every other printer's filament-changer lanes through Moonraker.
+// Filament slots: an Elegoo printer's CANVAS trays, a Bambu's AMS, a Creality's CFS and a Flashforge's IFS through their own
+// services; every other printer's filament-changer lanes through Moonraker.
+private val OWN_SLOT_READER_KINDS = setOf(PrinterKind.ELEGOO, PrinterKind.BAMBU_LAB, PrinterKind.CREALITY, PrinterKind.FLASHFORGE)
 fun ScreenState.filamentSlotReaderFor(address: String): FilamentSlotReader =
-    if(kindFor(address) == PrinterKind.ELEGOO || kindFor(address) == PrinterKind.BAMBU_LAB) printerServiceFor(profiles.find { it.address == address }, address) as FilamentSlotReader else moonrakerFor(address)
+    if(kindFor(address) in OWN_SLOT_READER_KINDS) printerServiceFor(profiles.find { it.address == address }, address) as FilamentSlotReader else moonrakerFor(address)
 // A Bambu profile's address is a bare host - it has no HTTP endpoint for a URL to point at - so it
 // is validated by bambuHostAddress rather than Moonraker.parseAddress. Both throw
 // IllegalArgumentException, so every call site keeps its existing failure handling.
@@ -59,6 +61,10 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     // The access code is the Centauri Carbon 2's (blank for a Centauri Carbon); the slicing profile says which protocol.
     PrinterKind.ELEGOO -> ElegooPrinterService(address, profile.apiKey, profile.serial,
         if (profile.slicingModel == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS) "Elegoo Centauri Carbon 2" else "Elegoo Centauri Carbon")
+    // A Creality K1 / K2 / Hi needs nothing but its address. A Flashforge needs its serial number and its access code (the
+    // "check code"), which takes the same encrypted apiKey slot as Bambu's access code.
+    PrinterKind.CREALITY -> CrealityPrinterService(address)
+    PrinterKind.FLASHFORGE -> FlashforgePrinterService(address, profile.serial, profile.apiKey)
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER

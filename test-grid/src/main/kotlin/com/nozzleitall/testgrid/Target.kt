@@ -7,6 +7,7 @@ import net.jamesjennison.klippercompanion.PrinterKind
 import net.jamesjennison.klippercompanion.PrinterTransport
 import net.jamesjennison.klippercompanion.SlicingPrinterModel
 import net.jamesjennison.klippercompanion.capabilitiesFor
+import net.jamesjennison.klippercompanion.startVerifiedFor
 import java.io.File
 
 /**
@@ -151,12 +152,13 @@ object CapabilityNames {
         return buildSet {
             add(STATUS)
             if (moonraker) { add(FIRMWARE_IDENTITY); add(FILES); add(UPLOAD_JOB); add(START_PRINT) }
-            if (!moonraker && c.acceptsOnDeviceSlicedGcode) add(UPLOAD_AND_START)
+            // A kind whose start is still gated off (startVerifiedFor) only uploads: it doesn't claim send-and-print.
+            if (!moonraker && c.acceptsOnDeviceSlicedGcode && startVerifiedFor(kind)) add(UPLOAD_AND_START)
             if (c.supportsCamera) add(CAMERA)
             if (c.supportsPauseResumeCancel) { add(PAUSE); add(RESUME); add(CANCEL) }
             if (c.supportsKlipperExtras) add(TEMPERATURES)
             if (c.supportsJog) add(MOTION)
-            if (c.hasMultiAce || c.transport == PrinterTransport.ELEGOO || hardware["canvas"] == true) add(MATERIAL_STATE)
+            if (c.hasMultiAce || c.transport in setOf(PrinterTransport.ELEGOO, PrinterTransport.CREALITY, PrinterTransport.FLASHFORGE) || hardware["canvas"] == true) add(MATERIAL_STATE)
             if (hardware["canvas"] == true || hardware["multi_tool"] == true) add(MULTI_MATERIAL)
         }
     }
@@ -176,6 +178,8 @@ object FirmwareFamilies {
     const val BAMBU = "bambu-lan"
     const val PRUSALINK = "prusalink"
     const val OCTOPRINT = "octoprint"
+    const val CREALITY = "creality-lan"
+    const val FLASHFORGE = "flashforge-lan"
 
     data class Classified(val family: String, val kind: PrinterKind, val slicingModel: SlicingPrinterModel?, val hardware: Map<String, Boolean>, val detail: String)
 
@@ -209,6 +213,9 @@ object FirmwareFamilies {
         // Multi-material (Prusa XL 5T, an MMU, a toolchanger behind OctoPrint) comes from the saved profile's slots.
         PrinterTransport.PRUSA_LINK -> Classified(PRUSALINK, PrinterKind.PRUSA_LINK, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "PrusaLink")
         PrinterTransport.OCTOPRINT -> Classified(OCTOPRINT, PrinterKind.OCTOPRINT, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "OctoPrint")
+        // A CFS / IFS is one nozzle fed from several slots; its slots come from the saved profile's pack (FilamentChangers).
+        PrinterTransport.CREALITY -> Classified(CREALITY, PrinterKind.CREALITY, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Creality LAN (port 9999)")
+        PrinterTransport.FLASHFORGE -> Classified(FLASHFORGE, PrinterKind.FLASHFORGE, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Flashforge local API (port 8898)")
     }
 }
 

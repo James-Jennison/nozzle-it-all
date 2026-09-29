@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -121,6 +121,29 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )
+    // Creality K1 / K2 / Hi (CrealityPrinterService) and Flashforge AD5X / 5M (FlashforgePrinterService): live status, the
+    // CFS / IFS slots and uploading a sliced file. Starting it is refused until CrealityCfs.START_VERIFIED /
+    // FlashforgeIfs.START_VERIFIED (nobody has checked the start on a printer yet), and pause / resume / cancel aren't built.
+    // Built from OrcaSlicer's and CrealityPrint's sources only.
+    PrinterKind.CREALITY -> PrinterCapabilities(
+        transport = PrinterTransport.CREALITY, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    PrinterKind.FLASHFORGE -> PrinterCapabilities(
+        transport = PrinterTransport.FLASHFORGE, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
 }
 
-
+/**
+ * Whether Nozzle It All may start a print on this kind of printer. False while a kind's start is gated off until it has
+ * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED): sending a sliced file to
+ * one then uploads it, and the person starts it on the printer's screen.
+ */
+fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
+    PrinterKind.CREALITY -> CrealityCfs.START_VERIFIED
+    PrinterKind.FLASHFORGE -> FlashforgeIfs.START_VERIFIED
+    else -> true
+}

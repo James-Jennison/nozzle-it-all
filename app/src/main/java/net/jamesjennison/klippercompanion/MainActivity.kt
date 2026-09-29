@@ -773,6 +773,12 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("Here an Elegoo Centauri Carbon or Centauri Carbon 2 offers live status and temperatures (read-only), its CANVAS slots, sending and starting a sliced file, and cancel. Pause and resume are offered on the Centauri Carbon only: the Centauri Carbon 2's network protocol has no resume. Macros, console, configuration, camera and file previews are not available for this printer kind.")
                         OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("CANVAS slots")}
                     } } }
+                    else if(capabilities.transport == PrinterTransport.CREALITY || capabilities.transport == PrinterTransport.FLASHFORGE) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val creality = capabilities.transport == PrinterTransport.CREALITY
+                        Text(if(creality) "Creality printer" else "Flashforge printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a ${if(creality) "Creality K1, K2 or Hi" else "Flashforge AD5X or Adventurer 5M"} offers live status and temperatures (read-only), its ${if(creality) "CFS" else "IFS"} slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text(if(creality) "CFS slots" else "IFS slots")}
+                    } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")

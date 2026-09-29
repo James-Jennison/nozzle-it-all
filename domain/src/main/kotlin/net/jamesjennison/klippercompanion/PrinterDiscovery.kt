@@ -86,6 +86,25 @@ object PrinterDiscovery {
         return DiscoveredPrinter(address, PrinterKind.OCTOPRINT, title.ifBlank { "OctoPrint" }.take(80), SlicingPrinterModel.GENERIC_KLIPPER, detail = "OctoPrint - needs an API key")
     }
 
+    /**
+     * A Creality K1 / K2 / Hi answering `GET /info` on port 80 with its `model` and `mac` (CrealityCfs.parseInfo; Orca
+     * CrealityHostDiscovery.cpp probe_info). Null when the body isn't one. The model code suggests a slicing pack.
+     */
+    fun parseCrealityInfo(body: String, address: String): DiscoveredPrinter? {
+        val info = CrealityCfs.parseInfo(body) ?: return null
+        val known = CrealityCfs.CFS_MODELS[info.model]
+        val name = info.hostname.ifBlank { "Creality " + (known ?: info.model) }.take(80)
+        val cfsC = if (CrealityCfs.isK1Family(info.model) && info.model != "K1_CFS-C") " - choose the CFS-C profile if one is attached" else ""
+        return DiscoveredPrinter(address, PrinterKind.CREALITY, name, CrealityCfs.slicingModelFor(info.model),
+            detail = "Creality ${known ?: "printer (model ${info.model})"}$cfsC".take(160))
+    }
+
+    /** A Flashforge printer's reply to its UDP discovery probe (FlashforgeIfs.parseDiscovery), from [address]. */
+    fun flashforge(address: String, found: FlashforgeIfs.Discovered): DiscoveredPrinter =
+        DiscoveredPrinter(address, PrinterKind.FLASHFORGE, found.name.ifBlank { "Flashforge printer" }.take(80),
+            if (found.name.contains("AD5X", ignoreCase = true)) SlicingPrinterModel.FLASHFORGE_AD5X else null, found.serial,
+            "Flashforge - needs its access code")
+
     /** One Bambu SSDP NOTIFY / search reply (headers `Location`, `USN` = serial, `DevName.bambu.com`, `DevModel.bambu.com`). */
     fun parseBambuSsdp(message: String): DiscoveredPrinter? {
         val headers = message.lineSequence().mapNotNull { line -> line.indexOf(':').takeIf { it > 0 }?.let { line.substring(0, it).trim().lowercase() to line.substring(it + 1).trim() } }.toMap()

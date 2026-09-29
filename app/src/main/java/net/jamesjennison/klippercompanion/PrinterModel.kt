@@ -64,7 +64,16 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     // A Creality K1 / K2 / Hi needs nothing but its address. A Flashforge needs its serial number and its access code (the
     // "check code"), which takes the same encrypted apiKey slot as Bambu's access code.
     PrinterKind.CREALITY -> CrealityPrinterService(address)
-    PrinterKind.FLASHFORGE -> FlashforgePrinterService(address, profile.serial, profile.apiKey)
+    // Upstream OrcaSlicer's split (Flashforge.cpp:329-332, 410-413): both set -> the port-8898 local API (AD5X / 5M);
+    // either blank -> the legacy port-8899 console (Adventurer 3 / 4, Creator, Guider).
+    PrinterKind.FLASHFORGE -> if (FlashforgeLegacy.usesLegacy(profile.serial, profile.apiKey)) FlashforgeLegacyPrinterService(address)
+        else FlashforgePrinterService(address, profile.serial, profile.apiKey)
+    // A Duet's board password (blank: RepRapFirmware's default) takes the same encrypted apiKey slot.
+    PrinterKind.DUET -> DuetPrinterService(address, profile.apiKey)
+    // An UltiMaker's pairing id (not a secret: it goes in the auth/check URL) in serial, its key in the encrypted apiKey slot.
+    PrinterKind.ULTIMAKER -> UltiMakerPrinterService(address, profile.serial, profile.apiKey)
+    // Repetier-Server's API key in the encrypted apiKey slot; the server's printer slug (not a secret) in serial.
+    PrinterKind.REPETIER -> RepetierPrinterService(address, profile.apiKey, profile.serial)
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER

@@ -189,7 +189,8 @@ import java.io.File
     // Unlike Bambu, this app's slicer output for a Prusa Link target is already plain .gcode (no
     // bundle), so the toolpath/stats extraction above only ever branches on bambuTarget.
     val prusaTarget = profile.kind == PrinterKind.PRUSA_LINK || profile.kind == PrinterKind.OCTOPRINT || profile.kind == PrinterKind.ELEGOO ||
-        profile.kind == PrinterKind.CREALITY || profile.kind == PrinterKind.FLASHFORGE // all take plain G-code uploaded and started in one request (Creality/Flashforge: upload, start gated)
+        profile.kind == PrinterKind.CREALITY || profile.kind == PrinterKind.FLASHFORGE || profile.kind == PrinterKind.DUET ||
+        profile.kind == PrinterKind.ULTIMAKER || profile.kind == PrinterKind.REPETIER // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier: upload, start gated; UltiMaker: nothing sent while gated)
     // Toolpath + stats parsing, both off the main thread the same way slicing itself is
     // dispatched. A parse failure doesn't block printing - the review is a visualization aid,
     // not a correctness gate; the actual G-code was already produced successfully.
@@ -337,7 +338,7 @@ import java.io.File
                             prusaTarget -> {
                                 val gcode = sliced ?: return@Button
                                 execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest=PrusaLinkPrintRequest(gcode, filename),
-                                    allowedStates=setOf("standby","complete","cancelled","error")), state.generation)
+                                    allowedStates=sendAllowedStates(profile.kind)), state.generation)
                             }
                             else -> execute(Moonraker.start(filename, state.kindFor(state.address)), state.generation)
                         }

@@ -111,6 +111,9 @@ private fun kindLabel(k: net.jamesjennison.klippercompanion.PrinterKind) = when 
     net.jamesjennison.klippercompanion.PrinterKind.ELEGOO -> "Elegoo (LAN)"
     net.jamesjennison.klippercompanion.PrinterKind.CREALITY -> "Creality (LAN)"
     net.jamesjennison.klippercompanion.PrinterKind.FLASHFORGE -> "Flashforge (LAN)"
+    net.jamesjennison.klippercompanion.PrinterKind.DUET -> "Duet (RepRapFirmware)"
+    net.jamesjennison.klippercompanion.PrinterKind.ULTIMAKER -> "UltiMaker (LAN)"
+    net.jamesjennison.klippercompanion.PrinterKind.REPETIER -> "Repetier-Server"
 }
 
 private fun familyLabel(f: String) = when (f) {
@@ -125,6 +128,10 @@ private fun familyLabel(f: String) = when (f) {
     com.nozzleitall.testgrid.FirmwareFamilies.OCTOPRINT -> "OctoPrint"
     com.nozzleitall.testgrid.FirmwareFamilies.CREALITY -> "Creality LAN"
     com.nozzleitall.testgrid.FirmwareFamilies.FLASHFORGE -> "Flashforge local API"
+    com.nozzleitall.testgrid.FirmwareFamilies.FLASHFORGE_LEGACY -> "Flashforge legacy console"
+    com.nozzleitall.testgrid.FirmwareFamilies.DUET -> "Duet / RepRapFirmware"
+    com.nozzleitall.testgrid.FirmwareFamilies.ULTIMAKER -> "UltiMaker LAN API"
+    com.nozzleitall.testgrid.FirmwareFamilies.REPETIER -> "Repetier-Server"
     else -> f
 }
 

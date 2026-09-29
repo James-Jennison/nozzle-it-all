@@ -777,7 +777,20 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         val creality = capabilities.transport == PrinterTransport.CREALITY
                         Text(if(creality) "Creality printer" else "Flashforge printer", style=MaterialTheme.typography.titleSmall)
                         Text("Here a ${if(creality) "Creality K1, K2 or Hi" else "Flashforge AD5X or Adventurer 5M"} offers live status and temperatures (read-only), its ${if(creality) "CFS" else "IFS"} slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        if(!creality) Text("An older Flashforge saved without a serial number and access code (Adventurer 3 / 4, Creator, Guider) uses its port-8899 connection instead: Nozzle It All only checks it answers, and doesn't read its state yet.")
                         OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text(if(creality) "CFS slots" else "IFS slots")}
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.DUET) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Duet printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a Duet on RepRapFirmware offers a connection check and uploading a sliced file to 0:/gcodes. Nozzle It All doesn't read its state, temperatures or progress yet (the slicer code this connection is ported from doesn't). Start the print on the printer's screen or in Duet Web Control: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet.")
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.ULTIMAKER) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("UltiMaker printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a networked UltiMaker offers its state and job progress (read-only; no temperatures over this connection). Sending, pausing and aborting prints from Nozzle It All aren't verified on a real printer yet, and an UltiMaker prints every job it is sent, so nothing is sent: print from the printer's screen. Pair it in Edit printer.")
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.REPETIER) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Repetier-Server printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a printer behind Repetier-Server offers a connection check and uploading a sliced file to the server's model library (which doesn't print it). Nozzle It All doesn't read its state, temperatures or progress yet (the slicer code this connection is ported from doesn't). Start the print from Repetier-Server or the printer's screen: starting, pausing and stopping from Nozzle It All aren't verified on a real printer yet.")
                     } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)

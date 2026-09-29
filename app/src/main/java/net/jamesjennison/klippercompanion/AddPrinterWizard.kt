@@ -133,7 +133,10 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.OCTOPRINT, {kind=PrinterKind.OCTOPRINT}, label={Text("OctoPrint")}, modifier=Modifier.testTag("wizard-kind-octoprint"))
                         FilterChip(kind==PrinterKind.ELEGOO, {kind=PrinterKind.ELEGOO}, label={Text("Elegoo")}, modifier=Modifier.testTag("wizard-kind-elegoo"))
                         FilterChip(kind==PrinterKind.CREALITY, {kind=PrinterKind.CREALITY}, label={Text("Creality (K1 / K2 / Hi)")}, modifier=Modifier.testTag("wizard-kind-creality"))
-                        FilterChip(kind==PrinterKind.FLASHFORGE, {kind=PrinterKind.FLASHFORGE}, label={Text("Flashforge (AD5X / 5M)")}, modifier=Modifier.testTag("wizard-kind-flashforge"))
+                        FilterChip(kind==PrinterKind.FLASHFORGE, {kind=PrinterKind.FLASHFORGE}, label={Text("Flashforge")}, modifier=Modifier.testTag("wizard-kind-flashforge"))
+                        FilterChip(kind==PrinterKind.DUET, {kind=PrinterKind.DUET}, label={Text("Duet (RepRapFirmware)")}, modifier=Modifier.testTag("wizard-kind-duet"))
+                        FilterChip(kind==PrinterKind.ULTIMAKER, {kind=PrinterKind.ULTIMAKER}, label={Text("UltiMaker (3 / S-series)")}, modifier=Modifier.testTag("wizard-kind-ultimaker"))
+                        FilterChip(kind==PrinterKind.REPETIER, {kind=PrinterKind.REPETIER}, label={Text("Repetier-Server")}, modifier=Modifier.testTag("wizard-kind-repetier"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -164,6 +167,24 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                             visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
                         Text("Serial number and access code are both on the printer's own network settings screen; Flashforge's local API needs both. You start the print on the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
+                        Text("An older Flashforge (Adventurer 3 / 4, Creator, Guider): leave both blank. Nozzle It All then uses its older port-8899 connection, which only checks the printer answers (its state isn't read yet).", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.DUET) {
+                        OutlinedTextField(address, {address=it}, label={Text("Duet address")}, placeholder={Text("192.168.1.50 or duet.local")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Board password (optional)")}, singleLine=true, modifier=Modifier.testTag("wizard-duet-password"),
+                            visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+                        Text("A Duet on RepRapFirmware, standalone or with Duet Software Framework. Only enter a password if the board has one (M551). Nozzle It All checks the board is reachable and uploads sliced files; you start the print on the printer's screen or Duet Web Control (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.ULTIMAKER) {
+                        OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        UltiMakerPairing(address, serial, apiKey) { id, key -> serial = id; apiKey = key }
+                        Text("A networked UltiMaker (3, S3, S5, S7). Status works without pairing. Sending prints from here isn't verified on a real printer yet, and an UltiMaker prints every job it is sent, so nothing is sent: print from the printer's screen. The UltiMaker 2 has no network connection.", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.REPETIER) {
+                        OutlinedTextField(address, {address=it}, label={Text("Repetier-Server address")}, placeholder={Text("192.168.1.60:3344")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("API key")}, singleLine=true, modifier=Modifier.testTag("wizard-repetier-key"),
+                            visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+                        OutlinedTextField(serial, {serial=it.take(40)}, label={Text("Printer slug (blank if the server has one printer)")}, singleLine=true, modifier=Modifier.testTag("wizard-repetier-slug"))
+                        Text("One printer behind a Repetier-Server. Nozzle It All checks the server answers and stores sliced files in its model library; you start the print from Repetier-Server or the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),

@@ -35,17 +35,17 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
+      "current": "d801028e-9d4f-4024-9c03-cac135666b39",
       "firmware": {
         "family": "cosmos",
         "version": "Release - 26.09.0"
       },
       "gradeSources": {
-        "controls": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "file_transfer": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "monitoring": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "physical_print": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "slicing": "9a06437f-006b-4fdd-bf9e-2b176a795b77"
+        "controls": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "file_transfer": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "monitoring": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "physical_print": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "slicing": "d801028e-9d4f-4024-9c03-cac135666b39"
       },
       "grades": {
         "controls": "UNVERIFIED",
@@ -71,6 +71,24 @@
           "runId": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
           "source": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
+          "supersededBy": "d801028e-9d4f-4024-9c03-cac135666b39"
+        },
+        {
+          "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
+          "completedAt": 1790682604141,
+          "contentDigest": "0ed92571b46a30d91712384f02355633edf3bd6e6b3d737fd370740ecf315dc4",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
+          "source": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip",
+          "suite": "cosmos-centauri-carbon 1.2.0",
           "supersededBy": null
         }
       ],
@@ -84,21 +102,21 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
+      "current": "d801028e-9d4f-4024-9c03-cac135666b39",
       "firmware": {
         "family": "cosmos",
         "version": "Release - 26.09.0"
       },
       "gradeSources": {
-        "controls": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "file_transfer": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "monitoring": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "physical_print": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
-        "slicing": "9a06437f-006b-4fdd-bf9e-2b176a795b77"
+        "controls": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "file_transfer": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "monitoring": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "physical_print": "d801028e-9d4f-4024-9c03-cac135666b39",
+        "slicing": "d801028e-9d4f-4024-9c03-cac135666b39"
       },
       "grades": {
-        "controls": "SKIPPED",
-        "file_transfer": "PARTIAL",
+        "controls": "PARTIAL",
+        "file_transfer": "PASS",
         "monitoring": "PASS",
         "physical_print": "SKIPPED",
         "slicing": "PASS"
@@ -119,6 +137,24 @@
           "review": "accepted",
           "runId": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
           "source": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip",
+          "suite": "cosmos-centauri-carbon 1.2.0",
+          "supersededBy": "d801028e-9d4f-4024-9c03-cac135666b39"
+        },
+        {
+          "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
+          "completedAt": 1790682604141,
+          "contentDigest": "0ed92571b46a30d91712384f02355633edf3bd6e6b3d737fd370740ecf315dc4",
+          "grades": {
+            "controls": "PARTIAL",
+            "file_transfer": "PASS",
+            "monitoring": "PASS",
+            "physical_print": "SKIPPED",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
+          "source": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
           "supersededBy": null
         }

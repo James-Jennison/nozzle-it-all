@@ -7,8 +7,8 @@ configurations without physical evidence are UNVERIFIED. "(unreviewed)" means no
 | Printer | Firmware | Nozzle build | Adapter | Scope | Slicing | File transfer | Monitoring | Controls | Physical printing | Current evidence |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Bambu Lab X1 Carbon | bambu-lan | — | android-bambu-lan | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite bambu-lan 1.2.0). |
-| Elegoo Centauri Carbon | cosmos Release - 26.09.0 | 0.1.0.testgrid | android-moonraker | Multi-material / tool changing | PASS | UNVERIFIED | PASS | UNVERIFIED | SKIPPED | physical run `9a06437f` (cosmos-centauri-carbon 1.2.0), bundle `7134a20862d8` |
-| Elegoo Centauri Carbon | cosmos Release - 26.09.0 | 0.1.0.testgrid | android-moonraker | Single material | PASS | PARTIAL | PASS | SKIPPED | SKIPPED | physical run `9a06437f` (cosmos-centauri-carbon 1.2.0), bundle `7134a20862d8` |
+| Elegoo Centauri Carbon | cosmos Release - 26.09.0 | 0.1.0.testgrid | android-moonraker | Multi-material / tool changing | PASS | UNVERIFIED | PASS | UNVERIFIED | SKIPPED | physical run `d801028e` (cosmos-centauri-carbon 1.2.0), bundle `f09a467a1f6a` |
+| Elegoo Centauri Carbon | cosmos Release - 26.09.0 | 0.1.0.testgrid | android-moonraker | Single material | PASS | PASS | PASS | PARTIAL | SKIPPED | physical run `d801028e` (cosmos-centauri-carbon 1.2.0), bundle `f09a467a1f6a` |
 | Elegoo Centauri Carbon | elegoo-stock | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.2.0). |
 | Elegoo Centauri Carbon | opencentauri-patched | — | android-elegoo-sdcp | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite opencentauri-patched 1.2.0). |
 | Generic Klipper | klipper | — | android-moonraker | Single material | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | UNVERIFIED | No physical evidence yet (fixture suite generic-klipper 1.2.0). |
@@ -27,13 +27,15 @@ Every run is kept. For each category the matrix shows the newest run that graded
 
 | Run | Kind | Suite | Completed (UTC) | Slicing | File transfer | Monitoring | Controls | Physical printing | Review | Status | Bundle digest | Source |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `9a06437f` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:28:29.434Z | PASS | UNVERIFIED | PASS | UNVERIFIED | SKIPPED | accepted | current | `7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e` | 7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip |
+| `9a06437f` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:28:29.434Z | PASS | UNVERIFIED | PASS | UNVERIFIED | SKIPPED | accepted | superseded by `d801028e` | `7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e` | 7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip |
+| `d801028e` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:50:04.141Z | PASS | UNVERIFIED | PASS | UNVERIFIED | SKIPPED | accepted | current | `f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768` | f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip |
 
 ### Elegoo Centauri Carbon · cosmos Release - 26.09.0 · Nozzle 0.1.0.testgrid · android-moonraker · Single material
 
 | Run | Kind | Suite | Completed (UTC) | Slicing | File transfer | Monitoring | Controls | Physical printing | Review | Status | Bundle digest | Source |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `9a06437f` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:28:29.434Z | PASS | PARTIAL | PASS | SKIPPED | SKIPPED | accepted | current | `7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e` | 7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip |
+| `9a06437f` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:28:29.434Z | PASS | PARTIAL | PASS | SKIPPED | SKIPPED | accepted | superseded by `d801028e` | `7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e` | 7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip |
+| `d801028e` | physical | cosmos-centauri-carbon 1.2.0 | 2026-09-29T11:50:04.141Z | PASS | PASS | PASS | PARTIAL | SKIPPED | accepted | current | `f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768` | f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip |
 
 ### Snapmaker U1 · paxx-extended 1.6.0.267_20260815150420 · Nozzle 0.1.0.testgrid · android-moonraker · Multi-material / tool changing
 

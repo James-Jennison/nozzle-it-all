@@ -119,6 +119,21 @@
       "printer": "Snapmaker U1",
       "runId": "d2bd7369-efb4-48af-9cca-d3d8a890f823",
       "suite": "paxx-u1 1.0.0"
+    },
+    {
+      "attachments": 0,
+      "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
+      "bytes": 9926,
+      "completedAt": 1790682604141,
+      "contentDigest": "0ed92571b46a30d91712384f02355633edf3bd6e6b3d737fd370740ecf315dc4",
+      "file": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip",
+      "firmwareFamily": "cosmos",
+      "kind": "physical",
+      "location": "gthost-build01:~/testgrid-evidence/bundles",
+      "maxSafetyLevel": 3,
+      "printer": "Elegoo Centauri Carbon",
+      "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
+      "suite": "cosmos-centauri-carbon 1.2.0"
     }
   ],
   "format": "nozzle.evidence-index",

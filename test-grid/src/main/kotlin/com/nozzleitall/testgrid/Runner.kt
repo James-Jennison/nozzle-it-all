@@ -132,6 +132,7 @@ class RunSession private constructor(
                 .put("version", s.identity?.firmware?.version.orEmpty()).put("detail", s.classified.detail))
             .put("capabilities", JSONArray(s.capabilities.sorted()))
             .put("hardware", JSONObject(s.classified.hardware.toSortedMap()))
+            .put("toolSlots", s.description.toolSlots)
             .putOpt("slicingModel", s.classified.slicingModel?.name)
     }
 
@@ -236,7 +237,7 @@ class RunSession private constructor(
         }
         val caps = record.target.strings("capabilities").toSet()
         val missing = test.requiredCapabilities.filter { it !in caps }
-        if (missing.isNotEmpty()) return "The printer does not declare ${missing.joinToString()}."
+        if (missing.isNotEmpty()) return "Nozzle It All can't do this on this printer yet (it doesn't offer ${missing.joinToString()}), so the test can't run. It is recorded as blocked, not failed."
         if (target == null && (test.steps + test.cleanup).any { it.kind?.usesPrinter == true }) return "No printer is selected."
         return null
     }
@@ -730,7 +731,7 @@ class RunSession private constructor(
                 if (sum.sha256 != slice.optString("sha256")) return StepStatus.FAILED to "The sliced file changed after slicing (SHA-256 mismatch)."
                 val profile = slicer?.profile(slice.getJSONObject("profile").getString("id"))
                 val checks = p.optJSONArray("checks") ?: JSONArray()
-                val failures = (0 until checks.length()).mapNotNull { checks.optJSONObject(it) }.mapNotNull { c -> GcodeScan.evaluate(c, sum, profile)?.let { "${c.optString("check")}: $it" } }
+                val failures = (0 until checks.length()).mapNotNull { checks.optJSONObject(it) }.mapNotNull { c -> GcodeScan.evaluate(c, sum, profile, record.target.optInt("toolSlots", 1))?.let { "${c.optString("check")}: $it" } }
                 s.data.put("summary", JSONObject(sum.toJson())).put("checks", checks)
                 if (failures.isEmpty()) StepStatus.PASSED to "All ${checks.length()} G-code checks passed." else StepStatus.FAILED to failures.joinToString(" ")
             }

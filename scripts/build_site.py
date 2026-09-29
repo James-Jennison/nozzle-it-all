@@ -82,7 +82,6 @@ def compatibility():
     import html as h
     data = json.loads((ROOT / "docs" / "testgrid" / "compatibility-report.json").read_text())
     tested = [row for row in data["rows"] if row["history"]]
-    waiting = [row for row in data["rows"] if not row["history"]]
     def cell(g, label):
         cls, text = GRADE.get(g.split(" ")[0], ("planned", "Not tested"))
         if "(unreviewed)" in g: text += " (not yet reviewed)"
@@ -95,9 +94,18 @@ def compatibility():
         out.append(f'<tr><th scope="row">{h.escape(row["printer"]["manufacturer"] + " " + row["printer"]["model"])}<br><span class="fine">{h.escape(fw)} · {scope} · tested with Nozzle It All {h.escape(row["nozzleVersion"])}</span></th>'
                    + "".join(cell(row["grades"].get(key, "UNVERIFIED"), label) for key, label in CATEGORIES) + '</tr>')
     out.append('</tbody></table></div>')
-    names = sorted({f'{r["printer"]["manufacturer"]} {r["printer"]["model"]} ({FAMILY.get(r["firmware"]["family"], r["firmware"]["family"])})'.replace(" any model", "").replace(" any Klipper printer", " Klipper printers") for r in waiting})
-    out.append('<h2>Waiting for testers</h2><p>These printer and firmware combinations have a test suite in the app but no accepted results yet:</p><ul>'
-               + "".join(f'<li>{h.escape(n)}</li>' for n in names) + '</ul>')
+    # Straight from the suites the app ships (test-grid resources), so this list can't lag behind them.
+    suites_dir = ROOT / "test-grid" / "src" / "main" / "resources" / "testgrid" / "suites"
+    tested_families = {r["firmware"]["family"] for r in tested}
+    titles = []
+    for name in json.loads((suites_dir / "index.json").read_text())["suites"]:
+        s = json.loads((suites_dir / name).read_text())
+        if s["target"]["firmwareFamily"] not in tested_families: titles.append(s["title"])
+    out.append('<h2>Waiting for testers</h2><p>The app has tests for these, but no accepted results yet. One suite covers every model of its kind, '
+               'and each model gets its own row above once tested:</p><ul>' + "".join(f'<li>{h.escape(t)}</li>' for t in sorted(titles)) + '</ul>')
+    ledger = json.loads((ROOT / "docs" / "testgrid" / "evidence" / "acceptance.json").read_text())
+    latest = max((e["date"] for e in ledger["accepted"]), default=None)
+    if latest: out.append(f'<p class="fine">Most recent result accepted {h.escape(latest)}.</p>')
     return "\n".join(out)
 
 

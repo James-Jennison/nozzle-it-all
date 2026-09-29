@@ -75,4 +75,23 @@ class SendAndStartTest {
         assertEquals(ResultState.SKIPPED, mk4s.session.record.test("multi-print")!!.result)
         assertTrue(mk4s.session.record.test("multi-print")!!.reason.contains("multi_tool"))
     }
+
+    @Test fun whereTheAppDoesntStartPrintsYetThoseTestsAreBlockedAndNothingIsSent() {
+        // Creality (CFS) and Flashforge (IFS): the app uploads but doesn't start prints until START_VERIFIED.
+        listOf("creality-lan" to SimulatedPrinter.Preset.CREALITY_K2, "flashforge-lan" to SimulatedPrinter.Preset.FLASHFORGE_AD5X).forEach { (suite, preset) ->
+            val clock = Support.Clock()
+            val sim = SimulatedPrinter(preset, clock::now)
+            var sent = 0
+            val target = object : TestTarget by sim { override fun sendAndStart(file: java.io.File, requestedName: String): TransferOutcome { sent++; return sim.sendAndStart(file, requestedName) } }
+            val st = Support.start(suite, target, clock)
+            Support.drive(st.session)
+            val r = st.session.record
+            listOf("telemetry", "slice-single", "multi-lanes", "multi-slice").forEach { assertEquals("$suite/$it: ${r.test(it)!!.reason}", ResultState.PASS, r.test(it)!!.result) }
+            listOf("transfer", "print-single", "print-controls", "multi-print").forEach {
+                assertEquals("$suite/$it", ResultState.BLOCKED, r.test(it)!!.result)
+                assertTrue(r.test(it)!!.reason, r.test(it)!!.reason.contains("can't do this on this printer yet"))
+            }
+            assertEquals(suite, 0, sent)
+        }
+    }
 }

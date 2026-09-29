@@ -18,6 +18,8 @@ live firmware reads) are prior history, not Test Grid evidence, and are not impo
 | Prusa via PrusaLink | `prusalink` | fixture | external testers; send-and-start, printing, pause/resume/cancel; multi-material when the profile has several tools (XL 5T). No MMU3 slicing profile exists in Nozzle yet |
 | Generic Klipper/Moonraker (each model its own row) | `generic-klipper` | fixture | external testers |
 | OctoPrint | `octoprint` | fixture | external testers; send-and-start, printing, pause/resume/cancel; multi-material when the profile has several tools |
+| Creality on its LAN interface (K2 family, Hi, K1; CFS) | `creality-lan` | fixture | external testers; status, slicing and CFS slots now; printing and pause/resume/cancel blocked until Nozzle It All starts prints on these printers |
+| Flashforge on its local API (AD5X; IFS) | `flashforge-lan` | fixture | external testers; status, slicing and IFS slots now; printing and pause/resume/cancel blocked until Nozzle It All starts prints on these printers |
 | Desktop adapters (`paxx-lan`, `moonraker`, …) | none: Test Mode is Android-only in v1; a result on Android is not evidence for Desktop | n/a | n/a |
 
 The owner does not have a stock Centauri Carbon; stock and OpenCentauri-patched coverage must come from external

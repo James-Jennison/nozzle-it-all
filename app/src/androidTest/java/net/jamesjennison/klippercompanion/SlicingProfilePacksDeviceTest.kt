@@ -190,6 +190,12 @@ class SlicingProfilePacksDeviceTest {
             }
         }
         assertTrue("expected tower extrusions to check, found $checked", checked > 50)
+        // P-0030: the tower (rib walls included) starts at its configured position; only its brim reaches past it.
+        fun setting(key: String) = Regex("(?m)^; $key = (-?[0-9.]+)").find(gcode)?.groupValues?.get(1)?.toDouble()
+            ?: throw AssertionError("no $key in the G-code config")
+        val towerX = setting("wipe_tower_x"); val towerY = setting("wipe_tower_y"); val brim = setting("prime_tower_brim_width")
+        assertTrue("the tower reaches past its configured corner ($towerX, $towerY) by more than its ${brim} mm brim: area from ($minX, $minY)",
+            minX + 0.5 >= towerX - brim - 1.0 && minY + 0.5 >= towerY - brim - 1.0)
         // The extra object line still goes through the preview parser.
         assertTrue(out.inputStream().buffered().use { GcodePreview.parse(it) }.segments.isNotEmpty())
     }

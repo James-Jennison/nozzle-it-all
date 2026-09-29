@@ -48,3 +48,14 @@ needs the full engine checkout (`scripts/engine_pin.py verify` without `--allow-
 copy lacks; the pin verifies here. Files: `/run/media/jjennison/DATA/Nozzle It All/releases/0.1.1/` (AAB, APK, mapping.txt, SBOM, SHA256SUMS).
 Uploaded to the closed-testing "Alpha" track by the owner (the AAB is over the 10 MB upload-tool limit); Google approved it the same day.
 Contents: 376 bundled printer profiles with a searchable picker, custom machine settings, stock and PAXX Snapmaker U1 types.
+
+## 0.1.2 (2026-09-27)
+
+Tag `v0.1.2` (commit `5f05768`), versionCode 275, same upload key. Fixes Play's "Unsafe HostnameVerifier" policy issue
+raised against 274 (Android TLS no longer accepts every hostname). Built locally at 05:26:45 on 2026-09-27 from the
+working tree that was committed 16 seconds later as `5f05768` (the AAB in the main checkout's build output and the
+uploaded `nozzle-it-all-0.1.2-275.aab` are byte-identical, SHA-256 `ab15d44b388c25d0…`); the tag was added on
+2026-09-29 from that evidence. Submitted by the owner to the closed-testing "Alpha" track and accepted. It predates the
+Elegoo connection (`f46426b`), the Test Grid and Test Mode, and the Creality and Flashforge kinds.
+
+From 0.1.3 on, every release is tagged at the exact commit it is built from, at build time (docs/RELEASE.md).

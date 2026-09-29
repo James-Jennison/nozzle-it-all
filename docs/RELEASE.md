@@ -30,6 +30,13 @@ dependencies with SHA-256 of each artifact, the pinned nozzle-engine commit, and
 archive list is everything present in orcaslicer-android-engine's `deps/src`, including alternates that may not be linked
 (for example CGAL 6.0.1 next to 5.6.3); trim `engine/fork/android/DEPENDENCIES.json` if that matters for a submission.
 
+## Tagging
+
+Every Play upload is tagged `v<versionName>` at the exact commit it was built from, when it is built, and the build
+records that commit (`SOURCE_REVISION`, passed as `-PnozzleSourceRevision`); the tree must be clean. The tag is how the
+open-source page's promise ("each release's tag records its exact engine") and the AGPL source offer are kept.
+Releases and their files are listed in docs/FIRST_RELEASE.md.
+
 ## Engine pinning
 `engine/fork/ENGINE_PIN.json` pins the nozzle-engine commit (github.com/James-Jennison/nozzle-engine), which every
 platform builds from; the source is fetched by that commit, so there is no local patch. `engine/fork/android/DEPENDENCIES.json`

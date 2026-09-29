@@ -1,7 +1,7 @@
 # Physically unverified configurations
 
 Physical Test Grid evidence exists only for the Snapmaker U1 on PAXX extended firmware and the Elegoo Centauri Carbon
-with CANVAS on OpenCentauri COSMOS 26.09 (up to level 3 so far), both in Android Test Mode on the owner's printers: see [COMPATIBILITY_REPORT.md](COMPATIBILITY_REPORT.md) for its grades and
+with CANVAS on OpenCentauri COSMOS 26.09, both in Android Test Mode on the owner's printers: see [COMPATIBILITY_REPORT.md](COMPATIBILITY_REPORT.md) for its grades and
 [evidence/README.md](evidence/README.md) for the bundles. Everything else below is UNVERIFIED in the Test Grid matrix, in
 every category. Results recorded elsewhere (the owner's U1 cube print, the M2 heater acceptance on the U1, the COSMOS
 live firmware reads) are prior history, not Test Grid evidence, and are not imported into it.
@@ -9,8 +9,7 @@ live firmware reads) are prior history, not Test Grid evidence, and are not impo
 | Configuration | Suite | Coverage | Who can supply evidence |
 |---|---|---|---|
 | Snapmaker U1 on PAXX, multi-tool: file transfer and controls | `paxx-u1` has no multi-material tests in these categories | reference | n/a (slicing, monitoring and printing have evidence) |
-| Elegoo Centauri Carbon on OpenCentauri COSMOS 26.07+ (android-moonraker): printing, and pause/resume/cancel | `cosmos-centauri-carbon` level 4 | reference | the owner (manual steps: [manual/cosmos-centauri-carbon.md](manual/cosmos-centauri-carbon.md)); levels 1-3 have evidence |
-| Centauri Carbon on COSMOS with CANVAS (AFC): two-tool printing | `cosmos-centauri-carbon` multi-material tests | reference | the owner; CANVAS lanes and two-tool slicing have evidence |
+| Centauri Carbon on COSMOS with CANVAS (AFC): two-tool printing without colour bleed | `cosmos-centauri-carbon` multi-material tests | reference | the owner, once the prime-tower engine fix (nozzle-engine#4) is in the app; the first two-tool print failed on bleed |
 | Centauri Carbon on COSMOS older than 26.07.0 | none (legacy profile not bundled; the COSMOS suite fails its profile match by design) | n/a | n/a |
 | Snapmaker U1 on stock firmware | `snapmaker-u1-stock` | fixture | external testers |
 | Elegoo Centauri Carbon on Elegoo stock firmware (SDCP) | `elegoo-centauri-carbon-stock` | fixture | external testers; Test Mode v1 blocks transfer and print steps on this connection |

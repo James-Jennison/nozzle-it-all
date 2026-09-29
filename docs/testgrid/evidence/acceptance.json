@@ -53,6 +53,12 @@
       "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
       "date": "2026-09-29",
       "note": "Level 3 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from 9d6860e (cosmos-centauri-carbon 1.2.0). Every test up to level 3 PASS: upload (SHA-256 verified), listing and delete; nozzle 60 C, bed 40 C, G28, Z +5 mm, heaters off. Accepted with a correction: the camera snapshot's recorded SHA-256 had 'cc1' masked (the printer is saved as CC1; fixed in #14)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc",
+      "date": "2026-09-29",
+      "note": "Level 4 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from d381dcd (cosmos-centauri-carbon 1.2.0). Single material all PASS (towers 20.0/20.0, hole 8.0, height 10.4, wall 1.2 mm; pause/resume/cancel). Two-tool print FAIL on colour bleed: no prime tower (engine bug, nozzle-engine#4), flush_multiplier 0.3 and white-for-every-slot flush volumes (fixed in #17). Single-material prints were sliced with the plain COSMOS profile (COSMOS warned; suite 1.3.0 uses the AFC profile with CANVAS)."
     }
   ],
   "format": "nozzle.evidence-acceptance",

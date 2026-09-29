@@ -65,6 +65,12 @@
       "bundleDigest": "3e094a9380bdcaa4c4a99870aa794d2d8de8b1c13a100e6a66b7a05e8a3501a9",
       "date": "2026-09-29",
       "note": "Level 4 run on the owner's Centauri Carbon with CANVAS, COSMOS Release 26.09.0, built from 9523afd with nozzle-engine d17bfe5 (cosmos-centauri-carbon 1.3.0). Two-tool print PASS with no colour bleed: prime tower printed, flush multiplier 1, purge sized from the lane colours. Every other test carried over from run fa7d2ea1 (bundle f36c2f38) or re-ran and passed. Owner reported the result as satisfactory before exporting."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3",
+      "date": "2026-09-29",
+      "note": "Level 4 run on the owner's Centauri Carbon with CANVAS, COSMOS Release 26.09.0, built from 988df75 with nozzle-engine 2b7b6cf (tower declared for the adaptive mesh). Two-tool print PASS with the prime tower printed on the bed (owner watched it; visible in the photo) and no colour bleed. Everything else carried over."
     }
   ],
   "format": "nozzle.evidence-acceptance",

@@ -42,7 +42,7 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "d9da0749-7161-4f86-8a59-6416acfafe98",
+      "current": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc",
       "firmware": {
         "family": "cosmos",
         "version": "Release - 26.09.0"
@@ -54,18 +54,18 @@
           "fa7d2ea1-8165-4fec-a0f4-d0605747e932"
         ],
         "physical_print": [
-          "d9da0749-7161-4f86-8a59-6416acfafe98"
+          "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
         ],
         "slicing": [
-          "d9da0749-7161-4f86-8a59-6416acfafe98"
+          "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
         ]
       },
       "gradeSources": {
-        "controls": "d9da0749-7161-4f86-8a59-6416acfafe98",
-        "file_transfer": "d9da0749-7161-4f86-8a59-6416acfafe98",
+        "controls": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc",
+        "file_transfer": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc",
         "monitoring": "fa7d2ea1-8165-4fec-a0f4-d0605747e932",
-        "physical_print": "d9da0749-7161-4f86-8a59-6416acfafe98",
-        "slicing": "d9da0749-7161-4f86-8a59-6416acfafe98"
+        "physical_print": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc",
+        "slicing": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
       },
       "grades": {
         "controls": "UNVERIFIED",
@@ -91,7 +91,7 @@
           "runId": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
           "source": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
-          "supersededBy": "d9da0749-7161-4f86-8a59-6416acfafe98"
+          "supersededBy": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
         },
         {
           "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
@@ -109,7 +109,7 @@
           "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
           "source": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
-          "supersededBy": "d9da0749-7161-4f86-8a59-6416acfafe98"
+          "supersededBy": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
         },
         {
           "bundleDigest": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc",
@@ -145,6 +145,24 @@
           "runId": "d9da0749-7161-4f86-8a59-6416acfafe98",
           "source": "3e094a9380bdcaa4c4a99870aa794d2d8de8b1c13a100e6a66b7a05e8a3501a9.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.3.0",
+          "supersededBy": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
+        },
+        {
+          "bundleDigest": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3",
+          "completedAt": 1790707298021,
+          "contentDigest": "6233386ab84abf7f6e64e7e9590be165393fb77c78179400cc00b6f88172f155",
+          "grades": {
+            "controls": "UNVERIFIED",
+            "file_transfer": "UNVERIFIED",
+            "monitoring": "SKIPPED",
+            "physical_print": "PASS",
+            "slicing": "PASS"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc",
+          "source": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3.nozzle-evidence.zip",
+          "suite": "cosmos-centauri-carbon 1.3.0",
           "supersededBy": null
         }
       ],
@@ -158,7 +176,7 @@
     },
     {
       "adapter": "android-moonraker",
-      "current": "d9da0749-7161-4f86-8a59-6416acfafe98",
+      "current": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc",
       "firmware": {
         "family": "cosmos",
         "version": "Release - 26.09.0"
@@ -212,7 +230,7 @@
           "runId": "9a06437f-006b-4fdd-bf9e-2b176a795b77",
           "source": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
-          "supersededBy": "d9da0749-7161-4f86-8a59-6416acfafe98"
+          "supersededBy": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
         },
         {
           "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
@@ -230,7 +248,7 @@
           "runId": "d801028e-9d4f-4024-9c03-cac135666b39",
           "source": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.2.0",
-          "supersededBy": "d9da0749-7161-4f86-8a59-6416acfafe98"
+          "supersededBy": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc"
         },
         {
           "bundleDigest": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc",
@@ -265,6 +283,24 @@
           "review": "accepted",
           "runId": "d9da0749-7161-4f86-8a59-6416acfafe98",
           "source": "3e094a9380bdcaa4c4a99870aa794d2d8de8b1c13a100e6a66b7a05e8a3501a9.nozzle-evidence.zip",
+          "suite": "cosmos-centauri-carbon 1.3.0",
+          "supersededBy": null
+        },
+        {
+          "bundleDigest": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3",
+          "completedAt": 1790707298021,
+          "contentDigest": "6233386ab84abf7f6e64e7e9590be165393fb77c78179400cc00b6f88172f155",
+          "grades": {
+            "controls": "SKIPPED",
+            "file_transfer": "SKIPPED",
+            "monitoring": "SKIPPED",
+            "physical_print": "SKIPPED",
+            "slicing": "SKIPPED"
+          },
+          "kind": "physical",
+          "review": "accepted",
+          "runId": "47be97a3-6be2-4dd7-9840-8f8c5f7ba3dc",
+          "source": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3.nozzle-evidence.zip",
           "suite": "cosmos-centauri-carbon 1.3.0",
           "supersededBy": null
         }

@@ -31,6 +31,21 @@
       "suite": "paxx-u1 1.1.0"
     },
     {
+      "attachments": 1,
+      "bundleDigest": "3e094a9380bdcaa4c4a99870aa794d2d8de8b1c13a100e6a66b7a05e8a3501a9",
+      "bytes": 6720044,
+      "completedAt": 1790702515997,
+      "contentDigest": "39b49cd569a3157fbb0e570f1122e7b0431f1ca52555b7d8fb70b070a3ddd9c1",
+      "file": "3e094a9380bdcaa4c4a99870aa794d2d8de8b1c13a100e6a66b7a05e8a3501a9.nozzle-evidence.zip",
+      "firmwareFamily": "cosmos",
+      "kind": "physical",
+      "location": "gthost-build01:~/testgrid-evidence/bundles",
+      "maxSafetyLevel": 4,
+      "printer": "Elegoo Centauri Carbon",
+      "runId": "d9da0749-7161-4f86-8a59-6416acfafe98",
+      "suite": "cosmos-centauri-carbon 1.3.0"
+    },
+    {
       "attachments": 4,
       "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
       "bytes": 12702455,

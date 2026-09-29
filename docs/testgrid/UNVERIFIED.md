@@ -9,7 +9,6 @@ live firmware reads) are prior history, not Test Grid evidence, and are not impo
 | Configuration | Suite | Coverage | Who can supply evidence |
 |---|---|---|---|
 | Snapmaker U1 on PAXX, multi-tool: file transfer and controls | `paxx-u1` has no multi-material tests in these categories | reference | n/a (slicing, monitoring and printing have evidence) |
-| Centauri Carbon on COSMOS with CANVAS (AFC): two-tool printing without colour bleed | `cosmos-centauri-carbon` multi-material tests | reference | the owner, once the prime-tower engine fix (nozzle-engine#4) is in the app; the first two-tool print failed on bleed |
 | Centauri Carbon on COSMOS older than 26.07.0 | none (legacy profile not bundled; the COSMOS suite fails its profile match by design) | n/a | n/a |
 | Snapmaker U1 on stock firmware | `snapmaker-u1-stock` | fixture | external testers |
 | Elegoo Centauri Carbon on Elegoo stock firmware (SDCP) | `elegoo-centauri-carbon-stock` | fixture | external testers; Test Mode v1 blocks transfer and print steps on this connection |

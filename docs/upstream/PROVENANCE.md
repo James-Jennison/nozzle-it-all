@@ -19,7 +19,9 @@ interchange).
   filaments.
 - **Adaptations:** re-implemented in Kotlin (`adapter-paxx/.../U1Protocol.kt`) against the shared printer model; no
   C++ was copied. Material edits always send `FORCE=1` because PAXX is the target; the Stock adapter disables
-  material edits instead of sending it.
+  material edits instead of sending it. Every U1 start is `server.files.start_local_print` as JSON-RPC on Moonraker's
+  websocket (as `U1LanPrintHost::start_print` does; Snapmaker/u1-moonraker a308cfa registers it for every transport
+  except HTTP), with `bed_level: 1` so the firmware runs the start G-code's adaptive bed mesh.
 - **Subsystem / platforms:** PAXX adapter and Stock U1 adapter; Desktop now, Android and Web later.
 - **Test evidence:** `PaxxLanAdapterTest` (13 tests) and `U1Protocol` parsing against the recorded U1 status in P-0002.
 - **Known divergence:** the fork's colour-distance toolhead suggestion (`suggest_mapping`) is not ported yet.

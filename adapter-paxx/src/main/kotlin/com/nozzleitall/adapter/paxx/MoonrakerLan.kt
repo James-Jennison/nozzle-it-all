@@ -78,6 +78,40 @@ class MoonrakerLan(address: String, private val apiKey: String = "", eventListen
 
     fun gcode(script: String): Any = post("printer/gcode/script", mapOf("script" to script))
 
+    /**
+     * The U1's `server.files.start_local_print` with [params], as one JSON-RPC request on Moonraker's websocket, sent once:
+     * the U1 registers it for every transport except HTTP (Snapmaker/u1-moonraker a308cfa). The U1 scans the file before
+     * starting, so the reply can take a while. An error or a `state` other than success is a refusal ([PrinterRejected]);
+     * no reply leaves the outcome unknown (IOException), never retried.
+     */
+    fun startLocalPrint(params: JSONObject): JSONObject {
+        val id = java.security.SecureRandom().nextInt(Int.MAX_VALUE)
+        val request = JSONObject().put("jsonrpc", "2.0").put("method", "server.files.start_local_print").put("id", id).put("params", params)
+        val reply = java.util.concurrent.ArrayBlockingQueue<Result<JSONObject>>(1)
+        val socket = commandClient.newWebSocket(Request.Builder().url(base.resolve("websocket")!!).build(), object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) { webSocket.send(request.toString()) }
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                val msg = try { JSONObject(text) } catch (e: org.json.JSONException) { return }
+                if (msg.optInt("id", -1) == id) reply.offer(Result.success(msg))
+            }
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                reply.offer(Result.failure(IOException("the printer closed the connection before replying"))); webSocket.close(1000, null)
+            }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                reply.offer(Result.failure(if (response?.code == 401 || response?.code == 403)
+                    PrinterRejected(if (apiKey.isBlank()) "The printer requires an API key." else "The printer rejected the API key.") else t))
+            }
+        })
+        try {
+            val msg = reply.poll(90, TimeUnit.SECONDS)?.getOrElse { if (it is PrinterRejected) throw it else throw IOException("Lost the connection while starting the print (${it.message})") }
+                ?: throw IOException("No reply from the printer within 90 s")
+            msg.optJSONObject("error")?.let { throw PrinterRejected("The printer refused to start: ${it.optString("message", "error").take(300)}") }
+            val result = msg.optJSONObject("result") ?: throw IOException("The printer's reply to the print start was not understood")
+            if (result.optString("state") != "success") throw PrinterRejected("The printer refused to start: ${result.optString("message", result.optString("state")).take(300)}")
+            return result
+        } finally { socket.close(1000, null) }
+    }
+
     fun bytes(pathOrUrl: String, max: Int): ByteArray {
         cameraResponse(client, pathOrUrl).use { r ->
             if (!r.isSuccessful) throw IOException("Camera unavailable (HTTP ${r.code}).")

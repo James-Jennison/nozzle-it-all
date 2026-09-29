@@ -130,10 +130,6 @@ class PaxxLanAdapterTest {
             assertEquals("SET_HEATER_TEMPERATURE HEATER=extruder2 TARGET=220", fake.calls.last().query["script"])
             s.perform(PrinterAction.SetMaterialInfo(1, Material("Polymaker", "PLA", "Matte", "#112233")))
             assertEquals("SET_PRINT_FILAMENT_CONFIG CONFIG_EXTRUDER=1 VENDOR=\"Polymaker\" FILAMENT_TYPE=\"PLA\" FILAMENT_SUBTYPE=\"Matte\" FILAMENT_COLOR_RGBA=112233FF FORCE=1", fake.calls.last().query["script"])
-            s.perform(PrinterAction.StartJob("cube.gcode", listOf(2, 0)))
-            val start = fake.calls.last()
-            assertEquals("/server/files/start_local_print", start.path)
-            assertEquals("[[0,2],[1,0]]", JSONObject(start.body).getJSONObject("options").getString("map_table"))
             s.perform(PrinterAction.LoadMaterial(3))
             assertEquals("T3\nLOAD_FILAMENT", fake.calls.last().query["script"])
         }

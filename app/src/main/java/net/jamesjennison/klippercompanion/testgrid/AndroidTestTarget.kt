@@ -101,6 +101,10 @@ class AndroidTestTarget(
         return fileChanges().use { it.files() }
     }
 
+    /** The printer's live filament slots (U1 toolheads, CANVAS lanes...), for slicing with the colours actually loaded. */
+    fun liveSlots(): List<net.jamesjennison.klippercompanion.FilamentSlot> =
+        runCatching { service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots } }.getOrNull().orEmpty()
+
     override fun materialSlots(): List<String> {
         if (!moonraker && profile.kind != PrinterKind.ELEGOO) throw UnsupportedByTarget("This connection reports no material slots.")
         val slots = service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots }.orEmpty().map { "${it.name ?: "slot ${it.tool + 1}"}: ${it.label}${it.colorHex?.let { c -> " $c" } ?: ""}${if (it.active) " (active)" else ""}" }

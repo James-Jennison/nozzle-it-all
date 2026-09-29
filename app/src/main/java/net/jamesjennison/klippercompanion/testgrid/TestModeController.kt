@@ -108,7 +108,7 @@ class TestModeController private constructor(private val context: Context) {
     }
 
     private fun buildSlicer(option: TargetOption): TestSlicer = when (option) {
-        is TargetOption.Saved -> AndroidTestSlicer(context, option.profile)
+        is TargetOption.Saved -> AndroidTestSlicer(context, option.profile) { (target as? AndroidTestTarget)?.liveSlots().orEmpty() }
         is TargetOption.Simulated -> SimulatedSlicer({ id, f -> runCatching { context.assets.open("slicer_profiles/$id/$f").use { it.readBytes() } }.getOrNull() }, File(context.cacheDir, "testgrid-sliced"))
     }
 

@@ -71,6 +71,17 @@ import androidx.compose.ui.unit.dp
             OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("Access code (Centauri Carbon 2 only, if you set one)")},singleLine=true,modifier=Modifier.testTag("elegoo-access-code"),
                 visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+        } else if(kind==PrinterKind.CREALITY) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            Text("A Creality K1, K2 or Hi on Creality's own firmware needs nothing else. Nozzle It All reads its status and CFS slots and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.FLASHFORGE) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            OutlinedTextField(serial,{serial=it.take(40)},label={Text("Serial number")},singleLine=true,modifier=Modifier.testTag("flashforge-serial"))
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("Access code")},singleLine=true,modifier=Modifier.testTag("flashforge-access-code"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+            Text("Both are on the printer's own network settings screen. Nozzle It All reads its status and IFS slots and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
         } else if(kind==PrinterKind.PRUSA_LINK) {
             OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
             Text("The address shown on the printer's own screen under Settings > Network, with no http:// prefix.",style=MaterialTheme.typography.bodySmall)
@@ -89,7 +100,7 @@ import androidx.compose.ui.unit.dp
             Text("Only needed if Moonraker requires authentication; copy it from Fluidd's or Mainsail's settings.",style=MaterialTheme.typography.bodySmall)
         }
         Text("Printer type",style=MaterialTheme.typography.labelLarge)
-        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear: stock U1 firmware shows Bespok3d, PAXX firmware shows multiACE. Bambu Lab and Prusa Link are different protocols entirely, with their own fields above.",style=MaterialTheme.typography.bodySmall)
+        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear: stock U1 firmware shows Bespok3d, PAXX firmware shows multiACE. Bambu Lab, Prusa Link, OctoPrint, Elegoo, Creality and Flashforge are different protocols entirely, with their own fields above.",style=MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             FilterChip(kind==PrinterKind.GENERIC_KLIPPER,{kind=PrinterKind.GENERIC_KLIPPER},label={Text("Generic Klipper")})
             FilterChip(kind==PrinterKind.SNAPMAKER_U1,{kind=PrinterKind.SNAPMAKER_U1},label={Text("Snapmaker U1 (stock)")},modifier=Modifier.testTag("kind-u1-stock"))
@@ -98,6 +109,8 @@ import androidx.compose.ui.unit.dp
             FilterChip(kind==PrinterKind.PRUSA_LINK,{kind=PrinterKind.PRUSA_LINK},label={Text("Prusa Link")},modifier=Modifier.testTag("kind-prusa-link"))
             FilterChip(kind==PrinterKind.OCTOPRINT,{kind=PrinterKind.OCTOPRINT},label={Text("OctoPrint")},modifier=Modifier.testTag("kind-octoprint"))
             FilterChip(kind==PrinterKind.ELEGOO,{kind=PrinterKind.ELEGOO},label={Text("Elegoo")},modifier=Modifier.testTag("kind-elegoo"))
+            FilterChip(kind==PrinterKind.CREALITY,{kind=PrinterKind.CREALITY},label={Text("Creality (K1 / K2 / Hi)")},modifier=Modifier.testTag("kind-creality"))
+            FilterChip(kind==PrinterKind.FLASHFORGE,{kind=PrinterKind.FLASHFORGE},label={Text("Flashforge (AD5X / 5M)")},modifier=Modifier.testTag("kind-flashforge"))
         }
         // WO-13: which bundled slicer profile family this printer needs, if any. Deliberately
         // separate from "printer type" above - the U1 and a Centauri Carbon both speak

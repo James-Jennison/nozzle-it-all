@@ -802,3 +802,32 @@ interchange).
   the mapping at print start (CFS websocket `colorMatch`, Flashforge `materialMappings`, Anycubic) is separate work. The
   Qidi Box is not included: its packs rely on OrcaSlicer's type-1 wipe tower, which this engine does not select yet.
 - **Touches:** slicing (multi-material), six Creality slicing packs.
+
+## P-0033 — Creality (CFS) and Flashforge (IFS) printer connections (ported, not copied)
+
+- **Upstream:** OrcaSlicer `5298e49d` (local checkout): `src/slic3r/Utils/CrealityPrint.cpp`, `CrealityPrintAgent.cpp`,
+  `CrealityHostDiscovery.cpp`, `Flashforge.cpp` / `.hpp`, and `src/slic3r/GUI/PrintHostDialogs.cpp`
+  (FlashforgePrintHostSendDialog). AGPL-3.0. CrealityPrint `59ae8cb` (local checkout, AGPL-3.0):
+  `src/slic3r/GUI/print_manage/Device/LanDeviceProbe.cpp`, `Klipper4408Interface.cpp`, `print_manage/data/DataType.cpp` and
+  the minified `resources/web/deviceMgr/assets/BZCDzYbb.js` (cited as "line N @byte offset").
+- **Imported:** nothing copied. The wire rules, re-implemented in Kotlin: `CrealityCfs` (`/info`, the port-9999 websocket
+  with its `ok` heartbeat reply, `boxsInfo` parsing, `/upload/<name>`, `opGcodeFile` / `colorMatch` / `multiColorPrint`,
+  the K1 vs K2 G-code directories) and `FlashforgeIfs` (port 8898 `/detail` and `/uploadGcode`, the `code`/`err` reply
+  rule, `matlStationInfo` slots, the `materialMappings` base64 JSON, Orca's material-family check, the UDP 48899
+  discovery reply). The `colorMatch` id uses CrealityPrint's `T{floor(T/4)+1}{A+T%4}`: Orca's `"T1"+('A'+i)` is wrong from
+  T4 up. `SlicedFileFilaments` reads each file tool's type and colour from the sliced file's settings block.
+- **Change:** `PrinterKind.CREALITY` (`CrealityPrinterService`) and `PrinterKind.FLASHFORGE` (`FlashforgePrinterService`,
+  serial number + access code): live status, the CFS / IFS slots (read-only), uploading a sliced file, discovery (Creality
+  `/info` in the TCP sweep, Flashforge's UDP probe). **Starting a print is gated off** (`CrealityCfs.START_VERIFIED`,
+  `FlashforgeIfs.START_VERIFIED`, both false, as `BambuAms.AMS_PRINT_VERIFIED`): sending uploads the file (Flashforge with
+  `printNow: false`) and refuses the start with "isn't verified on real hardware yet"; the start messages are built and
+  unit-tested only. Never sent: CFS load/unload (`feedInOrOut`), `refreshBox`, `boxConfig`, homing, jogging, temperatures;
+  pause / resume / cancel are not built.
+- **Test evidence:** unit tests only (CrealityCfsTest, FlashforgeIfsTest, SlicedFileFilamentsTest in :domain;
+  CrealityFlashforgeServiceTest in :app against a local MockWebServer). All fixtures are constructed from the upstream
+  schemas, not captured: nothing here has met a real printer.
+- **Known divergence / to verify on hardware:** Flashforge's `/detail` status field names are not on disk anywhere (a best
+  guess); the Hi and K2 SE `/info` model codes are unknown; whether a K2 pushes its full state on connect; HTTPS/wss-only
+  Creality printers are not supported; the start path (idle gate, upload listing wait, pushed-state confirmation) has never
+  run. The file-tool -> slot map is one-to-one (T n -> slot n) until the UI can pass a chosen map.
+- **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard), Test Grid classification.

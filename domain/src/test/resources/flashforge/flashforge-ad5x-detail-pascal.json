@@ -1,0 +1,7 @@
+{"status":"ready","printProgress":0,"printFileName":"","rightTemp":26.5,"rightTargetTemp":0,"platTemp":25.1,"platTargetTemp":0,
+ "HasMatlStation":1,
+ "MatlStationInfo":{"SlotCnt":"4","SlotInfos":[
+    {"slotId":1,"hasFilament":true,"materialName":"PLA Silk","materialColor":"#FFD700"},
+    {"slotId":2,"hasFilament":true,"materialName":"PLA","materialColor":"#FF0000"},
+    {"slotId":3,"hasFilament":false,"materialName":"","materialColor":""},
+    {"slotId":4,"hasFilament":true,"materialName":"PETG","materialColor":"#FAFAFA"}]}}

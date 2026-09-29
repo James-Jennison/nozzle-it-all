@@ -465,7 +465,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // G-code (see SlicingCoordinator.sliceProject()'s own branch), and neither Bambu nor Prusa
     // Link need this screen's Moonraker-only LiveFileChanges upload step below.
     val bambuTarget = profile?.kind == PrinterKind.BAMBU_LAB
-    val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT || profile?.kind == PrinterKind.ELEGOO // all take plain G-code uploaded and started in one request
+    val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT || profile?.kind == PrinterKind.ELEGOO ||
+        profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE // all take plain G-code uploaded and started in one request (Creality/Flashforge: upload, start gated)
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).
@@ -985,7 +986,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             else -> execute(Moonraker.start(filename, state.kindFor(state.address)), state.generation)
                         }
                         close()
-                    }, enabled = !working && sliceError == null && stagedFilename != null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-and-print-confirm")) { Text("Start print") }
+                    }, enabled = !working && sliceError == null && stagedFilename != null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-and-print-confirm")) { Text(if (profile == null || startVerifiedFor(profile.kind)) "Start print" else "Upload to printer") }
                 }
             }
         }

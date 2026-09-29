@@ -13,9 +13,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Finds printers on the local network: a bounded TCP sweep that verifies Moonraker (`/server/info`) and PrusaLink (`/api/version`) by their
- * real replies, plus Bambu's SSDP broadcast (which carries the serial number) and Elegoo's two UDP discovery messages (Centauri Carbon:
- * "M99999" to port 3000; Centauri Carbon 2: {"id":0,"method":7000} to port 52700, as elegoo-link's discovery strategies send them).
+ * Finds printers on the local network: a bounded TCP sweep that verifies Creality's `/info`, Moonraker (`/server/info`) and PrusaLink
+ * (`/api/version`) by their real replies, plus Bambu's SSDP broadcast (which carries the serial number), Elegoo's two UDP discovery messages
+ * (Centauri Carbon: "M99999" to port 3000; Centauri Carbon 2: {"id":0,"method":7000} to port 52700, as elegoo-link's discovery strategies
+ * send them) and Flashforge's UDP probe to port 48899 (its reply carries the serial number; Orca Flashforge.cpp:48-76,226-327).
  * Read-only: it only GETs public info endpoints and asks printers to describe themselves.
  * Nothing here sends credentials, and results are suggestions the wizard still verifies with its own live checks.
  */
@@ -30,6 +31,9 @@ class PrinterScanner(
     private val elegooSdcpPort: Int = com.nozzleitall.adapter.elegoo.Sdcp.DISCOVERY_PORT,
     private val elegooCc2Port: Int = com.nozzleitall.adapter.elegoo.Cc2.DISCOVERY_PORT,
     private val elegooBroadcast: String = "255.255.255.255",
+    private val crealityPorts: List<Int> = listOf(80),
+    private val flashforgePort: Int = FlashforgeIfs.DISCOVERY_PORT,
+    private val flashforgeListenPort: Int = FlashforgeIfs.DISCOVERY_LISTEN_PORT,
 ) {
     private val http = OkHttpClient.Builder().connectTimeout(connectTimeoutMs.toLong(), TimeUnit.MILLISECONDS).readTimeout(1500, TimeUnit.MILLISECONDS)
         .followRedirects(false).retryOnConnectionFailure(false).build()
@@ -40,13 +44,16 @@ class PrinterScanner(
         val pool = Executors.newFixedThreadPool(48)
         val ssdp = Thread { runCatching { listenSsdp(cancelled, hosts, report) } }.apply { isDaemon = true; start() }
         val elegoo = Thread { runCatching { listenElegoo(cancelled, hosts, report) } }.apply { isDaemon = true; start() }
+        val flashforge = Thread { runCatching { listenFlashforge(cancelled, hosts, report) } }.apply { isDaemon = true; start() }
         try {
             val jobs = hosts.map { host -> pool.submit { if (!cancelled.get()) probeHost(host)?.let(report) } }
             jobs.forEach { runCatching { it.get(20, TimeUnit.SECONDS) } }
-        } finally { pool.shutdownNow(); ssdp.join(ssdpWaitMs + 1000L); elegoo.join(ssdpWaitMs + 1000L) }
+        } finally { pool.shutdownNow(); ssdp.join(ssdpWaitMs + 1000L); elegoo.join(ssdpWaitMs + 1000L); flashforge.join(ssdpWaitMs + 1000L) }
     }
 
     internal fun probeHost(host: String): DiscoveredPrinter? {
+        // First: a K1 / K2 may also run Moonraker, but its CFS and print start live on Creality's own protocol.
+        for (port in crealityPorts) if (open(host, port)) creality(host, port)?.let { return it }
         for (port in moonrakerPorts) if (open(host, port)) moonraker(host, port)?.let { return it }
         for (port in prusaPorts) if (open(host, port)) prusa(host, port)?.let { return it }
         for (port in octoPrintPorts) if (open(host, port)) octoPrint(host, port)?.let { return it }
@@ -100,6 +107,32 @@ class PrinterScanner(
     private fun getText(url: String): String? = try {
         http.newCall(Request.Builder().url(url).build()).execute().use { r -> if (r.isSuccessful) r.body?.source()?.let { s -> s.request(64 * 1024); s.buffer.clone().readUtf8() } else null }
     } catch (_: Exception) { null }
+
+    /** Creality's `GET /info` (Orca CrealityHostDiscovery.cpp probe_info): JSON with `model` and `mac`, else not a Creality. */
+    private fun creality(host: String, port: Int): DiscoveredPrinter? {
+        val base = if (port == 80) "http://$host" else "http://$host:$port"
+        return get("$base/info")?.let { PrinterDiscovery.parseCrealityInfo(it, if (port == 80) host else "$host:$port") }
+    }
+
+    /**
+     * Flashforge's discovery: the 20-byte probe to port 48899, broadcast and to each host, from a socket bound to 18007 (where
+     * Orca listens for the reply). A reply names the printer and its serial number (FlashforgeIfs.parseDiscovery); the printer
+     * is the reply's source address. Nothing is sent that could change the printer. Skipped if 18007 is taken.
+     */
+    internal fun listenFlashforge(cancelled: AtomicBoolean, hosts: List<String>, report: (DiscoveredPrinter) -> Unit) {
+        val socket = DatagramSocket(null as java.net.SocketAddress?).apply { reuseAddress = true; bind(InetSocketAddress(flashforgeListenPort)); soTimeout = 300; broadcast = true }
+        socket.use {
+            val probe = FlashforgeIfs.DISCOVERY_MESSAGE
+            (listOf(elegooBroadcast) + hosts).forEach { t -> runCatching { socket.send(DatagramPacket(probe, probe.size, InetAddress.getByName(t), flashforgePort)) } }
+            val deadline = System.currentTimeMillis() + ssdpWaitMs; val buf = ByteArray(1024)
+            while (System.currentTimeMillis() < deadline && !cancelled.get()) {
+                val packet = DatagramPacket(buf, buf.size)
+                try { socket.receive(packet) } catch (_: java.net.SocketTimeoutException) { continue }
+                val host = packet.address.hostAddress ?: continue
+                FlashforgeIfs.parseDiscovery(packet.data.copyOf(packet.length))?.let { report(PrinterDiscovery.flashforge(host, it)) }
+            }
+        }
+    }
 
     private fun prusa(host: String, port: Int): DiscoveredPrinter? {
         val base = if (port == 80) "http://$host" else "http://$host:$port"

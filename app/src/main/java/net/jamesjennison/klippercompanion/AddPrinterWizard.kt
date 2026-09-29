@@ -132,6 +132,8 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.PRUSA_LINK, {kind=PrinterKind.PRUSA_LINK}, label={Text("Prusa Link")}, modifier=Modifier.testTag("wizard-kind-prusa-link"))
                         FilterChip(kind==PrinterKind.OCTOPRINT, {kind=PrinterKind.OCTOPRINT}, label={Text("OctoPrint")}, modifier=Modifier.testTag("wizard-kind-octoprint"))
                         FilterChip(kind==PrinterKind.ELEGOO, {kind=PrinterKind.ELEGOO}, label={Text("Elegoo")}, modifier=Modifier.testTag("wizard-kind-elegoo"))
+                        FilterChip(kind==PrinterKind.CREALITY, {kind=PrinterKind.CREALITY}, label={Text("Creality (K1 / K2 / Hi)")}, modifier=Modifier.testTag("wizard-kind-creality"))
+                        FilterChip(kind==PrinterKind.FLASHFORGE, {kind=PrinterKind.FLASHFORGE}, label={Text("Flashforge (AD5X / 5M)")}, modifier=Modifier.testTag("wizard-kind-flashforge"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -152,6 +154,16 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                             visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
                         Text("A Centauri Carbon on Elegoo's own firmware or a Centauri Carbon 2, on your network. A Centauri Carbon running OpenCentauri COSMOS is a Klipper printer: choose Generic Klipper for it.", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.CREALITY) {
+                        OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        Text("A Creality K1, K2 or Hi on Creality's own firmware, on your network. Nozzle It All reads its status and CFS slots and uploads sliced files; you start the print on the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.FLASHFORGE) {
+                        OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        OutlinedTextField(serial, {serial=it.take(40)}, label={Text("Serial number")}, singleLine=true, modifier=Modifier.testTag("wizard-flashforge-serial"))
+                        OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Access code")}, singleLine=true, modifier=Modifier.testTag("wizard-flashforge-access-code"),
+                            visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+                        Text("Serial number and access code are both on the printer's own network settings screen; Flashforge's local API needs both. You start the print on the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),

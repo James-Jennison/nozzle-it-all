@@ -1,0 +1,16 @@
+{"boxsInfo":{
+  "name":"MF003",
+  "same_material":[],
+  "color_same_material":[],
+  "materialBoxs":[
+    {"id":0,"state":1,"type":1,
+     "materials":[{"id":0,"state":1,"vendor":"Generic","type":"TPU","name":"Generic TPU","color":"#0000000","selected":0}]},
+    {"id":1,"state":1,"type":0,"temp":25,"humidity":40,
+     "materials":[
+       {"id":0,"state":2,"vendor":"Creality","type":"PLA","name":"Hyper PLA","rfid":"000001","color":"#0FF0000","diameter":1.75,"minTemp":190,"maxTemp":240,"pressure":0.04,"percent":80,"selected":0,"editStatus":0},
+       {"id":1,"state":0,"vendor":"","type":"","name":"","rfid":"","color":"#0000000","selected":0},
+       {"id":2,"state":1,"vendor":"Generic","type":"PETG","name":"Generic PETG","rfid":"","color":"#0FFFFFF","diameter":1.75,"minTemp":220,"maxTemp":260,"selected":1},
+       {"id":3,"state":1,"vendor":"","type":"","name":"","rfid":"","color":"#0FFFFFF","selected":0}]},
+    {"id":2,"state":0,"type":0,
+     "materials":[{"id":0,"state":1,"vendor":"Creality","type":"ABS","name":"Hyper ABS","color":"#000FF00","selected":0}]}
+  ]}}

@@ -30,6 +30,11 @@ enum class StepKind(val id: String, val level: SafetyLevel, val mutates: Boolean
     UPLOAD("upload", SafetyLevel.REVERSIBLE_FILES, true, true, true),
     /** Deletes only the file this run itself uploaded; never a name from the suite. */
     DELETE_UPLOADED("delete_uploaded", SafetyLevel.REVERSIBLE_FILES, true, true, true),
+    /**
+     * Deletes earlier Test Grid files (`nozzle-testgrid-*.gcode` in the G-code root) the printer no longer has loaded and
+     * this run no longer needs. The exact names are shown for approval; only those are deleted.
+     */
+    DELETE_LEFTOVERS("delete_leftovers", SafetyLevel.REVERSIBLE_FILES, true, true, true),
     SET_TEMPERATURE("set_temperature", SafetyLevel.SUPERVISED_CONTROLS, true, true, true),
     HOME("home", SafetyLevel.SUPERVISED_CONTROLS, true, true, true),
     JOG("jog", SafetyLevel.SUPERVISED_CONTROLS, true, true, true),

@@ -5,7 +5,7 @@
     0
   ],
   "id": "cosmos-centauri-carbon",
-  "suiteVersion": "1.1.0",
+  "suiteVersion": "1.2.0",
   "title": "Elegoo Centauri Carbon on OpenCentauri COSMOS",
   "description": "Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.",
   "coverage": "reference",
@@ -375,6 +375,11 @@
           "params": {
             "fromTest": "slice-single"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         }
       ],
       "requiresOperatorConfirmation": true,
@@ -799,6 +804,11 @@
           "params": {
             "fromTest": "slice-single"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         }
       ],
       "requiresOperatorConfirmation": true,
@@ -958,6 +968,11 @@
           "params": {
             "fromTest": "slice-single"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         },
         {
           "id": "cleanup-nozzle",
@@ -1210,6 +1225,11 @@
           "params": {
             "fromTest": "multi-slice"
           }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
         }
       ],
       "requiresOperatorConfirmation": true,

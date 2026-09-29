@@ -1,7 +1,7 @@
 # Elegoo Centauri Carbon on OpenCentauri COSMOS
 
-Suite `cosmos-centauri-carbon` version 1.1.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `52bc683b049bf7e267ed10160e6ae4f28816835cf0b4987ef36749c3e9a905e7`.
+Suite `cosmos-centauri-carbon` version 1.2.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `0a43322426d36e4b82ec7c04812d5328446a7eeccb5634287e0b93fd075b3fa8`.
 
 Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.
 
@@ -129,6 +129,7 @@ Expected:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded file if it is still there: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 
 ## 9. Heaters, homing and a small move (`controls-idle`)
 
@@ -215,6 +216,7 @@ Evidence to collect:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 
 Time limit: 360 min; if exceeded the test is recorded as fail.
 
@@ -253,6 +255,7 @@ Expected:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 - **Approve:** Make sure the nozzle heater is off: Turn the nozzle heater off.
 - **Approve:** Make sure the bed heater is off: Turn the bed heater off.
 
@@ -322,6 +325,7 @@ Evidence to collect:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 
 Time limit: 300 min; if exceeded the test is recorded as fail.
 

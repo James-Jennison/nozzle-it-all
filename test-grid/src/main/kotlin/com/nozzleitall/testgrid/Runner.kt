@@ -88,6 +88,10 @@ class RunSession private constructor(
     private val tests = suite.tests
 
     companion object {
+        /** The names Nozzle uploads Test Grid files under, in the G-code root. Nothing else is ever a leftover. */
+        val LEFTOVER = Regex("""^nozzle-testgrid-[a-z0-9._-]+\.gcode$""")
+        const val LEFTOVER_LIMIT = 50
+
         /** Starts a new run. [snapshot] comes from TargetCheck.inspect and must have no mismatches for [suite]. */
         fun start(suite: Suite, target: TestTarget, snapshot: TargetSnapshot, slicer: TestSlicer?, env: Environment, journal: RunJournal?,
                   maxLevel: SafetyLevel, supersedes: List<String> = emptyList()): RunSession {
@@ -280,7 +284,7 @@ class RunSession private constructor(
         val step = test.steps[idx]
         val kind = step.kind!!
         when {
-            nothingToDo(step) != null -> { stepRec.status = StepStatus.SKIPPED; stepRec.detail = nothingToDo(step)!!; stepRec.finishedAt = now() }
+            nothingToDo(step, stepRec)?.let { why -> stepRec.status = StepStatus.SKIPPED; stepRec.detail = why; stepRec.finishedAt = now() } != null -> {}
             kind.consequential || step.requiresConfirmation -> { stepRec.status = StepStatus.AWAITING_CONFIRMATION; rec.state = RunState.AWAITING_CONFIRMATION }
             kind.operator -> { stepRec.status = StepStatus.AWAITING_OBSERVATION; rec.state = RunState.AWAITING_OBSERVATION; captureShown(step, stepRec) }
             else -> {
@@ -297,7 +301,7 @@ class RunSession private constructor(
         val stepRec = rec.cleanup[idx]; val step = test.cleanup[idx]
         val kind = step.kind!!
         when {
-            nothingToDo(step) != null -> { stepRec.status = StepStatus.SKIPPED; stepRec.detail = nothingToDo(step)!!; stepRec.finishedAt = now() }
+            nothingToDo(step, stepRec)?.let { why -> stepRec.status = StepStatus.SKIPPED; stepRec.detail = why; stepRec.finishedAt = now() } != null -> {}
             kind.consequential || step.requiresConfirmation -> stepRec.status = StepStatus.AWAITING_CONFIRMATION
             kind.operator -> { stepRec.status = StepStatus.SKIPPED; stepRec.detail = "Operator steps are not run during cleanup." }
             else -> execute(test, step, stepRec)
@@ -538,7 +542,7 @@ class RunSession private constructor(
         val step = (test.steps + test.cleanup).first { it.id == s.stepId }
         val d = target?.description
         val targetText = d?.let { "${it.label} · ${it.manufacturer} ${it.model} (${record.target.optJSONObject("firmware")?.optString("family")}) via ${it.adapter} at ${it.address}" } ?: "no printer"
-        return Pending.Confirmation(test, step, s.phase, actionText(step), targetText)
+        return Pending.Confirmation(test, step, s.phase, actionText(step, s), targetText)
     }
 
     private fun operatorPending(test: TestCase, s: StepRecord): Pending {
@@ -547,8 +551,11 @@ class RunSession private constructor(
         else Pending.Observation(test, step)
     }
 
-    /** The exact action text the operator approves. */
-    fun actionText(step: Step): String = when (step.kind) {
+    /** The exact action text the operator approves; [s] carries what a step found before asking (leftover names). */
+    fun actionText(step: Step, s: StepRecord? = null): String = when (step.kind) {
+        StepKind.DELETE_LEFTOVERS -> s?.data?.optJSONArray("candidates")?.let { a -> (0 until a.length()).map { a.getString(it) } }?.takeIf { it.isNotEmpty() }
+            ?.let { "Delete ${it.size} earlier Test Grid file(s) from the printer: ${it.joinToString(", ")}. Nothing else is deleted." }
+            ?: "Delete earlier Test Grid files (nozzle-testgrid-*.gcode) that the printer no longer has loaded; their names are shown before you approve"
         StepKind.UPLOAD -> latestSlice(step)?.let { "Upload ${uploadName(step)} (${it.optLong("bytes")} bytes, SHA-256 ${it.optString("sha256").take(16)}…) to the printer's G-code folder. Nothing is printed." }
             ?: "Upload the sliced file (no sliced file yet: this step will be blocked)"
         StepKind.DELETE_UPLOADED -> latestUpload(step)?.takeIf { !it.optBoolean("deleted") }?.let { "Delete ${it.optString("remotePath")} from the printer: the file this run uploaded, verified by SHA-256 before deletion." }
@@ -560,9 +567,28 @@ class RunSession private constructor(
      * Why a consequential step has nothing to act on, so it is skipped without asking. Found on the first level-2 run:
      * cleanup asked the operator to approve deleting a file the test had already deleted.
      */
-    private fun nothingToDo(step: Step): String? = when (step.kind) {
+    private fun nothingToDo(step: Step, s: StepRecord): String? = when (step.kind) {
         StepKind.DELETE_UPLOADED -> if (latestUpload(step)?.takeIf { !it.optBoolean("deleted") } == null) "Nothing uploaded by this run is left to delete." else null
+        // Read once, before asking, so the approval names the exact files; an empty list is skipped without asking.
+        StepKind.DELETE_LEFTOVERS -> try {
+            val found = leftovers()
+            s.data.put("candidates", JSONArray(found))
+            if (found.isEmpty()) "No earlier Test Grid files to delete on the printer." else null
+        } catch (e: UnsupportedByTarget) { e.message ?: "This printer connection can't list files." }
+          catch (e: Exception) { "Could not list the printer's files (${e.message}); nothing was deleted." }
         else -> null
+    }
+
+    /**
+     * Earlier Test Grid files that can go: named `nozzle-testgrid-*.gcode` in the G-code root (the names Nozzle uploads
+     * under), not the file the printer has loaded (a finished print keeps it; Nozzle never deletes a loaded file), and
+     * not a file this run uploaded for a test that hasn't finished.
+     */
+    private fun leftovers(): List<String> {
+        val loaded = printer().status().filename
+        val needed = (0 until uploads().length()).map { uploads().getJSONObject(it) }
+            .filter { u -> !u.optBoolean("deleted") && record.test(u.optString("test"))?.state?.terminal != true }.map { it.optString("remotePath") }.toSet()
+        return printer().files().filter { LEFTOVER.matches(it) && it != loaded && it !in needed }.sorted().take(LEFTOVER_LIMIT)
     }
 
     private fun controlAction(step: Step): ControlAction? = when (step.kind) {
@@ -575,6 +601,8 @@ class RunSession private constructor(
         StepKind.CANCEL -> ControlAction.Cancel
         else -> null
     }
+
+    private fun markDeleted(path: String) { (0 until uploads().length()).map { uploads().getJSONObject(it) }.filter { it.optString("remotePath") == path }.forEach { it.put("deleted", true) } }
 
     private fun uploadName(step: Step) = "nozzle-testgrid-${suite.id}-${step.params.optString("fromTest").ifBlank { "run" }}.gcode".replace(Regex("[^a-z0-9._-]"), "-")
 
@@ -778,6 +806,28 @@ class RunSession private constructor(
                     } else (if (r.sent) StepStatus.FAILED else StepStatus.BLOCKED) to r.reason
                     is TransferOutcome.Unknown -> StepStatus.OUTCOME_UNKNOWN to r.reason
                 }
+            }
+            StepKind.DELETE_LEFTOVERS -> {
+                // Only names the operator approved, and only those still eligible now: re-read, never widened.
+                val approved = s.data.optJSONArray("candidates")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                val eligible = leftovers().toSet()
+                val deleted = JSONArray(); val kept = JSONArray()
+                for (path in approved) {
+                    if (path !in eligible) { kept.put(JSONObject().put("file", path).put("reason", "no longer eligible (gone, or loaded now)")); continue }
+                    when (val r = printer().delete(path)) {
+                        is TransferOutcome.Verified -> { deleted.put(path); markDeleted(path) }
+                        is TransferOutcome.Refused -> {
+                            kept.put(JSONObject().put("file", path).put("reason", r.reason))
+                            if (r.sent) { s.data.put("deleted", deleted).put("kept", kept); return StepStatus.FAILED to "The printer refused to delete $path: ${r.reason}" }
+                        }
+                        is TransferOutcome.Unknown -> {
+                            s.data.put("deleted", deleted).put("kept", kept).put("unknown", path)
+                            return StepStatus.OUTCOME_UNKNOWN to "Deleting $path: ${r.reason}${if (deleted.length() > 0) " (${deleted.length()} deleted before it)" else ""}"
+                        }
+                    }
+                }
+                s.data.put("deleted", deleted).put("kept", kept)
+                StepStatus.PASSED to "Deleted ${deleted.length()} earlier Test Grid file(s)${if (kept.length() > 0) "; left ${kept.length()}: " + (0 until kept.length()).joinToString("; ") { kept.getJSONObject(it).let { k -> "${k.getString("file")} (${k.getString("reason")})" } } else ""}."
             }
             StepKind.SET_TEMPERATURE, StepKind.HOME, StepKind.JOG, StepKind.START_PRINT, StepKind.PAUSE, StepKind.RESUME, StepKind.CANCEL -> {
                 val action = controlAction(step) ?: return StepStatus.BLOCKED to "Nothing uploaded by this run to start."

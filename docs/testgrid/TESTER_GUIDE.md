@@ -37,6 +37,9 @@ credentials; they stay on your phone.
      it and the rest of that test.
    - **Your observation:** answer what you see or measure. "Can't observe this" is fine; it is recorded.
    - **Attach evidence:** pick a photo from your gallery. Location and camera data are removed.
+   - **Cleanup:** after a test that sent files, Test Mode may offer to delete earlier `nozzle-testgrid-…` files from
+     the printer, naming each one. A finished print keeps its file loaded and Nozzle never deletes a loaded file, so the
+     file from the last print stays until a later run removes it.
    - **Outcome unknown:** the printer may or may not have received the last command. Go and look. Describe what you
      see; Test Mode reads the printer again. The command is never resent. Then you are offered the test's cleanup
      (for example heaters off), each step approved separately.

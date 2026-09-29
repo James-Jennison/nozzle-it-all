@@ -89,6 +89,7 @@ The vocabulary is closed. There is no step that sends arbitrary G-code, runs a m
 | `monitor` | 1 | no | `until`: `printing`, `paused`, `complete`, `idle`, `progress_increases`, `heater_reaches`, `heater_below` (+`heater`, `celsius`, `toleranceC`), `pollSeconds`; `timeoutSeconds` required |
 | `upload` | 2 | yes | `fromTest`: uploads that test's sliced G-code under a unique `nozzle-testgrid-…` name, verified by SHA-256 |
 | `delete_uploaded` | 2 | yes | deletes only a file this run uploaded |
+| `delete_leftovers` | 2 | yes | deletes earlier `nozzle-testgrid-*.gcode` files in the G-code root that the printer no longer has loaded and this run no longer needs; the approval names every file, nothing else is deleted, and it is skipped without asking when there are none |
 | `set_temperature` | 3 | yes | `heater` (`nozzle`, `bed`), `celsius` (nozzle ≤ 120, bed ≤ 70; 0 = off) |
 | `home` | 3 | yes | |
 | `jog` | 3 | yes | `axis` (X, Y, Z), `mm` (non-zero, ≤ 10) |

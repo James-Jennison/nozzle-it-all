@@ -1,7 +1,7 @@
 # Snapmaker U1 on PAXX extended firmware
 
-Suite `paxx-u1` version 1.1.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `5c9473bdee137bf4bd0c3af684a86f742ba54b811f9f3ba45e7a8011998409de`.
+Suite `paxx-u1` version 1.2.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `847c3f9070ac5f2b933bd3824a4dc43049af02f3b37d0df386aaf7b41fd8a054`.
 
 Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.
 
@@ -120,6 +120,7 @@ Expected:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded file if it is still there: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 
 ## 8. Heaters, homing and a small move (`controls-idle`)
 
@@ -206,6 +207,7 @@ Evidence to collect:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 
 Time limit: 360 min; if exceeded the test is recorded as fail.
 
@@ -244,6 +246,7 @@ Expected:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 - **Approve:** Make sure the nozzle heater is off: Turn the nozzle heater off.
 - **Approve:** Make sure the bed heater is off: Turn the bed heater off.
 
@@ -313,6 +316,7 @@ Evidence to collect:
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
 
 Time limit: 300 min; if exceeded the test is recorded as fail.
 

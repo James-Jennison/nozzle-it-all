@@ -92,6 +92,8 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
 
     @Synchronized override fun delete(remotePath: String): TransferOutcome {
         if (remotePath !in files) return TransferOutcome.Refused("Source no longer exists.")
+        // Like the app's own file path: a file the printer has loaded (a finished print keeps it) is never deleted.
+        if (remotePath == loaded) return TransferOutcome.Refused("$remotePath is loaded on the printer; not deleted.", sent = false)
         files -= remotePath
         if ("lost_ack:delete_uploaded" in faults) return TransferOutcome.Unknown("Connection reset by $hostname while deleting")
         return TransferOutcome.Verified(remotePath, "")

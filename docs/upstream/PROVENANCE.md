@@ -731,8 +731,12 @@ interchange).
   was printed with the mesh clamped from the objects' area. It is defined only, never started: the tool-change macros
   run inside the tower's moves and must never be skipped, so excluding it in Mainsail/Fluidd does nothing.
 - **Found by:** the owner's Test Grid two-colour print on the Centauri Carbon (COSMOS, CANVAS, adaptive mesh on). The
-  G-code had a tower on every layer, but the mesh covered only X/Y 105–151 and the bed's back-left corner is ~0.25 mm
-  below the centre, so the tower's first layer was printed too high, did not stick and the tower was lost.
+  G-code had a tower on every layer, and the printer's logs show it extruded the tower at its position, but the
+  adaptive mesh covered only X/Y 105–151: the tower's area was never measured, and its height there was taken from
+  the objects' edge. Nothing of the tower stayed on the bed. (An earlier note put the corner ~0.25 mm low; that came
+  from a saved mesh made before the owner levelled the bed, so the real error there is unknown.)
+- **Confirmed on hardware:** the next two-colour print on the same Centauri Carbon, sliced with this engine, printed the
+  tower.
 - **Test evidence:** desktop CLI, two cubes on two filaments: the defined area encloses every tower extrusion with
   ~0.25 mm to spare on the Centauri Carbon (rib wall: defined X 9.5–37.5 Y 214.5–242.0, printed X 9.8–37.2
   Y 214.7–241.8) and the U1 (rectangle). Golden outputs unchanged (single cube, no tower).

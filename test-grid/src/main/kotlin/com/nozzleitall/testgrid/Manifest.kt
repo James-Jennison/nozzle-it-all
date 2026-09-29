@@ -35,6 +35,11 @@ enum class StepKind(val id: String, val level: SafetyLevel, val mutates: Boolean
      * this run no longer needs. The exact names are shown for approval; only those are deleted.
      */
     DELETE_LEFTOVERS("delete_leftovers", SafetyLevel.REVERSIBLE_FILES, true, true, true),
+    /**
+     * For printers that only take a file together with a print start (Bambu LAN, PrusaLink, OctoPrint, Elegoo stock):
+     * sends the file sliced in this run and starts it, as the app's own "Send and print" does. One approval covers both.
+     */
+    SEND_AND_START("send_and_start", SafetyLevel.PHYSICAL_PRINT, true, true, true),
     SET_TEMPERATURE("set_temperature", SafetyLevel.SUPERVISED_CONTROLS, true, true, true),
     HOME("home", SafetyLevel.SUPERVISED_CONTROLS, true, true, true),
     JOG("jog", SafetyLevel.SUPERVISED_CONTROLS, true, true, true),

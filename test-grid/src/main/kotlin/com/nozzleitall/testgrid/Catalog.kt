@@ -75,7 +75,7 @@ object ManualInstructions {
         val approve = if (s.kind?.consequential == true) "**Approve:** " else ""
         val text = when (s.kind) {
             StepKind.VERIFY_MODEL -> "Nozzle checks the acceptance model `${p.optString("model")}` against its published SHA-256."
-            StepKind.SLICE -> "Nozzle slices `${p.optString("model")}` with the bundled `${p.optString("profile")}` profile on this device${withNote(p)}." +
+            StepKind.SLICE -> (if (p.optString("profile") == SuiteProfiles.PRINTER) "Nozzle slices `${p.optString("model")}` with the slicing profile saved for your printer (Edit printer), on this device." else "Nozzle slices `${p.optString("model")}` with the bundled `${p.optString("profile")}` profile on this device${withNote(p)}.") +
                 (models?.let { m -> runCatching { m.entry(p.optString("model")).parts.joinToString { "${it.file} (${it.sha256.take(12)}…)" } }.getOrNull()?.let { " Files: $it." } } ?: "")
             StepKind.SCAN_GCODE -> "Nozzle checks the sliced G-code: " + (0 until (p.optJSONArray("checks")?.length() ?: 0)).joinToString { p.getJSONArray("checks").getJSONObject(it).optString("check").replace('_', ' ') } + "."
             StepKind.UPLOAD_GUARD -> "Nozzle hands the known-unsafe fixture `${p.optString("fixture")}` to the upload path and expects it to be refused before anything is sent."
@@ -90,6 +90,7 @@ object ManualInstructions {
             StepKind.MONITOR -> "Nozzle watches status until `${p.optString("until")}`${p.optString("heater").takeIf { it.isNotBlank() }?.let { " ($it ${p.optInt("celsius")} °C)" } ?: ""}, up to ${s.timeoutSeconds ?: 60} s."
             StepKind.UPLOAD -> "Upload the sliced G-code under a unique `nozzle-testgrid-…` name; Nozzle verifies it by SHA-256. Nothing prints."
             StepKind.DELETE_UPLOADED -> "Delete the file this run uploaded (only that file)."
+            StepKind.SEND_AND_START -> "Send the sliced G-code under a unique `nozzle-testgrid-…` name and start printing it, in one request (this printer takes files only that way). The printer heats, moves and extrudes."
             StepKind.DELETE_LEFTOVERS -> "Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays."
             StepKind.SET_TEMPERATURE -> ControlAction.SetTemperature(p.optString("heater"), p.optInt("celsius")).describe() + "."
             StepKind.HOME -> ControlAction.Home.describe()

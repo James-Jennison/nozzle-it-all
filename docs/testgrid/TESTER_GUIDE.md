@@ -6,9 +6,11 @@ credentials; they stay on your phone.
 
 ## Before you start
 
-- Save and connect the printer in Nozzle as usual, with the right printer type and slicing profile (for a Centauri
+- Save and connect the printer in Nozzle as usual, with the right printer type and **your printer's own slicing
+  profile**: Test Mode slices with it, so a missing or wrong profile stops the slicing tests. A multi-material setup
+  (Prusa XL 5T, CANVAS, a toolchanger) needs its multi-tool profile for the multi-material tests to run. For a Centauri
   Carbon on COSMOS: type Klipper, profile "Elegoo Centauri Carbon (OpenCentauri COSMOS)", and run "Detect firmware
-  now" in Edit printer).
+  now" in Edit printer.
 - Clear the bed. Have calipers, and enough of one filament (two colours for the multi-material tests).
 - Know where your printer's own stop control is. Test Mode's **Interrupt** stops further steps but does not stop a
   running print.

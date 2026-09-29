@@ -11,6 +11,8 @@ import com.nozzleitall.testgrid.TargetKind
 import com.nozzleitall.testgrid.TestTarget
 import com.nozzleitall.testgrid.TransferOutcome
 import com.nozzleitall.testgrid.UnsupportedByTarget
+import net.jamesjennison.klippercompanion.BambuPrintProtocol
+import net.jamesjennison.klippercompanion.BambuPrintRequest
 import net.jamesjennison.klippercompanion.FilamentSlotReader
 import net.jamesjennison.klippercompanion.HeaterControls
 import net.jamesjennison.klippercompanion.HeaterRequest
@@ -21,6 +23,7 @@ import net.jamesjennison.klippercompanion.PrinterKind
 import net.jamesjennison.klippercompanion.PrinterProfile
 import net.jamesjennison.klippercompanion.PrinterService
 import net.jamesjennison.klippercompanion.PrinterTransport
+import net.jamesjennison.klippercompanion.PrusaLinkPrintRequest
 import net.jamesjennison.klippercompanion.SlicingModelCatalog
 import net.jamesjennison.klippercompanion.SlicingPrinterModel
 import net.jamesjennison.klippercompanion.capabilitiesFor
@@ -42,6 +45,8 @@ class AndroidTestTarget(
     private val profile: PrinterProfile,
     private val cacheDir: File,
     private val declaredFamily: String? = null,
+    /** Slots the saved slicing profile declares (Prusa XL 5T, CANVAS...): decides whether multi-material tests apply. */
+    private val toolSlots: Int = 1,
     private val serviceFactory: (PrinterProfile) -> PrinterService = { printerServiceFor(it, it.address) },
     private val clock: () -> Long = System::currentTimeMillis,
 ) : TestTarget {
@@ -53,10 +58,16 @@ class AndroidTestTarget(
         val manufacturer = info?.vendor?.label ?: "Unknown"
         val model = info?.label?.removePrefix(info.vendor.label)?.trim()?.substringBefore(" (")?.substringBefore(" + ")?.trim()?.ifBlank { null } ?: profile.kind.name
         val (adapter, protocol) = adapterFor(profile)
-        TargetDescription(TargetKind.PHYSICAL, manufacturer, model, profile.kind, adapter, protocol, profile.label, profile.address, profile.slicingModel, declaredFamily)
+        TargetDescription(TargetKind.PHYSICAL, manufacturer, model, profile.kind, adapter, protocol, profile.label, profile.address, profile.slicingModel, declaredFamily, toolSlots)
     }
 
     companion object {
+        /** Failure wording that means nothing reached the printer (the services check these before sending). */
+        private val NOT_SENT = listOf("Nothing was sent", BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED, "Match each filament", "sliced file is missing",
+            "The printer is ", "password", "API key", "access code")
+        /** Wording for a definite refusal by the printer after the request went out: nothing is running. */
+        private val REFUSED = listOf("rejected the print command", "did not start it", "Could not upload", "(HTTP ")
+
         fun adapterFor(p: PrinterProfile): Pair<String, String> = when (capabilitiesFor(p.kind).transport) {
             PrinterTransport.MOONRAKER -> "android-moonraker" to "moonraker-http"
             PrinterTransport.ELEGOO -> if (p.slicingModel == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS) "android-elegoo-cc2" to "mqtt" else "android-elegoo-sdcp" to "sdcp-websocket"
@@ -147,7 +158,34 @@ class AndroidTestTarget(
         moonraker { m -> m.history(0).jobs.firstOrNull { it.filename == remotePath || it.filename.endsWith("/$remotePath") }?.status }
     }.getOrNull()
 
-    override fun perform(action: ControlAction): CommandOutcome = moonraker { m ->
+    /**
+     * The app's own "Send and print" request for printers that take a file only with a print start: Bambu (a .gcode.3mf
+     * over FTPS, then the MQTT project_file command), PrusaLink and OctoPrint (upload with print), Elegoo (upload, then start).
+     * These services report every failure as an exception, so what is known to have happened is read from its wording:
+     * refused before anything was sent, refused by the printer, or anything else (a lost reply), which the runner then
+     * confirms from the printer's state or leaves unknown.
+     */
+    override fun sendAndStart(file: File, requestedName: String): TransferOutcome {
+        if (moonraker) throw UnsupportedByTarget("This printer connection takes files through upload and start steps instead.")
+        val idle = setOf("standby", "complete", "cancelled", "error")
+        val command = if (profile.kind == PrinterKind.BAMBU_LAB)
+            PrinterCommand("Print $requestedName", "", allowedStates = idle, bambuPrintRequest = BambuPrintRequest(file, requestedName))
+        else PrinterCommand("Print $requestedName", "", allowedStates = idle, prusaLinkPrintRequest = PrusaLinkPrintRequest(file, requestedName))
+        return try {
+            service { s -> s.command(command) }
+            TransferOutcome.Verified(requestedName, com.nozzleitall.testgrid.Canon.sha256(file))
+        } catch (e: IllegalArgumentException) { TransferOutcome.Refused(e.message ?: "Refused before sending.", sent = false) }
+          catch (e: Exception) {
+            val m = e.message.orEmpty()
+            when {
+                NOT_SENT.any { m.contains(it, ignoreCase = true) } -> TransferOutcome.Refused(m, sent = false)
+                REFUSED.any { m.contains(it, ignoreCase = true) } -> TransferOutcome.Refused(m, sent = true)
+                else -> TransferOutcome.Unknown("${m.ifBlank { e.javaClass.simpleName }}. The printer may have received the file and started; check it before continuing.")
+            }
+        }
+    }
+
+    override fun perform(action: ControlAction): CommandOutcome = if (!moonraker) serviceControl(action) else moonraker { m ->
         val command = try {
             when (action) {
                 is ControlAction.SetTemperature -> {
@@ -166,6 +204,23 @@ class AndroidTestTarget(
         try { m.command(command); CommandOutcome.Accepted }
         catch (e: net.jamesjennison.klippercompanion.U1StartRefused) { CommandOutcome.Rejected(e.message ?: "The printer refused to start.", sent = true) }
         catch (e: Exception) { CommandOutcome.Unknown("${e.message ?: e.javaClass.simpleName}. The printer may have received the command; check it before continuing.") }
+    }
+
+    /** Pause, resume and cancel go through the printer's own service, as the dashboard's buttons do; nothing else exists for these printers. */
+    private fun serviceControl(action: ControlAction): CommandOutcome {
+        val command = when (action) {
+            ControlAction.Pause -> PrinterCommand("Pause print", "printer/print/pause", allowedStates = setOf("printing"))
+            ControlAction.Resume -> PrinterCommand("Resume print", "printer/print/resume", allowedStates = setOf("paused"))
+            ControlAction.Cancel -> PrinterCommand("Cancel print", "printer/print/cancel", allowedStates = setOf("printing", "paused"))
+            else -> return CommandOutcome.Rejected("${action.describe()} isn't available for this printer through Nozzle.", sent = false)
+        }
+        return try { service { s -> s.command(command) }; CommandOutcome.Accepted }
+        catch (e: Exception) {
+            val m = e.message.orEmpty()
+            if (NOT_SENT.any { m.contains(it, ignoreCase = true) } || m.contains("Unsupported command", ignoreCase = true) || m.contains("No active", ignoreCase = true) || m.contains("doesn't support", ignoreCase = true))
+                CommandOutcome.Rejected(m, sent = false)
+            else CommandOutcome.Unknown("${m.ifBlank { e.javaClass.simpleName }}. The printer may have received the command; check it before continuing.")
+        }
     }
 
     override fun localSecrets(): Set<String> {

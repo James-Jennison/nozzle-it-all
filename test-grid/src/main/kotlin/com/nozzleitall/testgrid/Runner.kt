@@ -578,6 +578,8 @@ class RunSession private constructor(
         StepKind.DELETE_LEFTOVERS -> s?.data?.optJSONArray("candidates")?.let { a -> (0 until a.length()).map { a.getString(it) } }?.takeIf { it.isNotEmpty() }
             ?.let { "Delete ${it.size} earlier Test Grid file(s) from the printer: ${it.joinToString(", ")}. Nothing else is deleted." }
             ?: "Delete earlier Test Grid files (nozzle-testgrid-*.gcode) that the printer no longer has loaded; their names are shown before you approve"
+        StepKind.SEND_AND_START -> latestSlice(step)?.let { "Send ${uploadName(step)} (${it.optLong("bytes")} bytes, SHA-256 ${it.optString("sha256").take(16)}…) to the printer and start printing it. The printer will heat, move and extrude." }
+            ?: "Send and start the sliced file (no sliced file yet: this step will be blocked)"
         StepKind.UPLOAD -> latestSlice(step)?.let { "Upload ${uploadName(step)} (${it.optLong("bytes")} bytes, SHA-256 ${it.optString("sha256").take(16)}…) to the printer's G-code folder. Nothing is printed." }
             ?: "Upload the sliced file (no sliced file yet: this step will be blocked)"
         StepKind.DELETE_UPLOADED -> latestUpload(step)?.takeIf { !it.optBoolean("deleted") }?.let { "Delete ${it.optString("remotePath")} from the printer: the file this run uploaded, verified by SHA-256 before deletion." }
@@ -631,6 +633,9 @@ class RunSession private constructor(
      * without it (found on the owner's CANVAS printer).
      */
     private fun profileFor(p: JSONObject): String {
+        // "@printer": the slicing profile saved for the tester's own printer (a fixture suite can meet any model).
+        if (p.optString("profile") == SuiteProfiles.PRINTER) return SuiteProfiles.forPrinter(record.target.optString("slicingModel"))
+            ?: throw UnsupportedByTarget("This printer has no slicing profile chosen. Choose one in Edit printer, then start again: Nozzle slices with your printer's own profile.")
         val hw = record.target.optJSONObject("hardware")
         val with = p.optJSONObject("profileWith")
         return with?.keys()?.asSequence()?.sorted()?.firstOrNull { hw?.optBoolean(it) == true }?.let { with.getString(it) } ?: p.optString("profile")
@@ -642,7 +647,11 @@ class RunSession private constructor(
 
     private fun markDeleted(path: String) { (0 until uploads().length()).map { uploads().getJSONObject(it) }.filter { it.optString("remotePath") == path }.forEach { it.put("deleted", true) } }
 
-    private fun uploadName(step: Step) = "nozzle-testgrid-${suite.id}-${step.params.optString("fromTest").ifBlank { "run" }}.gcode".replace(Regex("[^a-z0-9._-]"), "-")
+    // A Bambu slice is a .gcode.3mf bundle and keeps that extension; everything else is .gcode.
+    private fun uploadName(step: Step): String {
+        val ext = if (latestSlice(step)?.optString("file").orEmpty().endsWith(".gcode.3mf")) ".gcode.3mf" else ".gcode"
+        return "nozzle-testgrid-${suite.id}-${step.params.optString("fromTest").ifBlank { "run" }}$ext".replace(Regex("[^a-z0-9._-]"), "-")
+    }
 
     private fun slices(): JSONObject = record.context.optJSONObject("slices") ?: JSONObject().also { record.context.put("slices", it) }
     private fun uploads(): JSONArray = record.context.optJSONArray("uploads") ?: JSONArray().also { record.context.put("uploads", it) }
@@ -846,6 +855,26 @@ class RunSession private constructor(
                     is TransferOutcome.Unknown -> StepStatus.OUTCOME_UNKNOWN to r.reason
                 }
             }
+            StepKind.SEND_AND_START -> {
+                val slice = latestSlice(step) ?: return StepStatus.BLOCKED to "No sliced G-code from this run to send."
+                val file = File(slice.getString("file"))
+                if (Canon.sha256(file) != slice.optString("sha256")) return StepStatus.FAILED to "The sliced file changed after slicing; not sending it."
+                val start = ControlAction.StartPrint(uploadName(step))
+                val fresh = try { printer().status() } catch (e: Exception) { return StepStatus.BLOCKED to "The printer could not be re-checked (${e.message}). Nothing was sent." }
+                if (fresh.state !in start.allowedStates || !fresh.ready) return StepStatus.BLOCKED to "The printer is ${fresh.state}${if (fresh.ready) "" else " and not ready"}; sending a print needs it idle. Nothing was sent."
+                when (val r = printer().sendAndStart(file, uploadName(step))) {
+                    is TransferOutcome.Verified -> {
+                        uploads().put(JSONObject().put("remotePath", r.remotePath).put("sha256", slice.optString("sha256")).put("fromTest", step.params.optString("fromTest")).put("test", test.id).put("started", true))
+                        s.data.put("remotePath", r.remotePath).put("sha256", slice.optString("sha256")).put("bytes", file.length())
+                        StepStatus.PASSED to "The printer accepted ${r.remotePath} and started printing it."
+                    }
+                    is TransferOutcome.Refused -> (if (r.sent) StepStatus.FAILED else StepStatus.BLOCKED) to r.reason
+                    is TransferOutcome.Unknown -> confirmByState(ControlAction.StartPrint(uploadName(step)), fresh, s)?.let {
+                        uploads().put(JSONObject().put("remotePath", uploadName(step)).put("sha256", slice.optString("sha256")).put("fromTest", step.params.optString("fromTest")).put("test", test.id).put("started", true))
+                        StepStatus.PASSED to "The printer's reply was lost (${r.reason.take(80)}), but its state confirms it: $it"
+                    } ?: (StepStatus.OUTCOME_UNKNOWN to r.reason)
+                }
+            }
             StepKind.DELETE_LEFTOVERS -> {
                 // Only names the operator approved, and only those still eligible now: re-read, never widened.
                 val approved = s.data.optJSONArray("candidates")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
@@ -919,7 +948,7 @@ class RunSession private constructor(
                 val i = "XYZ".indexOf(a.axis); val b = before.position?.getOrNull(i); val p = r.position?.getOrNull(i)
                 if (i >= 0 && b != null && p != null && kotlin.math.abs((p - b) - a.mm) < 0.05 && r.idle) "${a.axis} moved from ${"%.2f".format(java.util.Locale.ROOT, b)} to ${"%.2f".format(java.util.Locale.ROOT, p)} mm" else null
             }
-            is ControlAction.StartPrint -> if (r.state in setOf("printing", "paused", "complete") && r.filename == a.remotePath) "the printer is ${r.state} ${a.remotePath}" else null
+            is ControlAction.StartPrint -> if (r.state in setOf("printing", "paused", "complete") && SuiteProfiles.sameFile(r.filename, a.remotePath)) "the printer is ${r.state} ${a.remotePath}" else null
             ControlAction.Pause -> if (r.state == "paused") "the printer is paused" else null
             ControlAction.Resume -> if (r.state == "printing" && before.state == "paused") "the printer is printing again" else null
             ControlAction.Cancel -> if (r.state == "cancelled") "the print is cancelled" else null

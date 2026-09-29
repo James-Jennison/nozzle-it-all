@@ -44,7 +44,7 @@ const SAFE_ID = /^[a-z0-9_]+$/;
 export async function loadProfile(id: string, fetcher: typeof fetch = fetch): Promise<ProfileFiles> {
   if (id === DEFAULT_PROFILE) return BUNDLED;
   if (!SAFE_ID.test(id)) throw new Error('That printer profile name is not valid.');
-  if (id in UNSUPPORTED_PROFILES) throw new Error(`The ${id} printer profile can't be sliced by this version yet.`);
+  if (id in UNSUPPORTED_PROFILES) throw new Error(`The ${id} printer profile isn't offered by this version yet: slicing for it hasn't been tested on a real printer.`);
   const get = async (f: string) => { const r = await fetcher(`/profiles/${id}/${f}.json`); if (!r.ok) throw new Error(`Couldn't load the ${f} profile for ${id} (${r.status}).`); return r.text(); };
   const [machine, process, filament] = await Promise.all([get('machine'), get('process'), get('filament')]);
   return { machine, process, filament };

@@ -1,11 +1,11 @@
 {
-  "why": "Printer profiles the Snapmaker Orca-based engine can't slice yet. Their start G-code needs upstream OrcaSlicer's multi-nozzle system (filament_map, nozzle groups, chamber hold), which Snapmaker Orca's engine doesn't have. Owner decision 2026-09-27: hidden until that system is ported and tested on a real machine, never filled with single-nozzle stand-ins. See docs/upstream/PROVENANCE.md P-0007.",
+  "why": "Printer profiles Nozzle It All doesn't offer yet. Since nozzle-engine e23c0df (docs/upstream/PROVENANCE.md P-0023, P-0024) the engine slices all six (upstream OrcaSlicer's multi-extruder / multi-nozzle system is ported), but none has been printed on a real machine. On the two-extruder models filaments go to extruders by upstream's default rule (filament i on extruder i, the rest on the master extruder); the app has no per-filament choice yet. Owner decision 2026-09-27: hidden until tested on a real machine.",
   "profiles": {
-    "bambu_h2c": "nozzle_diameter_at_nozzle_id / initial_nozzle_id (nozzle groups)",
-    "bambu_h2d": "nozzle_diameter compared as one value (dual-nozzle groups)",
-    "bambu_h2d_pro": "nozzle_diameter compared as one value (dual-nozzle groups)",
-    "bambu_h2s": "nozzle_diameter compared as one value (nozzle groups)",
-    "bambu_p2s": "hold_chamber_temp_for_flat_print (chamber hold)",
-    "bambu_x2d": "filament_map (filament-to-extruder map)"
+    "bambu_h2c": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet); nozzle-rack assignment is static (upstream's grouping engine not ported)",
+    "bambu_h2d": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet)",
+    "bambu_h2d_pro": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet)",
+    "bambu_h2s": "slices; not yet printed on a real machine",
+    "bambu_p2s": "slices; not yet printed on a real machine",
+    "bambu_x2d": "slices; not yet printed on a real machine; filaments go to extruders by the default rule (no per-filament choice in the app yet)"
   }
 }

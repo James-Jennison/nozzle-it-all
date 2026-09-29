@@ -33,6 +33,11 @@ class ToolSlotsTest {
             assertEquals(dir, 1, count)
         }
     }
+    // machine.json declares one extruder; an AMS printer's pack adds its filament slots (BambuAms).
+    @Test fun bambuAmsPacksDeclareFourFilamentSlots() {
+        val pack = slicingProfilePack(SlicingPrinterModel.BAMBU_X1_CARBON, null) ?: throw AssertionError("no X1 Carbon pack")
+        assertEquals(4, pack.toolCountOf(File("src/main/assets/slicer_profiles/bambu_x1_carbon/machine.json").readText()))
+    }
     @Test fun missingOrMalformedExtruderColourFallsBackToOneRatherThanGuessingHigher() {
         assertEquals(1, parseToolCount("""{}"""))
         assertEquals(1, parseToolCount("""{"extruder_colour": []}"""))

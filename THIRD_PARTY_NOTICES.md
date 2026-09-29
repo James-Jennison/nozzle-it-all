@@ -30,11 +30,15 @@ Incorporated so far:
   (serial-pinned TLS trust, the MQTT LAN transport and bounded status probe,
   the implicit-TLS FTPS upload client, `project_file` command construction and
   acknowledgement parsing, and the port-6000 chamber-camera stream re-served as
-  loopback MJPEG). `BambuPrintProtocol.kt` drops Helix's AMS/multi-material lane
-  mapping (see that file's header): this app prints single-material from the
-  external spool only. Helix's React Native bridge shims and its `.gcode.3mf`
-  artifact builder were not ported — this app has no slicer and uploads an
-  already-sliced archive as-is.
+  loopback MJPEG). `BambuPrintProtocol.kt` also carries Helix's AMS lane mapping
+  (`toolToLane`, `use_ams`), restored in 2026-09; starting a multi-filament print
+  with it stays off until confirmed on a real printer (`BambuAms.AMS_PRINT_VERIFIED`).
+- `BambuAmsTrays.kt` — adapted from Helix's `services/bambuReport.ts` (global AMS
+  tray numbering, `tray_exist_bits` occupancy, the active tray). Its test fixture
+  `domain/src/test/resources/bambu/helix-p1s-report.json` is Helix's
+  `scripts/fixtures/bambu-p1s-report.json`, unchanged.
+  Helix's React Native bridge shims and its `.gcode.3mf` artifact builder were not
+  ported: this app slices its own bundles with its own engine.
 
 ## Bespok3d daemon and Snapmaker U1 jinni (bundled binaries)
 

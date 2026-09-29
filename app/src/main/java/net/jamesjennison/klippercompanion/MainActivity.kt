@@ -747,6 +747,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     if(capabilities.transport == PrinterTransport.BAMBU_MQTT) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("LAN mode limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.")
+                        // Read-only: the AMS trays from the printer's status report (BambuAmsTrays).
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("AMS slots")}
                     } } }
                     else if(capabilities.transport == PrinterTransport.OCTOPRINT) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("OctoPrint limitations", style=MaterialTheme.typography.titleSmall)

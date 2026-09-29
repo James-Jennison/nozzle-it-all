@@ -601,3 +601,86 @@ interchange).
   51 engine device tests on the Razr (Android 17).
 - **Known divergence:** none; the engine is unchanged.
 - **Touches:** build, CI, licensing notices, packaging.
+
+## P-0023 — nozzle-engine with Bambu's multi-extruder / multi-nozzle support
+
+- **Upstream:** nozzle-engine `e23c0df67b36854f52b6e57fd33c62bdd2831634` (`engine/fork/ENGINE_PIN.json`), from
+  `dc86dbf` (P-0020 to P-0022) plus the engine's `e3/multi-nozzle` work (github.com/James-Jennison/nozzle-engine pull 1).
+  Each change is its own commit there, ported from upstream OrcaSlicer (dev at `5298e49d`) with the differences listed.
+- **Imported:** nothing into this repository; the engine carries the code.
+- **Engine changes** (from upstream OrcaSlicer, AGPL-3.0):
+  - G-code templates: `ceil()`, `floor()`, vector leniency. Divergence: an unindexed per-extruder vector reads the
+    filament's extruder from `filament_map` converted to 0-based (upstream indexes with the 1-based value and reads the
+    other nozzle; reported upstream as a draft).
+  - Extruder variants: Bambu profiles' per-variant printer, process and filament settings are collapsed to each extruder
+    / filament for the variant it has installed (only printers declaring more than one variant). Multi-filament prints
+    give every filament its own copy of the filament profile's variant columns.
+  - The start, tool-change, layer and timelapse G-code variables and options Bambu's H2S, P2S, H2D, H2D Pro, X2D and
+    H2C profiles read (see the engine commits for the list).
+  - Not ported: upstream's flush-minimising filament/nozzle grouping (the H2C's rack nozzles are assigned in filament
+    order), perimeter-avoiding travel to the prime tower, tower interface layers, ramming cool-down, the timelapse
+    position picker and farthest-point timelapse.
+- **Adaptations:** the pin, the About dialog's engine commit and the website's open-source page name `e23c0df`;
+  `schemas/slicing/settings-schema.json` regenerated (source commit only: the new options are profile keys the schema
+  does not list); `engine/profiles/unsupported-profiles.json` and
+  its message now say why the six Bambu profiles stay hidden: they slice, but none has been printed on a real machine,
+  and the two-extruder models need a filament-to-extruder choice (`filament_map`) the app doesn't make yet.
+- **Test evidence:** engine CI on gthost for the branch (run 36473192446: desktop, golden on all 380 profiles, contract,
+  Android, WebAssembly); printed G-code unchanged on every profile that sliced before, single- and two-filament; this
+  repository's gate (734 JVM tests, lint, site and schema checks), the Web App's typecheck, 33 unit tests and the browser
+  engine smoke test on five printers (same layers, grams and times as before), and all 51 engine device tests on the Razr.
+- **Known divergence:** printed G-code is unchanged for every printer already offered; the five older Bambu printers'
+  config block lists one value per setting.
+- **Touches:** slicing (all platforms), settings schema, licensing notice.
+
+## P-0024 — default filament-to-extruder rule on Bambu multi-extruder printers
+
+- **Upstream:** nozzle-engine `25ca1a2b6e66e1e3ebb6d77c841b7ab6a0dcb7af` (`engine/fork/ENGINE_PIN.json`,
+  James-Jennison/nozzle-engine pull 2): `e23c0df` (P-0023) plus one commit.
+- **Imported:** nothing into this repository.
+- **Engine change:** a request that doesn't map every filament to an extruder (this app sends no `filament_map`) gets
+  upstream OrcaSlicer's rule for printers without its grouping engine: filament *i* on extruder *i* while there are
+  extruders, the rest on the master extruder (new option `master_extruder_id`). Only Bambu printers that declare extruder
+  variants are affected. Upstream's own default for Bambu printers is its flush-minimising grouping, which is not ported.
+- **Adaptations:** pin, About dialog, website and `engine/profiles/unsupported-profiles.json` updated. The app's tool slots
+  are one per extruder, so slot *n* prints on extruder *n*, which is this rule; a per-filament choice needs more
+  filaments than extruders (a Bambu AMS), which the app doesn't model yet.
+- **Test evidence:** listed in the commit.
+- **Known divergence:** none for printers already offered (G-code identical to P-0023 apart from the new setting line).
+- **Touches:** slicing (Bambu multi-extruder profiles only).
+
+## P-0025 — Bambu multi-colour (AMS) slicing
+
+- **Upstream:** nozzle-engine `c8e5a4d7d402016df78addc52f3992834abd3b74` (`engine/fork/ENGINE_PIN.json`): `25ca1a2` (P-0024) plus one commit.
+- **Imported:** nothing into this repository.
+- **Engine change:** the Bambu `.gcode.3mf` bundle path takes a filament (AMS slot) per object
+  (`slice_multi_object_bambu_bundle`, JNI `nativeSliceMultiObjectBambuBundleTools`; the older entry points still work),
+  and `slice_info` now lists each used filament's type and colour, as upstream's Plater writes them. The filament's
+  catalogue id stays empty: upstream converts it with Bambu's network plugin, which this app does not use.
+- **Adaptations:** Bambu printers that take an AMS (X1, X1 Carbon, X1E, P1P, P1S, A1, A1 mini, and the hidden P2S and
+  H2S) get four filament slots (`BambuAms`, the way the CANVAS packs declare theirs), which turns on the project's
+  per-object slot assignment and material painting for them; `SlicingCoordinator.sliceProject` gives the Bambu bundle
+  the same per-slot filament config and flushing volumes as other multi-material printers.
+- **Not in this change:** starting an AMS print over LAN. The print command still sends `use_ams:false` with an empty
+  AMS mapping, so a multi-colour file prints from the external spool until the mapping is added and tested on a real
+  Bambu printer.
+- **Test evidence:** listed in the commit.
+- **Touches:** slicing (Bambu), project editor slots.
+
+## P-0026 — Bambu AMS trays and print mapping (ported from Helix, gated)
+
+- **Upstream:** Helix (github.com/FatBoy721/Helix, AGPL-3.0-or-later, main as of 2026-09-05):
+  `android/app/src/main/java/org/crabcore/u1control/bambu/BambuPrintProtocol.kt` (the `toolToLane` / `use_ams` mapping
+  our port had dropped) and `services/bambuReport.ts` (AMS tray numbering and occupancy), with its
+  `scripts/fixtures/bambu-p1s-report.json`.
+- **Imported:** `BambuAmsTrays.kt` (new, from `bambuReport.ts`); the mapping restored in `BambuPrintProtocol.kt`; the
+  fixture as `domain/src/test/resources/bambu/helix-p1s-report.json`.
+- **Adaptations:** trays become `FilamentSlot`s, so the Bambu printer screen's new "AMS slots" button shows them
+  (read-only, one status probe); `BambuAms.matchTrays` matches a bundle's filaments (slice_info) to loaded trays by
+  material, then colour; `BambuPrintRequest.toolToLane` carries the result.
+- **Gate:** `BambuAms.AMS_PRINT_VERIFIED = false`. Until a tester with a Bambu printer and an AMS has started and
+  completed a multi-filament print with this mapping, `BambuPrinterService.startPrint` still refuses multi-filament
+  files and sends `use_ams:false` for everything else, exactly as before. The mapping itself is unit-tested against
+  Helix's wire format only; it has never reached a printer.
+- **Test evidence:** listed in the commit.
+- **Touches:** Bambu printer screen (AMS slots), Bambu print command (unchanged on the wire while gated).

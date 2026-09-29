@@ -37,7 +37,7 @@ class BambuPrinterService(
     private val accessCode: String,
     private val probe: BambuStatusProbe = BambuStatusProbe(),
     private val ftps: BambuFtpsClient = BambuFtpsClient(),
-) : PrinterService {
+) : PrinterService, FilamentSlotReader {
 
     override val address: String get() = host
 
@@ -52,6 +52,13 @@ class BambuPrinterService(
         } catch (e: org.json.JSONException) {
             throw ApiFailure("Printer state is incomplete.")
         }
+    }
+
+    /** The AMS trays from one status report (BambuAmsTrays); read-only, the same bounded probe as snapshot(). */
+    override fun filamentSlots(): FilamentSlotStatus {
+        val report = await(probe.probe(config), PROBE_TIMEOUT_MS, "The printer did not return its status.")
+        val slots = try { BambuAmsTrays.parse(JSONObject(report)) } catch (e: org.json.JSONException) { throw ApiFailure("Printer state is incomplete.") }
+        return FilamentSlotStatus(slots, "the printer's AMS")
     }
 
     /**
@@ -150,6 +157,12 @@ class BambuPrinterService(
      * Single-material, external spool only - see BambuPrintProtocol's header.
      */
     private fun startPrint(request: BambuPrintRequest) {
+        // A multi-filament bundle needs an AMS mapping. Until one has been confirmed on a real printer
+        // (BambuAms.AMS_PRINT_VERIFIED) it is refused before anything moves; after that, only with a mapping.
+        val multiFilament = bambuBundleFilaments(request.file) > 1
+        if (multiFilament && !BambuAms.AMS_PRINT_VERIFIED) throw ApiFailure(BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED)
+        if (multiFilament && request.toolToLane.isEmpty()) throw ApiFailure("Match each filament in this file to an AMS tray before printing.")
+        val useAms = multiFilament && BambuAms.AMS_PRINT_VERIFIED
         val remoteName = request.remoteName
         val md5 = md5Hex(request.file)
         try {
@@ -169,6 +182,8 @@ class BambuPrinterService(
                 bedLeveling = request.bedLeveling,
                 flowCalibration = request.flowCalibration,
                 timelapse = request.timelapse,
+                toolToLane = if (useAms) request.toolToLane else emptyMap(),
+                useAms = useAms,
             )
         )
 
@@ -310,3 +325,10 @@ object BambuSnapshot {
         )
     }
 }
+
+/** How many filaments a `.gcode.3mf` bundle's slice_info lists; 0 for a plain G-code file or a bundle without one. */
+fun bambuBundleFilaments(file: File): Int = try {
+    java.util.zip.ZipFile(file).use { zip ->
+        zip.getEntry("Metadata/slice_info.config")?.let { entry -> zip.getInputStream(entry).bufferedReader().use { BambuPrintProtocol.usedFilaments(it.readText()) } } ?: 0
+    }
+} catch (_: java.util.zip.ZipException) { 0 }

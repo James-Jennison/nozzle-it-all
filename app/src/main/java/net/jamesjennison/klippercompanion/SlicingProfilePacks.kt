@@ -13,10 +13,9 @@ import java.io.File
 internal data class SlicingProfilePack(val assetDir: String, val cosmosGeneration: CosmosProfileGeneration? = null, val custom: CustomMachine? = null, val filamentSlots: Int? = null) {
     val machinePath get() = "$assetDir/machine.json"
     /** The machine profile as it will be used: the bundled file, with this printer's custom bed/G-code applied to a copy when set. */
-    fun machineText(context: Context): String {
-        val raw = context.assets.open(machinePath).use { it.reader().readText() }
-        return custom?.let { applyCustomMachine(raw, it) } ?: raw
-    }
+    fun machineText(context: Context): String = machineTextFrom(context.assets.open(machinePath).use { it.reader().readText() })
+    /** [raw] (the bundled machine.json) as it will be used: with this printer's custom machine applied when set. */
+    fun machineTextFrom(raw: String): String = custom?.let { applyCustomMachine(raw, it) } ?: raw
     val processPath get() = "$assetDir/process.json"
     val filamentPath get() = "$assetDir/filament.json"
 }
@@ -35,7 +34,8 @@ internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: Co
         ElegooProfileFirmware.ELEGOO_STOCK -> SlicingProfilePack(dir, filamentSlots = ElegooProfiles.filamentSlots(model))
         // Every other model is one row of the generated catalog (scripts/bundle_vendor_profiles.py).
         // Bambu printers that take an AMS get its slots (BambuAms), Prusa printers with an MMU3 its five (PrusaMmu).
-        null -> SlicingProfilePack(dir, custom = custom, filamentSlots = BambuAms.filamentSlots(model) ?: PrusaMmu.filamentSlots(model))
+        // A custom machine's declared filament changer lanes (Klipper AFC, Happy Hare, ...) come first.
+        null -> SlicingProfilePack(dir, custom = custom, filamentSlots = custom?.filamentSlots ?: BambuAms.filamentSlots(model) ?: PrusaMmu.filamentSlots(model))
     }
 }
 

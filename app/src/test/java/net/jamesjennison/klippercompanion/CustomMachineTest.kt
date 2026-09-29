@@ -83,4 +83,24 @@ class CustomMachineTest {
         val restored = SettingsBackup.decode(SettingsBackup.encode(list, "correct horse".toCharArray()), "correct horse".toCharArray())
         assertEquals(list, restored)
     }
+
+    // A Klipper printer with a filament changer (AFC / Box Turtle, Happy Hare / ERCF): its declared lanes.
+    @Test fun filamentChangerLanesRoundTripValidateAndApply() {
+        val boxTurtle = voron.copy(filamentSlots = 4)
+        assertNull(boxTurtle.problem())
+        assertNotNull(voron.copy(filamentSlots = 1).problem()); assertNotNull(voron.copy(filamentSlots = 17).problem()); assertNotNull(voron.copy(filamentSlots = -1).problem())
+        assertEquals(boxTurtle, CustomMachine.fromJson(boxTurtle.toJson()))
+        assertNull(CustomMachine.fromJson(voron.toJson())!!.filamentSlots) // saved before lanes existed: none
+        // Applied: one nozzle, a single-extruder multi-material machine, and no M600 template (the generic profile's
+        // would pause for a manual swap at every change on top of the engine's T<n>).
+        assertEquals("M600", JSONObject(genericKlipper).getString("change_filament_gcode"))
+        val applied = JSONObject(applyCustomMachine(genericKlipper, boxTurtle))
+        assertEquals("", applied.getString("change_filament_gcode")); assertEquals("1", applied.getString("single_extruder_multi_material"))
+        assertEquals(1, applied.getJSONArray("nozzle_diameter").length())
+        assertEquals("M600", JSONObject(applyCustomMachine(genericKlipper, voron)).getString("change_filament_gcode")) // no lanes: unchanged
+        // The pack reports the lanes as slots: one nozzle fed by four lanes, a filament swap.
+        val pack = slicingProfilePack(SlicingPrinterModel.GENERIC_KLIPPER, null, boxTurtle)!!
+        assertEquals(ToolSetup(nozzles = 1, slots = 4), pack.toolSetupOf(pack.machineTextFrom(genericKlipper)))
+        assertEquals(MultiToolFamily.FILAMENT_SWAP, pack.toolSetupOf(pack.machineTextFrom(genericKlipper)).family)
+    }
 }

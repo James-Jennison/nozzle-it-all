@@ -169,6 +169,19 @@ class PrinterModel(
             onResult(result)
         }
     }
+    /** Read-only: how many filament changer lanes (AFC, Happy Hare) the saved printer at [address] reports; 0 for none. */
+    fun detectFilamentLanes(address: String, onResult: (Result<Int>) -> Unit) {
+        if (_state.value.profiles.none { it.address == address }) { onResult(Result.failure(ApiFailure("This profile is no longer available."))); return }
+        viewModelScope.launch {
+            val result = try {
+                Result.success(withContext(io) {
+                    val service = resolvedServiceFactory(address)
+                    try { (service as? FilamentSlotReader)?.filamentSlots()?.slots?.size ?: 0 } finally { runCatching { service.close() } }
+                })
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+            onResult(result)
+        }
+    }
     fun favoriteProfile(address: String) {
         if(_state.value.busy) return
         val profiles = _state.value.profiles.map { if(it.address==address) it.copy(favorite=!it.favorite) else it }

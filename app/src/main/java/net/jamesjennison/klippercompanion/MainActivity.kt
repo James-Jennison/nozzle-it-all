@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                 CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, setCustomMachine=model::setCustomMachine, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
                     backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop,
-                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, addProfile=model::addProfile,
+                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, detectLanes=model::detectFilamentLanes, addProfile=model::addProfile,
                     dismissCommandNotice=model::dismissCommandNotice, autoOpenWizard=addPrinterNow)
                 }
             }
@@ -180,7 +180,7 @@ private enum class BackupStep { NONE, EXPORT_PASSPHRASE, IMPORT_PASSPHRASE }
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String? = {_,_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
-    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null, addProfile:(PrinterProfile)->String?={null},
+    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null, detectLanes:((String, (Result<Int>)->Unit)->Unit)?=null, addProfile:(PrinterProfile)->String?={null},
     stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={}, dismissCommandNotice:()->Unit={}, autoOpenWizard:Boolean=true, setCustomMachine:(String, CustomMachine?)->Unit={_,_->},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
@@ -1007,7 +1007,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
     runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}
-    editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile,detectFirmware,setCustomMachine) }
+    editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile,detectFirmware,setCustomMachine,detectLanes) }
     if(addingPrinter) AddPrinterWizard(state.savedPrinters, addProfile, ::openPrinter) { addingPrinter = false }
     pending?.let { (command, epoch) ->
         AlertDialog(onDismissRequest = { pending = null }, title = { Text(command.title + "?") },

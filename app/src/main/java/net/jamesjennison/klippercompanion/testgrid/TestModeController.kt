@@ -264,18 +264,28 @@ class TestModeController private constructor(private val context: Context) {
         }
     }
 
-    /** The tester code the maintainers handed out, remembered on this device after the first successful send. */
-    val testerCode: String get() = context.getSharedPreferences("testgrid", Context.MODE_PRIVATE).getString("tester_code", "").orEmpty()
+    /**
+     * This phone's tester ID: random, made by the app the first time it's needed and kept on this device. It says which
+     * bundles came from the same tester (and lets the inbox block one that is abused); it is not a login and names no one.
+     */
+    val testerId: String get() {
+        val prefs = context.getSharedPreferences("testgrid", Context.MODE_PRIVATE)
+        prefs.getString("tester_id", null)?.let { return it }
+        val bytes = ByteArray(15).also { java.security.SecureRandom().nextBytes(it) }
+        val id = "t-" + android.util.Base64.encodeToString(bytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP)
+        prefs.edit { putString("tester_id", id) }
+        return id
+    }
 
     /**
-     * "Send to Nozzle It All": posts the bundle exactly as previewed to the Test Grid inbox. Sent once per tap; the inbox
-     * names bundles by their content, so the same bundle sent twice is filed once.
+     * "Send to Nozzle It All": posts the bundle exactly as previewed to the Test Grid inbox with this phone's tester ID.
+     * Sent once per tap; the inbox names bundles by their content, so the same bundle sent twice is filed once.
      */
-    fun submit(code: String) {
+    fun submit() {
         val b = _state.value.bundle ?: return
         update { it.copy(submitError = null) }
         work {
-            val request = okhttp3.Request.Builder().url(SUBMIT_URL).header("X-Nozzle-Tester", code.trim())
+            val request = okhttp3.Request.Builder().url(SUBMIT_URL).header("X-Nozzle-Tester", testerId)
                 .post(b.zip().toRequestBody("application/zip".toMediaTypeOrNull())).build()
             val client = okhttp3.OkHttpClient.Builder().callTimeout(3, java.util.concurrent.TimeUnit.MINUTES).build()
             val (ok, message) = try {
@@ -285,10 +295,7 @@ class TestModeController private constructor(private val context: Context) {
                     else false to (body?.optString("error")?.takeIf { it.isNotBlank() } ?: "The inbox answered HTTP ${r.code}.")
                 }
             } catch (e: java.io.IOException) { false to "Couldn't reach nozzleitall.com (${e.message}). Nothing is lost: try again, or email it instead." }
-            if (ok) {
-                context.getSharedPreferences("testgrid", Context.MODE_PRIVATE).edit { putString("tester_code", code.trim()) }
-                update { it.copy(submitted = message, submitError = null) }
-            } else update { it.copy(submitError = message) }
+            if (ok) update { it.copy(submitted = message, submitError = null) } else update { it.copy(submitError = message) }
         }
     }
 

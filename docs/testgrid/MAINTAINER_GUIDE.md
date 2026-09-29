@@ -5,10 +5,11 @@ All commands run from the repository root. None of them contacts a printer.
 ## 0. Collect
 
 Testers send bundles from Test Mode to `https://nozzleitall.com/testgrid/submit.php` (stored on the web server in
-`/home/jamesjen/testgrid-inbox/bundles`, outside the web root, named by SHA-256, with the tester code's label; no IP
+`/home/jamesjen/testgrid-inbox/bundles`, outside the web root, named by SHA-256, with the app-made tester ID; no IP
 address is kept) or by email to support@nozzleitall.com. `scripts/testgrid_fetch_inbox.sh` copies new inbox bundles to
-`gthost-build01:~/testgrid-evidence/incoming/` and verifies each. Tester codes: `scripts/deploy_testgrid_inbox.sh
---add-code "<name>"` prints a new one; deleting its line in `testgrid-inbox/codes.txt` revokes it. The endpoint itself is
+`gthost-build01:~/testgrid-evidence/incoming/` and verifies each. There is no login: the tester ID (made by the app,
+random) groups a phone's bundles; `scripts/deploy_testgrid_inbox.sh --block t-...` stops one that is abused. Limits:
+40 MB per bundle, 30 per tester ID and 300 in total per day. The endpoint itself is
 `infra/testgrid-inbox/`, deployed with `scripts/deploy_testgrid_inbox.sh --go`.
 
 ## 1. Verify

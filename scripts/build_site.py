@@ -56,17 +56,31 @@ def parse_page(path):
         if k not in meta: fail(f"{path.name}: front matter needs {k}")
     return meta, m.group(2)
 
+def catalog_entries():
+    """Every bundled slicing model, read from the app's own catalogue (domain SlicingModelCatalog.kt), so the site can't lag it."""
+    kt = (ROOT / "domain" / "src" / "main" / "kotlin" / "net" / "jamesjennison" / "klippercompanion" / "SlicingModelCatalog.kt").read_text()
+    vendors = dict(re.findall(r'(\w+)\("([^"]+)"\)', re.search(r"enum class SlicingVendor\(val label: String\) \{([^}]*)\}", kt).group(1)))
+    rows = re.findall(r'SlicingModelInfo\(SlicingPrinterModel\.\w+, "((?:[^"\\]|\\.)*)", SlicingVendor\.(\w+), "[^"]*", (true|false)\)', kt)
+    if len(rows) < 100: fail(f"read only {len(rows)} models from SlicingModelCatalog.kt")
+    out = {}
+    for label, vendor, verified in rows: out.setdefault(vendors[vendor], []).append({"label": label, "verified": verified == "true"})
+    return out
+
+def model_count():
+    c = catalog_entries()
+    return f"{sum(len(v) for v in c.values())} models from {len(c)} makers"
+
 def model_catalog():
-    """The slicing-profile catalog (site-src/printer_models.json, written by scripts/bundle_vendor_profiles.py) as collapsible vendor sections."""
+    """The slicing-profile catalog as collapsible vendor sections."""
     import html as h
-    data = json.loads((SRC / "printer_models.json").read_text())
-    total = sum(len(v["models"]) for v in data["vendors"])
-    jump = " &middot; ".join(f'<a href="#v-{re.sub(r"[^a-z0-9]+", "-", v["name"].lower()).strip("-")}">{h.escape(v["name"])} ({len(v["models"])})</a>' for v in data["vendors"])
-    out = [f'<p><strong>{total} models from {len(data["vendors"])} makers.</strong></p>', f'<p class="fine">{jump}</p>']
-    for v in data["vendors"]:
-        anchor = re.sub(r"[^a-z0-9]+", "-", v["name"].lower()).strip("-")
-        items = "".join(f'<li>{h.escape(m["label"])}{" <span class=\"badge verified\">Verified on hardware</span>" if m["verified"] else ""}</li>' for m in v["models"])
-        out.append(f'<details id="v-{anchor}"><summary>{h.escape(v["name"])} ({len(v["models"])})</summary><ul>{items}</ul></details>')
+    data = catalog_entries()
+    total = sum(len(v) for v in data.values())
+    jump = " &middot; ".join(f'<a href="#v-{re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")}">{h.escape(name)} ({len(models)})</a>' for name, models in data.items())
+    out = [f'<p><strong>{total} models from {len(data)} makers.</strong></p>', f'<p class="fine">{jump}</p>']
+    for name, models in data.items():
+        anchor = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        items = "".join(f'<li>{h.escape(m["label"])}{" <span class=\"badge verified\">Verified on hardware</span>" if m["verified"] else ""}</li>' for m in models)
+        out.append(f'<details id="v-{anchor}"><summary>{h.escape(name)} ({len(models)})</summary><ul>{items}</ul></details>')
     return "\n".join(out)
 
 
@@ -112,7 +126,9 @@ def compatibility():
 def render(r, meta, body, base):
     def sub(text):
         text = text.replace("{{github}}", r["github"]).replace("{{email}}", r["support_email"]).replace("{{updated}}", r["updated"])
-        text = text.replace("{{primary_cta}}", primary_cta(r)).replace("{{platform_cards}}", platform_cards(r)).replace("{{model_catalog}}", model_catalog() if "{{model_catalog}}" in text else "").replace("{{compatibility}}", compatibility() if "{{compatibility}}" in text else "")
+        text = text.replace("{{primary_cta}}", primary_cta(r)).replace("{{platform_cards}}", platform_cards(r)).replace("{{model_catalog}}", model_catalog() if "{{model_catalog}}" in text else "").replace("{{compatibility}}", compatibility() if "{{compatibility}}" in text else "").replace("{{model_count}}", model_count() if "{{model_count}}" in text else "")
+        pin = json.loads((ROOT / "engine" / "fork" / "ENGINE_PIN.json").read_text())["base"]["commit"]
+        text = text.replace("{{engine_pin_short}}", pin[:12]).replace("{{engine_pin}}", pin)
         text = re.sub(r"\{\{status:(\w+)\}\}", lambda m: badge(r, m.group(1)), text)
         return text
     page = base.replace("{{content}}", body)

@@ -32,9 +32,11 @@
 <main id="main">
 <div class="wrap prose">
  <h1>Supported printers</h1>
- <p class="lead">Nozzle It All connects to the printers you own over your own network. We are honest about how sure we are, so every printer type below is one of two things:</p>
+ <p class="lead">Nozzle It All connects to the printers you own over your own network. We are honest about how sure we are, so every printer type below is marked with one of these:</p>
  <p><span class="badge verified">Verified on hardware</span> we have run it on a real printer of this kind.<br>
- <span class="badge docs">Built from vendor docs</span> written against the vendor's published protocol and tested against an emulator or test server, but <strong>not yet on a real printer</strong>. It may work well, and it may not. If you try one, please <a href="/support/">tell us what happened</a>.</p>
+ <span class="badge docs">Built from vendor docs</span> written against the vendor's published protocol and tested against an emulator or test server, but <strong>not yet on a real printer</strong>. It may work well, and it may not. If you try one, please <a href="/support/">tell us what happened</a>.<br>
+ <span class="badge docs">Built from open-source slicer code</span> ported from the maker's or OrcaSlicer's published source and tested against simulated printers, also <strong>not yet on a real printer</strong>.<br>
+ <span class="badge planned">Next update</span> in the app's next update, not in the version you can install today.</p>
 
  <p>For test results per printer model and firmware, category by category, see <a href="/compatibility/">Printer compatibility</a>.</p>
 
@@ -42,30 +44,36 @@
   <thead><tr><th scope="col">Printer or firmware</th><th scope="col">Status</th><th scope="col">What it does</th></tr></thead>
   <tbody>
    <tr><th scope="row">Klipper with Moonraker</th><td><span class="badge verified">Verified on hardware</span></td>
-    <td>Status, temperatures, progress, start, pause and cancel, file browser, macros, camera, jog, bed levelling, timelapse and filament load and unload, each shown only if the printer reports it. Sliced files can be sent to it.</td></tr>
+    <td>Status, temperatures, progress, start, pause and cancel, file browser, macros, camera, jog, bed levelling, timelapse and filament load and unload, each shown only if the printer reports it. Sliced files can be sent to it. Filament changers are read when present (AFC / Box Turtle, Happy Hare / ERCF, Qidi Box), and multi-colour files can be sliced for them. Verified on the Snapmaker U1 and the Centauri Carbon on COSMOS; other Klipper printers are listed as waiting for testers on the <a href="/compatibility/">compatibility page</a>.</td></tr>
    <tr><th scope="row">Snapmaker U1 (PAXX firmware)</th><td><span class="badge verified">Verified on hardware</span></td>
-    <td><strong>The primary platform.</strong> Everything above, plus its four toolheads: the material loaded in each one, Full Spectrum colour mixing and multiACE. Works entirely on your own network with no Snapmaker account, cloud or internet connection; away from home, connect through your own private network such as Tailscale. A bundled slicing profile is included. Bespok3d, an add-on manager for the printer, does not work on this firmware.</td></tr>
+    <td><strong>The primary platform.</strong> Everything above, plus its four toolheads: the material loaded in each one, Full Spectrum colour mixing and multiACE. Works entirely on your own network with no Snapmaker account, cloud or internet connection; away from home, connect through your own private network such as Tailscale. A bundled slicing profile is included; single- and multi-colour printing passed on a real U1, with its adaptive bed mesh (<a href="/compatibility/">results</a>). Bespok3d, an add-on manager for the printer, does not work on this firmware.</td></tr>
    <tr><th scope="row">Snapmaker U1 (stock firmware)</th><td><span class="badge docs">Built from vendor docs</span></td>
     <td>Monitoring, controls, sending jobs and the slicing profile over your own network, plus optional pairing with Bespok3d on Android. Some stock-firmware features exist only through Snapmaker's own cloud; on Desktop those will come through optional Stock U1 support, installed separately and only started if you add a Stock U1. If it fails, your PAXX printers are unaffected. Nothing here has been run on a stock-firmware U1 yet, so treat it as untested and tell us how it goes.</td></tr>
-   <tr><th scope="row">Elegoo Centauri Carbon running OpenCentauri</th><td><span class="badge verified">Verified on hardware</span></td>
-    <td>Works as a Klipper-style printer with a bundled slicing profile. You confirm the firmware version once, because slicing with the wrong profile can stop a print on some firmware.</td></tr>
+   <tr><th scope="row">Elegoo Centauri Carbon running OpenCentauri COSMOS</th><td><span class="badge verified">Verified on hardware</span></td>
+    <td>Add it as a Klipper printer and choose the COSMOS profile (the CANVAS one if you have CANVAS); the app checks the firmware version, because slicing with the wrong profile can stop a print. Single-colour printing and two-colour printing with CANVAS, with a wipe tower and COSMOS's adaptive bed mesh, passed on a real printer on COSMOS 26.09 (<a href="/compatibility/">results</a>). OpenCentauri's patched stock firmware is a different thing and is not tested yet.</td></tr>
+   <tr><th scope="row">Elegoo on Elegoo firmware <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from vendor docs</span></td>
+    <td>Centauri Carbon (SDCP) and Centauri Carbon 2 (MQTT, with its access code): status, CANVAS lanes, sending and starting a sliced file, and cancel; pause and resume on the Centauri Carbon only. No camera. Tested against simulated printers only.</td></tr>
    <tr><th scope="row">Bambu Lab (LAN mode)</th><td><span class="badge docs">Built from vendor docs</span></td>
-    <td>Status, pause, resume and stop, and sending a sliced file, over the printer's local network. The camera works on the A1 and P1 series; the X1 and H2 series use a camera stream Nozzle It All can't show yet. Needs LAN mode, the printer's serial number and access code. The app remembers each printer's certificate the first time it connects and warns you if it later changes. Tested against an emulator only.</td></tr>
+    <td>Status, pause, resume and stop, and sending a sliced file, over the printer's local network. The camera works on the A1 and P1 series; the X1 and H2 series use a camera stream Nozzle It All can't show yet. Needs LAN mode, the printer's serial number and access code. The app remembers each printer's certificate the first time it connects and warns you if it later changes. The AMS slots (AMS, AMS lite, AMS 2 Pro, AMS HT) are read and multi-colour files can be sliced, but multi-colour printing is not switched on yet: until it has been checked on a real printer, a multi-colour file is refused at the start. Tested against an emulator only.</td></tr>
    <tr><th scope="row">OctoPrint</th><td><span class="badge docs">Built from vendor docs</span></td>
     <td>Status, temperatures, progress, start, pause and cancel, and sending a sliced file, using an API key. Tested against a real OctoPrint server, but not with a physical printer attached. No camera.</td></tr>
    <tr><th scope="row">PrusaLink</th><td><span class="badge docs">Built from vendor docs</span></td>
-    <td>Status, progress and controls, using the PrusaLink password. No camera. A bundled Prusa slicing profile exists, also untested on a real printer.</td></tr>
+    <td>Status, progress and controls, and sending and starting a sliced file, using the PrusaLink password. No camera. Slicing profiles for the Prusa models, including the MMU3 (CORE One, MK4S, MK3.9, MK3.5) and the XL 5T for multi-colour, all untested on a real printer.</td></tr>
+   <tr><th scope="row">Creality (K1, K2, Hi; CFS) <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from open-source slicer code</span></td>
+    <td>Status and the CFS slots over the printer's own network, and sending a sliced file to it. Starting the print from Nozzle It All is not switched on yet: you start it on the printer's screen. No pause, resume or cancel, no camera. Tested against simulated printers only.</td></tr>
+   <tr><th scope="row">Flashforge (AD5X, 5M; IFS) <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from open-source slicer code</span></td>
+    <td>Status and the IFS slots through the printer's local API, and sending a sliced file to it, using its serial number and access code. Starting the print from Nozzle It All is not switched on yet: you start it on the printer's screen. No pause, resume or cancel, no camera. Tested against simulated printers only.</td></tr>
   </tbody>
  </table></div>
- <p>Have one of these printers? <a href="/testing/hardware/">Help us test it</a>. <a href="/printers/models/">See every printer model with a bundled slicing profile</a> (376 models from 60 makers). Slicing works for all of them; connecting to and controlling a printer is limited to the types in this table.</p>
+ <p>Have one of these printers? <a href="/testing/hardware/">Help us test it</a>. <a href="/printers/models/">See every printer model with a bundled slicing profile</a> (383 models from 60 makers). Slicing works for all of them; connecting to and controlling a printer is limited to the types in this table.</p>
 
  <h2>Which app does what</h2>
- <p>The Android app and Nozzle It All for Desktop connect to every printer type in this table themselves. Nozzle It All Web runs in your browser, which can only talk to Klipper-based printers (including the Snapmaker U1) directly, and only when the browser allows it; for everything else it goes through Nozzle It All for Desktop on your own computer, which you pair with the browser once. Nothing goes through a Nozzle server, and a printer's password, access code or API key stays in the app you added it to.</p>
+ <p>The Android app connects to every printer type in this table itself; Nozzle It All for Desktop connects to all of them except Creality and Flashforge. Nozzle It All Web runs in your browser, which can only talk to Klipper-based printers (including the Snapmaker U1) directly, and only when the browser allows it; for everything else it goes through Nozzle It All for Desktop on your own computer, which you pair with the browser once. Nothing goes through a Nozzle server, and a printer's password, access code or API key stays in the app you added it to.</p>
  <p>Only the Snapmaker U1 on stock firmware can use a maker's online account, and only if you switch that on. No other printer needs an account with its maker or with us.</p>
 
  <h2>Something not on the list?</h2>
  <p>If your printer runs Klipper with Moonraker, it will very likely work as "Klipper with Moonraker" even if the model is not named here. Tell us what you find at <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a>, or <a href="https://github.com/James-Jennison/nozzle-it-all/issues">open an issue</a>.</p>
- <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, Elegoo and OpenCentauri are names or trademarks of their owners. They are used here only to say what Nozzle It All works with, and do not imply endorsement or affiliation.</p>
+ <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Prusa, Bambu Lab, Snapmaker, Elegoo, OpenCentauri, Creality, Flashforge, Anycubic and Qidi are names or trademarks of their owners. They are used here only to say what Nozzle It All works with, and do not imply endorsement or affiliation.</p>
 </div>
 
 </main>

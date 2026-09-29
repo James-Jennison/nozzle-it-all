@@ -8,15 +8,17 @@ nav: printers
  <h1>Test on your own printer</h1>
  <p class="lead">This guide is for people helping us test the Android app on real printers. Most printer types here have never been tried on a real machine, so what you find is exactly what we need. Work through the tiers in order and stop whenever you like.</p>
 
+ <div class="callout"><p><strong>The quickest way to test, from the next update:</strong> the app's Test Mode runs these checks for you, step by step, and sends the results from inside the app. See <a href="/testing/">Test the Android app</a>. This guide remains for testing by hand.</p></div>
+
  <div class="callout"><p><strong>This guide is for app version 0.1.1 or newer.</strong> Open Settings, then About &amp; credits, and check the version. If you have 0.1.0, wait for the update from Google Play before you start (it installs automatically); the steps below use features that 0.1.0 does not have.</p></div>
 
- <div class="callout"><p><strong>Please read this first.</strong> The Bambu Lab, PrusaLink and Snapmaker U1 (stock firmware) support was built from the makers' published documentation and tested only against emulators. It may misbehave on a real printer. So: stay at the printer for anything that moves it, use the small test print below, know where your printer's own stop or power switch is, and do not test while a print you care about is running. You are always free to stop after any tier.</p></div>
+ <div class="callout"><p><strong>Please read this first.</strong> The Bambu Lab, OctoPrint, PrusaLink and Snapmaker U1 (stock firmware) support, and in the next update Elegoo on Elegoo firmware, Creality and Flashforge, was built from the makers' published documentation or open-source code and tested only against emulators or simulated printers. It may misbehave on a real printer. So: stay at the printer for anything that moves it, use the small test print below, know where your printer's own stop or power switch is, and do not test while a print you care about is running. You are always free to stop after any tier.</p></div>
 
  <h2>What you need</h2>
  <ul>
   <li>An Android phone with the app installed from the closed test. If you have not joined yet, see <a href="/testing/">Test the Android app</a>.</li>
   <li>Your printer, on the same network as the phone (or reachable over Tailscale).</li>
-  <li>The printer's details, kept to yourself: for <strong>Bambu Lab</strong>, LAN mode turned on plus the serial number and access code; for <strong>PrusaLink</strong>, the PrusaLink password; for <strong>Klipper</strong>, the printer's address (and API key if Moonraker asks for one).</li>
+  <li>The printer's details, kept to yourself: for <strong>Bambu Lab</strong>, LAN mode turned on plus the serial number and access code; for <strong>PrusaLink</strong>, the PrusaLink password; for <strong>OctoPrint</strong>, an API key; for <strong>Klipper</strong> (including a Centauri Carbon on COSMOS), the printer's address (and API key if Moonraker asks for one); for <strong>Elegoo</strong> on Elegoo firmware, the address (a Centauri Carbon 2 also needs its access code); for <strong>Flashforge</strong>, the serial number and access code; for <strong>Creality</strong>, the address.</li>
   <li>The <a href="/assets/test-cube-20mm.stl" download>20 mm test cube</a> (a plain cube, about 10 to 15 minutes to print). Save it on your phone.</li>
   <li>A little of your usual PLA.</li>
  </ul>
@@ -29,7 +31,7 @@ nav: printers
 
  <h2>Tier 1: connect and read status (nothing moves)</h2>
  <ol>
-  <li>In Settings, tap <strong>Add printer</strong>. Either use <strong>Scan network</strong>, or choose your printer type and type the address. Pick the type that matches your printer: Bambu Lab, Prusa Link, Generic Klipper, Snapmaker U1 (stock) or Snapmaker U1 (PAXX).</li>
+  <li>In Settings, tap <strong>Add printer</strong>. Either use <strong>Scan network</strong>, or choose your printer type and type the address. Pick the type that matches your printer: Bambu Lab, Prusa Link, OctoPrint, Generic Klipper (also for a Centauri Carbon on COSMOS), Snapmaker U1 (stock), Snapmaker U1 (PAXX), or in the next update Elegoo, Creality or Flashforge.</li>
   <li>The app should connect. On Home, check the printer state, the temperatures and (when a print runs) the progress agree with the printer's own screen.</li>
   <li>If your printer has a camera and the app offers one, check that the picture loads.</li>
   <li><strong>Reconnect:</strong> turn the phone's Wi-Fi off for about ten seconds, then on. The app should reconnect without you re-entering anything.</li>
@@ -48,7 +50,7 @@ nav: printers
  <p>Only continue if Tier 2 looked right.</p>
  <ol>
   <li><strong>3a, send the file.</strong> Tap <strong>Continue</strong> on the result, confirm <strong>Printer is ready</strong> (the bed is clear), and let the app send the file. Check the file now shows in the printer's own file list or screen. The print has <em>not</em> started. You can stop here.</li>
-  <li><strong>3b, start the print.</strong> When you are ready and standing by the printer, tap <strong>Start print</strong> and confirm. Watch the first layer all the way. It should heat, home, and print a cube.</li>
+  <li><strong>3b, start the print.</strong> When you are ready and standing by the printer, tap <strong>Start print</strong> and confirm. Watch the first layer all the way. It should heat, home, and print a cube. On Creality and Flashforge printers the app sends the file but doesn't start it yet: start it on the printer's screen. A multi-colour file is refused on Bambu printers for now.</li>
   <li>While it runs: <strong>Pause</strong>, wait for the printer to actually stop, then <strong>Resume</strong>, then <strong>Cancel</strong>. After each, check the printer did what the app said. After cancelling, the heaters should turn off and the printer return to idle.</li>
   <li>Did the cube come out right? Was it the right size (20 mm)?</li>
  </ol>

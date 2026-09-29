@@ -1,6 +1,7 @@
 package net.jamesjennison.klippercompanion.testgrid
 
 import android.content.Context
+import androidx.core.content.edit
 
 /**
  * Test Mode is for invited testers, so it is hidden until turned on: tapping the version line in About & credits
@@ -13,7 +14,7 @@ object TestModeAccess {
     private const val KEY = "test_mode_enabled"
 
     fun isEnabled(context: Context): Boolean = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
-    fun setEnabled(context: Context, on: Boolean) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply() }
+    fun setEnabled(context: Context, on: Boolean) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean(KEY, on) } }
 
     /** Counts taps; [tap] returns true on the tap that completes [needed] taps within [windowMs] of the first. Pure. */
     class TapCounter(private val needed: Int = TAPS, private val windowMs: Long = WINDOW_MS, private val clock: () -> Long = System::currentTimeMillis) {

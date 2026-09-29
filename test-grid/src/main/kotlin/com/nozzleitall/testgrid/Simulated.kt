@@ -23,6 +23,7 @@ class VirtualClock(@Volatile private var t: Long = System.currentTimeMillis()) {
  * (see FirmwareIdentity.kt); its address, hostname and key are deliberately realistic so redaction is exercised.
  *
  * [faults]: "lost_ack:<step kind>" performs the action but reports an unknown outcome (a reply lost after the printer
+ * "job_cleared": a finished print's live state is cleared (a restart) but the job history keeps it; "job_forgotten": both are gone.
  * acted); "lost_ack_noeffect:<step kind>" reports an unknown outcome without acting (the request never arrived);
  * "reject:<step kind>" refuses it; "guard_disabled" makes uploadPreflight accept anything (a broken guard).
  */
@@ -51,6 +52,7 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     private var bed = 23.0; private var bedTarget = 0.0
     private var progress = 0f
     private var loaded = ""
+    private val jobs = mutableMapOf<String, String>()
     private var uploads = 0
     private var homedAxes = ""
     private val position = doubleArrayOf(0.0, 0.0, 0.0)
@@ -59,7 +61,12 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     override fun identity() = LiveIdentity(FirmwareIdentity(preset.app, preset.version), hostname, preset.paxx, preset.afc)
 
     @Synchronized override fun status(): StatusReading {
-        if (state == "printing") { progress = (progress + 0.1f).coerceAtMost(1f); if (progress >= 1f) { state = "complete"; nozzleTarget = 0.0; bedTarget = 0.0 } }
+        if (state == "printing") { progress = (progress + 0.1f).coerceAtMost(1f); if (progress >= 1f) {
+            state = "complete"; nozzleTarget = 0.0; bedTarget = 0.0
+            if ("job_forgotten" !in faults) jobs[loaded] = "completed"
+            // The printer restarts while the app can't reach it: the live job state is cleared, only its history remains.
+            if ("job_cleared" in faults || "job_forgotten" in faults) { state = "standby"; loaded = "" }
+        } }
         nozzle = if (nozzleTarget > 0) nozzleTarget else 24.0
         bed = if (bedTarget > 0) bedTarget else 23.0
         return StatusReading(state, true, nozzle, nozzleTarget, bed, bedTarget, progress, loaded, clock(), homedAxes, position.toList())
@@ -98,6 +105,8 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         if ("lost_ack:delete_uploaded" in faults) return TransferOutcome.Unknown("Connection reset by $hostname while deleting")
         return TransferOutcome.Verified(remotePath, "")
     }
+
+    @Synchronized override fun jobResult(remotePath: String): String? = jobs[remotePath]
 
     @Synchronized override fun perform(action: ControlAction): CommandOutcome {
         val kind = when (action) {

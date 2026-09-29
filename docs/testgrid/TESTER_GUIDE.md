@@ -53,6 +53,9 @@ credentials; they stay on your phone.
 
 - The app closes or the phone restarts: open Test Mode, **Resume run**. A command that was in flight becomes "outcome
   unknown" for you to check. Nothing is repeated, and approvals are asked for again.
+- The connection drops or the printer restarts during a print: when Test Mode can read the printer again and it no
+  longer shows the print, Test Mode takes the result from the printer's own job history (completed, cancelled), or,
+  if the printer has no record, asks you whether the print finished. Your answer is recorded as yours.
 - The printer does something unexpected: stop it with its own controls or Nozzle's emergency stop, then **Interrupt
   this test** and describe it in the next observation or note.
 

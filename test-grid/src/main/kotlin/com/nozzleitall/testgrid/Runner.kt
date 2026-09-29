@@ -91,6 +91,7 @@ class RunSession private constructor(
         /** The names Nozzle uploads Test Grid files under, in the G-code root. Nothing else is ever a leftover. */
         val LEFTOVER = Regex("""^nozzle-testgrid-[a-z0-9._-]+\.gcode$""")
         const val LEFTOVER_LIMIT = 50
+        const val COMPLETE_QUESTION = "The printer no longer shows this print. Did it finish completely, with nothing cut short?"
 
         /** Starts a new run. [snapshot] comes from TargetCheck.inspect and must have no mismatches for [suite]. */
         fun start(suite: Suite, target: TestTarget, snapshot: TargetSnapshot, slicer: TestSlicer?, env: Environment, journal: RunJournal?,
@@ -393,6 +394,20 @@ class RunSession private constructor(
         val test = suite.test(rec.testId)!!
         val stepRec = rec.step(stepId)?.takeIf { it.status == StepStatus.AWAITING_OBSERVATION } ?: throw RunRefused("Step $stepId is not waiting for an observation.")
         val step = test.steps.first { it.id == stepId }
+        stepRec.data.strOrNull("askOperator")?.let { q ->
+            // An automatic step the printer could no longer answer: the operator's yes/no is the result, recorded as theirs.
+            val yes = value.trim().equals("yes", ignoreCase = true)
+            stepRec.status = if (yes) StepStatus.PASSED else StepStatus.FAILED
+            stepRec.detail = "Confirmed by the operator (the printer could not): \"$q\" ${if (yes) "Yes." else "No."}"
+            stepRec.data.put("operatorAnswer", if (yes) "yes" else "no").apply { if (note.isNotBlank()) put("note", note.trim().take(2000)) }
+            stepRec.finishedAt = now()
+            intervene("operator_confirmed", "${test.id}/$stepId: ${if (yes) "yes" else "no"} to \"$q\"", test.id, stepId)
+            log("Operator answered for ${test.id}/$stepId: ${if (yes) "yes" else "no"}")
+            rec.state = RunState.RUNNING
+            if (!yes) { skipRemaining(rec, "Not reached: step $stepId did not pass."); finishTest(test, rec) }
+            save()
+            return proceed()
+        }
         if (step.kind != StepKind.OBSERVE) throw RunRefused("Step $stepId needs an attachment, not an answer.")
         val (status, detail) = Observations.evaluate(step, value)
         stepRec.status = status; stepRec.detail = detail; stepRec.finishedAt = now(); stepRec.startedAt = stepRec.startedAt ?: stepRec.finishedAt
@@ -553,6 +568,7 @@ class RunSession private constructor(
 
     private fun operatorPending(test: TestCase, s: StepRecord): Pending {
         val step = test.steps.first { it.id == s.stepId }
+        s.data.strOrNull("askOperator")?.let { q -> return Pending.Observation(test, operatorQuestion(step, q)) }
         return if (step.kind == StepKind.ATTACH) Pending.Attachment(test, step, test.requiredEvidence.firstOrNull { it.id == step.params.optString("evidence") })
         else Pending.Observation(test, step)
     }
@@ -620,6 +636,10 @@ class RunSession private constructor(
         return with?.keys()?.asSequence()?.sorted()?.firstOrNull { hw?.optBoolean(it) == true }?.let { with.getString(it) } ?: p.optString("profile")
     }
 
+    /** An automatic step handed to the operator as a yes/no question (same id, so the answer lands on that step). */
+    private fun operatorQuestion(step: Step, question: String): Step = step.copy(kindId = StepKind.OBSERVE.id, kind = StepKind.OBSERVE,
+        params = JSONObject().put("question", question).put("response", "yes_no"), expect = JSONObject().put("equals", "yes"))
+
     private fun markDeleted(path: String) { (0 until uploads().length()).map { uploads().getJSONObject(it) }.filter { it.optString("remotePath") == path }.forEach { it.put("deleted", true) } }
 
     private fun uploadName(step: Step) = "nozzle-testgrid-${suite.id}-${step.params.optString("fromTest").ifBlank { "run" }}.gcode".replace(Regex("[^a-z0-9._-]"), "-")
@@ -648,7 +668,8 @@ class RunSession private constructor(
             if (kind.mutates) StepStatus.OUTCOME_UNKNOWN to "The request may have reached the printer: ${e.message ?: e.javaClass.simpleName}"
             else StepStatus.FAILED to (e.message ?: e.javaClass.simpleName)
         }
-        s.status = status; s.detail = detail; s.finishedAt = now()
+        s.status = status; s.detail = detail; s.finishedAt = if (status == StepStatus.AWAITING_OBSERVATION) null else now()
+        if (status == StepStatus.AWAITING_OBSERVATION) record.test(test.id)!!.state = RunState.AWAITING_OBSERVATION
         log("Step ${test.id}/${step.id} (${kind.id}): ${status.name}${if (detail.isNotBlank()) " - $detail" else ""}")
         if (status == StepStatus.OUTCOME_UNKNOWN) {
             val rec = record.test(test.id)!!
@@ -796,7 +817,7 @@ class RunSession private constructor(
                 val min = expect.optInt("min", 1)
                 if (slots.size >= min) StepStatus.PASSED to "${slots.size} material slot(s) reported." else StepStatus.FAILED to "${slots.size} slot(s) reported; expected at least $min."
             }
-            StepKind.MONITOR -> monitor(step, s)
+            StepKind.MONITOR -> monitor(test, step, s)
             StepKind.UPLOAD -> {
                 val slice = latestSlice(step) ?: return StepStatus.BLOCKED to "No sliced G-code from this run to upload."
                 val file = File(slice.getString("file"))
@@ -913,7 +934,7 @@ class RunSession private constructor(
         else -> "other"
     }
 
-    private fun monitor(step: Step, s: StepRecord): Pair<StepStatus, String> {
+    private fun monitor(test: TestCase, step: Step, s: StepRecord): Pair<StepStatus, String> {
         val p = step.params
         val until = p.optString("until")
         val timeout = (step.timeoutSeconds ?: 60) * 1000L
@@ -942,6 +963,22 @@ class RunSession private constructor(
                 if (until == "complete" && r.state in setOf("error", "cancelled")) {
                     s.data.put("samples", samples).put("lastState", r.state)
                     return StepStatus.FAILED to "The print ended as ${r.state}."
+                }
+                // The job is gone without the printer ever saying it completed (its state was cleared, for example by a
+                // restart while Nozzle couldn't reach it): the printer can no longer answer, so the operator does.
+                // Found on the owner's Centauri Carbon after a network outage: the step waited 4 h for "complete".
+                if (until == "complete" && r.state == "standby") {
+                    s.data.put("samples", samples).put("lastState", r.state)
+                    // The printer's own job history still knows how the print ended.
+                    val file = (0 until uploads().length()).map { uploads().getJSONObject(it) }.lastOrNull { it.optString("test") == test.id }?.optString("remotePath")
+                    val recorded = file?.let { runCatching { printer().jobResult(it) }.getOrNull() }
+                    if (recorded != null) s.data.put("jobHistory", recorded)
+                    when (recorded) {
+                        "completed" -> return StepStatus.PASSED to "The printer no longer shows the print live (state standby), and its job history records $file as completed."
+                        "cancelled", "error", "klippy_shutdown", "klippy_disconnect", "interrupted" -> return StepStatus.FAILED to "The printer's job history records $file as $recorded."
+                    }
+                    s.data.put("askOperator", COMPLETE_QUESTION)
+                    return StepStatus.AWAITING_OBSERVATION to "The printer no longer reports this print (state standby${if (r.filename.isBlank()) ", no file loaded" else ""}), so it can't confirm it completed. Asking the operator."
                 }
                 if (met) {
                     s.data.put("samples", samples).put("lastState", r.state).put("progress", r.progress).put("durationMillis", now() - start)

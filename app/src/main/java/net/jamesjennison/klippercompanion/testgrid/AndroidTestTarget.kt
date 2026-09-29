@@ -143,6 +143,10 @@ class AndroidTestTarget(
         }
     }
 
+    override fun jobResult(remotePath: String): String? = if (!moonraker) null else runCatching {
+        moonraker { m -> m.history(0).jobs.firstOrNull { it.filename == remotePath || it.filename.endsWith("/$remotePath") }?.status }
+    }.getOrNull()
+
     override fun perform(action: ControlAction): CommandOutcome = moonraker { m ->
         val command = try {
             when (action) {

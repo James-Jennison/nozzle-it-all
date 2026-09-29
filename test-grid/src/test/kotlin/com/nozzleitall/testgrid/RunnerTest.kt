@@ -562,4 +562,41 @@ class RunnerTest {
         assertEquals("elegoo_centauri_carbon_cosmos_afc" to ResultState.PASS, profileUsed(SimulatedPrinter.Preset.COSMOS_CC_CANVAS))
         assertEquals("elegoo_centauri_carbon_cosmos" to ResultState.PASS, profileUsed(SimulatedPrinter.Preset.COSMOS_CC))
     }
+
+    @Test fun aPrintWhoseLiveStateWasClearedIsConfirmedFromTheJobHistory() {
+        // Found on the owner's Centauri Carbon: after a network outage the printer showed standby with no file, and the
+        // "complete" wait ran for its full four hours. The printer's job history still says how the print ended.
+        val clock = Support.Clock()
+        val st = Support.start("paxx-u1", SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now, mutableSetOf("job_cleared")), clock)
+        Support.drive(st.session)
+        val step = st.session.record.test("print-single")!!.step("complete")!!
+        assertEquals(StepStatus.PASSED, step.status)
+        assertTrue(step.detail, step.detail.contains("job history records") && step.detail.contains("completed"))
+        assertEquals(ResultState.PASS, st.session.record.test("print-single")!!.result)
+    }
+
+    @Test fun withNoJobHistoryTheOperatorIsAskedInsteadOfWaiting() {
+        val clock = Support.Clock()
+        val st = Support.start("paxx-u1", SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now, mutableSetOf("job_forgotten")), clock)
+        val asked = mutableListOf<String>()
+        var p = st.session.proceed()
+        while (p !is Pending.Finished) p = when (p) {
+            is Pending.Preconditions -> st.session.answerPreconditions(p.test.preconditions.associate { it.id to true })
+            is Pending.Confirmation -> st.session.approve(p.step.id)
+            is Pending.Attachment -> st.session.attach(p.step.id, ScriptedOperator.placeholderPng(), "image/png")
+            is Pending.Observation -> {
+                if (p.step.id == "complete") { asked += p.test.id; assertEquals("yes_no", p.step.params.getString("response")); assertEquals(RunSession.COMPLETE_QUESTION, p.step.params.getString("question")) }
+                // The single print finished; the two-tool print did not.
+                st.session.observe(p.step.id, if (p.step.id == "complete" && p.test.id == "multi-print") "no" else ScriptedOperator.defaultAnswer(p.step))
+            }
+            else -> fail("unexpected $p").let { p }
+        }
+        assertEquals(listOf("print-single", "multi-print"), asked)
+        val single = st.session.record.test("print-single")!!
+        assertEquals(ResultState.PASS, single.result)
+        assertTrue(single.step("complete")!!.detail.startsWith("Confirmed by the operator"))
+        assertEquals("yes", single.step("complete")!!.data.getString("operatorAnswer"))
+        assertEquals(ResultState.FAIL, st.session.record.test("multi-print")!!.result)
+        assertTrue(st.session.record.interventions.count { it.kind == "operator_confirmed" } == 2)
+    }
 }

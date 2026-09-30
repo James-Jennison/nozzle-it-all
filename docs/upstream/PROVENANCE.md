@@ -1115,3 +1115,68 @@ interchange).
 - **Touches:** printer transports (Android, original USB-serial driver), shared UI (printer type chips, add-printer
   wizard, Edit printer, Control tab, slicer/project-editor upload refusal), manifest (optional USB host feature, device
   filter), Test Mode labels, Test Grid classification and gated-kind tests.
+
+## P-0039 — Android colour mixing (Snapmaker Full Spectrum / PrusaSlicer ColorMix), at parity with Desktop
+
+- **Upstream:** PRIMARY, an in-repo port: this app's own Desktop implementation (`desktop/.../FullSpectrum.kt`,
+  `PrusaColorMix.kt`, `ColourMixingUi.kt`, `PrusaColorMixUi.kt`), which already drives the engine's Full Spectrum
+  (`--full-spectrum`) and ColorMix (`--color-mix`, `virtual_extruders`) CLI modes. Nothing outside this repository
+  was read or copied; this is Desktop's own logic reused, not a new implementation of either vendor feature.
+- **Imported:** the pure-Kotlin request/response formats moved out of Desktop-only code into the shared, pure-JVM
+  `:printer-api` module so both transports use one implementation (requirement 1): `FullSpectrumFormat` and
+  `PrusaColorMixFormat` in `printer-api/src/main/kotlin/com/nozzleitall/printer/ext/ColourMixFormats.kt` (base
+  request/error JSON, `Mixes`/`Mix` row parsing, `Virtual`/`Component`, the sidecar and `virtual_extruders` slice-
+  request JSON shapes) plus the existing `ProfileFeatures`/`Snapmaker`/`Prusa` gating objects in `ColourMixing.kt`.
+  Desktop's `FullSpectrum.kt`/`PrusaColorMix.kt` now delegate to these shared types instead of holding their own
+  copies; Desktop's own `FullSpectrumTest.kt`/`PrusaColorMixTest.kt` were left in place and still pass unchanged.
+- **Change (Android-only additions):**
+  - `app/.../ToolSlots.kt`: `colourMixFeaturesFor(kind: PrinterKind, toolCount: Int): Set<String>`, a small bridge
+    from Android's `PrinterKind` onto the `PrinterFamily` ids `ProfileFeatures.of` gates on (Android has no
+    `PrinterFamily`/`familyHint` of its own the way Desktop's `PrepareState` does) - `SNAPMAKER_U1_PAXX`/
+    `SNAPMAKER_U1` map to `PrinterFamily.PAXX_U1`/`STOCK_U1` (Full Spectrum), every other kind falls through to
+    ColorMix's "any other multi-slot printer" branch, and any target with fewer than two tool slots gets neither.
+  - `app/.../AndroidColourMixing.kt`: `AndroidFullSpectrum` (`display`/`add`/`remove`) and `AndroidColorMix`
+    (`normalize`/`nextId`), the JNI-backed transport objects Android's UI calls instead of Desktop's CLI process,
+    both throwing `ColourMixEngineError` on an engine-reported failure.
+  - `app/.../ProjectEditorScreen.kt` (Prepare's materials tab, the `toolCount > 1` branch): a "Colour mixing"
+    section shown only when `colourMixFeaturesFor(...)` is non-empty (requirement 2), titled "Colour mixing - Full
+    Spectrum" or "Colour mixing - ColorMix" depending which system the target offers - never both. Each lists its
+    current mixes/blends with a Remove action and one "+ Add 50/50 mix (Tool 1 + Tool 2)" /
+    "+ Add 50/50 blend (Tool 1 + Tool 2)" button (a deliberately trimmed single-action entry point compared to
+    Desktop's full match/preset/gradient editor, sized for a phone - the plumbing behind it is the real thing, not
+    a stub). A ColorMix blend, once added, can be assigned to an object from the same per-object tool-assignment
+    dialog used for physical tools, as an extra "Blend <summary>" chip. `sliceOnePlate` passes
+    `mixedFilamentDefinitions` (Full Spectrum's config override, applied only when non-blank) and `virtualExtruders`
+    (ColorMix's blends, serialised via `PrusaColorMixFormat.sliceRequestJson`, only when non-empty) into
+    `SlicingCoordinator.sliceProject`, which already (from this feature's engine-wiring pass) folds
+    `mixedFilamentDefinitions` into the sliced config overrides and switches to `NativeEngine.nativeSliceMultiObjectMix`
+    instead of `nativeSliceMultiObjectEx` whenever `virtualExtruders` is non-blank; every printer with no mixing
+    configured slices exactly as it did before this feature.
+  - `app/.../testgrid/AndroidTestSlicer.kt`: `sliceColourMix(...)` (requirement 3), calling
+    `SlicingCoordinator.sliceProject` with the same `mixedFilamentDefinitions`/`virtualExtruders` parameters the UI
+    uses - the same code path, not a parallel test-only pipeline. `TestSlicer.slice(SliceRequest)` itself is left
+    untouched, since `SliceRequest` (shared with Desktop's own Test Grid suites) carries no notion of mixing.
+- **Engine dependency:** the four native entry points this relies on - `nativeFullSpectrum`, `nativeColorMix`,
+  `nativeSliceMultiObjectMix`, `nativeSlicePaintSessionMix` in `NativeEngine.kt` - match nozzle-engine PR #9, which
+  is not yet re-pinned into this branch. Until that pin lands, calling any of them is expected to fail (an
+  `UnsatisfiedLinkError`, or the engine's own "This engine doesn't support ... yet." error).
+- **Test evidence:** `ColourMixFormatsTest` (`:printer-api`, JVM) covers the shared formats' error/base-request
+  parsing, `Mixes`/row parsing including the gradient-fields-absent fallback, the `Virtual` file-round-trip
+  behaviour (a `toJson()`→`parse()` round trip reads the written colour back as `effectiveHex`, not
+  `colorOverride`, since `parse()` only trusts `colorOverride` from a live engine response carrying
+  `effective_color`), the sidecar round trip and the `virtual_extruders` slice-request JSON shape. `ToolSlotsTest`
+  (`:app`, JVM) covers `colourMixFeaturesFor`'s gating: Snapmaker U1 (stock and PAXX) with 2+ tools gets Full
+  Spectrum, any other kind with 2+ tools gets ColorMix, and a single-tool target gets neither, regardless of kind.
+  `ColourMixingSlicingDeviceTest` (`:app`, instrumented, package `net.jamesjennison.klippercompanion`) slices the
+  bundled Snapmaker U1 pack (4 physical tool slots) through `AndroidTestSlicer.sliceColourMix`: a ColorMix 50/50
+  blend of tools 1 and 2 assigned to a cube, asserting non-empty g-code, at least 10 layers, and a tool change on
+  at least 80% of layers; and a Full Spectrum slice with a real `mixed_filament_definitions` string, asserting the
+  sliced config block echoes both `FullSpectrumFormat.DEFINITIONS_KEY` and the definitions value. Neither talks to
+  a real printer (a local file slice against a bundled asset profile, like every other `*SlicingDeviceTest`); both
+  are expected to only pass once nozzle-engine PR #9 is re-pinned (see Engine dependency above).
+- **Known divergence:** Android's colour-mixing UI is intentionally narrower than Desktop's - one "add a 50/50
+  mix/blend" action per system plus Remove, not Desktop's full match/preset/gradient/manual-pattern editor; every
+  value the UI writes (indices, fractions) is real and reaches the slice, so this is a scope reduction for a phone
+  screen, not a placeholder.
+- **Touches:** shared printer-mixing formats (`:printer-api`, `:desktop`), Android Prepare/project editor UI,
+  Android's Test Grid slicer hook, unit and instrumented test suites.

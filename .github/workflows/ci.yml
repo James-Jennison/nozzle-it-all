@@ -77,7 +77,7 @@ jobs:
         run: python3 scripts/build_site.py --check
 
       - name: Unit tests + lint
-        run: ./gradlew testDebugUnitTest lintDebug :domain:check :transport:check :test-grid:check --no-daemon
+        run: ./gradlew testDebugUnitTest lintDebug :domain:check :transport:check :test-grid:check :desktop:test --no-daemon
 
       - name: Assemble debug (native build, arm64-v8a)
         # -PdeviceFarmTests leaves out the LAN/printer-only tests: Device Farm rejects (at re-signing) a test package with too much code.

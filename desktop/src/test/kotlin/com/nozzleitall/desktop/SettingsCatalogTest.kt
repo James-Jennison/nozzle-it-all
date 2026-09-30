@@ -110,11 +110,19 @@ class SettingsReachTheEngineTest {
 
 /** Printers the desktop engine can't slice yet can't be chosen (engine/profiles/unsupported-profiles.json). */
 class UnsupportedProfilesTest {
+    private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
+
     @org.junit.Test fun newestBambuMachinesAreHiddenAndEverythingElseIsListed() {
         val hidden = setOf("bambu_h2c", "bambu_h2d", "bambu_h2d_pro", "bambu_h2s", "bambu_p2s", "bambu_x2d")
         assertEquals(hidden, ProfileCatalog.unsupported.keys)
         assertTrue(ProfileCatalog.all.none { it.id in hidden })
         assertNotNull(ProfileCatalog.byId("bambu_x1_carbon"))
-        assertEquals(373, ProfileCatalog.all.size) // 376 bundled + COSMOS AFC + Elegoo CC and CC2 (CANVAS), minus the 6 hidden
+        // Every other profile Android bundles is listed. Checked against the bundled index itself, not a count, so adding a
+        // profile (e.g. the Prusa MMU3 packs, P-0031) doesn't break this test.
+        val index = JSONObject(File(root, "app/src/main/assets/slicer_profiles/index.json").readText()).getJSONArray("profiles")
+        val bundled = (0 until index.length()).map { index.getJSONObject(it).getString("id") }
+        assertEquals("no duplicate ids in the index", bundled.size, bundled.toSet().size)
+        assertTrue("every hidden profile is bundled", bundled.containsAll(hidden))
+        assertEquals(bundled.toSet() - hidden, ProfileCatalog.all.map { it.id }.toSet())
     }
 }

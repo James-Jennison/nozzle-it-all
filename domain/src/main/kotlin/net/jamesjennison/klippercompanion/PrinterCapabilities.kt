@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_SSTP, SNAPMAKER_SACP }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_SSTP, SNAPMAKER_SACP, USB_SERIAL }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -190,6 +190,16 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
     )
+    // A printer plugged in directly over USB, spoken to as a Marlin/Prusa serial port (UsbSerialPrinterService): live
+    // temperatures (M105 poll or M155 auto-report) and SD job progress (M27), read-only. Starting a print, uploading a
+    // file (M28/M29) and every other control are refused until UsbSerialPrinter.START_VERIFIED / UPLOAD_VERIFIED - see
+    // UsbSerialPrinter.kt. No camera, no on-device slicing add-ons. Built entirely from public protocol references
+    // (docs/upstream/PROVENANCE.md P-0038); not yet run against a printer.
+    PrinterKind.USB_SERIAL -> PrinterCapabilities(
+        transport = PrinterTransport.USB_SERIAL, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
 }
 
 /**
@@ -208,6 +218,7 @@ fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
     PrinterKind.ANYCUBIC_LAN -> AnycubicLan.START_VERIFIED
     PrinterKind.SNAPMAKER_A_SERIES -> SnapmakerSstp.START_VERIFIED
     PrinterKind.SNAPMAKER_SACP -> SnapmakerSacp.START_VERIFIED
+    PrinterKind.USB_SERIAL -> UsbSerialPrinter.START_VERIFIED
     else -> true
 }
 

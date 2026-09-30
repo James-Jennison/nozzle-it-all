@@ -89,6 +89,7 @@ class AndroidTestTarget(
             PrinterTransport.ANYCUBIC_LAN -> "android-anycubic-lan" to "anycubic-mqtt"
             PrinterTransport.SNAPMAKER_SSTP -> "android-snapmaker-sstp" to "snapmaker-sstp-http"
             PrinterTransport.SNAPMAKER_SACP -> "android-snapmaker-sacp" to "snapmaker-sacp-tcp"
+            PrinterTransport.USB_SERIAL -> "android-usb-serial" to "usb-serial"
         }
     }
 

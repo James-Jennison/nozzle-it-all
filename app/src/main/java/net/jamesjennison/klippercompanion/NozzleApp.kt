@@ -5,7 +5,7 @@ import android.content.Context
 
 /** Installs the persistent Bambu certificate pin store for every entry point (activity, monitor service, widget). */
 class NozzleApp : Application() {
-    override fun onCreate() { super.onCreate(); installBambuPins(this) }
+    override fun onCreate() { super.onCreate(); installBambuPins(this); UsbSerialDeviceManager.install(this) }
 }
 
 private class PrefsBambuPinStore(context: Context) : BambuPinStore {

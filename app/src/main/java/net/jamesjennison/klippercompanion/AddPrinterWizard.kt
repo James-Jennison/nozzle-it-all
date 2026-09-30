@@ -140,6 +140,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.ANYCUBIC_LAN, {kind=PrinterKind.ANYCUBIC_LAN}, label={Text("Anycubic (Kobra 3 / S1 / X)")}, modifier=Modifier.testTag("wizard-kind-anycubic-lan"))
                         FilterChip(kind==PrinterKind.SNAPMAKER_A_SERIES, {kind=PrinterKind.SNAPMAKER_A_SERIES}, label={Text("Snapmaker 2.0 (A250 / A350)")}, modifier=Modifier.testTag("wizard-kind-snapmaker-a-series"))
                         FilterChip(kind==PrinterKind.SNAPMAKER_SACP, {kind=PrinterKind.SNAPMAKER_SACP}, label={Text("Snapmaker J1 / Artisan")}, modifier=Modifier.testTag("wizard-kind-snapmaker-sacp"))
+                        FilterChip(kind==PrinterKind.USB_SERIAL, {kind=PrinterKind.USB_SERIAL; if(apiKey.isBlank()) apiKey = UsbSerial.OFFERED_BAUD_RATES.first().toString()}, label={Text("USB cable")}, modifier=Modifier.testTag("wizard-kind-usb-serial"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -196,6 +197,9 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         SnapmakerConnect(kind, address, serial, apiKey) { s, k -> serial = s; apiKey = k }
                         Text(if(kind==PrinterKind.SNAPMAKER_SACP) "A Snapmaker J1 or Artisan on your network. Tap Connect and accept Nozzle It All on the printer's screen. Nozzle It All reads its temperatures and job progress and uploads sliced files; you start the print on the printer's screen (starting from here isn't verified on a real printer yet). Laser and CNC work isn't offered."
                             else "A Snapmaker 2.0 (A150, A250 or A350, single or dual extruder) with a 3D printing module, on your network. Tap Connect and accept Nozzle It All on the touchscreen. Nozzle It All reads its state and job progress and uploads sliced files; you start the print on the printer's screen (starting from here isn't verified on a real printer yet). Laser and CNC work isn't offered.", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.USB_SERIAL) {
+                        UsbSerialDevicePicker(address, serial, apiKey) { addr, ser, baud -> address = addr; serial = ser; apiKey = baud }
+                        Text("A printer plugged into this device by USB cable, spoken to as a Marlin/Prusa serial port. Nozzle It All reads its temperatures and SD job progress; nothing is sent that could move, heat or reset it, and starting a print or uploading a file from here isn't verified on a real printer yet - copy the sliced file to the printer's SD card or USB stick and start it from the printer's own screen. Plugging in never restarts the printer on its own; a separate, explicit action offers to if it doesn't answer.", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),
@@ -264,4 +268,45 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
             }
         }) { Text(if(step==WizardStep.TYPE_AND_ADDRESS) "Cancel" else "Back") }
     })
+}
+
+/**
+ * PrinterKind.USB_SERIAL's device picker: lists attached devices [UsbSerial] recognizes, asks for permission when a
+ * device without it is tapped, then reports the canonical "usb:<vendorId>:<productId>:<serialNumber>" address
+ * (once permission makes the serial number readable), that device's own serial number (for [PrinterProfile.serial],
+ * display only) and the chosen baud rate (for [PrinterProfile.apiKey]) back to the caller.
+ */
+@Composable internal fun UsbSerialDevicePicker(address: String, serial: String, baud: String, onPick: (address: String, serial: String, baud: String) -> Unit) {
+    val devices = remember { mutableStateListOf<UsbSerialDeviceManager.AttachedDevice>() }
+    var refreshNote by remember { mutableStateOf("") }
+    fun refresh() {
+        devices.clear(); devices.addAll(UsbSerialDeviceManager.attachedDevices())
+        refreshNote = if(devices.isEmpty()) "No recognized USB-serial printer is plugged in. Plug one in with a USB cable, then tap Refresh." else ""
+    }
+    LaunchedEffect(Unit) { refresh() }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton({ refresh() }, modifier = Modifier.testTag("wizard-usb-refresh")) { Text("Refresh") }
+        if(refreshNote.isNotBlank()) Text(refreshNote, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("wizard-usb-note"))
+        devices.forEach { attached ->
+            val identity = UsbSerialDeviceManager.identity(attached.device)
+            val selected = address.isNotBlank() && UsbSerialDeviceManager.parseIdentity(address)?.let { it.first == attached.device.vendorId && it.second == attached.device.productId } == true
+            OutlinedButton({
+                UsbSerialDeviceManager.requestPermission(attached.device) { granted ->
+                    if(granted) onPick(UsbSerialDeviceManager.identity(attached.device), attached.device.serialNumber.orEmpty(), baud.ifBlank { UsbSerial.OFFERED_BAUD_RATES.first().toString() })
+                }
+            }, modifier = Modifier.fillMaxWidth().testTag("wizard-usb-device-${attached.device.vendorId}-${attached.device.productId}")) {
+                Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+                    Text("${attached.chipLabel} (${"%04x".format(attached.device.vendorId)}:${"%04x".format(attached.device.productId)})", maxLines = 1)
+                    Text(if(selected) "Selected" else identity, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                }
+            }
+        }
+        Text("Baud rate", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UsbSerial.OFFERED_BAUD_RATES.forEach { rate ->
+                FilterChip(baud == rate.toString(), { onPick(address, serial, rate.toString()) }, label = { Text(rate.toString()) }, modifier = Modifier.testTag("wizard-usb-baud-$rate"))
+            }
+        }
+        Text("Most 8-bit boards (Ender-class/Creality, many CH340/CP210x/FTDI adapters) use 115200. Prusa's native USB boards (MK4, MK3.5, CORE One) and some tuned Marlin builds use 250000 - not sure which applies, try 115200 first.", style = MaterialTheme.typography.bodySmall)
+    }
 }

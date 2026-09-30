@@ -7,13 +7,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 /**
- * Duet, UltiMaker, Repetier-Server, both Flashforge protocols (docs/upstream/PROVENANCE.md P-0035), Anycubic LAN (P-0036) and
- * the two Snapmaker connections (P-0037): while their start is
+ * Duet, UltiMaker, Repetier-Server, both Flashforge protocols (docs/upstream/PROVENANCE.md P-0035), Anycubic LAN (P-0036),
+ * the two Snapmaker connections (P-0037) and the USB-serial connection (P-0038): while their start is
  * gated off in the app, the Test Grid never claims send-and-print or any control for them, and each gets its own family.
  */
 class GatedKindsTest {
     private val gated = listOf(PrinterKind.DUET, PrinterKind.ULTIMAKER, PrinterKind.REPETIER, PrinterKind.FLASHFORGE, PrinterKind.ANYCUBIC_LAN,
-        PrinterKind.SNAPMAKER_A_SERIES, PrinterKind.SNAPMAKER_SACP)
+        PrinterKind.SNAPMAKER_A_SERIES, PrinterKind.SNAPMAKER_SACP, PrinterKind.USB_SERIAL)
 
     @Test fun gatedKindsDeclareNoStartOrControl() {
         for (kind in gated) {
@@ -38,6 +38,15 @@ class GatedKindsTest {
         assertEquals(FirmwareFamilies.SNAPMAKER_SSTP, FirmwareFamilies.classify(describe(PrinterKind.SNAPMAKER_A_SERIES, "snapmaker-sstp-http"), null).family)
         assertEquals(FirmwareFamilies.SNAPMAKER_SACP, FirmwareFamilies.classify(describe(PrinterKind.SNAPMAKER_SACP, "snapmaker-sacp-tcp"), null).family)
         assertEquals(PrinterKind.SNAPMAKER_SACP, FirmwareFamilies.classify(describe(PrinterKind.SNAPMAKER_SACP, "snapmaker-sacp-tcp"), null).kind)
+        assertEquals(FirmwareFamilies.USB_SERIAL, FirmwareFamilies.classify(describe(PrinterKind.USB_SERIAL, "usb-serial"), null).family)
+        assertEquals(PrinterKind.USB_SERIAL, FirmwareFamilies.classify(describe(PrinterKind.USB_SERIAL, "usb-serial"), null).kind)
+    }
+
+    /** P-0038: a USB-serial connection reads live temperatures and SD progress, so it claims status, but no start or control while
+     *  UsbSerialPrinter.START_VERIFIED is false, and no upload-and-start since Test Grid never sends a file over USB either. */
+    @Test fun usbSerialDeclaresStatusOnlyWhileUnverified() {
+        assertEquals(setOf(CapabilityNames.STATUS), CapabilityNames.declared(PrinterKind.USB_SERIAL))
+        assertFalse(startVerifiedFor(PrinterKind.USB_SERIAL))
     }
 
     /**

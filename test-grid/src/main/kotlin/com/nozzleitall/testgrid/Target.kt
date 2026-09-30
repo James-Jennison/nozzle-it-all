@@ -189,6 +189,7 @@ object FirmwareFamilies {
     const val ANYCUBIC_LAN = "anycubic-lan"
     const val SNAPMAKER_SSTP = "snapmaker-sstp"
     const val SNAPMAKER_SACP = "snapmaker-sacp"
+    const val USB_SERIAL = "usb-serial"
 
     /** TargetDescription.protocol of a Flashforge on the legacy console (AndroidTestTarget.adapterFor). */
     const val LEGACY_FLASHFORGE_PROTOCOL = "flashforge-tcp"
@@ -241,6 +242,9 @@ object FirmwareFamilies {
         // Snapmaker 2.0 A-series on the touchscreen's HTTP API, and the J1 / Artisan over SACP (P-0037): separate protocols, separate families.
         PrinterTransport.SNAPMAKER_SSTP -> Classified(SNAPMAKER_SSTP, PrinterKind.SNAPMAKER_A_SERIES, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Snapmaker 2.0 touchscreen HTTP API (/api/v1)")
         PrinterTransport.SNAPMAKER_SACP -> Classified(SNAPMAKER_SACP, PrinterKind.SNAPMAKER_SACP, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Snapmaker SACP over TCP (port 8888)")
+        // A printer plugged in by USB cable, spoken to as a Marlin/Prusa serial port (UsbSerial/MarlinSerial, P-0038). Never
+        // verified on real hardware yet - see UsbSerialPrinter.START_VERIFIED/UPLOAD_VERIFIED.
+        PrinterTransport.USB_SERIAL -> Classified(USB_SERIAL, PrinterKind.USB_SERIAL, description.slicingModel, emptyMap(), "USB-connected Marlin/Prusa-protocol serial printer")
     }
 }
 

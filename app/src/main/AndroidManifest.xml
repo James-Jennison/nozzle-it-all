@@ -9,8 +9,16 @@
  <!-- Optional: the in-app 3D model preview (ModelViewer.kt) uses GLES 3.0, guaranteed present
       at minSdk 28 in practice - required="false" so this never gates installability. -->
  <uses-feature android:glEsVersion="0x00030000" android:required="false" />
+ <!-- PrinterKind.USB_SERIAL (UsbSerial.kt/UsbSerialPrinterService): optional - Nozzle It All still works over the
+      network on a device with no USB host controller (most phones have one; some tablets/Chromebooks may not). -->
+ <uses-feature android:name="android.hardware.usb.host" android:required="false" />
  <application android:name=".NozzleApp" android:icon="@drawable/ic_launcher" android:dataExtractionRules="@xml/data_extraction_rules" android:label="${appLabel}" android:theme="@style/Theme.NozzleItAll" android:allowBackup="false" android:usesCleartextTraffic="true" android:supportsRtl="true">
-  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter><intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="application/octet-stream"/><data android:mimeType="application/x-gcode"/><data android:mimeType="text/plain"/></intent-filter><intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="nozzleitall" android:host="mmf-auth"/></intent-filter></activity>
+  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter><intent-filter><action android:name="android.intent.action.SEND"/><category android:name="android.intent.category.DEFAULT"/><data android:mimeType="application/octet-stream"/><data android:mimeType="application/x-gcode"/><data android:mimeType="text/plain"/></intent-filter><intent-filter><action android:name="android.intent.action.VIEW"/><category android:name="android.intent.category.DEFAULT"/><category android:name="android.intent.category.BROWSABLE"/><data android:scheme="nozzleitall" android:host="mmf-auth"/></intent-filter>
+   <!-- Lets Android offer to launch straight into Nozzle It All when a recognized USB-serial adapter is plugged in;
+        purely a convenience - the wizard's own device picker (AddPrinterWizard.kt) works without this too. -->
+   <intent-filter><action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/></intent-filter>
+   <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" android:resource="@xml/usb_device_filter"/>
+  </activity>
   <service android:name=".SliceService" android:exported="false" android:foregroundServiceType="specialUse">
    <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
     android:value="Keeps an on-device slice the owner just started running, and shows its progress, while the app is backgrounded. Runs only for the duration of that slice." />

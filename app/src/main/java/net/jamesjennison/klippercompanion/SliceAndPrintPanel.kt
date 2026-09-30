@@ -192,6 +192,11 @@ import java.io.File
         profile.kind == PrinterKind.CREALITY || profile.kind == PrinterKind.FLASHFORGE || profile.kind == PrinterKind.DUET ||
         profile.kind == PrinterKind.ULTIMAKER || profile.kind == PrinterKind.REPETIER || profile.kind == PrinterKind.ANYCUBIC_LAN ||
         profile.kind == PrinterKind.SNAPMAKER_A_SERIES || profile.kind == PrinterKind.SNAPMAKER_SACP // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier/Anycubic/Snapmaker: upload, start gated; UltiMaker: nothing sent while gated)
+    // A USB-connected printer's address is the synthetic "usb:<vendorId>:<productId>:<serial>" identity, not an HTTP
+    // host - LiveFileChanges below would fail confusingly trying to parse it as one. UsbSerialPrinterService.command()
+    // refuses a PrusaLinkPrintRequest outright (UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER): Nozzle It All can't write a
+    // file to the printer's SD/USB storage over this link, so there is no upload step to run at all - just the refusal.
+    val usbSerialTarget = profile.kind == PrinterKind.USB_SERIAL
     // Toolpath + stats parsing, both off the main thread the same way slicing itself is
     // dispatched. A parse failure doesn't block printing - the review is a visualization aid,
     // not a correctness gate; the actual G-code was already produced successfully.
@@ -215,6 +220,7 @@ import java.io.File
     LaunchedEffect(sliced, reviewedLayers, state.connected) {
         val gcode = sliced ?: return@LaunchedEffect
         if(!reviewedLayers) return@LaunchedEffect
+        if(usbSerialTarget) { working = false; error = UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER; return@LaunchedEffect }
         if(bambuTarget || prusaTarget) { stagedFilename = gcode.name; return@LaunchedEffect }
         if(!state.connected) { working = false; error = "Connect to ${state.address} to upload the sliced file."; return@LaunchedEffect }
         working = true; stage = "Uploading…"

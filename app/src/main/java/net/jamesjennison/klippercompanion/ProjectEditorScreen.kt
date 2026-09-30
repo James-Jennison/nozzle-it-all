@@ -469,6 +469,10 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE || profile?.kind == PrinterKind.DUET ||
         profile?.kind == PrinterKind.ULTIMAKER || profile?.kind == PrinterKind.REPETIER || profile?.kind == PrinterKind.ANYCUBIC_LAN ||
         profile?.kind == PrinterKind.SNAPMAKER_A_SERIES || profile?.kind == PrinterKind.SNAPMAKER_SACP // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier/Anycubic/Snapmaker: upload, start gated; UltiMaker: nothing sent while gated)
+    // Mirrors SliceAndPrintPanel.kt's own usbSerialTarget: a USB-connected printer's address is the synthetic
+    // "usb:<vendorId>:<productId>:<serial>" identity, not an HTTP host, and UsbSerialPrinterService.command() refuses a
+    // PrusaLinkPrintRequest outright (UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER) - there is no upload step to run here.
+    val usbSerialTarget = profile?.kind == PrinterKind.USB_SERIAL
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).
@@ -491,6 +495,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         val gcode = sliced ?: return@LaunchedEffect
         if (stage != ProjectEditorStage.STAGED) return@LaunchedEffect
         val target = profile ?: return@LaunchedEffect
+        if (usbSerialTarget) { working = false; sliceError = UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER; return@LaunchedEffect }
         if (bambuTarget || prusaTarget) { stagedFilename = gcode.name; return@LaunchedEffect }
         if (!state.connected) { working = false; sliceError = "Connect to ${target.address} to upload the sliced file."; return@LaunchedEffect }
         working = true; sliceStageLabel = "Uploading…"

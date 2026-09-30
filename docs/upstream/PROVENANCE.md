@@ -903,3 +903,63 @@ interchange).
   Repetier server with several printers needs its slug entered. No discovery for any of the four.
 - **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard, UltiMaker pairing),
   Test Grid classification.
+
+## P-0036 — Anycubic LAN mode connection (Kobra 3 / S1 / X, ACE / ACE Pro; ported, not copied)
+
+- **Upstream:** PRIMARY, ported from: anycubic-orca-plugin `458eee7` (local checkout, AGPL-3.0), an OrcaSlicer
+  printer-connection plugin: `anycubic_orca_plugin/anycubic_lan.py`, `tests/test_plugin.py`, `docs/orcaslicer-plugin.md`,
+  `AGENTS.md`. CROSS-CHECK: kobra-connect `3edba24` (local checkout, Apache-2.0): `kobra_connect/handshake.py`,
+  `client.py`, `models.py`, `moonraker_bridge/state.py` / `bridge.py`, `docs/mqtt-commands.md`. Both licences are
+  compatible with this repository's; nothing was copied from either, and neither was run.
+- **Imported:** nothing copied. The wire rules, re-implemented in Kotlin with file:line citations to both references
+  (`AnycubicLan`): the handshake (`GET :18910/info`; the signed `POST <ctrlInfoUrl>?ts&nonce&sign&did` with
+  `sign = md5(md5(token[:16]) + ts + nonce)`; the reply's `data.info` decrypted with AES-128-CBC, key `token[16:32]`, IV
+  `data.token`), MQTT 3.1.1 over TLS on 9883 with the decrypted `username` / `password`, the command topics
+  `anycubic/anycubicCloud/v1/{slicer|web}/printer/<modelId>/<deviceId>/<type>`, the report subscription
+  `anycubic/anycubicCloud/v1/printer/+/<modelId>/<deviceId>/#`, the message envelope (`type`, `action`, `timestamp`,
+  `msgid`, `data`), `info` / `query` status parsing, `multiColorBox` / `getInfo` ACE slot parsing (slots, material,
+  colour, loaded, active), the multipart `gcode_upload` (fields `filename` + `gcode`, the plugin's headers, one
+  re-handshake on 401), the `print` / `start` message with `ams_settings.ams_box_mapping`, and (built, gated, never sent)
+  pause / resume / stop, temperatures, homing, ACE feed and drying. The TLS link reuses the HiveMQ client and the
+  certificate pin store Bambu's connection uses (`AnycubicMqttSession`); no new dependency.
+- **Where the references disagree (the choice is recorded at each rule in `AnycubicLan` / `AnycubicMqttSession`):**
+  `/info` without `modelId` / `ctrlInfoUrl` (primary: defaults; kobra-connect: refuse — refused); cloud mode
+  (kobra-connect only — checked); `did` (primary: one fixed id; kobra-connect: random 32 — random per service); the IV
+  (primary: as sent; kobra-connect: NUL-padded to 16 — padded); the broker (kobra-connect follows the reply's
+  `broker` host and port — the printer's own host, the reply's port, else 9883); client certificate (kobra-connect presents
+  `devicecrt` / `devicepk`; primary none — offered when returned); the report subscription (`printer/public/...` vs
+  `printer/+/...` — `+`); the query namespace (kobra-connect's code: web; its doc and the primary: slicer — slicer);
+  `msgid` (dashed UUID, as the primary and kobra-connect's doc); `project` vs `last_project` precedence (`project`
+  first); state words (the union: the primary's `busy` / `pause` / `stoped`, kobra-connect's `pause` flag, `paused`,
+  `error`); temperatures (primary `tempature/set`; kobra-connect `print/update` settings — kobra-connect's, on the web
+  topic); homing (primary `axis/move`; kobra-connect's doc says MQTT has none — built, gated, never sent); the start
+  message (kobra-connect's minimal form vs the primary's full ACE form — the primary's). kobra-connect has no ACE and no
+  upload, so those are the primary's alone.
+- **Change:** `PrinterKind.ANYCUBIC_LAN` (`AnycubicLanPrinterService`), address only: the MQTT credentials come from
+  the printer's own handshake and are held in memory for one service, never stored, shown or logged. Live status and
+  temperatures, the ACE / ACE Pro slots (read-only), uploading a sliced file (which never starts a print). Chips in Edit
+  printer and the add-printer wizard, the Control-tab card with "ACE slots", send targets, Test Mode labels, Test Grid
+  family `anycubic-lan` (status and material state only). Safety additions not in either reference: URLs the printer
+  hands out (`ctrlInfoUrl`, `fileUploadurl`) are only followed on the printer's own host; model and device ids that would
+  change an MQTT topic are refused; the first TLS certificate seen at a printer address is pinned (trust on first use,
+  as Bambu's), forgotten when the printer is removed or re-added.
+- **Gated (`AnycubicLan.START_VERIFIED` false; `startVerifiedFor(ANYCUBIC_LAN)` false, so the Test Grid declares no
+  `upload_and_start`):** `print` / `start` (a send uploads, then refuses with "Uploaded <name> to the printer but did not
+  start it: starting a print on an Anycubic printer from Nozzle It All isn't verified on real hardware yet. Start it from
+  the printer's screen."); pause, resume, cancel, temperatures, homing / moving, ACE feed / unload / drying ("Nothing was
+  sent: <what> on an Anycubic printer from Nozzle It All isn't verified on real hardware yet. Use the printer's screen.",
+  before any request). The start path behind the gate (idle check, ACE mapping checked before the upload, a status read
+  to confirm) has never run.
+- **Test evidence:** unit tests only (`AnycubicLanTest` in :domain; `AnycubicLanPrinterServiceTest` against a local
+  MockWebServer and a fake MQTT session, and `AnycubicTrustPinTest`, in :app; `GatedKindsTest` in :test-grid). Fixtures
+  are the primary's own test values (handshake token / IV / credentials, status and ACE reports, the PETG mapping, the
+  upload reply) and kobra-connect's documented messages; the ciphertexts were made from the primary's test values with
+  `openssl enc`. Nothing here has met a real printer.
+- **Known divergence / to verify on hardware:** whether the broker needs the client certificate (Kobra 3) or not (S1);
+  whether its TLS certificate stays the same across reboots (the pin assumes so); which topic segment reports arrive on;
+  whether a printer without an ACE answers `multiColorBox` (silence is read as "no ACE"); the upload's X-BBL headers and
+  whether the daemon needs them; `ams_index` for a second ACE (only the first is mapped); the `md5` of the file name the
+  primary sends in `print` / `start`; the state words during heating / levelling. No discovery (the primary's SSDP /
+  `/info` probe is not ported), no camera (`:18088/flv`), no file list, no light, fan, speed or skip-object controls.
+- **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard, Control tab), Test Grid
+  classification.

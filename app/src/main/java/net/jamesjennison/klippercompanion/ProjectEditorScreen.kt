@@ -467,7 +467,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     val bambuTarget = profile?.kind == PrinterKind.BAMBU_LAB
     val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT || profile?.kind == PrinterKind.ELEGOO ||
         profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE || profile?.kind == PrinterKind.DUET ||
-        profile?.kind == PrinterKind.ULTIMAKER || profile?.kind == PrinterKind.REPETIER // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier: upload, start gated; UltiMaker: nothing sent while gated)
+        profile?.kind == PrinterKind.ULTIMAKER || profile?.kind == PrinterKind.REPETIER || profile?.kind == PrinterKind.ANYCUBIC_LAN // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier/Anycubic: upload, start gated; UltiMaker: nothing sent while gated)
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).

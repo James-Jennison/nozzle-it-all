@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -162,11 +162,20 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
     )
+    // Anycubic Kobra 3 / S1 / X on stock firmware in LAN mode (AnycubicLanPrinterService): live status and temperatures, the
+    // ACE / ACE Pro slots and uploading a sliced file. Starting it is refused until AnycubicLan.START_VERIFIED, and so are
+    // pause / resume / cancel, temperatures, homing and the ACE's feed and dryer. Ported from anycubic-orca-plugin,
+    // cross-checked against kobra-connect (P-0036).
+    PrinterKind.ANYCUBIC_LAN -> PrinterCapabilities(
+        transport = PrinterTransport.ANYCUBIC_LAN, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
 }
 
 /**
  * Whether Nozzle It All may start a print on this kind of printer. False while a kind's start is gated off until it has
- * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED, RepetierServer.START_VERIFIED): sending a
+ * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED, RepetierServer.START_VERIFIED, AnycubicLan.START_VERIFIED): sending a
  * sliced file to one then uploads it (an UltiMaker: sends nothing), and the person starts it on the printer's screen.
  */
 fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
@@ -176,6 +185,7 @@ fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
     PrinterKind.DUET -> DuetRrf.START_VERIFIED
     PrinterKind.ULTIMAKER -> UltiMakerApi.START_VERIFIED
     PrinterKind.REPETIER -> RepetierServer.START_VERIFIED
+    PrinterKind.ANYCUBIC_LAN -> AnycubicLan.START_VERIFIED
     else -> true
 }
 

@@ -114,6 +114,7 @@ private fun kindLabel(k: net.jamesjennison.klippercompanion.PrinterKind) = when 
     net.jamesjennison.klippercompanion.PrinterKind.DUET -> "Duet (RepRapFirmware)"
     net.jamesjennison.klippercompanion.PrinterKind.ULTIMAKER -> "UltiMaker (LAN)"
     net.jamesjennison.klippercompanion.PrinterKind.REPETIER -> "Repetier-Server"
+    net.jamesjennison.klippercompanion.PrinterKind.ANYCUBIC_LAN -> "Anycubic (LAN)"
 }
 
 private fun familyLabel(f: String) = when (f) {
@@ -132,6 +133,7 @@ private fun familyLabel(f: String) = when (f) {
     com.nozzleitall.testgrid.FirmwareFamilies.DUET -> "Duet / RepRapFirmware"
     com.nozzleitall.testgrid.FirmwareFamilies.ULTIMAKER -> "UltiMaker LAN API"
     com.nozzleitall.testgrid.FirmwareFamilies.REPETIER -> "Repetier-Server"
+    com.nozzleitall.testgrid.FirmwareFamilies.ANYCUBIC_LAN -> "Anycubic LAN mode"
     else -> f
 }
 

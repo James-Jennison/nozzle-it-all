@@ -66,7 +66,8 @@ class AndroidTestTarget(
         private val NOT_SENT = listOf("Nothing was sent", BambuPrintProtocol.MULTI_MATERIAL_NOT_SUPPORTED, BambuPrintProtocol.DYNAMIC_NOZZLE_MAP_NOT_SUPPORTED,
             "Match each filament", "is sliced for the", "which the printer reports empty", "sliced file is missing",
             "The printer is ", "password", "API key", "access code",
-            // Creality / Flashforge / Duet / Repetier while their start is gated off: the file is uploaded, no print starts (UltiMaker: nothing is sent).
+            // Creality / Flashforge / Duet / Repetier / Anycubic while their start is gated off: the file is uploaded, no print starts (UltiMaker: nothing is sent).
+            // Anycubic's gated controls say it the same way ("Nothing was sent: ... isn't verified on real hardware yet").
             "isn't verified on real hardware yet")
         /** Wording for a definite refusal by the printer after the request went out: nothing is running. */
         private val REFUSED = listOf("rejected the print command", "did not start it", "Could not upload", "(HTTP ")
@@ -83,6 +84,7 @@ class AndroidTestTarget(
             PrinterTransport.DUET -> "android-duet" to "duet-http"
             PrinterTransport.ULTIMAKER -> "android-ultimaker" to "ultimaker-http"
             PrinterTransport.REPETIER -> "android-repetier" to "repetier-http"
+            PrinterTransport.ANYCUBIC_LAN -> "android-anycubic-lan" to "anycubic-mqtt"
         }
     }
 
@@ -127,7 +129,7 @@ class AndroidTestTarget(
         runCatching { service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots } }.getOrNull().orEmpty()
 
     override fun materialSlots(): List<String> {
-        if (!moonraker && profile.kind !in setOf(PrinterKind.ELEGOO, PrinterKind.CREALITY, PrinterKind.FLASHFORGE)) throw UnsupportedByTarget("This connection reports no material slots.")
+        if (!moonraker && profile.kind !in setOf(PrinterKind.ELEGOO, PrinterKind.CREALITY, PrinterKind.FLASHFORGE, PrinterKind.ANYCUBIC_LAN)) throw UnsupportedByTarget("This connection reports no material slots.")
         val slots = service { s -> (s as? FilamentSlotReader)?.filamentSlots()?.slots }.orEmpty().map { "${it.name ?: "slot ${it.tool + 1}"}: ${it.label}${it.colorHex?.let { c -> " $c" } ?: ""}${if (it.active) " (active)" else ""}" }
         if (slots.isNotEmpty()) return slots
         if (profile.kind == PrinterKind.SNAPMAKER_U1 || profile.kind == PrinterKind.SNAPMAKER_U1_PAXX) return moonraker { m -> m.toolStatus().tools.map { "toolhead $it" } }

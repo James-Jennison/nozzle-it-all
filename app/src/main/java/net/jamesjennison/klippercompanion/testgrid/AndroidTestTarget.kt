@@ -70,7 +70,9 @@ class AndroidTestTarget(
             // Anycubic's gated controls say it the same way ("Nothing was sent: ... isn't verified on real hardware yet").
             "isn't verified on real hardware yet",
             // Snapmaker 2.0 with a laser or CNC head: refused at connect, before any file goes out (SnapmakerSstp.NOT_A_PRINTING_HEAD).
-            "laser or CNC module is attached")
+            "laser or CNC module is attached",
+            // USB-connected printers refuse every start, upload and control before a byte is written (UsbSerialPrinter).
+            "aren't verified on real hardware yet", "can't save a file to a USB-connected printer")
         /** Wording for a definite refusal by the printer after the request went out: nothing is running. */
         private val REFUSED = listOf("rejected the print command", "did not start it", "Could not upload", "(HTTP ")
 

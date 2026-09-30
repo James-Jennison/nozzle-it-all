@@ -97,12 +97,13 @@ class SendAndStartTest {
     }
 
     @Test fun printersPortedFromUpstreamHostsRunWhatTheAppCanDoAndBlockTheRest() {
-        // Duet, UltiMaker, Repetier-Server, the legacy Flashforge console and both Snapmaker connections: start gated off; Duet,
+        // Duet, UltiMaker, Repetier-Server, the legacy Flashforge console and both Snapmaker connections and USB serial: start gated off; Duet,
         // Repetier, the legacy console and Snapmaker SACP don't read printer state either, so their status test is blocked rather than failed.
         data class Case(val suite: String, val preset: SimulatedPrinter.Preset, val readsState: Boolean)
         listOf(Case("duet-rrf", SimulatedPrinter.Preset.DUET, false), Case("ultimaker-lan", SimulatedPrinter.Preset.ULTIMAKER_S5, true),
             Case("repetier-server", SimulatedPrinter.Preset.REPETIER, false), Case("flashforge-legacy", SimulatedPrinter.Preset.FLASHFORGE_ADVENTURER_4, false),
-            Case("snapmaker-sstp", SimulatedPrinter.Preset.SNAPMAKER_A350_DUAL, true), Case("snapmaker-sacp", SimulatedPrinter.Preset.SNAPMAKER_J1, false)).forEach { c ->
+            Case("snapmaker-sstp", SimulatedPrinter.Preset.SNAPMAKER_A350_DUAL, true), Case("snapmaker-sacp", SimulatedPrinter.Preset.SNAPMAKER_J1, false),
+            Case("usb-serial", SimulatedPrinter.Preset.USB_ENDER_3_V2, true)).forEach { c ->
             val clock = Support.Clock()
             val sim = SimulatedPrinter(c.preset, clock::now)
             var sent = 0
@@ -122,13 +123,18 @@ class SendAndStartTest {
         Support.drive(st.session)
         assertEquals(ResultState.PASS, st.session.record.test("multi-slice")!!.result)
         assertEquals(ResultState.BLOCKED, st.session.record.test("multi-print")!!.result)
-        // Likewise the dual-nozzle Snapmaker profiles (A350 Dual, J1).
-        listOf("snapmaker-sstp" to SimulatedPrinter.Preset.SNAPMAKER_A350_DUAL, "snapmaker-sacp" to SimulatedPrinter.Preset.SNAPMAKER_J1).forEach { (suite, preset) ->
+        // Likewise the dual-nozzle Snapmaker profiles (A350 Dual, J1) and an MMU3 on a USB cable; a single-nozzle USB printer skips them.
+        listOf("snapmaker-sstp" to SimulatedPrinter.Preset.SNAPMAKER_A350_DUAL, "snapmaker-sacp" to SimulatedPrinter.Preset.SNAPMAKER_J1,
+            "usb-serial" to SimulatedPrinter.Preset.USB_PRUSA_MK3_5_MMU3).forEach { (suite, preset) ->
             val c2 = Support.Clock()
             val s2 = Support.start(suite, SimulatedPrinter(preset, c2::now), c2)
             Support.drive(s2.session)
             assertEquals(suite, ResultState.PASS, s2.session.record.test("multi-slice")!!.result)
             assertEquals(suite, ResultState.BLOCKED, s2.session.record.test("multi-print")!!.result)
         }
+        val c3 = Support.Clock()
+        val s3 = Support.start("usb-serial", SimulatedPrinter(SimulatedPrinter.Preset.USB_ENDER_3_V2, c3::now), c3)
+        Support.drive(s3.session)
+        assertEquals(ResultState.SKIPPED, s3.session.record.test("multi-slice")!!.result)
     }
 }

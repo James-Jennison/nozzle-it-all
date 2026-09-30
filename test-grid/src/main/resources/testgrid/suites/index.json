@@ -22,6 +22,7 @@
     "fixture-snapmaker-sacp.json",
     "fixture-snapmaker-sstp.json",
     "fixture-snapmaker-u1-stock.json",
-    "fixture-ultimaker-lan.json"
+    "fixture-ultimaker-lan.json",
+    "fixture-usb-serial.json"
   ]
 }

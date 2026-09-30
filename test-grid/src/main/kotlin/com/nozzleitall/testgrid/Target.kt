@@ -244,7 +244,7 @@ object FirmwareFamilies {
         PrinterTransport.SNAPMAKER_SACP -> Classified(SNAPMAKER_SACP, PrinterKind.SNAPMAKER_SACP, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Snapmaker SACP over TCP (port 8888)")
         // A printer plugged in by USB cable, spoken to as a Marlin/Prusa serial port (UsbSerial/MarlinSerial, P-0038). Never
         // verified on real hardware yet - see UsbSerialPrinter.START_VERIFIED/UPLOAD_VERIFIED.
-        PrinterTransport.USB_SERIAL -> Classified(USB_SERIAL, PrinterKind.USB_SERIAL, description.slicingModel, emptyMap(), "USB-connected Marlin/Prusa-protocol serial printer")
+        PrinterTransport.USB_SERIAL -> Classified(USB_SERIAL, PrinterKind.USB_SERIAL, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "USB-connected Marlin/Prusa-protocol serial printer")
     }
 }
 

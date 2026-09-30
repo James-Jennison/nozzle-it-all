@@ -32,6 +32,7 @@ class UsbSerialPrinterService(
     private val lock = Any()
     @Volatile private var closed = false
     @Volatile private var started = false
+    private var needsResync = false
     @Volatile private var capabilities = MarlinSerial.Capabilities()
     @Volatile private var lastTemperatures: MarlinSerial.TemperatureReport? = null
     @Volatile private var lastSdStatus: MarlinSerial.SdStatus = MarlinSerial.SdStatus(false, null, null)
@@ -45,10 +46,12 @@ class UsbSerialPrinterService(
         if (started) return
         synchronized(lock) {
             if (started) return
-            port.open(baud)
-            val t = Thread(::readLoop, "usb-serial-reader").apply { isDaemon = true }
-            reader = t
-            t.start()
+            if (reader == null) { // a handshake that timed out is retried on the already-open port, not by reopening it
+                port.open(baud)
+                val t = Thread(::readLoop, "usb-serial-reader").apply { isDaemon = true }
+                reader = t
+                t.start()
+            }
             sendAndAwaitOk(MarlinSerial.RESET_LINE_NUMBER)
             val m115 = sendAndCollect("M115")
             capabilities = MarlinSerial.parseCapabilities(m115)
@@ -85,41 +88,43 @@ class UsbSerialPrinterService(
         replyQueue.offer(reply)
     }
 
-    /** Sends [command] and waits for its "ok" (handling Resend/Busy), throwing on timeout. Returns nothing but the wait itself. */
+    /** Sends [command] and waits for its "ok" (handling Resend/Busy), throwing on timeout. */
     private fun sendAndAwaitOk(command: String) {
-        var text = sendWindow.prepareSend(command)
-        port.write(text.toByteArray(Charsets.US_ASCII))
-        val deadline = clock() + replyTimeoutMs
-        while (true) {
-            val remaining = deadline - clock()
-            if (remaining <= 0) throw ApiFailure("The printer didn't answer ${command.trim()}.")
-            val reply = replyQueue.poll(remaining, TimeUnit.MILLISECONDS) ?: continue
-            when (val outcome = sendWindow.onReply(reply)) {
-                MarlinSerial.SendWindow.Outcome.Cleared -> return
-                is MarlinSerial.SendWindow.Outcome.Resend -> { text = outcome.text; port.write(text.toByteArray(Charsets.US_ASCII)) }
-                MarlinSerial.SendWindow.Outcome.StillWaiting -> Unit
-            }
-        }
+        exchange(command)
     }
 
     /**
-     * Like [sendAndAwaitOk] but also collects every non-ok line's text (M115/M27/M20 replies are multi-line) until
-     * the "ok" arrives, returning the joined text for the domain parsers to read.
+     * Like [sendAndAwaitOk] but also returns every non-ok line's text (M115/M27/M20 replies are multi-line) up to the
+     * "ok", joined for the domain parsers to read.
      */
-    private fun sendAndCollect(command: String): String {
+    private fun sendAndCollect(command: String): String = exchange(command)
+
+    /**
+     * The one send path. Lines left over from before this command (an unsolicited "echo:", or the reply to a command
+     * that already timed out) are dropped first, so they're never read as this command's reply - temperature pushes
+     * among them were already recorded by [handleLine]. After a timeout the firmware's line counter is unknown, so
+     * the next exchange renumbers with M110 N0 before sending anything else.
+     */
+    private fun exchange(command: String): String {
+        if (needsResync) {
+            needsResync = false
+            exchange(MarlinSerial.RESET_LINE_NUMBER)
+        }
+        replyQueue.clear()
         var text = sendWindow.prepareSend(command)
         port.write(text.toByteArray(Charsets.US_ASCII))
         val collected = StringBuilder()
         val deadline = clock() + replyTimeoutMs
         while (true) {
             val remaining = deadline - clock()
-            if (remaining <= 0) throw ApiFailure("The printer didn't answer ${command.trim()}.")
-            val reply = replyQueue.poll(remaining, TimeUnit.MILLISECONDS) ?: continue
-            when (reply) {
-                is MarlinSerial.Reply.Other -> collected.appendLine(reply.line)
-                is MarlinSerial.Reply.Temperature -> Unit
-                else -> Unit
+            val reply = if (remaining > 0) replyQueue.poll(remaining, TimeUnit.MILLISECONDS) else null
+            if (reply == null) {
+                if (clock() < deadline) continue
+                sendWindow.abandon()
+                needsResync = true
+                throw ApiFailure("The printer didn't answer ${command.trim()}.")
             }
+            if (reply is MarlinSerial.Reply.Other) collected.appendLine(reply.line)
             when (val outcome = sendWindow.onReply(reply)) {
                 MarlinSerial.SendWindow.Outcome.Cleared -> return collected.toString()
                 is MarlinSerial.SendWindow.Outcome.Resend -> { text = outcome.text; port.write(text.toByteArray(Charsets.US_ASCII)) }
@@ -161,7 +166,7 @@ class UsbSerialPrinterService(
 
     override fun catalog(): Catalog {
         ensureStarted()
-        val files = try { MarlinSerial.parseFileList(sendAndCollect("M20")) } catch (_: ApiFailure) { emptyList() }
+        val files = try { synchronized(lock) { MarlinSerial.parseFileList(sendAndCollect("M20")) } } catch (_: ApiFailure) { emptyList() }
         val warning = "USB-connected printers aren't verified on real hardware yet (firmware: ${capabilities.firmwareName.ifBlank { "unknown" }})."
         return Catalog(files, emptyList(), emptyList(), listOf(warning))
     }

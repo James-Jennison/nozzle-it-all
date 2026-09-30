@@ -66,6 +66,7 @@ object MarlinSerial {
     data class ToolTemperature(val index: Int, val current: Double, val target: Double?)
     data class TemperatureReport(val hotends: List<ToolTemperature>, val bed: ToolTemperature?)
 
+    private val M110_RE = Regex("""(?i)^M110\s+N(\d+)\b""")
     private val RESEND_RE = Regex("""(?i)^(?:resend|rs)\s*:?\s*(\d+)""")
     private val ERROR_RE = Regex("""(?i)^error\s*:\s*(.*)$""")
     private val TEMP_TOKEN_RE = Regex("""(?i)\b(T\d*|B)\s*:\s*(-?\d+(?:\.\d+)?)\s*(?:/\s*(-?\d+(?:\.\d+)?))?""")
@@ -206,6 +207,9 @@ object MarlinSerial {
         private val history = LinkedHashMap<Long, String>() // line number -> full numbered line (for resend)
         private var nextLineNumber = 1L
         private var awaiting: Long? = null
+        // Marlin and Prusa firmware follow every "Resend: n" with an "ok" of their own (flush_and_request_resend),
+        // which acknowledges the rejected line, not the resent one.
+        private var ignoreNextOk = false
 
         val hasLineInFlight: Boolean get() = awaiting != null
 
@@ -215,10 +219,16 @@ object MarlinSerial {
         /** Prepares the next numbered/checksummed line for [command] and marks it as awaiting "ok". Throws if a line is already in flight. */
         fun prepareSend(command: String): String {
             check(canSend()) { "A line is already awaiting ok." }
+            // "M110 N<k>" sets the firmware's last line number to k no matter what line number carries it (Marlin's
+            // queue.cpp swaps the line's own N for M110's). So it goes out as line k itself, and the next line is k+1;
+            // numbering it from the running counter would make the firmware ask for a line we've already renumbered.
+            val renumberTo = M110_RE.find(command.trim())?.groupValues?.get(1)?.toLong()
+            if (renumberTo != null) { history.clear(); nextLineNumber = renumberTo }
             val n = nextLineNumber++
             val line = numberedLine(n, command)
             history[n] = line
             awaiting = n
+            ignoreNextOk = false
             // Keep only enough history to satisfy a firmware asking to resend the last handful of lines.
             while (history.size > 64) history.remove(history.keys.first())
             return line
@@ -235,13 +245,23 @@ object MarlinSerial {
 
         /** Reports [reply] for the line currently in flight (or for an out-of-band push while idle). */
         fun onReply(reply: Reply): Outcome = when (reply) {
-            is Reply.Ok -> { awaiting = null; Outcome.Cleared }
+            is Reply.Ok -> if (ignoreNextOk) { ignoreNextOk = false; Outcome.StillWaiting } else { awaiting = null; Outcome.Cleared }
             is Reply.Resend -> {
                 val text = history[reply.line] ?: return Outcome.StillWaiting // nothing that old kept in history; nothing safe to resend
                 awaiting = reply.line
+                ignoreNextOk = true
                 Outcome.Resend(reply.line, text)
             }
             else -> Outcome.StillWaiting
+        }
+
+        /**
+         * Gives up on the line in flight (its reply never came). The firmware's line counter is now unknown, so the
+         * caller must renumber with [RESET_LINE_NUMBER] before sending anything else.
+         */
+        fun abandon() {
+            awaiting = null
+            ignoreNextOk = false
         }
     }
 }

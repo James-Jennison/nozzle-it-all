@@ -1,7 +1,8 @@
 package net.jamesjennison.klippercompanion
 
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,71 +11,100 @@ import org.junit.Test
 
 /**
  * [UsbSerialPrinterService] against an in-memory fake port: connect sequence, only-whitelisted-commands-written,
- * DTR-never-raised-without-explicit-restartBoard, gated actions write zero bytes, resend recovery.
+ * DTR-never-raised-without-explicit-restartBoard, gated actions write zero bytes, resend and timeout recovery.
  */
 class UsbSerialPrinterServiceTest {
 
-    /** Records every open()/write()/restartBoard() call; [scriptedReplies] are delivered to read() one at a time. */
-    private class FakeUsbSerialPort : UsbSerialPort {
+    /**
+     * A USB port with a small Marlin behind it: every written line is checked the way Marlin's queue.cpp does (checksum,
+     * N must be last+1, "M110 N<k>" sets last to k) and answered - a bad line gets "Error:...", "Resend: <last+1>",
+     * "ok" exactly as flush_and_request_resend sends them. Records every open()/write()/restartBoard() call.
+     */
+    private class FakeUsbSerialPort(
+        private val capabilityLines: List<String> = emptyList(),
+        /** Line numbers whose first copy arrives corrupted (the firmware asks for them again). */
+        private val corruptOnce: MutableSet<Long> = mutableSetOf(),
+        /** Commands whose first reply is lost entirely (nothing comes back), e.g. "M27". */
+        private val silentOnce: MutableSet<String> = mutableSetOf(),
+    ) : UsbSerialPort {
         override val deviceLabel: String = "fake"
         val openCalls = CopyOnWriteArrayList<Int>()
         val restartBoardCalls = AtomicInteger(0)
         val writes = CopyOnWriteArrayList<String>()
-        val scriptedReplies = ConcurrentLinkedQueue<String>()
+        val resendRequests = AtomicInteger(0)
+        private val outgoing = LinkedBlockingQueue<String>()
+        private var lastN = 0L
         @Volatile var closed = false
 
         override fun open(baud: Int) { openCalls.add(baud) }
         override fun restartBoard() { restartBoardCalls.incrementAndGet() }
         override fun write(data: ByteArray): Int {
-            writes.add(String(data, Charsets.US_ASCII))
+            val text = String(data, Charsets.US_ASCII)
+            writes.add(text)
+            receive(text.trimEnd('\n'))
             return data.size
         }
         override fun read(buffer: ByteArray, timeoutMs: Int): Int {
-            val line = scriptedReplies.poll() ?: run { Thread.sleep(1); return 0 }
-            val bytes = "$line\n".toByteArray(Charsets.US_ASCII)
+            val line = outgoing.poll(timeoutMs.toLong(), TimeUnit.MILLISECONDS) ?: return 0
+            val bytes = "$line\r\n".toByteArray(Charsets.US_ASCII)
             bytes.copyInto(buffer)
             return bytes.size
         }
         override fun close() { closed = true }
 
-        fun queueOkFor(handshake: Boolean = true) {
-            // M110 N0 -> ok, M115 -> capability lines + ok (no AUTOREPORT_TEMP, so no M155 is sent).
-            scriptedReplies += "ok"
-            scriptedReplies += "FIRMWARE_NAME:Marlin"
-            scriptedReplies += "ok"
+        private fun receive(line: String) {
+            val m = Regex("""^N(\d+) (.*)\*(\d+)$""").find(line) ?: error("unnumbered line written: $line")
+            val n = m.groupValues[1].toLong()
+            val command = m.groupValues[2]
+            val body = "N$n $command"
+            val renumber = Regex("""^M110 N(\d+)""").find(command)?.groupValues?.get(1)?.toLong()
+            val corrupt = corruptOnce.remove(n)
+            if (corrupt || m.groupValues[3].toInt() != MarlinSerial.checksum(body)) return requestResend("checksum mismatch")
+            if (renumber == null && n != lastN + 1) return requestResend("Line Number is not Last Line Number+1")
+            lastN = renumber ?: n
+            val word = command.substringBefore(' ')
+            if (silentOnce.remove(word)) return
+            when (word) {
+                "M115" -> { outgoing += "FIRMWARE_NAME:Marlin 2.1.2"; capabilityLines.forEach { outgoing += it }; outgoing += "ok" }
+                "M105" -> outgoing += "ok T:21.0 /0.0 B:20.5 /0.0"
+                "M27" -> { outgoing += "Not SD printing"; outgoing += "ok" }
+                "M20" -> { outgoing += "Begin file list"; outgoing += "BENCHY.GCO 1024"; outgoing += "End file list"; outgoing += "ok" }
+                else -> outgoing += "ok"
+            }
+        }
+
+        private fun requestResend(why: String) {
+            resendRequests.incrementAndGet()
+            outgoing += "Error:$why, Last Line: $lastN"
+            outgoing += "Resend: ${lastN + 1}"
+            outgoing += "ok"
         }
     }
 
-    private fun service(port: FakeUsbSerialPort): UsbSerialPrinterService =
-        UsbSerialPrinterService(address = "usb:1:2:ABC", baud = 115_200, portFactory = { port }, replyTimeoutMs = 2_000L)
+    private fun service(port: FakeUsbSerialPort, replyTimeoutMs: Long = 2_000L): UsbSerialPrinterService =
+        UsbSerialPrinterService(address = "usb:1:2:ABC", baud = 115_200, portFactory = { port }, replyTimeoutMs = replyTimeoutMs)
 
     @Test fun `connecting opens the port and runs only the read-only handshake`() {
         val port = FakeUsbSerialPort()
-        port.queueOkFor()
-        port.scriptedReplies += "Not SD printing"
-        port.scriptedReplies += "ok"
         val svc = service(port)
-        svc.snapshot()
+        val snap = svc.snapshot()
+        assertEquals("standby", snap.state)
         assertEquals(listOf(115_200), port.openCalls)
-        assertTrue(port.writes.any { it.contains("M110 N0") })
-        assertTrue(port.writes.any { it.contains("M115") })
+        assertEquals(MarlinSerial.numberedLine(0, "M110 N0"), port.writes[0])
+        assertEquals(MarlinSerial.numberedLine(1, "M115"), port.writes[1])
         // No AUTOREPORT_TEMP capability was advertised, so M155 must never be sent; M105 (poll) is allowed.
         assertFalse(port.writes.any { it.contains("M155") })
         val allowed = setOf("M110", "M115", "M105", "M155", "M27", "M20")
         for (w in port.writes) assertTrue("unexpected command written: $w", allowed.any { w.contains(it) })
+        assertEquals("the firmware never had to ask for a line again", 0, port.resendRequests.get())
+        assertEquals(21.0, svc.toolheadTemperatures().first { it.name == "extruder" }.temperature!!, 0.001)
+        assertEquals(listOf("BENCHY.GCO"), svc.catalog().files)
+        assertEquals(0, port.resendRequests.get())
     }
 
     @Test fun `M155 is sent only when the firmware advertises AUTOREPORT_TEMP`() {
-        val port = FakeUsbSerialPort()
-        port.scriptedReplies += "ok" // M110 N0
-        port.scriptedReplies += "FIRMWARE_NAME:Marlin"
-        port.scriptedReplies += "Cap:AUTOREPORT_TEMP:1"
-        port.scriptedReplies += "ok" // M115
-        port.scriptedReplies += "ok" // M155
-        port.scriptedReplies += "Not SD printing"
-        port.scriptedReplies += "ok" // M27
-        val svc = service(port)
-        svc.snapshot()
+        val port = FakeUsbSerialPort(capabilityLines = listOf("Cap:AUTOREPORT_TEMP:1"))
+        service(port).snapshot()
         assertTrue(port.writes.any { it.contains("M155 S2") })
         // Auto-report firmware must never be polled with M105.
         assertFalse(port.writes.any { it.contains("M105") })
@@ -82,12 +112,10 @@ class UsbSerialPrinterServiceTest {
 
     @Test fun `DTR is never raised except through the explicit restartBoard call`() {
         val port = FakeUsbSerialPort()
-        port.queueOkFor()
-        port.scriptedReplies += "Not SD printing"
-        port.scriptedReplies += "ok"
         val svc = service(port)
         svc.snapshot()
         svc.toolheadTemperatures()
+        svc.catalog()
         assertEquals(0, port.restartBoardCalls.get())
         svc.restartBoard()
         assertEquals(1, port.restartBoardCalls.get())
@@ -141,19 +169,32 @@ class UsbSerialPrinterServiceTest {
         assertTrue(port.writes.isEmpty())
     }
 
-    @Test fun `a resend is honored with the exact original numbered line before ok clears it`() {
-        val port = FakeUsbSerialPort()
-        // Handshake: M110 N0 gets a Resend once, then ok; M115 -> ok; then M105 (poll) -> ok; M27 -> not printing, ok.
-        port.scriptedReplies += "Resend:1"
-        port.scriptedReplies += "ok"
-        port.scriptedReplies += "FIRMWARE_NAME:Marlin"
-        port.scriptedReplies += "ok"
-        port.scriptedReplies += "Not SD printing"
-        port.scriptedReplies += "ok"
+    @Test fun `a resend is honored with the exact original numbered line, and the ok after the resend request isn't taken for it`() {
+        val port = FakeUsbSerialPort(corruptOnce = mutableSetOf(1L)) // M115, line 1
         val svc = service(port)
         svc.snapshot()
-        val m110Writes = port.writes.filter { it.contains("M110 N0") }
-        assertEquals(2, m110Writes.size)
-        assertEquals(m110Writes[0], m110Writes[1]) // resend re-sends the exact same numbered/checksummed line
+        val m115Writes = port.writes.filter { it.contains("M115") }
+        assertEquals(2, m115Writes.size)
+        assertEquals(m115Writes[0], m115Writes[1]) // resend re-sends the exact same numbered/checksummed line
+        assertEquals("only the corrupted line was asked for again", 1, port.resendRequests.get())
+        assertEquals("standby", svc.snapshot().state)
+    }
+
+    @Test fun `after a reply times out the next call renumbers and carries on`() {
+        val port = FakeUsbSerialPort(silentOnce = mutableSetOf("M27"))
+        val svc = service(port, replyTimeoutMs = 300L)
+        try {
+            svc.snapshot()
+            org.junit.Assert.fail("expected ApiFailure")
+        } catch (e: ApiFailure) {
+            assertTrue(e.message!!.contains("M27"))
+        }
+        val before = port.writes.size
+        assertEquals("standby", svc.snapshot().state)
+        val after = port.writes.drop(before)
+        assertEquals(MarlinSerial.numberedLine(0, "M110 N0"), after.first())
+        assertEquals(MarlinSerial.numberedLine(1, "M27"), after[1])
+        assertEquals(listOf(115_200), port.openCalls) // recovered on the open port, never reopened
+        assertEquals(0, port.resendRequests.get())
     }
 }

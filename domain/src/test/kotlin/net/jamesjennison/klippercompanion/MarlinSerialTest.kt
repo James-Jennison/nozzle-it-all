@@ -211,12 +211,33 @@ class MarlinSerialTest {
         assertFalse(window.canSend())
     }
 
-    @Test fun `send window resend then ok fully clears the window`() {
+    @Test fun `send window ignores the ok that follows a resend request and clears on the resent line's ok`() {
         val window = MarlinSerial.SendWindow()
         window.prepareSend("M105") // line 1
         window.onReply(MarlinSerial.Reply.Resend(1))
-        val outcome = window.onReply(MarlinSerial.Reply.Ok(null))
-        assertEquals(MarlinSerial.SendWindow.Outcome.Cleared, outcome)
+        // Marlin: "Resend: 1" then "ok" for the rejected copy; only the next ok is for the resent line.
+        assertEquals(MarlinSerial.SendWindow.Outcome.StillWaiting, window.onReply(MarlinSerial.Reply.Ok(null)))
+        assertFalse(window.canSend())
+        assertEquals(MarlinSerial.SendWindow.Outcome.Cleared, window.onReply(MarlinSerial.Reply.Ok(null)))
         assertTrue(window.canSend())
+    }
+
+    @Test fun `M110 N0 goes out as line 0 and the next line is 1`() {
+        val window = MarlinSerial.SendWindow()
+        window.prepareSend("M105")
+        window.onReply(MarlinSerial.Reply.Ok(null))
+        assertEquals(MarlinSerial.numberedLine(0, "M110 N0"), window.prepareSend(MarlinSerial.RESET_LINE_NUMBER))
+        window.onReply(MarlinSerial.Reply.Ok(null))
+        assertEquals(MarlinSerial.numberedLine(1, "M115"), window.prepareSend("M115"))
+    }
+
+    @Test fun `abandoning the line in flight opens the window again`() {
+        val window = MarlinSerial.SendWindow()
+        window.prepareSend("M105")
+        window.onReply(MarlinSerial.Reply.Resend(1))
+        window.abandon()
+        assertTrue(window.canSend())
+        window.prepareSend("M27")
+        assertEquals(MarlinSerial.SendWindow.Outcome.Cleared, window.onReply(MarlinSerial.Reply.Ok(null)))
     }
 }

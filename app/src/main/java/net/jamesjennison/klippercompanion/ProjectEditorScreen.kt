@@ -269,6 +269,19 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // keeps every object's own denormalized snapshot in sync) - derived from `objects` itself,
     // not separate state, so it's always exactly what would actually get sliced.
     val currentMaterial = objects.firstOrNull()?.material()
+    // Colour mixing (0.2.0, §requirement 2): which system (if any) this plate's own target/tool count actually offers -
+    // the same com.nozzleitall.printer.ext.ProfileFeatures rule Desktop's PrepareState.features() uses. Empty on every
+    // single-tool target and on any Bambu/AMS-style target (ColorMix and Full Spectrum are both engine-side PrusaSlicer/
+    // Snapmaker Orca features, gated to the printers that actually run one of those two config stacks).
+    val colourMixFeatures = remember(profile?.kind, toolCount) { colourMixFeaturesFor(profile?.kind ?: PrinterKind.GENERIC_KLIPPER, toolCount) }
+    // mixedFilamentDefinitions: Snapmaker Full Spectrum's own `mixed_filament_definitions` string (empty = none saved
+    // yet); fullSpectrumMixes is just that same string parsed back for display. virtualExtruders: PrusaSlicer ColorMix's
+    // own blends/gradients for this plate, fed to sliceOnePlate as `{"version":1,"virtual_extruders":[...]}` JSON
+    // (PrusaColorMixFormat.sliceRequestJson) only when non-empty.
+    var mixedFilamentDefinitions by remember(projectId, newProjectName) { mutableStateOf("") }
+    var fullSpectrumMixes by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.FullSpectrumFormat.Mix>>(emptyList()) }
+    var virtualExtruders by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.PrusaColorMixFormat.Virtual>>(emptyList()) }
+    var colourMixError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var materialPickerOpen by remember(projectId, newProjectName) { mutableStateOf(false) }
     // Phase 8 follow-up (§11, §16, WO-28): the real per-object material+tool picker, only ever
     // opened when toolCount > 1 (see the "Objects on this plate" section below) - holds the
@@ -397,8 +410,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         // The project's material overrides temperatures on top of (not instead of) the basic settings; skipped for a
         // multi-tool target, where slotMaterials carries each object's own material.
         val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
+        // Colour mixing (0.2.0, requirement 2): both blank/empty for every printer that doesn't offer either system
+        // (colourMixFeatures below) and for one that does but has no mixes/blends configured yet - sliceProject then
+        // slices exactly as it always has.
         val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
-            slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) }, outputTag = tag)
+            slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) }, outputTag = tag,
+            mixedFilamentDefinitions = mixedFilamentDefinitions.ifBlank { null },
+            virtualExtruders = if (virtualExtruders.isEmpty()) "" else com.nozzleitall.printer.ext.PrusaColorMixFormat.sliceRequestJson(virtualExtruders))
         if (outcome is SliceOutcome.Success) {
             // Calibration towers change a machine setting with height: patch the sliced plain G-code (not a Bambu bundle).
             val cal = CalibrationSpec.decode(project?.calibration)
@@ -852,6 +870,65 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                         }
                                         toolWarnings.forEachIndexed { k, w -> Text("⚠ $w", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-multimaterial-warning-$k")) }
                                     }
+                                    // Colour mixing (0.2.0, requirement 2): shown only when this printer/tool-count
+                                    // combination actually offers one of the two engine-side mixing systems
+                                    // (com.nozzleitall.printer.ext.ProfileFeatures - Snapmaker U1 families get Full
+                                    // Spectrum, every other >=2-slot target gets PrusaSlicer ColorMix, never both).
+                                    // Wording mirrors Desktop's own editors (ColourMixingUi.kt/PrusaColorMixUi.kt)
+                                    // trimmed to what fits a phone: one "Add" action per system instead of the full
+                                    // match/preset/gradient toolset, since a mix or blend, once added, already reaches
+                                    // the slice the same way Desktop's own editor output does.
+                                    if (colourMixFeatures.isNotEmpty()) {
+                                        val physical = remember(objects, toolCount) { (1..toolCount).map { slot -> val m = objects.firstOrNull { (it.toolSlotIndex ?: 1) == slot }?.material(); (m?.colorHex ?: "#FFFFFF") to m?.type } }
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-colour-mixing")) {
+                                            if (com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM in colourMixFeatures) {
+                                                Text("Colour mixing - Full Spectrum", style = MaterialTheme.typography.titleSmall)
+                                                Text("Blend two loaded filaments into a new virtual colour this printer mixes as it prints.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                fullSpectrumMixes.forEachIndexed { k, mix ->
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        Text(mix.label.ifBlank { "Mix #${mix.id}" } + " · ${mix.displayHex}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f).testTag("project-fullspectrum-mix-$k"))
+                                                        TextButton({
+                                                            scope.launch {
+                                                                colourMixError = null
+                                                                try { val r = AndroidFullSpectrum.remove(physical.map { it.first }, mixedFilamentDefinitions, mix.id); mixedFilamentDefinitions = r.definitions; fullSpectrumMixes = r.rows }
+                                                                catch (e: ColourMixEngineError) { colourMixError = e.message }
+                                                            }
+                                                        }, modifier = Modifier.testTag("project-fullspectrum-remove-$k")) { Text("Remove") }
+                                                    }
+                                                }
+                                                OutlinedButton({
+                                                    scope.launch {
+                                                        colourMixError = null
+                                                        try { val r = AndroidFullSpectrum.add(physical.map { it.first }, mixedFilamentDefinitions, 0, 1, 50); mixedFilamentDefinitions = r.definitions; fullSpectrumMixes = r.rows }
+                                                        catch (e: ColourMixEngineError) { colourMixError = e.message }
+                                                    }
+                                                }, enabled = toolCount >= 2, modifier = Modifier.testTag("project-fullspectrum-add")) { Text("+ Add 50/50 mix (Tool 1 + Tool 2)") }
+                                            } else if (com.nozzleitall.printer.ext.Prusa.COLOR_MIX in colourMixFeatures) {
+                                                Text("Colour mixing - ColorMix", style = MaterialTheme.typography.titleSmall)
+                                                Text("Blend two loaded filaments in a repeating layer cycle, then assign an object to it below like any other tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                virtualExtruders.forEachIndexed { k, v ->
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        Text(v.summary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f).testTag("project-colormix-blend-$k"))
+                                                        TextButton({ virtualExtruders = virtualExtruders.filter { it.id != v.id } }, modifier = Modifier.testTag("project-colormix-remove-$k")) { Text("Remove") }
+                                                    }
+                                                }
+                                                OutlinedButton({
+                                                    scope.launch {
+                                                        colourMixError = null
+                                                        try {
+                                                            val id = AndroidColorMix.nextId(toolCount, virtualExtruders)
+                                                            val draft = com.nozzleitall.printer.ext.PrusaColorMixFormat.Virtual(id, "blend", listOf(
+                                                                com.nozzleitall.printer.ext.PrusaColorMixFormat.Component(1, 0.5),
+                                                                com.nozzleitall.printer.ext.PrusaColorMixFormat.Component(2, 0.5),
+                                                            ))
+                                                            virtualExtruders = AndroidColorMix.normalize(physical, virtualExtruders + draft)
+                                                        } catch (e: ColourMixEngineError) { colourMixError = e.message }
+                                                    }
+                                                }, enabled = toolCount >= 2, modifier = Modifier.testTag("project-colormix-add")) { Text("+ Add 50/50 blend (Tool 1 + Tool 2)") }
+                                            }
+                                            colourMixError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-colour-mixing-error")) }
+                                        }
+                                    }
                                 }
                             }
                             1 -> {
@@ -1129,6 +1206,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         (1..toolCount).forEach { slot ->
                             FilterChip(pendingToolSlot == slot, { pendingToolSlot = slot }, label = { Text("Tool $slot") }, modifier = Modifier.testTag("project-object-tool-$slot"))
+                        }
+                        // ColorMix (0.2.0): a blend prints as its own virtual "tool", picked the same way as a real
+                        // one - its id already sits above toolCount (PrusaColorMix's own next_id numbering), so it
+                        // slots straight into the same 1-based toolSlotIndex every physical tool uses.
+                        virtualExtruders.forEach { v ->
+                            FilterChip(pendingToolSlot == v.id, { pendingToolSlot = v.id }, label = { Text("Blend ${v.summary}") }, modifier = Modifier.testTag("project-object-tool-blend-${v.id}"))
                         }
                     }
                     Text("Material", style = MaterialTheme.typography.labelMedium)

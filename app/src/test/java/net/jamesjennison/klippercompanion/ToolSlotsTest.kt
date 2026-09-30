@@ -136,4 +136,25 @@ class ToolSlotsTest {
         assertEquals(4, materials.size)
         assertTrue(materials.all { it == null })
     }
+
+    // Colour mixing (0.2.0, requirement 5): colourMixFeaturesFor must reproduce
+    // com.nozzleitall.printer.ext.ProfileFeatures.of's own real gating rule for every PrinterKind Android actually
+    // has - a U1 family gets Full Spectrum, any other real multi-slot target gets ColorMix, and a single-tool
+    // target (any kind) gets neither. Mirrors PrusaColorMixTest.colorMixIsForEveryMultiSlotPrinterWithoutFullSpectrum
+    // on the Desktop side, since Android has no PrinterFamily/familyHint of its own to test that rule against directly.
+    @Test fun stockU1WithMultipleToolsGetsFullSpectrum() {
+        assertEquals(setOf(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM), colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 4))
+    }
+    @Test fun paxxU1WithMultipleToolsGetsFullSpectrum() {
+        assertEquals(setOf(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM), colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1_PAXX, 4))
+    }
+    @Test fun anyOtherMultiSlotTargetGetsColorMixNotFullSpectrum() {
+        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.PRUSA_LINK, 5))
+        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 2))
+    }
+    @Test fun aSingleToolTargetGetsNeitherMixingSystem() {
+        assertTrue(colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 1).isEmpty())
+        assertTrue(colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 1).isEmpty())
+        assertTrue(colourMixFeaturesFor(PrinterKind.BAMBU_LAB, 1).isEmpty())
+    }
 }

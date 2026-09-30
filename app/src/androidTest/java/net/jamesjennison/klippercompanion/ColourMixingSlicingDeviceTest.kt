@@ -13,17 +13,21 @@ import java.io.File
 // Colour mixing (0.2.0, requirement 5): proves the two engine-side mixing systems actually reach a real slice
 // through the exact same SlicingCoordinator.sliceProject path the project editor's own colour-mixing UI uses
 // (AndroidTestSlicer.sliceColourMix), never a parallel test-only pipeline, against the bundled Snapmaker U1
-// profile pack (the one bundled multi-slot profile, same one ToolAssignmentSlicingDeviceTest/
-// MultiObjectSlicingDeviceTest already slice against - 4 real declared tool slots).
+// profile pack.
+//
+// Kept on Snapmaker U1 rather than switched to a non-U1 multi-slot pack (colour-mixing follow-up, requirement
+// 5b): U1 is the only bundled profile this app has actually proven slices multi-tool through
+// SlicingCoordinator's production path at all - see ToolAssignmentSlicingDeviceTest's own header, which
+// hardcodes U1's real override recipe (filament_diameter's array length is what really drives libslic3r's
+// extruder count, not machine.json) and explicitly calls generalizing it to another profile "a real, separate
+// follow-up". Every other bundled multi-slot pack (Prusa XL's 5T, the MMU3 packs, RatRig IDEX, the AMS/CFS
+// packs) either uses a different tool-count mechanism (declared filament slots rather than
+// filament_diameter's length) or has never been slice-tested multi-tool on Android at all; picking one for this
+// suite without first proving *that* profile's own override recipe would risk a flaky or silently-wrong test
+// rather than a real one. So this stays U1 until a non-U1 profile gets that same proof of its own.
 //
 // Never talks to a real printer: everything here is a local file slice against a bundled asset profile, exactly
 // like every other *SlicingDeviceTest in this package.
-//
-// These tests need the mixed_filament_definitions/virtual_extruders ops actually implemented by the on-device
-// engine (nozzle-engine PR #9, not yet re-pinned into this branch as of writing) - until that pin lands they are
-// expected to fail with "This engine doesn't support ... yet." from AndroidFullSpectrum/AndroidColorMix, or with
-// the *Mix native calls simply not existing (UnsatisfiedLinkError). The owner will re-run this suite once the
-// pin is updated.
 @RunWith(AndroidJUnit4::class)
 class ColourMixingSlicingDeviceTest {
     private fun cube(name: String): File {
@@ -109,5 +113,45 @@ class ColourMixingSlicingDeviceTest {
             text.contains(FullSpectrumFormat.DEFINITIONS_KEY),
         )
         assertTrue("expected the real definitions value in the sliced config block", text.contains(definitions))
+    }
+
+    // Colour mixing (0.2.0, requirement 5a): the fullSpectrumDefinitionsReachTheSlicedConfig test above proves a
+    // hand-written definitions string reaches the sliced config; this proves the whole real path a user actually
+    // exercises - AndroidFullSpectrum.add() (the exact call ProjectEditorScreen's "+ Add 50/50 mix" button makes)
+    // builds a real mix, and an object assigned to that mix's own virtual slot id actually alternates between the
+    // two physical tools it mixes, layer by layer, in the sliced G-code - the same alternation
+    // colorMixBlendAlternatesToolsAcrossLayers proves for ColorMix, so neither mixing system gets a weaker
+    // real-engine assertion than the other.
+    @Test fun fullSpectrumMixFromAddAlternatesToolsAcrossLayers() {
+        val cubeFile = cube("fullspectrum-add.stl")
+        val red = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }.copy(id = "fsadd-red", colorHex = "#FF0000")
+        val blue = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }.copy(id = "fsadd-blue", colorHex = "#0000FF")
+        // U1's other two slots keep whatever the bundled default reports - only slots 1 and 2 are mixed here.
+        val slotMaterials = listOf(red, blue, null, null)
+        val physical = slotMaterials.map { it?.colorHex ?: "#FFFFFF" }
+
+        val added = AndroidFullSpectrum.add(physical, definitions = "", a = 0, b = 1, mixBPercent = 50)
+        val mixId = added.addedId ?: throw AssertionError("expected AndroidFullSpectrum.add to return the new mix's id, got $added")
+
+        val outcome = slicer().sliceColourMix(
+            SlicingPrinterModel.SNAPMAKER_U1,
+            listOf(cubeFile to ModelTransform()),
+            toolSlotIndices = listOf(mixId),
+            slotMaterials = slotMaterials,
+            mixedFilamentDefinitions = added.definitions,
+        )
+        val gcode = (outcome as? SliceOutcome.Success)?.gcode ?: throw AssertionError("expected a real Full Spectrum slice, got $outcome")
+        assertTrue("expected real g-code output, got ${gcode.length()} bytes", gcode.exists() && gcode.length() > 1000)
+        val text = gcode.readText()
+
+        val toolChangesByLayer = text.split(Regex("(?m)^;LAYER_CHANGE$")).drop(1).map { layer ->
+            Regex("(?m)^T[0-9]+$").findAll(layer).map { it.value }.toList()
+        }
+        assertTrue("expected at least 10 layers in this slice, got ${toolChangesByLayer.size}", toolChangesByLayer.size >= 10)
+        val layersWithAToolChange = toolChangesByLayer.count { it.isNotEmpty() }
+        assertTrue(
+            "expected tool changes on at least 80% of layers (the mix alternates every layer), got $layersWithAToolChange/${toolChangesByLayer.size}",
+            layersWithAToolChange >= (toolChangesByLayer.size * 0.8),
+        )
     }
 }

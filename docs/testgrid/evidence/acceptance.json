@@ -71,6 +71,12 @@
       "bundleDigest": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3",
       "date": "2026-09-29",
       "note": "Level 4 run on the owner's Centauri Carbon with CANVAS, COSMOS Release 26.09.0, built from 988df75 with nozzle-engine 2b7b6cf (tower declared for the adaptive mesh). Two-tool print PASS with the prime tower printed on the bed (owner watched it; visible in the photo) and no colour bleed. Everything else carried over."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "2f65cc236af1541ab5427bed80788c7d22b5776bae3fdbf540507eb08cfc87df",
+      "date": "2026-09-30",
+      "note": "Level 4 run on the owner's Snapmaker U1, PAXX extended firmware 1.6.0.267_20260815150420, built from ece2b73 with nozzle-engine f766512 (paxx-u1 1.8.0). Colour-mix swatch: mix-slice PASS (50/50 of tool 1 blue #08ABFB and tool 2 magenta #D93B90 through Full Spectrum, alternating layer by layer), mix-print PASS (owner reported a blended purple; photo attached). The other 13 tests carried over from runs 40e84308, 5624aa6e (bundle cc752cad) and 2da1f8f0 (bundle 2d3afb85)."
     }
   ],
   "format": "nozzle.evidence-acceptance",

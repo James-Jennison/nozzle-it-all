@@ -32,6 +32,21 @@
     },
     {
       "attachments": 1,
+      "bundleDigest": "2f65cc236af1541ab5427bed80788c7d22b5776bae3fdbf540507eb08cfc87df",
+      "bytes": 1830295,
+      "completedAt": 1790770394445,
+      "contentDigest": "d2e1255104a4b5a652ccae7cc2fdcf1fe3c2d9a8a5ad4402c9d0e02affbb716f",
+      "file": "2f65cc236af1541ab5427bed80788c7d22b5776bae3fdbf540507eb08cfc87df.nozzle-evidence.zip",
+      "firmwareFamily": "paxx-extended",
+      "kind": "physical",
+      "location": "gthost-build01:~/testgrid-evidence/bundles",
+      "maxSafetyLevel": 4,
+      "printer": "Snapmaker U1",
+      "runId": "e0346c0b-c9b6-488c-b97d-f9126c61aecb",
+      "suite": "paxx-u1 1.8.0"
+    },
+    {
+      "attachments": 1,
       "bundleDigest": "3e094a9380bdcaa4c4a99870aa794d2d8de8b1c13a100e6a66b7a05e8a3501a9",
       "bytes": 6720044,
       "completedAt": 1790702515997,

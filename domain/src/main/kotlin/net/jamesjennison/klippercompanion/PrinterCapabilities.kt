@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_SSTP, SNAPMAKER_SACP, USB_SERIAL }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -73,6 +73,9 @@ data class PrinterCapabilities(
     // names, case-insensitively - same "no dead buttons" discipline this app's existing
     // "Favorite macros" section already uses, not a static assumption.
     val supportsFilamentLoadUnload: Boolean = false,
+    // False for a connection whose upstream print host reads no printer state at all (Duet: OrcaSlicer's Duet.cpp only
+    // checks the board answers; Repetier-Server: Repetier.cpp reads only printer slugs), so its snapshot is "reachable, state unknown". See sendAllowedStates.
+    val readsPrinterState: Boolean = true,
 )
 
 fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
@@ -82,10 +85,20 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = true,
         supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
     )
+    // PAXX/extended firmware: multiACE, but NO Bespok3d - Bespok3d targets stock firmware and the
+    // enrollment preflight refuses extended firmware (verified against the owner's PAXX U1).
     PrinterKind.SNAPMAKER_U1_PAXX -> PrinterCapabilities(
         transport = PrinterTransport.MOONRAKER, supportsPauseResumeCancel = true, supportsCamera = true,
         supportsKlipperExtras = true, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
-        hasBespok3d = true, hasMultiAce = true, verifiedOnRealHardware = true,
+        hasBespok3d = false, hasMultiAce = true, verifiedOnRealHardware = true,
+        supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
+    )
+    // Stock firmware: Bespok3d, no multiACE (a PAXX add-on). Same Moonraker feature set, but it has not been
+    // run on a stock-firmware U1 (the owner's is PAXX), so it is honestly reported as unverified.
+    PrinterKind.SNAPMAKER_U1 -> PrinterCapabilities(
+        transport = PrinterTransport.MOONRAKER, supportsPauseResumeCancel = true, supportsCamera = true,
+        supportsKlipperExtras = true, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = true, hasMultiAce = false, verifiedOnRealHardware = false,
         supportsJog = true, supportsBedLevelingTrigger = true, supportsTimelapseTrigger = true, supportsFilamentLoadUnload = true,
     )
     PrinterKind.BAMBU_LAB -> PrinterCapabilities(
@@ -98,11 +111,123 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )
+    // Elegoo Centauri Carbon (stock firmware, SDCP) / Centauri Carbon 2 (MQTT) through :adapter-elegoo: status, CANVAS
+    // slots, send-and-start, cancel; pause/resume on the Centauri Carbon only (ElegooPrinterService refuses them on a CC2,
+    // whose LAN protocol has no resume). No camera yet. Built against fakes only.
+    PrinterKind.ELEGOO -> PrinterCapabilities(
+        transport = PrinterTransport.ELEGOO, supportsPauseResumeCancel = true, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
     PrinterKind.PRUSA_LINK -> PrinterCapabilities(
         transport = PrinterTransport.PRUSA_LINK, supportsPauseResumeCancel = true, supportsCamera = false,
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )
+    // Creality K1 / K2 / Hi (CrealityPrinterService) and Flashforge AD5X / 5M (FlashforgePrinterService): live status, the
+    // CFS / IFS slots and uploading a sliced file. Starting it is refused until CrealityCfs.START_VERIFIED /
+    // FlashforgeIfs.START_VERIFIED (nobody has checked the start on a printer yet), and pause / resume / cancel aren't built.
+    // Built from OrcaSlicer's and CrealityPrint's sources only.
+    PrinterKind.CREALITY -> PrinterCapabilities(
+        transport = PrinterTransport.CREALITY, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    PrinterKind.FLASHFORGE -> PrinterCapabilities(
+        transport = PrinterTransport.FLASHFORGE, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    // Duet / RepRapFirmware (DuetPrinterService): a reachability check (upstream OrcaSlicer's Duet host reads no printer
+    // state, so the state is unknown) and uploading a sliced file. Starting it is refused until DuetRrf.START_VERIFIED;
+    // pause / resume / cancel aren't built. Built from OrcaSlicer's source only.
+    PrinterKind.DUET -> PrinterCapabilities(
+        transport = PrinterTransport.DUET, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
+    )
+    // Networked UltiMaker (UltiMakerPrinterService): live state and job progress from the cluster API (Cura's reads), and
+    // pairing. An UltiMaker prints every job it is sent, so sending is refused outright until UltiMakerApi.START_VERIFIED;
+    // pause / resume / abort aren't built. Built from OrcaSlicer's and Cura's sources only.
+    PrinterKind.ULTIMAKER -> PrinterCapabilities(
+        transport = PrinterTransport.ULTIMAKER, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    // Repetier-Server (RepetierPrinterService): a reachability check (upstream OrcaSlicer's Repetier host reads no printer
+    // state) and uploading a sliced file to the server's model library, which never prints. Starting it is refused until
+    // RepetierServer.START_VERIFIED; pause / stop aren't built. Built from OrcaSlicer's source only.
+    PrinterKind.REPETIER -> PrinterCapabilities(
+        transport = PrinterTransport.REPETIER, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
+    )
+    // Anycubic Kobra 3 / S1 / X on stock firmware in LAN mode (AnycubicLanPrinterService): live status and temperatures, the
+    // ACE / ACE Pro slots and uploading a sliced file. Starting it is refused until AnycubicLan.START_VERIFIED, and so are
+    // pause / resume / cancel, temperatures, homing and the ACE's feed and dryer. Ported from anycubic-orca-plugin,
+    // cross-checked against kobra-connect (P-0036).
+    PrinterKind.ANYCUBIC_LAN -> PrinterCapabilities(
+        transport = PrinterTransport.ANYCUBIC_LAN, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    // Snapmaker 2.0 A-series on the touchscreen's HTTP API (SnapmakerSstpPrinterService): live state, temperatures and job
+    // progress, connecting (the person accepts on the touchscreen) and uploading a sliced file, which never prints. Starting it
+    // is refused until SnapmakerSstp.START_VERIFIED, and so are pause / resume / stop, temperatures and homing / jogging.
+    // Laser and CNC are never offered. Ported from Snapmaker Luban (P-0037).
+    PrinterKind.SNAPMAKER_A_SERIES -> PrinterCapabilities(
+        transport = PrinterTransport.SNAPMAKER_SSTP, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    // Snapmaker J1 / Artisan over SACP (SnapmakerSacpPrinterService): temperatures and job progress from the printer's
+    // subscriptions, connecting and uploading a sliced file, which never prints. The printer's own state names aren't in the
+    // sources used, so its state is unknown (readsPrinterState false). Starting it is refused until
+    // SnapmakerSacp.START_VERIFIED, and so are pause / resume / stop, temperatures and homing / jogging. Laser and CNC are
+    // never offered. Ported from Snapmaker Luban and the Snapmaker SACP SDK (P-0037).
+    PrinterKind.SNAPMAKER_SACP -> PrinterCapabilities(
+        transport = PrinterTransport.SNAPMAKER_SACP, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
+    )
+    // A printer plugged in directly over USB, spoken to as a Marlin/Prusa serial port (UsbSerialPrinterService): live
+    // temperatures (M105 poll or M155 auto-report) and SD job progress (M27), read-only. Starting a print, uploading a
+    // file (M28/M29) and every other control are refused until UsbSerialPrinter.START_VERIFIED / UPLOAD_VERIFIED - see
+    // UsbSerialPrinter.kt. No camera, no on-device slicing add-ons. Built entirely from public protocol references
+    // (docs/upstream/PROVENANCE.md P-0038); not yet run against a printer.
+    PrinterKind.USB_SERIAL -> PrinterCapabilities(
+        transport = PrinterTransport.USB_SERIAL, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
 }
 
+/**
+ * Whether Nozzle It All may start a print on this kind of printer. False while a kind's start is gated off until it has
+ * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED, RepetierServer.START_VERIFIED, AnycubicLan.START_VERIFIED,
+ * SnapmakerSstp.START_VERIFIED, SnapmakerSacp.START_VERIFIED): sending a
+ * sliced file to one then uploads it (an UltiMaker: sends nothing), and the person starts it on the printer's screen.
+ */
+fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
+    PrinterKind.CREALITY -> CrealityCfs.START_VERIFIED
+    // Either Flashforge protocol (FlashforgeIfs: port 8898; FlashforgeLegacy: port 8899) may serve a FLASHFORGE profile.
+    PrinterKind.FLASHFORGE -> FlashforgeIfs.START_VERIFIED && FlashforgeLegacy.START_VERIFIED
+    PrinterKind.DUET -> DuetRrf.START_VERIFIED
+    PrinterKind.ULTIMAKER -> UltiMakerApi.START_VERIFIED
+    PrinterKind.REPETIER -> RepetierServer.START_VERIFIED
+    PrinterKind.ANYCUBIC_LAN -> AnycubicLan.START_VERIFIED
+    PrinterKind.SNAPMAKER_A_SERIES -> SnapmakerSstp.START_VERIFIED
+    PrinterKind.SNAPMAKER_SACP -> SnapmakerSacp.START_VERIFIED
+    PrinterKind.USB_SERIAL -> UsbSerialPrinter.START_VERIFIED
+    else -> true
+}
 
+/**
+ * The printer states "send to printer" may go out in. A kind that reads no printer state (readsPrinterState false) reports
+ * "unknown"; while its start is gated off (startVerifiedFor false) a send only uploads the file, never starts it, so
+ * "unknown" is allowed then and only then. Once such a kind's start is verified, a send needs a real idle state again.
+ */
+fun sendAllowedStates(kind: PrinterKind): Set<String> {
+    val idle = setOf("standby", "complete", "cancelled", "error")
+    return if (!capabilitiesFor(kind).readsPrinterState && !startVerifiedFor(kind)) idle + "unknown" else idle
+}

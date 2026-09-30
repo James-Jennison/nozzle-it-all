@@ -1,0 +1,1824 @@
+{
+ "vendors": [
+  {
+   "name": "Snapmaker",
+   "models": [
+    {
+     "label": "Snapmaker A250",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A250 BKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A250 Dual",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A250 Dual BKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A250 Dual QS+B Kit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A250 Dual QSKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A250 QS+B Kit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A250 QSKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350 BKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350 Dual",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350 Dual BKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350 Dual QS+B Kit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350 Dual QSKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350 QS+B Kit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker A350 QSKit",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker Artisan",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker J1",
+     "verified": false
+    },
+    {
+     "label": "Snapmaker U1",
+     "verified": true
+    }
+   ]
+  },
+  {
+   "name": "Elegoo",
+   "models": [
+    {
+     "label": "Elegoo Centauri Carbon (OpenCentauri COSMOS)",
+     "verified": true
+    }
+   ]
+  },
+  {
+   "name": "Bambu Lab",
+   "models": [
+    {
+     "label": "Bambu Lab A1",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab A1 mini",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab H2C",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab H2D",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab H2D Pro",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab H2S",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab P1P",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab P1S",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab P2S",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab X1",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab X1 Carbon",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab X1E",
+     "verified": false
+    },
+    {
+     "label": "Bambu Lab X2D",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Prusa",
+   "models": [
+    {
+     "label": "Prusa CORE One",
+     "verified": false
+    },
+    {
+     "label": "Prusa CORE One L",
+     "verified": false
+    },
+    {
+     "label": "Prusa MINI / MINI+",
+     "verified": false
+    },
+    {
+     "label": "Prusa MINI IS",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK3.5",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK3S / MK3S+",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK4",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK4S",
+     "verified": false
+    },
+    {
+     "label": "Prusa XL (single tool)",
+     "verified": false
+    },
+    {
+     "label": "Prusa CORE One + MMU3",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK4S + MMU3",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK3.9 + MMU3",
+     "verified": false
+    },
+    {
+     "label": "Prusa MK3.5 + MMU3",
+     "verified": false
+    },
+    {
+     "label": "Prusa XL 5T (five tools)",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Afinia",
+   "models": [
+    {
+     "label": "Afinia H+1(HS)",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Anker",
+   "models": [
+    {
+     "label": "Anker M5",
+     "verified": false
+    },
+    {
+     "label": "Anker M5 All-Metal Hot End",
+     "verified": false
+    },
+    {
+     "label": "Anker M5C",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Anycubic",
+   "models": [
+    {
+     "label": "Anycubic 4Max Pro",
+     "verified": false
+    },
+    {
+     "label": "Anycubic 4Max Pro 2",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Chiron",
+     "verified": false
+    },
+    {
+     "label": "Anycubic i3 Mega S",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra 2",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra 2 Max",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra 2 Neo",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra 2 Plus",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra 2 Pro",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra 3",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra 3 Max",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra Max",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra Neo",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra Plus",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra S1",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra S1 Max",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Kobra X",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Predator",
+     "verified": false
+    },
+    {
+     "label": "Anycubic Vyper",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Artillery",
+   "models": [
+    {
+     "label": "Artillery Genius",
+     "verified": false
+    },
+    {
+     "label": "Artillery Genius Pro",
+     "verified": false
+    },
+    {
+     "label": "Artillery Hornet",
+     "verified": false
+    },
+    {
+     "label": "Artillery M1 Pro",
+     "verified": false
+    },
+    {
+     "label": "Artillery Sidewinder X1",
+     "verified": false
+    },
+    {
+     "label": "Artillery Sidewinder X2",
+     "verified": false
+    },
+    {
+     "label": "Artillery Sidewinder X3 Plus",
+     "verified": false
+    },
+    {
+     "label": "Artillery Sidewinder X3 Pro",
+     "verified": false
+    },
+    {
+     "label": "Artillery Sidewinder X4 Plus",
+     "verified": false
+    },
+    {
+     "label": "Artillery Sidewinder X4 Pro",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "BIQU",
+   "models": [
+    {
+     "label": "BIQU B1",
+     "verified": false
+    },
+    {
+     "label": "BIQU BX",
+     "verified": false
+    },
+    {
+     "label": "BIQU Hurakan",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Blocks",
+   "models": [
+    {
+     "label": "BLOCKS Pro S100",
+     "verified": false
+    },
+    {
+     "label": "BLOCKS RD50 V2",
+     "verified": false
+    },
+    {
+     "label": "BLOCKS RF50",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Chuanying",
+   "models": [
+    {
+     "label": "Chuanying X1",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "CoLiDo",
+   "models": [
+    {
+     "label": "CoLiDo 160 V2",
+     "verified": false
+    },
+    {
+     "label": "CoLiDo DIY 4.0",
+     "verified": false
+    },
+    {
+     "label": "CoLiDo DIY 4.0 V2",
+     "verified": false
+    },
+    {
+     "label": "CoLiDo SR1",
+     "verified": false
+    },
+    {
+     "label": "CoLiDo X16",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Comgrow",
+   "models": [
+    {
+     "label": "Comgrow T300",
+     "verified": false
+    },
+    {
+     "label": "Comgrow T500",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Co Print",
+   "models": [
+    {
+     "label": "Co Print ChromaSet",
+     "verified": false
+    },
+    {
+     "label": "Co Print ChromaSet (Co Print ChromaSet - Ender-3 V3)",
+     "verified": false
+    },
+    {
+     "label": "Co Print ChromaSet (Co Print ChromaSet fast)",
+     "verified": false
+    },
+    {
+     "label": "Co Print ChromaSet (Co Print ChromaSet)",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Creality",
+   "models": [
+    {
+     "label": "Creality CR-10",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-10 Max",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-10 SE",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-10 Smart",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-10 Smart Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-10 V2",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-10 V3",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-10S Pro V2",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-20 Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-6 Max",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-6 SE",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-M4",
+     "verified": false
+    },
+    {
+     "label": "Creality CR-M4 SE",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-2 Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 Max",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 Max Neo",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 Neo",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 S1",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 S1 Plus",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 S1 Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 S1 Sonic",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 V2",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 V2 Neo",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 V3",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 V3 KE",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 V3 Plus",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 V3 SE",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-3 V4",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-5",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-5 Max",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-5 Plus",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-5 Pro (2019)",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-5 S1",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-5 S1 Sonic",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-5S",
+     "verified": false
+    },
+    {
+     "label": "Creality Ender-6",
+     "verified": false
+    },
+    {
+     "label": "Creality Hi",
+     "verified": false
+    },
+    {
+     "label": "Creality K1",
+     "verified": false
+    },
+    {
+     "label": "Creality K1 Max",
+     "verified": false
+    },
+    {
+     "label": "Creality K1 Max_CFS-C",
+     "verified": false
+    },
+    {
+     "label": "Creality K1 SE",
+     "verified": false
+    },
+    {
+     "label": "Creality K1 SE_CFS-C",
+     "verified": false
+    },
+    {
+     "label": "Creality K1_CFS-C",
+     "verified": false
+    },
+    {
+     "label": "Creality K1C",
+     "verified": false
+    },
+    {
+     "label": "Creality K1C_CFS-C",
+     "verified": false
+    },
+    {
+     "label": "Creality K2",
+     "verified": false
+    },
+    {
+     "label": "Creality K2 Plus",
+     "verified": false
+    },
+    {
+     "label": "Creality K2 Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality K2 SE",
+     "verified": false
+    },
+    {
+     "label": "Creality Sermoon D3",
+     "verified": false
+    },
+    {
+     "label": "Creality Sermoon D3 Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality Sermoon M300",
+     "verified": false
+    },
+    {
+     "label": "Creality Sermoon V1",
+     "verified": false
+    },
+    {
+     "label": "Creality Sermoon V1 Pro",
+     "verified": false
+    },
+    {
+     "label": "Creality SPARKX i7",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Cubicon",
+   "models": [
+    {
+     "label": "Cubicon xCeler-I",
+     "verified": false
+    },
+    {
+     "label": "Cubicon xCeler-Mini",
+     "verified": false
+    },
+    {
+     "label": "Cubicon xCeler-Plus",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Dremel",
+   "models": [
+    {
+     "label": "Dremel 3D20",
+     "verified": false
+    },
+    {
+     "label": "Dremel 3D40",
+     "verified": false
+    },
+    {
+     "label": "Dremel 3D45",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Eryone",
+   "models": [
+    {
+     "label": "Eryone Thinker X400",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Flashforge",
+   "models": [
+    {
+     "label": "Flashforge AD5X",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Adventurer 3 Series",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Adventurer 4 Series",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Adventurer 5M",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Adventurer 5M Pro",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Adventurer A5",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Artemis",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Creator 5",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Creator 5 Pro",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Guider 2s",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Guider 3 Ultra",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Guider4",
+     "verified": false
+    },
+    {
+     "label": "Flashforge Guider4 Pro",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "FLSun",
+   "models": [
+    {
+     "label": "FLSun Q5",
+     "verified": false
+    },
+    {
+     "label": "FLSun QQ-S Pro",
+     "verified": false
+    },
+    {
+     "label": "FLSun S1",
+     "verified": false
+    },
+    {
+     "label": "FLSun Super Racer (SR)",
+     "verified": false
+    },
+    {
+     "label": "FLSun T1",
+     "verified": false
+    },
+    {
+     "label": "FLSun V400",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "FlyingBear",
+   "models": [
+    {
+     "label": "FlyingBear Generic Klipper Printer",
+     "verified": false
+    },
+    {
+     "label": "FlyingBear Generic Klipper Printer (fdm_machine_common)",
+     "verified": false
+    },
+    {
+     "label": "FlyingBear Ghost 6",
+     "verified": false
+    },
+    {
+     "label": "FlyingBear Reborn3",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Folgertech",
+   "models": [
+    {
+     "label": "Folgertech FT-5",
+     "verified": false
+    },
+    {
+     "label": "Folgertech FT-6",
+     "verified": false
+    },
+    {
+     "label": "Folgertech i3",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Geeetech",
+   "models": [
+    {
+     "label": "Geeetech A10 M",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A10 Pro",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A10 T",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A20",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A20 M",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A20 T",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A30 M",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A30 Pro",
+     "verified": false
+    },
+    {
+     "label": "Geeetech A30 T",
+     "verified": false
+    },
+    {
+     "label": "Geeetech M1",
+     "verified": false
+    },
+    {
+     "label": "Geeetech Mizar",
+     "verified": false
+    },
+    {
+     "label": "Geeetech Mizar M",
+     "verified": false
+    },
+    {
+     "label": "Geeetech Mizar Max",
+     "verified": false
+    },
+    {
+     "label": "Geeetech Mizar Pro",
+     "verified": false
+    },
+    {
+     "label": "Geeetech Mizar S",
+     "verified": false
+    },
+    {
+     "label": "Geeetech Thunder",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "InfiMech",
+   "models": [
+    {
+     "label": "InfiMech Generic Klipper Printer",
+     "verified": false
+    },
+    {
+     "label": "InfiMech Generic Klipper Printer (fdm_machine_common)",
+     "verified": false
+    },
+    {
+     "label": "InfiMech TX",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "iQ",
+   "models": [
+    {
+     "label": "TiQ2",
+     "verified": false
+    },
+    {
+     "label": "TiQ8",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Kingroon",
+   "models": [
+    {
+     "label": "Kingroon KLP1",
+     "verified": false
+    },
+    {
+     "label": "Kingroon KP3S 3.0",
+     "verified": false
+    },
+    {
+     "label": "Kingroon KP3S PRO S1",
+     "verified": false
+    },
+    {
+     "label": "Kingroon KP3S PRO V2",
+     "verified": false
+    },
+    {
+     "label": "Kingroon KP3S V1",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "LH",
+   "models": [
+    {
+     "label": "LH Stinger",
+     "verified": false
+    },
+    {
+     "label": "LH Stinger MMU",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "LONGER",
+   "models": [
+    {
+     "label": "LONGER LK10",
+     "verified": false
+    },
+    {
+     "label": "LONGER LK10 Plus",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "M3D",
+   "models": [
+    {
+     "label": "M3D Enabler D7500",
+     "verified": false
+    },
+    {
+     "label": "M3D Enabler D8500",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "MagicMaker",
+   "models": [
+    {
+     "label": "MagicMaker MM BoneKing",
+     "verified": false
+    },
+    {
+     "label": "MagicMaker MM hj SK",
+     "verified": false
+    },
+    {
+     "label": "MagicMaker MM hqs hj",
+     "verified": false
+    },
+    {
+     "label": "MagicMaker MM hqs SF",
+     "verified": false
+    },
+    {
+     "label": "MagicMaker MM slb",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Mellow",
+   "models": [
+    {
+     "label": "Mellow M1",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Meltingplot",
+   "models": [
+    {
+     "label": "Meltingplot CHX 350",
+     "verified": false
+    },
+    {
+     "label": "Meltingplot MBL 133",
+     "verified": false
+    },
+    {
+     "label": "Meltingplot MBL 136",
+     "verified": false
+    },
+    {
+     "label": "Meltingplot MBL 308",
+     "verified": false
+    },
+    {
+     "label": "Meltingplot MBL 480",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "OpenEYE",
+   "models": [
+    {
+     "label": "OpenEYE Peacock V2",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "OrcaArena",
+   "models": [
+    {
+     "label": "OrcaArena Orca Arena X1 Carbon",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Peopoly",
+   "models": [
+    {
+     "label": "Peopoly Magneto X",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Phrozen",
+   "models": [
+    {
+     "label": "Phrozen Arco",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Positron3D",
+   "models": [
+    {
+     "label": "Positron3D The Positron",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Qidi",
+   "models": [
+    {
+     "label": "Qidi Q1 Pro",
+     "verified": false
+    },
+    {
+     "label": "Qidi Q2",
+     "verified": false
+    },
+    {
+     "label": "Qidi Q2C",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-CF Pro",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Max",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Max 3",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Max 4",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Plus",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Plus 3",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Plus 4",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Plus 5",
+     "verified": false
+    },
+    {
+     "label": "Qidi X-Smart 3",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Ratrig",
+   "models": [
+    {
+     "label": "RatRig V-Cast",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 3 200",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 3 300",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 3 400",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 3 500",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 300",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 400",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 500",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 HYBRID 300",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 HYBRID 400",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 HYBRID 500",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 300",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 300 COPY MODE",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 300 MIRROR MODE",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 400",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 400 COPY MODE",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 400 MIRROR MODE",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 500",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 500 COPY MODE",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Core 4 IDEX 500 MIRROR MODE",
+     "verified": false
+    },
+    {
+     "label": "RatRig V-Minion",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "re3D",
+   "models": [
+    {
+     "label": "re3D Gigabot 4",
+     "verified": false
+    },
+    {
+     "label": "re3D Gigabot 4 XLT",
+     "verified": false
+    },
+    {
+     "label": "re3D Terabot 4",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "RH3D",
+   "models": [
+    {
+     "label": "RH3D E3NG v1.2S",
+     "verified": false
+    },
+    {
+     "label": "RH3D VIRTU E3",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "RolohaunDesign",
+   "models": [
+    {
+     "label": "RolohaunDesign Rolohaun Delta Flyer Refit",
+     "verified": false
+    },
+    {
+     "label": "RolohaunDesign Rook MK1 LDO",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "SecKit",
+   "models": [
+    {
+     "label": "Seckit Go3",
+     "verified": false
+    },
+    {
+     "label": "SecKit SK-Tank",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "SeeMeCNC",
+   "models": [
+    {
+     "label": "SeeMeCNC Artemis 300",
+     "verified": false
+    },
+    {
+     "label": "SeeMeCNC BOSSdelta 300",
+     "verified": false
+    },
+    {
+     "label": "SeeMeCNC BOSSdelta 500 0505",
+     "verified": false
+    },
+    {
+     "label": "SeeMeCNC BOSSdelta 500 0510",
+     "verified": false
+    },
+    {
+     "label": "SeeMeCNC BOSSdelta 500 0521",
+     "verified": false
+    },
+    {
+     "label": "SeeMeCNC RostockMAX v3.2",
+     "verified": false
+    },
+    {
+     "label": "SeeMeCNC RostockMAX v4",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Sovol",
+   "models": [
+    {
+     "label": "Sovol SV01",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV01 Pro",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV02",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV05",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV06",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV06 ACE",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV06 Plus",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV06 Plus ACE",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV07",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV07 Plus",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV08",
+     "verified": false
+    },
+    {
+     "label": "Sovol SV08 MAX",
+     "verified": false
+    },
+    {
+     "label": "Sovol Zero",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Tiertime",
+   "models": [
+    {
+     "label": "Tiertime UP300 HS",
+     "verified": false
+    },
+    {
+     "label": "Tiertime UP310 Pro",
+     "verified": false
+    },
+    {
+     "label": "Tiertime UP400 Pro",
+     "verified": false
+    },
+    {
+     "label": "Tiertime UP600 HS",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Tronxy",
+   "models": [
+    {
+     "label": "Tronxy X5SA 400 Marlin Firmware",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "TwoTrees",
+   "models": [
+    {
+     "label": "TwoTrees SK1",
+     "verified": false
+    },
+    {
+     "label": "TwoTrees SP-5 Klipper",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "UltiMaker",
+   "models": [
+    {
+     "label": "UltiMaker 2",
+     "verified": false
+    },
+    {
+     "label": "UltiMaker S5",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Vivedino",
+   "models": [
+    {
+     "label": "Vivedino Troodon 2.0 - Klipper",
+     "verified": false
+    },
+    {
+     "label": "Vivedino Troodon 2.0 - RRF",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Volumic",
+   "models": [
+    {
+     "label": "Volumic EXO42",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO42 IDRE",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO42 IDRE (EXO42 IDRE COPY MODE (0.4 nozzle))",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO42 IDRE (EXO42 IDRE MIRROR MODE (0.4 nozzle))",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO42 Performance",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO42 Stage 2",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO65 IDRE",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO65 IDRE (EXO65 IDRE COPY MODE (0.4 nozzle))",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO65 IDRE (EXO65 IDRE MIRROR MODE (0.4 nozzle))",
+     "verified": false
+    },
+    {
+     "label": "Volumic EXO65 Performance",
+     "verified": false
+    },
+    {
+     "label": "Volumic SH65",
+     "verified": false
+    },
+    {
+     "label": "Volumic SH65 IDRE",
+     "verified": false
+    },
+    {
+     "label": "Volumic SH65 IDRE (SH65 IDRE COPY MODE (0.4 nozzle))",
+     "verified": false
+    },
+    {
+     "label": "Volumic SH65 IDRE (SH65 IDRE MIRROR MODE (0.4 nozzle))",
+     "verified": false
+    },
+    {
+     "label": "Volumic SH65 Performance",
+     "verified": false
+    },
+    {
+     "label": "Volumic SH65 Stage 2",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS20MK2",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30MK2",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30MK3",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30MK3 Stage 2",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30SC",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30SC2",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30SC2 Performance",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30SC2 Stage 2",
+     "verified": false
+    },
+    {
+     "label": "Volumic VS30ULTRA",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Voron",
+   "models": [
+    {
+     "label": "Voron 0.1",
+     "verified": false
+    },
+    {
+     "label": "Voron 2.4 250",
+     "verified": false
+    },
+    {
+     "label": "Voron 2.4 300",
+     "verified": false
+    },
+    {
+     "label": "Voron 2.4 350",
+     "verified": false
+    },
+    {
+     "label": "Voron Switchwire 250",
+     "verified": false
+    },
+    {
+     "label": "Voron Trident 250",
+     "verified": false
+    },
+    {
+     "label": "Voron Trident 300",
+     "verified": false
+    },
+    {
+     "label": "Voron Trident 350",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Voxelab",
+   "models": [
+    {
+     "label": "Voxelab Aquila X2",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Vzbot",
+   "models": [
+    {
+     "label": "Vzbot 235 AWD",
+     "verified": false
+    },
+    {
+     "label": "Vzbot 330 AWD",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Wanhao",
+   "models": [
+    {
+     "label": "Wanhao D12-300",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Wanhao France",
+   "models": [
+    {
+     "label": "Wanhao France D12 230 PRO M2 DIRECT",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 230 PRO M2 MONO DUAL",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 230 PRO M2 MONO DUAL PoopTool",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 230 PRO SMARTPAD DIRECT",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 230 PRO SMARTPAD MONO DUAL",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 230 PRO SMARTPAD MONO DUAL PoopTool",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 300 PRO M2 DIRECT",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 300 PRO M2 MONO DUAL",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 300 PRO M2 MONO DUAL PoopTool",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 300 PRO SMARTPAD DIRECT",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 300 PRO SMARTPAD MONO DUAL",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 300 PRO SMARTPAD MONO DUAL PoopTool",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 500 PRO M2 MONO DUAL",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 500 PRO M2 MONO DUAL PoopTool",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 500 PRO SMARTPAD DIRECT",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 500 PRO SMARTPAD DIRECT (D12 500 PRO SMARTPAD DIRECT)",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 500 PRO SMARTPAD MONO DUAL",
+     "verified": false
+    },
+    {
+     "label": "Wanhao France D12 500 PRO SMARTPAD MONO DUAL PoopTool",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "WEMAKE3D",
+   "models": [
+    {
+     "label": "WEMAKE3D PhoenixProV1",
+     "verified": false
+    },
+    {
+     "label": "WEMAKE3D TinyBotV1",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "WonderMaker",
+   "models": [
+    {
+     "label": "WonderMaker ZR",
+     "verified": false
+    },
+    {
+     "label": "WonderMaker ZR Ultra",
+     "verified": false
+    },
+    {
+     "label": "WonderMaker ZR Ultra S",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Z-Bolt",
+   "models": [
+    {
+     "label": "Z-Bolt S1000",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S1000 Dual",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S300",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S300 Dual",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S400",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S400 Dual",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S600",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S600 Dual",
+     "verified": false
+    },
+    {
+     "label": "Z-Bolt S800 Dual",
+     "verified": false
+    }
+   ]
+  },
+  {
+   "name": "Generic",
+   "models": [
+    {
+     "label": "Generic Klipper",
+     "verified": true
+    }
+   ]
+  }
+ ]
+}

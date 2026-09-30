@@ -1,0 +1,938 @@
+{
+ "snapmaker": {
+  "base": "cbf7bbb0b323b76a9a6dbc203d94ae6c9e8b2294",
+  "head": "da53bc5ffe47d7837ccdfde5f59a5ba1e9ec35f1",
+  "commits": [
+   {
+    "sha": "066458e8bba66a5d5a1340d5560ea2b36891041f",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "chore: sync flutter_web resources to 2.3.35 build 20260908191712 (#836)",
+    "files": [
+     "resources/web/flutter_web/.last_build_id",
+     "resources/web/flutter_web/canvaskit/canvaskit.js.symbols",
+     "resources/web/flutter_web/canvaskit/canvaskit.wasm",
+     "resources/web/flutter_web/canvaskit/chromium/canvaskit.js.symbols",
+     "resources/web/flutter_web/canvaskit/chromium/canvaskit.wasm",
+     "resources/web/flutter_web/canvaskit/skwasm.js.symbols",
+     "resources/web/flutter_web/canvaskit/skwasm.wasm",
+     "resources/web/flutter_web/canvaskit/skwasm_heavy.js.symbols",
+     "resources/web/flutter_web/canvaskit/skwasm_heavy.wasm",
+     "resources/web/flutter_web/canvaskit/wimp.js.symbols",
+     "resources/web/flutter_web/canvaskit/wimp.wasm",
+     "resources/web/flutter_web/flutter_bootstrap.8a55b8de4dcf8f34.js",
+     "resources/web/flutter_web/index.html",
+     "resources/web/flutter_web/main.d1f6340eba4fe20a.js",
+     "resources/web/flutter_web/version.json"
+    ]
+   },
+   {
+    "sha": "5870fe1bc092f253512b131766c6037ede7786e2",
+    "class": "packaging",
+    "action": "review",
+    "subject": "chore:change build macos 15 sdk  (#837)",
+    "files": [
+     ".github/workflows/build_all.yml",
+     ".github/workflows/build_check_cache.yml",
+     ".github/workflows/build_deps.yml",
+     ".github/workflows/build_orca.yml",
+     ".github/workflows/sentry_cli.yml",
+     "src/sentry_wrapper/SentryWrapper.cpp"
+    ]
+   },
+   {
+    "sha": "3d0111f2b2b9e81bb3ca054bec01ca78d59a5a9a",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "Fix sw_SetCache not overwriting existing cache entries (#838)",
+    "files": [
+     "src/slic3r/GUI/SSWCP.cpp"
+    ]
+   },
+   {
+    "sha": "d04372bc83cfae3e29b7a348aa5cceb51cf3285b",
+    "class": "profiles",
+    "action": "candidate",
+    "subject": "Update the process to the latest version number 02.03.03.03 (#841)",
+    "files": [
+     "resources/profiles/Snapmaker.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker ABS @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker ASA @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PEBA 90A @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PEBA 90A @U1 0.6 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PEBA 90A @U1 0.8 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PETG Translucent @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PETG-CF @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA Full Spectrum @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA Glow @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA Glow @U1 0.6 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA Matte @U1.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA Silk @U1.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA Translucent @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA Wood @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA-CF @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PVA @U1.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker Support For PLA @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/filament_allow_list.json",
+     "resources/profiles/Snapmaker/process/0.08mm Standard @Snapmaker U1 (0.4 nozzle).json",
+     "resources/profiles/Snapmaker/process/0.16mm Standard @Snapmaker U1 (0.4 nozzle).json",
+     "resources/profiles/Snapmaker/process/0.20mm High Quality @Snapmaker U1 (0.4 nozzle).json",
+     "resources/profiles/Snapmaker/process/fdm_process_U1_common.json"
+    ]
+   },
+   {
+    "sha": "f028fb7af425f696f56b464e4121708be69ae91a",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "Fix macOS filament drag crash (#842)",
+    "files": [
+     "src/slic3r/GUI/FilamentGroupDialog.cpp"
+    ]
+   },
+   {
+    "sha": "3a863243c1368cf84bc7b6604d67623f8305ac79",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "fix: unregister shell volumes from LOD sharing map before delete in load_shells (#844)",
+    "files": [
+     "src/slic3r/GUI/GCodeViewer.cpp"
+    ]
+   },
+   {
+    "sha": "6175e04d38a3c731d084b742cb8dfba194797879",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "chore: sync flutter_web resources to 2.3.36+20260909201217 (#845)",
+    "files": [
+     "resources/web/flutter_web/flutter_bootstrap.03f7a08aacf73312.js",
+     "resources/web/flutter_web/index.html",
+     "resources/web/flutter_web/main.91317cd84960fe05.js",
+     "resources/web/flutter_web/version.json"
+    ]
+   },
+   {
+    "sha": "ded5297bc7349d6a398a06943ee3bc5dfab52ae3",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "fix(gui): restore Flutter web URL construction (#843)",
+    "files": [
+     "src/slic3r/GUI/GUI_App.cpp",
+     "src/slic3r/GUI/GUI_App.hpp",
+     "src/slic3r/GUI/Plater.cpp",
+     "src/slic3r/GUI/PrinterWebView.cpp",
+     "src/slic3r/GUI/SSWCP.cpp",
+     "src/slic3r/GUI/WebDeviceDialog.cpp",
+     "src/slic3r/GUI/WebPreprintDialog.cpp",
+     "src/slic3r/GUI/WebViewDialog.cpp"
+    ]
+   },
+   {
+    "sha": "a2761fbc2ff4f43dc9fcdc10850d819e882ed8b0",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "fix(wcp): guard deviceFilamentInfo cache parsing against double-encoded payload (#849)",
+    "files": [
+     "src/slic3r/GUI/SSWCP.cpp"
+    ]
+   },
+   {
+    "sha": "2587003f0ae697af06179b7a1be8bb480a3439e7",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "chore: sync flutter_web resources to 2.3.37+20260910211339 (#850)",
+    "files": [
+     "resources/web/flutter_web/assets/assets/config/feature_flags.json",
+     "resources/web/flutter_web/assets/assets/i10n/zh-CN.json",
+     "resources/web/flutter_web/flutter_bootstrap.2d3d04c35428caa5.js",
+     "resources/web/flutter_web/index.html",
+     "resources/web/flutter_web/main.401dfa5a4c959171.js",
+     "resources/web/flutter_web/version.json"
+    ]
+   },
+   {
+    "sha": "56e82d53c85457f530827d2488664015b2eae08e",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "fix: preset diff dialog crashes + coFloatsOrPercents cereal serialization (#848)",
+    "files": [
+     "src/libslic3r/Config.hpp",
+     "src/slic3r/GUI/UnsavedChangesDialog.cpp"
+    ]
+   },
+   {
+    "sha": "5970fea62d3a4834581c2acc0b0b557b1d058ec0",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "Bugfix load web (#857)",
+    "files": [
+     "src/slic3r/GUI/GUI_App.cpp",
+     "src/slic3r/GUI/GUI_App.hpp",
+     "src/slic3r/GUI/PrinterWebView.cpp",
+     "src/slic3r/GUI/WebViewDialog.cpp",
+     "src/slic3r/GUI/Widgets/WebView.cpp",
+     "src/slic3r/Utils/SnapLogClient.cpp",
+     "src/slic3r/Utils/SnapLogClient.hpp",
+     "tests/slic3rutils/SnapLogClient_test.cpp"
+    ]
+   },
+   {
+    "sha": "6ea0a6725cf10a4efa154ec3b3dc9caa459ff4d9",
+    "class": "other",
+    "action": "review",
+    "subject": "Feature/update orca icon (#858)",
+    "files": [
+     "resources/Icon.icns",
+     "resources/images/Snapmaker_Orca-mac_128px.png",
+     "resources/images/Snapmaker_Orca-mac_256px.ico",
+     "resources/images/Snapmaker_Orca.icns",
+     "resources/images/Snapmaker_Orca.ico",
+     "resources/images/Snapmaker_Orca.png",
+     "resources/images/Snapmaker_OrcaTitle.ico",
+     "resources/images/Snapmaker_OrcaTitle.png",
+     "resources/images/Snapmaker_Orca_128px.png",
+     "resources/images/Snapmaker_Orca_154.png",
+     "resources/images/Snapmaker_Orca_154_title.png",
+     "resources/images/Snapmaker_Orca_192px.png",
+     "resources/images/Snapmaker_Orca_192px_grayscale.png",
+     "resources/images/Snapmaker_Orca_192px_transparent.png",
+     "resources/images/Snapmaker_Orca_32px.png",
+     "resources/images/Snapmaker_Orca_64.png",
+     "resources/images/Snapmaker_Orca_gradient.png",
+     "resources/images/Snapmaker_Orca_gradient_circle.png",
+     "resources/images/Snapmaker_Orca_gradient_narrow.png",
+     "resources/images/Snapmaker_Orca_gray.png",
+     "resources/images/info.png",
+     "resources/images/question.png"
+    ]
+   },
+   {
+    "sha": "8df75340d8d4ea77b660160e3951e4a5b861fa3b",
+    "class": "other",
+    "action": "review",
+    "subject": "chore:Raise minimum firmware version to 2.0.0 and switch Sentry environment to release (#862)",
+    "files": [
+     "src/common_func/common_func.hpp",
+     "src/sentry_wrapper/SentryWrapper.cpp"
+    ]
+   },
+   {
+    "sha": "c42c246e157fa9d21d0666d488d6f3daa2c39b90",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "fix: calibration config type mismatches after flow-variant migration (#861)",
+    "files": [
+     "src/libslic3r/calib.hpp",
+     "src/slic3r/GUI/Plater.cpp",
+     "src/slic3r/Utils/CalibUtils.cpp"
+    ]
+   },
+   {
+    "sha": "ae19088e15717e3249a33c8e7a0ef795ba4f46ed",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "chore: sync flutter_web resources to 2.3.38+20260915154633 (#863)",
+    "files": [
+     "resources/web/flutter_web/flutter_bootstrap.8411d9d1e47b24e7.js",
+     "resources/web/flutter_web/index.html",
+     "resources/web/flutter_web/main.8c1e336f107a452a.js",
+     "resources/web/flutter_web/version.json"
+    ]
+   },
+   {
+    "sha": "202df8bfbdcd88b08ec0f59dd38fd39e3f289744",
+    "class": "other",
+    "action": "review",
+    "subject": "Update web wizard and homepage logos to new Orca icon (#867)",
+    "files": [
+     "resources/web/image/logo.png",
+     "resources/web/image/logo2.png"
+    ]
+   },
+   {
+    "sha": "27cfcb4890d18f24a0e19d36c65d55ec2f6c26b7",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "Fix model opened from a URL being discarded on macOS (#852)",
+    "files": [
+     "src/slic3r/GUI/GUI_App.cpp",
+     "src/slic3r/GUI/GUI_App.hpp"
+    ]
+   },
+   {
+    "sha": "58474908afbb30417654587fa29f91de698b3b69",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "fix(mac): stabilize local device WebView loads and printer page switc\u2026 (#865)",
+    "files": [
+     "cmake/modules/MacOSXBundleInfo.plist.in",
+     "src/CMakeLists.txt",
+     "src/dev-utils/platform/osx/Info.plist.in",
+     "src/slic3r/GUI/HttpServer.cpp",
+     "src/slic3r/GUI/Plater.cpp",
+     "src/slic3r/GUI/PrinterWebView.cpp",
+     "src/slic3r/GUI/PrinterWebView.hpp",
+     "src/slic3r/GUI/WebDeviceDialog.cpp",
+     "src/slic3r/GUI/WebPresetDialog.cpp",
+     "src/slic3r/GUI/Widgets/WebView.cpp"
+    ]
+   },
+   {
+    "sha": "b1831e5dcb464172de33783142425aafda834fbc",
+    "class": "other",
+    "action": "review",
+    "subject": "fix(mac): regenerate app icons for consistent sizing across all surfaces (#873)",
+    "files": [
+     "resources/Icon.icns",
+     "resources/images/Snapmaker_Orca-mac_256px.ico",
+     "resources/images/Snapmaker_Orca.icns",
+     "resources/images/splash_app_icon.svg"
+    ]
+   },
+   {
+    "sha": "da53bc5ffe47d7837ccdfde5f59a5ba1e9ec35f1",
+    "class": "packaging",
+    "action": "review",
+    "subject": "feature ci: add macOS sign-and-package scripts for GitHub and GitLab (#860)",
+    "files": [
+     "scripts/gitlab_sign_and_package.sh",
+     "scripts/sign_and_package.sh"
+    ]
+   }
+  ]
+ },
+ "orca": {
+  "base": "737948be1f5b108b191420d4c670b511f8118604",
+  "head": "58bf267fdd751ca73d8808f68e34742fae41bc84",
+  "commits": [
+   {
+    "sha": "db3d684ee00fab86f817eaa6d858157c0cc735de",
+    "class": "packaging",
+    "action": "review",
+    "subject": "Scope the filament AMS length check to presets the vendor bundle references",
+    "files": [
+     "scripts/assign_filament_ids.py",
+     "scripts/orca_extra_profile_check.py",
+     "scripts/update_bambu_filament_ids.py"
+    ]
+   },
+   {
+    "sha": "ec207e67a31784eaa9c803190a8f9db2abf7b3b8",
+    "class": "profiles",
+    "action": "candidate",
+    "subject": "Mint content-addressed ids for the Bambu bundle",
+    "files": [
+     "resources/profiles/BBL.json",
+     "resources/profiles/BBL/filament/BETA/BETA ABS @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA ASA @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA HIPS @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PAHT-CF @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PEBA 90A @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Fluorescence @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Glitter @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Glow @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Gradient @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG HF @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Heat Color Change @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Marble @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Matte @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Metallic @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG Transparent @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG UV Color Change @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG-CF @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PETG-GF @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Basic @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Chameleon @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Fluorescence @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Glitter @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Glow @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Gradient @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Heat Color Change @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA High Speed @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA High Temp @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Marble @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Matte @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Metal @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Metallic @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA PRO @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Silk @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Silk+ @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Transparent @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA UV Color Change @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Wood @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA Youth @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA PLA-CF @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA TPU 90A @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA TPU 95A @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA TPU 98A @base.json",
+     "resources/profiles/BBL/filament/BETA/BETA TPU Matte @base.json",
+     "resources/profiles/BBL/filament/Bambu ABS @base.json",
+     "resources/profiles/BBL/filament/Bambu ABS-GF @base.json",
+     "resources/profiles/BBL/filament/Bambu ASA @base.json",
+     "resources/profiles/BBL/filament/Bambu ASA-Aero @base.json",
+     "resources/profiles/BBL/filament/Bambu ASA-CF @base.json"
+    ]
+   },
+   {
+    "sha": "df30e224272d026f5e7ce361ce4ac7bd7c55564e",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "[CLI]: CLI Crash Guards (#15477)",
+    "files": [
+     "src/OrcaSlicer.cpp",
+     "src/libslic3r/PrintConfig.cpp",
+     "src/libslic3r/utils.cpp",
+     "tests/libslic3r/test_config.cpp"
+    ]
+   },
+   {
+    "sha": "1170b048e81a04b5a9700d2f3d3e9d5e41b06577",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "[CLI]: Fix Plate Config Reading and BuildVolume Height Checks (#15479)",
+    "files": [
+     "src/OrcaSlicer.cpp",
+     "src/libslic3r/BuildVolume.cpp",
+     "src/slic3r/GUI/PartPlate.cpp",
+     "src/slic3r/GUI/PartPlate.hpp",
+     "src/slic3r/GUI/Plater.cpp",
+     "tests/libslic3r/CMakeLists.txt",
+     "tests/libslic3r/test_buildvolume.cpp"
+    ]
+   },
+   {
+    "sha": "134b9ad96e21500eccce9b7ce26a8fb16e4b1cf3",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Fix organic tree support generating one less bottom interface layer than defined (#15525)",
+    "files": [
+     "src/libslic3r/Support/SupportCommon.cpp",
+     "src/libslic3r/Support/TreeModelVolumes.cpp"
+    ]
+   },
+   {
+    "sha": "0224741105e2f6c52a171b3d975cbe68047c710d",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Fix organic support being printed into object top surfaces (#15539)",
+    "files": [
+     "src/libslic3r/Support/SupportCommon.cpp"
+    ]
+   },
+   {
+    "sha": "2ad9c87dda2624af447903663a0562e6ee5ce89e",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "fix: GIT_COMMIT_HASH forces full rebuilds and defeats compiler caching (#15537)",
+    "files": [
+     "CMakeLists.txt",
+     "build_win.bat",
+     "src/dev-utils/BaseException.cpp",
+     "src/libslic3r/libslic3r_version.h.in",
+     "src/slic3r/CMakeLists.txt",
+     "src/slic3r/GUI/AboutDialog.cpp",
+     "src/slic3r/GUI/BuildCommit.cpp",
+     "src/slic3r/GUI/BuildCommit.hpp",
+     "src/slic3r/GUI/GUI_App.cpp",
+     "src/slic3r/GUI/TroubleshootDialog.cpp",
+     "src/slic3r/GitCommitHash.cmake"
+    ]
+   },
+   {
+    "sha": "067dfa35c6b2f15f82554f9eeb72b510df2e7218",
+    "class": "packaging",
+    "action": "review",
+    "subject": "fix: make Windows debug builds work (#15353)",
+    "files": [
+     "deps/python3/python3.cmake",
+     "deps/python3/stage_windows.cmake",
+     "src/CMakeLists.txt",
+     "src/slic3r/plugin/PluginAuditManager.hpp",
+     "src/slic3r/plugin/PythonInterpreter.hpp"
+    ]
+   },
+   {
+    "sha": "cd011e6385c9a86977108c5820b02688f8925acd",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Fix CHB parciall bridge (#15387)",
+    "files": [
+     "src/libslic3r/PerimeterGenerator.cpp"
+    ]
+   },
+   {
+    "sha": "5302f703c07f63c456cb8dd8da2746c224e40e64",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "Automatically disable scarf seams when activating retraction calibration (#15543)",
+    "files": [
+     "src/slic3r/GUI/Plater.cpp"
+    ]
+   },
+   {
+    "sha": "6014f3fb43502ce9dcbfd2abb6f087f6eef76033",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Fix: guard the fifth null deref of the same kind, on the project-settings path (#15451)",
+    "files": [
+     "src/libslic3r/Config.cpp"
+    ]
+   },
+   {
+    "sha": "71e4e191917d70a7a508a1a3f322730b6a79d86d",
+    "class": "paxx-relevant",
+    "action": "review",
+    "subject": "Fix crash on startup if mixed filament has invalid component (#15432)",
+    "files": [
+     "src/slic3r/GUI/Plater.cpp"
+    ]
+   },
+   {
+    "sha": "c0c2cc5068bff9ef5e5f4e4138fa25fa1f4e65d2",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "fix: Virtual Camera Tools install downloads the network plugin (#15540)",
+    "files": [
+     "src/slic3r/GUI/MediaPlayCtrl.cpp"
+    ]
+   },
+   {
+    "sha": "4aa0e1d60b6f32ea84a4cfebbf1cfa93f87988e5",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "Translate filament ids at the printer boundary",
+    "files": [
+     ".github/workflows/check_profiles.yml",
+     "docs/HLSD/filament_id.md",
+     "scripts/assign_filament_ids.py",
+     "scripts/tests/test_filament_id.py",
+     "scripts/update_bambu_filament_ids.py",
+     "src/OrcaSlicer.cpp",
+     "src/slic3r/GUI/AMSDryControl.cpp",
+     "src/slic3r/GUI/AMSMaterialsSetting.cpp",
+     "src/slic3r/GUI/ColorDecomposeSupport.cpp",
+     "src/slic3r/GUI/DeviceCore/DevFilaBlackList.cpp",
+     "src/slic3r/GUI/DeviceCore/DevFilaSystem.cpp",
+     "src/slic3r/GUI/DeviceManager.cpp",
+     "src/slic3r/GUI/Plater.cpp",
+     "src/slic3r/GUI/PresetComboBoxes.cpp",
+     "src/slic3r/GUI/SelectMachine.cpp",
+     "src/slic3r/Utils/BBLPrinterAgent.cpp",
+     "src/slic3r/Utils/BBLPrinterAgent.hpp",
+     "src/slic3r/Utils/CalibUtils.cpp",
+     "src/slic3r/Utils/IPrinterAgent.hpp",
+     "src/slic3r/Utils/NetworkAgent.cpp",
+     "src/slic3r/Utils/NetworkAgent.hpp",
+     "tests/slic3rutils/CMakeLists.txt",
+     "tests/slic3rutils/test_bambu_filament_ids.cpp"
+    ]
+   },
+   {
+    "sha": "bf20b041e273f435649b1d6be969e20d41ba09dd",
+    "class": "profiles",
+    "action": "candidate",
+    "subject": "Make a filament's id depend only on the filament itself",
+    "files": [
+     "docs/HLSD/filament_id.md",
+     "resources/profiles/BBL.json",
+     "resources/profiles/BBL/filament/COEX/COEX NYLEX UNFILLED @BBL X1C.json",
+     "resources/profiles/Elegoo.json",
+     "resources/profiles/Elegoo/filament/BASE/Elegoo PAHT-CF @base.json",
+     "resources/profiles/Elegoo/filament/BASE/Elegoo PET-CF @base.json",
+     "resources/profiles/Elegoo/filament/BASE/Elegoo Rapid TPU 95A @base.json",
+     "resources/profiles/Elegoo/filament/BASE/Elegoo TPU 95A @base.json",
+     "resources/profiles/Elegoo/filament/EC/Elegoo PAHT-CF @EC.json",
+     "resources/profiles/Elegoo/filament/EC/Elegoo TPU 95A @EC.json",
+     "resources/profiles/Elegoo/filament/EC2/Elegoo PAHT-CF @EC2.json",
+     "resources/profiles/Elegoo/filament/EC2/Elegoo TPU 95A @EC2.json",
+     "resources/profiles/Elegoo/filament/ECC/Elegoo PAHT-CF @ECC.json",
+     "resources/profiles/Elegoo/filament/ECC/Elegoo TPU 95A @ECC.json",
+     "resources/profiles/Elegoo/filament/ECC2/Elegoo PAHT-CF @ECC2.json",
+     "resources/profiles/Elegoo/filament/ECC2/Elegoo TPU 95A @ECC2.json",
+     "resources/profiles/Elegoo/filament/EN3SERIES/Elegoo TPU 95A @EN3 Series.json",
+     "resources/profiles/Elegoo/filament/EN4SERIES/Elegoo TPU 95A @EN4 Series.json",
+     "resources/profiles/OrcaFilamentLibrary.json",
+     "resources/profiles/OrcaFilamentLibrary/filament/Elegoo/Elegoo PAHT-CF @System.json",
+     "resources/profiles/OrcaFilamentLibrary/filament/Elegoo/Elegoo PAHT-CF @base.json",
+     "resources/profiles/OrcaFilamentLibrary/filament/Elegoo/Elegoo PET-CF @base.json",
+     "resources/profiles/OrcaFilamentLibrary/filament/Elegoo/Elegoo Rapid TPU 95A @base.json",
+     "resources/profiles/OrcaFilamentLibrary/filament/Elegoo/Elegoo TPU 95A @System.json",
+     "resources/profiles/OrcaFilamentLibrary/filament/Elegoo/Elegoo TPU 95A @base.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1 0.2 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1 0.6 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1 0.8 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker Breakaway Support For PLA @U1.json",
+     "scripts/assign_filament_ids.py",
+     "scripts/filament_id_snapshot.json",
+     "scripts/tests/test_filament_id.py",
+     "scripts/update_bambu_filament_ids.py"
+    ]
+   },
+   {
+    "sha": "0b6bbd85bd269277e940f09b906481ae9b16ac0c",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "build: clear 75 warnings - hidden base overloads (#15542)",
+    "files": [
+     "src/libslic3r/Int128.hpp",
+     "src/slic3r/GUI/AMSMaterialsSetting.cpp",
+     "src/slic3r/GUI/AMSMaterialsSetting.hpp",
+     "src/slic3r/GUI/AMSSetting.cpp",
+     "src/slic3r/GUI/AMSSetting.hpp",
+     "src/slic3r/GUI/DeviceTab/uiAMSBestPositionPopup.cpp",
+     "src/slic3r/GUI/DeviceTab/uiAMSBestPositionPopup.hpp",
+     "src/slic3r/GUI/DeviceTab/uiAmsHumidityPopup.cpp",
+     "src/slic3r/GUI/DeviceTab/uiAmsHumidityPopup.h",
+     "src/slic3r/GUI/DeviceTab/wgtDeviceNozzleRack.cpp",
+     "src/slic3r/GUI/DeviceTab/wgtDeviceNozzleRack.h",
+     "src/slic3r/GUI/DeviceTab/wgtDeviceNozzleSelect.cpp",
+     "src/slic3r/GUI/FilamentMapPanel.cpp",
+     "src/slic3r/GUI/FilamentMapPanel.hpp",
+     "src/slic3r/GUI/SelectMachine.cpp",
+     "src/slic3r/GUI/SendToPrinter.cpp",
+     "src/slic3r/GUI/SlicingProgressNotification.cpp",
+     "src/slic3r/GUI/SlicingProgressNotification.hpp",
+     "src/slic3r/GUI/Widgets/AMSControl.cpp",
+     "src/slic3r/GUI/Widgets/AnimaController.cpp",
+     "src/slic3r/GUI/Widgets/AnimaController.hpp",
+     "src/slic3r/GUI/Widgets/ErrorMsgStaticText.hpp",
+     "src/slic3r/GUI/Widgets/MultiNozzleSync.cpp",
+     "src/slic3r/GUI/Widgets/RadioBox.cpp",
+     "src/slic3r/GUI/Widgets/RadioBox.hpp"
+    ]
+   },
+   {
+    "sha": "85dc86642588eb5c872ad6e0278b16ad70027fef",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Spiral Inset infill (spiral-concentric infill) (#15085)",
+    "files": [
+     "resources/images/param_spiralinset.svg",
+     "src/libslic3r/CMakeLists.txt",
+     "src/libslic3r/Fill/Fill.cpp",
+     "src/libslic3r/Fill/FillBase.cpp",
+     "src/libslic3r/Fill/FillSpiralInset.cpp",
+     "src/libslic3r/Fill/FillSpiralInset.hpp",
+     "src/libslic3r/Layer.cpp",
+     "src/libslic3r/PrintConfig.cpp",
+     "src/libslic3r/PrintConfig.hpp",
+     "src/libslic3r/Support/SupportParameters.hpp",
+     "src/slic3r/GUI/ConfigManipulation.cpp",
+     "tests/fff_print/test_fill.cpp",
+     "tests/libslic3r/test_config_variant_expansion.cpp"
+    ]
+   },
+   {
+    "sha": "0365304ae03b537eaca6c7445947a9116bfcb496",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "fix: G-code preview drops comment text and cuts non-ASCII lines short (#15448)",
+    "files": [
+     "src/slic3r/GUI/GCodeViewer.cpp"
+    ]
+   },
+   {
+    "sha": "43ce8c5e46c2e82b937f48aa96ce2ea1ac215383",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "fix: SLIC3R_PCH=OFF now builds on Windows, allowing compiler caching (#15552)",
+    "files": [
+     "build_win.bat",
+     "scripts/test_build_win.ps1",
+     "src/libslic3r/BlacklistedLibraryCheck.cpp",
+     "src/libslic3r/CMakeLists.txt",
+     "src/libslic3r/MultiPoint.hpp",
+     "src/libslic3r/Print.cpp",
+     "src/libslic3r/SLA/Hollowing.cpp",
+     "src/slic3r/CMakeLists.txt",
+     "src/slic3r/GUI/DragCanvas.hpp",
+     "src/slic3r/GUI/GUI_App.cpp",
+     "src/slic3r/GUI/OptionsGroup.hpp",
+     "src/slic3r/GUI/wxMediaCtrl3.h",
+     "src/slic3r/Utils/Bonjour.hpp",
+     "src/slic3r/win_platform.hpp"
+    ]
+   },
+   {
+    "sha": "8d44b680bdc174f3da4a7adfeba62b33fbc7e084",
+    "class": "packaging",
+    "action": "review",
+    "subject": "fix: bumping the bundled uv version rebuilds the whole GUI library (#15553)",
+    "files": [
+     "src/slic3r/CMakeLists.txt"
+    ]
+   },
+   {
+    "sha": "3500a1e588fb3618ec1393f094310f181709d4ee",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "unify id generation scripts",
+    "files": [
+     ".github/pull_request_template.md",
+     "docs/HLSD/filament_id.md",
+     "scripts/assign_vendor_setting_ids.py",
+     "scripts/orca_extra_profile_check.py",
+     "scripts/orca_id_tool.py",
+     "scripts/tests/test_filament_id.py",
+     "scripts/tests/test_setting_id.py",
+     "scripts/update_bambu_filament_ids.py",
+     "src/libslic3r/Preset.cpp",
+     "src/libslic3r/Preset.hpp",
+     "src/libslic3r/PresetBundle.cpp",
+     "tests/libslic3r/test_preset_setting_id.cpp"
+    ]
+   },
+   {
+    "sha": "eebc82cc9575ee6fc5501dca4591d523a18a5328",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "clean up",
+    "files": [
+     ".github/pull_request_template.md",
+     "src/slic3r/GUI/DeviceCore/DevFilaSystem.h"
+    ]
+   },
+   {
+    "sha": "494d50bd55dd30f9bfeda2125bae6bdc3fb6e5a0",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "fix: restore Ctrl+drag panning on macOS (#15312)",
+    "files": [
+     "src/slic3r/GUI/GLCanvas3D.cpp"
+    ]
+   },
+   {
+    "sha": "6943b6ddc3de741d2997fe0f49ef47e6dafb2923",
+    "class": "profiles",
+    "action": "candidate",
+    "subject": "Make Cubicon's \"@base\" filament presets true base profiles",
+    "files": [
+     "resources/profiles/Cubicon.json",
+     "resources/profiles/Cubicon/filament/Cubicon ABS @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon ABS @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon ABS-A100 @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon ABS-A100 @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon ABSk @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon ABSk @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon PA-CF @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon PA-CF @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon PC @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon PC @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon PETG @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon PETG @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon PLA @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon PLA @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon PLA+ @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon PLA+ @base.json",
+     "resources/profiles/Cubicon/filament/Cubicon PLAi21 @Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/filament/Cubicon PLAi21 @base.json",
+     "resources/profiles/Cubicon/machine/Cubicon xCeler-I 0.4 nozzle.json",
+     "resources/profiles/Cubicon/machine/Cubicon xCeler-I.json",
+     "resources/profiles/Cubicon/machine/Cubicon xCeler-Mini 0.4 nozzle.json",
+     "resources/profiles/Cubicon/machine/Cubicon xCeler-Mini.json",
+     "resources/profiles/Cubicon/machine/Cubicon xCeler-Plus 0.4 nozzle.json",
+     "resources/profiles/Cubicon/machine/Cubicon xCeler-Plus.json",
+     "scripts/filament_id_snapshot.json"
+    ]
+   },
+   {
+    "sha": "eec4ae1e876b75142faa7aede8136b079f70933a",
+    "class": "profiles",
+    "action": "candidate",
+    "subject": "Retire the untuned re3D umbrella presets superseded by the nozzle variants",
+    "files": [
+     "resources/profiles/re3D.json",
+     "resources/profiles/re3D/filament/re3D PC @0.4 nozzle.json",
+     "resources/profiles/re3D/filament/re3D PC.json",
+     "resources/profiles/re3D/filament/re3D PETG @0.4 nozzle.json",
+     "resources/profiles/re3D/filament/re3D PETG.json",
+     "resources/profiles/re3D/filament/re3D PLA @0.4 nozzle.json",
+     "resources/profiles/re3D/filament/re3D PLA.json",
+     "resources/profiles/re3D/filament/re3D rPETG @0.8 nozzle.json",
+     "resources/profiles/re3D/filament/re3D rPETG.json",
+     "resources/profiles/re3D/filament/re3D rPP @0.8 nozzle.json",
+     "resources/profiles/re3D/filament/re3D rPP.json",
+     "resources/profiles/re3D/machine/re3D Gigabot 4 0.4 nozzle.json",
+     "resources/profiles/re3D/machine/re3D Gigabot 4 0.8 nozzle.json",
+     "resources/profiles/re3D/machine/re3D Gigabot 4 XLT 0.4 nozzle.json",
+     "resources/profiles/re3D/machine/re3D Gigabot 4 XLT 0.8 nozzle.json",
+     "resources/profiles/re3D/machine/re3D Gigabot 4 XLT.json",
+     "resources/profiles/re3D/machine/re3D Gigabot 4.json",
+     "resources/profiles/re3D/machine/re3D GigabotX 2 XLT.json",
+     "resources/profiles/re3D/machine/re3D GigabotX 2.json",
+     "resources/profiles/re3D/machine/re3D Terabot 4 0.4 nozzle.json",
+     "resources/profiles/re3D/machine/re3D Terabot 4 0.8 nozzle.json",
+     "resources/profiles/re3D/machine/re3D Terabot 4.json",
+     "resources/profiles/re3D/machine/re3D TerabotX 2.json",
+     "scripts/filament_id_snapshot.json"
+    ]
+   },
+   {
+    "sha": "886d43d37a7eb98db7d090fe8cb8399089800b69",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Fix Support Fill Cost Thresholds Being Frozen By The First Call (#15564)",
+    "files": [
+     "src/libslic3r/Fill/FillBase.cpp"
+    ]
+   },
+   {
+    "sha": "b394ca891f9faa140dbb0480d50d313252b30e76",
+    "class": "paxx-relevant",
+    "action": "review",
+    "subject": "Retire the superseded Snapmaker PLA-CF preset for the U1 0.4 nozzle",
+    "files": [
+     "resources/profiles/Snapmaker.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA-CF @U1 0.4 nozzle.json",
+     "resources/profiles/Snapmaker/filament/Snapmaker PLA-CF @U1.json",
+     "scripts/filament_id_snapshot.json"
+    ]
+   },
+   {
+    "sha": "fcb128c51b424976ca262fb6ed9af91129107171",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "Fix Traditional Chinese language selection (#15567)",
+    "files": [
+     "src/slic3r/GUI/Preferences.cpp"
+    ]
+   },
+   {
+    "sha": "9e1b000e7f08531eabd9efb7a932a983a7421438",
+    "class": "packaging",
+    "action": "review",
+    "subject": "Hold every filament product to exactly one id, with no exceptions",
+    "files": [
+     "docs/HLSD/filament_id.md",
+     "scripts/orca_id_tool.py",
+     "scripts/tests/test_filament_id.py",
+     "scripts/tests/test_setting_id.py",
+     "scripts/update_bambu_filament_ids.py"
+    ]
+   },
+   {
+    "sha": "52ed9a8848db2e986bb95a23842085ac492302cc",
+    "class": "stock-only",
+    "action": "quarantine",
+    "subject": "Optimize login user layout",
+    "files": [
+     "resources/web/homepage/css/dark.css",
+     "resources/web/homepage/css/home.css",
+     "resources/web/homepage/img/c.jpg",
+     "resources/web/homepage/index.html",
+     "resources/web/homepage/js/home.js",
+     "src/slic3r/Utils/OrcaCloudServiceAgent.cpp"
+    ]
+   },
+   {
+    "sha": "9b1e141aa9cd7dc9f5c374c8d3c2ebd5a4304853",
+    "class": "workspace-ui",
+    "action": "candidate",
+    "subject": "Allow saving preset without parent while it doesnt have parent profile (Detach from parent option for parentless profiles) (#15558)",
+    "files": [
+     "src/slic3r/GUI/SavePresetDialog.cpp"
+    ]
+   },
+   {
+    "sha": "40ce930e18a526016641e6e3170e367e37b2dbac",
+    "class": "packaging",
+    "action": "review",
+    "subject": "build: share cached objects between build directories and worktrees (#15573)",
+    "files": [
+     "CMakeLists.txt",
+     "build_win.bat",
+     "scripts/test_build_win.ps1"
+    ]
+   },
+   {
+    "sha": "5779274e5bb226623949829b9d00ee1bd3949846",
+    "class": "packaging",
+    "action": "review",
+    "subject": "test: cover support interface generation and tree support (#15575)",
+    "files": [
+     "tests/fff_print/CMakeLists.txt",
+     "tests/fff_print/test_support_material.cpp",
+     "tests/fff_print/test_tree_support.cpp"
+    ]
+   },
+   {
+    "sha": "c61d2fe5d1a2450651133578f248849ed82a4c2b",
+    "class": "profiles",
+    "action": "candidate",
+    "subject": "Fix the Folgertech i3 0.6 nozzle printable area (#15577)",
+    "files": [
+     "resources/profiles/Folgertech.json",
+     "resources/profiles/Folgertech/machine/Folgertech i3 0.6 nozzle.json"
+    ]
+   },
+   {
+    "sha": "bcb4f17d9ae5dd9c807550c92163389dcba66f28",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "fix(cli): resolve inherited presets through vendor manifests (#15438)",
+    "files": [
+     "src/OrcaSlicer.cpp",
+     "src/libslic3r/AppConfig.cpp",
+     "src/libslic3r/AppConfig.hpp",
+     "src/libslic3r/Preset.cpp",
+     "src/libslic3r/Preset.hpp",
+     "src/libslic3r/PresetBundle.cpp",
+     "src/libslic3r/PresetBundle.hpp",
+     "tests/libslic3r/test_preset_bundle_loading.cpp"
+    ]
+   },
+   {
+    "sha": "01a03d6d32d482a28f667723541d4cb462ffc303",
+    "class": "other",
+    "action": "review",
+    "subject": "delete plan docs",
+    "files": [
+     "docs/superpowers/plans/2026-07-23-wx-inspectable-on-dpiaware-plan.md",
+     "docs/superpowers/plans/2026-07-23-wx-inspector-plugins-plan.md",
+     "docs/superpowers/plans/2026-08-14-ffmpeg-player-macos.md",
+     "docs/superpowers/specs/2026-07-23-wx-inspectable-on-dpiaware-design.md",
+     "docs/superpowers/specs/2026-07-23-wx-inspector-plugins-design.md",
+     "docs/superpowers/specs/2026-08-14-ffmpeg-player-macos-design.md"
+    ]
+   },
+   {
+    "sha": "42d75e119ad8bbc685e4f807efedffcf9b4ca9f9",
+    "class": "other",
+    "action": "review",
+    "subject": "update .gitignore to ignore docs/superpowers",
+    "files": [
+     ".gitignore"
+    ]
+   },
+   {
+    "sha": "fe29eadc34f702f6375ace6e71d90f6be9634eab",
+    "class": "other",
+    "action": "review",
+    "subject": "docs: add documentation guidelines for subsystem design and updates",
+    "files": [
+     "AGENTS.md"
+    ]
+   },
+   {
+    "sha": "8e064659ad1992d8a83227a6240b006f7165a752",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Fix Non-Deterministic Slicing - Order Per-Layer Intersection Lines Canonically (#15563)",
+    "files": [
+     "src/libslic3r/TriangleMeshSlicer.cpp"
+    ]
+   },
+   {
+    "sha": "58bf267fdd751ca73d8808f68e34742fae41bc84",
+    "class": "slicing",
+    "action": "candidate",
+    "subject": "Scale Min Junction Width to Prevent Fuzzy Skin From Failing Slice (#15566)",
+    "files": [
+     "src/libslic3r/Feature/FuzzySkin/FuzzySkin.cpp",
+     "src/libslic3r/Feature/FuzzySkin/FuzzySkin.hpp",
+     "tests/libslic3r/test_arachne_walls.cpp"
+    ]
+   }
+  ]
+ }
+}

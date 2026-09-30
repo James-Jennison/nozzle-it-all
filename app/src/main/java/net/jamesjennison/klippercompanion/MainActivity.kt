@@ -157,10 +157,17 @@ class MainActivity : ComponentActivity() {
                     model.foreground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
                     onDispose { lifecycle.removeObserver(observer); model.foreground(false) }
                 }
-                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
+                // First-run welcome: only for a brand-new install (no printers yet); finishing or skipping it is remembered forever.
+                var onboardingDone by remember { mutableStateOf(OnboardingPrefs.isDone(this@MainActivity)) }
+                var addPrinterNow by remember { mutableStateOf(!OnboardingPrefs.wizardSuppressed(this@MainActivity)) }
+                if (!onboardingDone && state.profiles.isEmpty() && state.address.isBlank()) {
+                    OnboardingScreen { addPrinter -> OnboardingPrefs.markDone(this@MainActivity, addPrinter); addPrinterNow = addPrinter; onboardingDone = true }
+                } else {
+                CompanionScreen(state, model::connect, model::disconnect, model::refreshCatalog, model::execute, model::forgetPrinter, model::updateProfile, model::favoriteProfile, model::moveProfile, model::selectCamera, model::selectFile, model::loadHistory, sharedFile=sharedFile, setCustomMachine=model::setCustomMachine, consumeShare={sharedFile=null}, appearance=appearance, saveAppearance={ appearance=it; appearancePrefs.edit().putString("options", it.encode()).apply() },
                     backgroundAlertsEnabled=backgroundAlertsEnabled, setBackgroundAlertsEnabled=::setBackgroundAlertsEnabled, emergencyStop=model::emergencyStop,
-                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, addProfile=model::addProfile,
-                    dismissCommandNotice=model::dismissCommandNotice)
+                    stagedAddress=stagedAddress, stagedAction=stagedAction, consumeStagedAction={stagedAddress=null;stagedAction=null}, detectFirmware=model::detectFirmware, detectLanes=model::detectFilamentLanes, addProfile=model::addProfile,
+                    dismissCommandNotice=model::dismissCommandNotice, autoOpenWizard=addPrinterNow)
+                }
             }
         }
     }
@@ -173,8 +180,8 @@ private enum class BackupStep { NONE, EXPORT_PASSPHRASE, IMPORT_PASSPHRASE }
 @Composable
 fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()->Unit, refresh: ()->Unit, execute: (PrinterCommand, Int)->Unit, forgetPrinter: (String)->Unit = {}, updateProfile: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String? = {_,_,_,_,_,_,_->null}, favoriteProfile: (String)->Unit = {},
     moveProfile: (String,Int)->Unit = {_,_->}, selectCamera: (String)->Unit = {}, selectFile: (String)->Unit = {}, loadHistory: (Int)->Unit = {}, sharedFile:Uri?=null,consumeShare:()->Unit={}, appearance:DashboardOptions=DashboardOptions(), saveAppearance:(DashboardOptions)->Unit={},
-    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null, addProfile:(PrinterProfile)->String?={null},
-    stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={}, dismissCommandNotice:()->Unit={},
+    backgroundAlertsEnabled:Boolean=false, setBackgroundAlertsEnabled:(Boolean)->Unit={}, emergencyStop:()->Unit={}, detectFirmware:((String, (Result<FirmwareIdentity>)->Unit)->Unit)?=null, detectLanes:((String, (Result<Int>)->Unit)->Unit)?=null, addProfile:(PrinterProfile)->String?={null},
+    stagedAddress:String?=null, stagedAction:String?=null, consumeStagedAction:()->Unit={}, dismissCommandNotice:()->Unit={}, autoOpenWizard:Boolean=true, setCustomMachine:(String, CustomMachine?)->Unit={_,_->},
     consoleFactory:(String)->ConsoleReader={ a -> state.moonrakerFor(a) }, meshFactory:(String)->MeshReader={ a -> state.moonrakerFor(a) },
     toolheadsFactory:(String)->ToolheadReader={ a -> state.moonrakerFor(a) }, fanStatusFactory:(String)->FanReadoutReader={ a -> state.moonrakerFor(a) },
     configFactory:(String)->ConfigFileReader={ a -> state.moonrakerFor(a) }, configWriterFactory:(String)->ConfigWriter={ a -> state.moonrakerFor(a) },
@@ -183,6 +190,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     pandaBreathFactory:(String)->PandaBreathReader={ a -> state.moonrakerFor(a) },
     spoolmanFactory:(String)->SpoolmanReader={ a -> state.moonrakerFor(a) },
     aceFactory:(String)->AceReader={ a -> state.moonrakerFor(a) },
+    filamentSlotsFactory:(String)->FilamentSlotReader={ a -> state.filamentSlotReaderFor(a) },
     tileCamera: @Composable (PrinterTile)->Unit={PrinterTileCamera(it)}) {
     // Phase 7 (§16): hoisted up from further below (it's a pure derived value, no side effects)
     // so the panel-open blocks right below can pass real per-printer control-gate flags
@@ -216,6 +224,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     if(bespok3dOpen) Bespok3dPanel(state,{bespok3dOpen=false})
     var aceOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(aceOpen) AcePanel(state,execute,{aceOpen=false},aceFactory)
+    var filamentSlotsOpen by remember(state.address,state.generation) { mutableStateOf(false) }
+    if(filamentSlotsOpen) FilamentSlotsPanel(state.address,state.connected,{filamentSlotsOpen=false},filamentSlotsFactory)
     var ledOpen by remember(state.address,state.generation) { mutableStateOf(false) }
     if(ledOpen) LedPanel(state,execute,{ledOpen=false})
     var toolOpen by remember(state.address,state.generation) { mutableStateOf(false) }
@@ -276,6 +286,21 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     LaunchedEffect(MmfRedirects.pending) { if (MmfRedirects.pending != null) tab = 5 }
     var selfCheckRunning by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
+    // Test Mode (Nozzle Test Grid): a separate full-screen window; it never shares the dashboard's connection or pending command.
+    var testModeOpen by rememberSaveable { mutableStateOf(false) }
+    // Hidden until an invited tester turns it on (TestModeAccess): 7 quick taps on a version line (Settings → Diagnostics or About & credits).
+    var testModeEnabled by remember { mutableStateOf(net.jamesjennison.klippercompanion.testgrid.TestModeAccess.isEnabled(context)) }
+    val versionTaps = remember { net.jamesjennison.klippercompanion.testgrid.TestModeAccess.TapCounter() }
+    var testModeNote by remember { mutableStateOf<String?>(null) }
+    // Either version line (Settings → Diagnostics, or About & credits) counts toward the same 7 taps.
+    fun tapVersion() {
+        if(versionTaps.tap()) {
+            testModeEnabled = !testModeEnabled
+            net.jamesjennison.klippercompanion.testgrid.TestModeAccess.setEnabled(context, testModeEnabled)
+            testModeNote = if(testModeEnabled) "Test Mode is on: it's in Settings, next to About & credits." else "Test Mode is off."
+            android.widget.Toast.makeText(context, testModeNote, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     var backupStep by remember { mutableStateOf(BackupStep.NONE) }
     var backupPassphrase by remember { mutableStateOf("") }
     var backupMessage by remember { mutableStateOf<String?>(null) }
@@ -343,7 +368,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     // again, isn't forced back in against their will.
     var autoOpenedWizard by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.profiles.isEmpty(), state.address.isBlank()) {
-        if (state.profiles.isEmpty() && state.address.isBlank() && !autoOpenedWizard) { addingPrinter = true; autoOpenedWizard = true }
+        if (autoOpenWizard && state.profiles.isEmpty() && state.address.isBlank() && !autoOpenedWizard) { addingPrinter = true; autoOpenedWizard = true }
     }
     var fileQuery by rememberSaveable(state.address) { mutableStateOf("") }
     var folder by rememberSaveable(state.address) { mutableStateOf("") }
@@ -444,7 +469,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         OutlinedButton({ selfCheckRunning = true; uiScope.launch { selfCheckResults = SelfCheck.run(context); selfCheckRunning = false } }, enabled = !selfCheckRunning, modifier = Modifier.testTag("run-self-check")) { Text(if(selfCheckRunning) "Checking…" else "Run self-check", maxLines = 1) }
-                        OutlinedButton({ creditsOpen = true }, modifier = Modifier.testTag("open-credits")) { Text("Credits", maxLines = 1) }
+                        OutlinedButton({ creditsOpen = true }, modifier = Modifier.testTag("open-credits")) { Text("About & credits", maxLines = 1) }
+                        if(testModeEnabled) OutlinedButton({ testModeOpen = true }, modifier = Modifier.testTag("open-test-mode")) { Text("Test Mode", maxLines = 1) }
                         OutlinedButton({ backupStep = BackupStep.EXPORT_PASSPHRASE; backupMessage = null }, modifier = Modifier.testTag("backup-printers")) { Text("Back up printers", maxLines = 1) }
                         OutlinedButton({ restorePicker.launch(arrayOf("*/*")) }, modifier = Modifier.testTag("restore-printers")) { Text("Restore printers", maxLines = 1) }
                     }
@@ -475,11 +501,18 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             }
             backupMessage?.let { msg -> if(tab == 4) item { Text(msg, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("backup-message")) } }
             if(creditsOpen) item {
-                AlertDialog(onDismissRequest = { creditsOpen = false }, title = { Text("Credits") }, modifier = Modifier.testTag("credits-dialog"),
+                AlertDialog(onDismissRequest = { creditsOpen = false }, title = { Text("About & credits") }, modifier = Modifier.testTag("credits-dialog"),
                     text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Models and images in Discover are provided by MyMiniFactory and the designers who publish them. The designer's credit is saved with every project you start from a model; please respect each model's license when you print, share or sell.", style = MaterialTheme.typography.bodySmall)
                         Text("Searches are sent to MyMiniFactory. Nothing else leaves your device.", style = MaterialTheme.typography.bodySmall)
-                        Text("On-device slicing uses the OrcaSlicer engine (AGPL-3.0), built with the open-source libraries listed in THIRD_PARTY_NOTICES.", style = MaterialTheme.typography.bodySmall)
+                        Text("Open source", style = MaterialTheme.typography.titleSmall)
+                        Text(OpenSourceNotice.statement, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("source-offer-statement"))
+                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                        OpenSourceNotice.links.forEachIndexed { i, (label, url) ->
+                            TextButton({ runCatching { uriHandler.openUri(url) } }, modifier = Modifier.testTag("source-link-$i")) { Text(label, style = MaterialTheme.typography.bodySmall) }
+                        }
+                        Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.testTag("about-version").clickable { tapVersion() })
+                        testModeNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("test-mode-note")) }
                     } },
                     confirmButton = { TextButton({ creditsOpen = false }, modifier = Modifier.testTag("credits-close")) { Text("Close") } })
             }
@@ -511,7 +544,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 val connection = state.printerConnections[saved] ?: if (saved == state.address) PrinterConnection(state.connected,
                                     if(state.connected) state.snapshot?.state.orEmpty() else state.message)
                                     else null
-                                Text(connection?.let { "${if(it.connected) "Connected" else "Offline"} • ${it.state}" }
+                                Text(connection?.let { familyStateLabel(it.state, it.connected) }
                                     ?: "Monitoring paused", style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.testTag("saved-status:$saved"))
                                 if(profile.favorite) Text("Favorite", style = MaterialTheme.typography.bodyLarge)
@@ -580,7 +613,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Box(Modifier.size(8.dp).background(heroDot, CircleShape))
-                                        Text((state.snapshot?.displayState ?: "awaiting printer").uppercase(), style = MaterialTheme.typography.labelMedium, color = heroDot)
+                                        Text(familyStateLabel(state.snapshot?.state ?: "awaiting printer").uppercase(), style = MaterialTheme.typography.labelMedium, color = heroDot)
                                     }
                                     val remaining = estimatedRemaining(state.snapshot,state.activeMetadata)
                                     if(remaining!=null) Text("${formatDuration(remaining)} left" + (estimatedFinishClockTime(remaining)?.let { " · Done at $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontFamily = PlexMono)
@@ -707,6 +740,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                             FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton({meshOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-mesh")){Text("Bed mesh")}
                                 OutlinedButton({toolheadsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-toolheads")){Text("Toolhead temperatures")}
+                                // Feature-detected like Spoolman: a filament changer's lanes (CANVAS on COSMOS, Box Turtle, Happy Hare).
+                                OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("Filament slots")}
                                 OutlinedButton({fanStatusOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-fanstatus")){Text("Fan status")}
                                 OutlinedButton({configOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-config")){Text("Configuration")}
                                 OutlinedButton({timelapseOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-timelapse")){Text("Timelapses")}
@@ -726,14 +761,54 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     if(capabilities.transport == PrinterTransport.BAMBU_MQTT) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("LAN mode limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Bambu Lab printer in LAN mode exposes no macros, console or configuration; its temperatures, fans and lights are not remotely controllable over this protocol.")
+                        // Read-only: the AMS trays from the printer's status report (BambuAmsTrays).
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("AMS slots")}
                     } } }
                     else if(capabilities.transport == PrinterTransport.OCTOPRINT) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("OctoPrint limitations", style=MaterialTheme.typography.titleSmall)
                         Text("Here an OctoPrint printer offers live status, temperatures (read-only), starting a print from a sliced file, and pause, resume and cancel. Macros, console, configuration, camera and file previews are not available for this printer kind.")
                     } } }
+                    else if(capabilities.transport == PrinterTransport.ELEGOO) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Elegoo printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here an Elegoo Centauri Carbon or Centauri Carbon 2 offers live status and temperatures (read-only), its CANVAS slots, sending and starting a sliced file, and cancel. Pause and resume are offered on the Centauri Carbon only: the Centauri Carbon 2's network protocol has no resume. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("CANVAS slots")}
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.CREALITY || capabilities.transport == PrinterTransport.FLASHFORGE) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val creality = capabilities.transport == PrinterTransport.CREALITY
+                        Text(if(creality) "Creality printer" else "Flashforge printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a ${if(creality) "Creality K1, K2 or Hi" else "Flashforge AD5X or Adventurer 5M"} offers live status and temperatures (read-only), its ${if(creality) "CFS" else "IFS"} slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        if(!creality) Text("An older Flashforge saved without a serial number and access code (Adventurer 3 / 4, Creator, Guider) uses its port-8899 connection instead: Nozzle It All only checks it answers, and doesn't read its state yet.")
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text(if(creality) "CFS slots" else "IFS slots")}
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.DUET) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Duet printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a Duet on RepRapFirmware offers a connection check and uploading a sliced file to 0:/gcodes. Nozzle It All doesn't read its state, temperatures or progress yet (the slicer code this connection is ported from doesn't). Start the print on the printer's screen or in Duet Web Control: starting, pausing and cancelling from Nozzle It All aren't verified on a real printer yet.")
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.ULTIMAKER) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("UltiMaker printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a networked UltiMaker offers its state and job progress (read-only; no temperatures over this connection). Sending, pausing and aborting prints from Nozzle It All aren't verified on a real printer yet, and an UltiMaker prints every job it is sent, so nothing is sent: print from the printer's screen. Pair it in Edit printer.")
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.REPETIER) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Repetier-Server printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a printer behind Repetier-Server offers a connection check and uploading a sliced file to the server's model library (which doesn't print it). Nozzle It All doesn't read its state, temperatures or progress yet (the slicer code this connection is ported from doesn't). Start the print from Repetier-Server or the printer's screen: starting, pausing and stopping from Nozzle It All aren't verified on a real printer yet.")
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.ANYCUBIC_LAN) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Anycubic printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here an Anycubic Kobra 3, Kobra S1 or Kobra X in LAN mode offers live status and temperatures (read-only), its ACE slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling, temperatures, homing and the ACE's feed and dryer from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("ACE slots")}
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.SNAPMAKER_SSTP || capabilities.transport == PrinterTransport.SNAPMAKER_SACP) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val sacp = capabilities.transport == PrinterTransport.SNAPMAKER_SACP
+                        Text(if(sacp) "Snapmaker J1 / Artisan" else "Snapmaker 2.0", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a ${if(sacp) "Snapmaker J1 or Artisan" else "Snapmaker 2.0 with a 3D printing module"} offers ${if(sacp) "its temperatures and job progress" else "its state, temperatures and job progress"} (read-only) and uploading a sliced file. Start the print on the printer's screen: starting, pausing and stopping, temperatures, nozzle switching and homing from Nozzle It All aren't verified on a real printer yet. Laser and CNC work isn't offered. Macros, console, configuration, camera and file previews are not available for this printer kind. Tap Connect in Edit printer and accept on the printer's screen first.")
+                    } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")
+                    } } }
+                    else if(capabilities.transport == PrinterTransport.USB_SERIAL) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("USB-connected printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a printer plugged in by USB cable, spoken to directly as a Marlin/Prusa-protocol serial port, offers its temperatures and SD job progress (read-only). Starting a print, uploading a file and every other control from Nozzle It All aren't verified on a real printer yet: print from the printer's own screen or SD card, and copy sliced files to its storage manually - Nozzle It All can't write to it over this connection. Macros, console, configuration, camera and file previews are not available for this printer kind.")
                     } } }
                     else {
                         // Owner request, 2026-09-22: the Control tab should show the operations
@@ -798,7 +873,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 Text("${job.status} · ${formatDuration(job.duration)} · ${formatMaterial(job.filamentMm)}")
                                 job.started?.takeIf { it < 253402300799.0 }?.let { Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date((it*1000).toLong()))) }
                                 val again = Reprint.resolve(job.filename, state.catalog.files)
-                                if(again != null) OutlinedButton({pending=Moonraker.start(again) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error"),modifier=Modifier.testTag("reprint:${job.id}")){Text("Reprint",maxLines=1)}
+                                if(again != null) OutlinedButton({pending=Moonraker.start(again, state.kindFor(state.address)) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error"),modifier=Modifier.testTag("reprint:${job.id}")){Text("Reprint",maxLines=1)}
                                 else Text("File no longer on the printer",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                         }
@@ -829,7 +904,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                                 FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                     OutlinedButton({workspace.download(state.address,file,state.apiKeyFor(state.address));uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected&&!workspace.loading){Text("Download / preview")}
                                     OutlinedButton({selectFile(file);uiScope.launch {listState.scrollToItem(0)}},enabled=state.connected,modifier=Modifier.testTag("details:$file")){Text("Details")}
-                                    OutlinedButton({pending=Moonraker.start(file) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error")){Text("Start print")}
+                                    OutlinedButton({pending=Moonraker.start(file, state.kindFor(state.address)) to state.generation},enabled=enabled&&state.snapshot?.state in setOf("standby","complete","cancelled","error")){Text("Start print")}
                                 }
                             } }
                         }
@@ -851,7 +926,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             if(tab == 4) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Diagnostics", style = MaterialTheme.typography.titleMedium)
-                    Text("Nozzle It All 0.1.0", style = MaterialTheme.typography.bodyMedium)
+                    Text("Nozzle It All ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("diagnostics-version").clickable { tapVersion() })
                     Text("Android ${Build.VERSION.RELEASE} · ${Build.MODEL}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Local network only — no cloud account, no telemetry.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -965,7 +1040,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     editingMacro?.let {name->MacroEditor(name,macroOptions[name]?:MacroOptions(),{editingMacro=null}){saveMacro(name,it)}}
     preparingMacro?.let {name->MacroForm(name,macroOptions[name]?:MacroOptions(),{preparingMacro=null}){preparingMacro=null;runningMacro=it}}
     runningMacro?.let {command->MacroReviewPanel(command,state,execute,{runningMacro=null})}
-    editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile,detectFirmware) }
+    editingProfile?.let { ProfileEditor(it,{editingProfile=null},updateProfile,detectFirmware,setCustomMachine,detectLanes) }
     if(addingPrinter) AddPrinterWizard(state.savedPrinters, addProfile, ::openPrinter) { addingPrinter = false }
     pending?.let { (command, epoch) ->
         AlertDialog(onDismissRequest = { pending = null }, title = { Text(command.title + "?") },
@@ -973,6 +1048,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             confirmButton = { Button({ pending = null; execute(command, epoch) }, enabled = enabled && (command.allowedStates.isEmpty() || state.snapshot?.state in command.allowedStates)) { Text("Confirm") } },
             dismissButton = { TextButton({ pending = null }) { Text("Go back") } })
     }
+    if(testModeOpen) net.jamesjennison.klippercompanion.testgrid.TestModeScreen(state.profiles) { testModeOpen = false }
     // Separate from the pending?.let dialog above: that one disables Confirm once the printer's
     // state drifts from what was reviewed, which is exactly backwards for an emergency stop.
     if(estopConfirm) AlertDialog(onDismissRequest = { estopConfirm = false }, title = { Text("Emergency stop?") },

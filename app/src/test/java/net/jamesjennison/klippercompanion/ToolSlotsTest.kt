@@ -20,9 +20,7 @@ class ToolSlotsTest {
             assertTrue("${file.parentFile?.name}: expected a real, positive tool count", count >= 1)
         }
     }
-    // The one bundled profile that actually declares more than one real extruder today -
-    // slicer_profiles/snapmaker_u1/machine.json's own extruder_colour array (real multiACE
-    // hardware, confirmed by reading the file directly, not assumed).
+    // The U1's four real toolheads: four nozzle_diameter entries in slicer_profiles/snapmaker_u1/machine.json.
     @Test fun snapmakerU1RealProfileReportsFourTools() {
         val count = parseToolCount(File("src/main/assets/slicer_profiles/snapmaker_u1/machine.json").readText())
         assertEquals(4, count)
@@ -33,20 +31,54 @@ class ToolSlotsTest {
             assertEquals(dir, 1, count)
         }
     }
+    // machine.json declares one extruder; an AMS printer's pack adds its filament slots (BambuAms).
+    @Test fun bambuAmsPacksDeclareFourFilamentSlots() {
+        val pack = slicingProfilePack(SlicingPrinterModel.BAMBU_X1_CARBON, null) ?: throw AssertionError("no X1 Carbon pack")
+        assertEquals(4, pack.toolCountOf(File("src/main/assets/slicer_profiles/bambu_x1_carbon/machine.json").readText()))
+    }
     @Test fun missingOrMalformedExtruderColourFallsBackToOneRatherThanGuessingHigher() {
         assertEquals(1, parseToolCount("""{}"""))
-        assertEquals(1, parseToolCount("""{"extruder_colour": []}"""))
-        assertEquals(1, parseToolCount("""{"extruder_colour": "not-an-array"}"""))
+        assertEquals(1, parseToolCount("""{"nozzle_diameter": []}"""))
+        assertEquals(1, parseToolCount("""{"nozzle_diameter": "not-an-array"}"""))
     }
     @Test fun toolSlotsForASingleExtruderIsOneSingleExtruderSlot() {
-        val slots = toolSlotsFor(1)
+        val slots = toolSlotsFor(ToolSetup(nozzles = 1, slots = 1))
         assertEquals(listOf(ToolSlot(0, ToolCapability.SINGLE_EXTRUDER)), slots)
     }
-    @Test fun toolSlotsForFourToolsIsFourIndependentToolSlots() {
-        val slots = toolSlotsFor(4)
+    @Test fun toolSlotsForFourToolheadsIsFourIndependentToolSlots() {
+        val slots = toolSlotsFor(ToolSetup(nozzles = 4, slots = 4))
         assertEquals(4, slots.size)
         assertEquals((0..3).toList(), slots.map { it.index })
         assertTrue(slots.all { it.capability == ToolCapability.INDEPENDENT_TOOL })
+    }
+    // Four spools through one nozzle (AMS, CANVAS): filament-swap slots, the same decision multiToolFamily makes.
+    @Test fun toolSlotsForFourSpoolsOnOneNozzleAreFilamentSwapSlots() {
+        val setup = ToolSetup(nozzles = 1, slots = 4)
+        assertEquals(MultiToolFamily.FILAMENT_SWAP, setup.family)
+        assertTrue(toolSlotsFor(setup).all { it.capability == ToolCapability.AMS_SLOT })
+    }
+    // The tool count is the physical nozzles, whatever extruder_colour holds (a Creality single-nozzle profile stores
+    // "#FCE94F" as one string; the Sermoon D3 Pro two colours as one string).
+    @Test fun extruderColourNeverAddsTools() {
+        assertEquals(1, parseToolCount("""{"nozzle_diameter": ["0.4"], "extruder_colour": ["#FFFFFF", "#000000", "#FF0000"]}"""))
+        assertEquals(1, parseToolCount(File("src/main/assets/slicer_profiles/creality_sermoon_d3_pro/machine.json").readText()))
+    }
+    // Every catalogue pack classifies from its own nozzles and slots: toolchangers and IDEX printers are independent tools,
+    // spools through one nozzle are a filament swap.
+    @Test fun catalogueFamiliesComeFromEachPacksOwnNozzlesAndSlots() {
+        fun family(model: SlicingPrinterModel, gen: CosmosProfileGeneration? = null): MultiToolFamily {
+            val pack = slicingProfilePack(model, gen) ?: throw AssertionError("no pack for $model")
+            val machine = File("src/main/assets/${pack.machinePath}").readText()
+            return pack.toolSetupOf(machine).family
+        }
+        for (m in listOf(SlicingPrinterModel.SNAPMAKER_U1, SlicingPrinterModel.PRUSA_XL_5T, SlicingPrinterModel.SNAPMAKER_J1,
+                SlicingPrinterModel.FLASHFORGE_CREATOR_5, SlicingPrinterModel.RATRIG_RATRIG_V_CORE_4_IDEX_300, SlicingPrinterModel.BAMBU_H2D))
+            assertEquals(m.name, MultiToolFamily.TOOLCHANGER, family(m))
+        for (m in listOf(SlicingPrinterModel.BAMBU_X1_CARBON, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_CANVAS))
+            assertEquals(m.name, MultiToolFamily.FILAMENT_SWAP, family(m))
+        assertEquals(MultiToolFamily.FILAMENT_SWAP, family(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS, CosmosProfileGeneration.CURRENT))
+        for (m in listOf(SlicingPrinterModel.CREALITY_K1, SlicingPrinterModel.PRUSA_MK4S, SlicingPrinterModel.PRUSA_XL))
+            assertEquals(m.name, MultiToolFamily.SINGLE, family(m))
     }
 
     // Phase 8 follow-up (WO-27): real base filament_diameter, parsed from every bundled
@@ -103,5 +135,26 @@ class ToolSlotsTest {
         assertTrue(indices.isEmpty())
         assertEquals(4, materials.size)
         assertTrue(materials.all { it == null })
+    }
+
+    // Colour mixing (0.2.0, requirement 5): colourMixFeaturesFor must reproduce
+    // com.nozzleitall.printer.ext.ProfileFeatures.of's own real gating rule for every PrinterKind Android actually
+    // has - a U1 family gets Full Spectrum, any other real multi-slot target gets ColorMix, and a single-tool
+    // target (any kind) gets neither. Mirrors PrusaColorMixTest.colorMixIsForEveryMultiSlotPrinterWithoutFullSpectrum
+    // on the Desktop side, since Android has no PrinterFamily/familyHint of its own to test that rule against directly.
+    @Test fun stockU1WithMultipleToolsGetsFullSpectrum() {
+        assertEquals(setOf(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM), colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 4))
+    }
+    @Test fun paxxU1WithMultipleToolsGetsFullSpectrum() {
+        assertEquals(setOf(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM), colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1_PAXX, 4))
+    }
+    @Test fun anyOtherMultiSlotTargetGetsColorMixNotFullSpectrum() {
+        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.PRUSA_LINK, 5))
+        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 2))
+    }
+    @Test fun aSingleToolTargetGetsNeitherMixingSystem() {
+        assertTrue(colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 1).isEmpty())
+        assertTrue(colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 1).isEmpty())
+        assertTrue(colourMixFeaturesFor(PrinterKind.BAMBU_LAB, 1).isEmpty())
     }
 }

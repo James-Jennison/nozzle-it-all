@@ -1,0 +1,122 @@
+{
+    "type": "machine",
+    "name": "LONGER LK10 Plus (0.4 nozzle)",
+    "from": "system",
+    "instantiation": "true",
+    "printer_technology": "FFF",
+    "gcode_flavor": "klipper",
+    "machine_max_acceleration_e": [
+        "5000"
+    ],
+    "machine_max_acceleration_extruding": [
+        "7000"
+    ],
+    "machine_max_acceleration_retracting": [
+        "7000"
+    ],
+    "machine_max_acceleration_travel": [
+        "7000"
+    ],
+    "machine_max_acceleration_x": [
+        "7000"
+    ],
+    "machine_max_acceleration_y": [
+        "7000"
+    ],
+    "machine_max_acceleration_z": [
+        "300"
+    ],
+    "machine_max_speed_e": [
+        "60"
+    ],
+    "machine_max_speed_x": [
+        "500"
+    ],
+    "machine_max_speed_y": [
+        "500"
+    ],
+    "machine_max_speed_z": [
+        "20"
+    ],
+    "machine_min_extruding_rate": [
+        "0"
+    ],
+    "machine_min_travel_rate": [
+        "0"
+    ],
+    "max_layer_height": [
+        "0.32"
+    ],
+    "min_layer_height": [
+        "0.08"
+    ],
+    "printable_height": "400",
+    "extruder_clearance_radius": "50",
+    "extruder_clearance_height_to_rod": "30",
+    "nozzle_diameter": [
+        "0.4"
+    ],
+    "printer_settings_id": "LONGER",
+    "printer_variant": "0.4",
+    "retraction_minimum_travel": [
+        "2"
+    ],
+    "retract_before_wipe": [
+        "70%"
+    ],
+    "retract_when_changing_layer": [
+        "1"
+    ],
+    "retraction_length": [
+        "1"
+    ],
+    "retract_length_toolchange": [
+        "1"
+    ],
+    "z_hop": [
+        "0"
+    ],
+    "retract_restart_extra": [
+        "0"
+    ],
+    "retract_restart_extra_toolchange": [
+        "0"
+    ],
+    "retraction_speed": [
+        "35"
+    ],
+    "deretraction_speed": [
+        "35"
+    ],
+    "single_extruder_multi_material": "1",
+    "wipe": [
+        "1"
+    ],
+    "before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n\n;[layer_z]\n\nTIMELAPSE_TAKE_FRAME\n\nG92 E0.0",
+    "layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
+    "change_filament_gcode": "M600",
+    "machine_end_gcode": "PRINT_END\nM84",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "START_PRINT_PREPARE BED_TEMP=[bed_temperature_initial_layer_single]\nSTART_PURGE_WIPE TRAVEL_SPEED=[travel_speed]\nSTART_PRINT_COOL_PURGE\nSTART_PRINT_FINAL_HEAT BED_TEMP=[bed_temperature_initial_layer_single] NOZZLE_TEMP=[nozzle_temperature_initial_layer] TRAVEL_SPEED=[travel_speed]\nSTART_PRIME_LINES TRAVEL_SPEED=[travel_speed]\n; filament start gcode",
+    "setting_id": "Fs8OHF8JceLEAO1v",
+    "printer_model": "LONGER LK10 Plus",
+    "printer_notes": "",
+    "default_print_profile": "0.20mm Standard @LONGER LK10 Plus (0.4 nozzle)",
+    "printable_area": [
+        "0x0",
+        "320x0",
+        "320x320",
+        "0x320"
+    ],
+    "extruder_clearance_height_to_lid": "380",
+    "nozzle_hrc": "0",
+    "nozzle_type": "brass",
+    "nozzle_volume": "0",
+    "default_filament_profile": [
+        "Generic PLA @System"
+    ],
+    "thumbnails": [
+        "300x300"
+    ],
+    "thumbnails_format": "PNG"
+}

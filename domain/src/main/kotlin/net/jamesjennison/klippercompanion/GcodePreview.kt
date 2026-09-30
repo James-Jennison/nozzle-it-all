@@ -4,7 +4,8 @@ import java.io.InputStream
 import java.io.InterruptedIOException
 import kotlin.math.*
 
-data class ToolpathSegment(val x1:Float,val y1:Float,val x2:Float,val y2:Float,val layer:Int,val byteEnd:Long=0,val tool:Int=0)
+/** [preamble] marks extrusion seen before the file's first layer marker (a printer's start-up purge/prime line); parse() drops it when the file has layer markers. */
+data class ToolpathSegment(val x1:Float,val y1:Float,val x2:Float,val y2:Float,val layer:Int,val byteEnd:Long=0,val tool:Int=0,val preamble:Boolean=false)
 data class Toolpath(val segments:List<ToolpathSegment>,val heights:List<Float>,val sampled:Boolean,val ignoredMotion:Boolean,val travels:List<ToolpathSegment> = emptyList(),val byteSize:Long=0,val toolChanges:List<ToolChange> = emptyList(),val toolsUsed:Set<Int> = setOf(0))
 /** A tool change seen in the G-code (`T1` etc.): the layer it happened on and the tool selected. */
 data class ToolChange(val layer:Int,val tool:Int)
@@ -18,7 +19,7 @@ object GcodePreview {
         var bytes=0L;var x=0.0;var y=0.0;var z=0.0;var e=0.0;var xyzAbsolute=true;var eAbsolute=true;var units=1.0
         var offsetX=0.0;var offsetY=0.0;var knownX=false;var knownY=false
         val segments=ArrayList<ToolpathSegment>();val heights=ArrayList<Float>();var layer=-1;var extrusionZ=Double.NaN
-        var stride=1L;var moves=0L;var ignored=false;var tool=0;val toolChanges=ArrayList<ToolChange>();val pendingTools=ArrayList<Int>();val toolsUsed=sortedSetOf(0)
+        var markerSeen=false;var stride=1L;var moves=0L;var ignored=false;var tool=0;val toolChanges=ArrayList<ToolChange>();val pendingTools=ArrayList<Int>();val toolsUsed=sortedSetOf(0)
         val travels=ArrayList<ToolpathSegment>();var travelStride=1L;var travelMoves=0L
         fun travel(ax:Double,ay:Double,bx:Double,by:Double) {
             if(travelMoves++%travelStride==0L) travels.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer.coerceAtLeast(0),bytes))
@@ -29,11 +30,13 @@ object GcodePreview {
             if((layer<0||abs(height-extrusionZ)>0.001)&&heights.size<10_000) {heights.add(height.toFloat());layer++;extrusionZ=height}
             // A tool change belongs to the layer of the next extrusion (the layer counter advances lazily on Z changes).
             if(pendingTools.isNotEmpty()){pendingTools.forEach{toolChanges.add(ToolChange(layer.coerceAtLeast(0),it))};pendingTools.clear()}
-            if(moves++%stride==0L)segments.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer,bytes,tool))
+            if(moves++%stride==0L)segments.add(ToolpathSegment((ax+offsetX).toFloat(),(ay+offsetY).toFloat(),(bx+offsetX).toFloat(),(by+offsetY).toFloat(),layer,bytes,tool,!markerSeen))
             if(segments.size>=MAX_SEGMENTS){val retained=segments.filterIndexed{i,_->i%2==0};segments.clear();segments.addAll(retained);stride*=2}
         }
         val line=StringBuilder()
         fun consume() {
+            // Layer markers survive comment stripping only here: Orca/Prusa write ;LAYER_CHANGE, Cura writes ;LAYER:n.
+            if(!markerSeen){val t=line.trimStart();if(t.startsWith(";LAYER_CHANGE")||t.startsWith(";LAYER:"))markerSeen=true}
             val clean=StringBuilder();var depth=0
             for(c in line) {if(c==';'&&depth==0)break;when(c){'('->depth++;')'->{require(depth>0){"Unbalanced G-code comment."};depth--};else->if(depth==0)clean.append(c)}}
             require(depth==0){"Unbalanced G-code comment."}
@@ -82,6 +85,19 @@ object GcodePreview {
         }
         if(line.isNotEmpty())consume();require(segments.isNotEmpty()){"No supported extrusion paths found."}
         pendingTools.forEach{toolChanges.add(ToolChange(layer.coerceAtLeast(0),it))}
+        // A file with layer markers: the start-up purge/prime line before the first one is the printer's, not the model's. Keeping it in the
+        // preview stretched the framing to the bed edge (the model drew at a fraction of the view) and gave the slider a phantom first layer.
+        if(markerSeen&&segments.any{it.preamble}) {
+            val real=segments.filter{!it.preamble}
+            val first=real.minOfOrNull{it.layer}?:0
+            if(real.isNotEmpty()) {
+                val shift={l:Int->(l-first).coerceAtLeast(0)}
+                segments.clear();segments.addAll(real.map{it.copy(layer=shift(it.layer))})
+                val trimmedHeights=heights.drop(first);heights.clear();heights.addAll(trimmedHeights)
+                val shiftedTravels=travels.map{it.copy(layer=shift(it.layer))};travels.clear();travels.addAll(shiftedTravels)
+                val shiftedTools=toolChanges.map{ToolChange(shift(it.layer),it.tool)};toolChanges.clear();toolChanges.addAll(shiftedTools)
+            }
+        } else if(segments.any{it.preamble}) {val plain=segments.map{it.copy(preamble=false)};segments.clear();segments.addAll(plain)}
         return Toolpath(segments,heights,stride>1||travelStride>1,ignored,travels,bytes,toolChanges,toolsUsed)
     }
 }

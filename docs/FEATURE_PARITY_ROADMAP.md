@@ -702,7 +702,7 @@ applies to it.
 `064cfa7`. Blocking prerequisite for everything else in M8; 227 unit tests green
 at landing.
 
-**M8b — Bespok3d plugin bridge + Snapmaker U1/PAXX remote screen (P27).** Done
+**M8b — Bespok3d plugin bridge + Snapmaker U1 remote screen (P27; stock firmware only, PAXX/extended is refused by design, see WO-4).** Done
 2026-09-20, commits `e1045a3`/`a7271d3`. Ported `Bespok3dClient`/SSH preflight/
 enrollment with attribution headers; the signed daemon/jinni bootstrap bundle
 enrollment depends on is independently downloaded from Bespok3d's own GitHub

@@ -60,6 +60,56 @@ class SlicingProfilePacksDeviceTest {
         val toolpath = output.inputStream().buffered().use { GcodePreview.parse(it) }
         assertTrue("expected real extrusion segments", toolpath.segments.isNotEmpty())
     }
+    // Every model in the generated catalog (scripts/bundle_vendor_profiles.py) must load and slice through the real engine;
+    // a pack that fails is reported by name so one bad Bambu/Prusa profile is easy to find. COSMOS needs a firmware
+    // generation and has its own tests above.
+    // Every printer the app offers slices real G-code. COSMOS profiles are sliced as the app slices them, after the
+    // printer's firmware has been confirmed (CosmosProfileGeneration.CURRENT); the profiles the engine can't slice yet
+    // (SlicingEngineSupport, engine/profiles/unsupported-profiles.json) are never offered, so they are not sliced here.
+    @Test fun everyBundledCatalogModelSlicesRealGcode() {
+        val failures = mutableListOf<String>()
+        SlicingEngineSupport.offered.forEach { info ->
+            try {
+                val cosmos = ElegooProfiles.isCosmos(info.model)
+                val gcode = sliceCube(info.model, if (cosmos) CosmosProfileGeneration.CURRENT else null)
+                if (!gcode.contains("G1")) failures += "${info.label}: no G1 moves in output"
+                if (cosmos && !gcode.contains("PRINT_START")) failures += "${info.label}: COSMOS start G-code has no PRINT_START"
+            } catch (t: Throwable) { failures += "${info.label}: ${t.javaClass.simpleName}: ${t.message}" }
+        }
+        assertTrue("models that failed to slice:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+
+    // The two safety rules that keep printers out of the loop above: an unconfirmed COSMOS firmware gets no profile, and
+    // a profile the engine can't slice is refused with a reason instead of being sliced with stand-in values.
+    @Test fun cosmosProfilesNeedConfirmedFirmwareAndUnsupportedProfilesAreRefused() {
+        SlicingModelCatalog.all.filter { ElegooProfiles.isCosmos(it.model) }.forEach { info ->
+            assertNull("${info.label} has no profile until its firmware is confirmed", slicingProfilePack(info.model, null))
+            assertNotNull("${info.label} has a profile once its firmware is confirmed", slicingProfilePack(info.model, CosmosProfileGeneration.CURRENT))
+        }
+        SlicingModelCatalog.all.filter { !SlicingEngineSupport.isSupported(it.model) }.forEach { info ->
+            assertTrue("${info.label} is refused with a reason", SlicingEngineSupport.unsupportedReason(info.model)!!.contains("isn't offered"))
+            assertTrue("${info.label} is not offered", SlicingEngineSupport.offered.none { it.model == info.model })
+        }
+    }
+    // Custom machine (bed, origin, start/end G-code): a real slice through the real engine must use them.
+    @Test fun customMachineBedAndGcodeReachTheRealEngine() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val input = File(appContext.cacheDir, "cube.stl"); testContext.assets.open("cube.stl").use { it.copyTo(input.outputStream()) }
+        for ((centre, label) in listOf(false to "corner", true to "centre")) {
+            val custom = CustomMachine(180.0, 160.0, 150.0, originAtCenter = centre, startGcode = "MY_CUSTOM_START_MARKER_$label\nG90\nG92 E0", endGcode = "MY_CUSTOM_END_MARKER_$label")
+            val pack = slicingProfilePack(SlicingPrinterModel.GENERIC_KLIPPER, null, custom)!!
+            val shape = pack.readBedShape(appContext)
+            assertEquals("the bed the app reads is the custom one ($label)", if (centre) -90f else 0f, shape.points.minOf { it.first }, 0f)
+            assertEquals(150f, shape.heightMm, 0f)
+            val output = File(appContext.cacheDir, "custom_machine_$label.gcode"); output.delete()
+            NativeEngine.nativeSliceFile(input.absolutePath, output.absolutePath, pack.materialize(appContext).toTypedArray(), emptyArray(), emptyArray(), 0.0, 0.0, 0.0, 1.0)
+            val gcode = output.readText()
+            assertTrue("custom start G-code is in the output ($label)", gcode.contains("MY_CUSTOM_START_MARKER_$label"))
+            assertTrue("custom end G-code is in the output ($label)", gcode.contains("MY_CUSTOM_END_MARKER_$label"))
+            assertFalse("the profile's own START_PRINT must be gone ($label)", gcode.contains("START_PRINT EXTRUDER_TEMP"))
+        }
+    }
     @Test fun snapmakerU1ProfileSlicesRealGcode() {
         val gcode = sliceCube(SlicingPrinterModel.SNAPMAKER_U1)
         assertTrue(gcode.contains("G1"))
@@ -101,6 +151,80 @@ class SlicingProfilePacksDeviceTest {
         assertTrue(toolpath.toolChanges.size > 10)
         val stats = GcodeStatsParser.parse(out)
         assertTrue("both tools extrude: ${stats.perToolGrams}", stats.toolsUsed.containsAll(listOf(0, 1)))
-        assertEquals("the engine keeps the prime tower off on independent-tool machines, even though the XL process profile enables it", false, stats.primeTower)
+        // The XL process profile enables the prime tower, and a two-tool print keeps it (P-0027: per-object assignment used
+        // to count as one filament and switch it off).
+        assertEquals("the XL's prime tower is printed for a two-tool print", true, stats.primeTower)
+    }
+
+    // P-0029: on Klipper the wipe tower is defined as an object, so an adaptive bed mesh (COSMOS's BED_MESH_CALIBRATE
+    // ADAPTIVE=1) probes under it too. The owner's two-colour COSMOS print lost its tower: the mesh covered only the
+    // objects, and the bed's corner under the tower was lower. The defined area must cover every tower extrusion.
+    @Test fun aTwoToolCosmosSliceDefinesTheWipeTowerForTheAdaptiveBedMesh() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        fun cube(name: String) = File(appContext.cacheDir, name).also { f -> testContext.assets.open("cube.stl").use { it.copyTo(f.outputStream()) } }
+        val a = cube("cc-a.stl"); val b = cube("cc-b.stl"); val out = File(appContext.cacheDir, "cc-two-tool.gcode").also { it.delete() }
+        val pack = slicingProfilePack(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, CosmosProfileGeneration.CURRENT)!!
+        val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+        val overrides = MultiToolFilamentConfig.overridesFor(1.75, listOf(pla.copy(colorHex = "#FF0000"), pla.copy(colorHex = "#00FF00")), pla)
+        NativeEngine.nativeSliceMultiObject(arrayOf(a.absolutePath, b.absolutePath), doubleArrayOf(-30.0, 30.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 1.0), intArrayOf(1, 2),
+            out.absolutePath, pack.materialize(appContext).toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+        val gcode = out.readText()
+        assertTrue("the prime tower is printed", gcode.contains(";TYPE:Prime tower"))
+        val define = Regex("(?m)^EXCLUDE_OBJECT_DEFINE NAME=wipe_tower .*POLYGON=(\\[.*\\])$").find(gcode)
+            ?: throw AssertionError("expected the wipe tower to be defined as a Klipper object")
+        val corners = Regex("\\[(-?[0-9.]+),(-?[0-9.]+)\\]").findAll(define.groupValues[1]).map { it.groupValues[1].toDouble() to it.groupValues[2].toDouble() }.toList()
+        val minX = corners.minOf { it.first } - 0.5; val maxX = corners.maxOf { it.first } + 0.5
+        val minY = corners.minOf { it.second } - 0.5; val maxY = corners.maxOf { it.second } + 0.5
+        // Every extruding move of the tower lies inside the defined area.
+        var inTower = false; var x = 0.0; var y = 0.0; var checked = 0
+        for (line in gcode.lineSequence()) {
+            if (line.startsWith(";TYPE:")) inTower = line == ";TYPE:Prime tower"
+            if (!line.startsWith("G1")) continue
+            Regex("X(-?[0-9.]+)").find(line)?.let { x = it.groupValues[1].toDouble() }
+            Regex("Y(-?[0-9.]+)").find(line)?.let { y = it.groupValues[1].toDouble() }
+            val e = Regex("E(-?[0-9.]+)").find(line)?.groupValues?.get(1)?.toDouble() ?: 0.0
+            if (inTower && e > 0 && (line.contains('X') || line.contains('Y'))) {
+                assertTrue("tower extrusion at ($x, $y) is outside the defined area x $minX..$maxX y $minY..$maxY", x in minX..maxX && y in minY..maxY)
+                checked++
+            }
+        }
+        assertTrue("expected tower extrusions to check, found $checked", checked > 50)
+        // P-0030: the tower (rib walls included) starts at its configured position; only its brim reaches past it.
+        fun setting(key: String) = Regex("(?m)^; $key = (-?[0-9.]+)").find(gcode)?.groupValues?.get(1)?.toDouble()
+            ?: throw AssertionError("no $key in the G-code config")
+        val towerX = setting("wipe_tower_x"); val towerY = setting("wipe_tower_y"); val brim = setting("prime_tower_brim_width")
+        assertTrue("the tower reaches past its configured corner ($towerX, $towerY) by more than its ${brim} mm brim: area from ($minX, $minY)",
+            minX + 0.5 >= towerX - brim - 1.0 && minY + 0.5 >= towerY - brim - 1.0)
+        // The extra object line still goes through the preview parser.
+        assertTrue(out.inputStream().buffered().use { GcodePreview.parse(it) }.segments.isNotEmpty())
+    }
+
+    // P-0031: every Prusa MMU3 pack slices a two-colour print through the app's multi-tool path: five slots from
+    // PrusaMmu, a T1 change (the firmware drives the MMU3 on Tn, never an M600 pause), a prime tower, and the printer
+    // model check for its own printer.
+    @Test fun prusaMmu3PacksSliceTwoColoursWithToolChangesAndATower() {
+        val testContext = InstrumentationRegistry.getInstrumentation().context
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        fun cube(name: String) = File(appContext.cacheDir, name).also { f -> testContext.assets.open("cube.stl").use { it.copyTo(f.outputStream()) } }
+        val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+        for ((model, printerCheck) in listOf(SlicingPrinterModel.PRUSA_CORE_ONE_MMU3 to "COREONE", SlicingPrinterModel.PRUSA_MK4S_MMU3 to "MK4S",
+                SlicingPrinterModel.PRUSA_MK3_9_MMU3 to "MK3.9", SlicingPrinterModel.PRUSA_MK3_5_MMU3 to "MK3.5")) {
+            val pack = slicingProfilePack(model, null)!!
+            val setup = pack.toolSetupOf(pack.machineText(appContext))
+            assertEquals("$model: one nozzle, five MMU3 slots", ToolSetup(nozzles = 1, slots = PrusaMmu.MMU3_SLOTS), setup)
+            assertEquals(MultiToolFamily.FILAMENT_SWAP, setup.family)
+            val paths = pack.materialize(appContext)
+            val overrides = MultiToolFilamentConfig.overridesFor(parseBaseFilamentDiameter(File(paths[2]).readText()),
+                listOf(pla.copy(colorHex = "#FF0000"), pla.copy(colorHex = "#00FF00")) + List(PrusaMmu.MMU3_SLOTS - 2) { null }, pla)
+            val a = cube("mmu3-a.stl"); val b = cube("mmu3-b.stl"); val out = File(appContext.cacheDir, "mmu3-${model.name}.gcode").also { it.delete() }
+            NativeEngine.nativeSliceMultiObject(arrayOf(a.absolutePath, b.absolutePath), doubleArrayOf(-30.0, 30.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 1.0), intArrayOf(1, 2),
+                out.absolutePath, paths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray())
+            val gcode = out.readText()
+            assertTrue("$model: switches to the second MMU3 slot", Regex("(?m)^T1\\b").containsMatchIn(gcode))
+            assertFalse("$model: no manual filament change pauses", Regex("(?m)^M600\\b").containsMatchIn(gcode))
+            assertTrue("$model: prints a prime tower", gcode.contains(";TYPE:Prime tower"))
+            assertTrue("$model: checks it runs on a $printerCheck", gcode.contains("M862.3 P \"$printerCheck\""))
+        }
     }
 }

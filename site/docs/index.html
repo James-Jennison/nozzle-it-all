@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs and getting started | Nozzle It All</title>
+<meta name="description" content="How to add a printer, slice a model and send it, turn on print alerts and back up your printers in the Nozzle It All Android app, with answers to common questions.">
+<meta name="theme-color" content="#0D1114">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<link rel="preload" href="/assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css?v=46f9045c">
+<meta property="og:title" content="Docs and getting started | Nozzle It All">
+<meta property="og:description" content="How to add a printer, slice a model and send it, turn on print alerts and back up your printers in the Nozzle It All Android app, with answers to common questions.">
+<meta property="og:type" content="website">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+ <div class="wrap bar">
+  <a class="brand" href="/" aria-label="Nozzle It All, home"><img src="/assets/mark.svg" alt="" width="28" height="29"><span>Nozzle It All</span></a>
+  <nav aria-label="Main">
+   <a href="/platforms/">Platforms</a>
+   <a href="/printers/">Printers</a>
+   <a href="/docs/" aria-current="page">Docs</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+  </nav>
+ </div>
+</header>
+<main id="main">
+<div class="wrap prose">
+ <h1>Docs</h1>
+ <div class="callout"><p>These steps describe the Android app as it is being built. It is in <strong>invite-only closed testing</strong> on Google Play and not yet publicly available (see <a href="/platforms/">Platforms</a>), so screens and names may change. Nozzle It All for Desktop and Nozzle It All Web are in development and not yet available, so nothing here applies to them yet.</p></div>
+
+ <h2>1. Add a printer</h2>
+ <ol>
+  <li>Open the app and choose <strong>Add printer</strong>. On a fresh install it opens for you after a short welcome.</li>
+  <li>Press <strong>Scan network</strong> to find printers on your Wi-Fi, or pick the type and type the address yourself. The phone and printer must be on the same network.</li>
+  <li>Fill in what your printer type needs:
+   <ul>
+    <li><strong>Klipper / Snapmaker U1:</strong> the printer's address. An API key is optional. An Elegoo Centauri Carbon on OpenCentauri COSMOS is added this way too, with the COSMOS slicing profile.</li>
+    <li><strong>Bambu Lab:</strong> the printer's IP address, serial number and access code, all shown in its own network settings. LAN mode must be on.</li>
+    <li><strong>OctoPrint:</strong> its address and an API key, created in OctoPrint under Settings, Application Keys.</li>
+    <li><strong>PrusaLink:</strong> the printer's address and its PrusaLink password.</li>
+    <li><strong>Elegoo</strong> (Elegoo firmware, next update): the address; a Centauri Carbon 2 also needs its access code.</li>
+    <li><strong>Creality</strong> (next update): the address.</li>
+    <li><strong>Flashforge</strong> (next update): the address, serial number and access code, shown in its network settings.</li>
+   </ul></li>
+  <li>Optionally pick the bundled slicing profile for the printer. Some printers ask you to confirm their firmware first.</li>
+  <li>The app tests the connection. When it passes, press <strong>Finish</strong>.</li>
+ </ol>
+ <h2 id="away-from-home">Away from home</h2>
+ <p>A printer's local address only works on its own network. To reach it from elsewhere, put it behind one of these, then enter that address in the app. The app has this list built in (Add printer, "Connecting away from home"). The app never routes your printer's traffic through a server of ours; it just connects to the address you enter.</p>
+ <ul>
+  <li><strong>Tailscale (the one we suggest).</strong> Install Tailscale on the machine that runs the printer's software and on your phone, then use the <code>100.x.x.x</code> address or <code>*.ts.net</code> name it gives you. There is nothing to set up on your router, and traffic is encrypted between your own devices. The app accepts that address over plain <code>http://</code> because it stays inside your private Tailscale network.</li>
+  <li><strong>Cloudflare Tunnel.</strong> A free "Quick Tunnel" gives the printer a public <code>https://</code> address without opening a port on your router. Cloudflare's servers carry the traffic and can see it.</li>
+  <li><strong>OctoEverywhere.</strong> A third-party relay with a free tier and no router setup. Your access depends on their service, and their servers carry the traffic.</li>
+  <li><strong>Port forwarding.</strong> Forward a port on your router and use a dynamic DNS name if your address changes. No third party is involved, but the printer is exposed to the internet, so use an API key and <code>https://</code>.</li>
+ </ul>
+ <p>Whichever you pick, an API key is the only thing standing between your printer and anyone who reaches that address, so set one for anything other than Tailscale. See the <a href="/privacy/">privacy policy</a> for what each option means for your data.</p>
+
+ <h2>2. Slice a model and send it</h2>
+ <ol>
+  <li>In the <strong>Files</strong> tab, open <strong>Projects</strong> and start a new project, then add a model file (STL, 3MF or OBJ). You can also share a model file to Nozzle It All from another app, or start one from <strong>Discover</strong>.</li>
+  <li>Place and adjust it on the 3D plate. The app warns you if it does not fit the printer's bed.</li>
+  <li>Choose the quality, infill and supports, then slice. Slicing happens on your phone.</li>
+  <li>Check the layer-by-layer preview and the estimated time and filament. Then send it to the printer. The app asks you to confirm before it starts a print.</li>
+ </ol>
+
+ <h2>3. Print alerts</h2>
+ <p>In <strong>Settings</strong>, turn on <strong>Background print alerts</strong> to be told when a saved printer finishes, fails or goes offline while the app is closed. Android asks for notification permission only at that point.</p>
+
+ <h2>4. Back up your printers</h2>
+ <p>In <strong>Settings</strong>, choose <strong>Back up printers</strong>, set a passphrase, and save the file wherever you like. <strong>Restore printers</strong> reads it back. We cannot recover the passphrase, so keep it somewhere safe.</p>
+
+ <h2>Questions</h2>
+ <h3>Do I need an account?</h3>
+ <p>No. There is no Nozzle It All account.</p>
+ <h3>Does my model go to a server?</h3>
+ <p>No. Slicing happens on your phone. Only model searches and downloads in Discover go to MyMiniFactory. See the <a href="/privacy/">privacy policy</a>.</p>
+ <h3>Why does the app say a printer is "not verified on real hardware"?</h3>
+ <p>Because we have not run that printer type on a real printer yet. See <a href="/printers/">Printers</a>.</p>
+ <h3>Can I use it from a web browser or a computer?</h3>
+ <p>Not yet. Nozzle It All for Desktop (Linux first) and <a href="/platforms/web/">Nozzle It All Web</a> are in development. Setup guides will be published here when they're available.</p>
+ <h3>Something is wrong</h3>
+ <p>See <a href="/support/">Support</a>.</p>
+</div>
+
+</main>
+<footer class="site-footer">
+ <div class="wrap">
+  <nav aria-label="Footer">
+   <a href="/printers/">Printers</a>
+   <a href="/compatibility/">Compatibility</a>
+   <a href="/docs/">Docs</a>
+   <a href="/privacy/">Privacy</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+   <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>
+  </nav>
+  <p>Nozzle It All is free software under the GNU AGPL-3.0-or-later. No accounts, no analytics.</p>
+  <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, MyMiniFactory and OrcaSlicer are names or trademarks of their respective owners. Mentioning them does not imply endorsement by or affiliation with them.</p>
+ </div>
+</footer>
+</body>
+</html>

@@ -130,11 +130,10 @@ object SlicingCoordinator {
     // toolSlotIndices (Phase 8 follow-up, §11, WO-25/WO-26): parallel to `objects` (index i is
     // that object's own real, 1-based filament/tool assignment - see ToolSlots.kt and
     // NativeEngine.nativeSliceMultiObject's own doc comment for the real 1-based convention),
-    // applied only on the plain-gcode Moonraker path today (nativeSliceMultiObject) - the Bambu
-    // bundle path doesn't take per-object tool assignment yet (every bundled Bambu profile is
-    // single-extruder today, so there is nothing real to assign there - see WORK_ORDER.md's own
-    // note on this). Defaults to empty, meaning "every object keeps the printer's default
-    // extruder" - unchanged behavior for every caller that predates this parameter.
+    // applied on the plain-gcode path (nativeSliceMultiObjectEx) and on the Bambu bundle path
+    // (nativeSliceMultiObjectBambuBundleTools: AMS slots, BambuAms). Defaults to empty, meaning
+    // "every object keeps the printer's default extruder" - unchanged behavior for every caller
+    // that predates this parameter.
     // slotMaterials (Phase 8 follow-up, §11, §16, WO-27): index i is real tool slot (i+1)'s own
     // assigned MaterialProfile (null = unassigned, falls back to `overrides`' own material - see
     // below). When non-empty, this builds the real multi-slot filament config
@@ -143,7 +142,15 @@ object SlicingCoordinator {
     // bundled filament.json base diameter, merged into `overrides`. Left empty (the default, and
     // every caller before this parameter existed), this is the same single-material slice every
     // project already produces - no multi-slot config is generated at all.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList(), outputTag: String? = null): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
+    // Colour mixing (0.2.0, requirement 2): mixedFilamentDefinitions is Snapmaker Full Spectrum's own
+    // `mixed_filament_definitions` string (com.nozzleitall.printer.ext.FullSpectrumFormat.DEFINITIONS_KEY) - folded
+    // straight into `overrides`, since Full Spectrum needs no dedicated native call: the definitions travel as an
+    // ordinary config override, exactly the way Desktop's SliceEngine already applies them. virtualExtruders is
+    // PrusaSlicer ColorMix's own `{"version":1,"virtual_extruders":[...]}` JSON (PrusaColorMixFormat.sidecar) - when
+    // non-blank, slicing goes through nativeSliceMultiObjectMix instead of nativeSliceMultiObjectEx so the engine can
+    // resolve an object's tool index against a virtual (blended/gradient) extruder id, not just a physical one. Left
+    // blank (the default, and every caller before this parameter existed), slicing is byte-for-byte unchanged.
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList(), outputTag: String? = null, mixedFilamentDefinitions: String? = null, virtualExtruders: String = ""): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
@@ -151,39 +158,65 @@ object SlicingCoordinator {
             is ProfileResolution.Ready -> return@withContext try {
                 val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
                 val output = freshOutputFile(context, if (outputTag != null) "project-$outputTag" else "project", bambuBundle = bambuTarget, keepOthers = outputTag != null)
+                val slots = toolSlotIndices.ifEmpty { List(objects.size) { 0 } }
+                val effectiveOverrides = if (slotMaterials.isEmpty()) overrides else {
+                    // resolved.profilePaths is materialized in SlicingProfilePack.materialize()'s
+                    // own fixed order (machine, process, filament) - index 0/2 are the real
+                    // machine/filament files this exact slice is about to load.
+                    val realToolCount = resolved.pack.toolCountOf(File(resolved.profilePaths[0]).readText())
+                    // A real config inconsistency, not a cosmetic one: filament_diameter's own
+                    // array length must match the target's real declared extruder count
+                    // (ToolSlots.kt's own parseToolCount) or libslic3r's Print::validate()
+                    // rejects the slice outright ("Flush volumes matrix do not match to the
+                    // correct size!" - hit live building this feature, not assumed). Caught
+                    // here with an actionable message instead of surfacing that raw engine
+                    // error to a caller who passed the wrong number of slots.
+                    require(slotMaterials.size == realToolCount) {
+                        "slotMaterials must have exactly $realToolCount entries for this printer (one per its real declared tool slot), got ${slotMaterials.size}."
+                    }
+                    val baseFilamentJson = File(resolved.profilePaths[2]).readText()
+                    val baseDiameter = parseBaseFilamentDiameter(baseFilamentJson)
+                    val fallback = slotMaterials.filterNotNull().firstOrNull()
+                        ?: BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
+                    // Flushing volumes the printer's own slicer's way, with its nozzle volume (FlushVolumes, every slot on the base filament).
+                    val flush = runCatching {
+                        val base = org.json.JSONObject(baseFilamentJson)
+                        FlushVolumes.setup(org.json.JSONObject(File(resolved.profilePaths[0]).readText()), List(slotMaterials.size) { base })
+                    }.getOrDefault(FlushVolumes.Setup())
+                    overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback, flush)
+                }
+                // Full Spectrum: no dedicated native call - the definitions are an ordinary config override, applied
+                // on every path below exactly like any other entry in effectiveOverrides.
+                val mixedOverrides = if (mixedFilamentDefinitions.isNullOrBlank()) effectiveOverrides
+                    else effectiveOverrides + (com.nozzleitall.printer.ext.FullSpectrumFormat.DEFINITIONS_KEY to mixedFilamentDefinitions)
                 if (bambuTarget) {
-                    NativeEngine.nativeSliceMultiObjectBambuBundleEx(
+                    // Bambu: a .gcode.3mf bundle; with an AMS (BambuAms) each object prints with its assigned slot.
+                    // ColorMix's virtual extruders aren't wired into the Bambu bundle path (a Bambu target is never a
+                    // ColorMix printer - PrusaColorMix is offered on non-Bambu multi-slot printers only, see
+                    // ColourMixing.kt's ProfileFeatures.of/ofPrinter - so virtualExtruders is always blank here).
+                    NativeEngine.nativeSliceMultiObjectBambuBundleTools(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
-                        output.absolutePath, resolved.profilePaths.toTypedArray(), overrides.keys.toTypedArray(), overrides.values.toTypedArray(),
+                        slots.toIntArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), mixedOverrides.keys.toTypedArray(), mixedOverrides.values.toTypedArray(),
                         objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
                     )
+                } else if (virtualExtruders.isNotBlank()) {
+                    NativeEngine.nativeSliceMultiObjectMix(
+                        objects.map { it.first.absolutePath }.toTypedArray(),
+                        objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.scale.toDouble() }.toDoubleArray(),
+                        slots.toIntArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), mixedOverrides.keys.toTypedArray(), mixedOverrides.values.toTypedArray(),
+                        objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
+                        virtualExtruders,
+                    )
                 } else {
-                    val slots = toolSlotIndices.ifEmpty { List(objects.size) { 0 } }
-                    val effectiveOverrides = if (slotMaterials.isEmpty()) overrides else {
-                        // resolved.profilePaths is materialized in SlicingProfilePack.materialize()'s
-                        // own fixed order (machine, process, filament) - index 0/2 are the real
-                        // machine/filament files this exact slice is about to load.
-                        val realToolCount = parseToolCount(File(resolved.profilePaths[0]).readText())
-                        // A real config inconsistency, not a cosmetic one: filament_diameter's own
-                        // array length must match the target's real declared extruder count
-                        // (ToolSlots.kt's own parseToolCount) or libslic3r's Print::validate()
-                        // rejects the slice outright ("Flush volumes matrix do not match to the
-                        // correct size!" - hit live building this feature, not assumed). Caught
-                        // here with an actionable message instead of surfacing that raw engine
-                        // error to a caller who passed the wrong number of slots.
-                        require(slotMaterials.size == realToolCount) {
-                            "slotMaterials must have exactly $realToolCount entries for this printer (one per its real declared tool slot), got ${slotMaterials.size}."
-                        }
-                        val baseFilamentJson = File(resolved.profilePaths[2]).readText()
-                        val baseDiameter = parseBaseFilamentDiameter(baseFilamentJson)
-                        val fallback = slotMaterials.filterNotNull().firstOrNull()
-                            ?: BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
-                        overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback)
-                    }
                     NativeEngine.nativeSliceMultiObjectEx(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
@@ -191,7 +224,7 @@ object SlicingCoordinator {
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
                         slots.toIntArray(),
-                        output.absolutePath, resolved.profilePaths.toTypedArray(), effectiveOverrides.keys.toTypedArray(), effectiveOverrides.values.toTypedArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), mixedOverrides.keys.toTypedArray(), mixedOverrides.values.toTypedArray(),
                         objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
                     )
                 }
@@ -209,7 +242,7 @@ object SlicingCoordinator {
     }
 
     private sealed class ProfileResolution {
-        data class Ready(val profilePaths: List<String>) : ProfileResolution()
+        data class Ready(val profilePaths: List<String>, val pack: SlicingProfilePack) : ProfileResolution()
         data class Blocked(val outcome: SliceOutcome) : ProfileResolution()
     }
 
@@ -219,7 +252,10 @@ object SlicingCoordinator {
     // place, not two that could quietly drift apart.
     private suspend fun resolveProfilePaths(context: Context, profile: PrinterProfile): ProfileResolution {
         val model = profile.slicingModel ?: return ProfileResolution.Blocked(SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first."))
-        val cosmosGeneration = if (model == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) {
+        // A Centauri Carbon profile only ever slices for a printer connected on its own firmware's protocol: an Elegoo-firmware
+        // profile (M729 start G-code) never for a Moonraker/COSMOS printer, a COSMOS profile never for an Elegoo-firmware one.
+        ElegooProfiles.connectionProblem(model, profile.kind)?.let { return ProfileResolution.Blocked(SliceOutcome.FirmwareBlocked(it)) }
+        val cosmosGeneration = if (ElegooProfiles.isCosmos(model)) {
             // checkCentauriCarbonFirmwareMatch treats a null generation as "this call site isn't
             // about a Centauri Carbon profile at all" and returns Match unconditionally (see its
             // own test coverage in FirmwareIdentityTest) - correct for a generic caller, but wrong
@@ -252,9 +288,11 @@ object SlicingCoordinator {
             // is the one actually trusted for which profile pack gets selected.
             live?.let { cosmosRequiresCurrentProfile(it.version) }?.let { if (it) CosmosProfileGeneration.CURRENT else CosmosProfileGeneration.LEGACY }
         } else null
-        val pack = slicingProfilePack(model, cosmosGeneration)
+        // A printer saved with a profile the engine can't slice yet (engine/profiles/unsupported-profiles.json) says so.
+        SlicingEngineSupport.unsupportedReason(model)?.let { return ProfileResolution.Blocked(SliceOutcome.Failed(it)) }
+        val pack = slicingProfilePack(model, cosmosGeneration, profile.customMachine)
             ?: return ProfileResolution.Blocked(SliceOutcome.Failed("No bundled slicer profile exists yet for this printer's confirmed firmware."))
-        return ProfileResolution.Ready(pack.materialize(context))
+        return ProfileResolution.Ready(pack.materialize(context), pack)
     }
 }
 

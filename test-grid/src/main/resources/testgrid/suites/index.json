@@ -1,0 +1,28 @@
+{
+  "format": "nozzle.test-suite-index",
+  "version": [
+    1,
+    0
+  ],
+  "suites": [
+    "paxx-u1.json",
+    "cosmos-centauri-carbon.json",
+    "fixture-anycubic-lan.json",
+    "fixture-bambu-lan.json",
+    "fixture-creality-lan.json",
+    "fixture-duet-rrf.json",
+    "fixture-elegoo-cc-stock.json",
+    "fixture-flashforge-lan.json",
+    "fixture-flashforge-legacy.json",
+    "fixture-generic-klipper.json",
+    "fixture-octoprint.json",
+    "fixture-opencentauri-patched.json",
+    "fixture-prusalink.json",
+    "fixture-repetier-server.json",
+    "fixture-snapmaker-sacp.json",
+    "fixture-snapmaker-sstp.json",
+    "fixture-snapmaker-u1-stock.json",
+    "fixture-ultimaker-lan.json",
+    "fixture-usb-serial.json"
+  ]
+}

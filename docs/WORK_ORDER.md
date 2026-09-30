@@ -50,9 +50,66 @@ P28/M7 sections for what each one built and its commit hash.)*
 
 ## Next — one specific owner action unblocks each of these
 
+1. **WO-44 — Custom machine settings for printers no bundled profile matches (2026-09-26).**
+   Found while writing the hardware testing guide: testers who build their own printers cannot slice correctly, because
+   the app had no way to set a bed size, origin or start/end G-code (the slicer's Printer tab is a read-only summary).
+   `CustomMachine` (domain) holds width, depth, height, corner/centre origin and optional start/end G-code, validated
+   (bed 50-1000 mm, height 20-1000 mm, G-code <= 4000 chars, no control characters). `applyCustomMachine` patches a *copy*
+   of the profile's machine.json (`printable_area`, `printable_height`, `machine_start_gcode`/`machine_end_gcode`; exclusion
+   zones reset to Orca's "0x0"); the bundled asset is never edited and the nozzle stays 0.4 mm. Stored on
+   `PrinterProfile.customMachine` (preferences and the encrypted backup), edited by `CustomMachineEditor` in Edit printer
+   and the Add printer wizard (prefilled from the bundled profile), and applied everywhere a pack is read: slicing,
+   bed shape in the editor and preview, layer limits, tool count. Never offered for the COSMOS Centauri Carbon.
+   Unit tests (`CustomMachineTest`, 16 cases) cover validation, both origins, untouched-everything-else, backup and
+   preferences round trips. `customMachineBedAndGcodeReachTheRealEngine` in `SlicingProfilePacksDeviceTest` slices with
+   custom G-code through the real engine for both origins Passed on a Pixel 9a (12 of 12, 2.25 device-minutes). Not done: nozzle
+   diameter, and per-printer custom process defaults.
+1. **WO-43 — Bundle the whole OrcaSlicer 0.4 mm printer library; searchable model picker (2026-09-26).**
+   Requested for testers who own many models, then widened to a comprehensive list. `scripts/bundle_vendor_profiles.py`
+   flattens 371 more models across 60 vendors (Bambu, Prusa, Creality, Anycubic, Qidi, Sovol, Voron, Ratrig, Artillery,
+   Flashforge, ...) and generates `SlicingModelCatalog.kt` (the `SlicingPrinterModel` enum, `SlicingVendor`, one catalog
+   row per model). 377 models total, 9 MB of JSON (compresses well in the APK). The chip rows in Add printer and Edit
+   printer are replaced by `SlicingModelPicker` (search, collapsible vendor sections, "not yet confirmed" note).
+   Existing enum names and packs are untouched, so saved printers keep their profile. Slicing works for every model;
+   **sending only works over the four protocols the app speaks** (Moonraker, OctoPrint, PrusaLink, Bambu LAN).
+   Real fixes the wider library forced: `parseMachineLimits`/`parseFilamentTemperatureRange` now accept the string
+   forms some vendors write ("0.08,0.08"); the generator never uses a filament without a temperature range;
+   `multiToolFamily` treats only Snapmaker U1 and Prusa XL as independent-tool machines (any other multi-material
+   printer is a filament swap; a Prusa MK4 + MMU was wrongly a toolchanger). `SlicingModelCatalogTest` plus the
+   updated `MultiMaterialTest`/`SliceValidationTest` cover it (619 unit tests, 0 failures; lint clean; androidTest
+   compiles). `everyBundledCatalogModelSlicesRealGcode` in `SlicingProfilePacksDeviceTest` slices a cube with every
+   pack through the real engine: **needs a Device Farm run (estimate and approval first).** Not done: preselecting
+   the model from the printer (Bambu SSDP `DevModel` codes must come from real reports), and control/file-send for
+   the newer Bambu models remain untested.
+   **First real-device run (Pixel 9a, Android 15, 2.08 device-minutes, 2026-09-26):** 354 of 371 new profiles sliced;
+   17 were rejected by OrcaSlicer's own validation. 16 (13 Bambu models, Anycubic Kobra Max/Plus and Vyper) lacked a real
+   uncommented `G92 E0` at layer change, which Orca requires for Marlin-flavoured non-Bambu printers using relative
+   extrusion (Orca's GUI marks Bambu printers via its preset bundle, which our headless bridge lacks); one (Creality
+   Sermoon M300) defaulted to a bed plate its filament zeroes out. The generator now adds the reset where missing and
+   picks a supported plate; `SlicingModelCatalogTest` enforces both rules on every pack. A second device run then
+   passed all but one: **Bambu Lab A2L** uses G-code template variables this engine build does not define
+   (`bed_heat_stable_wait_flag`, `hotend_heating_rate`, `temperature_vitrification`, ...) and fails with "Failed to
+   generate G-code for invalid custom G-code", so it is excluded (`ENGINE_INCOMPATIBLE` in the generator) until the
+   engine is updated. The catalog is 376 models. (Correction to the count above: my first read of the failure list stopped
+   at a blank line inside one error message, so the run rejected more than the 17 it showed - the two Dremel models
+   below were hidden behind it.) Third run: Dremel 3D40/3D45 set absolute extrusion yet carry a `G92 E0` line, which
+   Orca forbids in that mode; the generator drops it (`fix_absolute_reset`) and a unit test enforces the rule.
+1. **WO-42 — Split Snapmaker U1 into stock and PAXX printer types (2026-09-26).**
+   `PrinterKind.SNAPMAKER_U1` (stock: Bespok3d, no multiACE, reported unverified) and
+   `SNAPMAKER_U1_PAXX` (multiACE, no Bespok3d). Saved PAXX printers are unaffected (kind is stored
+   by name). Network discovery now defaults a U1 to stock because Moonraker cannot tell the two
+   apart; a PAXX owner switches the type. Chips added to Add printer and Edit printer; unit tests
+   (607 total, 0 failures), lint and the androidTest compile pass. **Not yet run on a device:** the
+   two new/updated Compose tests in `PrinterCapabilitiesDeviceTest` and `PrinterScanDeviceTest`
+   need a Device Farm or connected run (state the minutes and get approval first).
 1. **WO-4 — Device-verify Bespok3d enrollment + remote screen (M8b).** Code and
-   unit tests are done. Blocked only on the owner's own Snapmaker U1/PAXX SSH
-   access code — once supplied, this is a verification pass, not new development.
+   unit tests are done. **Blocked by design on the owner's printer (2026-09-26):**
+   Bespok3d targets *stock* Snapmaker U1 firmware ("no flashing"), and the
+   enrollment preflight (`Bespok3dU1Preflight`) refuses extended/PAXX firmware; the
+   owner's U1 runs PAXX, so the daemon (port 4269) is not there and enrollment is
+   rejected. Earlier text assumed PAXX worked; it does not. Verification needs a
+   stock-firmware U1, or upstream confirmation that PAXX is supported (ask
+   Bespok3d/adapters and the paxx12 project). Do not bypass the preflight.
 2. **WO-5 — Device-verify the timelapse gallery (M8d).** Code and tests are done.
    Needs a live pass on the Razr against a printer that actually has
    moonraker-timelapse clips recorded.
@@ -2463,3 +2520,16 @@ P28/M7 sections for what each one built and its commit hash.)*
 - **Fix:** CI (`.github/workflows/ci.yml`) splits the suite into 4 balanced shards (about 68 tests each, generated at build time from the test sources) and schedules one Device Farm run per shard, in sequence, through a single manual dispatch. The manual run also accepts `device_pool_arn`, `test_filter`, and existing upload ARNs. The LAN/printer-only test files (which skip themselves without arguments) are left out of the Device Farm build (`-PdeviceFarmTests`), and the unused `room-testing` dependency was removed.
 - **Result:** shards 1-4 on a Google Pixel 9a (Android 15), 2026-09-25: 69 + 70 + 76 + 67 = 282 tests, 0 failures, about 33 device-minutes. The small pool (Pixel 10, Galaxy S25, Pixel Tablet) accepts filtered runs (18/18 passed); a full sharded run of it has not been done. Its earlier "Skipped" runs were not separately explained.
 - The CI user (`nozzle-it-all-ci`) cannot call `devicefarm:ListJobs` or `GetDevicePoolCompatibility`; the workflow prints what `GetRun` returns instead.
+
+## WO-39 — AGPL source offer / About screen (2026-09-25)
+Settings → "About & credits" now carries the AGPL-3.0 notice and the corresponding-source offer: this app's repo and LICENSE, THIRD_PARTY_NOTICES, the OrcaSlicer source at the pinned commit (`OpenSourceNotice.ENGINE_COMMIT`, enforced equal to `engine/ENGINE_PIN.json` by `OpenSourceNoticeTest`), the headless patch, and the app version. Verified on the Razr (`MmfNavigationDeviceTest`, screenshot). Also: `main` is now the GitHub default branch (created at `f8209e3`, the commit that passed the full 846-test Device Farm run on Pixel 10 / Pixel Tablet / Galaxy S25).
+
+## WO-40 — First-run onboarding (2026-09-25)
+Three short pages (slice on the phone / control your printers / your data stays yours), Skip always one tap, last page "Add my printer" or "Explore first". Shown only for a brand-new install (no printers, no address, `onboarding.done` unset); finishing or skipping persists `done`, and Skip/Explore also persists `suppress_wizard` so the Add Printer wizard no longer auto-opens on every cold start (`CompanionScreen(autoOpenWizard=…)`). No network calls or permissions on first run. UI tests use `NozzleTestRunner`, which marks onboarding done so tests that launch `MainActivity` reach the real screens. Design reviewed by the `frontend_ux` council: kept 3 pages; adopted its persistence fix (all exit paths suppress the wizard), dropped the "found automatically on Wi-Fi" and MyMiniFactory copy, heading semantics. Not adopted: a 2-page cut (one seat) and a Settings reset. Verified on the Razr (OnboardingDeviceTest, screenshot); no Device Farm run yet.
+
+## WO-41 — Brand identity applied (2026-09-25)
+Owner commissioned a brand from Lovart.ai (violet accent, "Infill" nozzle mark). The export was raster boards only, so the mark was traced to vector (`brand/`), and applied: adaptive launcher icon with monochrome layer, Play icon, favicon set (also in `site/`), and a new default **Violet** accent (dark `#A78BFA`, light `#6D28D9`; existing users keep their saved accent). The export's contrast claims were wrong for raw `#8B5CF6` (4.48:1 on the dark background, not 7.1:1; white text on it 4.23:1), hence the lighter/darker text shades. Verified on the Razr (launcher icon, screenshot; DashboardDeviceTest/OnboardingDeviceTest/CompanionScreenTest). Not done: splash screen, lockup/wordmark use in-app, marketing graphics, and a licence check of Lovart's terms for commercial use.
+WO-41 addendum (second Lovart export): Play icon replaced by Lovart's full-bleed square (downscaled to 512); dark launch window + Android 12 splash with the brand mark (`Theme.NozzleItAll`, `values-v31`). Lovart's feature graphic, social preview and screenshot frames depict a UI the app does not have and are deliberately not used.
+
+## Decision record, 2026-09-25 — web app hosting (owner)
+Owner confirmed **Plan A**: the web app is a PWA in front of an engine the *user* runs (Desktop agent or self-hosted Engine Service); Nozzle serves only the page files. A Nozzle-hosted slicing service ("Plan B": upload a model, slice on our server) was raised and deferred: **explore later**, as a separate decision, because it changes the privacy promise (models uploaded to us), running cost and abuse controls, and the site/privacy copy. Printer control would still need a local agent under either plan, since a cloud service cannot reach a home network.

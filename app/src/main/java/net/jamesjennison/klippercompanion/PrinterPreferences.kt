@@ -27,14 +27,14 @@ object PrinterPreferences {
             // Same absent/unrecognized-value tolerance as "kind": an older saved profile (or a
             // downgrade after a future value was written) has no slicingModel at all, not a bad one.
             val slicingModel = p.optString("slicingModel").takeIf { it.isNotBlank() }?.let { runCatching { SlicingPrinterModel.valueOf(it) }.getOrNull() }
-            PrinterProfile(address, p.optString("name").take(80), p.optBoolean("favorite"), p.optString("cameraId"), apiKey, kind, p.optString("serial").take(40), slicingModel, p.optString("declaredFirmwareVersion").take(80))
+            PrinterProfile(address, p.optString("name").take(80), p.optBoolean("favorite"), p.optString("cameraId"), apiKey, kind, p.optString("serial").take(40), slicingModel, p.optString("declaredFirmwareVersion").take(80), CustomMachine.fromJson(p.optJSONObject("customMachine")))
         }.getOrNull() }.distinctBy { it.address }
     } catch (_: Exception) { emptyList() }
     fun save(prefs: SharedPreferences, address: String, printers: List<String>) {
         prefs.edit().putString("address", address).putStringSet("savedPrinters", printers.toSet()).apply()
     }
     fun saveProfiles(prefs: SharedPreferences, secrets: SharedPreferences, address: String, profiles: List<PrinterProfile>) {
-        val json = JSONArray().apply { profiles.forEach { p -> put(JSONObject().put("address",p.address).put("name",p.name).put("favorite",p.favorite).put("cameraId",p.cameraId).put("kind",p.kind.name).put("serial",p.serial).put("slicingModel",p.slicingModel?.name ?: "").put("declaredFirmwareVersion",p.declaredFirmwareVersion)) } }
+        val json = JSONArray().apply { profiles.forEach { p -> put(JSONObject().put("address",p.address).put("name",p.name).put("favorite",p.favorite).put("cameraId",p.cameraId).put("kind",p.kind.name).put("serial",p.serial).put("slicingModel",p.slicingModel?.name ?: "").put("declaredFirmwareVersion",p.declaredFirmwareVersion).apply { p.customMachine?.let { put("customMachine", it.toJson()) } }) } }
         prefs.edit().putString("address",address).putStringSet("savedPrinters",profiles.map { it.address }.toSet()).putString("profilesV1",json.toString()).apply()
         val keep = profiles.map { it.address }.toSet()
         secrets.edit().apply {

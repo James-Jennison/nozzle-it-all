@@ -32,6 +32,8 @@ class MmfNavigationDeviceTest {
         compose.waitUntil(8000) { compose.onAllNodesWithTag("open-credits").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("open-credits").performScrollTo().performClick()
         compose.onNodeWithTag("credits-dialog").assertExists()
+        compose.onNodeWithTag("source-offer-statement").assertExists() // the AGPL source offer must be reachable from Credits
+        compose.onNodeWithTag("source-link-0").assertExists()
         compose.onNodeWithText("provided by MyMiniFactory", substring = true).assertExists()
         compose.onNodeWithTag("credits-close").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("credits-dialog").fetchSemanticsNodes().isEmpty() }

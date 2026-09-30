@@ -72,24 +72,25 @@ internal fun parseMachineLimits(machineJson: String): MachineLimits {
     val obj = JSONObject(machineJson)
     // Upstream Prusa XL profiles declare these as plain strings ("0.07"), every other bundled profile as one-element
     // arrays; the engine accepts both, so this does too.
-    fun firstDouble(key: String): Double? = obj.optJSONArray(key)?.takeIf { it.length() > 0 }?.optString(0)?.toDoubleOrNull() ?: obj.optString(key, "").toDoubleOrNull()
+    // Some vendors (multi-extruder machines) write one string with a value per extruder ("0.08,0.08"); the first extruder is used.
+    fun firstDouble(key: String): Double? = (obj.optJSONArray(key)?.takeIf { it.length() > 0 }?.optString(0) ?: obj.optString(key, "")).substringBefore(',').trim().toDoubleOrNull()
     return MachineLimits(firstDouble("min_layer_height"), firstDouble("max_layer_height"))
 }
 
 internal fun parseFilamentTemperatureRange(filamentJson: String): FilamentTemperatureRange {
     val obj = JSONObject(filamentJson)
-    fun firstInt(key: String): Int? = obj.optJSONArray(key)?.takeIf { it.length() > 0 }?.optString(0)?.toDoubleOrNull()?.toInt()
+    fun firstInt(key: String): Int? = (obj.optJSONArray(key)?.takeIf { it.length() > 0 }?.optString(0) ?: obj.optString(key, "")).substringBefore(',').trim().toDoubleOrNull()?.toInt()
     return FilamentTemperatureRange(firstInt("nozzle_temperature_range_low"), firstInt("nozzle_temperature_range_high"))
 }
 
 internal fun SlicingProfilePack.readMachineLimits(context: Context): MachineLimits =
-    parseMachineLimits(context.assets.open(machinePath).use { it.reader().readText() })
+    parseMachineLimits(machineText(context))
 
 internal fun SlicingProfilePack.readFilamentTemperatureRange(context: Context): FilamentTemperatureRange =
     parseFilamentTemperatureRange(context.assets.open(filamentPath).use { it.reader().readText() })
 
-internal fun machineLimitsFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context): MachineLimits? =
-    slicingProfilePack(model, cosmosGeneration)?.readMachineLimits(context)
+internal fun machineLimitsFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context, custom: CustomMachine? = null): MachineLimits? =
+    slicingProfilePack(model, cosmosGeneration, custom)?.readMachineLimits(context)
 
 internal fun filamentTemperatureRangeFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context): FilamentTemperatureRange? =
     slicingProfilePack(model, cosmosGeneration)?.readFilamentTemperatureRange(context)

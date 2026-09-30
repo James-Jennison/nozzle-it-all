@@ -5,12 +5,16 @@ java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaV
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 dependencies {
  api(project(":domain"))
+ // PrinterKind.ELEGOO reuses the desktop's Elegoo sessions (SDCP, the Centauri Carbon 2's MQTT) rather than a second copy.
+ implementation(project(":adapter-elegoo"))
  api("com.squareup.okhttp3:okhttp:4.12.0")
  api("com.github.mwiede:jsch:2.28.6")
  api("org.bouncycastle:bcprov-jdk18on:1.83"); api("org.bouncycastle:bcpg-jdk18on:1.83"); api("org.bouncycastle:bctls-jdk18on:1.83")
  api("com.hivemq:hivemq-mqtt-client:1.3.17")
  api("commons-net:commons-net:3.13.0")
  compileOnly("org.json:json:20240303")
+ // UsbSerialPrinterServiceTest is the first test :transport has ever had; nothing above pulled in a JUnit runner.
+ testImplementation("junit:junit:4.13.2")
 }
 
 // Phase 9S guard: shared modules must never import Android APIs, or a desktop/service build could not reuse them.

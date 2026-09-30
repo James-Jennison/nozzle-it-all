@@ -173,10 +173,9 @@ class BambuMqttConnection(private val listener: Listener) {
             .serverPort(port)
             .sslConfig()
                 .trustManagerFactory(SerialPinningTrustManagerFactory(printerSerial))
-                // The certificate names the serial, never the LAN address we dialled,
-                // so hostname matching can only ever fail. Identity is enforced by the
-                // trust manager above instead.
-                .hostnameVerifier { _, _ -> true }
+                // The certificate names the serial, never the LAN address we dialled, so the
+                // printer's identity is verified against its serial and pinned certificate.
+                .hostnameVerifier(BambuHostnameVerifier(printerSerial))
                 .applySslConfig()
             .addConnectedListener {
                 if (!owns(session, mqtt)) return@addConnectedListener

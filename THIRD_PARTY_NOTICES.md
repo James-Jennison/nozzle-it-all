@@ -30,11 +30,15 @@ Incorporated so far:
   (serial-pinned TLS trust, the MQTT LAN transport and bounded status probe,
   the implicit-TLS FTPS upload client, `project_file` command construction and
   acknowledgement parsing, and the port-6000 chamber-camera stream re-served as
-  loopback MJPEG). `BambuPrintProtocol.kt` drops Helix's AMS/multi-material lane
-  mapping (see that file's header): this app prints single-material from the
-  external spool only. Helix's React Native bridge shims and its `.gcode.3mf`
-  artifact builder were not ported — this app has no slicer and uploads an
-  already-sliced archive as-is.
+  loopback MJPEG). `BambuPrintProtocol.kt` also carries Helix's AMS lane mapping
+  (`toolToLane`, `use_ams`), restored in 2026-09; starting a multi-filament print
+  with it stays off until confirmed on a real printer (`BambuAms.AMS_PRINT_VERIFIED`).
+- `BambuAmsTrays.kt` — adapted from Helix's `services/bambuReport.ts` (global AMS
+  tray numbering, `tray_exist_bits` occupancy, the active tray). Its test fixture
+  `domain/src/test/resources/bambu/helix-p1s-report.json` is Helix's
+  `scripts/fixtures/bambu-p1s-report.json`, unchanged.
+  Helix's React Native bridge shims and its `.gcode.3mf` artifact builder were not
+  ported: this app slices its own bundles with its own engine.
 
 ## Bespok3d daemon and Snapmaker U1 jinni (bundled binaries)
 
@@ -68,36 +72,35 @@ of the Bespok3d Organisation, which is not a legal entity; copyright is held by
 its individual authors. This app is not affiliated with or endorsed by
 Bespok3d.
 
-## OrcaSlicer (on-device slicing, WO-13, in progress)
+## nozzle-engine (slicing engine, all platforms)
 
-The on-device slicing engine (not yet feature-complete — see
-`docs/WORK_ORDER.md`'s WO-13 entry for current status) is the owner's own
-separate **orcaslicer-android-engine** project (local to this machine, no git
-remote), which cross-compiles upstream `OrcaSlicer/OrcaSlicer` (AGPL-3.0-or-
-later) for Android arm64-v8a — the *full* engine, including Boost, CGAL, GMP,
-MPFR, OpenVDB, and OCCT (OpenCASCADE), built entirely from source. An earlier
-approach in this project vendored a feature-reduced OrcaSlicer+oneTBB build as
-pinned git submodules directly under `third_party/`, accepting a scope cut
-(no OpenVDB/CGAL/OCCT) because cross-compiling those from source looked like
-an unsolved problem — that approach is superseded now that the owner's
-already-working, full-featured engine was found. `app/src/main/cpp/
-CMakeLists.txt` builds directly against that project's patched OrcaSlicer
-checkout and prebuilt dependency prefix (`ORCASLICER_ENGINE_ROOT`, an
-absolute local path); `app/src/main/cpp/bridge/` (`slic3r_engine.cpp/hpp`,
-`slic3r_jni.cpp`, `nanosvg_impl.cpp`, `cli_test.cpp`) is copied from that
-project's own JNI bridge, with one local addition (`nativeSliceFile` forwards
-direct config overrides, not just profile-file paths — see `slic3r_jni.cpp`'s
-own header comment).
+Since 2026-09-28 every platform slices with **nozzle-engine** (github.com/James-Jennison/nozzle-engine, AGPL-3.0),
+pinned by commit in `engine/fork/ENGINE_PIN.json`: the desktop engine (`nozzle-engine`, shipped with Nozzle It All for
+Linux), the Android engine (`libslic3rengine.so`) and the Web App engine (`nozzle-engine.wasm`). nozzle-engine is a
+full-history fork of Snapmaker Orca (github.com/Snapmaker/OrcaSlicer, itself a fork of OrcaSlicer, AGPL-3.0) at commit
+`cbf7bbb0b323b76a9a6dbc203d94ae6c9e8b2294`, with Nozzle's changes (headless builds, fixes ported from upstream
+OrcaSlicer, upstream's per-filament flush settings, and the JNI, desktop and browser bridges in `nozzle/bridge/`) as
+individual commits. See docs/upstream/PROVENANCE.md P-0010 and P-0020 to P-0022. The Android build links the dependency
+prefix described below, with GMP built with its C++ classes (`engine/fork/android/DEPENDENCIES.json`).
 
-This build depends on a machine-local path and will not work on a checkout
-that doesn't have `orcaslicer-android-engine` at that same location — there
-is no public/portable alternative yet. Because that project has no git
-remote, its own commit history (not a public URL) is the only provenance
-record for the exact source state a given build used; `scripts/
-artifact-proof.py`'s manifest still covers everything under this app's own
-`app/src/main/` (including the copied bridge files and this `CMakeLists.txt`),
-the same mechanism that ruled out vendoring the Snapmaker `u1-slicer-for-
-android` project's unattested prebuilt binary in the first place.
+## PrusaSlicer ColorMix and prusa_fdm_mixer (desktop slicing engine)
+
+The desktop engine's virtual extruders (colour mixing for Prusa printers) are ported from PrusaSlicer 2.9.6
+(github.com/prusa3d/PrusaSlicer, AGPL-3.0), with presets from PrusaSlicer 3.0.0-alpha12, as part of
+nozzle-engine (its `nozzle/bridge/native/color_mix.cpp`). Its colour prediction is
+**prusa_fdm_mixer** (bundled with PrusaSlicer 2.9.6, MIT licence, Copyright Prusa Research), included unchanged with its
+licence notice in the engine. See docs/upstream/PROVENANCE.md P-0009.
+
+## orcaslicer-android-engine (Android dependency prefix)
+
+The Android engine's dependencies (Boost, CGAL, GMP, MPFR, OpenVDB, OCCT (OpenCASCADE), OpenCV and the rest) are the
+prefix cross-compiled for arm64-v8a by the owner's own **orcaslicer-android-engine** project (local to this machine,
+no git remote), built entirely from source archives whose SHA-256 are pinned in `engine/fork/android/DEPENDENCIES.json`
+(`scripts/engine_pin.py verify` checks them). `engine/fork/android/prepare_engine_root.sh` links that prefix, read only,
+next to the pinned nozzle-engine source; `app/src/main/cpp/CMakeLists.txt` builds against the result
+(`ORCASLICER_ENGINE_ROOT`). Until 2026-09-27 the engine itself also came from that project (upstream OrcaSlicer
+`824b216f` + `engine/android-headless-engine.patch`), and the JNI bridge was copied from it; the bridge now lives in
+nozzle-engine (`nozzle/bridge/android`, with its attribution headers).
 
 **Real bug found and fixed during integration (2026-09-21):** `nativeSliceFile`
 threw `"Some EditGcodeDialog defs were not specified properly"` only when
@@ -170,6 +173,48 @@ author `mudkip`, linked as the required profile from OpenCentauri's own install
 docs and from their own `github.com/OpenCentauri/cosmos`) - the actual fix for the
 real hard-emergency-stop risk this whole firmware-identity feature exists to guard
 against. See `PROVENANCE.md` for the full transcription and attribution detail.
+
+The Elegoo Centauri Carbon and Centauri Carbon 2 stock-firmware (CANVAS) packs
+(`elegoo_centauri_carbon_canvas`, `elegoo_centauri_carbon_2_canvas`) and their profile
+families under `engine/profiles/library/` (nozzle sizes, process presets, Elegoo and
+Generic filament presets) are flattened from **ElegooSlicer**
+(github.com/ELEGOO-3D/ElegooSlicer, Elegoo's fork of OrcaSlicer, AGPL-3.0;
+`resources/profiles/Elegoo`, checkout `2d507e39a9`) by `scripts/bundle_elegoo_canvas.sh`.
+Copyright Elegoo and the OrcaSlicer/Bambu Studio/PrusaSlicer authors; see `PROVENANCE.md`
+and `docs/upstream/PROVENANCE.md` for the settings pinned to match ElegooSlicer.
+
+## Flushing volumes (OrcaSlicer, ElegooSlicer and Snapmaker Orca code and data)
+
+`:domain` `FlushVolumes` and the Web App's `web/src/project/flush.ts` port the flushing-volume calculations of Snapmaker
+Orca (`FlushVolCalc.cpp`), **OrcaSlicer** (github.com/OrcaSlicer/OrcaSlicer, `824b216f`: `FlushVolCalc.cpp`,
+`FlushVolPredictor.cpp`) and **ElegooSlicer** (github.com/ELEGOO-3D/ElegooSlicer, `2d507e39a9`: `FlushVolumeRules.cpp`,
+`StandardColorMatcher.cpp`), all AGPL-3.0. `domain/src/main/resources/flush/` bundles OrcaSlicer's measured-flush data
+(`resources/flush/flush_data_*.txt`) and ElegooSlicer's per-printer rules
+(`resources/profiles/Elegoo/flush/flush_volumes.json`) unchanged. Copyright the OrcaSlicer, Bambu Studio and Elegoo
+authors; see `docs/upstream/PROVENANCE.md` P-0015.
+
+## elegoo-link and SDCP (Elegoo printer protocols)
+
+The Elegoo printer adapter (`adapter-elegoo/`: Centauri Carbon over SDCP, Centauri
+Carbon 2 over MQTT, and the CANVAS filament switcher's slots) is ported from
+**[elegoo-link](https://github.com/ELEGOO-3D/elegoo-link)**, Elegoo's printer connection
+library, Copyright 2025 Shenzhen Elegoo Technology Co., Ltd., licensed under the
+Apache License 2.0 (checkout `46c7b814e0`; licence text at
+`third_party_licenses/elegoo-link-Apache-2.0.txt`). The message formats, command and
+method numbers, status meanings, upload procedures and discovery messages were
+re-implemented in Kotlin from its `src/lan/` sources; no C++ was copied. Each source
+file in `adapter-elegoo/` names the upstream files it follows. Changes from upstream:
+LAN only (the cloud half of elegoo-link is not used), no automatic retries, bounded
+replies, and a minimal MQTT client in place of Eclipse Paho. The desktop app and the
+Android app both ship this module (Android uses it for its Elegoo printer connection).
+
+The SDCP V3.0.0 protocol description
+(github.com/cbd-tech/SDCP-Smart-Device-Control-Protocol-V3.0.0, checkout `f977215761`,
+Shenzhen CBD Technology Co., Ltd.) was used as a protocol reference for
+interoperability; it carries no licence file and none of its text is included beyond
+one short sample discovery reply used as a test fixture. ElegooSlicer (AGPL-3.0) was
+read for how its send dialog maps slots and which defaults it sends. See
+`docs/upstream/PROVENANCE.md`.
 
 ## Fonts
 

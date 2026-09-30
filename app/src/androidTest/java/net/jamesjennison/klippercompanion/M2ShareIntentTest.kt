@@ -16,7 +16,7 @@ class M2ShareIntentTest {
         compose.runOnUiThread {
             activity.startActivity(Intent(activity,MainActivity::class.java).apply {
                 action=Intent.ACTION_SEND;type="application/octet-stream"
-                putExtra(Intent.EXTRA_STREAM,Uri.parse("content://net.jamesjennison.klippercompanion.test.gcodefixture/sample"))
+                putExtra(Intent.EXTRA_STREAM,Uri.parse("content://${androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.packageName}.gcodefixture/sample"))
                 addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
             })
         }

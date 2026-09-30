@@ -4,12 +4,37 @@ import org.json.JSONObject
 import java.util.Locale
 
 // Ordinal-independent persistence: PrinterPreferences stores/reads this by name(), not ordinal.
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT }
+// SNAPMAKER_U1 = stock firmware (Bespok3d-capable); SNAPMAKER_U1_PAXX = PAXX/extended firmware (multiACE, no Bespok3d).
+// ELEGOO = an Elegoo Centauri Carbon on Elegoo's own firmware (SDCP) or a Centauri Carbon 2 (MQTT), through :adapter-elegoo.
+// CREALITY = a Creality K1 / K2 / Hi on Creality's own firmware (port-9999 websocket, CFS slots; CrealityCfs).
+// FLASHFORGE = a Flashforge AD5X / Adventurer 5M on its local HTTP API (port 8898, IFS slots; FlashforgeIfs): serial
+// (PrinterProfile.serial) + access code (PrinterProfile.apiKey).
+// DUET = a Duet board on RepRapFirmware, standalone (rr_* API) or with Duet Software Framework (/machine REST API; DuetRrf):
+// board password in PrinterProfile.apiKey, blank for RepRapFirmware's default.
+// ULTIMAKER = a networked UltiMaker (3 / S3 / S5 / S7; UltiMakerApi): status from the cluster API; the id / key the printer
+// issues on pairing in PrinterProfile.serial / PrinterProfile.apiKey. The UltiMaker 2 has no network and no kind.
+// REPETIER = one printer behind a Repetier-Server (RepetierServer): API key in PrinterProfile.apiKey, the server's printer
+// slug in PrinterProfile.serial (blank for a server with one printer).
+// ANYCUBIC_LAN = an Anycubic Kobra 3 / S1 / X generation printer on stock firmware in LAN mode, with or without an ACE / ACE Pro
+// (AnycubicLan): address only; the MQTT credentials come from the printer's own handshake and are never stored.
+// SNAPMAKER_A_SERIES = a Snapmaker 2.0 (A150 / A250 / A350, single or dual extruder, Quick Swap Kit or not) on the touchscreen's
+// HTTP API (SnapmakerSstp): the token the printer issues when the person accepts on its screen in PrinterProfile.apiKey, the
+// series it reports in PrinterProfile.serial.
+// SNAPMAKER_SACP = a Snapmaker J1 or Artisan over SACP on TCP port 8888 (SnapmakerSacp): the name Nozzle It All connects
+// as in PrinterProfile.serial (set by Connect), an optional token in PrinterProfile.apiKey.
+// USB_SERIAL = a printer plugged in over USB, spoken to as a Marlin/Prusa-protocol serial port (UsbSerial/MarlinSerial,
+// our own driver on android.hardware.usb - see UsbSerialPrinterService, module :transport). There is no network
+// address at all, so PrinterProfile.address holds a synthetic "usb:<vendorId>:<productId>:<serialNumber>" identity
+// string instead (vendor/product in decimal, serialNumber the USB device's own iSerialNumber, blank if it has none);
+// PrinterProfile.serial holds the same device serial number alone (for display); PrinterProfile.apiKey holds the
+// chosen baud rate as plain text ("115200" or "250000"). Never verified on real hardware yet (UsbSerialPrinter.
+// START_VERIFIED / UPLOAD_VERIFIED are both false) - see UsbSerialPrinter.kt.
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_A_SERIES, SNAPMAKER_SACP, USB_SERIAL }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing
 // profile declared for this printer yet"; also ordinal-independent persistence, by name().
-enum class SlicingPrinterModel { SNAPMAKER_U1, ELEGOO_CENTAURI_CARBON, BAMBU_GENERIC, PRUSA_GENERIC, GENERIC_KLIPPER, PRUSA_XL_5T }
+// SlicingPrinterModel itself is generated: see SlicingModelCatalog.kt (scripts/bundle_vendor_profiles.py).
 // serial identifies a BAMBU_LAB printer to its own MQTT/FTPS/camera transports and is unused by
 // every other kind. It is not a credential (apiKey is), so it persists alongside name/cameraId.
 // slicingModel/declaredFirmwareVersion are WO-13's firmware-identity fields: slicingModel picks
@@ -19,13 +44,14 @@ enum class SlicingPrinterModel { SNAPMAKER_U1, ELEGOO_CENTAURI_CARBON, BAMBU_GEN
 // alone for the actual go/no-go decision (FirmwareIdentity.kt's checkCentauriCarbonFirmwareMatch
 // takes a live reading), but it drives the UI ("this printer was last confirmed as COSMOS
 // 26.08.0 - revalidate?") and lets profile selection happen before a printer is even reachable.
-data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER, val serial: String = "", val slicingModel: SlicingPrinterModel? = null, val declaredFirmwareVersion: String = "") {
+data class PrinterProfile(val address: String, val name: String = "", val favorite: Boolean = false, val cameraId: String = "", val apiKey: String = "", val kind: PrinterKind = PrinterKind.GENERIC_KLIPPER, val serial: String = "", val slicingModel: SlicingPrinterModel? = null, val declaredFirmwareVersion: String = "", val customMachine: CustomMachine? = null) {
     val label: String get() = name.ifBlank { address }
-    // Null for every slicingModel except ELEGOO_CENTAURI_CARBON, and null there too until a firmware
+    // Null for every slicingModel except the COSMOS Centauri Carbon profiles (ElegooProfiles.isCosmos: with or without
+    // CANVAS), and null there too until a firmware
     // version has actually been confirmed (declaredFirmwareVersion blank, or unparseable - see
     // FirmwareIdentity.kt) - an unconfirmed/unparseable declaration must never resolve to a generation.
     val declaredCosmosProfileGeneration: CosmosProfileGeneration? get() =
-        if (slicingModel != SlicingPrinterModel.ELEGOO_CENTAURI_CARBON) null
+        if (!ElegooProfiles.isCosmos(slicingModel)) null
         else cosmosRequiresCurrentProfile(declaredFirmwareVersion)?.let { if (it) CosmosProfileGeneration.CURRENT else CosmosProfileGeneration.LEGACY }
 }
 data class FileInfo(val path: String, val size: Long? = null, val modified: Double? = null)

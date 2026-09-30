@@ -2,8 +2,8 @@ package org.orcaslicer.engine
 
 // Package name is fixed by the JNI bridge's exported symbol names
 // (Java_org_orcaslicer_engine_NativeEngine_...), copied from the owner's
-// orcaslicer-android-engine project - see app/src/main/cpp/bridge/ and
-// THIRD_PARTY_NOTICES.md. Deliberately not net.jamesjennison.klippercompanion:
+// orcaslicer-android-engine project and now in nozzle-engine's nozzle/bridge/android -
+// see THIRD_PARTY_NOTICES.md. Deliberately not net.jamesjennison.klippercompanion:
 // renaming this would mean patching the C++ bridge instead of reusing it
 // as-is.
 //
@@ -117,6 +117,16 @@ object NativeEngine {
         paintStrokes: Array<String>, volumeSpecs: Array<String>,
     )
 
+    // Multi-colour Bambu bundles: nativeSliceMultiObjectBambuBundleEx plus a 1-based filament (AMS slot) per object,
+    // parallel to modelPaths (0 = the default), as nativeSliceMultiObjectEx takes.
+    external fun nativeSliceMultiObjectBambuBundleTools(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray, toolSlotIndices: IntArray,
+        outputBundlePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+        paintStrokes: Array<String>, volumeSpecs: Array<String>,
+    )
+
     // Loads inputModelPath (STL/3MF/OBJ) the same real way nativeSliceFile does - real
     // Model::read_from_file, bed-centered - but stops short of slicing. Returns 3 floats (the
     // model's own real transform pivot - see engine::load_mesh_preview) followed by a flat
@@ -171,4 +181,34 @@ object NativeEngine {
     // selector). Must be called exactly once per nativeOpenPaintSession call, or that memory
     // leaks for the process lifetime - there is no finalizer.
     external fun nativeClosePaintSession(handle: Long)
+
+    // Colour mixing (0.2.0): Snapmaker Full Spectrum and PrusaSlicer ColorMix, the same engine ops Desktop drives
+    // through `nozzle-engine --full-spectrum` / `--color-mix` (see com.nozzleitall.printer.ext.FullSpectrumFormat /
+    // PrusaColorMixFormat in :printer-api for the shared request/response JSON both platforms build and parse).
+    // requestJson/return are the exact same JSON shapes as the CLI's request file / stdout; a failure comes back as
+    // {"error":"..."} rather than throwing, matching the CLI's own convention (see native_cli.cpp's exit code 2).
+    external fun nativeFullSpectrum(requestJson: String): String
+    external fun nativeColorMix(requestJson: String): String
+
+    // The real multi-object counterpart to nativeSliceMultiObjectEx, plus a `virtual_extruders` file (the
+    // {"version":1,"virtual_extruders":[...]} JSON PrusaColorMixFormat.sliceRequestJson/sidecar produce) - an object
+    // assigned to a virtual extruder's id via toolSlotIndices then prints that blend's/gradient's layer cycle
+    // (nozzle_cm::check_virtual_extruders_file, native_cli.cpp's `virtual_extruders` request line). Pass "" for no
+    // colour mixing - identical output to nativeSliceMultiObjectEx. Throws "Bad virtual extruders JSON: <why>" on a
+    // malformed virtualExtruders string, same RuntimeException convention as every other native call here.
+    external fun nativeSliceMultiObjectMix(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray, toolSlotIndices: IntArray,
+        outputGcodePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+        paintStrokes: Array<String>, volumeSpecs: Array<String>,
+        virtualExtruders: String,
+    )
+
+    // The paint-session counterpart: slices the session's own already-loaded model with a `virtual_extruders` file,
+    // same contract as nativeSliceMultiObjectMix's own virtualExtruders parameter.
+    external fun nativeSlicePaintSessionMix(
+        handle: Long, outputGcodePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>, virtualExtruders: String,
+    )
 }

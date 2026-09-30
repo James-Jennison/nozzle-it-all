@@ -66,7 +66,7 @@ fun PrinterTiles(tiles: List<PrinterTile>, enabled: Boolean, open: (String) -> U
                         Text(tile.label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.size(7.dp).background(dotColor, CircleShape))
-                            Text(displayState.replaceFirstChar { it.titlecase() }, style = MaterialTheme.typography.labelMedium, color = dotColor)
+                            Text(familyStateLabel(snapshot?.state ?: tile.status), style = MaterialTheme.typography.labelMedium, color = dotColor)
                         }
                         if (tile.kind.unverifiedOnRealHardware) Text("Not verified on real hardware yet",
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary,

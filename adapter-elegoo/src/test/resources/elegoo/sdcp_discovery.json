@@ -1,0 +1,13 @@
+{
+    "_source": "SDCP V3.0.0 document, 'Device Discovery Description' reply (values as in the document, MachineName set to the Centauri Carbon's)",
+    "Id": "979d4C788A4a78bC777A870F1A02867A",
+    "Data": {
+        "Name": "Workshop CC",
+        "MachineName": "Centauri Carbon",
+        "BrandName": "ELEGOO",
+        "MainboardIP": "192.168.1.2",
+        "MainboardID": "000000000001d354",
+        "ProtocolVersion": "V3.0.0",
+        "FirmwareVersion": "V1.4.44"
+    }
+}

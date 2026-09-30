@@ -1,0 +1,82 @@
+{
+  "accepted": [
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "e74b744e1242d61bf52b177f5e5eb768b7e6b05f432ad5f95e4da0f426141fd3",
+      "date": "2026-09-28",
+      "note": "Level 1 run on the owner's PAXX U1, owner at the printer. Accepted with the recorded corrections: sourceRevision should read af63b08; engine version was masked. Multi-material monitoring FAIL is a real app gap (no U1 material reading on Android)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "af07e2adc7be9c7713756cc6c34ac9402f18759d711d9fcc049305ae46498d7e",
+      "date": "2026-09-28",
+      "note": "Level 2 run on the owner's PAXX U1, owner at the printer: upload (SHA-256 verified), listing and delete. Built from 0b6d902. Extra cleanup approval prompt had no effect (fixed in acadaab)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "b7484a3810f04b4103d4d40cfb6943837409bd68f3495aaefa3c179a4683b6c1",
+      "date": "2026-09-28",
+      "note": "Level 1 rerun on the owner's PAXX U1 with the build (8f16e36) that reads loaded filament per toolhead; owner confirmed all four toolheads match."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "0d338dc676e85ad233a58c66fbce074092e56908b627454eb478d6a17258deab",
+      "date": "2026-09-28",
+      "note": "Level 3 run on the owner's PAXX U1, owner at the printer: nozzle 60 C and off, bed 40 C and off, G28, Z +5 mm, heaters off in cleanup; each step approved and confirmed."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "58f24794cfcf6a41a5f8e40b8ff7d3871447edf9520093b0acbf0c2fb0081200",
+      "date": "2026-09-28",
+      "note": "Level 4 run on the owner's PAXX U1, owner at the printer. Accepted with corrections: height and thin wall were ruler estimates (remeasured 10.4 mm and 1.1 mm, in tolerance); homing physically worked (G28 reply lost). Physical printing FAIL stands in this bundle until a caliper-measured run supersedes it."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
+      "date": "2026-09-28",
+      "note": "Level 4 rerun on the owner's PAXX U1 with calipers, owner at the printer, built from ca84486 (paxx-u1 1.1.0). Every test PASS: towers 20.0/20.0, hole 8.0, height 10.43, wall 1.27 mm; homing confirmed from printer state after the G28 reply was lost. Supersedes 58f24794 for physical printing."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "cc752caddf5c6862142bda44c6e4cc41fdf00e193c593aaba8749fa48dd3ae01",
+      "date": "2026-09-29",
+      "note": "Level 2 run on the owner's PAXX U1, built from b478c73 (paxx-u1 1.2.0). Every test up to level 2 PASS. First run of the delete_leftovers cleanup on hardware: approved once, deleted the two earlier Test Grid files; only the loaded print file remained."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "7134a20862d83959c68755b200f404ba7ea6118afc1adafdff5dabf4c000a05e",
+      "date": "2026-09-29",
+      "note": "Level 1 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from 9d6860e (cosmos-centauri-carbon 1.2.0). Every test up to level 1 PASS: identity, status, camera, single and two-tool slicing with the COSMOS AFC profile, profile match, stock profile refused, upload guard (M729/M8213), four CANVAS lanes confirmed by the owner. First physical COSMOS evidence."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "f09a467a1f6ad6a7646e79653580e03a797ad9a219328d060da33cfbba500768",
+      "date": "2026-09-29",
+      "note": "Level 3 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from 9d6860e (cosmos-centauri-carbon 1.2.0). Every test up to level 3 PASS: upload (SHA-256 verified), listing and delete; nozzle 60 C, bed 40 C, G28, Z +5 mm, heaters off. Accepted with a correction: the camera snapshot's recorded SHA-256 had 'cc1' masked (the printer is saved as CC1; fixed in #14)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "f36c2f3851813e2fbe3ead6cf488cf23d81905fed90250d4e74d389282f877cc",
+      "date": "2026-09-29",
+      "note": "Level 4 run on the owner's Centauri Carbon with CANVAS on OpenCentauri COSMOS Release 26.09.0, built from d381dcd (cosmos-centauri-carbon 1.2.0). Single material all PASS (towers 20.0/20.0, hole 8.0, height 10.4, wall 1.2 mm; pause/resume/cancel). Two-tool print FAIL on colour bleed: no prime tower (engine bug, nozzle-engine#4), flush_multiplier 0.3 and white-for-every-slot flush volumes (fixed in #17). Single-material prints were sliced with the plain COSMOS profile (COSMOS warned; suite 1.3.0 uses the AFC profile with CANVAS)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "3e094a9380bdcaa4c4a99870aa794d2d8de8b1c13a100e6a66b7a05e8a3501a9",
+      "date": "2026-09-29",
+      "note": "Level 4 run on the owner's Centauri Carbon with CANVAS, COSMOS Release 26.09.0, built from 9523afd with nozzle-engine d17bfe5 (cosmos-centauri-carbon 1.3.0). Two-tool print PASS with no colour bleed: prime tower printed, flush multiplier 1, purge sized from the lane colours. Every other test carried over from run fa7d2ea1 (bundle f36c2f38) or re-ran and passed. Owner reported the result as satisfactory before exporting."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3",
+      "date": "2026-09-29",
+      "note": "Level 4 run on the owner's Centauri Carbon with CANVAS, COSMOS Release 26.09.0, built from 988df75 with nozzle-engine 2b7b6cf (tower declared for the adaptive mesh). Two-tool print PASS with the prime tower printed on the bed (owner watched it; visible in the photo) and no colour bleed. Everything else carried over."
+    }
+  ],
+  "format": "nozzle.evidence-acceptance",
+  "rejected": [],
+  "version": [
+    1,
+    0
+  ]
+}

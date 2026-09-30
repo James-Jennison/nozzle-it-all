@@ -1,0 +1,21 @@
+{
+  "$description": "Shared multi-material recipe fixture: Android (MultiToolFilamentConfig, :domain test) and Web (slicing.ts, vitest) must both produce exactly `expected` for `input`. flush_volumes_matrix is Snapmaker Orca's colour-based calculation (FlushVolumes; minimum volume 0, no support filament).",
+  "input": {
+    "diameter": 1.75,
+    "fallbackNozzleC": 210,
+    "slots": [
+      { "type": "PLA", "colorHex": "#BE38F3", "nozzleC": 215 },
+      { "type": "PETG", "colorHex": "#FFFFFF", "nozzleC": 240 },
+      { "type": "TPU", "colorHex": "#DD0000" }
+    ]
+  },
+  "expected": {
+    "filament_diameter": "1.75,1.75,1.75",
+    "filament_colour": "#BE38F3;#FFFFFF;#DD0000",
+    "filament_type": "PLA;PETG;TPU",
+    "nozzle_temperature": "215,240,210",
+    "nozzle_temperature_initial_layer": "215,240,210",
+    "flush_volumes_matrix": "0,472,214,194,0,234,356,579,0",
+    "flush_volumes_vector": "140,140,140,140,140,140"
+  }
+}

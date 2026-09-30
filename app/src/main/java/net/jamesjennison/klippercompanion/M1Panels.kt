@@ -13,7 +13,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String?, detectFirmware: ((String, (Result<FirmwareIdentity>)->Unit)->Unit)? = null) {
+@Composable fun ProfileEditor(profile: PrinterProfile, close: ()->Unit, save: (String,String,String,String,PrinterKind,String,SlicingPrinterModel?)->String?, detectFirmware: ((String, (Result<FirmwareIdentity>)->Unit)->Unit)? = null, setCustomMachine: (String, CustomMachine?) -> Unit = { _, _ -> }, detectLanes: ((String, (Result<Int>)->Unit)->Unit)? = null) {
     var name by remember(profile) { mutableStateOf(profile.name) }
     var address by remember(profile) { mutableStateOf(profile.address) }
     // For a BAMBU_LAB profile this same field holds the access code from the printer's own screen -
@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
     var serial by remember(profile) { mutableStateOf(profile.serial) }
     var kind by remember(profile) { mutableStateOf(profile.kind) }
     var slicingModel by remember(profile) { mutableStateOf(profile.slicingModel) }
+    var customMachine by remember(profile) { mutableStateOf(profile.customMachine) }
+    var customMachineError by remember(profile) { mutableStateOf<String?>(null) }
     var showKey by remember(profile) { mutableStateOf(false) }
     var showRemoteHelp by remember(profile) { mutableStateOf(false) }
     var error by remember(profile) { mutableStateOf<String?>(null) }
@@ -37,7 +39,7 @@ import androidx.compose.ui.unit.dp
     // Still re-triggerable by hand below (the button stays) for the case this fires before the
     // printer is actually reachable, or the owner just wants to re-confirm after a firmware update.
     LaunchedEffect(slicingModel, address) {
-        if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null && !detecting) {
+        if(ElegooProfiles.isCosmos(slicingModel) && detectFirmware!=null && !detecting) {
             detecting=true;detectNote=""
             detectFirmware(profile.address) { result ->
                 detecting=false
@@ -62,6 +64,59 @@ import androidx.compose.ui.unit.dp
             OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("API key")},singleLine=true,modifier=Modifier.testTag("octoprint-key"),
                 visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+        } else if(kind==PrinterKind.ELEGOO) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            Text("The address from the printer's own network settings. A Centauri Carbon needs nothing else.",style=MaterialTheme.typography.bodySmall)
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("Access code (Centauri Carbon 2 only, if you set one)")},singleLine=true,modifier=Modifier.testTag("elegoo-access-code"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+        } else if(kind==PrinterKind.CREALITY) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            Text("A Creality K1, K2 or Hi on Creality's own firmware needs nothing else. Nozzle It All reads its status and CFS slots and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.FLASHFORGE) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            OutlinedTextField(serial,{serial=it.take(40)},label={Text("Serial number")},singleLine=true,modifier=Modifier.testTag("flashforge-serial"))
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("Access code")},singleLine=true,modifier=Modifier.testTag("flashforge-access-code"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+            Text("Both are on the printer's own network settings screen. Nozzle It All reads its status and IFS slots and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
+            // Upstream OrcaSlicer's own split (FlashforgeLegacy.usesLegacy): either field blank means the legacy console.
+            Text("An older Flashforge (Adventurer 3 / 4, Creator, Guider): leave both blank. Nozzle It All then uses its older port-8899 connection, which only checks the printer answers (its state isn't read yet).",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.DUET) {
+            OutlinedTextField(address,{address=it},label={Text("Duet address")},placeholder={Text("192.168.1.50 or duet.local")},singleLine=true)
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("Board password (optional)")},singleLine=true,modifier=Modifier.testTag("duet-password"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+            Text("Only if the board has one (M551); blank means RepRapFirmware's default. Standalone RepRapFirmware and Duet Software Framework both work. Nozzle It All checks the board is reachable and uploads sliced files to 0:/gcodes; start the print on the printer's screen or Duet Web Control (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.ULTIMAKER) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            // The issued id goes in serial, the key in the encrypted apiKey slot - see printerServiceFor's comment.
+            UltiMakerPairing(address, serial, apiKey) { id, key -> serial = id; apiKey = key }
+            Text("A networked UltiMaker (3, S3, S5, S7). Nozzle It All reads its state and job progress. Sending prints from here isn't verified on a real printer yet, and an UltiMaker prints every job it is sent, so nothing is sent: print from the printer's screen.",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.REPETIER) {
+            OutlinedTextField(address,{address=it},label={Text("Repetier-Server address")},placeholder={Text("192.168.1.60:3344")},singleLine=true)
+            // Same field/encrypted slot as Bambu's access code - see printerServiceFor's comment.
+            OutlinedTextField(apiKey,{apiKey=it.take(200)},label={Text("API key")},singleLine=true,modifier=Modifier.testTag("repetier-key"),
+                visualTransformation=if(showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
+            OutlinedTextField(serial,{serial=it.take(40)},label={Text("Printer slug (blank if the server has one printer)")},singleLine=true,modifier=Modifier.testTag("repetier-slug"))
+            Text("Nozzle It All checks the server answers and stores sliced files in its model library; start the print from Repetier-Server or the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.ANYCUBIC_LAN) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            Text("An Anycubic Kobra 3, Kobra S1 or Kobra X on Anycubic's own firmware needs nothing else, with LAN mode on: the printer hands over its connection details itself, and Nozzle It All never stores them. Nozzle It All reads its status and ACE slots and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet).",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.SNAPMAKER_A_SERIES || kind==PrinterKind.SNAPMAKER_SACP) {
+            OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
+            // SNAPMAKER_A_SERIES: the touchscreen's token in the encrypted apiKey slot, the series in serial. SNAPMAKER_SACP: the
+            // connection name in serial. Both are only ever set by Connect - see SnapmakerConnect.
+            SnapmakerConnect(kind, address, serial, apiKey) { s, k -> serial = s; apiKey = k }
+            Text(if(kind==PrinterKind.SNAPMAKER_SACP) "A Snapmaker J1 or Artisan on the same network. Nozzle It All reads its temperatures and job progress and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet). Laser and CNC work isn't offered."
+                else "A Snapmaker 2.0 (A150, A250 or A350, single or dual extruder) with a 3D printing module, on the same network. Nozzle It All reads its state and job progress and uploads sliced files; start the print on the printer's screen (starting from here isn't verified on a real printer yet). Laser and CNC work isn't offered.",style=MaterialTheme.typography.bodySmall)
+        } else if(kind==PrinterKind.USB_SERIAL) {
+            UsbSerialDevicePicker(address, serial, apiKey) { addr, ser, baud -> address = addr; serial = ser; apiKey = baud }
+            Text("A printer plugged into this device by USB cable, spoken to directly as a Marlin/Prusa-protocol serial port. Nozzle It All reads its temperatures and SD job progress; starting a print, uploading a file or any other control from here isn't verified on real hardware yet - print from the printer's own screen or SD card. Nozzle It All can't save a file to the printer's storage; copy it over manually.",style=MaterialTheme.typography.bodySmall)
         } else if(kind==PrinterKind.PRUSA_LINK) {
             OutlinedTextField(address,{address=it},label={Text("Printer IP address")},placeholder={Text("192.168.1.50")},singleLine=true)
             Text("The address shown on the printer's own screen under Settings > Network, with no http:// prefix.",style=MaterialTheme.typography.bodySmall)
@@ -80,31 +135,38 @@ import androidx.compose.ui.unit.dp
             Text("Only needed if Moonraker requires authentication; copy it from Fluidd's or Mainsail's settings.",style=MaterialTheme.typography.bodySmall)
         }
         Text("Printer type",style=MaterialTheme.typography.labelLarge)
-        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear. Bambu Lab and Prusa Link are different protocols entirely, with their own fields above.",style=MaterialTheme.typography.bodySmall)
+        Text("Generic Klipper and Snapmaker U1 both talk to Moonraker and differ only in which extra vendor controls appear: stock U1 firmware shows Bespok3d, PAXX firmware shows multiACE. Bambu Lab, Prusa Link, OctoPrint, Elegoo, Creality, Flashforge, Duet, UltiMaker, Repetier-Server, Anycubic, Snapmaker 2.0, Snapmaker J1 / Artisan and USB cable are different protocols entirely, with their own fields above.",style=MaterialTheme.typography.bodySmall)
         FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             FilterChip(kind==PrinterKind.GENERIC_KLIPPER,{kind=PrinterKind.GENERIC_KLIPPER},label={Text("Generic Klipper")})
-            FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX,{kind=PrinterKind.SNAPMAKER_U1_PAXX},label={Text("Snapmaker U1 (PAXX)")})
+            FilterChip(kind==PrinterKind.SNAPMAKER_U1,{kind=PrinterKind.SNAPMAKER_U1},label={Text("Snapmaker U1 (stock)")},modifier=Modifier.testTag("kind-u1-stock"))
+            FilterChip(kind==PrinterKind.SNAPMAKER_U1_PAXX,{kind=PrinterKind.SNAPMAKER_U1_PAXX},label={Text("Snapmaker U1 (PAXX)")},modifier=Modifier.testTag("kind-u1-paxx"))
             FilterChip(kind==PrinterKind.BAMBU_LAB,{kind=PrinterKind.BAMBU_LAB},label={Text("Bambu Lab")})
             FilterChip(kind==PrinterKind.PRUSA_LINK,{kind=PrinterKind.PRUSA_LINK},label={Text("Prusa Link")},modifier=Modifier.testTag("kind-prusa-link"))
             FilterChip(kind==PrinterKind.OCTOPRINT,{kind=PrinterKind.OCTOPRINT},label={Text("OctoPrint")},modifier=Modifier.testTag("kind-octoprint"))
+            FilterChip(kind==PrinterKind.ELEGOO,{kind=PrinterKind.ELEGOO},label={Text("Elegoo")},modifier=Modifier.testTag("kind-elegoo"))
+            FilterChip(kind==PrinterKind.CREALITY,{kind=PrinterKind.CREALITY},label={Text("Creality (K1 / K2 / Hi)")},modifier=Modifier.testTag("kind-creality"))
+            FilterChip(kind==PrinterKind.FLASHFORGE,{kind=PrinterKind.FLASHFORGE},label={Text("Flashforge")},modifier=Modifier.testTag("kind-flashforge"))
+            FilterChip(kind==PrinterKind.DUET,{kind=PrinterKind.DUET},label={Text("Duet (RepRapFirmware)")},modifier=Modifier.testTag("kind-duet"))
+            FilterChip(kind==PrinterKind.ULTIMAKER,{kind=PrinterKind.ULTIMAKER},label={Text("UltiMaker (3 / S-series)")},modifier=Modifier.testTag("kind-ultimaker"))
+            FilterChip(kind==PrinterKind.REPETIER,{kind=PrinterKind.REPETIER},label={Text("Repetier-Server")},modifier=Modifier.testTag("kind-repetier"))
+            FilterChip(kind==PrinterKind.ANYCUBIC_LAN,{kind=PrinterKind.ANYCUBIC_LAN},label={Text("Anycubic (Kobra 3 / S1 / X)")},modifier=Modifier.testTag("kind-anycubic-lan"))
+            FilterChip(kind==PrinterKind.SNAPMAKER_A_SERIES,{kind=PrinterKind.SNAPMAKER_A_SERIES},label={Text("Snapmaker 2.0 (A250 / A350)")},modifier=Modifier.testTag("kind-snapmaker-a-series"))
+            FilterChip(kind==PrinterKind.SNAPMAKER_SACP,{kind=PrinterKind.SNAPMAKER_SACP},label={Text("Snapmaker J1 / Artisan")},modifier=Modifier.testTag("kind-snapmaker-sacp"))
+            FilterChip(kind==PrinterKind.USB_SERIAL,{kind=PrinterKind.USB_SERIAL; if(apiKey.isBlank()) apiKey = UsbSerial.OFFERED_BAUD_RATES.first().toString()},label={Text("USB cable")},modifier=Modifier.testTag("kind-usb-serial"))
         }
         // WO-13: which bundled slicer profile family this printer needs, if any. Deliberately
         // separate from "printer type" above - the U1 and a Centauri Carbon both speak
         // Moonraker-shaped Klipper (same kind), but need different slicer profiles.
         Text("Slicing profile",style=MaterialTheme.typography.labelLarge)
         Text("Which bundled OrcaSlicer profile to use when slicing a shared model for this printer. Leave unset if you never slice on-device for it.",style=MaterialTheme.typography.bodySmall)
-        FlowRow(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            FilterChip(slicingModel==null,{slicingModel=null},label={Text("None")})
-            FilterChip(slicingModel==SlicingPrinterModel.SNAPMAKER_U1,{slicingModel=SlicingPrinterModel.SNAPMAKER_U1},label={Text("Snapmaker U1")})
-            FilterChip(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON,{slicingModel=SlicingPrinterModel.ELEGOO_CENTAURI_CARBON},label={Text("Elegoo Centauri Carbon")},modifier=Modifier.testTag("slicing-model-centauri-carbon"))
-            FilterChip(slicingModel==SlicingPrinterModel.BAMBU_GENERIC,{slicingModel=SlicingPrinterModel.BAMBU_GENERIC},label={Text("Bambu Lab")})
-            FilterChip(slicingModel==SlicingPrinterModel.PRUSA_GENERIC,{slicingModel=SlicingPrinterModel.PRUSA_GENERIC},label={Text("Prusa")})
-            FilterChip(slicingModel==SlicingPrinterModel.PRUSA_XL_5T, {slicingModel=SlicingPrinterModel.PRUSA_XL_5T}, label={Text("Prusa XL (5 tools)")}, modifier=Modifier.testTag("slicing-model-prusa-xl"))
-            FilterChip(slicingModel==SlicingPrinterModel.GENERIC_KLIPPER,{slicingModel=SlicingPrinterModel.GENERIC_KLIPPER},label={Text("Generic Klipper")})
-        }
+        SlicingModelPicker(slicingModel) { slicingModel = it }
+        // Lanes are read from the saved printer, so only for a saved Klipper printer (AFC and Happy Hare live in Moonraker).
+        val laneDetector = detectLanes?.takeIf { profile.kind == PrinterKind.GENERIC_KLIPPER }?.let { d -> { cb: (Result<Int>) -> Unit -> d(profile.address, cb) } }
+        CustomMachineEditor(slicingModel, profile.customMachine, laneDetector) { value, problem -> customMachine = value; customMachineError = problem }
         // COSMOS's real hard-e-stop risk (FirmwareIdentity.kt) is why this is a live read, not a
         // typed field: only ever set by detectFirmware actually reaching the printer, never guessed.
-        if(slicingModel==SlicingPrinterModel.ELEGOO_CENTAURI_CARBON && detectFirmware!=null) {
+        ElegooProfiles.connectionProblem(slicingModel,kind)?.let { Text(it,color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall,modifier=Modifier.testTag("elegoo-profile-problem")) }
+        if(ElegooProfiles.isCosmos(slicingModel) && detectFirmware!=null) {
             Text(if(detectedVersion.isBlank()) "Firmware not yet confirmed - detect it before slicing for this printer." else "Last confirmed firmware: $detectedVersion",style=MaterialTheme.typography.bodySmall)
             TextButton({
                 detecting=true;detectNote=""
@@ -118,7 +180,7 @@ import androidx.compose.ui.unit.dp
         }
         error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
         Text("Changing the address disconnects the active printer.")
-    } },confirmButton={TextButton({error=save(profile.address,address,name,apiKey,kind,serial,slicingModel);if(error==null) close()},enabled=address.isNotBlank()) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
+    } },confirmButton={TextButton({setCustomMachine(profile.address,customMachine.takeIf { ElegooProfiles.firmwareFor(slicingModel)==null });error=save(profile.address,address,name,apiKey,kind,serial,slicingModel);if(error==null) close()},enabled=address.isNotBlank() && customMachineError==null && ElegooProfiles.connectionProblem(slicingModel,kind)==null) {Text("Save")}},dismissButton={TextButton(close){Text("Cancel")}})
 }
 @Composable fun FileDetails(state: ScreenState) {
     if(state.fileLoading) LinearProgressIndicator(Modifier.fillMaxWidth())

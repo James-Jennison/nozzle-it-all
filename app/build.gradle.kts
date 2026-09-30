@@ -3,6 +3,10 @@ import java.time.Instant
 import java.util.UUID
 
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
+
+// The native engine is nozzle-engine (engine/fork/ENGINE_PIN.json, P-0020/P-0021/P-0022), built against the engine root
+// engine/fork/android/prepare_engine_root.sh makes (-PnozzleEngineRoot=<dir> to move it; ORCASLICER_ENGINE_ROOT wins).
+val nozzleEngineRoot: String = providers.gradleProperty("nozzleEngineRoot").getOrElse("/mnt/faststorage/build-work/nozzle-android-fork")
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 android {
@@ -13,15 +17,18 @@ android {
   // needs iconv(), only __INTRODUCED_IN(28) in Bionic, and every other engine dependency is
   // fine as low as 21 - so 28 is Boost.Locale's floor, not an arbitrary choice, and it narrows
   // this app's supported devices to Android 9+ (2018). See docs/WORK_ORDER.md's WO-13 entry.
-  applicationId = "net.jamesjennison.klippercompanion"; minSdk = 28; targetSdk = 36; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  applicationId = "com.nozzleitall.app"; minSdk = 28; targetSdk = 36; versionCode = (providers.gradleProperty("nozzleVersionCode").orNull ?: "1").toInt(); versionName = providers.gradleProperty("nozzleVersionName").orNull ?: "0.1.0"; testInstrumentationRunner = "net.jamesjennison.klippercompanion.NozzleTestRunner"
   // arm64-v8a only, matching every physical device this app has ever been verified on (Razr
   // 2023) and the only ABI the vendored slicing engine's dependencies were built for. NDK
   // 27.1.12297006 (pinned below) matches what that engine was built and verified with.
   ndk { abiFilters += "arm64-v8a" }
+  manifestPlaceholders["appLabel"] = "Nozzle It All"
   // Phase 10: optional MyMiniFactory developer credentials, supplied by the owner at build time (never committed).
   // MMF_API_KEY enables Discover browsing; MMF_CLIENT_KEY enables sign-in (file downloads). Empty = the user enters their own in Discover.
   buildConfigField("String", "MMF_API_KEY", "\"${providers.gradleProperty("MMF_API_KEY").orElse(providers.environmentVariable("MMF_API_KEY")).getOrElse("")}\"")
   buildConfigField("String", "MMF_CLIENT_KEY", "\"${providers.gradleProperty("MMF_CLIENT_KEY").orElse(providers.environmentVariable("MMF_CLIENT_KEY")).getOrElse("")}\"")
+  // Test Grid evidence names the commit a build came from. Blank outside a git checkout; -PnozzleSourceRevision overrides.
+  buildConfigField("String", "SOURCE_REVISION", "\"${providers.gradleProperty("nozzleSourceRevision").orElse(providers.exec { commandLine("git", "rev-parse", "HEAD"); isIgnoreExitValue = true }.standardOutput.asText.map { it.trim() }).getOrElse("").filter { it.isLetterOrDigit() }}\"")
   externalNativeBuild {
    cmake {
     // CMAKE_BUILD_TYPE=Release regardless of the Gradle Debug/Release variant - matches
@@ -44,7 +51,10 @@ android {
     // ORCASLICER_ENGINE_ROOT cache default. Passing the override here, only when the CI
     // environment variable is actually set, keeps local dev builds (no env var) completely
     // unaffected - this is additive, not a behavior change for anyone not running CI.
+    // The engine root: engine/fork/android/prepare_engine_root.sh's (-PnozzleEngineRoot=<dir> to move it).
+    // ORCASLICER_ENGINE_ROOT, when set (CI), always wins.
     System.getenv("ORCASLICER_ENGINE_ROOT")?.let { arguments += "-DORCASLICER_ENGINE_ROOT=$it" }
+     ?: run { arguments += "-DORCASLICER_ENGINE_ROOT=$nozzleEngineRoot" }
     // Without this, AGP discovers and builds every CMake target in the whole configured
     // project tree - including OrcaSlicer's desktop GUI executable (needs wxWidgets, which
     // isn't cross-compiled here) and its i18n tooling. slic3rengine is the only target this
@@ -74,6 +84,11 @@ android {
  }
  if (providers.gradleProperty("nozzleSmoke").isPresent) testBuildType = "releaseSmoke"
  buildTypes {
+  // -PnozzleIdSuffix=.something installs a debug build beside the real app (its own application ID and data), for
+  // on-device tests that must never replace or uninstall the installed app and its saved printers.
+  // -PnozzleAppLabel="Nozzle It All - Testing" gives such a build its own launcher name. Debug only: release is always "Nozzle It All".
+  debug { providers.gradleProperty("nozzleIdSuffix").orNull?.let { applicationIdSuffix = it; versionNameSuffix = it }
+   providers.gradleProperty("nozzleAppLabel").orNull?.let { manifestPlaceholders["appLabel"] = it } }
   release {
    isMinifyEnabled = true; isShrinkResources = true
    proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -106,7 +121,8 @@ android {
 }
 dependencies {
  implementation(project(":domain"))
- implementation(project(":transport"))
+ implementation(project(":transport")); implementation(project(":printer-api"))
+ implementation(project(":test-grid"))
  implementation(platform("androidx.compose:compose-bom:2026.06.00"))
  implementation("androidx.activity:activity-compose:1.11.0")
  implementation("androidx.compose.material3:material3")
@@ -146,6 +162,8 @@ dependencies {
  testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
  testImplementation("org.json:json:20240303")
  testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+ // ElegooPrinterServiceTest builds its fake printer's status with the Elegoo adapter's own parsers (Canvas, Sdcp, Cc2).
+ testImplementation(project(":adapter-elegoo"))
  androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.00"))
  androidTestImplementation("androidx.compose.ui:ui-test-junit4")
  androidTestImplementation("androidx.test:runner:1.6.2")
@@ -156,13 +174,15 @@ dependencies {
 }
 
 // Phase 9g: CycloneDX 1.5 SBOM of everything that ships - the resolved release runtime dependencies (with SHA-256 of
-// each artifact) plus the pinned native engine and its dependencies from engine/ENGINE_PIN.json. Offline, no plugin.
+// each artifact) plus the pinned native engine (engine/fork/ENGINE_PIN.json) and the source archives of its Android
+// dependencies (engine/fork/android/DEPENDENCIES.json). Offline, no plugin.
 tasks.register("generateSbom") {
  group = "release"; description = "Writes build/sbom/nozzle-it-all.cdx.json"
  val runtime = configurations.named("releaseRuntimeClasspath")
- val pinFile = rootProject.file("engine/ENGINE_PIN.json")
+ val pinFile = rootProject.file("engine/fork/ENGINE_PIN.json")
+ val depsFile = rootProject.file("engine/fork/android/DEPENDENCIES.json")
  val out = layout.buildDirectory.file("sbom/nozzle-it-all.cdx.json")
- inputs.files(runtime); inputs.file(pinFile); outputs.file(out)
+ inputs.files(runtime); inputs.file(pinFile); inputs.file(depsFile); outputs.file(out)
  doLast {
   fun esc(v: String) = v.replace("\\", "\\\\").replace("\"", "\\\"")
   fun sha256(f: java.io.File) = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
@@ -175,9 +195,10 @@ tasks.register("generateSbom") {
    }
   }
   val pin = groovy.json.JsonSlurper().parse(pinFile) as Map<*, *>
-  val upstream = pin["upstream"] as Map<*, *>
-  components["pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}"] = """{"type":"library","name":"OrcaSlicer (libslic3r, patched)","version":"${esc(upstream["commit"].toString())}","purl":"pkg:github/SoftFever/OrcaSlicer@${upstream["commit"]}","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}],"properties":[{"name":"patch.sha256","value":"${esc((pin["patch"] as Map<*, *>)["sha256"].toString())}"}]}"""
-  (pin["dependencies"] as List<*>).forEach { d ->
+  val c = (pin["base"] as Map<*, *>)["commit"].toString()
+  components["pkg:github/James-Jennison/nozzle-engine@$c"] = """{"type":"library","name":"nozzle-engine (libslic3r)","version":"${esc(c)}","purl":"pkg:github/James-Jennison/nozzle-engine@$c","licenses":[{"license":{"id":"AGPL-3.0-or-later"}}]}"""
+  val deps = groovy.json.JsonSlurper().parse(depsFile) as Map<*, *>
+  (deps["dependencies"] as List<*>).forEach { d ->
    d as Map<*, *>
    val n = d["file"].toString()
    components["pkg:generic/$n"] = """{"type":"library","name":"${esc(n)}","purl":"pkg:generic/${esc(n)}","hashes":[{"alg":"SHA-256","content":"${d["sha256"]}"}],"properties":[{"name":"linked","value":"native (arm64-v8a)"}]}"""

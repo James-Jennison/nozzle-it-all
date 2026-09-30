@@ -1,0 +1,148 @@
+{
+    "type": "machine",
+    "name": "D12 300 PRO M2 MONO DUAL PoopTool 0.4 nozzle",
+    "from": "system",
+    "instantiation": "true",
+    "printer_technology": "FFF",
+    "deretraction_speed": [
+        "25"
+    ],
+    "extruder_colour": [
+        "#FCE94F"
+    ],
+    "extruder_offset": [
+        "0x0"
+    ],
+    "gcode_flavor": "marlin2",
+    "support_chamber_temp_control": "0",
+    "support_air_filtration": "0",
+    "machine_max_acceleration_e": [
+        "6000"
+    ],
+    "machine_max_acceleration_extruding": [
+        "10000"
+    ],
+    "machine_max_acceleration_retracting": [
+        "5000"
+    ],
+    "machine_max_acceleration_x": [
+        "1200"
+    ],
+    "machine_max_acceleration_y": [
+        "1000"
+    ],
+    "machine_max_acceleration_z": [
+        "500"
+    ],
+    "machine_max_speed_e": [
+        "50"
+    ],
+    "machine_max_speed_x": [
+        "200"
+    ],
+    "machine_max_speed_y": [
+        "200"
+    ],
+    "machine_max_speed_z": [
+        "15"
+    ],
+    "machine_max_jerk_e": [
+        "2.5"
+    ],
+    "machine_max_jerk_x": [
+        "14"
+    ],
+    "machine_max_jerk_y": [
+        "14"
+    ],
+    "machine_max_jerk_z": [
+        "0.2"
+    ],
+    "machine_min_extruding_rate": [
+        "0"
+    ],
+    "machine_min_travel_rate": [
+        "0"
+    ],
+    "max_layer_height": [
+        "0.32"
+    ],
+    "min_layer_height": [
+        "0.08"
+    ],
+    "printable_height": "400",
+    "extruder_clearance_radius": "65",
+    "extruder_clearance_height_to_rod": "36",
+    "extruder_clearance_height_to_lid": "140",
+    "nozzle_diameter": [
+        "0.4"
+    ],
+    "printer_settings_id": "Wanhao France D12 300 PRO M2 MONO DUAL PoopTool 0.4 nozzle",
+    "printer_variant": "0.4",
+    "retraction_minimum_travel": [
+        "2"
+    ],
+    "retract_before_wipe": [
+        "0%"
+    ],
+    "retract_when_changing_layer": [
+        "0"
+    ],
+    "retraction_length": [
+        "5"
+    ],
+    "retract_length_toolchange": [
+        "0"
+    ],
+    "z_hop": [
+        "0.4"
+    ],
+    "retract_restart_extra": [
+        "0"
+    ],
+    "retract_restart_extra_toolchange": [
+        "0"
+    ],
+    "retraction_speed": [
+        "25"
+    ],
+    "single_extruder_multi_material": "1",
+    "change_filament_gcode": "M201 X20000 ; acc\u00e9l\u00e9ration X temporairement \u00e9lev\u00e9e\nM211 S0\n\nG1 E-25 F2000                     ; R\u00e9traction initiale normale\nM106 P1 S60                      ; Ventilateur auxiliaire activ\u00e9\n\n{if toolchange_count > 0}\nG17\nG2 Z{max_layer_z + 0.4} I0.86 J0.86 P1 F10000 ; Spiral lift pour les changements apr\u00e8s le premier\n{endif}\n\nG1 Z{max_layer_z + 3.0} F1200    ; Remont\u00e9e\nG1 X{print_bed_max[0] + 25} F8000 ; D\u00e9placement vers zone de purge\nG4 P3000                         ; Pause\n\nG1 E-60 F2000                    ; Deuxi\u00e8me r\u00e9traction pour atteindre un total de -70 mm\nG92 E0                           ; R\u00e9initialise la position extrudeur \u00e0 0\nG92 E0\n\nM106 S0                          ; Stop ventilateur\nT[next_extruder]                ; Changement d\u2019outil \nG1 E60 F2000 \nG1 E35 F600                      ; R\u00e9insertion du filament (partiel, \u00e9vite la surpression)\nG92 E0                           ; R\u00e9initialise encore\n\nG1 E32 F300\t\t; Pr\u00e9-purge\nG92 E0\n\n; FLUSH_START\n;G4 P3000\nG1 E25 F300 ; Purge minimum\n;EXTRA_PURGE\nG1 E{flush_length /1 } F300 ; Purge adaptative\n;G1 E[flush_length] F300 ; Purge adaptative\n; FLUSH_END\n\nG92 E0\nM106 S255                        ; Ventilateur \u00e0 pleine vitesse\nG4 P5000                         ; Pause de s\u00e9curit\u00e9\n\n;G90\t\t\t\t; Positionnement absolu\n\n{if layer_z <= (initial_layer_print_height + 0.001)}\n;M201 X[default_acceleration] Y[default_acceleration] Z500\n{endif}\n\nG1 X{print_bed_max[0] + 15} F6000\nG1 X{print_bed_max[0] + 25} F6000\nG1 X{print_bed_max[0] + 15} F6000\nM106 S0 \nG1 X{print_bed_max[0] + 25} F6000\nG1 E{flush_length /1 } F300 ; Purge adaptative\nG92 E0\nM106 S255                        ; Ventilateur \u00e0 pleine vitesse\nG4 P5000 \nG1 X{print_bed_max[0] + 15} F6000\nG1 X{print_bed_max[0] + 25} F6000\nG1 X{print_bed_max[0] + 15} F6000\n\n\n;{if layer_z <= (initial_layer_print_height + 0.001)}\nM201 X[initial_layer_acceleration] \n;{else}\nM201 X[default_acceleration]\n;{endif}\n\nG1 E1 F1800                    ; Amorce douce\nM211 S1                          ; R\u00e9activation des limites logicielles\nG92 E0                           ; Final reset extrudeur",
+    "wipe": [
+        "1"
+    ],
+    "support_multi_bed_types": "1",
+    "template_custom_gcode": ";;;;;;;;;;;;;;;;;;;;;;;;CUSTOM G-CODE;;;;;;;;;;;;;;;;;;;;;;;;\n{if curr_bed_type==\"Textured PEI Plate\"}\n SET_GCODE_OFFSET Z=-0.00\n{else}\nSET_GCODE_OFFSET Z=0.0\n{endif}\n{if curr_bed_type==\"Cool Plate\"}\n\n;available bed types are:\n;\"Cool Plate\"\n;\"Engineering Plate\"\n;\"High Temp Plate\"\n;\"Textured PEI Plate\"\n;;;;;;;;;;;;;;;;;;;;;;;;;CUSTOM G-CODE;;;;;;;;;;;;;;;;;;;;;;;;\n",
+    "z_hop_types": [
+        "Auto Lift"
+    ],
+    "before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0",
+    "default_print_profile": "0.20mm Standard @Wanhao-D12-300 PoopTool",
+    "machine_start_gcode": "G31\nsave_last_file\nSAVE_VARIABLE VARIABLE=was_interrupted VALUE=True\nG21                                ; set metrics values\nM104 S[nozzle_temperature_initial_layer]               ; set extruder temperature\nM140 S[bed_temperature_initial_layer_single]           ; set bed temperature\nG91                                ; set relative positioning mode\nG28                                ; home\nG90                                ; set absolute positioning mode\nG1 X0 Y0 F3000                      ; park head\nM117                                ; Purge extrudeur\nG92 E0                             ; Reset extrudeur\nM109 S[nozzle_temperature_initial_layer]                         ; set and wait extruder temperature\nM190 S[bed_temperature_initial_layer_single]            ; set and wait bed temperature\nBED_MESH_CALIBRATE ADAPTIVE=1 ADAPTIVE_MARGIN=5 ; adaptive bed leveling\n\nG1 Z1.0 F3000                      ; Pr\u00e9pare la buse \u00e0 une petite hauteur\nM83                                ; Positionnement relatif pour l'extrudeur\n\n; Purge longue \u00e0 l'avant du plateau (Y=0), centr\u00e9e\nG1 X{print_bed_max[0] / 2 - 20} Y0 Z0.3 F5000     ; D\u00e9but ligne 1\nG1 X{print_bed_max[0] / 2 + 20} Y0 Z0.3 F750 E24  ; Ligne 1 (2x plus longue)\nG1 X{print_bed_max[0] / 2 - 20} Y1 Z0.3 F5000     ; L\u00e9g\u00e8re mont\u00e9e et retour\nG1 X{print_bed_max[0] / 2 + 20} Y1 Z0.3 F750 E24  ; Ligne 2\n\nG1 E-5 F1800                                     ; R\u00e9traction\nM82                                              ; Positionnement absolu pour l'extrudeur\nG92 E0                                           ; Reset extrusion\nG1 Z1.0 F3000                                    ; L\u00e9g\u00e8re mont\u00e9e",
+    "machine_end_gcode": "; Wanhao D12-230 Default End Gcode\nG91                     ; Mode d\u00e9placement relatif\nG1 E-2 F300             ; Retrait l\u00e9ger du filament pour \u00e9viter le suintement\nG1 Z10 F1200             ; Monte la t\u00eate de 10 mm\nG90                     ; Retour en position absolue\nG1 X0 Y200 F3000         ; D\u00e9place la t\u00eate vers l'arri\u00e8re pour d\u00e9gager la pi\u00e8ce\nM104 S0                  ; \u00c9teint la chauffe de la buse\nM140 S0                  ; \u00c9teint la chauffe du plateau\nM107                     ; Arr\u00eate tous les ventilateurs\nM106 S0 P3               ; Arr\u00eate le ventilateur de la carte m\u00e8re\nM106 S0 P2               ; Arr\u00eate le ventilateur auxiliaire\nM84 X Y E                ; D\u00e9sactive les moteurs des axes X, Y et de l'extrudeur\nSET_VELOCITY_LIMIT ACCEL=2000 ACCEL_TO_DECEL=1000",
+    "setting_id": "5gVOdIblVA5gfKeN",
+    "printer_model": "D12 300 PRO M2 MONO DUAL PoopTool",
+    "printable_area": [
+        "0x0",
+        "310x0",
+        "310x310",
+        "0x310"
+    ],
+    "nozzle_type": "brass",
+    "auxiliary_fan": "0",
+    "default_filament_profile": [
+        "YUMI PLA Bowden"
+    ],
+    "extra_loading_move": "-2",
+    "nozzle_height": "4",
+    "thumbnails": "48x48/PNG, 300x300/PNG",
+    "wipe_distance": [
+        "2"
+    ],
+    "enable_filament_ramming": "0",
+    "machine_max_acceleration_travel": [
+        "5000",
+        "500"
+    ],
+    "machine_pause_gcode": "M600"
+}

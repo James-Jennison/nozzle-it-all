@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nozzleitall.design.NozzleTokens
 
 // "Kiln": a duotone (ember for heat, teal for the app's own accent) dark theme distinct from
 // Helix's flat single-cyan "Cockpit" palette - see the design concept artifact for the reasoning.
@@ -54,36 +55,47 @@ val PlexMono = FontFamily(
     Font(R.font.ibm_plex_mono_semibold, FontWeight.SemiBold),
 )
 
-@Composable fun CompanionTheme(dark: Boolean = true, accent: String = "Mint", content: @Composable () -> Unit) {
+@Composable fun CompanionTheme(dark: Boolean = true, accent: String = "Violet", content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = (if (dark) darkColorScheme(
-            primary = Color(0xFF5EEAD4), onPrimary = Color(0xFF04201B),
-            primaryContainer = Color(0xFF193632), onPrimaryContainer = Color(0xFFB7F5E6),
-            secondary = Color(0xFF9AA6AC), onSecondary = Color(0xFF161B1E),
-            secondaryContainer = Color(0xFF23272C), onSecondaryContainer = Color(0xFF5EEAD4),
-            tertiary = Color(0xFFFB923C), onTertiary = Color(0xFF1A0F06), // ember: heat/warning accent
+        // Base colours come from the shared design tokens (design/tokens, generated into NozzleTokens) so Android,
+        // Desktop and Web look alike; the person's accent choice below still applies.
+        colorScheme = (if (dark) NozzleTokens.darkPalette.let { t -> darkColorScheme(
+            primary = t.accent, onPrimary = t.onAccent,
+            primaryContainer = t.surfaceRaised, onPrimaryContainer = t.text,
+            secondary = t.textMuted, onSecondary = t.background,
+            secondaryContainer = t.surfaceRaised, onSecondaryContainer = t.accent,
+            tertiary = t.heat, onTertiary = t.background, // heat: temperatures and warnings
             tertiaryContainer = Color(0xFF2B1F17), onTertiaryContainer = Color(0xFFFDBA8C),
-            background = Color(0xFF0E1113), onBackground = Color(0xFFEDF2F4),
-            surface = Color(0xFF14161A), onSurface = Color(0xFFEDF2F4),
-            surfaceVariant = Color(0xFF1E2327), onSurfaceVariant = Color(0xFF9AA5AA),
-            surfaceContainerLowest = Color(0xFF0A0C0D), surfaceContainerLow = Color(0xFF121517),
-            surfaceContainer = Color(0xFF14161A), surfaceContainerHigh = Color(0xFF1C2024),
-            surfaceContainerHighest = Color(0xFF262B2F),
-            outline = Color(0xFF5C666B), outlineVariant = Color(0xFF23272C),
-            error = Color(0xFFFB7185), errorContainer = Color(0xFF3A1A1F),
-        ) else lightColorScheme(
-            background=Color(0xFFEAF0F4), surface=Color(0xFFFFFFFF),
-            onBackground=Color(0xFF19242D), onSurface=Color(0xFF19242D),
-            surfaceVariant=Color(0xFFDDE5EA), onSurfaceVariant=Color(0xFF3E4D57)
-        )).let { scheme ->
+            background = t.background, onBackground = t.text,
+            surface = t.surface, onSurface = t.text,
+            surfaceVariant = t.surfaceRaised, onSurfaceVariant = t.textMuted,
+            surfaceContainerLowest = t.surfaceSunken, surfaceContainerLow = t.surfaceSunken,
+            surfaceContainer = t.surface, surfaceContainerHigh = t.surfaceRaised,
+            surfaceContainerHighest = t.line,
+            outline = t.lineStrong, outlineVariant = t.line,
+            error = t.danger, onError = t.onDanger, errorContainer = Color(0xFF3A1A1F),
+        ) } else NozzleTokens.lightPalette.let { t -> lightColorScheme(
+            primary = t.accent, onPrimary = t.onAccent,
+            secondary = t.textMuted, tertiary = t.heat,
+            background = t.background, onBackground = t.text,
+            surface = t.surface, onSurface = t.text,
+            surfaceVariant = t.surfaceRaised, onSurfaceVariant = t.textMuted,
+            surfaceContainerLowest = t.surface, surfaceContainerLow = t.surfaceRaised,
+            surfaceContainer = t.surfaceRaised, surfaceContainerHigh = t.surfaceSunken, surfaceContainerHighest = t.line,
+            outline = t.lineStrong, outlineVariant = t.line,
+            error = t.danger, onError = t.onDanger,
+        ) }).let { scheme ->
             val primary = when(accent) {
+                // Brand violet (#8B5CF6) fails AA as text on the dark surface (4.48:1), so dark mode uses the lighter #A78BFA (6.97:1) and
+                // light mode the deeper #6D28D9 (white on it: 7.1:1). The raw brand violet is for fills (launcher icon, marketing).
+                "Violet" -> if(dark) NozzleTokens.darkPalette.accent else NozzleTokens.lightPalette.accent
                 "Blue" -> if(dark) Color(0xFFA8C8FF) else Color(0xFF245B9D)
                 "Lavender" -> if(dark) Color(0xFFD3BFFF) else Color(0xFF69429A)
                 else -> if(dark) Color(0xFF5EEAD4) else Color(0xFF006B58)
             }
             scheme.copy(primary=primary, onPrimary=if(dark) Color(0xFF0E1113) else Color.White,
                 primaryContainer=primary.copy(alpha=1f), onPrimaryContainer=if(dark) Color(0xFF0E1113) else Color.White,
-                secondaryContainer=if(dark) Color(0xFF23272C) else Color(0xFFDDE5EA), onSecondaryContainer=primary)
+                secondaryContainer=if(dark) NozzleTokens.darkPalette.surfaceRaised else NozzleTokens.lightPalette.surfaceRaised, onSecondaryContainer=primary)
         },
         typography = remember { kilnTypography() },
         shapes = Shapes(medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(20.dp)),

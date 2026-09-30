@@ -6,28 +6,38 @@
 const endpoint=__ENDPOINT__;
 const video=document.getElementById('video');
 window.cameraStats={frames:0,state:'Connecting'};
-let peer=null, timer=null, stopped=false, epoch=0, aborts=new Set();
-function cleanup(){epoch++;if(timer)clearTimeout(timer);timer=null;aborts.forEach(c=>c.abort());aborts.clear();if(peer)peer.close();peer=null;if(video.srcObject)video.srcObject.getTracks().forEach(t=>t.stop());video.srcObject=null;}
-function retry(){if(stopped)return;cleanup();window.cameraStats.state='Reconnecting';timer=setTimeout(start,3000);}
+let peer=null, timer=null, graceTimer=null, stopped=false, epoch=0, aborts=new Set(), failures=0;
+// A lossy Wi-Fi link makes WebRTC report 'disconnected' and stall for a moment; both usually heal on their own. So a
+// 'disconnected' connection gets DISCONNECT_GRACE_MS to recover, frames may stall up to STALL_LIMIT_MS before the stream
+// is restarted, retries back off, and the last frame stays on screen while reconnecting instead of going black.
+const DISCONNECT_GRACE_MS=8000, WATCHDOG_MS=5000, STALL_LIMIT_MS=20000;
+function cleanup(keepPicture){epoch++;if(timer)clearTimeout(timer);timer=null;if(graceTimer)clearTimeout(graceTimer);graceTimer=null;aborts.forEach(c=>c.abort());aborts.clear();if(peer)peer.close();peer=null;if(!keepPicture&&video.srcObject){video.srcObject.getTracks().forEach(t=>t.stop());video.srcObject=null;}}
+function retry(){if(stopped)return;cleanup(true);window.cameraStats.state='Reconnecting';failures++;timer=setTimeout(start,Math.min(15000,1500*failures));}
 async function signal(data){const controller=new AbortController();aborts.add(controller);const timeout=setTimeout(()=>controller.abort(),6000);try{const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:controller.signal,credentials:'omit',redirect:'error'});if(!r.ok)throw Error('Camera request failed');return await r.json();}finally{clearTimeout(timeout);aborts.delete(controller);}}
 async function start(){
- if(stopped)return; cleanup(); const ticket=epoch;window.cameraStats.state='Connecting';
+ if(stopped)return; cleanup(true); const ticket=epoch;window.cameraStats.state='Connecting';
  try{
   const offer=await signal({type:'request',iceServers:[],keepAlive:true});if(stopped||ticket!==epoch)return;
   const pc=new RTCPeerConnection({iceServers:[]});peer=pc;
   const valid=()=>!stopped&&ticket===epoch&&peer===pc;
-  pc.ontrack=e=>{if(valid()){video.srcObject=e.streams[0]||new MediaStream([e.track]);video.play().catch(()=>{window.cameraStats.state='Tap to play';});}};
+  pc.ontrack=e=>{if(valid()){const old=video.srcObject;video.srcObject=e.streams[0]||new MediaStream([e.track]);if(old&&old!==video.srcObject)old.getTracks().forEach(t=>t.stop());video.play().catch(()=>{window.cameraStats.state='Tap to play';});}};
   pc.ondatachannel=e=>{if(e.channel.label==='keepalive')e.channel.onmessage=()=>{if(valid()&&e.channel.readyState==='open')e.channel.send('pong');};};
-  pc.onconnectionstatechange=()=>{if(valid()&&['failed','disconnected','closed'].includes(pc.connectionState))retry();};
+  pc.onconnectionstatechange=()=>{if(!valid())return;const st=pc.connectionState;
+   if(st==='connected'){if(graceTimer){clearTimeout(graceTimer);graceTimer=null;}return;}
+   if(st==='failed'||st==='closed'){retry();return;}
+   if(st==='disconnected'&&!graceTimer)graceTimer=setTimeout(()=>{graceTimer=null;if(valid()&&pc.connectionState!=='connected')retry();},DISCONNECT_GRACE_MS);};
   pc.onicecandidate=e=>{if(valid()&&e.candidate)signal({type:'remote_candidate',id:offer.id,candidates:[e.candidate]}).catch(()=>{if(valid())retry();});};
   pc.addTransceiver('video',{direction:'recvonly'});
   await pc.setRemoteDescription({type:offer.type,sdp:offer.sdp});if(!valid())return;
   await pc.setLocalDescription(await pc.createAnswer());if(!valid())return;
   await signal({type:pc.localDescription.type,id:offer.id,sdp:pc.localDescription.sdp});
   if(!valid())return;
-  let previous=window.cameraStats.frames;
-  const watchdog=()=>{if(!valid())return;if(window.cameraStats.frames===previous){retry();return;}previous=window.cameraStats.frames;timer=setTimeout(watchdog,10000);};
-  timer=setTimeout(watchdog,10000);
+  let previous=window.cameraStats.frames, lastProgress=Date.now();
+  const watchdog=()=>{if(!valid())return;const now=Date.now();
+   if(window.cameraStats.frames!==previous){previous=window.cameraStats.frames;lastProgress=now;failures=0;}
+   else if(now-lastProgress>=STALL_LIMIT_MS){retry();return;}
+   timer=setTimeout(watchdog,WATCHDOG_MS);};
+  timer=setTimeout(watchdog,WATCHDOG_MS);
  }catch(e){if(!stopped&&ticket===epoch)retry();}
 }
 function frame(){if(stopped)return;window.cameraStats.frames++;window.cameraStats.state='Playing';video.requestVideoFrameCallback(frame);}

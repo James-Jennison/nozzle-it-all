@@ -71,6 +71,19 @@ class BambuTrustTest {
         }
     }
 
+    /** The MQTT/FTPS hostname check is the same identity check, never "accept anything" (Play's HostnameVerifier policy). */
+    @Test
+    fun hostnameVerifierChecksTheCertificateNotTheName() {
+        fun session(vararg certs: java.security.cert.Certificate) = java.lang.reflect.Proxy.newProxyInstance(
+            javax.net.ssl.SSLSession::class.java.classLoader, arrayOf(javax.net.ssl.SSLSession::class.java)) { _, method, _ ->
+            if (method.name == "getPeerCertificates") certs else null
+        } as javax.net.ssl.SSLSession
+        assertTrue(BambuHostnameVerifier(SERIAL).verify("192.168.1.50", session(certificate(SERIAL_PEM))))
+        org.junit.Assert.assertFalse(BambuHostnameVerifier(SERIAL).verify("192.168.1.50", session(certificate(OTHER_PEM))))
+        org.junit.Assert.assertFalse(BambuHostnameVerifier(SERIAL).verify("192.168.1.50", session()))
+        org.junit.Assert.assertFalse(BambuHostnameVerifier(SERIAL).verify("192.168.1.50", null))
+    }
+
     private fun certificate(base64: String): X509Certificate =
         CertificateFactory.getInstance("X.509")
             .generateCertificate(ByteArrayInputStream(Base64.getMimeDecoder().decode(base64)))

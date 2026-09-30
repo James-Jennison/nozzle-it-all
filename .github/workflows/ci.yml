@@ -1,9 +1,8 @@
 name: CI
 
 # Phase 0 (Consumer Slicer Plan §16): the app's own JVM/Kotlin gate (lint, unit tests, an
-# assembled debug build) plus the real native slicing-engine build (WO-13's
-# ORCASLICER_ENGINE_ROOT dependency, which has no public/portable source - see
-# app/src/main/cpp/CMakeLists.txt's own header comment). Runs on a self-hosted runner
+# assembled debug build) plus the real native slicing-engine build (nozzle-engine,
+# engine/fork/android/ci_engine_root.sh, over the runner's prebuilt NDK dependency prefix). Runs on a self-hosted runner
 # (gthost-build01) with that dependency pre-provisioned, per the owner's decision (§22 open
 # question 5) - a hosted GitHub runner cannot build this target at all.
 #
@@ -59,27 +58,26 @@ jobs:
     runs-on: [self-hosted, linux, x64, android-native]
     timeout-minutes: 60
     env:
-      ORCASLICER_ENGINE_ROOT: /home/jjennison/orcaslicer-android-engine
+      ANDROID_DEPS_PREFIX: /home/jjennison/orcaslicer-android-engine/deps/install/arm64-v8a
+      NOZZLE_ENGINE_CACHE: /home/jjennison/nozzle-engine-ci
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Verify native engine dependency is present
+      # The engine is nozzle-engine at the pinned commit (engine/fork/ENGINE_PIN.json, docs/upstream/PROVENANCE.md P-0020,
+      # P-0021), fetched and prepared in a cache that survives runs.
+      - name: Prepare slicing engine (pinned)
         run: |
-          test -f "$ORCASLICER_ENGINE_ROOT/orcaslicer/CMakeLists.txt" || \
-            { echo "::error::ORCASLICER_ENGINE_ROOT is missing the patched OrcaSlicer checkout - see app/src/main/cpp/CMakeLists.txt's header comment."; exit 1; }
-          test -d "$ORCASLICER_ENGINE_ROOT/deps/install/arm64-v8a" || \
-            { echo "::error::ORCASLICER_ENGINE_ROOT is missing prebuilt deps/install/arm64-v8a."; exit 1; }
+          root="$(engine/fork/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
+          echo "ORCASLICER_ENGINE_ROOT=${root##*$'\n'}" >> "$GITHUB_ENV"
 
-      # Phase 9g: the engine must be exactly the pinned upstream commit + patch + dependency archives.
-      - name: Verify engine pin
-        # The runner's engine is a plain copy (no .git, no deps/src archives), so the pin cannot be verified there yet: this step
-        # warns loudly instead of failing. Give the runner a real checkout plus deps/src and drop the flag to enforce it.
-        run: python3 scripts/engine_pin.py verify --allow-missing-deps --engine-root "$ORCASLICER_ENGINE_ROOT"
+      # The static website (site/) is generated from site-src/; fail if they drift or a release-state rule is broken.
+      - name: Check website build
+        run: python3 scripts/build_site.py --check
 
       - name: Unit tests + lint
-        run: ./gradlew testDebugUnitTest lintDebug :domain:check :transport:check --no-daemon
+        run: ./gradlew testDebugUnitTest lintDebug :domain:check :transport:check :test-grid:check :desktop:test --no-daemon
 
       - name: Assemble debug (native build, arm64-v8a)
         # -PdeviceFarmTests leaves out the LAN/printer-only tests: Device Farm rejects (at re-signing) a test package with too much code.
@@ -87,7 +85,7 @@ jobs:
 
       - name: Upload lint/test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reports
           path: |
@@ -131,7 +129,7 @@ jobs:
           PYEOF
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: app-debug
           path: apk-artifacts/
@@ -146,13 +144,15 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-west-2
-      PROJECT_ARN: "arn:aws:devicefarm:us-west-2:000000000000:project:1aced661-0a79-4dc0-b5bb-8ab8372a3970"
+      # Registers the account number as a secret so GitHub masks it anywhere it is printed (the ARNs below contain it and this repo is public).
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      PROJECT_ARN: ${{ vars.DEVICE_FARM_PROJECT_ARN }}
       APP_UPLOAD_ARN: ${{ inputs.app_upload_arn }}
       TEST_UPLOAD_ARN: ${{ inputs.test_upload_arn }}
       TEST_FILTER: ${{ inputs.test_filter }}
-      DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || 'arn:aws:devicefarm:us-west-2:000000000000:devicepool:1aced661-0a79-4dc0-b5bb-8ab8372a3970/f6f8c8e4-3714-4474-9b57-84c1e87ad2f9' }}
+      DEVICE_POOL_ARN: ${{ inputs.device_pool_arn || vars.DEVICE_FARM_POOL_ARN }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: app-debug
           path: apks
@@ -237,7 +237,8 @@ jobs:
       id-token: write
       attestations: write
     env:
-      ORCASLICER_ENGINE_ROOT: /home/jjennison/orcaslicer-android-engine
+      ANDROID_DEPS_PREFIX: /home/jjennison/orcaslicer-android-engine/deps/install/arm64-v8a
+      NOZZLE_ENGINE_CACHE: /home/jjennison/nozzle-engine-ci
       ANDROID_HOME: /opt/android-sdk
       ANDROID_SDK_ROOT: /opt/android-sdk
       NOZZLE_KEYSTORE_B64: ${{ secrets.NOZZLE_KEYSTORE_B64 }}
@@ -245,9 +246,13 @@ jobs:
       NOZZLE_KEY_ALIAS: ${{ secrets.NOZZLE_KEY_ALIAS }}
       NOZZLE_KEY_PASSWORD: ${{ secrets.NOZZLE_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Verify engine pin
-        run: python3 scripts/engine_pin.py verify --engine-root "$ORCASLICER_ENGINE_ROOT"
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # versionCode is the commit count, so it only ever goes up
+      - name: Prepare slicing engine (pinned)
+        run: |
+          root="$(engine/fork/android/ci_engine_root.sh "$NOZZLE_ENGINE_CACHE" "$ANDROID_DEPS_PREFIX")"
+          echo "ORCASLICER_ENGINE_ROOT=${root##*$'\n'}" >> "$GITHUB_ENV"
       - name: Decode signing key (if configured)
         run: |
           if [ -n "${NOZZLE_KEYSTORE_B64:-}" ]; then
@@ -256,26 +261,38 @@ jobs:
           else
             echo "::error::No signing key configured - refusing to build and attest an unsigned release."; exit 1
           fi
-      - name: Build release APK + SBOM
-        run: ./gradlew assembleRelease generateSbom --no-daemon
+      - name: Build release APK + Play bundle (AAB) + SBOM
+        # Tag vX.Y.Z sets versionName X.Y.Z; versionCode is the commit count (Play needs it to increase on every upload).
+        run: |
+          ./gradlew assembleRelease bundleRelease generateSbom --no-daemon \
+            -PnozzleVersionName="${GITHUB_REF_NAME#v}" -PnozzleVersionCode="$(git rev-list --count HEAD)"
       - name: Stage release files
         run: |
           mkdir -p release-artifacts
           cp app/build/outputs/apk/release/*.apk release-artifacts/
+          cp app/build/outputs/bundle/release/*.aab release-artifacts/
           cp app/build/sbom/nozzle-it-all.cdx.json release-artifacts/
           cp app/build/outputs/mapping/release/mapping.txt release-artifacts/
           (cd release-artifacts && sha256sum * > SHA256SUMS)
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             release-artifacts/*.apk
+            release-artifacts/*.aab
             release-artifacts/nozzle-it-all.cdx.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release
           path: release-artifacts/
           retention-days: 90
+      # A DRAFT release: nothing is public until the owner reviews the notes and presses Publish on GitHub.
+      - name: Create draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --generate-notes --title "Nozzle It All ${GITHUB_REF_NAME#v}" \
+            release-artifacts/*.apk release-artifacts/*.aab release-artifacts/SHA256SUMS release-artifacts/nozzle-it-all.cdx.json
       - name: Remove signing key
         if: always()
         run: shred -u "$RUNNER_TEMP/release.jks" 2>/dev/null || rm -f "$RUNNER_TEMP/release.jks"

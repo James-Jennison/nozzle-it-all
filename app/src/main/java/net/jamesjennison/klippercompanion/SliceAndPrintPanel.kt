@@ -105,13 +105,13 @@ import java.io.File
     // selection, so only the layer-height check applies here (the temperature-range check needs
     // a MaterialProfile, which ProjectEditorScreen's multi-object flow is the one that has).
     var machineLimits by remember(uri) { mutableStateOf<MachineLimits?>(null) }
-    LaunchedEffect(profile?.slicingModel) {
+    LaunchedEffect(profile?.slicingModel, profile?.customMachine) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         bedShape = try {
-            withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
         } catch (e: Exception) { null }
         machineLimits = try {
-            withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
         } catch (e: Exception) { null }
     }
     // Owned here, not by ModelViewer (which only lives during the "customizing" step and would
@@ -188,7 +188,15 @@ import java.io.File
     // command rather than Moonraker's separate upload-then-start - see the LaunchedEffect below.
     // Unlike Bambu, this app's slicer output for a Prusa Link target is already plain .gcode (no
     // bundle), so the toolpath/stats extraction above only ever branches on bambuTarget.
-    val prusaTarget = profile.kind == PrinterKind.PRUSA_LINK || profile.kind == PrinterKind.OCTOPRINT // both take plain G-code uploaded and started in one request
+    val prusaTarget = profile.kind == PrinterKind.PRUSA_LINK || profile.kind == PrinterKind.OCTOPRINT || profile.kind == PrinterKind.ELEGOO ||
+        profile.kind == PrinterKind.CREALITY || profile.kind == PrinterKind.FLASHFORGE || profile.kind == PrinterKind.DUET ||
+        profile.kind == PrinterKind.ULTIMAKER || profile.kind == PrinterKind.REPETIER || profile.kind == PrinterKind.ANYCUBIC_LAN ||
+        profile.kind == PrinterKind.SNAPMAKER_A_SERIES || profile.kind == PrinterKind.SNAPMAKER_SACP // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier/Anycubic/Snapmaker: upload, start gated; UltiMaker: nothing sent while gated)
+    // A USB-connected printer's address is the synthetic "usb:<vendorId>:<productId>:<serial>" identity, not an HTTP
+    // host - LiveFileChanges below would fail confusingly trying to parse it as one. UsbSerialPrinterService.command()
+    // refuses a PrusaLinkPrintRequest outright (UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER): Nozzle It All can't write a
+    // file to the printer's SD/USB storage over this link, so there is no upload step to run at all - just the refusal.
+    val usbSerialTarget = profile.kind == PrinterKind.USB_SERIAL
     // Toolpath + stats parsing, both off the main thread the same way slicing itself is
     // dispatched. A parse failure doesn't block printing - the review is a visualization aid,
     // not a correctness gate; the actual G-code was already produced successfully.
@@ -212,6 +220,7 @@ import java.io.File
     LaunchedEffect(sliced, reviewedLayers, state.connected) {
         val gcode = sliced ?: return@LaunchedEffect
         if(!reviewedLayers) return@LaunchedEffect
+        if(usbSerialTarget) { working = false; error = UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER; return@LaunchedEffect }
         if(bambuTarget || prusaTarget) { stagedFilename = gcode.name; return@LaunchedEffect }
         if(!state.connected) { working = false; error = "Connect to ${state.address} to upload the sliced file."; return@LaunchedEffect }
         working = true; stage = "Uploading…"
@@ -336,12 +345,12 @@ import java.io.File
                             prusaTarget -> {
                                 val gcode = sliced ?: return@Button
                                 execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest=PrusaLinkPrintRequest(gcode, filename),
-                                    allowedStates=setOf("standby","complete","cancelled","error")), state.generation)
+                                    allowedStates=sendAllowedStates(profile.kind)), state.generation)
                             }
-                            else -> execute(Moonraker.start(filename), state.generation)
+                            else -> execute(Moonraker.start(filename, state.kindFor(state.address)), state.generation)
                         }
                         close()
-                    }, enabled=!working && error==null && stagedFilename!=null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-and-print-confirm")) { Text("Start print") }
+                    }, enabled=!working && error==null && stagedFilename!=null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("slice-and-print-confirm")) { Text(if(startVerifiedFor(profile.kind)) "Start print" else "Upload to printer") }
                 }
             }
         }

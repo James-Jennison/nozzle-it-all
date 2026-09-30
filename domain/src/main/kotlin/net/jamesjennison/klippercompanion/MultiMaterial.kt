@@ -3,17 +3,27 @@ package net.jamesjennison.klippercompanion
 // Phase 8 close-out (Consumer Slicer Plan §11): how each kind of multi-tool machine changes material, and the plain
 // warnings owners need before mixing materials on one plate. Pure logic, unit-tested.
 
-/** The three real mechanisms behind "more than one material". The bundled machine.json only says how many tools exist. */
-enum class MultiToolFamily(val label: String, val explanation: String) {
-    SINGLE("Single material", "One extruder: every object prints in the same material."),
-    TOOLCHANGER("Independent tools", "Each tool has its own nozzle and filament (Snapmaker U1, Prusa XL). A change swaps the toolhead, so little is purged; a prime tower only limits oozing from the idle nozzles."),
-    FILAMENT_SWAP("Filament swap, one nozzle", "One nozzle is fed from several spools (AMS-style). Every change flushes the old colour out, so purge waste is high and a prime tower is normally required."),
+/**
+ * The real mechanisms behind "more than one material". [sharesNozzle]: at least one nozzle is fed from several spools,
+ * so changes flush the old colour out through it (purge waste, a prime tower, flexible filament jamming).
+ */
+enum class MultiToolFamily(val label: String, val explanation: String, val sharesNozzle: Boolean) {
+    SINGLE("Single material", "One extruder: every object prints in the same material.", false),
+    TOOLCHANGER("Independent tools", "Each tool has its own nozzle and filament (toolchangers such as the Snapmaker U1 and Prusa XL, and IDEX printers). A change swaps the toolhead, so little is purged; a prime tower only limits oozing from the idle nozzles.", false),
+    FILAMENT_SWAP("Filament swap, one nozzle", "One nozzle is fed from several spools (Bambu AMS, Creality CFS, Anycubic ACE, Prusa MMU3, ...). Every change flushes the old colour out, so purge waste is high and a prime tower is normally required.", true),
+    MIXED("Several nozzles, each fed by several spools", "More spools than nozzles (for example a dual-nozzle printer with an AMS). Changes between spools on the same nozzle flush the old colour out, so purge waste and a prime tower apply as with a single shared nozzle.", true),
 }
 
-fun multiToolFamily(model: SlicingPrinterModel?, toolCount: Int): MultiToolFamily = when {
-    toolCount <= 1 -> MultiToolFamily.SINGLE
-    model == SlicingPrinterModel.BAMBU_GENERIC -> MultiToolFamily.FILAMENT_SWAP
-    else -> MultiToolFamily.TOOLCHANGER // Snapmaker U1, Prusa XL: the only multi-tool machines this app targets besides Bambu
+/**
+ * How a printer changes material, from its slicing pack: [nozzleCount] physical nozzles (machine.json's nozzle_diameter
+ * entries) and [slotCount] filament slots (the pack's slot count, which also counts spools fed through one nozzle).
+ * One nozzle per slot is a toolchanger or IDEX machine; more slots than nozzles means spools share a nozzle.
+ */
+fun multiToolFamily(nozzleCount: Int, slotCount: Int): MultiToolFamily = when {
+    slotCount <= 1 -> MultiToolFamily.SINGLE
+    nozzleCount <= 1 -> MultiToolFamily.FILAMENT_SWAP
+    slotCount <= nozzleCount -> MultiToolFamily.TOOLCHANGER
+    else -> MultiToolFamily.MIXED
 }
 
 object MaterialCompatibility {
@@ -32,11 +42,11 @@ object MaterialCompatibility {
         if (kinds.any { it in HIGH_TEMP } && kinds.any { it in LOW_TEMP })
             out += "${kinds.filter { it in LOW_TEMP }.joinToString("/")} with ${kinds.filter { it in HIGH_TEMP }.joinToString("/")} in one print: they shrink and bond very differently, so layers between them may not stick."
         if (kinds.any { it in FLEXIBLE } && kinds.any { it !in FLEXIBLE })
-            out += "Flexible filament (${kinds.filter { it in FLEXIBLE }.joinToString("/")}) with rigid filament" + if (family == MultiToolFamily.FILAMENT_SWAP) ": pushing flexible filament through a shared nozzle path often jams." else ": interfaces between them bond poorly."
+            out += "Flexible filament (${kinds.filter { it in FLEXIBLE }.joinToString("/")}) with rigid filament" + if (family.sharesNozzle) ": pushing flexible filament through a shared nozzle path often jams." else ": interfaces between them bond poorly."
         val nozzle = distinct.mapNotNull { it.tempNozzleC }
         if (nozzle.size >= 2 && nozzle.max() - nozzle.min() > 25)
             out += "Nozzle temperatures differ by ${nozzle.max() - nozzle.min()}°C (${nozzle.min()}–${nozzle.max()}°C)" +
-                if (family == MultiToolFamily.FILAMENT_SWAP) ": the single nozzle must swing between them at every change, which is slow and can burn the cooler material." else ": the hotter tool may ooze or cook while it waits."
+                if (family.sharesNozzle) ": the shared nozzle must swing between them at every change, which is slow and can burn the cooler material." else ": the hotter tool may ooze or cook while it waits."
         val bed = distinct.mapNotNull { it.tempBedC }
         if (bed.size >= 2 && bed.max() - bed.min() > 15)
             out += "Bed temperatures differ by ${bed.max() - bed.min()}°C (${bed.min()}–${bed.max()}°C): the bed holds one temperature, so the colder-bed material may not stick."

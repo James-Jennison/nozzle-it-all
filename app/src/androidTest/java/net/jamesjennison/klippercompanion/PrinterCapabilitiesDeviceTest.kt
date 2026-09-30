@@ -56,7 +56,24 @@ class PrinterCapabilitiesDeviceTest {
         compose.onNodeWithText("Cancel print").assertExists()
     }
 
-    @Test fun snapmakerU1PaxxShowsBespok3dAndMultiAceButtons() {
+    @Test fun stockSnapmakerU1ShowsBespok3dButNotMultiAce() {
+        val address = "http://u1.local/"
+        compose.setContent {
+            CompanionTheme {
+                CompanionScreen(
+                    ScreenState(address = address, connected = true, snapshot = PrinterSnapshot(true, "standby"),
+                        profiles = listOf(PrinterProfile(address, "U1", kind = PrinterKind.SNAPMAKER_U1))),
+                    {}, {}, {}, { _, _ -> },
+                )
+            }
+        }
+        compose.onNodeWithTag("nav-1").performClick()
+        compose.onNodeWithTag("open-bespok3d").assertExists()
+        compose.onNodeWithTag("open-ace").assertDoesNotExist()
+        compose.onNodeWithTag("open-heaters").assertExists()
+    }
+
+    @Test fun snapmakerU1PaxxShowsMultiAceButNotBespok3d() {
         val address = "http://u1.local/"
         compose.setContent {
             CompanionTheme {
@@ -68,7 +85,7 @@ class PrinterCapabilitiesDeviceTest {
             }
         }
         compose.onNodeWithTag("nav-1").performClick()
-        compose.onNodeWithTag("open-bespok3d").assertExists()
+        compose.onNodeWithTag("open-bespok3d").assertDoesNotExist()
         compose.onNodeWithTag("open-ace").assertExists()
         compose.onNodeWithTag("open-heaters").assertExists()
     }

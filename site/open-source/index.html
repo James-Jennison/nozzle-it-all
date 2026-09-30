@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open source | Nozzle It All</title>
+<meta name="description" content="Nozzle It All is free software under the GNU AGPL v3.0 or later, including its slicing engine. Where to get the complete source, the exact engine version and third-party notices.">
+<meta name="theme-color" content="#0D1114">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<link rel="preload" href="/assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css?v=46f9045c">
+<meta property="og:title" content="Open source | Nozzle It All">
+<meta property="og:description" content="Nozzle It All is free software under the GNU AGPL v3.0 or later, including its slicing engine. Where to get the complete source, the exact engine version and third-party notices.">
+<meta property="og:type" content="website">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+ <div class="wrap bar">
+  <a class="brand" href="/" aria-label="Nozzle It All, home"><img src="/assets/mark.svg" alt="" width="28" height="29"><span>Nozzle It All</span></a>
+  <nav aria-label="Main">
+   <a href="/platforms/">Platforms</a>
+   <a href="/printers/">Printers</a>
+   <a href="/docs/">Docs</a>
+   <a href="/open-source/" aria-current="page">Open source</a>
+   <a href="/support/">Support</a>
+  </nav>
+ </div>
+</header>
+<main id="main">
+<div class="wrap prose">
+ <h1>Open source</h1>
+ <p class="lead">Nozzle It All is free software. You can read it, run it, change it and share it, under the terms of the GNU Affero General Public License, version 3 or (at your option) any later version. It comes with no warranty.</p>
+
+ <h2>Get the source</h2>
+ <ul>
+  <li><a href="https://github.com/James-Jennison/nozzle-it-all">The app's source code</a> (Android app, shared modules, this website).</li>
+  <li><a href="https://github.com/James-Jennison/nozzle-it-all/blob/main/LICENSE">The full licence text</a>.</li>
+  <li><a href="https://github.com/James-Jennison/nozzle-it-all/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>: the components we build on and their licences.</li>
+ </ul>
+
+ <h2>The slicing engine</h2>
+ <p>Current versions of the app slice with <a href="https://github.com/James-Jennison/nozzle-engine">nozzle-engine</a>, which is also AGPL-3.0. (Releases up to 0.1.1 pinned OrcaSlicer itself plus a patch kept in this repository; each release's tag records its exact engine.) It is <a href="https://github.com/OrcaSlicer/OrcaSlicer">OrcaSlicer</a>'s engine by way of <a href="https://github.com/Snapmaker/OrcaSlicer">Snapmaker Orca</a>, with our changes to run it headless on Android, in the browser and on the desktop. Each change is its own commit in that repository. The app pins the exact version it ships:</p>
+ <ul>
+  <li>Engine commit: <a href="https://github.com/James-Jennison/nozzle-engine/tree/f7665123d00fb852a2cee5fd095901afbe6f45d1"><code>f7665123d00f</code></a> (<a href="https://github.com/James-Jennison/nozzle-engine/commits/f7665123d00fb852a2cee5fd095901afbe6f45d1">its change history</a>)</li>
+  <li><a href="https://github.com/James-Jennison/nozzle-it-all/blob/main/engine/fork/ENGINE_PIN.json">The pin file</a>, and <a href="https://github.com/James-Jennison/nozzle-it-all/blob/main/engine/fork/android/DEPENDENCIES.json">the Android dependency archives</a> with their checksums.</li>
+ </ul>
+
+ <h2>Building it</h2>
+ <p>The repository's README explains how to build the Android app with Gradle and how to prepare the pinned engine. A script in the repository checks the dependency archives against their pinned checksums.</p>
+
+ <h2>If you use it over a network</h2>
+ <p>The AGPL asks that people who use modified versions over a network can get the source of that version. If you run a modified copy of any part of Nozzle It All (for example a modified copy of Nozzle It All Web hosted for other people), you need to offer its source to its users. The licence text says exactly how.</p>
+
+ <h2>Credits</h2>
+ <p>Models and images in the app's Discover section are provided by <a href="https://www.myminifactory.com">MyMiniFactory</a> and the designers who publish them. Please respect each model's licence when you print, share or sell. Printer and software names on this site belong to their owners and are used only to say what Nozzle It All works with.</p>
+
+ <h2>Contributing</h2>
+ <p>Bug reports and pull requests are welcome on <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>. For questions or problems, see <a href="/support/">Support</a>.</p>
+</div>
+
+</main>
+<footer class="site-footer">
+ <div class="wrap">
+  <nav aria-label="Footer">
+   <a href="/printers/">Printers</a>
+   <a href="/compatibility/">Compatibility</a>
+   <a href="/docs/">Docs</a>
+   <a href="/privacy/">Privacy</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+   <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>
+  </nav>
+  <p>Nozzle It All is free software under the GNU AGPL-3.0-or-later. No accounts, no analytics.</p>
+  <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, MyMiniFactory and OrcaSlicer are names or trademarks of their respective owners. Mentioning them does not imply endorsement by or affiliation with them.</p>
+ </div>
+</footer>
+</body>
+</html>

@@ -1,5 +1,8 @@
 # Release engineering (Phase 9g)
 
+## Package name
+The Play/installed identity (`applicationId`) is `com.nozzleitall.app` (changed 2026-09-25 from `net.jamesjennison.klippercompanion` before the first upload; it can never change after the first Play upload). The Kotlin `namespace` is still `net.jamesjennison.klippercompanion`, so source paths and test class names are unchanged.
+
 ## Signing
 The release APK is signed only when these are set (environment or `~/.gradle/gradle.properties`; never committed):
 `NOZZLE_KEYSTORE` (path), `NOZZLE_KEYSTORE_PASSWORD`, `NOZZLE_KEY_ALIAS`, `NOZZLE_KEY_PASSWORD`.
@@ -16,21 +19,29 @@ but keeps the app's own classes and Kotlin (`app/proguard-smoke.pro`, `app/progu
 ./gradlew assembleReleaseSmoke assembleAndroidTest -PnozzleSmoke
 adb install -r app/build/outputs/apk/releaseSmoke/app-releaseSmoke.apk
 adb install -r app/build/outputs/apk/androidTest/releaseSmoke/app-releaseSmoke-androidTest.apk
-adb shell am instrument -w net.jamesjennison.klippercompanion.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w com.nozzleitall.app.test/net.jamesjennison.klippercompanion.NozzleTestRunner
 ```
 Reinstall the debug APKs afterwards (`assembleDebug assembleDebugAndroidTest`, then `adb install -r`). Never `adb uninstall`:
 it deletes the saved printers.
 
 ## SBOM
 `./gradlew generateSbom` writes `app/build/sbom/nozzle-it-all.cdx.json` (CycloneDX 1.5): the resolved release runtime
-dependencies with SHA-256 of each artifact, the pinned OrcaSlicer commit and patch hash, and the native dependency
-archives. Note the archive list is everything present in the engine's `deps/src`, including alternates that may not be linked
-(for example CGAL 6.0.1 next to 5.6.3); trim `engine/ENGINE_PIN.json` if that matters for a submission.
+dependencies with SHA-256 of each artifact, the pinned nozzle-engine commit, and the Android dependency archives. Note the
+archive list is everything present in orcaslicer-android-engine's `deps/src`, including alternates that may not be linked
+(for example CGAL 6.0.1 next to 5.6.3); trim `engine/fork/android/DEPENDENCIES.json` if that matters for a submission.
+
+## Tagging
+
+Every Play upload is tagged `v<versionName>` at the exact commit it was built from, when it is built, and the build
+records that commit (`SOURCE_REVISION`, passed as `-PnozzleSourceRevision`); the tree must be clean. The tag is how the
+open-source page's promise ("each release's tag records its exact engine") and the AGPL source offer are kept.
+Releases and their files are listed in docs/FIRST_RELEASE.md.
 
 ## Engine pinning
-`engine/ENGINE_PIN.json` pins the upstream OrcaSlicer commit (`824b216f`, an unreleased nightly), the patch applied on top
-(`engine/android-headless-engine.patch`, three CMake files) and the SHA-256 of every dependency source archive.
-`python3 scripts/engine_pin.py verify` fails on any drift; `update` re-pins after a deliberate engine change. CI runs `verify`.
+`engine/fork/ENGINE_PIN.json` pins the nozzle-engine commit (github.com/James-Jennison/nozzle-engine), which every
+platform builds from; the source is fetched by that commit, so there is no local patch. `engine/fork/android/DEPENDENCIES.json`
+pins the SHA-256 of every Android dependency source archive: `python3 scripts/engine_pin.py verify` fails on any drift;
+`update` re-pins after a deliberate dependency change.
 
 ## Provenance
 The `release` job in `.github/workflows/ci.yml` (tag `v*`) builds the release APK and SBOM and attaches GitHub build-provenance

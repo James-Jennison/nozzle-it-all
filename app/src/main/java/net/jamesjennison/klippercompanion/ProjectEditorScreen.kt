@@ -48,6 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.jamesjennison.klippercompanion.project.AppDatabase
+import net.jamesjennison.klippercompanion.project.ColourMixPersistence
 import net.jamesjennison.klippercompanion.project.ProjectObject
 import net.jamesjennison.klippercompanion.project.ProjectViewModel
 import net.jamesjennison.klippercompanion.project.material
@@ -224,14 +225,16 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // printer keeps exactly today's single-material-per-project UX unchanged, not a hidden
     // no-op control (§20).
     var toolCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
-    LaunchedEffect(profile?.slicingModel) {
+    var nozzleCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
+    LaunchedEffect(profile?.slicingModel, profile?.customMachine) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         try {
-            bedShape = withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
-            machineLimits = withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
+            bedShape = withContext(Dispatchers.IO) { bedShapeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
+            machineLimits = withContext(Dispatchers.IO) { machineLimitsFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
             filamentRange = withContext(Dispatchers.IO) { filamentTemperatureRangeFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) }
-            toolCount = withContext(Dispatchers.IO) { toolCountFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext) } ?: 1
-        } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1 }
+            val setup = withContext(Dispatchers.IO) { toolSetupFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
+            toolCount = setup?.slots ?: 1; nozzleCount = setup?.nozzles ?: 1
+        } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1; nozzleCount = 1 }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
     // WO-30 follow-up (owner: "too much text/settings visible at once"): the EDIT stage's plate,
@@ -267,6 +270,47 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // keeps every object's own denormalized snapshot in sync) - derived from `objects` itself,
     // not separate state, so it's always exactly what would actually get sliced.
     val currentMaterial = objects.firstOrNull()?.material()
+    // Colour mixing (0.2.0, §requirement 2): which system (if any) this plate's own target/tool count actually offers -
+    // the same com.nozzleitall.printer.ext.ProfileFeatures rule Desktop's PrepareState.features() uses. Empty on every
+    // single-tool target and on any Bambu/AMS-style target (ColorMix and Full Spectrum are both engine-side PrusaSlicer/
+    // Snapmaker Orca features, gated to the printers that actually run one of those two config stacks).
+    val colourMixFeatures = remember(profile?.kind, toolCount) { colourMixFeaturesFor(profile?.kind ?: PrinterKind.GENERIC_KLIPPER, toolCount) }
+    // mixedFilamentDefinitions: Snapmaker Full Spectrum's own `mixed_filament_definitions` string (empty = none saved
+    // yet); fullSpectrumMixes is just that same string parsed back for display. virtualExtruders: PrusaSlicer ColorMix's
+    // own blends/gradients for this plate, fed to sliceOnePlate as `{"version":1,"virtual_extruders":[...]}` JSON
+    // (PrusaColorMixFormat.sliceRequestJson) only when non-empty. Both are persisted on the Project row
+    // (Project.mixedFilamentDefinitions/colorMixJson) - the LaunchedEffect below seeds them back from there whenever a
+    // different project is opened, and every add/remove/edit below saves through persistColourMixing so a mix or
+    // blend survives closing the editor (colour-mixing defect: these used to live only in this `remember` state).
+    var mixedFilamentDefinitions by remember(projectId, newProjectName) { mutableStateOf("") }
+    var fullSpectrumMixes by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.FullSpectrumFormat.Mix>>(emptyList()) }
+    var virtualExtruders by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.PrusaColorMixFormat.Virtual>>(emptyList()) }
+    var colourMixError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    var colourMixLoadedFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    // The slot's material (colour-mixing defect: this used to be recomputed ad hoc from "whichever object sits on
+    // this slot" at the mixing UI's own call sites, which could disagree with what sliceOnePlate() actually sends the
+    // engine as slotMaterials once objects were reordered or a slot's only object was removed). One definition, shared
+    // by the mixing UI below and by the persisted-mix reload effect, both derived from the exact same
+    // multiToolSliceInputsFor() the slice request itself uses.
+    val physical = remember(objects, toolCount) {
+        val slotMaterials = multiToolSliceInputsFor(objects, toolCount).second
+        (1..toolCount).map { slot -> val m = slotMaterials.getOrNull(slot - 1); (m?.colorHex ?: "#FFFFFF") to (m?.type ?: "PLA") }
+    }
+    LaunchedEffect(project?.id) {
+        val current = project ?: return@LaunchedEffect
+        if (colourMixLoadedFor == current.id) return@LaunchedEffect
+        colourMixLoadedFor = current.id
+        val definitions = current.mixedFilamentDefinitions.orEmpty()
+        mixedFilamentDefinitions = definitions
+        virtualExtruders = ColourMixPersistence.decodeColorMix(current.colorMixJson)
+        fullSpectrumMixes = if (definitions.isBlank()) emptyList() else runCatching {
+            AndroidFullSpectrum.display(physical.map { it.first }, definitions).rows
+        }.getOrElse { emptyList() }
+    }
+    // Saves both mixing systems' current state onto the Project row (see the LaunchedEffect above that reloads it).
+    fun persistColourMixing() {
+        scope.launch { vm.setColourMixing(mixedFilamentDefinitions, ColourMixPersistence.encodeColorMix(virtualExtruders)) }
+    }
     var materialPickerOpen by remember(projectId, newProjectName) { mutableStateOf(false) }
     // Phase 8 follow-up (§11, §16, WO-28): the real per-object material+tool picker, only ever
     // opened when toolCount > 1 (see the "Objects on this plate" section below) - holds the
@@ -395,8 +439,13 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         // The project's material overrides temperatures on top of (not instead of) the basic settings; skipped for a
         // multi-tool target, where slotMaterials carries each object's own material.
         val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
+        // Colour mixing (0.2.0, requirement 2): both blank/empty for every printer that doesn't offer either system
+        // (colourMixFeatures below) and for one that does but has no mixes/blends configured yet - sliceProject then
+        // slices exactly as it always has.
         val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
-            slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) }, outputTag = tag)
+            slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) }, outputTag = tag,
+            mixedFilamentDefinitions = mixedFilamentDefinitions.ifBlank { null },
+            virtualExtruders = if (virtualExtruders.isEmpty()) "" else com.nozzleitall.printer.ext.PrusaColorMixFormat.sliceRequestJson(virtualExtruders))
         if (outcome is SliceOutcome.Success) {
             // Calibration towers change a machine setting with height: patch the sliced plain G-code (not a Bambu bundle).
             val cal = CalibrationSpec.decode(project?.calibration)
@@ -463,7 +512,14 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // G-code (see SlicingCoordinator.sliceProject()'s own branch), and neither Bambu nor Prusa
     // Link need this screen's Moonraker-only LiveFileChanges upload step below.
     val bambuTarget = profile?.kind == PrinterKind.BAMBU_LAB
-    val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT // both take plain G-code uploaded and started in one request
+    val prusaTarget = profile?.kind == PrinterKind.PRUSA_LINK || profile?.kind == PrinterKind.OCTOPRINT || profile?.kind == PrinterKind.ELEGOO ||
+        profile?.kind == PrinterKind.CREALITY || profile?.kind == PrinterKind.FLASHFORGE || profile?.kind == PrinterKind.DUET ||
+        profile?.kind == PrinterKind.ULTIMAKER || profile?.kind == PrinterKind.REPETIER || profile?.kind == PrinterKind.ANYCUBIC_LAN ||
+        profile?.kind == PrinterKind.SNAPMAKER_A_SERIES || profile?.kind == PrinterKind.SNAPMAKER_SACP // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier/Anycubic/Snapmaker: upload, start gated; UltiMaker: nothing sent while gated)
+    // Mirrors SliceAndPrintPanel.kt's own usbSerialTarget: a USB-connected printer's address is the synthetic
+    // "usb:<vendorId>:<productId>:<serial>" identity, not an HTTP host, and UsbSerialPrinterService.command() refuses a
+    // PrusaLinkPrintRequest outright (UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER) - there is no upload step to run here.
+    val usbSerialTarget = profile?.kind == PrinterKind.USB_SERIAL
     // Toolpath + stats parsing, off the main thread - a parse failure doesn't block printing,
     // the review is a visualization aid, not a correctness gate (matches SliceAndPrintPanel's
     // own convention).
@@ -486,6 +542,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         val gcode = sliced ?: return@LaunchedEffect
         if (stage != ProjectEditorStage.STAGED) return@LaunchedEffect
         val target = profile ?: return@LaunchedEffect
+        if (usbSerialTarget) { working = false; sliceError = UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER; return@LaunchedEffect }
         if (bambuTarget || prusaTarget) { stagedFilename = gcode.name; return@LaunchedEffect }
         if (!state.connected) { working = false; sliceError = "Connect to ${target.address} to upload the sliced file."; return@LaunchedEffect }
         working = true; sliceStageLabel = "Uploading…"
@@ -824,23 +881,99 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     // already carries its own real material + tool assignment,
                                     // tap "Assign" on a row to change it.
                                     Text("$toolCount real tool slots on ${profile?.label ?: "this printer"} - tap \"Assign\" on an object above to pick its material and tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-multitool-hint"))
-                                    val family = multiToolFamily(profile?.slicingModel, toolCount)
+                                    val family = multiToolFamily(nozzleCount, toolCount)
                                     val assigned = objects.mapNotNull { it.material() }
                                     val toolWarnings = MaterialCompatibility.warnings(assigned, family)
                                     val primeTowerOn = advancedOverrides["enable_prime_tower"]?.let { it == "1" }
                                     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-multimaterial")) {
                                         Text(family.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.testTag("project-multimaterial-family"))
                                         Text(family.explanation, style = MaterialTheme.typography.bodySmall)
-                                        if (family == MultiToolFamily.FILAMENT_SWAP) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Switch(primeTowerOn ?: true, { advancedOverrides = advancedOverrides + ("enable_prime_tower" to if (it) "1" else "0") }, modifier = Modifier.testTag("project-prime-tower"))
-                                                Text(" Prime tower" + if (primeTowerOn == null) " (profile default)" else "", style = MaterialTheme.typography.bodyMedium)
-                                            }
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Switch(primeTowerOn ?: true, { advancedOverrides = advancedOverrides + ("enable_prime_tower" to if (it) "1" else "0") }, modifier = Modifier.testTag("project-prime-tower"))
+                                            Text(" Prime tower" + if (primeTowerOn == null) " (profile default)" else "", style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        if (family.sharesNozzle) {
                                             Text("Flush amount and where to flush: Settings > Multi-material.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         } else {
-                                            Text("No prime tower or flush settings here: this engine does not purge on independent-tool machines (checked on the Snapmaker U1 profile - turning the tower on changes nothing).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-no-purge-note"))
+                                            Text("No flushing between colours on independent tools: the prime tower only primes each tool after a change and catches ooze from the idle nozzles.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("project-no-purge-note"))
                                         }
                                         toolWarnings.forEachIndexed { k, w -> Text("⚠ $w", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-multimaterial-warning-$k")) }
+                                    }
+                                    // Colour mixing (0.2.0, requirement 2): shown only when this printer/tool-count
+                                    // combination actually offers one of the two engine-side mixing systems
+                                    // (com.nozzleitall.printer.ext.ProfileFeatures - Snapmaker U1 families get Full
+                                    // Spectrum, every other >=2-slot target gets PrusaSlicer ColorMix, never both).
+                                    // Wording mirrors Desktop's own editors (ColourMixingUi.kt/PrusaColorMixUi.kt)
+                                    // trimmed to what fits a phone: one "Add" action per system instead of the full
+                                    // match/preset/gradient toolset, since a mix or blend, once added, already reaches
+                                    // the slice the same way Desktop's own editor output does.
+                                    if (colourMixFeatures.isNotEmpty()) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-colour-mixing")) {
+                                            if (com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM in colourMixFeatures) {
+                                                Text("Colour mixing - Full Spectrum", style = MaterialTheme.typography.titleSmall)
+                                                Text("Blend two loaded filaments into a new virtual colour this printer mixes as it prints.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                fullSpectrumMixes.forEachIndexed { k, mix ->
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        Text(mix.label.ifBlank { "Mix #${mix.id}" } + " · ${mix.displayHex}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f).testTag("project-fullspectrum-mix-$k"))
+                                                        TextButton({
+                                                            scope.launch {
+                                                                colourMixError = null
+                                                                try {
+                                                                    val r = AndroidFullSpectrum.remove(physical.map { it.first }, mixedFilamentDefinitions, mix.id)
+                                                                    mixedFilamentDefinitions = r.definitions; fullSpectrumMixes = r.rows
+                                                                    persistColourMixing()
+                                                                    // Snapmaker's own renumbering after this removal - an object on the removed
+                                                                    // mix (or one shifted to a different id) must follow it, never keep pointing
+                                                                    // at a slot the mix list no longer has (colour-mixing defect 3).
+                                                                    if (r.remap.isNotEmpty()) vm.remapToolSlots { slot -> ColourMixPersistence.applyFullSpectrumRemap(slot, r.remap) }
+                                                                } catch (e: ColourMixEngineError) { colourMixError = e.message }
+                                                            }
+                                                        }, modifier = Modifier.testTag("project-fullspectrum-remove-$k")) { Text("Remove") }
+                                                    }
+                                                }
+                                                OutlinedButton({
+                                                    scope.launch {
+                                                        colourMixError = null
+                                                        try {
+                                                            val r = AndroidFullSpectrum.add(physical.map { it.first }, mixedFilamentDefinitions, 1, 2, 50)
+                                                            mixedFilamentDefinitions = r.definitions; fullSpectrumMixes = r.rows
+                                                            persistColourMixing()
+                                                        } catch (e: ColourMixEngineError) { colourMixError = e.message }
+                                                    }
+                                                }, enabled = toolCount >= 2, modifier = Modifier.testTag("project-fullspectrum-add")) { Text("+ Add 50/50 mix (Tool 1 + Tool 2)") }
+                                            } else if (com.nozzleitall.printer.ext.Prusa.COLOR_MIX in colourMixFeatures) {
+                                                Text("Colour mixing - ColorMix", style = MaterialTheme.typography.titleSmall)
+                                                Text("Blend two loaded filaments in a repeating layer cycle, then assign an object to it below like any other tool.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                virtualExtruders.forEachIndexed { k, v ->
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        Text(v.summary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f).testTag("project-colormix-blend-$k"))
+                                                        TextButton({
+                                                            val removedId = v.id
+                                                            virtualExtruders = virtualExtruders.filter { it.id != removedId }
+                                                            persistColourMixing()
+                                                            // Any object printing on this blend goes back to tool 1, the same rule
+                                                            // Desktop's PrepareState.removeVirtualExtruder applies (colour-mixing defect 3).
+                                                            scope.launch { vm.remapToolSlots { slot -> ColourMixPersistence.applyColorMixRemoval(slot, removedId) } }
+                                                        }, modifier = Modifier.testTag("project-colormix-remove-$k")) { Text("Remove") }
+                                                    }
+                                                }
+                                                OutlinedButton({
+                                                    scope.launch {
+                                                        colourMixError = null
+                                                        try {
+                                                            val id = AndroidColorMix.nextId(toolCount, virtualExtruders)
+                                                            val draft = com.nozzleitall.printer.ext.PrusaColorMixFormat.Virtual(id, "blend", listOf(
+                                                                com.nozzleitall.printer.ext.PrusaColorMixFormat.Component(1, 0.5),
+                                                                com.nozzleitall.printer.ext.PrusaColorMixFormat.Component(2, 0.5),
+                                                            ))
+                                                            virtualExtruders = AndroidColorMix.normalize(physical, virtualExtruders + draft)
+                                                            persistColourMixing()
+                                                        } catch (e: ColourMixEngineError) { colourMixError = e.message }
+                                                    }
+                                                }, enabled = toolCount >= 2, modifier = Modifier.testTag("project-colormix-add")) { Text("+ Add 50/50 blend (Tool 1 + Tool 2)") }
+                                            }
+                                            colourMixError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-colour-mixing-error")) }
+                                        }
                                     }
                                 }
                             }
@@ -877,7 +1010,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
                                     Text("Brim (bed adhesion)")
                                 }
-                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", multiToolFamily(profile?.slicingModel, toolCount), { advancedOverrides = it })
+                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", multiToolFamily(nozzleCount, toolCount), { advancedOverrides = it })
                                 validationIssues.forEach { issue ->
                                     Text(
                                         issue.message,
@@ -937,8 +1070,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.testTag("project-slice-multimaterial")) {
                                 Text("Toolchanges: ${st.toolchanges ?: slicedToolpath?.toolChanges?.size ?: 0}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-toolchanges"))
                                 Text(st.toolsUsed.joinToString("  ·  ") { t -> "T${t + 1} ${"%.1f".format(st.perToolGrams.getOrElse(t) { 0.0 })} g" }, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-pertool"))
-                                st.estimatedPurgeGrams()?.takeIf { multiToolFamily(profile?.slicingModel, toolCount) != MultiToolFamily.TOOLCHANGER }?.let { Text("Estimated purge waste: ${"%.1f".format(it)} g (estimate)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-purge")) }
-                                st.purgeNote(multiToolFamily(profile?.slicingModel, toolCount))?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-slice-purge-note")) }
+                                st.estimatedPurgeGrams()?.takeIf { multiToolFamily(nozzleCount, toolCount) != MultiToolFamily.TOOLCHANGER }?.let { Text("Estimated purge waste: ${"%.1f".format(it)} g (estimate)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-purge")) }
+                                st.purgeNote(multiToolFamily(nozzleCount, toolCount))?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-slice-purge-note")) }
                             }
                         }
                         val toolMaterials = (1..toolCount.coerceAtLeast(1)).map { slot -> objects.firstOrNull { (it.toolSlotIndex ?: 1) == slot }?.material() }
@@ -978,12 +1111,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             prusaTarget -> {
                                 val gcode = sliced ?: return@Button
                                 execute(PrinterCommand("Print $filename", "", prusaLinkPrintRequest = PrusaLinkPrintRequest(gcode, filename),
-                                    allowedStates = setOf("standby", "complete", "cancelled", "error")), state.generation)
+                                    allowedStates = sendAllowedStates(profile.kind)), state.generation)
                             }
-                            else -> execute(Moonraker.start(filename), state.generation)
+                            else -> execute(Moonraker.start(filename, state.kindFor(state.address)), state.generation)
                         }
                         close()
-                    }, enabled = !working && sliceError == null && stagedFilename != null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-and-print-confirm")) { Text("Start print") }
+                    }, enabled = !working && sliceError == null && stagedFilename != null, modifier = Modifier.fillMaxWidth().padding(16.dp).testTag("project-slice-and-print-confirm")) { Text(if (profile == null || startVerifiedFor(profile.kind)) "Start print" else "Upload to printer") }
                 }
             }
         }
@@ -1119,6 +1252,19 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         (1..toolCount).forEach { slot ->
                             FilterChip(pendingToolSlot == slot, { pendingToolSlot = slot }, label = { Text("Tool $slot") }, modifier = Modifier.testTag("project-object-tool-$slot"))
+                        }
+                        // ColorMix (0.2.0): a blend prints as its own virtual "tool", picked the same way as a real
+                        // one - its id already sits above toolCount (PrusaColorMix's own next_id numbering), so it
+                        // slots straight into the same 1-based toolSlotIndex every physical tool uses.
+                        virtualExtruders.forEach { v ->
+                            FilterChip(pendingToolSlot == v.id, { pendingToolSlot = v.id }, label = { Text("Blend ${v.summary}") }, modifier = Modifier.testTag("project-object-tool-blend-${v.id}"))
+                        }
+                        // Colour mixing defect 1: a Full Spectrum mix, like a ColorMix blend above, prints as its own
+                        // virtual tool at its own id - it was previously missing from this list entirely, so an object
+                        // could never actually be assigned to a mix once one existed. Only enabled mixes are offered,
+                        // matching fullSpectrumMixes' own display list above.
+                        fullSpectrumMixes.filter { it.enabled }.forEach { mix ->
+                            FilterChip(pendingToolSlot == mix.id, { pendingToolSlot = mix.id }, label = { Text(mix.label.ifBlank { "Mix ${mix.id}" }) }, modifier = Modifier.testTag("project-object-tool-mix-${mix.id}"))
                         }
                     }
                     Text("Material", style = MaterialTheme.typography.labelMedium)

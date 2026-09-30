@@ -1,0 +1,1429 @@
+{
+  "schema": "nozzle.test-suite",
+  "version": [
+    1,
+    0
+  ],
+  "id": "paxx-u1",
+  "suiteVersion": "1.8.0",
+  "title": "Snapmaker U1 on PAXX extended firmware",
+  "description": "Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.",
+  "coverage": "reference",
+  "requiredNozzleVersion": "0.1.0",
+  "target": {
+    "manufacturer": "Snapmaker",
+    "model": "U1",
+    "firmwareFamily": "paxx-extended",
+    "firmwareVariants": [
+      "paxx-extended"
+    ],
+    "printerKinds": [
+      "SNAPMAKER_U1_PAXX"
+    ],
+    "adapter": "android-moonraker",
+    "protocol": "moonraker-http",
+    "slicingProfile": "snapmaker_u1",
+    "hardware": {
+      "multi_tool": true
+    },
+    "notEquivalentTo": [
+      "snapmaker-stock"
+    ]
+  },
+  "requiredCapabilities": [
+    "status",
+    "firmware_identity"
+  ],
+  "tests": [
+    {
+      "id": "identity",
+      "title": "Identify the printer and its firmware",
+      "category": "monitoring",
+      "scope": "single_material",
+      "safetyLevel": 1,
+      "description": "Reads the firmware identity live and classifies it with the same rules as network discovery. A different firmware family stops the suite's grades from applying.",
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "identity",
+          "kind": "read_identity"
+        },
+        {
+          "id": "caps",
+          "kind": "check_capabilities",
+          "params": {
+            "required": [
+              "status"
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Firmware reads as this suite's firmware family"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "telemetry",
+      "title": "Read status and temperatures",
+      "category": "monitoring",
+      "scope": "single_material",
+      "safetyLevel": 1,
+      "preconditions": [
+        {
+          "id": "present",
+          "text": "You can see the printer's own screen."
+        }
+      ],
+      "steps": [
+        {
+          "id": "status",
+          "kind": "read_status",
+          "expect": {
+            "ready": true,
+            "temperatures": [
+              "nozzle",
+              "bed"
+            ]
+          }
+        },
+        {
+          "id": "files",
+          "kind": "list_files"
+        },
+        {
+          "id": "matches",
+          "kind": "observe",
+          "params": {
+            "question": "Do the temperatures Nozzle reads (shown below) match the printer's own screen, within 2 °C?",
+            "response": "yes_no",
+            "show": "status"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Status is ready",
+        "Nozzle and bed temperatures are reported and match the printer's screen"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "camera",
+      "title": "Camera stream and snapshot",
+      "category": "monitoring",
+      "scope": "single_material",
+      "safetyLevel": 1,
+      "description": "Only the camera's kind, the snapshot's size and its hash are recorded; no image or URL leaves the device.",
+      "requiredCapabilities": [
+        "camera"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "cams",
+          "kind": "list_cameras",
+          "expect": {
+            "min": 1
+          }
+        },
+        {
+          "id": "snap",
+          "kind": "camera_snapshot",
+          "expect": {
+            "minBytes": 1000
+          }
+        },
+        {
+          "id": "live",
+          "kind": "observe",
+          "params": {
+            "question": "Does the camera picture below show the printer, and change when you tap Refresh?",
+            "response": "yes_no",
+            "show": "camera"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "At least one camera",
+        "A snapshot decodes as an image",
+        "The live view updates"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "slice-single",
+      "title": "Slice the single-material acceptance model",
+      "category": "slicing",
+      "scope": "single_material",
+      "safetyLevel": 0,
+      "description": "Slices the standard acceptance model on this device with the bundled profile and checks the result: it extrudes, stays inside the printable area, is centred, and uses this firmware's own start/end G-code.",
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-acceptance-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-acceptance-v1",
+            "profile": "snapmaker_u1"
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "requires_macro",
+                "macro": "PRINT_START"
+              },
+              {
+                "check": "within_bed"
+              },
+              {
+                "check": "centered",
+                "toleranceMm": 5
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code is produced",
+        "No command from another firmware appears",
+        "The model is centred within 5 mm and inside the bed"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "profile-match",
+      "title": "The U1 profile suits this firmware",
+      "category": "slicing",
+      "scope": "single_material",
+      "safetyLevel": 1,
+      "description": "Checks the bundled U1 profile against the live firmware family.",
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "match",
+          "kind": "profile_match",
+          "params": {
+            "profile": "snapmaker_u1"
+          }
+        }
+      ],
+      "expectedObservations": [],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "upload-guard",
+      "title": "Refuse files sliced for Elegoo stock firmware",
+      "category": "file_transfer",
+      "scope": "single_material",
+      "safetyLevel": 1,
+      "description": "Hands two known-unsafe files to this printer's real upload path and expects both to be refused before any request is made. Nothing is sent.",
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "m729",
+          "kind": "upload_guard",
+          "title": "M729 file",
+          "params": {
+            "fixture": "stock-elegoo-m729.gcode"
+          }
+        },
+        {
+          "id": "m8213",
+          "kind": "upload_guard",
+          "title": "M8213 file",
+          "params": {
+            "fixture": "stock-elegoo-m8213.gcode"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Both files are refused before sending"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "transfer",
+      "title": "Upload, verify and delete a file",
+      "category": "file_transfer",
+      "scope": "single_material",
+      "safetyLevel": 2,
+      "description": "Uploads the G-code sliced earlier in this run under a unique name, verifies the printer holds exactly those bytes (SHA-256), then deletes that one file and verifies it is gone. Nothing prints.",
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the sliced acceptance model",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "listed",
+          "kind": "list_files",
+          "expect": {
+            "uploaded": true
+          }
+        },
+        {
+          "id": "delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded file",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "The file arrives intact",
+        "It is listed",
+        "It is deleted and no longer present"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded file if it is still there",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    },
+    {
+      "id": "controls-idle",
+      "title": "Heaters, homing and a small move",
+      "category": "controls",
+      "scope": "single_material",
+      "safetyLevel": 3,
+      "description": "Low, non-printing temperatures and one small move. Each command is shown and approved one at a time; the printer is re-read before each and nothing is sent unless it is idle.",
+      "requiredCapabilities": [
+        "temperatures",
+        "motion"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "clear",
+          "text": "Nothing is on the bed or near the toolhead, and the bed can move freely."
+        }
+      ],
+      "steps": [
+        {
+          "id": "heat-nozzle",
+          "kind": "set_temperature",
+          "params": {
+            "heater": "nozzle",
+            "celsius": 60
+          }
+        },
+        {
+          "id": "nozzle-reached",
+          "kind": "monitor",
+          "params": {
+            "until": "heater_reaches",
+            "heater": "nozzle",
+            "celsius": 60,
+            "toleranceC": 3,
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 300
+        },
+        {
+          "id": "screen-target",
+          "kind": "observe",
+          "params": {
+            "question": "Does the printer's own screen show a 60 °C nozzle target?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "nozzle-off",
+          "kind": "set_temperature",
+          "params": {
+            "heater": "nozzle",
+            "celsius": 0
+          }
+        },
+        {
+          "id": "heat-bed",
+          "kind": "set_temperature",
+          "params": {
+            "heater": "bed",
+            "celsius": 40
+          }
+        },
+        {
+          "id": "bed-reached",
+          "kind": "monitor",
+          "params": {
+            "until": "heater_reaches",
+            "heater": "bed",
+            "celsius": 40,
+            "toleranceC": 3,
+            "pollSeconds": 10
+          },
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "bed-off",
+          "kind": "set_temperature",
+          "params": {
+            "heater": "bed",
+            "celsius": 0
+          }
+        },
+        {
+          "id": "home",
+          "kind": "home"
+        },
+        {
+          "id": "homed",
+          "kind": "observe",
+          "params": {
+            "question": "Did every axis home normally, with no grinding, skipping or collision?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "jog-z",
+          "kind": "jog",
+          "params": {
+            "axis": "Z",
+            "mm": 5
+          }
+        },
+        {
+          "id": "moved",
+          "kind": "observe",
+          "params": {
+            "question": "Did the bed or toolhead move about 5 mm in Z, in the expected direction?",
+            "response": "yes_no"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Nozzle reaches 60 °C and turns off",
+        "Bed reaches 40 °C and turns off",
+        "Homing completes",
+        "Z moves 5 mm"
+      ],
+      "requiredEvidence": [],
+      "timeout": {
+        "seconds": 3600,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-nozzle",
+          "kind": "set_temperature",
+          "title": "Make sure the nozzle heater is off",
+          "params": {
+            "heater": "nozzle",
+            "celsius": 0
+          }
+        },
+        {
+          "id": "cleanup-bed",
+          "kind": "set_temperature",
+          "title": "Make sure the bed heater is off",
+          "params": {
+            "heater": "bed",
+            "celsius": 0
+          }
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": []
+    },
+    {
+      "id": "print-single",
+      "title": "Print the acceptance model (single material)",
+      "category": "physical_print",
+      "scope": "single_material",
+      "safetyLevel": 4,
+      "description": "A complete physical print of the acceptance model with the G-code sliced in this run: first layer, placement, dimensions, bridging, retraction and surface.",
+      "requiredCapabilities": [
+        "upload_job",
+        "start_print"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the sliced acceptance model",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "title": "Start the acceptance print",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "progress",
+          "kind": "monitor",
+          "params": {
+            "until": "progress_increases",
+            "pollSeconds": 30
+          },
+          "timeoutSeconds": 2400
+        },
+        {
+          "id": "first-layer",
+          "kind": "observe",
+          "params": {
+            "question": "Judge the first layer: even lines, stuck down everywhere, no gaps, no scraping.",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "first-layer-photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "first-layer",
+            "prompt": "Photo of the first layer"
+          }
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "unattended",
+          "kind": "observe",
+          "params": {
+            "question": "Did the print finish without you having to intervene?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "placement",
+          "kind": "observe",
+          "params": {
+            "question": "Where on the bed did the model print?",
+            "response": "choice",
+            "choices": [
+              "centre",
+              "off centre",
+              "partly off the bed"
+            ]
+          },
+          "expect": {
+            "oneOf": [
+              "centre"
+            ]
+          }
+        },
+        {
+          "id": "tower-x",
+          "kind": "observe",
+          "params": {
+            "question": "Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 19.75,
+            "max": 20.25
+          }
+        },
+        {
+          "id": "tower-y",
+          "kind": "observe",
+          "params": {
+            "question": "Tower width along Y: across the outside of the tower, at right angles to X. Target 20.0 mm; passes 19.75 to 20.25.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 19.75,
+            "max": 20.25
+          }
+        },
+        {
+          "id": "hole",
+          "kind": "observe",
+          "params": {
+            "question": "Square hole through the middle of the tower: its width, across the middle, with the calipers' inside jaws. Target 8.0 mm; passes 7.7 to 8.3.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 7.7,
+            "max": 8.3
+          }
+        },
+        {
+          "id": "height",
+          "kind": "observe",
+          "params": {
+            "question": "Total height, with calipers: from the bottom of the base plate to the top of the tower. Target 10.6 mm; passes 10.35 to 10.85. A ruler can't resolve this: without calipers choose Can't observe this.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 10.35,
+            "max": 10.85
+          }
+        },
+        {
+          "id": "wall",
+          "kind": "observe",
+          "params": {
+            "question": "Thin wall thickness, with calipers: the single 20 mm-long fin standing on its own, not the tower's walls. Target 1.2 mm; passes 1.0 to 1.4. Without calipers choose Can't observe this.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 1.0,
+            "max": 1.4
+          }
+        },
+        {
+          "id": "bridge",
+          "kind": "observe",
+          "params": {
+            "question": "Look under the bridge deck: straight strands across the 18 mm gap, no drooping or failed strands?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "bridge-photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "bridge",
+            "prompt": "Photo of the bridge underside"
+          }
+        },
+        {
+          "id": "stringing",
+          "kind": "observe",
+          "params": {
+            "question": "Between the two tall pillars: no strings, or only a few fine wisps that brush off?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "surface",
+          "kind": "observe",
+          "params": {
+            "question": "Tower walls: even layers, no blobs, zits, gaps or layer shifts?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "top-photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "top",
+            "prompt": "Photo of the finished print from above"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "The print completes",
+        "First layer adheres evenly",
+        "Tower 20.0 ± 0.25 mm, hole 8.0 ± 0.3 mm, height 10.6 ± 0.25 mm, wall 1.2 ± 0.2 mm",
+        "Bridge holds across 18 mm",
+        "Little or no stringing",
+        "Clean walls"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "first-layer",
+          "kind": "photo",
+          "description": "The first layer, from above, while or just after it prints"
+        },
+        {
+          "id": "top",
+          "kind": "photo",
+          "description": "The finished print from above"
+        },
+        {
+          "id": "bridge",
+          "kind": "photo",
+          "description": "The underside of the bridge deck"
+        }
+      ],
+      "timeout": {
+        "seconds": 21600,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded print file",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    },
+    {
+      "id": "print-controls",
+      "title": "Pause, resume and cancel a print",
+      "category": "controls",
+      "scope": "single_material",
+      "safetyLevel": 4,
+      "description": "Starts the acceptance print only to exercise pause, resume and cancel. The partial print is discarded.",
+      "requiredCapabilities": [
+        "pause_print",
+        "resume_print",
+        "cancel_print",
+        "upload_job",
+        "start_print"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the sliced acceptance model",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "title": "Start a print that will be cancelled",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "progress",
+          "kind": "monitor",
+          "params": {
+            "until": "progress_increases",
+            "pollSeconds": 20
+          },
+          "timeoutSeconds": 2400
+        },
+        {
+          "id": "pause",
+          "kind": "pause"
+        },
+        {
+          "id": "paused",
+          "kind": "monitor",
+          "params": {
+            "until": "paused",
+            "pollSeconds": 3
+          },
+          "timeoutSeconds": 180
+        },
+        {
+          "id": "parked",
+          "kind": "observe",
+          "params": {
+            "question": "Did the printer stop extruding and move the toolhead away from the print?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "resume",
+          "kind": "resume"
+        },
+        {
+          "id": "resumed",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 3
+          },
+          "timeoutSeconds": 180
+        },
+        {
+          "id": "resumed-ok",
+          "kind": "observe",
+          "params": {
+            "question": "Did printing continue where it stopped, without a gap or blob?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "cancel",
+          "kind": "cancel"
+        },
+        {
+          "id": "stopped",
+          "kind": "monitor",
+          "params": {
+            "until": "idle",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 600
+        },
+        {
+          "id": "cancel-ok",
+          "kind": "observe",
+          "params": {
+            "question": "Did the printer stop the print and begin turning its heaters off?",
+            "response": "yes_no"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Pause parks the toolhead",
+        "Resume continues cleanly",
+        "Cancel stops the print"
+      ],
+      "requiredEvidence": [],
+      "timeout": {
+        "seconds": 7200,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded print file",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        },
+        {
+          "id": "cleanup-nozzle",
+          "kind": "set_temperature",
+          "title": "Make sure the nozzle heater is off",
+          "params": {
+            "heater": "nozzle",
+            "celsius": 0
+          }
+        },
+        {
+          "id": "cleanup-bed",
+          "kind": "set_temperature",
+          "title": "Make sure the bed heater is off",
+          "params": {
+            "heater": "bed",
+            "celsius": 0
+          }
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    },
+    {
+      "id": "multi-lanes",
+      "title": "Read the material slots",
+      "category": "monitoring",
+      "scope": "multi_material",
+      "safetyLevel": 1,
+      "description": "Read-only view of the four toolheads. Graded separately from single-material monitoring.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "slots",
+          "kind": "read_material_slots",
+          "expect": {
+            "min": 4
+          }
+        },
+        {
+          "id": "slots-match",
+          "kind": "observe",
+          "params": {
+            "question": "Do the four toolheads Nozzle reads (shown below) match what is loaded in each?",
+            "response": "yes_no",
+            "show": "slots"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Every slot is reported",
+        "They match what is loaded"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "multi-slice",
+      "title": "Slice the multi-material acceptance model",
+      "category": "slicing",
+      "scope": "multi_material",
+      "safetyLevel": 0,
+      "description": "Two-part model, one part per tool or lane.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-acceptance-mm-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-acceptance-mm-v1",
+            "profile": "snapmaker_u1"
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "uses_tools",
+                "count": 2
+              },
+              {
+                "check": "max_tool_index",
+                "max": 3
+              },
+              {
+                "check": "within_bed"
+              },
+              {
+                "check": "requires_macro",
+                "macro": "PRINT_START"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code selects two tools",
+        "No stock-firmware commands"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "multi-print",
+      "title": "Print the multi-material acceptance model",
+      "category": "physical_print",
+      "scope": "multi_material",
+      "safetyLevel": 4,
+      "description": "Kept apart from single-material acceptance: this grades material and tool changes only.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        },
+        {
+          "id": "loaded",
+          "text": "Two different colours are loaded in the first two tools or lanes."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the multi-material G-code",
+          "params": {
+            "fromTest": "multi-slice"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "title": "Start the multi-material print",
+          "params": {
+            "fromTest": "multi-slice"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 1200
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "changes",
+          "kind": "observe",
+          "params": {
+            "question": "Did every tool or material change happen, with the right material in each stripe?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "bleed",
+          "kind": "observe",
+          "params": {
+            "question": "Colour bleed at the stripe boundaries:",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "stripes",
+            "prompt": "Photo of the finished stripes"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "All changes happen",
+        "Each stripe is the right material"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "stripes",
+          "kind": "photo",
+          "description": "The finished stripes from above"
+        }
+      ],
+      "timeout": {
+        "seconds": 18000,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded print file",
+          "params": {
+            "fromTest": "multi-slice"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "multi-slice"
+      ]
+    },
+    {
+      "id": "mix-slice",
+      "title": "Slice a 50/50 colour-mix swatch",
+      "category": "slicing",
+      "scope": "multi_material",
+      "safetyLevel": 0,
+      "description": "Slices the colour swatch as a 50/50 mix of tool 1 and tool 2, the same way the project editor's “+ Add 50/50 mix” does: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. The G-code must change between the two tools from layer to layer.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-colour-swatch-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-colour-swatch-v1",
+            "profile": "snapmaker_u1",
+            "colourMix": {
+              "a": 1,
+              "b": 2,
+              "bPercent": 50
+            }
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "uses_tools",
+                "count": 2
+              },
+              {
+                "check": "max_tool_index",
+                "max": 3
+              },
+              {
+                "check": "within_bed"
+              },
+              {
+                "check": "alternates_tools",
+                "minLayers": 10,
+                "minFraction": 0.8
+              },
+              {
+                "check": "requires_macro",
+                "macro": "PRINT_START"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code is produced",
+        "It selects tools 1 and 2 only",
+        "The swatch changes tool on at least 80% of its layers"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "mix-print",
+      "title": "Print the colour-mix swatch",
+      "category": "physical_print",
+      "scope": "multi_material",
+      "safetyLevel": 4,
+      "description": "Prints the swatch sliced in this run. The printer changes tool on about every layer, 30 times: on a printer with one nozzle fed from several slots (CANVAS, AMS, CFS, an MMU) each change also purges, so the print is slower and uses more filament than its size suggests.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        },
+        {
+          "id": "loaded",
+          "text": "Two clearly different colours (for example blue and yellow) are loaded in the first two tools or lanes."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the colour-mix G-code",
+          "params": {
+            "fromTest": "mix-slice"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "title": "Start the colour-mix swatch",
+          "params": {
+            "fromTest": "mix-slice"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 1200
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "unattended",
+          "kind": "observe",
+          "params": {
+            "question": "Did the swatch finish without you having to intervene (no failed tool or filament change)?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "alternation",
+          "kind": "observe",
+          "params": {
+            "question": "Look closely at a long side of the swatch: do the two colours take turns, one thin layer each, all the way up?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "blend",
+          "kind": "observe",
+          "params": {
+            "question": "Now from about an arm's length: do the sides read as one blended colour, rather than two separate colours or stripes?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "blend",
+            "prompt": "Photo of a long side of the swatch, in good light"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "The print completes",
+        "The colours alternate layer by layer",
+        "From arm's length the sides look like one blended colour"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "blend",
+          "kind": "photo",
+          "description": "A long side of the finished swatch"
+        }
+      ],
+      "timeout": {
+        "seconds": 18000,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded print file",
+          "params": {
+            "fromTest": "mix-slice"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "mix-slice"
+      ]
+    }
+  ]
+}

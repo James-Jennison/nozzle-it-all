@@ -1,0 +1,32 @@
+{
+    "_source": "Shape from the SDCP V3.0.0 document 'Status Information'; FDM field names from elegoo-link elegoo_fdm_cc_message_adapter.cpp handlePrinterStatus (TempOfNozzle, TempTargetNozzle, TempOfHotbed, TempTargetHotbed, CurrenCoord, CurrentFanSpeed, PrintInfo.Progress, PrintSpeedPct). Not a hardware capture.",
+    "Status": {
+        "CurrentStatus": [1],
+        "TimeLapseStatus": 0,
+        "PlatFormType": 0,
+        "TempOfHotbed": 59.8,
+        "TempOfNozzle": 219.6,
+        "TempOfBox": 31.0,
+        "TempTargetHotbed": 60,
+        "TempTargetNozzle": 220,
+        "TempTargetBox": 0,
+        "CurrenCoord": "110.20,95.00,1.40",
+        "CurrentFanSpeed": {"ModelFan": 100, "AuxiliaryFan": 0, "BoxFan": 30},
+        "LightStatus": {"SecondLight": 1},
+        "PrintInfo": {
+            "Status": 13,
+            "CurrentLayer": 7,
+            "TotalLayer": 100,
+            "CurrentTicks": 600,
+            "TotalTicks": 3600,
+            "Filename": "cube.gcode",
+            "ErrorNumber": 0,
+            "TaskId": "f3a8f0b4-0000-4000-8000-000000000001",
+            "PrintSpeedPct": 100,
+            "Progress": 42
+        }
+    },
+    "MainboardID": "000000000001d354",
+    "TimeStamp": 1687069655,
+    "Topic": "sdcp/status/000000000001d354"
+}

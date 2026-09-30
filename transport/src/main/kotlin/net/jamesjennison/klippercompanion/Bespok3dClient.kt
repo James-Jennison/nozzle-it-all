@@ -329,13 +329,32 @@ object Bespok3dProtocol {
  * same rule and is not itself thread-confined, matching how it was already written upstream.
  */
 class Bespok3dClient {
+  /**
+   * First contact with a printer, before anything is trusted. The certificate is captured during a handshake that is then
+   * refused, so nothing is exchanged with an unverified server; the public /license details are read over a connection
+   * pinned to exactly that certificate. The owner confirms its fingerprint before [requestAccess] sends any secret.
+   */
   fun probe(host: String): Bespok3dProbe {
-    val response = request(host, "/license", "GET", null, null, null)
+    val leaf = captureCertificate(host)
+    val leafPem = pem(leaf)
+    val response = request(host, "/license", "GET", null, null, leafPem)
     return Bespok3dProtocol.parseProbe(
       response.body,
-      pem(response.leaf),
-      Bespok3dProtocol.certificateSha256(response.leaf.encoded),
+      leafPem,
+      Bespok3dProtocol.certificateSha256(leaf.encoded),
     )
+  }
+
+  private fun captureCertificate(host: String): X509Certificate {
+    val capture = CertificateCapture()
+    val context = SSLContext.getInstance("TLS").apply { init(null, arrayOf<TrustManager>(capture), null) }
+    (context.socketFactory.createSocket() as javax.net.ssl.SSLSocket).use { socket ->
+      socket.connect(java.net.InetSocketAddress(validatedHost(host), PORT), TIMEOUT_MS)
+      socket.soTimeout = TIMEOUT_MS
+      // Always fails: the capture refuses every certificate once it has recorded it.
+      runCatching { socket.startHandshake() }
+    }
+    return capture.leaf ?: throw CertificateException("Bespok3d presented no certificate")
   }
 
   /**
@@ -574,7 +593,7 @@ class Bespok3dClient {
     method: String,
     body: String?,
     token: String?,
-    certificatePem: String?,
+    certificatePem: String,
   ): Response = requestBytes(
     host = host,
     path = path,
@@ -593,7 +612,7 @@ class Bespok3dClient {
     body: ByteArray?,
     contentType: String?,
     token: String?,
-    certificatePem: String?,
+    certificatePem: String,
     timeoutMs: Int,
   ): Response {
     val cleanHost = validatedHost(host)
@@ -602,8 +621,11 @@ class Bespok3dClient {
     connection.connectTimeout = TIMEOUT_MS
     connection.readTimeout = timeoutMs
     connection.requestMethod = method
-    connection.hostnameVerifier = HostnameVerifier { _, _ -> true }
-    connection.sslSocketFactory = socketFactory(certificatePem)
+    // The daemon's self-signed certificate doesn't name its LAN address, so identity is the pinned certificate: the
+    // session is accepted only if the printer presents exactly the one the owner confirmed.
+    val pinned = certificate(certificatePem)
+    connection.hostnameVerifier = PinnedCertificateVerifier(pinned)
+    connection.sslSocketFactory = socketFactory(pinned)
     connection.setRequestProperty("Accept", "application/json")
     if (token != null) connection.setRequestProperty("Authorization", "Bearer $token")
     if (body != null) {
@@ -672,9 +694,8 @@ class Bespok3dClient {
     return host
   }
 
-  private fun socketFactory(pinnedPem: String?) = SSLContext.getInstance("TLS").apply {
-    val manager = if (pinnedPem == null) TrustAnyCertificate else ExactCertificateTrust(certificate(pinnedPem))
-    init(null, arrayOf<TrustManager>(manager), null)
+  private fun socketFactory(pinned: X509Certificate) = SSLContext.getInstance("TLS").apply {
+    init(null, arrayOf<TrustManager>(ExactCertificateTrust(pinned)), null)
   }.socketFactory
 
   private fun certificate(pem: String): X509Certificate =
@@ -686,14 +707,28 @@ class Bespok3dClient {
     return "-----BEGIN CERTIFICATE-----\n$base64\n-----END CERTIFICATE-----\n"
   }
 
-  private object TrustAnyCertificate : X509TrustManager {
-    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
-    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
+  /** Records the server's certificate and refuses it: first contact never trusts anything. */
+  private class CertificateCapture : X509TrustManager {
+    @Volatile var leaf: X509Certificate? = null
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) =
+      throw CertificateException("Client certificates are not accepted")
+    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+      leaf = chain?.firstOrNull()
+      throw CertificateException("Certificate recorded for the owner to confirm; not trusted yet")
+    }
     override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
   }
 
+  private class PinnedCertificateVerifier(private val pinned: X509Certificate) : HostnameVerifier {
+    override fun verify(hostname: String?, session: javax.net.ssl.SSLSession?): Boolean {
+      val leaf = runCatching { session?.peerCertificates?.firstOrNull() }.getOrNull() as? X509Certificate ?: return false
+      return leaf.encoded.contentEquals(pinned.encoded)
+    }
+  }
+
   private class ExactCertificateTrust(private val pinned: X509Certificate) : X509TrustManager {
-    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) =
+      throw CertificateException("Client certificates are not accepted")
     override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
       val leaf = chain?.firstOrNull() ?: throw CertificateException("Bespok3d presented no certificate")
       if (!leaf.encoded.contentEquals(pinned.encoded)) {

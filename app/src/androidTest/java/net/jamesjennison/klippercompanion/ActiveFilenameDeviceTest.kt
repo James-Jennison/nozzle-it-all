@@ -32,15 +32,14 @@ class ActiveFilenameDeviceTest {
         compose.onNodeWithText("retained.gcode").assertDoesNotExist()
         compose.onNodeWithText("No active file").assertExists()
         compose.onNodeWithText("0%").assertDoesNotExist()
-        compose.onNodeWithText("Standby").assertExists()
+        // Shared family vocabulary (FamilyTerms.kt): a completed job reads "Finished", not the old raw "standby".
+        compose.onNodeWithText("Finished").assertExists()
         compose.openFixtureDashboard()
         compose.onNodeWithText("No active file").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("0%").assertExists()
-        // WO-16: the tile view (PrinterTiles.kt) titlecases displayState ("Standby"); the detail
-        // view opened by openFixtureDashboard (MainActivity.kt's hero card) uppercases it
-        // instead ("STANDBY") - a real, deterministic casing difference between the two screens,
-        // not device-dependent flakiness.
-        compose.onNodeWithText("STANDBY").assertExists()
+        // The detail view opened by openFixtureDashboard (MainActivity.kt's hero card) shows the same shared
+        // label uppercased ("FINISHED"); the tile view uses sentence case ("Finished").
+        compose.onNodeWithText("FINISHED").assertExists()
         compose.runOnIdle {snapshot.value=snapshot.value.copy(state="paused")}
         compose.onNodeWithText("retained.gcode").assertIsDisplayed()
         compose.runOnIdle {snapshot.value=snapshot.value.copy(state="complete")}

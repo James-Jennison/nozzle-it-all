@@ -50,7 +50,8 @@ class MultiToolFilamentConfigTest {
             val o = MultiToolFilamentConfig.overridesFor(1.75, List(n) { pla }, pla)
             val matrix = o.getValue("flush_volumes_matrix").split(',').map { it.toInt() }
             assertEquals(n * n, matrix.size)
-            for (i in 0 until n) for (j in 0 until n) assertEquals(if (i == j) 0 else MultiToolFilamentConfig.FLUSH_BETWEEN_TOOLS_MM3, matrix[i * n + j])
+            // Same colour in every slot: upstream's calculation gives its floor, 60 mm³, off the diagonal.
+            for (i in 0 until n) for (j in 0 until n) assertEquals(if (i == j) 0 else FlushVolumes.calc(pla.colorHex, pla.colorHex, 0), matrix[i * n + j])
             assertEquals(n * 2, o.getValue("flush_volumes_vector").split(',').size)
         }
     }

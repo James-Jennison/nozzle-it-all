@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nozzle It All Web (in development) | Nozzle It All</title>
+<meta name="description" content="Nozzle It All Web is the full Nozzle It All app in your browser. It slices on your own device, keeps projects in your browser and connects to your printers without a Nozzle cloud. It is in development and not yet available.">
+<meta name="theme-color" content="#0D1114">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<link rel="preload" href="/assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css?v=46f9045c">
+<meta property="og:title" content="Nozzle It All Web (in development) | Nozzle It All">
+<meta property="og:description" content="Nozzle It All Web is the full Nozzle It All app in your browser. It slices on your own device, keeps projects in your browser and connects to your printers without a Nozzle cloud. It is in development and not yet available.">
+<meta property="og:type" content="website">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+ <div class="wrap bar">
+  <a class="brand" href="/" aria-label="Nozzle It All, home"><img src="/assets/mark.svg" alt="" width="28" height="29"><span>Nozzle It All</span></a>
+  <nav aria-label="Main">
+   <a href="/platforms/" aria-current="page">Platforms</a>
+   <a href="/printers/">Printers</a>
+   <a href="/docs/">Docs</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+  </nav>
+ </div>
+</header>
+<main id="main">
+<div class="wrap prose">
+ <p class="eyebrow"><a href="/platforms/">Platforms</a> / Web</p>
+ <h1>Nozzle It All Web <span class="badge development">In development</span></h1>
+ <p class="lead">Nozzle It All Web is the whole Nozzle It All app, delivered through your browser. It isn't this website and it isn't a remote control for another app. It is built and being tested, and it isn't available to open yet. When it is, this page will link to it.</p>
+
+ <div class="callout"><p><strong>Slices on your device. No Nozzle account. No Nozzle cloud.</strong> The slicing engine runs inside your browser, so your models aren't uploaded anywhere. Projects are kept in your browser until you export them.</p></div>
+
+ <h2>What you can do in it</h2>
+ <ul>
+  <li>Create, import, open, save and organise projects.</li>
+  <li>Arrange models on the plate, and pick the printer, materials and print settings: guided choices first, advanced settings when you want them.</li>
+  <li>Slice with a progress bar and a Cancel button, then look through the result layer by layer with time and material estimates.</li>
+  <li>Export the sliced file, or export the project as a standard 3MF that Nozzle It All for Desktop and for Android can open.</li>
+  <li>Send jobs to your printer and watch it print, where your browser allows (see below).</li>
+  <li>Install it from the browser and keep using it offline once it has loaded.</li>
+ </ul>
+
+ <h2>How it reaches your printers</h2>
+ <p>Browsers deliberately limit what a web page may contact on your home network, and each browser does it differently. So the web app offers two routes, and tells you plainly which one works where you are:</p>
+ <ul>
+  <li><strong>Directly</strong>, where your browser allows a secure page to talk to your printer, and your printer lists the web app as an allowed origin.</li>
+  <li><strong>Through Nozzle It All for Desktop</strong> on the same computer. Desktop can act as a local connector: it listens only on that computer, only answers the Nozzle web app, needs a one-time pairing code, and only talks to printers you added in Desktop.</li>
+ </ul>
+ <p>Either way, printer traffic goes from your device to your printer. It never passes through a Nozzle server. Slicing, projects and export work without either route.</p>
+
+ <h2>Which browsers</h2>
+ <p>Slicing needs WebAssembly and a page your browser treats as isolated from other sites. Current Chrome, Edge and Firefox on desktop and Android are the target. Safari support depends on a slower single-threaded engine that isn't finished; the app says so when it can't slice rather than failing silently.</p>
+
+ <h2>Printers</h2>
+ <p>Snapmaker U1 printers running PAXX firmware are the primary target, and need no Snapmaker account or cloud. The browser can talk to Klipper printers directly (including the U1 and a Centauri Carbon on COSMOS); other printers go through Nozzle It All for Desktop on your own computer. Stock-firmware U1 printers can be monitored and sent jobs over your network; features that stock firmware only offers through Snapmaker's cloud aren't available in the browser. See <a href="/printers/">supported printers</a>.</p>
+
+ <h2>Status</h2>
+ <p>Built and being tested. There is nothing to open yet. Follow progress on <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>.</p>
+</div>
+
+</main>
+<footer class="site-footer">
+ <div class="wrap">
+  <nav aria-label="Footer">
+   <a href="/printers/">Printers</a>
+   <a href="/compatibility/">Compatibility</a>
+   <a href="/docs/">Docs</a>
+   <a href="/privacy/">Privacy</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+   <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>
+  </nav>
+  <p>Nozzle It All is free software under the GNU AGPL-3.0-or-later. No accounts, no analytics.</p>
+  <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, MyMiniFactory and OrcaSlicer are names or trademarks of their respective owners. Mentioning them does not imply endorsement by or affiliation with them.</p>
+ </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,101 @@
+{
+  "about": "Source archives of the Android dependency prefix the engine links (orcaslicer-android-engine's deps/src, cross-compiled with NDK 27.1 into deps/install/arm64-v8a). engine/fork/android/prepare_engine_root.sh links that prefix and rebuilds GMP from gmp-6.2.1.tar.xz with its C++ classes. scripts/engine_pin.py verify checks the archives against these hashes; the SBOM lists them.",
+  "dependencies": [
+    {
+      "file": "CGAL-5.6.3.zip",
+      "sha256": "5d577acb4a9918ccb960491482da7a3838f8d363aff47e14d703f19fd84733d4"
+    },
+    {
+      "file": "CGAL-6.0.1.tar.xz",
+      "sha256": "0acdfbf317c556630dd526f3253780f29b6ec9713ee92903e81b5c93c0f59b7f"
+    },
+    {
+      "file": "OCCT-7_6_0.tar.gz",
+      "sha256": "73f8f71be02c1d9a977e854bcc9202502184d339f1f212c19797a5f23baefabe"
+    },
+    {
+      "file": "OCCT-7_8_1.tar.gz",
+      "sha256": "7321af48c34dc253bf8aae3f0430e8cb10976961d534d8509e72516978aa82f5"
+    },
+    {
+      "file": "assimp-5.4.3.tar.gz",
+      "sha256": "66dfbaee288f2bc43172440a55d0235dfc7bf885dda6435c038e8000e79582cb"
+    },
+    {
+      "file": "boost_1_86_0.tar.gz",
+      "sha256": "2575e74ffc3ef1cd0babac2c1ee8bdb5782a0ee672b1912da40e5b4b591ca01f"
+    },
+    {
+      "file": "cereal-1.3.0.tar.gz",
+      "sha256": "329ea3e3130b026c03a4acc50e168e7daff4e6e661bc6a7dfec0d77b570851d5"
+    },
+    {
+      "file": "draco-1.5.7.tar.gz",
+      "sha256": "bf6b105b79223eab2b86795363dfe5e5356050006a96521477973aba8f036fe1"
+    },
+    {
+      "file": "eigen-3.4.0.tar.gz",
+      "sha256": "8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72"
+    },
+    {
+      "file": "eigen-5.0.1.tar.gz",
+      "sha256": "e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec"
+    },
+    {
+      "file": "freetype-2.12.1.tar.gz",
+      "sha256": "efe71fd4b8246f1b0b1b9bfca13cfff1c9ad85930340c27df469733bbb620938"
+    },
+    {
+      "file": "gmp-6.2.1.tar.xz",
+      "sha256": "fd4829912cddd12f84181c3451cc752be224643e87fac497b69edddadc49b4f2"
+    },
+    {
+      "file": "libexpat-R_2_6_4.tar.gz",
+      "sha256": "372b18f6527d162fa9658f1c74d22a37429b82d822f5a1e1fc7e00f6045a06a2"
+    },
+    {
+      "file": "libjpeg-turbo-3.0.1.tar.gz",
+      "sha256": "5b9bbca2b2a87c6632c821799438d358e27004ab528abf798533c15d50b39f82"
+    },
+    {
+      "file": "libnoise-1.0.zip",
+      "sha256": "96ffd6cc47898dd8147aab53d7d1b1911b507d9dbaecd5613ca2649468afd8b6"
+    },
+    {
+      "file": "libpng-1.6.35.tar.gz",
+      "sha256": "6d59d6a154ccbb772ec11772cb8f8beb0d382b61e7ccc62435bf7311c9f4b210"
+    },
+    {
+      "file": "mpfr-4.2.2.tar.bz2",
+      "sha256": "9ad62c7dc910303cd384ff8f1f4767a655124980bb6d8650fe62c815a231bb7b"
+    },
+    {
+      "file": "nlopt-2.5.0.tar.gz",
+      "sha256": "c6dd7a5701fff8ad5ebb45a3dc8e757e61d52658de3918e38bab233e7fd3b4ae"
+    },
+    {
+      "file": "oneTBB-2021.13.0.tar.gz",
+      "sha256": "3ad5dd08954b39d113dc5b3f8a8dc6dc1fd5250032b7c491eb07aed5c94133e1"
+    },
+    {
+      "file": "opencv-4.6.0.tar.gz",
+      "sha256": "1ec1cba65f9f20fe5a41fda1586e01c70ea0c9a6d7b67c9e13edf0cfe2239277"
+    },
+    {
+      "file": "openexr-2.5.5.zip",
+      "sha256": "0307a3d7e1fa1e77e9d84d7e9a8694583fbbbfd50bdc6884e2c96b8ef6b902de"
+    },
+    {
+      "file": "openssl-1_1_1w.tar.gz",
+      "sha256": "2130e8c2fb3b79d1086186f78e59e8bc8d1a6aedf17ab3907f4cb9ae20918c41"
+    },
+    {
+      "file": "openvdb-11.0.0.tar.gz",
+      "sha256": "6314ff1db057ea90050763e7b7d7ed86d8224fcd42a82cdbb9c515e001b96c74"
+    },
+    {
+      "file": "zlib-1.3.1.tar.gz",
+      "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+    }
+  ]
+}

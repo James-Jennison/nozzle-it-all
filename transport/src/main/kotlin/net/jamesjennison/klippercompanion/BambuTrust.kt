@@ -68,7 +68,9 @@ class SerialPinningTrustManagerFactory(expectedSerial: String) : TrustManagerFac
 
 class SerialPinningTrustManager(private val expectedSerial: String) : X509TrustManager {
 
-    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) = Unit
+    // Nozzle is only ever the client here, so a client certificate is never something to accept.
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) =
+        throw CertificateException("Client certificates are not accepted")
 
     override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
         val leaf = chain?.firstOrNull()
@@ -100,6 +102,19 @@ class SerialPinningTrustManager(private val expectedSerial: String) : X509TrustM
 
     private companion object {
         val CN_PATTERN = Regex("CN=([^,]+)")
+    }
+}
+
+/**
+ * Hostname verification for Bambu printers. Their certificates name the printer's serial, never the LAN address we
+ * dialled, so the usual name match can't apply; instead the session is accepted only if its certificate passes the same
+ * check as [SerialPinningTrustManager]: issued to exactly this serial, and the certificate first trusted for it.
+ */
+class BambuHostnameVerifier(private val expectedSerial: String) : javax.net.ssl.HostnameVerifier {
+    override fun verify(hostname: String?, session: javax.net.ssl.SSLSession?): Boolean {
+        val chain = runCatching { session?.peerCertificates }.getOrNull()?.filterIsInstance<X509Certificate>()?.toTypedArray()
+        if (chain.isNullOrEmpty()) return false
+        return runCatching { SerialPinningTrustManager(expectedSerial).checkServerTrusted(chain, "UNKNOWN") }.isSuccess
     }
 }
 

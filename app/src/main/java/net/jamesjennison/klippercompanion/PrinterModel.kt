@@ -30,17 +30,29 @@ fun ScreenState.kindFor(address: String): PrinterKind = profiles.find { it.addre
 // Klipper-only panels build these; a BAMBU_LAB printer never reaches them because MainActivity
 // hides every control that needs one (BambuPrinterService implements none of the reader interfaces).
 fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
+// Filament slots: an Elegoo printer's CANVAS trays, a Bambu's AMS, a Creality's CFS, a Flashforge's IFS and an Anycubic's
+// ACE through their own services; every other printer's filament-changer lanes through Moonraker.
+private val OWN_SLOT_READER_KINDS = setOf(PrinterKind.ELEGOO, PrinterKind.BAMBU_LAB, PrinterKind.CREALITY, PrinterKind.FLASHFORGE, PrinterKind.ANYCUBIC_LAN)
+fun ScreenState.filamentSlotReaderFor(address: String): FilamentSlotReader =
+    if(kindFor(address) in OWN_SLOT_READER_KINDS) printerServiceFor(profiles.find { it.address == address }, address) as FilamentSlotReader else moonrakerFor(address)
 // A Bambu profile's address is a bare host - it has no HTTP endpoint for a URL to point at - so it
 // is validated by bambuHostAddress rather than Moonraker.parseAddress. Both throw
 // IllegalArgumentException, so every call site keeps its existing failure handling.
 internal fun normalizedAddress(address: String, kind: PrinterKind): String =
     // PRUSA_LINK is plain HTTP on the local network too, same shape as a Moonraker address (just a
     // different API path) - Moonraker.parseAddress's local-network validation applies unchanged.
-    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address) else Moonraker.parseAddress(address).toString() // OCTOPRINT and PRUSA_LINK are plain HTTP on the LAN too
+    // USB_SERIAL has no network address at all - address is a synthetic "usb:<vendorId>:<productId>:<serialNumber>"
+    // identity string (see M1Data.kt's PrinterKind.USB_SERIAL doc comment / UsbSerialDeviceManager.identity), which
+    // is already in canonical form and must never be run through Moonraker's HTTP-URL parser.
+    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address)
+    else if(kind == PrinterKind.USB_SERIAL) address.also { require(UsbSerialDeviceManager.parseIdentity(it) != null) { "Not a USB printer identity." } }
+    else Moonraker.parseAddress(address).toString() // OCTOPRINT and PRUSA_LINK are plain HTTP on the LAN too
 // What a person types or "Scan network" fills in: a bare "192.168.1.50" or "octopi.local:5000" means plain HTTP on the LAN. Kept apart from
 // normalizedAddress so a stored address without a scheme is still rejected rather than silently turned into a connection target.
 internal fun normalizedInputAddress(address: String, kind: PrinterKind): String =
-    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address) else normalizedAddress(address.trim().let { if("://" in it) it else "http://$it" }, kind)
+    if(kind == PrinterKind.BAMBU_LAB) bambuHostAddress(address)
+    else if(kind == PrinterKind.USB_SERIAL) normalizedAddress(address, kind) // the device picker already hands over the canonical usb:… string
+    else normalizedAddress(address.trim().let { if("://" in it) it else "http://$it" }, kind)
 // The one place that decides which transport a saved printer actually gets. A BAMBU_LAB profile
 // speaks nothing Moonraker understands (MQTT/FTPS/port-6000 camera); a PRUSA_LINK profile speaks
 // PrusaLink's own digest-authenticated REST API, not Moonraker's JSON-RPC-over-HTTP - both get
@@ -53,6 +65,30 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     PrinterKind.BAMBU_LAB -> BambuPrinterService(bambuHostAddress(address), profile.serial, profile.apiKey)
     PrinterKind.PRUSA_LINK -> PrusaLinkPrinterService(address, profile.apiKey)
     PrinterKind.OCTOPRINT -> OctoPrintPrinterService(address, profile.apiKey)
+    // The access code is the Centauri Carbon 2's (blank for a Centauri Carbon); the slicing profile says which protocol.
+    PrinterKind.ELEGOO -> ElegooPrinterService(address, profile.apiKey, profile.serial,
+        if (profile.slicingModel == SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS) "Elegoo Centauri Carbon 2" else "Elegoo Centauri Carbon")
+    // A Creality K1 / K2 / Hi needs nothing but its address. A Flashforge needs its serial number and its access code (the
+    // "check code"), which takes the same encrypted apiKey slot as Bambu's access code.
+    PrinterKind.CREALITY -> CrealityPrinterService(address)
+    // Upstream OrcaSlicer's split (Flashforge.cpp:329-332, 410-413): both set -> the port-8898 local API (AD5X / 5M);
+    // either blank -> the legacy port-8899 console (Adventurer 3 / 4, Creator, Guider).
+    PrinterKind.FLASHFORGE -> if (FlashforgeLegacy.usesLegacy(profile.serial, profile.apiKey)) FlashforgeLegacyPrinterService(address)
+        else FlashforgePrinterService(address, profile.serial, profile.apiKey)
+    // A Duet's board password (blank: RepRapFirmware's default) takes the same encrypted apiKey slot.
+    PrinterKind.DUET -> DuetPrinterService(address, profile.apiKey)
+    // An UltiMaker's pairing id (not a secret: it goes in the auth/check URL) in serial, its key in the encrypted apiKey slot.
+    PrinterKind.ULTIMAKER -> UltiMakerPrinterService(address, profile.serial, profile.apiKey)
+    // Repetier-Server's API key in the encrypted apiKey slot; the server's printer slug (not a secret) in serial.
+    PrinterKind.REPETIER -> RepetierPrinterService(address, profile.apiKey, profile.serial)
+    // An Anycubic in LAN mode needs only its address: its MQTT credentials come from its own handshake, held in memory only.
+    PrinterKind.ANYCUBIC_LAN -> AnycubicLanPrinterService(address)
+    // A Snapmaker 2.0's touchscreen token in the encrypted apiKey slot, its series (shown only) in serial; a J1 / Artisan's
+    // connection name in serial and its optional hello token in apiKey. Both are set only by SnapmakerConnect's Connect.
+    PrinterKind.SNAPMAKER_A_SERIES -> SnapmakerSstpPrinterService(address, profile.apiKey, profile.serial)
+    PrinterKind.SNAPMAKER_SACP -> SnapmakerSacpPrinterService(address, profile.serial, profile.apiKey)
+    // profile.apiKey holds the chosen baud rate as plain text (see M1Data.kt's PrinterKind.USB_SERIAL doc comment).
+    PrinterKind.USB_SERIAL -> UsbSerialPrinterService(address, profile.apiKey.toIntOrNull() ?: UsbSerial.OFFERED_BAUD_RATES.first(), UsbSerialDeviceManager.portFactory(address))
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
@@ -95,6 +131,7 @@ class PrinterModel(
         if(_state.value.busy) return "Wait for the current command to finish."
         val current = _state.value
         if(current.profiles.any { it.address == profile.address }) return "That printer address is already saved."
+        ElegooProfiles.connectionProblem(profile.slicingModel, profile.kind)?.let { return it }
         val profiles = current.profiles + profile
         _state.value = current.copy(profiles = profiles, savedPrinters = profiles.map { it.address })
         persist(profiles = profiles)
@@ -121,6 +158,7 @@ class PrinterModel(
         // confirmed firmware declaration - WO-13's declaredFirmwareVersion is specifically a
         // confirmation *for a given slicingModel*, not a fact about the printer in isolation.
         val newSlicingModel = slicingModel ?: existing.slicingModel
+        ElegooProfiles.connectionProblem(newSlicingModel, normalizedKind)?.let { _state.value=current.copy(commandNotice=it); return it }
         val declaredFirmwareVersion = if (newSlicingModel != existing.slicingModel) "" else existing.declaredFirmwareVersion
         val profiles = current.profiles.map { if(it.address == oldAddress) it.copy(address=normalized,name=name.trim().take(80),cameraId=if(normalized==oldAddress) it.cameraId else "",apiKey=normalizedKey,kind=normalizedKind,serial=(serial ?: it.serial).trim().take(40),slicingModel=newSlicingModel,declaredFirmwareVersion=declaredFirmwareVersion) else it }
         val selected = if(current.address == oldAddress) normalized else _state.value.address
@@ -129,6 +167,15 @@ class PrinterModel(
         monitorSavedPrinters()
         return null
     }
+    /** Stores or clears a printer's custom machine (bed, origin, height, start/end G-code). Saved with the profile. */
+    fun setCustomMachine(address: String, custom: CustomMachine?) {
+        val current = _state.value
+        if (current.profiles.none { it.address == address }) return
+        val profiles = current.profiles.map { if (it.address == address) it.copy(customMachine = custom) else it }
+        _state.value = current.copy(profiles = profiles)
+        persist()
+    }
+
     // WO-13: a live-only read, deliberately separate from updateProfile - never guesses or
     // defaults a firmware declaration, only ever records what a real printer just reported (see
     // FirmwareIdentity.kt's own header comment on why a stale/cached value is unsafe here).
@@ -149,6 +196,19 @@ class PrinterModel(
                 _state.value = _state.value.copy(profiles = profiles)
                 persist()
             }
+            onResult(result)
+        }
+    }
+    /** Read-only: how many filament changer lanes (AFC, Happy Hare) the saved printer at [address] reports; 0 for none. */
+    fun detectFilamentLanes(address: String, onResult: (Result<Int>) -> Unit) {
+        if (_state.value.profiles.none { it.address == address }) { onResult(Result.failure(ApiFailure("This profile is no longer available."))); return }
+        viewModelScope.launch {
+            val result = try {
+                Result.success(withContext(io) {
+                    val service = resolvedServiceFactory(address)
+                    try { (service as? FilamentSlotReader)?.filamentSlots()?.slots?.size ?: 0 } finally { runCatching { service.close() } }
+                })
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
             onResult(result)
         }
     }
@@ -271,6 +331,7 @@ class PrinterModel(
             _state.value = _state.value.copy(address = "")
         }
         _state.value.profiles.firstOrNull { it.address == address && it.kind == PrinterKind.BAMBU_LAB }?.serial?.takeIf { it.isNotBlank() }?.let { BambuCertPins.store.forget(it) }
+        _state.value.profiles.firstOrNull { it.address == address && it.kind == PrinterKind.ANYCUBIC_LAN }?.let { p -> anycubicPinKeyForAddress(p.address)?.let { BambuCertPins.store.forget(it) } }
         val printers = _state.value.savedPrinters - address
         val profiles=_state.value.profiles.filter { it.address!=address }
         _state.value = _state.value.copy(savedPrinters = printers,profiles=profiles);persist()

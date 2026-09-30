@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy | Nozzle It All</title>
+<meta name="description" content="Nozzle It All has no accounts, no advertising and no tracking, and the Android app sends your app data to no Nozzle It All server, except a hardware-test report an invited tester chooses to send. What the app, the planned web app and this website do and do not collect.">
+<meta name="theme-color" content="#0D1114">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/favicon-180.png">
+<link rel="preload" href="/assets/fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/site.css?v=46f9045c">
+<meta property="og:title" content="Privacy policy | Nozzle It All">
+<meta property="og:description" content="Nozzle It All has no accounts, no advertising and no tracking, and the Android app sends your app data to no Nozzle It All server, except a hardware-test report an invited tester chooses to send. What the app, the planned web app and this website do and do not collect.">
+<meta property="og:type" content="website">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+ <div class="wrap bar">
+  <a class="brand" href="/" aria-label="Nozzle It All, home"><img src="/assets/mark.svg" alt="" width="28" height="29"><span>Nozzle It All</span></a>
+  <nav aria-label="Main">
+   <a href="/platforms/">Platforms</a>
+   <a href="/printers/">Printers</a>
+   <a href="/docs/">Docs</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+  </nav>
+ </div>
+</header>
+<main id="main">
+<div class="wrap prose">
+<h1>Privacy policy</h1>
+<p class="fine">Last updated 2026-09-29. Applies to the Nozzle It All Android app and to the website at nozzleitall.com. Future versions, including desktop and web versions, will be covered here before they are released.</p>
+<div class="callout"><p><strong>In short:</strong> there are no Nozzle It All accounts, no advertising, no tracking, and no analytics or crash-reporting SDKs built into the app. The Android app does not send your app data to any Nozzle It All server, and there is no Nozzle It All cloud service. The one exception is Test Mode, for invited hardware testers: a test report is sent only when you tap Send, and you see its full contents first. It talks to your own printers on networks you configure, and to MyMiniFactory when you browse or download models.</p></div>
+<h2>Who we are</h2>
+<p>Nozzle It All is an open-source project run by James Jennison, with input from the community. You can reach us at <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a>.</p>
+<h2>What the app stores on your device</h2>
+<ul><li>The printers you add, including their names, network addresses and any access details you enter, such as an API key or access code. Access details are kept using Android's encrypted credential storage.</li><li>Your projects, models, sliced files and settings.</li><li>If you sign in to MyMiniFactory, the sign-in token the service gives the app. It is kept in the same encrypted storage and is sent only to MyMiniFactory when needed.</li></ul>
+<p>This app data stays on your device unless you deliberately send it somewhere, such as to one of your printers or to a location you select for a backup.</p>
+<p>Android's automatic cloud backup is turned off for the app's data. If you use the app's <strong>Back up printers</strong> feature, the app writes an encrypted file to a location you choose. The backup is protected by a passphrase you set. We do not receive the backup or your passphrase and cannot read it.</p>
+<h2>What leaves your device</h2>
+<ul><li><strong>To your printers.</strong> The app connects directly to printers you add to read their status and to send commands, files and camera-stream requests. These connections go to the printer address you configure and do not pass through a Nozzle It All service.</li><li><p><strong>Away from home, through a service or connection method you choose.</strong> To reach a printer when you are not on its local network, you can configure an address provided through a service such as Tailscale, Cloudflare Tunnel or OctoEverywhere, or use another method such as port forwarding. Nozzle It All does not provide, operate or control these services and none is required. The app simply connects to the address you enter.</p><p>If you use a third-party remote-access service, your connection is handled according to that service's architecture, configuration, terms and privacy policy. Depending on the service and configuration, the provider may process connection metadata or traffic. Port forwarding does not require a separate remote-access provider, but it can expose the printer or printer service directly to the internet.</p></li><li><strong>To MyMiniFactory.</strong> When you use Discover, your searches, requests for model information and images, and model files you choose to download are sent to MyMiniFactory and infrastructure used to deliver its content. If you sign in, your MyMiniFactory account is used for authenticated requests and downloads. MyMiniFactory's own privacy policy applies to that traffic.</li><li><strong>Test Mode reports, only if you send one.</strong> Test Mode is hidden unless an invited tester turns it on. At the end of a test run it builds an evidence report (the tests' results, your answers, the photos you attached, the printer's model and firmware, and the Nozzle It All version). Printer addresses, names, access details, hostnames, file paths and photo location data are removed before you see it, and you can read every file in it on screen. It is sent only when you tap <em>Send to Nozzle It All</em> (it goes to nozzleitall.com with a random tester ID the app made for your phone, so your reports can be grouped; no IP address is stored with it) or <em>Email it instead</em> (your email app sends it to support@nozzleitall.com). We use these reports only to judge printer compatibility and publish the results as a compatibility report without any personal details. Ask us at support@nozzleitall.com to delete a report you sent.</li><li><strong>Nozzle It All sends no additional usage data.</strong> The app contains no analytics, crash-reporting, advertising or tracking SDKs and does not send usage data to a Nozzle It All server. If you install the app through Google Play, Google may independently collect device, crash or performance information from users who have chosen to share such information and may make some of it available to developers. Nozzle It All does not add its own crash-reporting or analytics service.</li></ul>
+<p>The only Nozzle It All web page the app may use as part of normal app operation is the MyMiniFactory sign-in relay described below, and only when you choose to sign in.</p>
+<h2>Security</h2>
+<p>Printer credentials and MyMiniFactory authentication tokens stored by the app are kept using Android's encrypted credential storage.</p>
+<p>Backup files created by the app are encrypted using the passphrase you provide.</p>
+<p>Connections to internet services use encrypted HTTPS connections where supported and required by those services. Connections to printers use the network protocols supported by the printer or printer software. Some local printer protocols may not provide transport encryption.</p>
+<p>No internet-connected system can be guaranteed completely secure. You are responsible for securing your local network and for choosing appropriate settings if you make a printer reachable from outside your local network.</p>
+<h2>Permissions the app asks for</h2>
+<div class="tablewrap"><table><thead><tr><th scope="col">Permission</th><th scope="col">Why</th></tr></thead><tbody><tr><td>Internet, network state, Wi-Fi state</td><td>To reach your printers and MyMiniFactory.</td></tr><tr><td>Multicast over Wi-Fi</td><td>To discover compatible printers on your local network, including printers that announce themselves through local network broadcasts or multicast.</td></tr><tr><td>Foreground service</td><td>To run optional background print alerts. A persistent low-priority notification is shown while this service is active.</td></tr><tr><td>Notifications</td><td>To tell you when a print finishes, fails or a printer goes offline. This is optional and the app asks for notification permission only when you enable alerts.</td></tr></tbody></table></div>
+<p>The app does not ask for access to your location, contacts, microphone or camera.</p>
+<p>The app also does not request broad access to the files on your device. When you choose a file or destination through Android's system file picker, Android gives the app access only as permitted through that selection and the operating system's storage framework.</p>
+<h2>Signing in to MyMiniFactory</h2>
+<p>Sign-in uses a small page on this website, <code>nozzleitall.com/mmf-auth</code>, to hand the authentication result back to the app.</p>
+<p>The authentication result is carried in the part of the page address after the <code>#</code>. Web browsers do not include that fragment when requesting the page from the server, so the MyMiniFactory authentication result itself is not sent to the Nozzle It All web server. JavaScript running in your browser reads the result and passes it back to the app.</p>
+<p>As with any visit to nozzleitall.com, Cloudflare and our web server may process ordinary connection information when this relay page is loaded, such as an IP address, request headers and the requested page. They do not receive the MyMiniFactory authentication result contained after the <code>#</code>.</p>
+<p>We do not receive or store your MyMiniFactory password.</p>
+<h2>This website</h2>
+<p>We do not use cookies for advertising, analytics or tracking.</p>
+<p>The website is delivered through Cloudflare, which provides services including DNS, caching, TLS and security. Cloudflare may process technical connection information such as your IP address in the normal course of serving pages and may set strictly necessary cookies for security, traffic management or abuse prevention. Cloudflare's own privacy policy applies to its processing.</p>
+<p>Our web server may keep ordinary access and error logs for security, troubleshooting, reliability and abuse prevention. These logs can contain information such as an IP address, browser or user-agent information, the requested URL, timestamps and technical request information.</p>
+<p>We do not use those logs to create advertising profiles or track people across websites.</p>
+<p>If you email support, we receive the information contained in your message, including your email address and anything you choose to include. We keep that correspondence as needed to respond, troubleshoot problems, maintain necessary records or continue an ongoing support conversation. You can ask us to delete support correspondence by emailing <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a>, subject to any information we reasonably need to retain for security, legal or recordkeeping purposes.</p>
+<h2>Data retention</h2>
+<p>Nozzle It All does not maintain user accounts or store your app projects, printer credentials, models, sliced files or app settings on our servers.</p>
+<p>Website access and error logs are retained only for as long as reasonably necessary for security, troubleshooting, reliability and abuse prevention.</p>
+<p>Support correspondence is retained for as long as reasonably necessary to respond to you and maintain the relevant support record, unless you request deletion or longer retention is reasonably required for security, legal or recordkeeping purposes.</p>
+<p>Information processed independently by Google, Cloudflare, MyMiniFactory or another service you choose is subject to that provider's own retention practices.</p>
+<h2>Nozzle It All Web and Nozzle It All for Desktop (in development)</h2>
+<p>Neither is available yet. This section describes how they are built, and will be confirmed before either is released.</p>
+<p>When it is released, its page files will be served from our own domain, so our hosting infrastructure will necessarily receive ordinary requests for those files.</p>
+<p>Nozzle It All Web's page files are served from our domain. After that, slicing runs inside your browser, projects are stored in your browser, and printer traffic goes from your browser, or from Nozzle It All for Desktop on your own computer, straight to your printer. Your models are not uploaded to us. There is no Nozzle It All account or hosted slicing service. Nozzle It All for Desktop works the same way on your computer. Optional Stock U1 support can talk to Snapmaker's own services with your Snapmaker account, only if you install it and add a Stock U1; that is between you and Snapmaker.</p>
+<p>The final architecture and data flows may change during development. This privacy policy will be updated to describe the released web app before it becomes publicly available.</p>
+<h2>Deleting your data</h2>
+<p>Nozzle It All does not maintain a server-side copy of your app projects, printer credentials, models, sliced files or app settings.</p>
+<p>To remove app data from your device, you can delete individual items where the app provides that option, forget a printer in Settings, clear the app's data through Android, or uninstall the app.</p>
+<p>If you created an encrypted backup file, deleting data from the app does not delete copies of that backup file stored elsewhere. You must delete those copies yourself from wherever you saved them.</p>
+<p>You may ask us to delete support correspondence by contacting <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a>.</p>
+<p>Ordinary website logs are deleted according to our normal retention practices rather than through individual user-account deletion, because the website has no Nozzle It All user accounts.</p>
+<p>To delete a MyMiniFactory account or information held by MyMiniFactory, use MyMiniFactory's own account and privacy controls.</p>
+<p>Information held by Google, Cloudflare, a remote-access provider or another third party is controlled by that provider and is subject to its own deletion procedures.</p>
+<h2>Children</h2>
+<p>Nozzle It All is a tool intended for people who operate 3D printers and is not directed at children.</p>
+<p>We do not knowingly collect personal information from children through a Nozzle It All account or cloud service because no such account or service exists.</p>
+<p>If you believe a child has provided personal information directly to us, for example through a support email, contact <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a>.</p>
+<h2>Third-party services</h2>
+<p>Depending on the features you choose to use, your information or network traffic may be processed by third-party services including:</p>
+<ul><li>MyMiniFactory, when you browse, sign in or download models.</li><li>Google, if you obtain the Android app through Google Play.</li><li>Cloudflare, when you access nozzleitall.com.</li><li>A remote-access provider you independently configure, such as Tailscale, Cloudflare Tunnel or OctoEverywhere.</li></ul>
+<p>Nozzle It All does not control these providers' privacy practices. Their own privacy policies and terms apply to information they process.</p>
+<h2>Changes</h2>
+<p>If this privacy policy changes, the date at the top will change with it.</p>
+<p>Material changes affecting how the released app handles user data will also be noted in the app's release notes or otherwise communicated through an appropriate project channel.</p>
+<h2>Contact</h2>
+<p>Questions or requests concerning privacy can be sent to:</p>
+<p><a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a></p>
+</div>
+
+</main>
+<footer class="site-footer">
+ <div class="wrap">
+  <nav aria-label="Footer">
+   <a href="/printers/">Printers</a>
+   <a href="/compatibility/">Compatibility</a>
+   <a href="/docs/">Docs</a>
+   <a href="/privacy/">Privacy</a>
+   <a href="/open-source/">Open source</a>
+   <a href="/support/">Support</a>
+   <a href="https://github.com/James-Jennison/nozzle-it-all">GitHub</a>
+  </nav>
+  <p>Nozzle It All is free software under the GNU AGPL-3.0-or-later. No accounts, no analytics.</p>
+  <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Bambu Lab, Snapmaker, MyMiniFactory and OrcaSlicer are names or trademarks of their respective owners. Mentioning them does not imply endorsement by or affiliation with them.</p>
+ </div>
+</footer>
+</body>
+</html>

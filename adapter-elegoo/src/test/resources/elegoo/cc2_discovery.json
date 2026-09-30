@@ -1,0 +1,11 @@
+{
+    "_source": "Reply to {\"id\":0,\"method\":7000} with the fields elegoo-link elegoo_fdm_cc2_discovery_strategy.cpp parseResponse reads (host_name, machine_model, sn, token_status, lan_status). Values are illustrative.",
+    "id": 0,
+    "result": {
+        "host_name": "Garage CC2",
+        "machine_model": "Centauri Carbon 2",
+        "sn": "CC2A0001B2C3",
+        "token_status": 1,
+        "lan_status": 1
+    }
+}

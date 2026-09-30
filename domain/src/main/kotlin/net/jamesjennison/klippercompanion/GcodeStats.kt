@@ -39,7 +39,8 @@ data class GcodeStats(
     /** What the owner should know about purging for this print, depending on how the machine changes material. */
     fun purgeNote(family: MultiToolFamily): String? = when {
         (toolchanges ?: 0) <= 0 -> null
-        family == MultiToolFamily.TOOLCHANGER -> "Independent tools: nothing is purged at toolchanges (each tool keeps its own nozzle), so there is no purge waste to estimate."
+        family == MultiToolFamily.TOOLCHANGER && primeTower == false -> "No prime tower: each tool starts printing straight after a change, so an idle nozzle's ooze and a thin first line can show (turn on Prime tower in Settings to prime each tool)."
+        family == MultiToolFamily.TOOLCHANGER -> "Independent tools: nothing is flushed between colours; each tool primes a small amount on the prime tower after a change (the profile's prime volume), so the flush estimate doesn't apply."
         primeTower == false -> "No prime tower: nothing is purged at toolchanges, so colours can bleed at each change (turn on Prime tower in Settings to purge)."
         else -> null
     }
@@ -48,6 +49,9 @@ data class GcodeStats(
 object GcodeStatsParser {
     private val timeRegex = Regex("""estimated printing time \(normal mode\)\s*=\s*(.+)""")
     private val weightRegex = Regex("""total filament used \[g]\s*=\s*([\d.]+)""")
+    // Bambu's G-code layout (Bambu profiles on the Snapmaker Orca engine): the time is in the header block and the
+    // weights are per filament with no total.
+    private val headerTimeRegex = Regex("""^;\s*model printing time:.*total estimated time:\s*(.+)$""")
     private val perToolMmRegex = Regex("""^;\s*filament used \[mm]\s*=\s*(.+)$""")
     private val perToolGramsRegex = Regex("""^;\s*filament used \[g]\s*=\s*(.+)$""")
     private val changeRegex = Regex("""total filament change\s*=\s*(\d+)""")
@@ -58,13 +62,14 @@ object GcodeStatsParser {
     private fun numbers(text: String) = text.split(',').map { it.trim().toDoubleOrNull()?.takeIf(Double::isFinite) ?: 0.0 }
 
     fun parse(file: File): GcodeStats {
-        var time: String? = null; var weight: Double? = null
+        var time: String? = null; var weight: Double? = null; var headerTime: String? = null
         var perMm: List<Double> = emptyList(); var perG: List<Double> = emptyList()
         var changes: Int? = null; var prime: Boolean? = null; var flush: List<Double> = emptyList(); var density: Double? = null
         file.bufferedReader().useLines { lines ->
             for (line in lines) {
                 if (!line.startsWith(";")) continue
                 if (time == null) timeRegex.find(line)?.let { time = it.groupValues[1].trim() }
+                if (headerTime == null) headerTimeRegex.find(line)?.let { headerTime = it.groupValues[1].trim() }
                 if (weight == null) weightRegex.find(line)?.let { weight = it.groupValues[1].toDoubleOrNull() }
                 if (perMm.isEmpty()) perToolMmRegex.find(line)?.let { perMm = numbers(it.groupValues[1]) }
                 if (perG.isEmpty()) perToolGramsRegex.find(line)?.let { perG = numbers(it.groupValues[1]) }
@@ -74,6 +79,8 @@ object GcodeStatsParser {
                 if (density == null) densityRegex.find(line)?.let { density = it.groupValues[1].toDoubleOrNull() }
             }
         }
+        if (time == null) time = headerTime
+        if (weight == null && perG.isNotEmpty()) weight = perG.sum()
         return GcodeStats(time, weight, perMm.takeIf { it.isNotEmpty() }?.sum(), changes, perG, perMm, prime, flush, density)
     }
 }

@@ -130,7 +130,7 @@ class ColourMixingSlicingDeviceTest {
         val slotMaterials = listOf(red, blue, null, null)
         val physical = slotMaterials.map { it?.colorHex ?: "#FFFFFF" }
 
-        val added = AndroidFullSpectrum.add(physical, definitions = "", a = 0, b = 1, mixBPercent = 50)
+        val added = AndroidFullSpectrum.add(physical, definitions = "", a = 1, b = 2, mixBPercent = 50)
         val mixId = added.addedId ?: throw AssertionError("expected AndroidFullSpectrum.add to return the new mix's id, got $added")
 
         val outcome = slicer().sliceColourMix(

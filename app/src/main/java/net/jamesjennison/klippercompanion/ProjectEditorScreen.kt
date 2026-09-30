@@ -935,7 +935,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                     scope.launch {
                                                         colourMixError = null
                                                         try {
-                                                            val r = AndroidFullSpectrum.add(physical.map { it.first }, mixedFilamentDefinitions, 0, 1, 50)
+                                                            val r = AndroidFullSpectrum.add(physical.map { it.first }, mixedFilamentDefinitions, 1, 2, 50)
                                                             mixedFilamentDefinitions = r.definitions; fullSpectrumMixes = r.rows
                                                             persistColourMixing()
                                                         } catch (e: ColourMixEngineError) { colourMixError = e.message }

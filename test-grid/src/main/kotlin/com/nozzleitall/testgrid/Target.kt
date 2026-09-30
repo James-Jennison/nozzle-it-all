@@ -160,7 +160,7 @@ object CapabilityNames {
             if (c.supportsPauseResumeCancel) { add(PAUSE); add(RESUME); add(CANCEL) }
             if (c.supportsKlipperExtras) add(TEMPERATURES)
             if (c.supportsJog) add(MOTION)
-            if (c.hasMultiAce || c.transport in setOf(PrinterTransport.ELEGOO, PrinterTransport.CREALITY) || (c.transport == PrinterTransport.FLASHFORGE && !legacyFlashforge) || hardware["canvas"] == true) add(MATERIAL_STATE)
+            if (c.hasMultiAce || c.transport in setOf(PrinterTransport.ELEGOO, PrinterTransport.CREALITY, PrinterTransport.ANYCUBIC_LAN) || (c.transport == PrinterTransport.FLASHFORGE && !legacyFlashforge) || hardware["canvas"] == true) add(MATERIAL_STATE)
             if (hardware["canvas"] == true || hardware["multi_tool"] == true) add(MULTI_MATERIAL)
         }
     }
@@ -186,6 +186,7 @@ object FirmwareFamilies {
     const val DUET = "duet-rrf"
     const val ULTIMAKER = "ultimaker-lan"
     const val REPETIER = "repetier-server"
+    const val ANYCUBIC_LAN = "anycubic-lan"
 
     /** TargetDescription.protocol of a Flashforge on the legacy console (AndroidTestTarget.adapterFor). */
     const val LEGACY_FLASHFORGE_PROTOCOL = "flashforge-tcp"
@@ -233,6 +234,8 @@ object FirmwareFamilies {
         PrinterTransport.ULTIMAKER -> Classified(ULTIMAKER, PrinterKind.ULTIMAKER, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "UltiMaker LAN API (/api/v1, /cluster-api/v1)")
         // The server's firmware behind it isn't visible over upstream's API; one family for Repetier-Server.
         PrinterTransport.REPETIER -> Classified(REPETIER, PrinterKind.REPETIER, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Repetier-Server")
+        // Stock Anycubic firmware in LAN mode; an ACE is one nozzle fed from four slots, its slots from the saved profile's pack (FilamentChangers).
+        PrinterTransport.ANYCUBIC_LAN -> Classified(ANYCUBIC_LAN, PrinterKind.ANYCUBIC_LAN, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Anycubic LAN mode (MQTT over TLS, port 9883)")
     }
 }
 

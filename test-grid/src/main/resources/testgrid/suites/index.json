@@ -19,6 +19,8 @@
     "fixture-opencentauri-patched.json",
     "fixture-prusalink.json",
     "fixture-repetier-server.json",
+    "fixture-snapmaker-sacp.json",
+    "fixture-snapmaker-sstp.json",
     "fixture-snapmaker-u1-stock.json",
     "fixture-ultimaker-lan.json"
   ]

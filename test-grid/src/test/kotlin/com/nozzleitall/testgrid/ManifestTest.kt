@@ -15,7 +15,7 @@ class ManifestTest {
 
     @Test fun everyBundledSuiteParsesAndValidates() {
         val suites = SuiteCatalog.bundled()
-        assertEquals(16, suites.size)
+        assertEquals(18, suites.size)
         assertEquals(listOf("paxx-u1", "cosmos-centauri-carbon"), suites.filter { it.coverage == Coverage.REFERENCE }.map { it.id })
         assertTrue(suites.filter { it.coverage == Coverage.FIXTURE }.map { it.id }.containsAll(listOf("snapmaker-u1-stock", "elegoo-centauri-carbon-stock", "opencentauri-patched", "bambu-lan", "prusalink", "generic-klipper", "octoprint")))
         suites.forEach { s -> assertTrue(s.id, s.tests.isNotEmpty()); assertEquals(64, s.digest.length) }

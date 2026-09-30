@@ -68,7 +68,9 @@ class AndroidTestTarget(
             "The printer is ", "password", "API key", "access code",
             // Creality / Flashforge / Duet / Repetier / Anycubic while their start is gated off: the file is uploaded, no print starts (UltiMaker: nothing is sent).
             // Anycubic's gated controls say it the same way ("Nothing was sent: ... isn't verified on real hardware yet").
-            "isn't verified on real hardware yet")
+            "isn't verified on real hardware yet",
+            // Snapmaker 2.0 with a laser or CNC head: refused at connect, before any file goes out (SnapmakerSstp.NOT_A_PRINTING_HEAD).
+            "laser or CNC module is attached")
         /** Wording for a definite refusal by the printer after the request went out: nothing is running. */
         private val REFUSED = listOf("rejected the print command", "did not start it", "Could not upload", "(HTTP ")
 

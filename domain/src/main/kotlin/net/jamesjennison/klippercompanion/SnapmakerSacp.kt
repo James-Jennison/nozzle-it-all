@@ -11,7 +11,7 @@ import java.util.Locale
  * Sources (docs/upstream/PROVENANCE.md P-0037), cited as file:line:
  * - @snapmaker/snapmaker-sacp-sdk 0.1.1 (ISC), `package/dist/` ("sdk/<file>:N"): the wire format (communication/Header.js,
  *   Packet.js, Communication.js, Dispatcher.js, Response.js), the byte helpers (helper.js) and the payload models
- *   (models/*.js).
+ *   (the .js files under models/).
  * - Luban db573f5 (AGPL-3.0), `src/server/services/machine/` ("luban/<file>:N"): which commands Luban sends, to which
  *   peer, in which order, and how it reads the answers (sacp/SacpClient.ts, channels/SacpTcpChannel.ts,
  *   channels/SacpChannel.ts).

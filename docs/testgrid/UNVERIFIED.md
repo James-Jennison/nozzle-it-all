@@ -20,6 +20,10 @@ live firmware reads) are prior history, not Test Grid evidence, and are not impo
 | OctoPrint | `octoprint` | fixture | external testers; send-and-start, printing, pause/resume/cancel; multi-material when the profile has several tools |
 | Creality on its LAN interface (K2 family, Hi, K1; CFS) | `creality-lan` | fixture | external testers; status, slicing and CFS slots now; printing and pause/resume/cancel blocked until Nozzle It All starts prints on these printers |
 | Flashforge on its local API (AD5X; IFS) | `flashforge-lan` | fixture | external testers; status, slicing and IFS slots now; printing and pause/resume/cancel blocked until Nozzle It All starts prints on these printers |
+| Older Flashforge on its legacy console (Adventurer 3/4, Creator, Guider) | `flashforge-legacy` | fixture | external testers; slicing now; status, slots, printing and controls blocked until Nozzle It All does them on these printers |
+| Duet / RepRapFirmware | `duet-rrf` | fixture | external testers; slicing now; status, printing and controls blocked until Nozzle It All does them |
+| UltiMaker S-series on its local API | `ultimaker-lan` | fixture | external testers; status and slicing now; printing and controls blocked until Nozzle It All starts prints on these printers |
+| Repetier-Server | `repetier-server` | fixture | external testers; slicing now; status, printing and controls blocked until Nozzle It All does them |
 | Desktop adapters (`paxx-lan`, `moonraker`, …) | none: Test Mode is Android-only in v1; a result on Android is not evidence for Desktop | n/a | n/a |
 
 The owner does not have a stock Centauri Carbon; stock and OpenCentauri-patched coverage must come from external

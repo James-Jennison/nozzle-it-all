@@ -32,7 +32,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite bambu-lan 1.5.0).",
+      "note": "No physical evidence yet (fixture suite bambu-lan 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Bambu Lab",
@@ -69,7 +69,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite creality-lan 1.5.0).",
+      "note": "No physical evidence yet (fixture suite creality-lan 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Creality",
@@ -106,7 +106,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite creality-lan 1.5.0).",
+      "note": "No physical evidence yet (fixture suite creality-lan 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Creality",
@@ -416,7 +416,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.5.0).",
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -453,7 +453,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.5.0).",
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -490,7 +490,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.5.0).",
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -527,7 +527,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.5.0).",
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -564,7 +564,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite flashforge-lan 1.5.0).",
+      "note": "No physical evidence yet (fixture suite flashforge-lan 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Flashforge",
@@ -601,7 +601,81 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite flashforge-lan 1.5.0).",
+      "note": "No physical evidence yet (fixture suite flashforge-lan 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Flashforge",
+        "model": "any model"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-flashforge-legacy",
+      "current": null,
+      "firmware": {
+        "family": "flashforge-legacy",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite flashforge-legacy 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Flashforge",
+        "model": "any model"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-flashforge-legacy",
+      "current": null,
+      "firmware": {
+        "family": "flashforge-legacy",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite flashforge-legacy 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Flashforge",
@@ -638,7 +712,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite generic-klipper 1.5.0).",
+      "note": "No physical evidence yet (fixture suite generic-klipper 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -675,11 +749,85 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite generic-klipper 1.5.0).",
+      "note": "No physical evidence yet (fixture suite generic-klipper 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
         "model": "any Klipper printer"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-duet",
+      "current": null,
+      "firmware": {
+        "family": "duet-rrf",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite duet-rrf 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "any model"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-duet",
+      "current": null,
+      "firmware": {
+        "family": "duet-rrf",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite duet-rrf 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "any model"
       },
       "scope": "single_material"
     },
@@ -712,7 +860,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite octoprint 1.5.0).",
+      "note": "No physical evidence yet (fixture suite octoprint 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -749,7 +897,81 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite octoprint 1.5.0).",
+      "note": "No physical evidence yet (fixture suite octoprint 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "any model"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-repetier",
+      "current": null,
+      "firmware": {
+        "family": "repetier-server",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite repetier-server 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "any model"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-repetier",
+      "current": null,
+      "firmware": {
+        "family": "repetier-server",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite repetier-server 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Generic",
@@ -786,7 +1008,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite prusalink 1.5.0).",
+      "note": "No physical evidence yet (fixture suite prusalink 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Prusa",
@@ -823,7 +1045,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite prusalink 1.5.0).",
+      "note": "No physical evidence yet (fixture suite prusalink 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Prusa",
@@ -1204,7 +1426,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.5.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",
@@ -1241,11 +1463,85 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.5.0).",
+      "note": "No physical evidence yet (fixture suite snapmaker-u1-stock 1.6.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Snapmaker",
         "model": "U1"
+      },
+      "scope": "single_material"
+    },
+    {
+      "adapter": "android-ultimaker",
+      "current": null,
+      "firmware": {
+        "family": "ultimaker-lan",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite ultimaker-lan 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "UltiMaker",
+        "model": "any model"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-ultimaker",
+      "current": null,
+      "firmware": {
+        "family": "ultimaker-lan",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite ultimaker-lan 1.6.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "UltiMaker",
+        "model": "any model"
       },
       "scope": "single_material"
     }

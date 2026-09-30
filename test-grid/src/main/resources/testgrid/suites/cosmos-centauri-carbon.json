@@ -5,7 +5,7 @@
     0
   ],
   "id": "cosmos-centauri-carbon",
-  "suiteVersion": "1.5.0",
+  "suiteVersion": "1.6.0",
   "title": "Elegoo Centauri Carbon on OpenCentauri COSMOS",
   "description": "Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.",
   "coverage": "reference",

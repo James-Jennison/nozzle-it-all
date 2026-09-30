@@ -63,17 +63,25 @@
     <td>Status and the CFS slots over the printer's own network, and sending a sliced file to it. Starting the print from Nozzle It All is not switched on yet: you start it on the printer's screen. No pause, resume or cancel, no camera. Tested against simulated printers only.</td></tr>
    <tr><th scope="row">Flashforge (AD5X, 5M; IFS) <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from open-source slicer code</span></td>
     <td>Status and the IFS slots through the printer's local API, and sending a sliced file to it, using its serial number and access code. Starting the print from Nozzle It All is not switched on yet: you start it on the printer's screen. No pause, resume or cancel, no camera. Tested against simulated printers only.</td></tr>
+   <tr><th scope="row">Older Flashforge (Adventurer 3/4, Creator, Guider) <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from open-source slicer code</span></td>
+    <td>Sending a sliced file over the printer's older network console, when no serial number and access code are entered. Printer state and filament slots aren't read yet, and starting the print from Nozzle It All is not switched on: start it on the printer's screen. Tested against simulated printers only.</td></tr>
+   <tr><th scope="row">Duet / RepRapFirmware <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from open-source slicer code</span></td>
+    <td>Sending a sliced file to a Duet board, with or without Duet Software Framework. Printer state isn't read yet, and starting the print from Nozzle It All is not switched on: start it on the printer's screen or its web interface. Tested against simulated printers only.</td></tr>
+   <tr><th scope="row">UltiMaker S-series <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from open-source slicer code</span></td>
+    <td>Status over the printer's local network API, after you approve Nozzle It All on the printer's screen. An UltiMaker prints every job it is sent, and starting a print from Nozzle It All is not switched on yet, so nothing is sent for now. The UltiMaker 2 has no network. Tested against simulated printers only.</td></tr>
+   <tr><th scope="row">Repetier-Server <span class="badge planned">Next update</span></th><td><span class="badge docs">Built from open-source slicer code</span></td>
+    <td>Sending a sliced file to a printer behind Repetier-Server. Printer state isn't read yet, and starting the print from Nozzle It All is not switched on: start it in Repetier-Server. Tested against simulated printers only.</td></tr>
   </tbody>
  </table></div>
  <p>Have one of these printers? <a href="/testing/hardware/">Help us test it</a>. <a href="/printers/models/">See every printer model with a bundled slicing profile</a> (383 models from 60 makers). Slicing works for all of them; connecting to and controlling a printer is limited to the types in this table.</p>
 
  <h2>Which app does what</h2>
- <p>The Android app connects to every printer type in this table itself; Nozzle It All for Desktop connects to all of them except Creality and Flashforge. Nozzle It All Web runs in your browser, which can only talk to Klipper-based printers (including the Snapmaker U1) directly, and only when the browser allows it; for everything else it goes through Nozzle It All for Desktop on your own computer, which you pair with the browser once. Nothing goes through a Nozzle server, and a printer's password, access code or API key stays in the app you added it to.</p>
+ <p>The Android app connects to every printer type in this table itself; Nozzle It All for Desktop connects to all of them except Creality, Flashforge, Duet, UltiMaker and Repetier-Server. Nozzle It All Web runs in your browser, which can only talk to Klipper-based printers (including the Snapmaker U1) directly, and only when the browser allows it; for everything else it goes through Nozzle It All for Desktop on your own computer, which you pair with the browser once. Nothing goes through a Nozzle server, and a printer's password, access code or API key stays in the app you added it to.</p>
  <p>Only the Snapmaker U1 on stock firmware can use a maker's online account, and only if you switch that on. No other printer needs an account with its maker or with us.</p>
 
  <h2>Something not on the list?</h2>
  <p>If your printer runs Klipper with Moonraker, it will very likely work as "Klipper with Moonraker" even if the model is not named here. Tell us what you find at <a href="mailto:support@nozzleitall.com">support@nozzleitall.com</a>, or <a href="https://github.com/James-Jennison/nozzle-it-all/issues">open an issue</a>.</p>
- <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Prusa, Bambu Lab, Snapmaker, Elegoo, OpenCentauri, Creality, Flashforge, Anycubic and Qidi are names or trademarks of their owners. They are used here only to say what Nozzle It All works with, and do not imply endorsement or affiliation.</p>
+ <p class="fine">Klipper, Moonraker, OctoPrint, PrusaLink, Prusa, Bambu Lab, Snapmaker, Elegoo, OpenCentauri, Creality, Flashforge, Anycubic, Qidi, Duet, RepRapFirmware, UltiMaker and Repetier are names or trademarks of their owners. They are used here only to say what Nozzle It All works with, and do not imply endorsement or affiliation.</p>
 </div>
 
 </main>

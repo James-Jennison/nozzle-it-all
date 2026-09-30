@@ -4,34 +4,29 @@
     1,
     0
   ],
-  "id": "elegoo-centauri-carbon-stock",
+  "id": "repetier-server",
   "suiteVersion": "1.6.0",
-  "title": "Elegoo printer on Elegoo stock firmware",
-  "description": "For external testers with an Elegoo printer on unmodified firmware (Centauri Carbon over SDCP, Centauri Carbon 2 over MQTT), with or without CANVAS. Not COSMOS, not OpenCentauri-patched. Heaters, homing and moves aren't available through Nozzle on these printers, so they aren't tested. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
+  "title": "Printer through Repetier-Server",
+  "description": "For testers with a printer behind Repetier-Server, sliced with the printer's own profile. Nozzle It All doesn't read the printer's state through Repetier-Server yet, so the status test is blocked too. Nozzle It All doesn't start prints or pause/resume/cancel on these printers yet, so those tests are recorded as blocked until it does. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
   "requiredNozzleVersion": "0.1.0",
   "target": {
-    "manufacturer": "Elegoo",
-    "model": "Centauri Carbon",
-    "firmwareFamily": "elegoo-stock",
+    "manufacturer": "Generic",
+    "model": "any model",
+    "firmwareFamily": "repetier-server",
     "firmwareVariants": [
-      "elegoo-stock"
+      "repetier-server"
     ],
     "printerKinds": [
-      "ELEGOO"
+      "REPETIER"
     ],
-    "adapter": "android-elegoo-sdcp",
-    "protocol": "sdcp-websocket",
+    "adapter": "android-repetier",
+    "protocol": "repetier-http",
     "slicingProfile": "@printer",
     "hardware": {},
-    "notEquivalentTo": [
-      "cosmos",
-      "opencentauri-patched"
-    ]
+    "notEquivalentTo": []
   },
-  "requiredCapabilities": [
-    "status"
-  ],
+  "requiredCapabilities": [],
   "tests": [
     {
       "id": "telemetry",
@@ -111,6 +106,9 @@
             "checks": [
               {
                 "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
               },
               {
                 "check": "within_bed"
@@ -614,46 +612,6 @@
       ]
     },
     {
-      "id": "multi-lanes",
-      "title": "Read the material slots",
-      "category": "monitoring",
-      "scope": "multi_material",
-      "safetyLevel": 1,
-      "description": "Read-only view of the CANVAS lanes. Graded separately from single-material monitoring.",
-      "requiredHardware": [
-        "canvas"
-      ],
-      "preconditions": [],
-      "steps": [
-        {
-          "id": "slots",
-          "kind": "read_material_slots",
-          "expect": {
-            "min": 4
-          }
-        },
-        {
-          "id": "slots-match",
-          "kind": "observe",
-          "params": {
-            "question": "Do the CANVAS lanes Nozzle reads (shown below) match what is loaded?",
-            "response": "yes_no",
-            "show": "slots"
-          }
-        }
-      ],
-      "expectedObservations": [
-        "Every slot is reported",
-        "They match what is loaded"
-      ],
-      "requiredEvidence": [],
-      "cleanup": [],
-      "requiresOperatorConfirmation": false,
-      "mutatesPrinterState": false,
-      "uncertainResultProhibitsRetry": false,
-      "dependsOn": []
-    },
-    {
       "id": "multi-slice",
       "title": "Slice the multi-material acceptance model",
       "category": "slicing",
@@ -661,7 +619,7 @@
       "safetyLevel": 0,
       "description": "Two-part model, one part per tool or lane.",
       "requiredHardware": [
-        "canvas"
+        "multi_tool"
       ],
       "preconditions": [],
       "steps": [
@@ -690,12 +648,14 @@
                 "check": "non_empty"
               },
               {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
                 "check": "uses_tools",
                 "count": 2
               },
               {
-                "check": "max_tool_index",
-                "max": 3
+                "check": "max_tool_index"
               },
               {
                 "check": "within_bed"
@@ -726,7 +686,7 @@
         "upload_and_start"
       ],
       "requiredHardware": [
-        "canvas"
+        "multi_tool"
       ],
       "preconditions": [
         {

@@ -9,12 +9,16 @@
     "cosmos-centauri-carbon.json",
     "fixture-bambu-lan.json",
     "fixture-creality-lan.json",
+    "fixture-duet-rrf.json",
     "fixture-elegoo-cc-stock.json",
     "fixture-flashforge-lan.json",
+    "fixture-flashforge-legacy.json",
     "fixture-generic-klipper.json",
     "fixture-octoprint.json",
     "fixture-opencentauri-patched.json",
     "fixture-prusalink.json",
-    "fixture-snapmaker-u1-stock.json"
+    "fixture-repetier-server.json",
+    "fixture-snapmaker-u1-stock.json",
+    "fixture-ultimaker-lan.json"
   ]
 }

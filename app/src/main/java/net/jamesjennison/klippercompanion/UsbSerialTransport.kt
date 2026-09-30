@@ -29,6 +29,8 @@ class UsbSerialTransport(
     private val interfaceNumber: Int
     private val endpointIn: UsbEndpoint
     private val endpointOut: UsbEndpoint
+    /** FTDI only: the port its requests are addressed to (UsbSerial.Ftdi.channelFor). */
+    private val ftdiChannel: Int
 
     init {
         val cdcInterface = (0 until device.interfaceCount).map(device::getInterface)
@@ -50,6 +52,11 @@ class UsbSerialTransport(
         endpointOut = (0 until usbInterface.endpointCount).map(usbInterface::getEndpoint)
             .firstOrNull { it.type == UsbConstants.USB_ENDPOINT_XFER_BULK && it.direction == UsbConstants.USB_DIR_OUT }
             ?: throw IllegalStateException("No bulk OUT endpoint.")
+        // bcdDevice: bytes 12-13 (little-endian) of the device descriptor, which rawDescriptors starts with.
+        ftdiChannel = if (chipMatch.family != UsbSerial.ChipFamily.FTDI) 0 else {
+            val d = connection.rawDescriptors ?: throw IllegalStateException("Could not read the USB device descriptor.")
+            UsbSerial.Ftdi.channelFor((d[12].toInt() and 0xFF) or ((d[13].toInt() and 0xFF) shl 8), interfaceNumber)
+        }
     }
 
     override val deviceLabel: String
@@ -57,46 +64,54 @@ class UsbSerialTransport(
 
     private fun openSequenceFor(baud: Int): List<UsbSerial.ControlTransfer> = when (chipMatch.family) {
         UsbSerial.ChipFamily.CDC_ACM -> UsbSerial.CdcAcm.openSequence(interfaceNumber, baud)
-        UsbSerial.ChipFamily.CH34X -> UsbSerial.Ch34x.openSequence(baud)
+        UsbSerial.ChipFamily.CH34X -> {
+            val version = UsbSerial.Ch34x.readVersion().also(::issue).data[0].toInt() and 0xFF
+            UsbSerial.Ch34x.openSequence(baud, version)
+        }
         UsbSerial.ChipFamily.CP210X -> UsbSerial.Cp210x.openSequence(baud)
-        UsbSerial.ChipFamily.FTDI -> UsbSerial.Ftdi.openSequence(baud)
+        UsbSerial.ChipFamily.FTDI -> UsbSerial.Ftdi.openSequence(baud, ftdiChannel)
     }
 
     private fun restartSequence(): List<UsbSerial.ControlTransfer> = when (chipMatch.family) {
         UsbSerial.ChipFamily.CDC_ACM -> UsbSerial.CdcAcm.restartBoardSequence(interfaceNumber)
         UsbSerial.ChipFamily.CH34X -> UsbSerial.Ch34x.restartBoardSequence()
         UsbSerial.ChipFamily.CP210X -> UsbSerial.Cp210x.restartBoardSequence()
-        UsbSerial.ChipFamily.FTDI -> UsbSerial.Ftdi.restartBoardSequence()
+        UsbSerial.ChipFamily.FTDI -> UsbSerial.Ftdi.restartBoardSequence(ftdiChannel)
     }
 
-    private fun issue(transfer: UsbSerial.ControlTransfer): Int = connection.controlTransfer(
-        transfer.requestType, transfer.request, transfer.value, transfer.index,
-        transfer.data.takeIf { it.isNotEmpty() }, transfer.data.size, CONTROL_TIMEOUT_MS,
-    )
+    /** Issues [transfer]; an IN transfer's reply lands in its data buffer. Throws unless every byte went through. */
+    private fun issue(transfer: UsbSerial.ControlTransfer) {
+        val n = connection.controlTransfer(
+            transfer.requestType, transfer.request, transfer.value, transfer.index,
+            transfer.data.takeIf { it.isNotEmpty() }, transfer.data.size, CONTROL_TIMEOUT_MS,
+        )
+        if (n < transfer.data.size) throw ApiFailure("The printer's USB-serial chip didn't accept its settings.")
+    }
 
     override fun open(baud: Int) {
         // Every transfer in an openSequence is deliberately DTR/RTS-deasserting or -neutral; see UsbSerial.kt's header.
-        for (transfer in openSequenceFor(baud)) issue(patchDirection(transfer))
+        for (transfer in openSequenceFor(baud)) issue(transfer)
     }
-
-    /**
-     * UsbSerial.Ch34x's REQ_READ_VERSION entry is built with the OUT-direction request() helper (UsbSerial.kt has no
-     * android.hardware.usb.UsbConstants.USB_DIR_IN of its own to flip it with) even though ch341.c reads the version
-     * back from the device; UsbSerial.kt's own doc comment on Ch34x.openSequence says this substitution is this
-     * class's job. Every other transfer in every chip's sequence is a real OUT write and is issued unchanged.
-     */
-    private fun patchDirection(transfer: UsbSerial.ControlTransfer): UsbSerial.ControlTransfer =
-        if (chipMatch.family == UsbSerial.ChipFamily.CH34X && transfer.request == UsbSerial.Ch34x.REQ_READ_VERSION)
-            transfer.copy(requestType = (transfer.requestType and UsbConstants.USB_DIR_IN.inv()) or UsbConstants.USB_DIR_IN)
-        else transfer
 
     override fun restartBoard() {
         for (transfer in restartSequence()) issue(transfer)
     }
 
-    override fun write(data: ByteArray): Int = connection.bulkTransfer(endpointOut, data, data.size, BULK_TIMEOUT_MS)
+    override fun write(data: ByteArray): Int {
+        var sent = 0
+        while (sent < data.size) {
+            val n = connection.bulkTransfer(endpointOut, data, sent, data.size - sent, BULK_TIMEOUT_MS)
+            if (n <= 0) throw ApiFailure("Couldn't send to the printer over USB.")
+            sent += n
+        }
+        return sent
+    }
 
-    override fun read(buffer: ByteArray, timeoutMs: Int): Int = connection.bulkTransfer(endpointIn, buffer, buffer.size, timeoutMs)
+    override fun read(buffer: ByteArray, timeoutMs: Int): Int {
+        val n = connection.bulkTransfer(endpointIn, buffer, buffer.size, timeoutMs)
+        if (n <= 0 || chipMatch.family != UsbSerial.ChipFamily.FTDI) return n
+        return UsbSerial.Ftdi.stripStatusBytes(buffer, n, endpointIn.maxPacketSize)
+    }
 
     override fun close() {
         runCatching { connection.releaseInterface(usbInterface) }

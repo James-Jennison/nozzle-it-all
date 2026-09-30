@@ -27,7 +27,7 @@ package net.jamesjennison.klippercompanion
  * running from the printer's own SD card, an unwanted reset kills it. Every [openSequence] below therefore leaves
  * DTR and RTS de-asserted (the chip's power-on/idle state for CDC-ACM and CP210x; CH34x and FTDI are given an
  * explicit "leave low" transfer so a chip that reset with different mark/space wiring can't leave them asserted by
- * accident) and nothing in this module ever raises them on its own. [UsbSerialTransport.raiseDtrToRestartBoard] is
+ * accident) and nothing in this module ever raises them on its own. [UsbSerialPort.restartBoard] is
  * the only call that can assert DTR, and it exists only behind the explicit, user-initiated "Restart the printer's
  * board to connect" action described in UsbSerialPrinterService.
  */
@@ -107,13 +107,15 @@ object UsbSerial {
 
     /**
      * One USB control transfer, exactly as android.hardware.usb.UsbDeviceConnection.controlTransfer(requestType,
-     * request, value, index, data, length, timeout) takes it. [data] is the OUT payload (empty for most of these
-     * chips' setup transfers; CDC's SET_LINE_CODING is the one that carries a body).
+     * request, value, index, data, length, timeout) takes it. For an OUT transfer [data] is the payload (empty for
+     * most of these chips' setup transfers; CDC's SET_LINE_CODING is the one that carries a body); for an IN transfer
+     * ([isIn]) it is the buffer the reply is read into, sized to exactly the bytes expected.
      */
     data class ControlTransfer(val requestType: Int, val request: Int, val value: Int, val index: Int, val data: ByteArray = ByteArray(0)) {
         override fun equals(other: Any?): Boolean = other is ControlTransfer && requestType == other.requestType &&
             request == other.request && value == other.value && index == other.index && data.contentEquals(other.data)
         override fun hashCode(): Int = requestType * 31 + request * 31 + value * 31 + index * 31 + data.contentHashCode()
+        val isIn: Boolean get() = requestType and USB_DIR_IN != 0
     }
 
     // android.hardware.usb.UsbConstants values, spelled out so this module has no Android dependency.
@@ -191,6 +193,14 @@ object UsbSerial {
         // linux/ch341.c:28-29: bits in the modem-control byte this driver writes (inverted on the wire, see below).
         const val BIT_DTR = 1 shl 5
         const val BIT_RTS = 1 shl 6
+        /**
+         * linux/ch341.c:257-265: set in the prescaler/divisor write on chips newer than version 0x27, or the chip holds
+         * received bytes until a full 32-byte packet has built up - so a short "ok" would sit in it until the reply
+         * timed out.
+         */
+        const val DIVISOR_NO_RX_BUFFERING = 1 shl 7
+        /** linux/ch341.c:274-280: from this version on, line control is written through LCR (with LCR2 zero). */
+        const val VERSION_WITH_LCR = 0x30
 
         private const val CLK_RATE = 48_000_000 // linux/ch341.c:154
         // linux/ch341.c:166-167: the chip's documented supported range.
@@ -239,23 +249,27 @@ object UsbSerial {
             ControlTransfer(USB_DIR_OUT or USB_TYPE_VENDOR or USB_RECIP_DEVICE, request, value, index, data)
 
         /**
-         * Opens at 8N1 and [baud]: read the chip version (needed only to know whether LCR2/LCR write applies, from
-         * version >= 0x30 per linux/ch341.c:275-278; assumed modern here since the version can't be read before this
-         * sequence is issued - a version-gated retry is UsbSerialTransport's job, not this pure sequence's),
-         * SERIAL_INIT, the divisor/prescaler write, the LCR/LCR2 write, then MODEM_CTRL with DTR and RTS *not*
-         * requested (control=0).
+         * linux/ch341.c:316-326: the chip version, read before anything else. Two bytes come back; the first is the
+         * version [openSequence] needs.
+         */
+        fun readVersion(): ControlTransfer =
+            ControlTransfer(USB_DIR_IN or USB_TYPE_VENDOR or USB_RECIP_DEVICE, REQ_READ_VERSION, 0, 0, ByteArray(2))
+
+        /**
+         * Opens at 8N1 and [baud] on a chip that reported [version] through [readVersion]: SERIAL_INIT, the
+         * divisor/prescaler write (with [DIVISOR_NO_RX_BUFFERING] when version > 0x27), the LCR/LCR2 write (only
+         * from [VERSION_WITH_LCR]), then MODEM_CTRL with DTR and RTS *not* requested (control=0).
          *
          * linux/ch341.c:291-292: the modem-control byte is sent inverted (`~control`) - the chip's wire convention,
          * not a driver choice - so control=0 (DTR/RTS both clear) is sent as 0xFFFF (masked to 16 bits): this leaves
          * both lines deasserted, matching the chip's own power-on state, rather than toggling them.
          */
-        fun openSequence(baud: Int): List<ControlTransfer> {
+        fun openSequence(baud: Int, version: Int): List<ControlTransfer> {
             val divisor = baudDivisor(baud) ?: throw IllegalArgumentException("Unsupported baud rate for CH34x: $baud")
-            return listOf(
-                request(REQ_READ_VERSION, 0, 0), // read-only; UsbSerialTransport substitutes the actual IN transfer
+            return listOfNotNull(
                 request(REQ_SERIAL_INIT, 0, 0),
-                request(REQ_WRITE_REG, (REG_DIVISOR shl 8) or REG_PRESCALER, divisor),
-                request(REQ_WRITE_REG, (REG_LCR2 shl 8) or REG_LCR, LCR_8N1),
+                request(REQ_WRITE_REG, (REG_DIVISOR shl 8) or REG_PRESCALER, if (version > 0x27) divisor or DIVISOR_NO_RX_BUFFERING else divisor),
+                if (version >= VERSION_WITH_LCR) request(REQ_WRITE_REG, (REG_LCR2 shl 8) or REG_LCR, LCR_8N1) else null,
                 request(REQ_MODEM_CTRL, modemControlValue(dtr = false, rts = false), 0),
             )
         }
@@ -355,8 +369,19 @@ object UsbSerial {
         const val MIN_BPS = 183 // 3,000,000 / 0x4000 (the largest BM-style divisor); below this the divisor overflows the field.
         const val MAX_BPS = 3_000_000
 
-        private fun request(request: Int, value: Int, index: Int = 0) =
+        private fun request(request: Int, value: Int, index: Int) =
             ControlTransfer(USB_DIR_OUT or USB_TYPE_VENDOR or USB_RECIP_DEVICE, request, value, index)
+
+        /**
+         * The port every request is addressed to (linux/ftdi_sio.c:1495-1575): 0 on the single-port FT232A/B/R
+         * (bcdDevice 0x200/0x400/0x600) and anything older; "channel A" (1) plus the interface number on every other
+         * part, the FT-X, FT232H and the multi-port FT2232/FT4232 included. [bcdDevice] is the device descriptor's
+         * release number.
+         */
+        fun channelFor(bcdDevice: Int, interfaceNumber: Int): Int =
+            if (bcdDevice <= 0x200 || bcdDevice == 0x400 || bcdDevice == 0x600) 0 else CHANNEL_A + interfaceNumber
+
+        private const val CHANNEL_A = 1 // ftdi_sio.h:44
 
         /**
          * The FT232BM/FT232R-family 16-bit-plus-fraction baud divisor from a 48 MHz reference (linux/ftdi_sio.c:1147-
@@ -376,7 +401,7 @@ object UsbSerial {
             divisor = divisor or (divfrac[(divisor3 and 0x7).toInt()] shl 14)
             if (divisor == 1) divisor = 0
             else if (divisor == 0x4001) divisor = 1
-            return divisor and 0xFFFF // value/index split done by the caller (index carries the high word; unused for a single-channel chip, so 0)
+            return divisor // up to 17 bits: the low 16 go in value, bit 16 in index (see [openSequence])
         }
 
         /** ftdi_sio.h:234/237: mask<<8 | state-bits-at-the-mask's-own-position. `dtr`/`rts` null means "leave unchanged". */
@@ -393,18 +418,41 @@ object UsbSerial {
          * driven *low* (deasserted) - unlike CDC-ACM and CP210x, an FTDI chip's own reset state for these lines
          * isn't documented as always-low, so this is sent explicitly rather than assumed.
          */
-        fun openSequence(baud: Int): List<ControlTransfer> {
+        fun openSequence(baud: Int, channel: Int): List<ControlTransfer> {
             val divisor = baudDivisor(baud) ?: throw IllegalArgumentException("Unsupported baud rate for FTDI: $baud")
+            // linux/ftdi_sio.c:1352-1356: the divisor's bits above 16 go in index, shifted up a byte when there's a channel.
+            val high = divisor shr 16
+            val baudIndex = if (channel != 0) (high shl 8) or channel else high
             return listOf(
-                request(SIO_RESET, RESET_SIO),
-                request(SIO_SET_BAUDRATE, divisor),
-                request(SIO_SET_DATA, SET_DATA_8N1),
-                request(SIO_MODEM_CTRL, modemControlValue(dtr = false, rts = false)),
+                request(SIO_RESET, RESET_SIO, channel),
+                request(SIO_SET_BAUDRATE, divisor and 0xFFFF, baudIndex),
+                request(SIO_SET_DATA, SET_DATA_8N1, channel),
+                request(SIO_MODEM_CTRL, modemControlValue(dtr = false, rts = false), channel),
             )
         }
 
         /** The explicit "Restart the printer's board to connect" action only: DTR and RTS both driven high. */
-        fun restartBoardSequence(): List<ControlTransfer> = listOf(request(SIO_MODEM_CTRL, modemControlValue(dtr = true, rts = true)))
+        fun restartBoardSequence(channel: Int): List<ControlTransfer> =
+            listOf(request(SIO_MODEM_CTRL, modemControlValue(dtr = true, rts = true), channel))
+
+        /**
+         * Every bulk IN packet from an FTDI chip starts with two modem/line-status bytes (linux/ftdi_sio.c:2404-2450,
+         * 2506-2517), sent even when no data arrived. Copies just the data bytes of [length] bytes read into [data]
+         * (split into [maxPacketSize] packets) to the front of [data], returning how many there are.
+         */
+        fun stripStatusBytes(data: ByteArray, length: Int, maxPacketSize: Int): Int {
+            var out = 0
+            var i = 0
+            while (i < length) {
+                val packet = minOf(length - i, maxPacketSize)
+                if (packet > 2) {
+                    data.copyInto(data, out, i + 2, i + packet)
+                    out += packet - 2
+                }
+                i += packet
+            }
+            return out
+        }
     }
 
     /** The two baud rates the wizard offers directly (auto-try tries both), per the work order. */

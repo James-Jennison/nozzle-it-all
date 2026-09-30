@@ -61,7 +61,7 @@ class UsbSerialPrinterService(
     }
 
     private fun readLoop() {
-        val buf = ByteArray(256)
+        val buf = ByteArray(READ_BUFFER_BYTES) // at least one full high-speed bulk packet (512), or the read overflows
         while (!closed) {
             val n = try { port.read(buf, 200) } catch (_: Exception) { break }
             if (n <= 0) continue
@@ -211,5 +211,9 @@ class UsbSerialPrinterService(
     override fun close() {
         closed = true
         runCatching { port.close() }
+    }
+
+    private companion object {
+        const val READ_BUFFER_BYTES = 4096
     }
 }

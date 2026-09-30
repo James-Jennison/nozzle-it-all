@@ -1,0 +1,792 @@
+{
+  "schema": "nozzle.test-suite",
+  "version": [
+    1,
+    0
+  ],
+  "id": "usb-serial",
+  "suiteVersion": "1.7.0",
+  "title": "Printer on a USB cable (Marlin / Prusa firmware)",
+  "description": "For testers with a Marlin or Prusa-firmware printer plugged into the phone or tablet by a USB cable (USB OTG), sliced with the printer's own profile. Connecting doesn't restart the printer; don't use \"Restart the printer's board\" during a test run. Status (temperatures and SD-card progress) is read now. Nozzle It All doesn't send files, start prints or pause/resume/cancel over USB yet, so those tests are recorded as blocked until it does. Multi-material tests run when the saved profile has several tools or filament slots (for example a Prusa MMU). Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
+  "coverage": "fixture",
+  "requiredNozzleVersion": "0.1.0",
+  "target": {
+    "manufacturer": "Generic",
+    "model": "any model",
+    "firmwareFamily": "usb-serial",
+    "firmwareVariants": [
+      "usb-serial"
+    ],
+    "printerKinds": [
+      "USB_SERIAL"
+    ],
+    "adapter": "android-usb-serial",
+    "protocol": "usb-serial",
+    "slicingProfile": "@printer",
+    "hardware": {},
+    "notEquivalentTo": []
+  },
+  "requiredCapabilities": [
+    "status"
+  ],
+  "tests": [
+    {
+      "id": "telemetry",
+      "title": "Read status and temperatures",
+      "category": "monitoring",
+      "scope": "single_material",
+      "safetyLevel": 1,
+      "requiredCapabilities": [
+        "status"
+      ],
+      "preconditions": [
+        {
+          "id": "present",
+          "text": "You can see the printer's own screen."
+        }
+      ],
+      "steps": [
+        {
+          "id": "status",
+          "kind": "read_status",
+          "expect": {
+            "temperatures": [
+              "nozzle",
+              "bed"
+            ]
+          }
+        },
+        {
+          "id": "matches",
+          "kind": "observe",
+          "params": {
+            "question": "Do the temperatures Nozzle reads (shown below) match the printer's own screen, within 2 °C?",
+            "response": "yes_no",
+            "show": "status"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Status and temperatures are reported and match the screen"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "slice-single",
+      "title": "Slice the acceptance model with your printer's profile",
+      "category": "slicing",
+      "scope": "single_material",
+      "safetyLevel": 0,
+      "description": "Slices the standard acceptance model on this device with the slicing profile saved for this printer (Edit printer), and checks it extrudes, stays on the bed and is centred.",
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-acceptance-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-acceptance-v1",
+            "profile": "@printer"
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "within_bed"
+              },
+              {
+                "check": "centered",
+                "toleranceMm": 5
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code is produced",
+        "The model is centred within 5 mm and inside the bed"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "transfer",
+      "title": "Send a file and start it",
+      "category": "file_transfer",
+      "scope": "single_material",
+      "safetyLevel": 4,
+      "description": "This printer takes a file only together with a print start, so file transfer is proven by sending the sliced file, seeing the printer start it, and cancelling straight away.",
+      "requiredCapabilities": [
+        "upload_and_start",
+        "cancel_print"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        }
+      ],
+      "steps": [
+        {
+          "id": "send",
+          "kind": "send_and_start",
+          "title": "Send and start the acceptance model",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "shown",
+          "kind": "observe",
+          "params": {
+            "question": "Does the printer's own screen show this print (a nozzle-testgrid-… file) starting?",
+            "response": "yes_no",
+            "show": "status"
+          }
+        },
+        {
+          "id": "cancel",
+          "kind": "cancel"
+        },
+        {
+          "id": "stopped",
+          "kind": "monitor",
+          "params": {
+            "until": "idle",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 600
+        }
+      ],
+      "expectedObservations": [
+        "The printer receives the file and starts it",
+        "It stops when cancelled"
+      ],
+      "requiredEvidence": [],
+      "timeout": {
+        "seconds": 7200,
+        "onTimeout": "fail"
+      },
+      "cleanup": [],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    },
+    {
+      "id": "print-single",
+      "title": "Print the acceptance model (single material)",
+      "category": "physical_print",
+      "scope": "single_material",
+      "safetyLevel": 4,
+      "description": "A complete physical print of the acceptance model with the G-code sliced in this run: first layer, placement, dimensions, bridging, retraction and surface.",
+      "requiredCapabilities": [
+        "upload_and_start"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        }
+      ],
+      "steps": [
+        {
+          "id": "send",
+          "kind": "send_and_start",
+          "title": "Send and start the acceptance print",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "progress",
+          "kind": "monitor",
+          "params": {
+            "until": "progress_increases",
+            "pollSeconds": 30
+          },
+          "timeoutSeconds": 2400
+        },
+        {
+          "id": "first-layer",
+          "kind": "observe",
+          "params": {
+            "question": "Judge the first layer: even lines, stuck down everywhere, no gaps, no scraping.",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "first-layer-photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "first-layer",
+            "prompt": "Photo of the first layer"
+          }
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "unattended",
+          "kind": "observe",
+          "params": {
+            "question": "Did the print finish without you having to intervene?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "placement",
+          "kind": "observe",
+          "params": {
+            "question": "Where on the bed did the model print?",
+            "response": "choice",
+            "choices": [
+              "centre",
+              "off centre",
+              "partly off the bed"
+            ]
+          },
+          "expect": {
+            "oneOf": [
+              "centre"
+            ]
+          }
+        },
+        {
+          "id": "tower-x",
+          "kind": "observe",
+          "params": {
+            "question": "Tower width along X: across the outside of the 20 mm square tower (ruler or calipers). Target 20.0 mm; passes 19.75 to 20.25.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 19.75,
+            "max": 20.25
+          }
+        },
+        {
+          "id": "tower-y",
+          "kind": "observe",
+          "params": {
+            "question": "Tower width along Y: across the outside of the tower, at right angles to X. Target 20.0 mm; passes 19.75 to 20.25.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 19.75,
+            "max": 20.25
+          }
+        },
+        {
+          "id": "hole",
+          "kind": "observe",
+          "params": {
+            "question": "Square hole through the middle of the tower: its width, across the middle, with the calipers' inside jaws. Target 8.0 mm; passes 7.7 to 8.3.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 7.7,
+            "max": 8.3
+          }
+        },
+        {
+          "id": "height",
+          "kind": "observe",
+          "params": {
+            "question": "Total height, with calipers: from the bottom of the base plate to the top of the tower. Target 10.6 mm; passes 10.35 to 10.85. A ruler can't resolve this: without calipers choose Can't observe this.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 10.35,
+            "max": 10.85
+          }
+        },
+        {
+          "id": "wall",
+          "kind": "observe",
+          "params": {
+            "question": "Thin wall thickness, with calipers: the single 20 mm-long fin standing on its own, not the tower's walls. Target 1.2 mm; passes 1.0 to 1.4. Without calipers choose Can't observe this.",
+            "response": "number",
+            "unit": "mm"
+          },
+          "expect": {
+            "min": 1.0,
+            "max": 1.4
+          }
+        },
+        {
+          "id": "bridge",
+          "kind": "observe",
+          "params": {
+            "question": "Look under the bridge deck: straight strands across the 18 mm gap, no drooping or failed strands?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "bridge-photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "bridge",
+            "prompt": "Photo of the bridge underside"
+          }
+        },
+        {
+          "id": "stringing",
+          "kind": "observe",
+          "params": {
+            "question": "Between the two tall pillars: no strings, or only a few fine wisps that brush off?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "surface",
+          "kind": "observe",
+          "params": {
+            "question": "Tower walls: even layers, no blobs, zits, gaps or layer shifts?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "top-photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "top",
+            "prompt": "Photo of the finished print from above"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "The print completes",
+        "First layer adheres evenly",
+        "Tower 20.0 ± 0.25 mm, hole 8.0 ± 0.3 mm, height 10.6 ± 0.25 mm, wall 1.2 ± 0.2 mm",
+        "Bridge holds across 18 mm",
+        "Little or no stringing",
+        "Clean walls"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "first-layer",
+          "kind": "photo",
+          "description": "The first layer, from above, while or just after it prints"
+        },
+        {
+          "id": "top",
+          "kind": "photo",
+          "description": "The finished print from above"
+        },
+        {
+          "id": "bridge",
+          "kind": "photo",
+          "description": "The underside of the bridge deck"
+        }
+      ],
+      "timeout": {
+        "seconds": 21600,
+        "onTimeout": "fail"
+      },
+      "cleanup": [],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    },
+    {
+      "id": "print-controls",
+      "title": "Pause, resume and cancel a print",
+      "category": "controls",
+      "scope": "single_material",
+      "safetyLevel": 4,
+      "description": "Starts the acceptance print only to exercise pause, resume and cancel. The partial print is discarded.",
+      "requiredCapabilities": [
+        "pause_print",
+        "resume_print",
+        "cancel_print",
+        "upload_and_start"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        }
+      ],
+      "steps": [
+        {
+          "id": "send",
+          "kind": "send_and_start",
+          "title": "Send and start a print that will be cancelled",
+          "params": {
+            "fromTest": "slice-single"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 900
+        },
+        {
+          "id": "progress",
+          "kind": "monitor",
+          "params": {
+            "until": "progress_increases",
+            "pollSeconds": 20
+          },
+          "timeoutSeconds": 2400
+        },
+        {
+          "id": "pause",
+          "kind": "pause"
+        },
+        {
+          "id": "paused",
+          "kind": "monitor",
+          "params": {
+            "until": "paused",
+            "pollSeconds": 3
+          },
+          "timeoutSeconds": 180
+        },
+        {
+          "id": "parked",
+          "kind": "observe",
+          "params": {
+            "question": "Did the printer stop extruding and move the toolhead away from the print?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "resume",
+          "kind": "resume"
+        },
+        {
+          "id": "resumed",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 3
+          },
+          "timeoutSeconds": 180
+        },
+        {
+          "id": "resumed-ok",
+          "kind": "observe",
+          "params": {
+            "question": "Did printing continue where it stopped, without a gap or blob?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "cancel",
+          "kind": "cancel"
+        },
+        {
+          "id": "stopped",
+          "kind": "monitor",
+          "params": {
+            "until": "idle",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 600
+        },
+        {
+          "id": "cancel-ok",
+          "kind": "observe",
+          "params": {
+            "question": "Did the printer stop the print and begin turning its heaters off?",
+            "response": "yes_no"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "Pause parks the toolhead",
+        "Resume continues cleanly",
+        "Cancel stops the print"
+      ],
+      "requiredEvidence": [],
+      "timeout": {
+        "seconds": 7200,
+        "onTimeout": "fail"
+      },
+      "cleanup": [],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "slice-single"
+      ]
+    },
+    {
+      "id": "multi-slice",
+      "title": "Slice the multi-material acceptance model",
+      "category": "slicing",
+      "scope": "multi_material",
+      "safetyLevel": 0,
+      "description": "Two-part model, one part per tool or lane.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-acceptance-mm-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-acceptance-mm-v1",
+            "profile": "@printer"
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "uses_tools",
+                "count": 2
+              },
+              {
+                "check": "max_tool_index"
+              },
+              {
+                "check": "within_bed"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code selects two tools",
+        "No stock-firmware commands"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "multi-print",
+      "title": "Print the multi-material acceptance model",
+      "category": "physical_print",
+      "scope": "multi_material",
+      "safetyLevel": 4,
+      "description": "Kept apart from single-material acceptance: this grades material and tool changes only.",
+      "requiredCapabilities": [
+        "upload_and_start"
+      ],
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        },
+        {
+          "id": "loaded",
+          "text": "Two different colours are loaded in the first two tools or lanes."
+        }
+      ],
+      "steps": [
+        {
+          "id": "send",
+          "kind": "send_and_start",
+          "title": "Send and start the multi-material print",
+          "params": {
+            "fromTest": "multi-slice"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 1200
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "changes",
+          "kind": "observe",
+          "params": {
+            "question": "Did every tool or material change happen, with the right material in each stripe?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "bleed",
+          "kind": "observe",
+          "params": {
+            "question": "Colour bleed at the stripe boundaries:",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "stripes",
+            "prompt": "Photo of the finished stripes"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "All changes happen",
+        "Each stripe is the right material"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "stripes",
+          "kind": "photo",
+          "description": "The finished stripes from above"
+        }
+      ],
+      "timeout": {
+        "seconds": 18000,
+        "onTimeout": "fail"
+      },
+      "cleanup": [],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "multi-slice"
+      ]
+    }
+  ]
+}

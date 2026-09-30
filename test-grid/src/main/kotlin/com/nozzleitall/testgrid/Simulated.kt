@@ -55,7 +55,11 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         ANYCUBIC_KOBRA_3(PrinterKind.ANYCUBIC_LAN, "Anycubic", "Kobra 3", "", "", false, false, SlicingPrinterModel.ANYCUBIC_KOBRA_3, 4),
         // Snapmaker 2.0 on its touchscreen API (reads state) and the J1 over SACP (doesn't yet); both dual-nozzle profiles, start gated off.
         SNAPMAKER_A350_DUAL(PrinterKind.SNAPMAKER_A_SERIES, "Snapmaker", "A350 Dual", "", "", false, false, SlicingPrinterModel.SNAPMAKER_A350_DUAL, 2),
-        SNAPMAKER_J1(PrinterKind.SNAPMAKER_SACP, "Snapmaker", "J1", "", "", false, false, SlicingPrinterModel.SNAPMAKER_J1, 2);
+        SNAPMAKER_J1(PrinterKind.SNAPMAKER_SACP, "Snapmaker", "J1", "", "", false, false, SlicingPrinterModel.SNAPMAKER_J1, 2),
+        // A Marlin printer on a USB cable (reads temperatures and SD progress; start, upload and controls gated off), and a
+        // Prusa MK3.5 with an MMU3 on one, for the multi-material slicing tests.
+        USB_ENDER_3_V2(PrinterKind.USB_SERIAL, "Creality", "Ender-3 V2", "", "", false, false, SlicingPrinterModel.CREALITY_ENDER_3_V2),
+        USB_PRUSA_MK3_5_MMU3(PrinterKind.USB_SERIAL, "Prusa", "MK3.5 MMU3", "", "", false, false, SlicingPrinterModel.PRUSA_MK3_5_MMU3, 5);
 
         companion object { fun parse(s: String) = entries.firstOrNull { it.name.equals(s.replace('-', '_'), ignoreCase = true) } }
     }

@@ -1054,6 +1054,80 @@
       "scope": "single_material"
     },
     {
+      "adapter": "android-usb-serial",
+      "current": null,
+      "firmware": {
+        "family": "usb-serial",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite usb-serial 1.7.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "any model"
+      },
+      "scope": "multi_material"
+    },
+    {
+      "adapter": "android-usb-serial",
+      "current": null,
+      "firmware": {
+        "family": "usb-serial",
+        "version": "—"
+      },
+      "gradeRuns": {
+        "controls": [],
+        "file_transfer": [],
+        "monitoring": [],
+        "physical_print": [],
+        "slicing": []
+      },
+      "gradeSources": {
+        "controls": null,
+        "file_transfer": null,
+        "monitoring": null,
+        "physical_print": null,
+        "slicing": null
+      },
+      "grades": {
+        "controls": "UNVERIFIED",
+        "file_transfer": "UNVERIFIED",
+        "monitoring": "UNVERIFIED",
+        "physical_print": "UNVERIFIED",
+        "slicing": "UNVERIFIED"
+      },
+      "history": [],
+      "note": "No physical evidence yet (fixture suite usb-serial 1.7.0).",
+      "nozzleVersion": "—",
+      "printer": {
+        "manufacturer": "Generic",
+        "model": "any model"
+      },
+      "scope": "single_material"
+    },
+    {
       "adapter": "android-prusalink",
       "current": null,
       "firmware": {

@@ -15,7 +15,9 @@ import java.util.Locale
 // issues on pairing in PrinterProfile.serial / PrinterProfile.apiKey. The UltiMaker 2 has no network and no kind.
 // REPETIER = one printer behind a Repetier-Server (RepetierServer): API key in PrinterProfile.apiKey, the server's printer
 // slug in PrinterProfile.serial (blank for a server with one printer).
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER }
+// ANYCUBIC_LAN = an Anycubic Kobra 3 / S1 / X generation printer on stock firmware in LAN mode, with or without an ACE / ACE Pro
+// (AnycubicLan): address only; the MQTT credentials come from the printer's own handshake and are never stored.
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing

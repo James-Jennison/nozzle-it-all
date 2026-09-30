@@ -27,6 +27,18 @@ data class Project(
     val calibration: String? = null,
     // Phase 10: where a downloaded model came from (designer, source, link) - MyMiniFactory's guidelines require credit.
     val attribution: String? = null,
+    // Colour mixing (0.2.0, WO-30): the project's own Snapmaker Full Spectrum
+    // mixed_filament_definitions string (FullSpectrumFormat.DEFINITIONS_KEY's value), null when the
+    // project has no Full Spectrum mixes. Desktop keeps this in settings.overrides instead because
+    // Desktop's PrepareState is itself backed by a project file it fully owns; Android's Project row
+    // is that same durable store here, so it goes on the entity directly rather than through a
+    // generic overrides map that doesn't exist on this side.
+    val mixedFilamentDefinitions: String? = null,
+    // Colour mixing (0.2.0, WO-30): the project's ColorMix virtual extruders, stored as
+    // PrusaColorMixFormat's own slice-request JSON (see ColourMixPersistence.encodeColorMix) - the
+    // same shape Desktop keeps in its 3MF sidecar (PrusaColorMixFormat.SIDECAR); Android has no 3MF
+    // export path, so this is that sidecar's content kept in the project row instead of a file.
+    val colorMixJson: String? = null,
 )
 
 // One imported model within a Project's build plate. `transform` reuses the existing

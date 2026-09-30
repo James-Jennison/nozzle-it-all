@@ -4,30 +4,27 @@
     1,
     0
   ],
-  "id": "elegoo-centauri-carbon-stock",
+  "id": "anycubic-lan",
   "suiteVersion": "1.7.0",
-  "title": "Elegoo printer on Elegoo stock firmware",
-  "description": "For external testers with an Elegoo printer on unmodified firmware (Centauri Carbon over SDCP, Centauri Carbon 2 over MQTT), with or without CANVAS. Not COSMOS, not OpenCentauri-patched. Heaters, homing and moves aren't available through Nozzle on these printers, so they aren't tested. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
+  "title": "Anycubic printer in LAN mode on stock firmware (ACE)",
+  "description": "For testers with an Anycubic Kobra 3 / 3 Max, S1 / S1 Max or Kobra X on stock firmware with LAN mode on, with or without ACE / ACE Pro, sliced with the printer's own profile. Status and the ACE slots are read now. Nozzle It All doesn't start prints, pause/resume/cancel or control these printers yet, so those tests are recorded as blocked until it does. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
   "requiredNozzleVersion": "0.1.0",
   "target": {
-    "manufacturer": "Elegoo",
-    "model": "Centauri Carbon",
-    "firmwareFamily": "elegoo-stock",
+    "manufacturer": "Anycubic",
+    "model": "any model",
+    "firmwareFamily": "anycubic-lan",
     "firmwareVariants": [
-      "elegoo-stock"
+      "anycubic-lan"
     ],
     "printerKinds": [
-      "ELEGOO"
+      "ANYCUBIC_LAN"
     ],
-    "adapter": "android-elegoo-sdcp",
-    "protocol": "sdcp-websocket",
+    "adapter": "android-anycubic-lan",
+    "protocol": "anycubic-mqtt",
     "slicingProfile": "@printer",
     "hardware": {},
-    "notEquivalentTo": [
-      "cosmos",
-      "opencentauri-patched"
-    ]
+    "notEquivalentTo": []
   },
   "requiredCapabilities": [
     "status"
@@ -111,6 +108,9 @@
             "checks": [
               {
                 "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
               },
               {
                 "check": "within_bed"
@@ -619,9 +619,9 @@
       "category": "monitoring",
       "scope": "multi_material",
       "safetyLevel": 1,
-      "description": "Read-only view of the CANVAS lanes. Graded separately from single-material monitoring.",
+      "description": "Read-only view of the ACE slots. Graded separately from single-material monitoring.",
       "requiredHardware": [
-        "canvas"
+        "multi_tool"
       ],
       "preconditions": [],
       "steps": [
@@ -629,14 +629,14 @@
           "id": "slots",
           "kind": "read_material_slots",
           "expect": {
-            "min": 4
+            "min": 1
           }
         },
         {
           "id": "slots-match",
           "kind": "observe",
           "params": {
-            "question": "Do the CANVAS lanes Nozzle reads (shown below) match what is loaded?",
+            "question": "Do the ACE slots Nozzle reads (shown below) match what is loaded?",
             "response": "yes_no",
             "show": "slots"
           }
@@ -661,7 +661,7 @@
       "safetyLevel": 0,
       "description": "Two-part model, one part per tool or lane.",
       "requiredHardware": [
-        "canvas"
+        "multi_tool"
       ],
       "preconditions": [],
       "steps": [
@@ -690,12 +690,14 @@
                 "check": "non_empty"
               },
               {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
                 "check": "uses_tools",
                 "count": 2
               },
               {
-                "check": "max_tool_index",
-                "max": 3
+                "check": "max_tool_index"
               },
               {
                 "check": "within_bed"
@@ -726,7 +728,7 @@
         "upload_and_start"
       ],
       "requiredHardware": [
-        "canvas"
+        "multi_tool"
       ],
       "preconditions": [
         {

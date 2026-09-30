@@ -5,7 +5,7 @@
     0
   ],
   "id": "flashforge-lan",
-  "suiteVersion": "1.6.0",
+  "suiteVersion": "1.7.0",
   "title": "Flashforge printer on its local API (IFS)",
   "description": "For testers with a Flashforge AD5X or other printer reached over Flashforge's local API, sliced with the printer's own profile. Nozzle It All doesn't start prints or pause/resume/cancel on these printers yet, so those tests are recorded as blocked until it does; status, slicing and the IFS slots are tested now. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",

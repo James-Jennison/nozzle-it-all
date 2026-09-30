@@ -51,7 +51,8 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         DUET(PrinterKind.DUET, "Generic", "RepRapFirmware printer", "", "", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
         ULTIMAKER_S5(PrinterKind.ULTIMAKER, "UltiMaker", "S5", "", "", false, false, SlicingPrinterModel.ULTIMAKER_S5, 2),
         REPETIER(PrinterKind.REPETIER, "Generic", "Repetier-Server printer", "", "", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
-        FLASHFORGE_ADVENTURER_4(PrinterKind.FLASHFORGE, "Flashforge", "Adventurer 4", "", "", false, false, SlicingPrinterModel.FLASHFORGE_ADVENTURER_4_SERIES, legacyFlashforge = true);
+        FLASHFORGE_ADVENTURER_4(PrinterKind.FLASHFORGE, "Flashforge", "Adventurer 4", "", "", false, false, SlicingPrinterModel.FLASHFORGE_ADVENTURER_4_SERIES, legacyFlashforge = true),
+        ANYCUBIC_KOBRA_3(PrinterKind.ANYCUBIC_LAN, "Anycubic", "Kobra 3", "", "", false, false, SlicingPrinterModel.ANYCUBIC_KOBRA_3, 4);
 
         companion object { fun parse(s: String) = entries.firstOrNull { it.name.equals(s.replace('-', '_'), ignoreCase = true) } }
     }
@@ -100,7 +101,7 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
     override fun materialSlots(): List<String> = when {
         preset.afc -> listOf("lane1: PLA white", "lane2: PLA black", "lane3: PETG orange", "lane4: empty")
         preset.printerKind == PrinterKind.BAMBU_LAB -> listOf("AMS 1 slot 1: PLA white", "AMS 1 slot 2: PLA black")
-        preset.printerKind == PrinterKind.CREALITY || preset.printerKind == PrinterKind.FLASHFORGE -> listOf("slot 1: PLA white", "slot 2: PLA black", "slot 3: empty", "slot 4: empty")
+        preset.printerKind == PrinterKind.CREALITY || preset.printerKind == PrinterKind.FLASHFORGE || preset.printerKind == PrinterKind.ANYCUBIC_LAN -> listOf("slot 1: PLA white", "slot 2: PLA black", "slot 3: empty", "slot 4: empty")
         preset.printerKind == PrinterKind.SNAPMAKER_U1_PAXX || preset.printerKind == PrinterKind.SNAPMAKER_U1 -> listOf("T0: PLA", "T1: PLA", "T2: PLA", "T3: PLA")
         else -> throw UnsupportedByTarget("This printer reports no material slots.")
     }

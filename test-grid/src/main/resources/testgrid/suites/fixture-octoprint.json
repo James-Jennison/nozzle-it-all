@@ -5,7 +5,7 @@
     0
   ],
   "id": "octoprint",
-  "suiteVersion": "1.6.0",
+  "suiteVersion": "1.7.0",
   "title": "Printer through OctoPrint",
   "description": "For testers with any printer behind OctoPrint, sliced with the printer's own profile. One result covers only that printer, firmware and OctoPrint setup. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",

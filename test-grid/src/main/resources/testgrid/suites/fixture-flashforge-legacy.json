@@ -5,7 +5,7 @@
     0
   ],
   "id": "flashforge-legacy",
-  "suiteVersion": "1.6.0",
+  "suiteVersion": "1.7.0",
   "title": "Older Flashforge printer (legacy network console)",
   "description": "For testers with an older Flashforge printer (Adventurer 3/4, Creator, Guider) reached over its legacy network console, sliced with the printer's own profile. Nozzle It All doesn't read state or filament slots on these yet, so those tests are blocked too. Nozzle It All doesn't start prints or pause/resume/cancel on these printers yet, so those tests are recorded as blocked until it does. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",

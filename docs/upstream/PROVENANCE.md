@@ -1016,3 +1016,100 @@ interchange).
   screen. No discovery, camera, file list, fans, lights or enclosure.
 - **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard, Control tab), Test Grid
   classification, slicing-profile gating.
+
+## P-0038 — USB-connected Marlin/Prusa-protocol serial printer (original driver on `android.hardware.usb`, facts only from GPL sources)
+
+- **Upstream:** FACTS ONLY, never copied, from GPL-2.0-licensed Linux kernel USB-serial drivers, commit
+  `551c722f40809618230001baccf219193e22fc5a` (local read-only clone at `linux-usb-serial/`): `drivers/usb/serial/ch341.c`
+  (CH340/CH341 vendor requests, register addresses, baud prescaler/divisor formula, inverted modem-control byte),
+  `drivers/usb/serial/cp210x.c` (Silicon Labs CP210x vendor requests, literal little-endian baud field, modem handshake
+  value), `drivers/usb/serial/ftdi_sio.c` / `ftdi_sio.h` (FTDI SIO requests, the 48 MHz fractional divisor table, modem
+  control mask+state encoding). GPL-2.0 is incompatible with this repository's licence, so nothing from these four files
+  was read as code to transcribe: only public facts (control-request numbers, register addresses/values, ID tables,
+  command sequences) were taken, and every baud-divisor calculation here was re-derived independently from the USB-IF's
+  and each chip vendor's own public datasheets, not copied from the kernel's arithmetic. Cited in code comments as
+  `linux/<file>:<line>`. CDC-ACM class constants (`SET_LINE_CODING`, `SET_CONTROL_LINE_STATE`, the control/data interface
+  classes) come from the USB-IF's public CDC 1.2 specification, cross-checked only for definitions (never code) against
+  `/usr/src/linux-headers-7.0.0-34/include/uapi/linux/usb/cdc.h` (also GPL-2.0, facts only). The host-side G-code
+  streaming/resend/M115-capability protocol (Marlin's own documented serial protocol) was cross-referenced for facts only
+  against Ultimaker Cura's USBPrinting plugin (LGPL-3.0, `plugins/USBPrinting/USBPrinterOutputDevice.py` /
+  `avr_isp/`-adjacent serial handling) and PrusaSlicer's `src/slic3r/Utils/Serial.cpp` / `src/slic3r/GUI/Jobs/*` G-code
+  sender path (AGPL-3.0). Neither plugin's code or comments were copied; only the line protocol's observable shape
+  (checksummed `N<n> ...*<checksum>` lines, `ok`/`Resend:`/`busy:`/`Error:`/`start` replies, `M115`'s `Cap:` lines,
+  `M27`/`M20` reply shapes) was used, which is also documented independently by Marlin's own firmware source and RepRap
+  wiki pages.
+- **Imported:** nothing copied. An original Kotlin USB-serial driver against Android's built-in `android.hardware.usb`
+  host API (no new Gradle dependency, no network fetch of any kind): `UsbSerial.kt` (chip identification by USB class
+  for CDC-ACM or by vendor:product ID table for CH34x/CP210x/FTDI; per-chip open/restart control-transfer sequences;
+  baud encoding for each chip family) and `MarlinSerial.kt` (checksum, numbered-line framing, reply parsing, `M115`
+  capability parsing, `M27`/`M20` parsing, a one-line-in-flight send window with resend recovery) in `:domain`;
+  `UsbSerialTransport.kt` (opens the `UsbDeviceConnection`, claims the interface, issues the control sequence, runs
+  bulk IN/OUT) and `UsbSerialPrinterService.kt` (a `PrinterService` reading firmware/temperatures and SD progress) in
+  `:transport`; `UsbSerialDeviceManager.kt` (USB permission request/broadcast, device enumeration, the synthetic
+  `"usb:<vendorId>:<productId>:<serialNumber>"` identity) and a device-picker UI in the add-printer wizard and Edit
+  printer in `:app`.
+- **Change:** one new kind, `PrinterKind.USB_SERIAL` (`UsbSerialPrinterService`). Live temperatures (`M105` polling, or
+  `M155 S2` auto-report when the firmware's `M115` `Cap:` line advertises `AUTOREPORT_TEMP:1`) and SD job progress
+  (`M27`), read-only. No camera, no on-device slicing add-ons, no Klipper extras, no pause/resume/cancel. Connecting
+  never restarts the printer's board: every chip is opened with DTR and RTS de-asserted (never toggled automatically),
+  and the reader thread only ever writes `M110 N0`, `M115`, `M105`, `M155 S<n>` (gated on the capability check above),
+  `M27` and `M20` — nothing that moves, heats, extrudes, changes settings or writes EEPROM/files. DTR/RTS per chip:
+  - CDC-ACM (`UsbSerial.CdcAcm`): `SET_CONTROL_LINE_STATE` (request `0x22`) with a control-line bitmap (`0x01`=DTR,
+    `0x02`=RTS); the open sequence sends this with both bits clear, so DTR/RTS start de-asserted; only the explicit
+    restart action sends DTR set (RFC-1394-style CDC modem control, USB-IF CDC 1.2, `linux/ftdi_sio.h` not applicable
+    here since CDC-ACM is a standard class, not a vendor driver).
+  - CH340/CH341 (`UsbSerial.Ch34x`, `linux/ch341.c`): a `REQ_MODEM_CTRL` (`0xA4`) vendor request whose value is the
+    control byte's bitwise complement (the chip's hardware convention is active-low on this wire) — `modemControlValue`
+    inverts the bitmap before sending, so a DTR/RTS-clear request is *not* simply value `0`; the open sequence's
+    `REQ_MODEM_CTRL` call passes both lines de-asserted, and only the explicit restart action asserts DTR.
+  - CP210x (`UsbSerial.Cp210x`, `linux/cp210x.c`): `SET_MHS` vendor request with a mask+state pair (bits 0/1 select
+    which of DTR/RTS to change, bits 8/9 carry the new value) — the open sequence's `SET_MHS` selects and clears both
+    lines explicitly; only the explicit restart action selects and sets DTR.
+  - FTDI FT232R/FT231X-class (`UsbSerial.Ftdi`, `linux/ftdi_sio.c`): `SIO_MODEM_CTRL` vendor request, same mask+state
+    convention as CP210x (low byte state, high byte mask) — the open sequence clears both lines explicitly; only the
+    explicit restart action sets DTR.
+  If a board answers nothing within the reply timeout, `UsbSerialPrinterService` surfaces a clear message rather than
+  raising DTR itself; only an explicit, user-initiated "Restart the printer's board to connect" action (`restartBoard()`)
+  raises DTR, and its own UI text says it restarts the printer and must not be used while printing.
+  Wired: `PrinterCapabilities.capabilitiesFor`/`startVerifiedFor` (`UsbSerialPrinter.START_VERIFIED`),
+  `printerServiceFor`, `normalizedAddress`/`normalizedInputAddress` (`PrinterModel.kt`), a device-picker chip and panel
+  in the add-printer wizard (`AddPrinterWizard.kt`) and Edit printer (`M1Panels.kt`), a Control-tab card
+  (`MainActivity.kt`), refusal text in `SliceAndPrintPanel.kt`/`ProjectEditorScreen.kt` for the "can't save a file"
+  case, the manifest's optional `android.hardware.usb.host` feature and `USB_DEVICE_ATTACHED` filter
+  (`usb_device_filter.xml`), Test Mode labels (`TestModeScreen.kt`), Test Grid family `usb-serial`
+  (`FirmwareFamilies.USB_SERIAL`, `AndroidTestTarget.adapterFor`) and `GatedKindsTest`.
+- **Gated (`UsbSerialPrinter.START_VERIFIED` / `UPLOAD_VERIFIED` false; `startVerifiedFor` false):** starting a print
+  (`M23`/`M24`) is refused with "USB-connected printers aren't verified on real hardware yet. <name> was not sent. Copy
+  the sliced file to the printer's SD card or USB stick and start it from the printer's own screen."; pause, resume,
+  stop, temperatures, nozzle switching, homing/moving and fans with "USB-connected printers aren't verified on real
+  hardware yet: <what> isn't offered."; uploading a file (`M28`/`M29`) with "USB-connected printers aren't verified on
+  real hardware yet. Uploading <name> to the printer's storage isn't offered. Copy the sliced file to the printer's SD
+  card or USB stick manually." — all before any byte is sent. Sending a sliced file from the slicer/project-editor
+  screens is refused outright, independent of the verified flags, with "Nozzle It All can't save a file to a
+  USB-connected printer's storage. Copy it to the printer's SD card or USB stick manually, then print it from the
+  printer's own screen." (`UsbSerialPrinter.CANNOT_SAVE_TO_PRINTER`) since this transport's address is a synthetic USB
+  identity, not an uploadable HTTP endpoint. No console: user-typed or arbitrary G-code is never sent by this change.
+  The `M28`/`M29` upload state machine (`UsbSerialPrinter.SdUpload`) is implemented and unit-tested behind this gate:
+  nothing is written after `M28` until the firmware's "Writing to file" acknowledgement line arrives, and any other
+  line aborts the upload.
+- **Additions of this port (not in any reference):** the synthetic `"usb:<vendorId>:<productId>:<serialNumber>"` printer
+  address (this repository's own encoding, not from any reference); CDC-ACM auto-detection by interface class rather
+  than a fixed ID table; a CH34x-specific direction patch in `UsbSerialTransport` for `REQ_READ_VERSION` (the
+  domain-layer control-sequence builder leaves this IN-direction substitution to the Android transport layer, since
+  `:domain` has no dependency on `android.hardware.usb`'s direction constants).
+- **Test evidence:** unit tests only, entirely off gthost-build01 (never run against a real device, and never contacted
+  via adb/phone/network). `UsbSerialTest`, `MarlinSerialTest` and `UsbSerialPrinterTest` in `:domain` (chip
+  identification, per-chip control sequences, baud vectors, checksums, line/capability/SD-status/file-list parsing,
+  resend/busy handling, gate defaults and exact refusal strings, the `SdUpload` state machine);
+  `UsbSerialPrinterServiceTest` in `:transport` (a fake in-memory `UsbSerialPort`: connect sequence, only-whitelisted-
+  commands-written, DTR never raised without the explicit restart action, every gated control path writes zero bytes,
+  resend recovery); `GatedKindsTest` in `:test-grid`.
+- **Known divergence / to verify on hardware:** every chip's real-world behaviour under this driver (no CH34x, CP210x,
+  FTDI or CDC-ACM adapter, and no Marlin/Prusa firmware, was available to test against); whether the reply timeout used
+  for the "no answer" message is long enough for every board's boot time; whether every 8-bit AVR-class board really
+  auto-resets on DTR the way the safety design assumes (some boards need RTS, some need both, some need neither - this
+  driver never asserts either automatically regardless); the exact set of firmware capability strings various Marlin
+  forks emit in `M115`'s `Cap:` lines beyond `AUTOREPORT_TEMP`; USB permission behavior across Android OEM skins/versions.
+- **Touches:** printer transports (Android, original USB-serial driver), shared UI (printer type chips, add-printer
+  wizard, Edit printer, Control tab, slicer/project-editor upload refusal), manifest (optional USB host feature, device
+  filter), Test Mode labels, Test Grid classification and gated-kind tests.

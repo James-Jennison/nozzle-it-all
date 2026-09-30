@@ -117,6 +117,7 @@ private fun kindLabel(k: net.jamesjennison.klippercompanion.PrinterKind) = when 
     net.jamesjennison.klippercompanion.PrinterKind.ANYCUBIC_LAN -> "Anycubic (LAN)"
     net.jamesjennison.klippercompanion.PrinterKind.SNAPMAKER_A_SERIES -> "Snapmaker 2.0 (A-series)"
     net.jamesjennison.klippercompanion.PrinterKind.SNAPMAKER_SACP -> "Snapmaker J1 / Artisan"
+    net.jamesjennison.klippercompanion.PrinterKind.USB_SERIAL -> "USB cable"
 }
 
 private fun familyLabel(f: String) = when (f) {
@@ -138,6 +139,7 @@ private fun familyLabel(f: String) = when (f) {
     com.nozzleitall.testgrid.FirmwareFamilies.ANYCUBIC_LAN -> "Anycubic LAN mode"
     com.nozzleitall.testgrid.FirmwareFamilies.SNAPMAKER_SSTP -> "Snapmaker 2.0 touchscreen API"
     com.nozzleitall.testgrid.FirmwareFamilies.SNAPMAKER_SACP -> "Snapmaker SACP"
+    com.nozzleitall.testgrid.FirmwareFamilies.USB_SERIAL -> "USB serial (Marlin/Prusa)"
     else -> f
 }
 

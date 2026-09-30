@@ -22,7 +22,14 @@ import java.util.Locale
 // series it reports in PrinterProfile.serial.
 // SNAPMAKER_SACP = a Snapmaker J1 or Artisan over SACP on TCP port 8888 (SnapmakerSacp): the name Nozzle It All connects
 // as in PrinterProfile.serial (set by Connect), an optional token in PrinterProfile.apiKey.
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_A_SERIES, SNAPMAKER_SACP }
+// USB_SERIAL = a printer plugged in over USB, spoken to as a Marlin/Prusa-protocol serial port (UsbSerial/MarlinSerial,
+// our own driver on android.hardware.usb - see UsbSerialPrinterService, module :transport). There is no network
+// address at all, so PrinterProfile.address holds a synthetic "usb:<vendorId>:<productId>:<serialNumber>" identity
+// string instead (vendor/product in decimal, serialNumber the USB device's own iSerialNumber, blank if it has none);
+// PrinterProfile.serial holds the same device serial number alone (for display); PrinterProfile.apiKey holds the
+// chosen baud rate as plain text ("115200" or "250000"). Never verified on real hardware yet (UsbSerialPrinter.
+// START_VERIFIED / UPLOAD_VERIFIED are both false) - see UsbSerialPrinter.kt.
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_A_SERIES, SNAPMAKER_SACP, USB_SERIAL }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing

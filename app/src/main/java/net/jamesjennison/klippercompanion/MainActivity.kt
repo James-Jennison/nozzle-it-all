@@ -806,6 +806,10 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")
                     } } }
+                    else if(capabilities.transport == PrinterTransport.USB_SERIAL) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("USB-connected printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a printer plugged in by USB cable, spoken to directly as a Marlin/Prusa-protocol serial port, offers its temperatures and SD job progress (read-only). Starting a print, uploading a file and every other control from Nozzle It All aren't verified on a real printer yet: print from the printer's own screen or SD card, and copy sliced files to its storage manually - Nozzle It All can't write to it over this connection. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                    } } }
                     else {
                         // Owner request, 2026-09-22: the Control tab should show the operations
                         // someone needs to operate their printer - dedicated controls above, not

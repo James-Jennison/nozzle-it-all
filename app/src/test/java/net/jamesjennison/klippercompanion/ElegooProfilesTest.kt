@@ -49,7 +49,9 @@ class ElegooProfilesTest {
         for (kind in PrinterKind.entries) {
             for (m in listOf(stockCc, stockCc2)) assertEquals("$m on $kind", kind == PrinterKind.ELEGOO, ElegooProfiles.connectionProblem(m, kind) == null)
             for (m in listOf(SlicingPrinterModel.ELEGOO_CENTAURI_CARBON, cosmosAfc)) assertEquals("$m on $kind", kind in moonraker, ElegooProfiles.connectionProblem(m, kind) == null)
-            assertNull(ElegooProfiles.connectionProblem(SlicingPrinterModel.GENERIC_KLIPPER, kind))
+            // The Snapmaker 2.0 / J1 / Artisan connections take only their own Snapmaker profiles (SnapmakerModels, P-0037).
+            val snapmaker = kind == PrinterKind.SNAPMAKER_A_SERIES || kind == PrinterKind.SNAPMAKER_SACP
+            assertEquals("GENERIC_KLIPPER on $kind", !snapmaker, ElegooProfiles.connectionProblem(SlicingPrinterModel.GENERIC_KLIPPER, kind) == null)
             assertNull(ElegooProfiles.connectionProblem(null, kind))
         }
         assertTrue(ElegooProfiles.connectionProblem(stockCc2, PrinterKind.GENERIC_KLIPPER)!!.contains("M729"))

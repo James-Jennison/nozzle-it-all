@@ -17,7 +17,12 @@ import java.util.Locale
 // slug in PrinterProfile.serial (blank for a server with one printer).
 // ANYCUBIC_LAN = an Anycubic Kobra 3 / S1 / X generation printer on stock firmware in LAN mode, with or without an ACE / ACE Pro
 // (AnycubicLan): address only; the MQTT credentials come from the printer's own handshake and are never stored.
-enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN }
+// SNAPMAKER_A_SERIES = a Snapmaker 2.0 (A150 / A250 / A350, single or dual extruder, Quick Swap Kit or not) on the touchscreen's
+// HTTP API (SnapmakerSstp): the token the printer issues when the person accepts on its screen in PrinterProfile.apiKey, the
+// series it reports in PrinterProfile.serial.
+// SNAPMAKER_SACP = a Snapmaker J1 or Artisan over SACP on TCP port 8888 (SnapmakerSacp): the name Nozzle It All connects
+// as in PrinterProfile.serial (set by Connect), an optional token in PrinterProfile.apiKey.
+enum class PrinterKind { GENERIC_KLIPPER, SNAPMAKER_U1_PAXX, BAMBU_LAB, PRUSA_LINK, OCTOPRINT, SNAPMAKER_U1, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_A_SERIES, SNAPMAKER_SACP }
 // WO-13: which OrcaSlicer profile family a printer needs - a hardware-model distinction, not a
 // protocol one (unlike PrinterKind - both SNAPMAKER_U1 and ELEGOO_CENTAURI_CARBON speak
 // GENERIC_KLIPPER-shaped Moonraker, but need different slicer profiles). Null means "no slicing

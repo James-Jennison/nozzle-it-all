@@ -45,7 +45,8 @@ object ElegooProfiles {
 
     /**
      * Why [model] can't be used for a printer connected as [kind], or null when it can. Checked when a printer is saved
-     * and again before every slice.
+     * and again before every slice. Also answers for the Snapmaker 2.0 / J1 / Artisan connections (SnapmakerModels), so
+     * every caller of this one check covers them too.
      */
     fun connectionProblem(model: SlicingPrinterModel?, kind: PrinterKind): String? = when (firmwareFor(model)) {
         ElegooProfileFirmware.ELEGOO_STOCK -> if (kind == PrinterKind.ELEGOO) null else
@@ -54,7 +55,7 @@ object ElegooProfiles {
         ElegooProfileFirmware.COSMOS -> if (kind in MOONRAKER_KINDS) null else
             "This profile is for OpenCentauri COSMOS, which is reached through Moonraker. For a Centauri Carbon on Elegoo's own firmware, " +
                 "choose the Elegoo firmware profile."
-        null -> null
+        null -> SnapmakerModels.connectionProblem(model, kind)
     }
 
     private val STOCK_COMMAND = Regex("""^\s*(M729|M8213)\b""", RegexOption.IGNORE_CASE)

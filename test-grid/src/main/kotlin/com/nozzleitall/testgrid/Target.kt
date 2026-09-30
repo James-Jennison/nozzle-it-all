@@ -187,6 +187,8 @@ object FirmwareFamilies {
     const val ULTIMAKER = "ultimaker-lan"
     const val REPETIER = "repetier-server"
     const val ANYCUBIC_LAN = "anycubic-lan"
+    const val SNAPMAKER_SSTP = "snapmaker-sstp"
+    const val SNAPMAKER_SACP = "snapmaker-sacp"
 
     /** TargetDescription.protocol of a Flashforge on the legacy console (AndroidTestTarget.adapterFor). */
     const val LEGACY_FLASHFORGE_PROTOCOL = "flashforge-tcp"
@@ -236,6 +238,9 @@ object FirmwareFamilies {
         PrinterTransport.REPETIER -> Classified(REPETIER, PrinterKind.REPETIER, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Repetier-Server")
         // Stock Anycubic firmware in LAN mode; an ACE is one nozzle fed from four slots, its slots from the saved profile's pack (FilamentChangers).
         PrinterTransport.ANYCUBIC_LAN -> Classified(ANYCUBIC_LAN, PrinterKind.ANYCUBIC_LAN, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Anycubic LAN mode (MQTT over TLS, port 9883)")
+        // Snapmaker 2.0 A-series on the touchscreen's HTTP API, and the J1 / Artisan over SACP (P-0037): separate protocols, separate families.
+        PrinterTransport.SNAPMAKER_SSTP -> Classified(SNAPMAKER_SSTP, PrinterKind.SNAPMAKER_A_SERIES, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Snapmaker 2.0 touchscreen HTTP API (/api/v1)")
+        PrinterTransport.SNAPMAKER_SACP -> Classified(SNAPMAKER_SACP, PrinterKind.SNAPMAKER_SACP, description.slicingModel, mapOf("multi_tool" to (description.toolSlots > 1)), "Snapmaker SACP over TCP (port 8888)")
     }
 }
 

@@ -12,7 +12,7 @@ package net.jamesjennison.klippercompanion
 // "which transport"/"which vendor add-ons", and `printerServiceFor`/`normalizedAddress` in
 // PrinterModel.kt already select the transport correctly from it) - `PrinterCapabilities` is a
 // derived, UI-facing view over it, not a replacement data model or a second source of truth.
-enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN }
+enum class PrinterTransport { MOONRAKER, BAMBU_MQTT, PRUSA_LINK, OCTOPRINT, ELEGOO, CREALITY, FLASHFORGE, DUET, ULTIMAKER, REPETIER, ANYCUBIC_LAN, SNAPMAKER_SSTP, SNAPMAKER_SACP }
 
 data class PrinterCapabilities(
     val transport: PrinterTransport,
@@ -171,11 +171,31 @@ fun capabilitiesFor(kind: PrinterKind): PrinterCapabilities = when (kind) {
         supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
         hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
     )
+    // Snapmaker 2.0 A-series on the touchscreen's HTTP API (SnapmakerSstpPrinterService): live state, temperatures and job
+    // progress, connecting (the person accepts on the touchscreen) and uploading a sliced file, which never prints. Starting it
+    // is refused until SnapmakerSstp.START_VERIFIED, and so are pause / resume / stop, temperatures and homing / jogging.
+    // Laser and CNC are never offered. Ported from Snapmaker Luban (P-0037).
+    PrinterKind.SNAPMAKER_A_SERIES -> PrinterCapabilities(
+        transport = PrinterTransport.SNAPMAKER_SSTP, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false,
+    )
+    // Snapmaker J1 / Artisan over SACP (SnapmakerSacpPrinterService): temperatures and job progress from the printer's
+    // subscriptions, connecting and uploading a sliced file, which never prints. The printer's own state names aren't in the
+    // sources used, so its state is unknown (readsPrinterState false). Starting it is refused until
+    // SnapmakerSacp.START_VERIFIED, and so are pause / resume / stop, temperatures and homing / jogging. Laser and CNC are
+    // never offered. Ported from Snapmaker Luban and the Snapmaker SACP SDK (P-0037).
+    PrinterKind.SNAPMAKER_SACP -> PrinterCapabilities(
+        transport = PrinterTransport.SNAPMAKER_SACP, supportsPauseResumeCancel = false, supportsCamera = false,
+        supportsKlipperExtras = false, supportsNativePrintFileFlow = false, acceptsOnDeviceSlicedGcode = true,
+        hasBespok3d = false, hasMultiAce = false, verifiedOnRealHardware = false, readsPrinterState = false,
+    )
 }
 
 /**
  * Whether Nozzle It All may start a print on this kind of printer. False while a kind's start is gated off until it has
- * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED, RepetierServer.START_VERIFIED, AnycubicLan.START_VERIFIED): sending a
+ * been checked on a real printer (CrealityCfs.START_VERIFIED, FlashforgeIfs.START_VERIFIED, DuetRrf.START_VERIFIED, UltiMakerApi.START_VERIFIED, RepetierServer.START_VERIFIED, AnycubicLan.START_VERIFIED,
+ * SnapmakerSstp.START_VERIFIED, SnapmakerSacp.START_VERIFIED): sending a
  * sliced file to one then uploads it (an UltiMaker: sends nothing), and the person starts it on the printer's screen.
  */
 fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
@@ -186,6 +206,8 @@ fun startVerifiedFor(kind: PrinterKind): Boolean = when (kind) {
     PrinterKind.ULTIMAKER -> UltiMakerApi.START_VERIFIED
     PrinterKind.REPETIER -> RepetierServer.START_VERIFIED
     PrinterKind.ANYCUBIC_LAN -> AnycubicLan.START_VERIFIED
+    PrinterKind.SNAPMAKER_A_SERIES -> SnapmakerSstp.START_VERIFIED
+    PrinterKind.SNAPMAKER_SACP -> SnapmakerSacp.START_VERIFIED
     else -> true
 }
 

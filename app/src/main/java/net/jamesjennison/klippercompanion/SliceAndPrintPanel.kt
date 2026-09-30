@@ -190,7 +190,8 @@ import java.io.File
     // bundle), so the toolpath/stats extraction above only ever branches on bambuTarget.
     val prusaTarget = profile.kind == PrinterKind.PRUSA_LINK || profile.kind == PrinterKind.OCTOPRINT || profile.kind == PrinterKind.ELEGOO ||
         profile.kind == PrinterKind.CREALITY || profile.kind == PrinterKind.FLASHFORGE || profile.kind == PrinterKind.DUET ||
-        profile.kind == PrinterKind.ULTIMAKER || profile.kind == PrinterKind.REPETIER || profile.kind == PrinterKind.ANYCUBIC_LAN // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier/Anycubic: upload, start gated; UltiMaker: nothing sent while gated)
+        profile.kind == PrinterKind.ULTIMAKER || profile.kind == PrinterKind.REPETIER || profile.kind == PrinterKind.ANYCUBIC_LAN ||
+        profile.kind == PrinterKind.SNAPMAKER_A_SERIES || profile.kind == PrinterKind.SNAPMAKER_SACP // all take plain G-code uploaded and started in one request (Creality/Flashforge/Duet/Repetier/Anycubic/Snapmaker: upload, start gated; UltiMaker: nothing sent while gated)
     // Toolpath + stats parsing, both off the main thread the same way slicing itself is
     // dispatched. A parse failure doesn't block printing - the review is a visualization aid,
     // not a correctness gate; the actual G-code was already produced successfully.

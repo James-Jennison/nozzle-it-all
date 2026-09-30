@@ -797,6 +797,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("Here an Anycubic Kobra 3, Kobra S1 or Kobra X in LAN mode offers live status and temperatures (read-only), its ACE slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling, temperatures, homing and the ACE's feed and dryer from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
                         OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("ACE slots")}
                     } } }
+                    else if(capabilities.transport == PrinterTransport.SNAPMAKER_SSTP || capabilities.transport == PrinterTransport.SNAPMAKER_SACP) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val sacp = capabilities.transport == PrinterTransport.SNAPMAKER_SACP
+                        Text(if(sacp) "Snapmaker J1 / Artisan" else "Snapmaker 2.0", style=MaterialTheme.typography.titleSmall)
+                        Text("Here a ${if(sacp) "Snapmaker J1 or Artisan" else "Snapmaker 2.0 with a 3D printing module"} offers ${if(sacp) "its temperatures and job progress" else "its state, temperatures and job progress"} (read-only) and uploading a sliced file. Start the print on the printer's screen: starting, pausing and stopping, temperatures, nozzle switching and homing from Nozzle It All aren't verified on a real printer yet. Laser and CNC work isn't offered. Macros, console, configuration, camera and file previews are not available for this printer kind. Tap Connect in Edit printer and accept on the printer's screen first.")
+                    } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")

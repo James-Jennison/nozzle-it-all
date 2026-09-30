@@ -26,6 +26,7 @@ object AndroidFullSpectrum {
     fun display(physical: List<String>, definitions: String): FullSpectrumFormat.Mixes =
         FullSpectrumFormat.parseMixes(run(FullSpectrumFormat.baseRequest("display", physical, definitions)))
 
+    /** [a] and [b] are physical filament ids, 1-based (Tool 1 is 1), as Snapmaker's MixedFilamentManager numbers them. */
     fun add(physical: List<String>, definitions: String, a: Int, b: Int, mixBPercent: Int): FullSpectrumFormat.Mixes =
         FullSpectrumFormat.parseMixes(run(FullSpectrumFormat.baseRequest("add", physical, definitions).put("a", a).put("b", b).put("mix_b_percent", mixBPercent)))
 

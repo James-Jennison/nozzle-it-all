@@ -30,9 +30,9 @@ fun ScreenState.kindFor(address: String): PrinterKind = profiles.find { it.addre
 // Klipper-only panels build these; a BAMBU_LAB printer never reaches them because MainActivity
 // hides every control that needs one (BambuPrinterService implements none of the reader interfaces).
 fun ScreenState.moonrakerFor(address: String): Moonraker = Moonraker(address, apiKeyFor(address))
-// Filament slots: an Elegoo printer's CANVAS trays, a Bambu's AMS, a Creality's CFS and a Flashforge's IFS through their own
-// services; every other printer's filament-changer lanes through Moonraker.
-private val OWN_SLOT_READER_KINDS = setOf(PrinterKind.ELEGOO, PrinterKind.BAMBU_LAB, PrinterKind.CREALITY, PrinterKind.FLASHFORGE)
+// Filament slots: an Elegoo printer's CANVAS trays, a Bambu's AMS, a Creality's CFS, a Flashforge's IFS and an Anycubic's
+// ACE through their own services; every other printer's filament-changer lanes through Moonraker.
+private val OWN_SLOT_READER_KINDS = setOf(PrinterKind.ELEGOO, PrinterKind.BAMBU_LAB, PrinterKind.CREALITY, PrinterKind.FLASHFORGE, PrinterKind.ANYCUBIC_LAN)
 fun ScreenState.filamentSlotReaderFor(address: String): FilamentSlotReader =
     if(kindFor(address) in OWN_SLOT_READER_KINDS) printerServiceFor(profiles.find { it.address == address }, address) as FilamentSlotReader else moonrakerFor(address)
 // A Bambu profile's address is a bare host - it has no HTTP endpoint for a URL to point at - so it
@@ -74,6 +74,8 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     PrinterKind.ULTIMAKER -> UltiMakerPrinterService(address, profile.serial, profile.apiKey)
     // Repetier-Server's API key in the encrypted apiKey slot; the server's printer slug (not a secret) in serial.
     PrinterKind.REPETIER -> RepetierPrinterService(address, profile.apiKey, profile.serial)
+    // An Anycubic in LAN mode needs only its address: its MQTT credentials come from its own handshake, held in memory only.
+    PrinterKind.ANYCUBIC_LAN -> AnycubicLanPrinterService(address)
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER
@@ -316,6 +318,7 @@ class PrinterModel(
             _state.value = _state.value.copy(address = "")
         }
         _state.value.profiles.firstOrNull { it.address == address && it.kind == PrinterKind.BAMBU_LAB }?.serial?.takeIf { it.isNotBlank() }?.let { BambuCertPins.store.forget(it) }
+        _state.value.profiles.firstOrNull { it.address == address && it.kind == PrinterKind.ANYCUBIC_LAN }?.let { p -> anycubicPinKeyForAddress(p.address)?.let { BambuCertPins.store.forget(it) } }
         val printers = _state.value.savedPrinters - address
         val profiles=_state.value.profiles.filter { it.address!=address }
         _state.value = _state.value.copy(savedPrinters = printers,profiles=profiles);persist()

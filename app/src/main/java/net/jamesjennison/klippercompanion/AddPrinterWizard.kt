@@ -137,6 +137,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.DUET, {kind=PrinterKind.DUET}, label={Text("Duet (RepRapFirmware)")}, modifier=Modifier.testTag("wizard-kind-duet"))
                         FilterChip(kind==PrinterKind.ULTIMAKER, {kind=PrinterKind.ULTIMAKER}, label={Text("UltiMaker (3 / S-series)")}, modifier=Modifier.testTag("wizard-kind-ultimaker"))
                         FilterChip(kind==PrinterKind.REPETIER, {kind=PrinterKind.REPETIER}, label={Text("Repetier-Server")}, modifier=Modifier.testTag("wizard-kind-repetier"))
+                        FilterChip(kind==PrinterKind.ANYCUBIC_LAN, {kind=PrinterKind.ANYCUBIC_LAN}, label={Text("Anycubic (Kobra 3 / S1 / X)")}, modifier=Modifier.testTag("wizard-kind-anycubic-lan"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -185,6 +186,9 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                             trailingIcon={TextButton({showKey=!showKey}){Text(if(showKey) "Hide" else "Show")}})
                         OutlinedTextField(serial, {serial=it.take(40)}, label={Text("Printer slug (blank if the server has one printer)")}, singleLine=true, modifier=Modifier.testTag("wizard-repetier-slug"))
                         Text("One printer behind a Repetier-Server. Nozzle It All checks the server answers and stores sliced files in its model library; you start the print from Repetier-Server or the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.ANYCUBIC_LAN) {
+                        OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        Text("An Anycubic Kobra 3, Kobra S1 or Kobra X on Anycubic's own firmware, with LAN mode turned on in the printer's settings. Nothing else is needed: the printer hands Nozzle It All its connection details itself. Nozzle It All reads its status and ACE slots and uploads sliced files; you start the print on the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),
@@ -230,6 +234,7 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                 normalizedAddressResult = normalized
                 // Adding a printer is a fresh trust decision: an old pin (say from an abandoned attempt, or a printer that was reset) must not block it.
                 if(kind == PrinterKind.BAMBU_LAB && serial.isNotBlank()) BambuCertPins.store.forget(serial.trim())
+                if(kind == PrinterKind.ANYCUBIC_LAN) anycubicPinKeyForAddress(normalized)?.let { BambuCertPins.store.forget(it) }
                 // Typing the address and picking the type (instead of tapping a scan result) used to leave the profile empty
                 // even for a U1, where only one profile fits.
                 if(slicingModel == null && !slicingModelChosen) slicingModel = PrinterDiscovery.defaultSlicingModel(kind)

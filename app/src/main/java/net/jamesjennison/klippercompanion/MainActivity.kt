@@ -792,6 +792,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                         Text("Repetier-Server printer", style=MaterialTheme.typography.titleSmall)
                         Text("Here a printer behind Repetier-Server offers a connection check and uploading a sliced file to the server's model library (which doesn't print it). Nozzle It All doesn't read its state, temperatures or progress yet (the slicer code this connection is ported from doesn't). Start the print from Repetier-Server or the printer's screen: starting, pausing and stopping from Nozzle It All aren't verified on a real printer yet.")
                     } } }
+                    else if(capabilities.transport == PrinterTransport.ANYCUBIC_LAN) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Anycubic printer", style=MaterialTheme.typography.titleSmall)
+                        Text("Here an Anycubic Kobra 3, Kobra S1 or Kobra X in LAN mode offers live status and temperatures (read-only), its ACE slots, and uploading a sliced file. Start the print on the printer's screen: starting, pausing and cancelling, temperatures, homing and the ACE's feed and dryer from Nozzle It All aren't verified on a real printer yet. Macros, console, configuration, camera and file previews are not available for this printer kind.")
+                        OutlinedButton({filamentSlotsOpen=true},enabled=state.connected,modifier=Modifier.testTag("open-filament-slots")){Text("ACE slots")}
+                    } } }
                     else if(capabilities.transport == PrinterTransport.PRUSA_LINK) item { KilnFrame { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("PrusaLink API limitations", style=MaterialTheme.typography.titleSmall)
                         Text("A Prusa Link printer exposes no macros, console or configuration over this API; its temperatures are read-only here and file browsing is the top-level folder only.")

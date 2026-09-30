@@ -85,6 +85,8 @@ class AndroidTestTarget(
             PrinterTransport.ULTIMAKER -> "android-ultimaker" to "ultimaker-http"
             PrinterTransport.REPETIER -> "android-repetier" to "repetier-http"
             PrinterTransport.ANYCUBIC_LAN -> "android-anycubic-lan" to "anycubic-mqtt"
+            PrinterTransport.SNAPMAKER_SSTP -> "android-snapmaker-sstp" to "snapmaker-sstp-http"
+            PrinterTransport.SNAPMAKER_SACP -> "android-snapmaker-sacp" to "snapmaker-sacp-tcp"
         }
     }
 

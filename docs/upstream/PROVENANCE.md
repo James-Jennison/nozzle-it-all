@@ -963,3 +963,56 @@ interchange).
   `/info` probe is not ported), no camera (`:18088/flv`), no file list, no light, fan, speed or skip-object controls.
 - **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard, Control tab), Test Grid
   classification.
+
+## P-0037 — Snapmaker 2.0 A-series, J1 and Artisan connections (ported from Luban and the SACP SDK, not copied)
+
+- **Upstream:** PRIMARY, ported from: Snapmaker Luban `db573f5` (local partial clone, AGPL-3.0),
+  `src/server/services/machine/`: `channels/SstpHttpChannel.ts` (Snapmaker 2.0 HTTP API), `channels/SacpTcpChannel.ts`,
+  `channels/SacpChannel.ts`, `sacp/SacpClient.ts` (SACP over TCP), `ProtocolDetector.ts`, `types.ts`. WIRE FORMAT:
+  `@snapmaker/snapmaker-sacp-sdk` 0.1.1 (local copy of the published package, ISC), `package/dist/`: `helper.js`,
+  `communication/Header.js`, `Packet.js`, `Communication.js`, `Dispatcher.js`, `Response.js`, `models/*.js`. Both
+  licences are compatible with this repository's; nothing was copied from either, and neither was run or installed.
+  The Snapmaker-SACP GitHub repository carries no licence and was deliberately NOT used, read or cited.
+- **Imported:** nothing copied. Re-implemented in Kotlin with file:line citations at each rule:
+  `SnapmakerSstp` (the HTTP API: `POST /api/v1/connect` with a form `token`, approval on the touchscreen, `series` /
+  `headType`; `GET /api/v1/status` fields; the multipart `POST /api/v1/upload` with `token` + `file`) and `SnapmakerSacp`
+  (the SACP packet: SOF 0xAA55, length, version, receiver, CRC-8, sender, attribute, sequence, command set / id, payload,
+  ones'-complement checksum; ACK matching on command + sequence; subscribe / unsubscribe; the hello `0x01/0x05` with
+  host name, client name and token; hello heartbeat `0xb0/0x0b`; machine info `0x01/0x21`; the heartbeat, nozzle, bed,
+  current-line and printing-time subscriptions; the printing file's info `0xac/0x1a`; the printer-driven upload
+  `0xb0/0x00` / `0x01` / `0x02` in 60 KiB chunks with an md5; the printer's goodbye `0x01/0x06`).
+- **Change:** two new kinds; the U1 kinds are untouched. `PrinterKind.SNAPMAKER_A_SERIES`
+  (`SnapmakerSstpPrinterService`, A150 / A250 / A350 incl. Dual and Quick Swap kits) and `PrinterKind.SNAPMAKER_SACP`
+  (`SnapmakerSacpPrinterService`, J1 / Artisan). Live status and temperatures (read-only) and uploading a sliced file,
+  which never starts a print. The A-series token and the SACP hello token live in the encrypted apiKey slot, like other
+  kinds' secrets; the token only travels in request bodies, never in a URL, message or log. The printer is asked to
+  accept Nozzle It All only from the explicit "Connect" button in Edit printer / the add-printer wizard
+  (`SnapmakerConnect`); status reads and uploads never send the A-series connect, and a J1 / Artisan with no connection
+  name sends nothing at all. Chips in Edit printer and the wizard, send targets, a Control-tab card, Test Mode labels,
+  Test Grid families `snapmaker-sstp` and `snapmaker-sacp`, and each kind limited to its own catalogue profiles
+  (`SnapmakerModels`: A250 / A350 variants for the A-series, J1 / Artisan for SACP; there is no A150 profile).
+- **Gated (`SnapmakerSstp.START_VERIFIED` / `SnapmakerSacp.START_VERIFIED` false; `startVerifiedFor` false):** starting a
+  print (`POST /api/v1/start_print`; SACP `0xb0/0x08`) is refused after the upload with "Uploaded <name> to the printer but
+  did not start it: starting a print on a Snapmaker printer from Nozzle It All isn't verified on real hardware yet. Start
+  it from the printer's screen."; pause, resume, stop, temperatures, nozzle switching and homing / moving with "Nothing
+  was sent: <what> on a Snapmaker printer from Nozzle It All isn't verified on real hardware yet. Use the printer's
+  screen.", before any request. None of those messages is built. Laser and CNC work is never offered; an A-series
+  reporting a laser or CNC head is refused at Connect.
+- **Additions of this port (not in the references):** reply time limits (Luban's SACP requests wait without one unless
+  retransmitted); a non-zero `0xb0/0x00` ACK is taken as a refused upload (Luban ignores it); a chunk request for another
+  file's md5 is answered with the error byte 200; the A-series status is read without the token; closing an A-series
+  service does not send `POST /api/v1/disconnect` (short-lived services share the one accepted session).
+- **Test evidence:** unit tests only. `SnapmakerSacpTest` (known-answer packets computed with a line-by-line Python
+  transliteration of the SDK's `helper.js` CRC-8 / checksum and `Header.js` / `Packet.js` serialisation, and payload
+  fixtures packed with Python's `struct` from the SDK models' layouts) and `SnapmakerSstpTest` in :domain;
+  `SnapmakerSstpPrinterServiceTest` (MockWebServer) and `SnapmakerSacpPrinterServiceTest` (a fake SACP peer on
+  127.0.0.1) in :app; `GatedKindsTest` in :test-grid. Nothing here has met a real printer.
+- **Known divergence / to verify on hardware:** the A-series HTTP port (Luban's `PORT_SCREEN_HTTP` is outside the
+  partial clone; 8080 is assumed, an address with a port wins); whether `GET /api/v1/status` needs the token (Luban's
+  heartbeat worker is outside the clone); the A-series state names (Luban's WorkflowStatus enum is in a package not
+  used; idle / running / paused are inferred); the J1 / Artisan state (Luban's WORKFLOW_STATUS_MAP is not in the
+  sources, so the state is always "unknown" and a send only uploads); the Artisan's machine-type number
+  (SACP_TYPE_SERIES_MAP is not in the sources); whether each short-lived SACP service's hello re-prompts on the printer's
+  screen. No discovery, camera, file list, fans, lights or enclosure.
+- **Touches:** printer transports (Android), shared UI (printer type chips, add-printer wizard, Control tab), Test Grid
+  classification, slicing-profile gating.

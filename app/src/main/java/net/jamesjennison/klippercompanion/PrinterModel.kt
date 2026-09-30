@@ -76,6 +76,10 @@ internal fun printerServiceFor(profile: PrinterProfile?, address: String): Print
     PrinterKind.REPETIER -> RepetierPrinterService(address, profile.apiKey, profile.serial)
     // An Anycubic in LAN mode needs only its address: its MQTT credentials come from its own handshake, held in memory only.
     PrinterKind.ANYCUBIC_LAN -> AnycubicLanPrinterService(address)
+    // A Snapmaker 2.0's touchscreen token in the encrypted apiKey slot, its series (shown only) in serial; a J1 / Artisan's
+    // connection name in serial and its optional hello token in apiKey. Both are set only by SnapmakerConnect's Connect.
+    PrinterKind.SNAPMAKER_A_SERIES -> SnapmakerSstpPrinterService(address, profile.apiKey, profile.serial)
+    PrinterKind.SNAPMAKER_SACP -> SnapmakerSacpPrinterService(address, profile.serial, profile.apiKey)
     else -> Moonraker(address, profile?.apiKey.orEmpty())
 }
 private fun kindOf(profiles: List<PrinterProfile>, address: String): PrinterKind = profiles.find { it.address == address }?.kind ?: PrinterKind.GENERIC_KLIPPER

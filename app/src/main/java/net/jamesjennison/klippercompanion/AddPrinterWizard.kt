@@ -138,6 +138,8 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                         FilterChip(kind==PrinterKind.ULTIMAKER, {kind=PrinterKind.ULTIMAKER}, label={Text("UltiMaker (3 / S-series)")}, modifier=Modifier.testTag("wizard-kind-ultimaker"))
                         FilterChip(kind==PrinterKind.REPETIER, {kind=PrinterKind.REPETIER}, label={Text("Repetier-Server")}, modifier=Modifier.testTag("wizard-kind-repetier"))
                         FilterChip(kind==PrinterKind.ANYCUBIC_LAN, {kind=PrinterKind.ANYCUBIC_LAN}, label={Text("Anycubic (Kobra 3 / S1 / X)")}, modifier=Modifier.testTag("wizard-kind-anycubic-lan"))
+                        FilterChip(kind==PrinterKind.SNAPMAKER_A_SERIES, {kind=PrinterKind.SNAPMAKER_A_SERIES}, label={Text("Snapmaker 2.0 (A250 / A350)")}, modifier=Modifier.testTag("wizard-kind-snapmaker-a-series"))
+                        FilterChip(kind==PrinterKind.SNAPMAKER_SACP, {kind=PrinterKind.SNAPMAKER_SACP}, label={Text("Snapmaker J1 / Artisan")}, modifier=Modifier.testTag("wizard-kind-snapmaker-sacp"))
                     }
                     if(kind==PrinterKind.BAMBU_LAB) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
@@ -189,6 +191,11 @@ private enum class WizardStep { TYPE_AND_ADDRESS, SLICING_PROFILE, FIRMWARE_CONF
                     } else if(kind==PrinterKind.ANYCUBIC_LAN) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
                         Text("An Anycubic Kobra 3, Kobra S1 or Kobra X on Anycubic's own firmware, with LAN mode turned on in the printer's settings. Nothing else is needed: the printer hands Nozzle It All its connection details itself. Nozzle It All reads its status and ACE slots and uploads sliced files; you start the print on the printer's screen (starting from here isn't verified on a real printer yet).", style=MaterialTheme.typography.bodySmall)
+                    } else if(kind==PrinterKind.SNAPMAKER_A_SERIES || kind==PrinterKind.SNAPMAKER_SACP) {
+                        OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true, modifier=Modifier.testTag("wizard-address"))
+                        SnapmakerConnect(kind, address, serial, apiKey) { s, k -> serial = s; apiKey = k }
+                        Text(if(kind==PrinterKind.SNAPMAKER_SACP) "A Snapmaker J1 or Artisan on your network. Tap Connect and accept Nozzle It All on the printer's screen. Nozzle It All reads its temperatures and job progress and uploads sliced files; you start the print on the printer's screen (starting from here isn't verified on a real printer yet). Laser and CNC work isn't offered."
+                            else "A Snapmaker 2.0 (A150, A250 or A350, single or dual extruder) with a 3D printing module, on your network. Tap Connect and accept Nozzle It All on the touchscreen. Nozzle It All reads its state and job progress and uploads sliced files; you start the print on the printer's screen (starting from here isn't verified on a real printer yet). Laser and CNC work isn't offered.", style=MaterialTheme.typography.bodySmall)
                     } else if(kind==PrinterKind.PRUSA_LINK) {
                         OutlinedTextField(address, {address=it}, label={Text("Printer IP address")}, placeholder={Text("192.168.1.50")}, singleLine=true)
                         OutlinedTextField(apiKey, {apiKey=it.take(200)}, label={Text("Prusa Link password")}, singleLine=true, modifier=Modifier.testTag("wizard-prusa-password"),

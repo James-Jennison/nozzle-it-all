@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
+import com.nozzleitall.printer.ext.FullSpectrumFormat
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -87,7 +88,7 @@ fun ColourMixingSection(p: PrepareState) {
  * Every mode previews the result (its layer stripe and colour) and offers Snapmaker's recommended swatches.
  */
 @Composable
-private fun MixEditor(p: PrepareState, mix: FullSpectrum.Mix?, physical: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>, onDone: () -> Unit) {
+private fun MixEditor(p: PrepareState, mix: FullSpectrumFormat.Mix?, physical: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>, onDone: () -> Unit) {
     val c = Nz.colors
     val scope = rememberCoroutineScope()
     val typed = physical.map { (it.colorHex ?: "#FFFFFF") to it.type }
@@ -104,7 +105,7 @@ private fun MixEditor(p: PrepareState, mix: FullSpectrum.Mix?, physical: List<co
     var matchDialog by remember { mutableStateOf<org.json.JSONObject?>(null) }
     var matchInfo by remember { mutableStateOf<String?>(null) }
     var direction by remember { mutableStateOf(0) }
-    var preview by remember { mutableStateOf<FullSpectrum.Mixes?>(null) }
+    var preview by remember { mutableStateOf<FullSpectrumFormat.Mixes?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
     var presets by remember { mutableStateOf<List<FullSpectrum.Preset>>(emptyList()) }
 
@@ -323,7 +324,7 @@ fun ColourMatchWindow(p: PrepareState, item: PrepItem, onClose: () -> Unit) {
     val physical = p.materials()
     var mode by remember { mutableStateOf("auto") }
     val manual = remember { mutableStateListOf<Int>().apply { addAll(physical.map { it.slot }) } }
-    var result by remember { mutableStateOf<FullSpectrum.MatchResult?>(null) }
+    var result by remember { mutableStateOf<FullSpectrumFormat.MatchResult?>(null) }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     // The model's colours, one entry per distinct colour with the file filaments using it: the file's own colours when it

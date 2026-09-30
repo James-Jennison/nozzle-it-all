@@ -1,5 +1,5 @@
-nozzle-engine (native Linux x86_64) built on gthost-build01 by nozzle-engine CI (run 36632934268), 2026-09-29T21:28:25Z from ed7e510be4eed68335d1c2d188ac9cad7908fa2c
-engine source: nozzle-engine cedbf252e94d357d0d41795da59aebe2e4eb8e14 (engine/fork/ENGINE_PIN.json); built from the pull request's test merge ed7e510, whose tree efc52a6 is identical to cedbf25's
+nozzle-engine (native Linux x86_64) built on gthost-build01 by nozzle-engine CI (run 36665180509), 2026-09-30T03:41:03Z from 3ec8ee843f0059a214612b10686e311554603de0
+engine source: nozzle-engine f7665123d00fb852a2cee5fd095901afbe6f45d1 (engine/fork/ENGINE_PIN.json); built from the pull request's test merge 3ec8ee8, whose tree 3f9f987 is identical to f766512's
 bridge: /home/jjennison/actions-runner-nozzle-engine/_work/nozzle-engine/nozzle-engine/engine/nozzle/bridge/native
 deps: /home/jjennison/nozzle-engine-ci/desktop-deps
-488991e723eab3f5a9301efddc785739d68b26a9af3a8e403b2a798fd58f1d96  nozzle-engine
+e2be00a5e214cc33c97d7d64f3937f070f21bf83f010546b7e4d4ac7a0320d23  nozzle-engine

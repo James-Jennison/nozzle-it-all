@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
+import com.nozzleitall.printer.ext.PrusaColorMixFormat
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +35,7 @@ fun PrusaColorMixSection(p: PrepareState) {
     val physical = p.materials()
     LaunchedEffect(physical.map { it.colorHex }) { p.refreshColorMix(this) }
     var editing by remember { mutableStateOf<Int?>(null) } // a virtual id, or 0 for a new blend
-    var confirmDelete by remember { mutableStateOf<PrusaColorMix.Virtual?>(null) }
+    var confirmDelete by remember { mutableStateOf<PrusaColorMixFormat.Virtual?>(null) }
 
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Txt("Color mix", Nz.type.label, c.text)
@@ -86,19 +87,19 @@ fun PrusaColorMixSection(p: PrepareState) {
  * "Reset to blended" (any recipe change resets it too); the layer sequence it prints; and the preset palette.
  */
 @Composable
-private fun BlendEditor(p: PrepareState, v: PrusaColorMix.Virtual?, physical: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>, onDone: () -> Unit) {
+private fun BlendEditor(p: PrepareState, v: PrusaColorMixFormat.Virtual?, physical: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>, onDone: () -> Unit) {
     val c = Nz.colors
     val scope = rememberCoroutineScope()
     val typed = physical.map { (it.colorHex ?: "#FFFFFF") to it.type }
     val extruders = remember(v?.id) { mutableStateListOf<Int>().apply { addAll(v?.components?.map { it.extruder } ?: listOf(1, 2)) } }
     var ratios by remember(v?.id) { mutableStateOf(v?.components?.map { it.value } ?: listOf(0.5, 0.5)) }
     var colour by remember(v?.id) { mutableStateOf(v?.colorOverride) }
-    var result by remember { mutableStateOf<PrusaColorMix.Virtual?>(null) }
+    var result by remember { mutableStateOf<PrusaColorMixFormat.Virtual?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
-    var presets by remember { mutableStateOf<List<PrusaColorMix.Preset>>(emptyList()) }
+    var presets by remember { mutableStateOf<List<PrusaColorMixFormat.Preset>>(emptyList()) }
     val filter = remember { mutableStateListOf<Int>() } // presets: only those using these extruders
     fun balanced(n: Int) = List(n) { i -> if (i == n - 1) 1.0 - (n - 1) * Math.round(100.0 / n) / 100.0 else Math.round(100.0 / n) / 100.0 }
-    fun draft(id: Int) = PrusaColorMix.Virtual(id, "fullspectrum", extruders.zip(ratios).map { (e, r) -> PrusaColorMix.Component(e, r) }, colour)
+    fun draft(id: Int) = PrusaColorMixFormat.Virtual(id, "fullspectrum", extruders.zip(ratios).map { (e, r) -> PrusaColorMixFormat.Component(e, r) }, colour)
     val bring = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     LaunchedEffect(v?.id) { kotlinx.coroutines.delay(50); bring.bringIntoView() }
     LaunchedEffect(extruders.toList(), ratios, colour) {

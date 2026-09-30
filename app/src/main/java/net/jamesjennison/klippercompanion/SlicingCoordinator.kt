@@ -142,7 +142,15 @@ object SlicingCoordinator {
     // bundled filament.json base diameter, merged into `overrides`. Left empty (the default, and
     // every caller before this parameter existed), this is the same single-material slice every
     // project already produces - no multi-slot config is generated at all.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList(), outputTag: String? = null): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
+    // Colour mixing (0.2.0, requirement 2): mixedFilamentDefinitions is Snapmaker Full Spectrum's own
+    // `mixed_filament_definitions` string (com.nozzleitall.printer.ext.FullSpectrumFormat.DEFINITIONS_KEY) - folded
+    // straight into `overrides`, since Full Spectrum needs no dedicated native call: the definitions travel as an
+    // ordinary config override, exactly the way Desktop's SliceEngine already applies them. virtualExtruders is
+    // PrusaSlicer ColorMix's own `{"version":1,"virtual_extruders":[...]}` JSON (PrusaColorMixFormat.sidecar) - when
+    // non-blank, slicing goes through nativeSliceMultiObjectMix instead of nativeSliceMultiObjectEx so the engine can
+    // resolve an object's tool index against a virtual (blended/gradient) extruder id, not just a physical one. Left
+    // blank (the default, and every caller before this parameter existed), slicing is byte-for-byte unchanged.
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList(), outputTag: String? = null, mixedFilamentDefinitions: String? = null, virtualExtruders: String = ""): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
         when (val resolved = resolveProfilePaths(context, profile)) {
@@ -177,8 +185,15 @@ object SlicingCoordinator {
                     }.getOrDefault(FlushVolumes.Setup())
                     overrides + MultiToolFilamentConfig.overridesFor(baseDiameter, slotMaterials, fallback, flush)
                 }
+                // Full Spectrum: no dedicated native call - the definitions are an ordinary config override, applied
+                // on every path below exactly like any other entry in effectiveOverrides.
+                val mixedOverrides = if (mixedFilamentDefinitions.isNullOrBlank()) effectiveOverrides
+                    else effectiveOverrides + (com.nozzleitall.printer.ext.FullSpectrumFormat.DEFINITIONS_KEY to mixedFilamentDefinitions)
                 if (bambuTarget) {
                     // Bambu: a .gcode.3mf bundle; with an AMS (BambuAms) each object prints with its assigned slot.
+                    // ColorMix's virtual extruders aren't wired into the Bambu bundle path (a Bambu target is never a
+                    // ColorMix printer - PrusaColorMix is offered on non-Bambu multi-slot printers only, see
+                    // ColourMixing.kt's ProfileFeatures.of/ofPrinter - so virtualExtruders is always blank here).
                     NativeEngine.nativeSliceMultiObjectBambuBundleTools(
                         objects.map { it.first.absolutePath }.toTypedArray(),
                         objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
@@ -186,8 +201,20 @@ object SlicingCoordinator {
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
                         slots.toIntArray(),
-                        output.absolutePath, resolved.profilePaths.toTypedArray(), effectiveOverrides.keys.toTypedArray(), effectiveOverrides.values.toTypedArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), mixedOverrides.keys.toTypedArray(), mixedOverrides.values.toTypedArray(),
                         objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
+                    )
+                } else if (virtualExtruders.isNotBlank()) {
+                    NativeEngine.nativeSliceMultiObjectMix(
+                        objects.map { it.first.absolutePath }.toTypedArray(),
+                        objects.map { it.second.offsetXMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.offsetYMm.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
+                        objects.map { it.second.scale.toDouble() }.toDoubleArray(),
+                        slots.toIntArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), mixedOverrides.keys.toTypedArray(), mixedOverrides.values.toTypedArray(),
+                        objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
+                        virtualExtruders,
                     )
                 } else {
                     NativeEngine.nativeSliceMultiObjectEx(
@@ -197,7 +224,7 @@ object SlicingCoordinator {
                         objects.map { it.second.rotationZDeg.toDouble() }.toDoubleArray(),
                         objects.map { it.second.scale.toDouble() }.toDoubleArray(),
                         slots.toIntArray(),
-                        output.absolutePath, resolved.profilePaths.toTypedArray(), effectiveOverrides.keys.toTypedArray(), effectiveOverrides.values.toTypedArray(),
+                        output.absolutePath, resolved.profilePaths.toTypedArray(), mixedOverrides.keys.toTypedArray(), mixedOverrides.values.toTypedArray(),
                         objects.indices.map { extras.getOrNull(it)?.paint.orEmpty() }.toTypedArray(), objects.indices.map { extras.getOrNull(it)?.volumes.orEmpty() }.toTypedArray(),
                     )
                 }

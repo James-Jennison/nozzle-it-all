@@ -181,4 +181,34 @@ object NativeEngine {
     // selector). Must be called exactly once per nativeOpenPaintSession call, or that memory
     // leaks for the process lifetime - there is no finalizer.
     external fun nativeClosePaintSession(handle: Long)
+
+    // Colour mixing (0.2.0): Snapmaker Full Spectrum and PrusaSlicer ColorMix, the same engine ops Desktop drives
+    // through `nozzle-engine --full-spectrum` / `--color-mix` (see com.nozzleitall.printer.ext.FullSpectrumFormat /
+    // PrusaColorMixFormat in :printer-api for the shared request/response JSON both platforms build and parse).
+    // requestJson/return are the exact same JSON shapes as the CLI's request file / stdout; a failure comes back as
+    // {"error":"..."} rather than throwing, matching the CLI's own convention (see native_cli.cpp's exit code 2).
+    external fun nativeFullSpectrum(requestJson: String): String
+    external fun nativeColorMix(requestJson: String): String
+
+    // The real multi-object counterpart to nativeSliceMultiObjectEx, plus a `virtual_extruders` file (the
+    // {"version":1,"virtual_extruders":[...]} JSON PrusaColorMixFormat.sliceRequestJson/sidecar produce) - an object
+    // assigned to a virtual extruder's id via toolSlotIndices then prints that blend's/gradient's layer cycle
+    // (nozzle_cm::check_virtual_extruders_file, native_cli.cpp's `virtual_extruders` request line). Pass "" for no
+    // colour mixing - identical output to nativeSliceMultiObjectEx. Throws "Bad virtual extruders JSON: <why>" on a
+    // malformed virtualExtruders string, same RuntimeException convention as every other native call here.
+    external fun nativeSliceMultiObjectMix(
+        modelPaths: Array<String>, offsetXMm: DoubleArray, offsetYMm: DoubleArray,
+        rotationZDeg: DoubleArray, scale: DoubleArray, toolSlotIndices: IntArray,
+        outputGcodePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>,
+        paintStrokes: Array<String>, volumeSpecs: Array<String>,
+        virtualExtruders: String,
+    )
+
+    // The paint-session counterpart: slices the session's own already-loaded model with a `virtual_extruders` file,
+    // same contract as nativeSliceMultiObjectMix's own virtualExtruders parameter.
+    external fun nativeSlicePaintSessionMix(
+        handle: Long, outputGcodePath: String, profilePaths: Array<String>,
+        overrideKeys: Array<String>, overrideValues: Array<String>, virtualExtruders: String,
+    )
 }

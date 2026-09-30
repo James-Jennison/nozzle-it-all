@@ -73,6 +73,27 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
             SliceOutcome.Cancelled -> SliceResult.Failed("Slicing was cancelled.")
         }
     }
+
+    /**
+     * Colour mixing (0.2.0, requirement 3): a slice option for Full Spectrum ([mixedFilamentDefinitions]) and
+     * ColorMix ([virtualExtruders]), through the exact same SlicingCoordinator.sliceProject path the project
+     * editor's own colour-mixing UI uses (ProjectEditorScreen.kt's sliceOnePlate) - not a parallel test-only
+     * pipeline. SliceRequest/TestSlicer.slice() carry no notion of mixing (every other suite has nothing to do
+     * with it), so the device tests that need this call it directly instead of going through slice(request).
+     */
+    fun sliceColourMix(
+        model: net.jamesjennison.klippercompanion.SlicingPrinterModel,
+        parts: List<Pair<File, ModelTransform>>,
+        toolSlotIndices: List<Int>,
+        slotMaterials: List<net.jamesjennison.klippercompanion.MaterialProfile?>,
+        mixedFilamentDefinitions: String? = null,
+        virtualExtruders: String = "",
+    ): SliceOutcome = runBlocking {
+        SlicingCoordinator.sliceProject(
+            context, parts, printer.copy(slicingModel = model), toolSlotIndices = toolSlotIndices, slotMaterials = slotMaterials,
+            mixedFilamentDefinitions = mixedFilamentDefinitions, virtualExtruders = virtualExtruders, outputTag = "testgrid-colourmix",
+        )
+    }
 }
 
 object AndroidTestEnvironment {

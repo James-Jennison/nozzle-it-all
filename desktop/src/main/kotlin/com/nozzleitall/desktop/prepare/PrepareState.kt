@@ -1,5 +1,7 @@
 package com.nozzleitall.desktop.prepare
 
+import com.nozzleitall.printer.ext.PrusaColorMixFormat
+import com.nozzleitall.printer.ext.FullSpectrumFormat
 import net.jamesjennison.klippercompanion.FlushVolumes
 import androidx.compose.runtime.*
 import com.nozzleitall.desktop.AppState
@@ -290,14 +292,14 @@ class PrepareState(private val app: AppState) {
     // --- Colour mixing (Snapmaker Full Spectrum). The mixes are Snapmaker's own mixed_filament_definitions string; the
     // engine (Snapmaker Orca's MixedFilamentManager) turns it into rows with virtual slot numbers after the physical ones.
     var mixDefinitions by mutableStateOf("")
-    val mixes = mutableStateListOf<FullSpectrum.Mix>()
+    val mixes = mutableStateListOf<FullSpectrumFormat.Mix>()
     var mixProblem by mutableStateOf<String?>(null)
 
     // --- PrusaSlicer ColorMix (virtual extruders), for multi-slot printers without Full Spectrum. Stored as PrusaSlicer's
     // own 3MF sidecar, so a project opens in PrusaSlicer with the same virtual extruders and paint.
-    val colorMix = mutableStateListOf<PrusaColorMix.Virtual>()
+    val colorMix = mutableStateListOf<PrusaColorMixFormat.Virtual>()
 
-    fun setColorMix(list: List<PrusaColorMix.Virtual>) { colorMix.clear(); colorMix.addAll(list.sortedBy { it.id }) }
+    fun setColorMix(list: List<PrusaColorMixFormat.Virtual>) { colorMix.clear(); colorMix.addAll(list.sortedBy { it.id }) }
 
     /** Re-reads the virtual extruders through PrusaSlicer's own normalising for the current slots (colours, cycles). */
     fun refreshColorMix(scope: kotlinx.coroutines.CoroutineScope) {
@@ -308,7 +310,7 @@ class PrepareState(private val app: AppState) {
     }
 
     /** Adds or replaces a virtual extruder, then re-reads the list through PrusaSlicer's normalising. */
-    fun saveVirtualExtruder(v: PrusaColorMix.Virtual, scope: kotlinx.coroutines.CoroutineScope) {
+    fun saveVirtualExtruder(v: PrusaColorMixFormat.Virtual, scope: kotlinx.coroutines.CoroutineScope) {
         setColorMix(colorMix.filter { it.id != v.id } + v); changed(); refreshColorMix(scope)
     }
 
@@ -360,7 +362,7 @@ class PrepareState(private val app: AppState) {
     fun allSlots(): List<Pair<Int, String>> = materials().map { it.slot to listOfNotNull(it.vendor, it.type).joinToString(" ").ifBlank { "Filament" } } +
         mixes.filter { it.enabled }.map { it.id to it.label } + colorMix.map { it.id to "[V] Extruder ${it.id}" }
 
-    private fun setMixes(m: FullSpectrum.Mixes) { mixDefinitions = m.definitions; mixes.clear(); mixes.addAll(m.rows); mixProblem = null }
+    private fun setMixes(m: FullSpectrumFormat.Mixes) { mixDefinitions = m.definitions; mixes.clear(); mixes.addAll(m.rows); mixProblem = null }
 
     /** Re-reads the mixes for the current slots (their colours and numbers follow the loaded filaments). */
     fun refreshMixes(scope: kotlinx.coroutines.CoroutineScope) {
@@ -370,7 +372,7 @@ class PrepareState(private val app: AppState) {
             .onSuccess { setMixes(it) }.onFailure { mixProblem = it.message } }
     }
 
-    fun editMixes(scope: kotlinx.coroutines.CoroutineScope, op: (List<String>, String) -> FullSpectrum.Mixes) {
+    fun editMixes(scope: kotlinx.coroutines.CoroutineScope, op: (List<String>, String) -> FullSpectrumFormat.Mixes) {
         val defs = mixDefinitions; val physical = physicalColours()
         scope.launch { runCatching { withContext(Dispatchers.IO) { op(physical, defs) } }
             .onSuccess { setMixes(it); followRemap(it.remap); changed() }.onFailure { mixProblem = it.message } }
@@ -392,7 +394,7 @@ class PrepareState(private val app: AppState) {
     fun usedSlots(): Set<Int> = items.flatMapTo(HashSet()) { item -> listOf(item.slot) + item.painted.map { item.slotFor(it) } }
 
     /** Applies a Color Mixing Match to [item]: its colours print in the matched slots or new mixes. */
-    fun applyMatch(item: PrepItem, result: FullSpectrum.MatchResult, scope: kotlinx.coroutines.CoroutineScope) {
+    fun applyMatch(item: PrepItem, result: FullSpectrumFormat.MatchResult, scope: kotlinx.coroutines.CoroutineScope) {
         mixDefinitions = result.definitions
         // Auto mode matched against Snapmaker's recommended filaments: with no printer reporting what's loaded, the slots
         // become those filaments (as Snapmaker Orca's apply step sets them); a connected printer's slots are what's loaded.

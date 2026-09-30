@@ -52,7 +52,10 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         ULTIMAKER_S5(PrinterKind.ULTIMAKER, "UltiMaker", "S5", "", "", false, false, SlicingPrinterModel.ULTIMAKER_S5, 2),
         REPETIER(PrinterKind.REPETIER, "Generic", "Repetier-Server printer", "", "", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
         FLASHFORGE_ADVENTURER_4(PrinterKind.FLASHFORGE, "Flashforge", "Adventurer 4", "", "", false, false, SlicingPrinterModel.FLASHFORGE_ADVENTURER_4_SERIES, legacyFlashforge = true),
-        ANYCUBIC_KOBRA_3(PrinterKind.ANYCUBIC_LAN, "Anycubic", "Kobra 3", "", "", false, false, SlicingPrinterModel.ANYCUBIC_KOBRA_3, 4);
+        ANYCUBIC_KOBRA_3(PrinterKind.ANYCUBIC_LAN, "Anycubic", "Kobra 3", "", "", false, false, SlicingPrinterModel.ANYCUBIC_KOBRA_3, 4),
+        // Snapmaker 2.0 on its touchscreen API (reads state) and the J1 over SACP (doesn't yet); both dual-nozzle profiles, start gated off.
+        SNAPMAKER_A350_DUAL(PrinterKind.SNAPMAKER_A_SERIES, "Snapmaker", "A350 Dual", "", "", false, false, SlicingPrinterModel.SNAPMAKER_A350_DUAL, 2),
+        SNAPMAKER_J1(PrinterKind.SNAPMAKER_SACP, "Snapmaker", "J1", "", "", false, false, SlicingPrinterModel.SNAPMAKER_J1, 2);
 
         companion object { fun parse(s: String) = entries.firstOrNull { it.name.equals(s.replace('-', '_'), ignoreCase = true) } }
     }

@@ -5,7 +5,7 @@
     0
   ],
   "id": "bambu-lan",
-  "suiteVersion": "1.6.0",
+  "suiteVersion": "1.7.0",
   "title": "Bambu Lab printer in LAN mode",
   "description": "For testers with any Bambu Lab printer in LAN-only mode; sliced with the printer's own profile into a .gcode.3mf. AMS multi-colour printing isn't enabled in Nozzle yet, so there is no multi-material test here. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",

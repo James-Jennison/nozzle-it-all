@@ -5,7 +5,7 @@
     0
   ],
   "id": "ultimaker-lan",
-  "suiteVersion": "1.6.0",
+  "suiteVersion": "1.7.0",
   "title": "UltiMaker printer on its local network API",
   "description": "For testers with an UltiMaker S-series printer (S5 and similar) on the local network, paired with Nozzle It All on the printer's screen, sliced with the printer's own profile. The UltiMaker 2 has no network and isn't covered. Nozzle It All doesn't start prints or pause/resume/cancel on these printers yet, so those tests are recorded as blocked until it does. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",

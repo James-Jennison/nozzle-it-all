@@ -5,7 +5,7 @@
     0
   ],
   "id": "generic-klipper",
-  "suiteVersion": "1.6.0",
+  "suiteVersion": "1.7.0",
   "title": "Generic Klipper/Moonraker printer",
   "description": "For testers with any other Klipper/Moonraker printer. One Klipper result proves only that printer model, kinematics and configuration: every model is its own row in the matrix. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",

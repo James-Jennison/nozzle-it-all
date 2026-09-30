@@ -78,7 +78,8 @@ class SendAndStartTest {
 
     @Test fun whereTheAppDoesntStartPrintsYetThoseTestsAreBlockedAndNothingIsSent() {
         // Creality (CFS) and Flashforge (IFS): the app uploads but doesn't start prints until START_VERIFIED.
-        listOf("creality-lan" to SimulatedPrinter.Preset.CREALITY_K2, "flashforge-lan" to SimulatedPrinter.Preset.FLASHFORGE_AD5X).forEach { (suite, preset) ->
+        listOf("creality-lan" to SimulatedPrinter.Preset.CREALITY_K2, "flashforge-lan" to SimulatedPrinter.Preset.FLASHFORGE_AD5X,
+            "anycubic-lan" to SimulatedPrinter.Preset.ANYCUBIC_KOBRA_3).forEach { (suite, preset) ->
             val clock = Support.Clock()
             val sim = SimulatedPrinter(preset, clock::now)
             var sent = 0

@@ -7,6 +7,7 @@
   "suites": [
     "paxx-u1.json",
     "cosmos-centauri-carbon.json",
+    "fixture-anycubic-lan.json",
     "fixture-bambu-lan.json",
     "fixture-creality-lan.json",
     "fixture-duet-rrf.json",

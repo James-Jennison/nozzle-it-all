@@ -5,7 +5,7 @@
     0
   ],
   "id": "opencentauri-patched",
-  "suiteVersion": "1.5.0",
+  "suiteVersion": "1.6.0",
   "title": "Elegoo Centauri Carbon on OpenCentauri-patched stock firmware",
   "description": "For testers running OpenCentauri's patched stock firmware (not COSMOS). It shares the stock slicer profile and the SDCP protocol, but is graded separately from unpatched stock firmware. The printer cannot report which it runs; the tester declares it in Test Mode. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
@@ -39,6 +39,9 @@
       "category": "monitoring",
       "scope": "single_material",
       "safetyLevel": 1,
+      "requiredCapabilities": [
+        "status"
+      ],
       "preconditions": [
         {
           "id": "present",

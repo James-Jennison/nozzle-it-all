@@ -94,4 +94,31 @@ class SendAndStartTest {
             assertEquals(suite, 0, sent)
         }
     }
+
+    @Test fun printersPortedFromUpstreamHostsRunWhatTheAppCanDoAndBlockTheRest() {
+        // Duet, UltiMaker, Repetier-Server and the legacy Flashforge console: start gated off; Duet, Repetier and the
+        // legacy console don't read printer state either, so their status test is blocked rather than failed.
+        data class Case(val suite: String, val preset: SimulatedPrinter.Preset, val readsState: Boolean)
+        listOf(Case("duet-rrf", SimulatedPrinter.Preset.DUET, false), Case("ultimaker-lan", SimulatedPrinter.Preset.ULTIMAKER_S5, true),
+            Case("repetier-server", SimulatedPrinter.Preset.REPETIER, false), Case("flashforge-legacy", SimulatedPrinter.Preset.FLASHFORGE_ADVENTURER_4, false)).forEach { c ->
+            val clock = Support.Clock()
+            val sim = SimulatedPrinter(c.preset, clock::now)
+            var sent = 0
+            val target = object : TestTarget by sim { override fun sendAndStart(file: java.io.File, requestedName: String): TransferOutcome { sent++; return sim.sendAndStart(file, requestedName) } }
+            val st = Support.start(c.suite, target, clock)
+            Support.drive(st.session)
+            val r = st.session.record
+            assertEquals(c.suite, c.suite, r.target.getJSONObject("firmware").getString("family"))
+            assertEquals("${c.suite}/slice-single: ${r.test("slice-single")!!.reason}", ResultState.PASS, r.test("slice-single")!!.result)
+            assertEquals("${c.suite}/telemetry", if (c.readsState) ResultState.PASS else ResultState.BLOCKED, r.test("telemetry")!!.result)
+            listOf("transfer", "print-single", "print-controls").forEach { assertEquals("${c.suite}/$it", ResultState.BLOCKED, r.test(it)!!.result) }
+            assertEquals(c.suite, 0, sent)
+        }
+        // The UltiMaker S5's profile has two nozzles, so its multi-material tests apply (and block at printing).
+        val clock = Support.Clock()
+        val st = Support.start("ultimaker-lan", SimulatedPrinter(SimulatedPrinter.Preset.ULTIMAKER_S5, clock::now), clock)
+        Support.drive(st.session)
+        assertEquals(ResultState.PASS, st.session.record.test("multi-slice")!!.result)
+        assertEquals(ResultState.BLOCKED, st.session.record.test("multi-print")!!.result)
+    }
 }

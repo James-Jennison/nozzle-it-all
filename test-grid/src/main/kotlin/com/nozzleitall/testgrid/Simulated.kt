@@ -31,7 +31,7 @@ class VirtualClock(@Volatile private var t: Long = System.currentTimeMillis()) {
  */
 class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = System::currentTimeMillis, val faults: MutableSet<String> = mutableSetOf()) : TestTarget {
     enum class Preset(val printerKind: PrinterKind, val manufacturer: String, val model: String, val app: String, val version: String,
-                      val paxx: Boolean, val afc: Boolean, val slicingModel: SlicingPrinterModel, val toolSlots: Int = 1) {
+                      val paxx: Boolean, val afc: Boolean, val slicingModel: SlicingPrinterModel, val toolSlots: Int = 1, val legacyFlashforge: Boolean = false) {
         PAXX_U1(PrinterKind.SNAPMAKER_U1_PAXX, "Snapmaker", "U1", "", "1.6.0.267_20260815150420", true, false, SlicingPrinterModel.SNAPMAKER_U1),
         STOCK_U1(PrinterKind.SNAPMAKER_U1, "Snapmaker", "U1", "", "1.6.0.267_20260815150420", false, false, SlicingPrinterModel.SNAPMAKER_U1),
         COSMOS_CC(PrinterKind.GENERIC_KLIPPER, "Elegoo", "Centauri Carbon", "OpenCentauri Cosmos", "Release - 26.08.0", false, false, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON),
@@ -46,7 +46,12 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         PRUSA_XL_5T(PrinterKind.PRUSA_LINK, "Prusa", "XL 5T", "", "", false, false, SlicingPrinterModel.PRUSA_XL_5T, 5),
         // Start is gated off for these kinds in the app (startVerifiedFor), so their suites' print tests are blocked.
         CREALITY_K2(PrinterKind.CREALITY, "Creality", "K2", "", "", false, false, SlicingPrinterModel.CREALITY_K2, 4),
-        FLASHFORGE_AD5X(PrinterKind.FLASHFORGE, "Flashforge", "AD5X", "", "", false, false, SlicingPrinterModel.FLASHFORGE_AD5X, 4);
+        FLASHFORGE_AD5X(PrinterKind.FLASHFORGE, "Flashforge", "AD5X", "", "", false, false, SlicingPrinterModel.FLASHFORGE_AD5X, 4),
+        // Ported from upstream's print hosts; start gated off. Duet and Repetier-Server don't read printer state.
+        DUET(PrinterKind.DUET, "Generic", "RepRapFirmware printer", "", "", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
+        ULTIMAKER_S5(PrinterKind.ULTIMAKER, "UltiMaker", "S5", "", "", false, false, SlicingPrinterModel.ULTIMAKER_S5, 2),
+        REPETIER(PrinterKind.REPETIER, "Generic", "Repetier-Server printer", "", "", false, false, SlicingPrinterModel.GENERIC_KLIPPER),
+        FLASHFORGE_ADVENTURER_4(PrinterKind.FLASHFORGE, "Flashforge", "Adventurer 4", "", "", false, false, SlicingPrinterModel.FLASHFORGE_ADVENTURER_4_SERIES, legacyFlashforge = true);
 
         companion object { fun parse(s: String) = entries.firstOrNull { it.name.equals(s.replace('-', '_'), ignoreCase = true) } }
     }
@@ -57,6 +62,7 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
 
     override val description = TargetDescription(TargetKind.SIMULATED, preset.manufacturer, preset.model, preset.printerKind, "simulated", "simulated-moonraker",
         "Simulated ${preset.model} ($hostname)", address, preset.slicingModel, toolSlots = preset.toolSlots)
+        .let { if (preset.legacyFlashforge) it.copy(protocol = FirmwareFamilies.LEGACY_FLASHFORGE_PROTOCOL) else it }
 
     private var state = "standby"
     private var nozzle = 24.0; private var nozzleTarget = 0.0
@@ -85,7 +91,7 @@ class SimulatedPrinter(val preset: Preset, private val clock: () -> Long = Syste
         return StatusReading(state, true, nozzle, nozzleTarget, bed, bedTarget, progress, loaded, clock(), homedAxes, position.toList())
     }
 
-    override fun declaredCapabilities() = CapabilityNames.declared(preset.printerKind, FirmwareFamilies.classify(description, identity()).hardware)
+    override fun declaredCapabilities() = CapabilityNames.declared(preset.printerKind, FirmwareFamilies.classify(description, identity()).hardware, preset.legacyFlashforge)
     override fun cameras() = listOf(CameraInfo("Toolhead", "$address/webcam/webrtc?token=$apiKey"))
     override fun cameraSnapshot(camera: CameraInfo): ByteArray = ByteArray(2048).also { b ->
         byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte()).copyInto(b); b[2046] = 0xFF.toByte(); b[2047] = 0xD9.toByte()

@@ -5,7 +5,7 @@
     0
   ],
   "id": "paxx-u1",
-  "suiteVersion": "1.5.0",
+  "suiteVersion": "1.6.0",
   "title": "Snapmaker U1 on PAXX extended firmware",
   "description": "Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.",
   "coverage": "reference",

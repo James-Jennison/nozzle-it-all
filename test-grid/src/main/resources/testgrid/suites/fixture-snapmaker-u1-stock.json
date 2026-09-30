@@ -5,7 +5,7 @@
     0
   ],
   "id": "snapmaker-u1-stock",
-  "suiteVersion": "1.5.0",
+  "suiteVersion": "1.6.0",
   "title": "Snapmaker U1 on stock firmware",
   "description": "For external testers with a stock-firmware U1 (no PAXX). Local LAN path only; the optional Snapmaker cloud helper is not exercised. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",

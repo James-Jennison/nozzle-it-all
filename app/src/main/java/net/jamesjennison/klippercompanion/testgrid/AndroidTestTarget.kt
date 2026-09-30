@@ -107,7 +107,8 @@ class AndroidTestTarget(
             toolhead?.first, toolhead?.second?.takeIf { it.size == 3 })
     }
 
-    override fun declaredCapabilities(): Set<String> = CapabilityNames.declared(profile.kind)
+    override fun declaredCapabilities(): Set<String> = CapabilityNames.declared(profile.kind,
+        legacyFlashforge = profile.kind == PrinterKind.FLASHFORGE && net.jamesjennison.klippercompanion.FlashforgeLegacy.usesLegacy(profile.serial, profile.apiKey))
 
     override fun cameras(): List<CameraInfo> = service { s -> s.cameras().map { CameraInfo(it.name, it.stream.ifBlank { it.snapshot }) } }
 

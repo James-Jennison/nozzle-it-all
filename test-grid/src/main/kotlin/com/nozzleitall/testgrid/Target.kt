@@ -146,11 +146,13 @@ object CapabilityNames {
     val KNOWN = setOf(STATUS, FIRMWARE_IDENTITY, CAMERA, FILES, UPLOAD_JOB, UPLOAD_AND_START, START_PRINT, PAUSE, RESUME, CANCEL,
         TEMPERATURES, MOTION, MATERIAL_STATE, MULTI_MATERIAL)
 
-    fun declared(kind: PrinterKind, hardware: Map<String, Boolean> = emptyMap()): Set<String> {
+    /** [legacyFlashforge]: a Flashforge on the legacy port-8899 console, which reads neither printer state nor slots. */
+    fun declared(kind: PrinterKind, hardware: Map<String, Boolean> = emptyMap(), legacyFlashforge: Boolean = false): Set<String> {
         val c = capabilitiesFor(kind)
         val moonraker = c.transport == PrinterTransport.MOONRAKER
         return buildSet {
-            add(STATUS)
+            // Status only where the app really reads the printer's state (Duet and Repetier-Server report "unknown").
+            if (c.readsPrinterState && !legacyFlashforge) add(STATUS)
             if (moonraker) { add(FIRMWARE_IDENTITY); add(FILES); add(UPLOAD_JOB); add(START_PRINT) }
             // A kind whose start is still gated off (startVerifiedFor) only uploads: it doesn't claim send-and-print.
             if (!moonraker && c.acceptsOnDeviceSlicedGcode && startVerifiedFor(kind)) add(UPLOAD_AND_START)
@@ -158,7 +160,7 @@ object CapabilityNames {
             if (c.supportsPauseResumeCancel) { add(PAUSE); add(RESUME); add(CANCEL) }
             if (c.supportsKlipperExtras) add(TEMPERATURES)
             if (c.supportsJog) add(MOTION)
-            if (c.hasMultiAce || c.transport in setOf(PrinterTransport.ELEGOO, PrinterTransport.CREALITY, PrinterTransport.FLASHFORGE) || hardware["canvas"] == true) add(MATERIAL_STATE)
+            if (c.hasMultiAce || c.transport in setOf(PrinterTransport.ELEGOO, PrinterTransport.CREALITY) || (c.transport == PrinterTransport.FLASHFORGE && !legacyFlashforge) || hardware["canvas"] == true) add(MATERIAL_STATE)
             if (hardware["canvas"] == true || hardware["multi_tool"] == true) add(MULTI_MATERIAL)
         }
     }

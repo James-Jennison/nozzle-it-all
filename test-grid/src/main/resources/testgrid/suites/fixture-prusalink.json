@@ -5,7 +5,7 @@
     0
   ],
   "id": "prusalink",
-  "suiteVersion": "1.5.0",
+  "suiteVersion": "1.6.0",
   "title": "Prusa printer through PrusaLink",
   "description": "For testers with any Prusa printer reached through PrusaLink, sliced with the printer's own profile. Each model is its own row in the report. Multi-material tests run when the saved profile has more than one tool or filament slot (Prusa XL 5T); Nozzle has no MMU3 slicing profile yet. Fixture suite: every result stays UNVERIFIED until a bundle from matching physical hardware is accepted.",
   "coverage": "fixture",
@@ -36,6 +36,9 @@
       "category": "monitoring",
       "scope": "single_material",
       "safetyLevel": 1,
+      "requiredCapabilities": [
+        "status"
+      ],
       "preconditions": [
         {
           "id": "present",

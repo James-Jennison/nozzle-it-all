@@ -1,6 +1,9 @@
 package com.nozzleitall.desktop.prepare
 
 import com.nozzleitall.printer.ext.PrusaColorMixFormat
+import com.nozzleitall.printer.ext.PrusaColorMixFormat.Component
+import com.nozzleitall.printer.ext.PrusaColorMixFormat.Preset
+import com.nozzleitall.printer.ext.PrusaColorMixFormat.Virtual
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -21,8 +24,6 @@ import java.util.concurrent.TimeUnit
 object PrusaColorMix {
     const val SIDECAR = PrusaColorMixFormat.SIDECAR
 
-    typealias Component = PrusaColorMixFormat.Component
-    typealias Virtual = PrusaColorMixFormat.Virtual
 
     fun parse(entry: JSONObject): Virtual = PrusaColorMixFormat.parse(entry)
 
@@ -62,7 +63,6 @@ object PrusaColorMix {
     fun mix(colors: List<String>, ratios: List<Double>): String =
         run(JSONObject().put("op", "mix").put("colors", JSONArray(colors)).put("ratios", JSONArray(ratios))).getString("color")
 
-    typealias Preset = PrusaColorMixFormat.Preset
 
     /** PrusaSlicer's preset palette for the loaded filaments (same material only, near-duplicates removed, by hue). */
     fun presets(physical: List<Pair<String, String?>>): List<Preset> {

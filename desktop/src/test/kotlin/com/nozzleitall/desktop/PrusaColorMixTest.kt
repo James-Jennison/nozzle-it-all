@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop
 
+import com.nozzleitall.printer.ext.PrusaColorMixFormat
 import com.nozzleitall.desktop.prepare.*
 import com.nozzleitall.project.*
 import org.junit.Assert.*
@@ -13,7 +14,7 @@ class PrusaColorMixTest {
     private val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
     private val xl = listOf("#FF0000", "#0000FF", "#FFFF00", "#FFFFFF", "#000000").map { it to "PLA" }
     private fun engineReady() = assumeTrue("slicing engine available", SliceEngine.locateEngine() != null)
-    private fun blend(id: Int, vararg c: Pair<Int, Double>) = PrusaColorMix.Virtual(id, "fullspectrum", c.map { PrusaColorMix.Component(it.first, it.second) })
+    private fun blend(id: Int, vararg c: Pair<Int, Double>) = PrusaColorMixFormat.Virtual(id, "fullspectrum", c.map { PrusaColorMixFormat.Component(it.first, it.second) })
 
     @Test fun blendsNormaliseToPrusasLayerCycle() {
         engineReady()

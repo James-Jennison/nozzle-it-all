@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
+import com.nozzleitall.printer.ext.PrusaColorMixFormat
 import com.nozzleitall.project.Mesh
 import com.nozzleitall.project.Paint
 import com.nozzleitall.project.ProjectManifest
@@ -17,7 +18,7 @@ object MeshIO {
     /** A model file's geometry, plus for a 3MF the filaments it was set up with and the one its first object prints with. */
     class Loaded(val mesh: Mesh, val filaments: List<SourceFilament> = emptyList(), val filament: Int? = null,
                  /** PrusaSlicer's virtual extruders, when the file has them (its ColorMix sidecar). */
-                 val colorMix: List<PrusaColorMix.Virtual> = emptyList(),
+                 val colorMix: List<PrusaColorMixFormat.Virtual> = emptyList(),
                  /** The ColorMix sidecar as the file has it (for PrusaSlicer's import remap). */
                  val colorMixSidecar: ByteArray? = null)
 

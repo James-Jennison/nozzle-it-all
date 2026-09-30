@@ -1,6 +1,10 @@
 package com.nozzleitall.desktop.prepare
 
 import com.nozzleitall.printer.ext.FullSpectrumFormat
+import com.nozzleitall.printer.ext.FullSpectrumFormat.Match
+import com.nozzleitall.printer.ext.FullSpectrumFormat.MatchResult
+import com.nozzleitall.printer.ext.FullSpectrumFormat.Mix
+import com.nozzleitall.printer.ext.FullSpectrumFormat.Mixes
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -21,10 +25,6 @@ object FullSpectrum {
     /** The project setting that carries the mixes, exactly as Snapmaker Orca stores it. */
     const val DEFINITIONS_KEY = FullSpectrumFormat.DEFINITIONS_KEY
 
-    typealias Mix = FullSpectrumFormat.Mix
-    typealias Mixes = FullSpectrumFormat.Mixes
-    typealias Match = FullSpectrumFormat.Match
-    typealias MatchResult = FullSpectrumFormat.MatchResult
 
     class EngineError(message: String) : Exception(message)
 

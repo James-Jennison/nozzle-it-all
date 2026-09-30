@@ -133,7 +133,7 @@ class SnapmakerSacpTest {
 
     @Test fun appliesNotificationsToTheStatus() {
         val s = SnapmakerSacp
-        var st = s.Status()
+        var st = SnapmakerSacp.Status()
         assertTrue(s.heartbeatStale(st, 1_000))
         // sdk/models/ExtruderInfo.js:12-39: key 0, one extruder, status 1, 0.4 mm, 210.5 / 215.0 C.
         st = s.apply(st, s.NOZZLES, hex("00" + "000100010001009001000044360300d8470300"), 10)
@@ -149,7 +149,7 @@ class SnapmakerSacpTest {
         st = s.apply(st, s.PRINTING_TIME, hex("003c000000"), 50)
         assertEquals(1000L, st.currentLine); assertEquals(60L, st.printingSeconds)
         assertEquals(0f, st.progress) // no total yet
-        st = st.copy(fileInfo = s.FileInfo("cube.gcode", 2000, 3600))
+        st = st.copy(fileInfo = SnapmakerSacp.FileInfo("cube.gcode", 2000, 3600))
         assertEquals(0.5f, st.progress)
         val snap = st.snapshot(ready = true)
         assertEquals("unknown", snap.state); assertEquals("", snap.activeFilename) // never shown as printing without a state
@@ -164,7 +164,7 @@ class SnapmakerSacpTest {
     @Test fun twoExtrudersPickTheWorkingNozzle() {
         val s = SnapmakerSacp
         fun e(i: Int, status: Int) = "%02x".format(i) + "01" + "00" + "%02x".format(status) + "00" + "90010000" + "44360300" + "d8470300"
-        val st = s.apply(s.Status(), s.NOZZLES, hex("00" + "0002" + e(0, 0) + e(1, 1)), 1)
+        val st = s.apply(SnapmakerSacp.Status(), s.NOZZLES, hex("00" + "0002" + e(0, 0) + e(1, 1)), 1)
         assertEquals(0, st.left!!.index); assertEquals(1, st.right!!.index); assertEquals(1, st.workNozzle)
         assertEquals("right nozzle", st.snapshot(true).activeExtruder)
         assertEquals(2, st.toolheads().size)

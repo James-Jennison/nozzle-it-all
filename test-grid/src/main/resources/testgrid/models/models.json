@@ -88,6 +88,31 @@
       ],
       "scope": "multi_material",
       "title": "Nozzle multi-material acceptance model v1"
+    },
+    {
+      "dimensions": {
+        "footprint": {
+          "x": 40,
+          "y": 10
+        },
+        "height": 6
+      },
+      "features": [
+        "colour mixing (Full Spectrum or ColorMix)",
+        "layer-by-layer tool alternation",
+        "blended colour"
+      ],
+      "id": "nozzle-colour-swatch-v1",
+      "parts": [
+        {
+          "bytes": 684,
+          "file": "nozzle-colour-swatch-v1.stl",
+          "sha256": "4e56f2cf29166733f15fe4170c850c26574af0de4a7378eef5822e6ce53f4e40",
+          "tool": 1
+        }
+      ],
+      "scope": "multi_material",
+      "title": "Nozzle colour-mixing swatch v1"
     }
   ],
   "version": [

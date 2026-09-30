@@ -22,11 +22,14 @@ import java.nio.ByteOrder
  *  - a 1.2 mm thin wall, 20 long, 8.6 tall: thin-wall and extrusion width
  * nozzle-acceptance-mm-v1 (multi-material, kept separate on purpose): four 10 × 40 × 3 stripes alternating between two
  * parts (tool 1, tool 2), for material/tool change, purge and colour bleed. Never part of single-material acceptance.
+ * nozzle-colour-swatch-v1 (multi-material): one 40 × 10 × 6 mm block, sliced as a 50/50 colour mix of two tools. Its
+ * 30 layers (at 0.2 mm) alternate between them, and its long sides show whether the two read as one blended colour.
  */
 object AcceptanceModel {
     const val GENERATOR_VERSION = 1
     const val SINGLE_ID = "nozzle-acceptance-v1"
     const val MULTI_ID = "nozzle-acceptance-mm-v1"
+    const val SWATCH_ID = "nozzle-colour-swatch-v1"
 
     data class Box(val x0: Double, val y0: Double, val z0: Double, val x1: Double, val y1: Double, val z1: Double) {
         fun contains(x: Double, y: Double, z: Double) = x in x0..x1 && y in y0..y1 && z in z0..z1
@@ -47,6 +50,7 @@ object AcceptanceModel {
 
     val MULTI_A = Solid("$MULTI_ID-a", listOf(Box(0.0, 0.0, 0.0, 10.0, 40.0, 3.0), Box(20.0, 0.0, 0.0, 30.0, 40.0, 3.0)))
     val MULTI_B = Solid("$MULTI_ID-b", listOf(Box(10.0, 0.0, 0.0, 20.0, 40.0, 3.0), Box(30.0, 0.0, 0.0, 40.0, 40.0, 3.0)))
+    val SWATCH = Solid(SWATCH_ID, listOf(Box(0.0, 0.0, 0.0, 40.0, 10.0, 6.0)))
 
     /** Published measurements and the tolerances the reference suites accept (mm). */
     val SINGLE_DIMENSIONS: JSONObject get() = JSONObject(mapOf(
@@ -59,8 +63,10 @@ object AcceptanceModel {
 
     val MULTI_DIMENSIONS: JSONObject get() = JSONObject().put("footprint", JSONObject().put("x", 40.0).put("y", 40.0)).put("stripeWidth", 10.0).put("height", 3.0).put("stripes", 4)
 
+    val SWATCH_DIMENSIONS: JSONObject get() = JSONObject().put("footprint", JSONObject().put("x", 40.0).put("y", 10.0)).put("height", 6.0)
+
     fun files(): Map<String, ByteArray> = sortedMapOf(
-        "$SINGLE_ID.stl" to stl(SINGLE), "$MULTI_ID-a.stl" to stl(MULTI_A), "$MULTI_ID-b.stl" to stl(MULTI_B))
+        "$SINGLE_ID.stl" to stl(SINGLE), "$MULTI_ID-a.stl" to stl(MULTI_A), "$MULTI_ID-b.stl" to stl(MULTI_B), "$SWATCH_ID.stl" to stl(SWATCH))
 
     fun manifest(): JSONObject {
         val f = files()
@@ -73,7 +79,10 @@ object AcceptanceModel {
                     .put("features", JSONArray(listOf("bed placement and limits", "first layer", "dimensional accuracy", "retraction", "bridging", "surface quality", "thin walls"))))
                 .put(JSONObject().put("id", MULTI_ID).put("title", "Nozzle multi-material acceptance model v1").put("scope", MaterialScope.MULTI.id)
                     .put("parts", JSONArray().put(part("$MULTI_ID-a.stl", 1)).put(part("$MULTI_ID-b.stl", 2))).put("dimensions", MULTI_DIMENSIONS)
-                    .put("features", JSONArray(listOf("tool or material change", "purge", "colour bleed at boundaries")))))
+                    .put("features", JSONArray(listOf("tool or material change", "purge", "colour bleed at boundaries"))))
+                .put(JSONObject().put("id", SWATCH_ID).put("title", "Nozzle colour-mixing swatch v1").put("scope", MaterialScope.MULTI.id)
+                    .put("parts", JSONArray().put(part("$SWATCH_ID.stl", 1))).put("dimensions", SWATCH_DIMENSIONS)
+                    .put("features", JSONArray(listOf("colour mixing (Full Spectrum or ColorMix)", "layer-by-layer tool alternation", "blended colour")))))
     }
 
     data class Triangle(val n: DoubleArray, val a: DoubleArray, val b: DoubleArray, val c: DoubleArray)

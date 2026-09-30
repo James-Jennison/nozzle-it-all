@@ -1,7 +1,7 @@
 # Elegoo Centauri Carbon on OpenCentauri COSMOS
 
-Suite `cosmos-centauri-carbon` version 1.4.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `cbba9d1cfc02e7c996c35611d0f8ad8a49c4da81c3067bed9bdea2ef2056d562`.
+Suite `cosmos-centauri-carbon` version 1.8.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `528c3d494dfaa0287f73362dfd952785f591288eec9ec5176ba81dc28f704fb0`.
 
 Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.
 
@@ -322,6 +322,62 @@ Expected:
 
 Evidence to collect:
 - photo: The finished stripes from above
+
+Cleanup (offered even if the test fails; each step needs approval):
+- **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
+
+Time limit: 300 min; if exceeded the test is recorded as fail.
+
+## 15. Slice a 50/50 colour-mix swatch (`mix-slice`)
+
+Category: **Slicing** · Scope: Multi-material / tool changing · Level 1 · read-only discovery and telemetry · does not change printer state
+Needs detected hardware: canvas. Skipped otherwise.
+
+Slices the colour swatch as a 50/50 mix of tool 1 and tool 2, the same way the project editor's “+ Add 50/50 mix” does: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. The G-code must change between the two tools from layer to layer.
+
+Steps:
+1. Nozzle checks the acceptance model `nozzle-colour-swatch-v1` against its published SHA-256.
+2. Nozzle slices `nozzle-colour-swatch-v1` with the bundled `elegoo_centauri_carbon_cosmos_afc` profile on this device. Every part prints as a 50/50 colour mix of tool 1 and tool 2, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others). Files: nozzle-colour-swatch-v1.stl (4e56f2cf2916…).
+3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, alternates tools, requires macro.
+
+Expected:
+- G-code is produced
+- It selects tools 1 and 2 only
+- The swatch changes tool on at least 80% of its layers
+
+## 16. Print the colour-mix swatch (`mix-print`)
+
+Category: **Physical printing** · Scope: Multi-material / tool changing · Level 4 · physical printing · changes printer state · needs your approval per step
+Runs only if `mix-slice` passed.
+Needs detected hardware: canvas. Skipped otherwise.
+
+Prints the swatch sliced in this run. The printer changes tool on about every layer, 30 times: on a printer with one nozzle fed from several slots (CANVAS, AMS, CFS, an MMU) each change also purges, so the print is slower and uses more filament than its size suggests.
+
+Preconditions:
+- [ ] The printer is idle: not printing, paused or heating for a job. (also checked automatically: printer_idle)
+- [ ] You are standing at the printer and can reach its power switch or emergency stop.
+- [ ] A clean, empty build plate is installed.
+- [ ] You can watch the printer for the whole print.
+- [ ] Two clearly different colours (for example blue and yellow) are loaded in the first two tools or lanes.
+
+Steps:
+1. **Approve:** Upload the colour-mix G-code: Upload the sliced G-code under a unique `nozzle-testgrid-…` name; Nozzle verifies it by SHA-256. Nothing prints.
+2. **Approve:** Start the colour-mix swatch: Start printing the uploaded file. The printer heats, moves and extrudes.
+3. Nozzle watches status until `printing`, up to 1200 s.
+4. Nozzle watches status until `complete`, up to 14400 s.
+5. **You answer:** Did the swatch finish without you having to intervene (no failed tool or filament change)? (yes/no)
+6. **You answer:** Look closely at a long side of the swatch: do the two colours take turns, one thin layer each, all the way up? (pass/partial/fail)
+7. **You answer:** Now from about an arm's length: do the sides read as one blended colour, rather than two separate colours or stripes? (pass/partial/fail)
+8. **You attach:** Photo of a long side of the swatch, in good light (evidence `blend`).
+
+Expected:
+- The print completes
+- The colours alternate layer by layer
+- From arm's length the sides look like one blended colour
+
+Evidence to collect:
+- photo: A long side of the finished swatch
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).

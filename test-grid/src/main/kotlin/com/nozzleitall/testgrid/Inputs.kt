@@ -91,9 +91,18 @@ data class GcodeSummary(
     /** Extents of everything the slicer prints (skirt, prime tower, model), after the printer's own start G-code. */
     val printExtents: List<Double>? = allExtents,
     val toolsUsed: Set<Int>, val macros: Set<String>, val stockElegooCommand: String?, val maxZ: Double?,
+    /**
+     * Per ";LAYER_CHANGE" layer, the tools that print the model itself (object feature types) on it; prime tower and
+     * purge moves don't count. Empty when the file has no layer markers.
+     */
+    val layerTools: List<Set<Int>> = emptyList(),
 ) {
+    /** Layers (after the first) whose model tools differ from the layer below: a 50/50 colour mix changes on every one. */
+    val alternatingLayers: Int get() = layerTools.zipWithNext().count { (a, b) -> a != b }
+
     fun toJson(): Map<String, Any?> = mapOf("sha256" to sha256, "bytes" to bytes, "lines" to lines, "extrusionMoves" to extrusionMoves,
         "objectExtents" to objectExtents, "allExtents" to allExtents, "printExtents" to printExtents, "toolsUsed" to toolsUsed.sorted(), "maxZ" to maxZ,
+        "layers" to layerTools.size, "alternatingLayers" to alternatingLayers,
         "macros" to macros.sorted().take(40), "stockElegooCommand" to stockElegooCommand)
 }
 
@@ -124,14 +133,18 @@ object GcodeScan {
         val obj = Extents(); val untyped = Extents(); val all = Extents(); val printed = Extents()
         val tools = sortedSetOf<Int>(); val macros = sortedSetOf<String>()
         var maxZ: Double? = null
+        // The tool that is active when each move runs; before any T command the printer is on T0.
+        var tool = 0
+        val layers = mutableListOf<MutableSet<Int>>()
         readable(file).buffered().useLines { seq ->
             seq.forEach { raw ->
                 lines++
                 val trimmed = raw.trim()
                 if (trimmed.startsWith(";TYPE:", ignoreCase = true)) { type = trimmed.substring(6).trim().lowercase(); sawType = true; return@forEach }
+                if (trimmed.equals(";LAYER_CHANGE", ignoreCase = true)) { layers += mutableSetOf<Int>(); return@forEach }
                 val code = trimmed.substringBefore(';').trim()
                 if (code.isEmpty()) return@forEach
-                TOOL.find(code)?.let { tools += it.groupValues[1].toInt(); return@forEach }
+                TOOL.find(code)?.let { tool = it.groupValues[1].toInt(); tools += tool; return@forEach }
                 val word = code.split(Regex("\\s+"))[0].uppercase()
                 when {
                     word == "G90" -> abs = true
@@ -149,7 +162,7 @@ object GcodeScan {
                         if (extruding && (nx != x || ny != y)) {
                             moves++
                             all.add(x, y); all.add(nx, ny)
-                            if (!sawType) { untyped.add(x, y); untyped.add(nx, ny) } else { printed.add(x, y); printed.add(nx, ny); if (type in OBJECT_TYPES) { obj.add(x, y); obj.add(nx, ny) } }
+                            if (!sawType) { untyped.add(x, y); untyped.add(nx, ny) } else { printed.add(x, y); printed.add(nx, ny); if (type in OBJECT_TYPES) { obj.add(x, y); obj.add(nx, ny); layers.lastOrNull()?.add(tool) } }
                             maxZ = maxOf(maxZ ?: nz, nz)
                         }
                         x = nx; y = ny; z = nz
@@ -159,7 +172,8 @@ object GcodeScan {
             }
         }
         val stock = file.bufferedReader().useLines { ElegooProfiles.stockElegooCommand(it) }
-        return GcodeSummary(Canon.sha256(file), file.length(), lines, moves, if (sawType) obj.box() else untyped.box(), all.box(), if (sawType) printed.box() else all.box(), tools, macros, stock, maxZ)
+        return GcodeSummary(Canon.sha256(file), file.length(), lines, moves, if (sawType) obj.box() else untyped.box(), all.box(), if (sawType) printed.box() else all.box(), tools, macros, stock, maxZ,
+            layers.filter { it.isNotEmpty() })
     }
 
     private fun arg(code: String, letter: Char): Double? =
@@ -201,6 +215,17 @@ object GcodeScan {
         // Without an explicit "max", the limit is the printer's own slot count: its nozzles (Prusa XL 5T: five) or the
         // filament slots one nozzle is fed from (CFS, CANVAS, MMU), whichever is larger.
         "max_tool_index" -> (if (check.has("max")) check.optInt("max", 0) else (maxOf(profile?.nozzleDiameters?.size ?: 1, slots).coerceAtLeast(1) - 1)).let { max -> s.toolsUsed.filter { it > max }.takeIf { it.isNotEmpty() }?.let { "The G-code selects T${it.joinToString(", T")}, beyond T$max." } }
+        // A 50/50 colour mix (Full Spectrum or ColorMix) prints the model with its two filaments in turn, one layer each.
+        "alternates_tools" -> {
+            val minLayers = check.optInt("minLayers", 10); val fraction = check.optDouble("minFraction", 0.8)
+            val layers = s.layerTools.size; val changes = s.alternatingLayers
+            when {
+                layers == 0 -> "The G-code has no layer markers (;LAYER_CHANGE) to check the alternation against."
+                layers < minLayers -> "The model prints on $layers layer(s); at least $minLayers are needed to judge the alternation."
+                changes < fraction * (layers - 1) -> "The model's filament changes between $changes of ${layers - 1} layer pairs; a 50/50 mix should change on at least %.0f%% of them.".format(java.util.Locale.ROOT, fraction * 100)
+                else -> null
+            }
+        }
         "uses_tools" -> check.optInt("count", 1).let { n -> if (s.toolsUsed.size >= n) null else "The G-code selects ${s.toolsUsed.size} tool(s); at least $n are expected." }
         else -> "Unknown check \"${check.optString("check")}\"."
     }

@@ -193,7 +193,7 @@ object StepLimits {
     val AXES = setOf("X", "Y", "Z")
     val MONITOR_CONDITIONS = setOf("printing", "complete", "idle", "paused", "progress_increases", "heater_reaches", "heater_below")
     val RESPONSES = setOf("yes_no", "pass_partial_fail", "number", "text", "choice")
-    val GCODE_CHECKS = setOf("non_empty", "no_stock_elegoo_commands", "requires_macro", "within_bed", "centered", "max_tool_index", "uses_tools")
+    val GCODE_CHECKS = setOf("non_empty", "no_stock_elegoo_commands", "requires_macro", "within_bed", "centered", "max_tool_index", "uses_tools", "alternates_tools")
     val PRECONDITION_CHECKS = setOf("printer_idle", "printer_connected")
     /** What an observe step shows the operator alongside the question: what Nozzle itself sees, to compare against. */
     val OBSERVE_SHOWS = setOf("status", "slots", "camera")
@@ -251,7 +251,14 @@ object SuiteValidator {
         val p = mutableListOf<String>()
         val a = s.params
         when (k) {
-            StepKind.SLICE -> { if (a.optString("model").isBlank()) p += "params.model is required"; if (a.optString("profile").isBlank()) p += "params.profile is required" }
+            StepKind.SLICE -> {
+                if (a.optString("model").isBlank()) p += "params.model is required"; if (a.optString("profile").isBlank()) p += "params.profile is required"
+                a.optJSONObject("colourMix")?.let { m ->
+                    val x = m.optInt("a"); val y = m.optInt("b"); val pc = m.optInt("bPercent", 50)
+                    if (x !in 1..16 || y !in 1..16 || x == y) p += "params.colourMix.a and .b must be two different tools, 1 to 16"
+                    if (pc !in 1..99) p += "params.colourMix.bPercent must be 1 to 99"
+                }
+            }
             StepKind.VERIFY_MODEL -> if (a.optString("model").isBlank()) p += "params.model is required"
             StepKind.PROFILE_MATCH -> if (a.optString("profile").isBlank()) p += "params.profile is required"
             StepKind.UPLOAD_GUARD -> if (a.optString("fixture").isBlank()) p += "params.fixture is required"

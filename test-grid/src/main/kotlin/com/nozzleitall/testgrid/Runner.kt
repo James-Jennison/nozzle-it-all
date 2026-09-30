@@ -10,10 +10,22 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-data class SliceRequest(val modelId: String, val parts: List<Pair<File, ModelPart>>, val profile: ProfileInfo, val outputName: String)
+/**
+ * A colour mix to slice every part with: tools [a] and [b] (1-based, as the app numbers them), [bPercent] of it from
+ * [b]. The slicer uses whichever mixing system the app offers for the printer (Full Spectrum on a U1, ColorMix elsewhere).
+ */
+data class ColourMix(val a: Int, val b: Int, val bPercent: Int) {
+    fun toJson(): JSONObject = JSONObject().put("a", a).put("b", b).put("bPercent", bPercent)
+    companion object {
+        fun fromJson(o: JSONObject?): ColourMix? = o?.let { ColourMix(it.optInt("a"), it.optInt("b"), it.optInt("bPercent", 50)) }
+    }
+}
+
+data class SliceRequest(val modelId: String, val parts: List<Pair<File, ModelPart>>, val profile: ProfileInfo, val outputName: String, val mix: ColourMix? = null)
 
 sealed class SliceResult {
-    data class Success(val gcode: File) : SliceResult()
+    /** [mixing]: the colour-mixing system the slice used ("Full Spectrum", "ColorMix"), when the request had a mix. */
+    data class Success(val gcode: File, val mixing: String? = null) : SliceResult()
     /** Refused for a safety reason (e.g. the live firmware check): the slicer did the right thing by not slicing. */
     data class Blocked(val reason: String) : SliceResult()
     data class Failed(val message: String) : SliceResult()
@@ -710,15 +722,19 @@ class RunSession private constructor(
                 s.data.put("profile", JSONObject().put("id", profile.id).put("name", profile.name).put("sha256", profile.sha256))
                     .put("model", p.optString("model")).put("modelParts", JSONArray(parts.map { JSONObject().put("file", it.second.file).put("sha256", it.second.sha256) }))
                     .put("simulatedSlicer", sl.simulated)
-                when (val r = sl.slice(SliceRequest(p.optString("model"), parts, profile, out))) {
+                val mix = ColourMix.fromJson(p.optJSONObject("colourMix"))
+                mix?.let { s.data.put("colourMix", it.toJson()) }
+                when (val r = sl.slice(SliceRequest(p.optString("model"), parts, profile, out, mix))) {
                     is SliceResult.Success -> {
+                        r.mixing?.let { s.data.put("mixingSystem", it) }
                         val sum = GcodeScan.scan(r.gcode)
                         s.data.put("gcode", JSONObject().put("sha256", sum.sha256).put("bytes", sum.bytes).put("lines", sum.lines))
                         val entry = JSONObject().put("test", test.id).put("file", r.gcode.absolutePath).put("sha256", sum.sha256).put("bytes", sum.bytes)
                             .put("profile", s.data.getJSONObject("profile")).put("model", p.optString("model")).put("modelParts", s.data.getJSONArray("modelParts"))
                             .put("simulatedSlicer", sl.simulated)
                         slices().put(test.id, entry); record.context.put("latestSlice", test.id)
-                        StepStatus.PASSED to (if (sl.simulated) "Simulated slice (not a real engine run): " else "Sliced: ") + "${sum.bytes} bytes, ${sum.extrusionMoves} extruding moves."
+                        StepStatus.PASSED to (if (sl.simulated) "Simulated slice (not a real engine run): " else "Sliced: ") + "${sum.bytes} bytes, ${sum.extrusionMoves} extruding moves" +
+                            (r.mixing?.let { " (tool ${mix!!.a} + tool ${mix.b} colour mix, through $it)" } ?: "") + "."
                     }
                     is SliceResult.Blocked -> StepStatus.BLOCKED to r.reason
                     is SliceResult.Failed -> StepStatus.FAILED to r.message

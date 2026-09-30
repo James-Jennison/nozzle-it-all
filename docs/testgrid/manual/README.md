@@ -16,7 +16,7 @@ Setup:
 
 Order: run level 1 first (identity, telemetry, camera, slicing, profile match, upload guard); then level 2 (upload,
 verify, delete one file); then level 3 (nozzle to 60 °C, bed to 40 °C, home, Z +5 mm) standing at the printer; then
-level 4 (full acceptance print, then the pause/resume/cancel print, then the multi-material print). Each level can be a
+level 4 (full acceptance print, then the pause/resume/cancel print, then the multi-material print, then the colour-mix swatch). Each level can be a
 separate run; each run exports its own bundle.
 
 ## Elegoo Centauri Carbon on OpenCentauri COSMOS: [cosmos-centauri-carbon.md](cosmos-centauri-carbon.md)

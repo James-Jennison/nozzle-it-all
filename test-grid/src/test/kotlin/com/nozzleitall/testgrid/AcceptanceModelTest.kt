@@ -17,7 +17,8 @@ class AcceptanceModelTest {
 
     @Test fun modelLibraryVerifiesHashesBeforeUse() {
         val lib = ModelLibrary.fromResources()
-        assertEquals(listOf(AcceptanceModel.SINGLE_ID, AcceptanceModel.MULTI_ID), lib.entries.map { it.id })
+        assertEquals(listOf(AcceptanceModel.SINGLE_ID, AcceptanceModel.MULTI_ID, AcceptanceModel.SWATCH_ID), lib.entries.map { it.id })
+        assertEquals(MaterialScope.MULTI, lib.entry(AcceptanceModel.SWATCH_ID).scope)
         assertEquals(MaterialScope.SINGLE, lib.entry(AcceptanceModel.SINGLE_ID).scope)
         assertEquals(MaterialScope.MULTI, lib.entry(AcceptanceModel.MULTI_ID).scope)
         val tampered = ModelLibrary(JSONObject(File(dir, "models.json").readText())) { n -> File(dir, n).readBytes().also { if (n.endsWith("-a.stl")) it[100] = (it[100] + 1).toByte() } }
@@ -25,7 +26,7 @@ class AcceptanceModelTest {
     }
 
     @Test fun everyMeshIsClosedAndTwoManifold() {
-        listOf(AcceptanceModel.SINGLE, AcceptanceModel.MULTI_A, AcceptanceModel.MULTI_B).forEach { solid ->
+        listOf(AcceptanceModel.SINGLE, AcceptanceModel.MULTI_A, AcceptanceModel.MULTI_B, AcceptanceModel.SWATCH).forEach { solid ->
             val tris = AcceptanceModel.mesh(solid)
             val edges = HashMap<List<Double>, Int>()
             tris.forEach { t ->

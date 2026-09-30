@@ -316,6 +316,34 @@ class RunnerTest {
         assertNull(GcodeScan.evaluate(org.json.JSONObject().put("check", "centered").put("toleranceMm", 5), GcodeScan.scan(good), cosmos))
     }
 
+    @Test fun aColourMixSliceAlternatesItsTwoFilamentsLayerByLayer() {
+        val clock = Support.Clock()
+        val st = Support.start("paxx-u1", SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now), clock)
+        Support.drive(st.session)
+        val mix = st.session.record.test("mix-slice")!!
+        assertEquals(ResultState.PASS, mix.result)
+        assertTrue(mix.step("slice")!!.detail, mix.step("slice")!!.detail.contains("tool 1 + tool 2 colour mix"))
+        assertEquals(ResultState.PASS, st.session.record.test("mix-print")!!.result)
+    }
+
+    @Test fun theAlternationCheckFailsWhenEveryLayerStaysOnOneFilament() {
+        val check = org.json.JSONObject().put("check", "alternates_tools").put("minLayers", 10).put("minFraction", 0.8)
+        fun gcode(toolFor: (Int) -> Int): java.io.File = java.io.File(Support.tmp(), "alt-${System.nanoTime()}.gcode").apply {
+            writeText(buildString {
+                append("G90\nM83\n")
+                for (layer in 0 until 20) {
+                    append(";LAYER_CHANGE\nG1 Z${0.2 * (layer + 1)}\nT${toolFor(layer)}\n;TYPE:Outer wall\nG1 X10 Y10\nG1 X20 Y10 E1\n")
+                }
+            })
+        }
+        assertNull(GcodeScan.evaluate(check, GcodeScan.scan(gcode { it % 2 }), null))
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode { 0 }), null)!!.contains("changes between 0 of 19"))
+        // Two blocks of one colour each: two tools used, but no mix.
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode { if (it < 10) 0 else 1 }), null) != null)
+        val short = org.json.JSONObject(check.toString()).put("minLayers", 30)
+        assertTrue(GcodeScan.evaluate(short, GcodeScan.scan(gcode { it % 2 }), null)!!.contains("at least 30"))
+    }
+
     @Test fun aFailedDependencyBlocksLaterCategoriesInsteadOfPassingOrFailingThem() {
         val clock = Support.Clock()
         // A slicer that fails: file transfer and printing must not be graded from it either way.
@@ -591,12 +619,14 @@ class RunnerTest {
             }
             else -> fail("unexpected $p").let { p }
         }
-        assertEquals(listOf("print-single", "multi-print"), asked)
+        assertEquals(listOf("print-single", "multi-print", "mix-print"), asked)
         val single = st.session.record.test("print-single")!!
         assertEquals(ResultState.PASS, single.result)
         assertTrue(single.step("complete")!!.detail.startsWith("Confirmed by the operator"))
         assertEquals("yes", single.step("complete")!!.data.getString("operatorAnswer"))
         assertEquals(ResultState.FAIL, st.session.record.test("multi-print")!!.result)
-        assertTrue(st.session.record.interventions.count { it.kind == "operator_confirmed" } == 2)
+        // The colour-mixing print is asked the same way, and the operator said it finished.
+        assertEquals(ResultState.PASS, st.session.record.test("mix-print")!!.result)
+        assertTrue(st.session.record.interventions.count { it.kind == "operator_confirmed" } == 3)
     }
 }

@@ -9,6 +9,7 @@ live firmware reads) are prior history, not Test Grid evidence, and are not impo
 | Configuration | Suite | Coverage | Who can supply evidence |
 |---|---|---|---|
 | Snapmaker U1 on PAXX, multi-tool: file transfer and controls | `paxx-u1` has no multi-material tests in these categories | reference | n/a (slicing, monitoring and printing have evidence) |
+| Colour mixing (Full Spectrum on the U1, ColorMix elsewhere): `mix-slice` and `mix-print` | every multi-material suite (1.8.0) | reference and fixture | the owner (PAXX U1, CANVAS Centauri Carbon), then external testers; no bundle yet |
 | Centauri Carbon on COSMOS older than 26.07.0 | none (legacy profile not bundled; the COSMOS suite fails its profile match by design) | n/a | n/a |
 | Snapmaker U1 on stock firmware | `snapmaker-u1-stock` | fixture | external testers |
 | Elegoo Centauri Carbon on Elegoo stock firmware (SDCP) | `elegoo-centauri-carbon-stock` | fixture | external testers; send-and-start transfer, printing, pause/resume/cancel, CANVAS two-colour (no heaters, homing or moves through Nozzle) |

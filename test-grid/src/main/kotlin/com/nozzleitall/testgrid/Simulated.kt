@@ -194,22 +194,25 @@ class SimulatedSlicer(private val readProfileFile: (String, String) -> ByteArray
         val sb = StringBuilder()
         sb.append("; Nozzle Test Grid SIMULATED slice: not produced by a slicing engine\n; model ${request.modelId}\n; profile ${request.profile.id} ${request.profile.sha256}\n")
         sb.append(request.profile.startGcode).append("\nG90\nM83\n")
-        var z = 0.2
+        // A colour mix alternates its two tools layer by layer, as the engine's 50/50 Full Spectrum and ColorMix do.
+        val mix = request.mix
+        var z = 0.2; var layer = 0
         while (z <= maxZ + 1e-6) {
             sb.append(";LAYER_CHANGE\nG1 Z%.2f F600\n".format(java.util.Locale.ROOT, z))
+            if (mix != null) sb.append("T${(if (layer % 2 == 0) mix.a else mix.b) - 1}\n")
             boxes.forEach { (part, b) ->
-                if (boxes.size > 1) sb.append("T${part.tool - 1}\n")
+                if (mix == null && boxes.size > 1) sb.append("T${part.tool - 1}\n")
                 sb.append(";TYPE:Outer wall\n")
                 val x0 = b[0] + dx; val y0 = b[1] + dy; val x1 = b[3] + dx; val y1 = b[4] + dy
                 sb.append("G0 X%.3f Y%.3f\n".format(java.util.Locale.ROOT, x0, y0))
                 listOf(x1 to y0, x1 to y1, x0 to y1, x0 to y0).forEach { (x, y) -> sb.append("G1 X%.3f Y%.3f E0.5\n".format(java.util.Locale.ROOT, x, y)) }
             }
-            z += if (maxZ > 5) 2.0 else 1.0
+            z += if (mix != null) 0.2 else if (maxZ > 5) 2.0 else 1.0; layer++
         }
         sb.append(request.profile.endGcode).append('\n')
         outDir.mkdirs()
         val out = File(outDir, "${request.outputName}.gcode")
         out.writeText(sb.toString())
-        return SliceResult.Success(out)
+        return SliceResult.Success(out, mix?.let { "simulated mixing" })
     }
 }

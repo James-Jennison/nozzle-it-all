@@ -64,6 +64,24 @@ class ManifestTest {
         assertTrue(parseProblem(far).contains("at most 10.0 mm"))
     }
 
+    private fun mixSlice(o: JSONObject): JSONObject {
+        val t = (0 until o.getJSONArray("tests").length()).map { o.getJSONArray("tests").getJSONObject(it) }.first { it.getString("id") == "mix-slice" }
+        return (0 until t.getJSONArray("steps").length()).map { t.getJSONArray("steps").getJSONObject(it) }.first { it.getString("kind") == "slice" }.getJSONObject("params").getJSONObject("colourMix")
+    }
+
+    @Test fun aColourMixNeedsTwoDifferentToolsAndAPartialRatio() {
+        val same = minimal(); mixSlice(same).put("b", 1)
+        assertTrue(parseProblem(same).contains("two different tools"))
+        val all = minimal(); mixSlice(all).put("bPercent", 100)
+        assertTrue(parseProblem(all).contains("bPercent must be 1 to 99"))
+    }
+
+    @Test fun everyMultiToolSuiteHasTheColourMixingTests() {
+        SuiteCatalog.bundled().filter { s -> s.tests.any { it.id == "multi-slice" } }.forEach { s ->
+            assertTrue(s.id, s.tests.map { it.id }.containsAll(listOf("mix-slice", "mix-print")))
+        }
+    }
+
     @Test fun aStepAboveTheTestsSafetyLevelIsRejected() {
         val o = minimal(); controlsTest(o).put("safetyLevel", 1)
         assertTrue(parseProblem(o).contains("above the test's"))

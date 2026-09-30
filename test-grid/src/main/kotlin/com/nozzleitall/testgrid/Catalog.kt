@@ -76,6 +76,7 @@ object ManualInstructions {
         val text = when (s.kind) {
             StepKind.VERIFY_MODEL -> "Nozzle checks the acceptance model `${p.optString("model")}` against its published SHA-256."
             StepKind.SLICE -> (if (p.optString("profile") == SuiteProfiles.PRINTER) "Nozzle slices `${p.optString("model")}` with the slicing profile saved for your printer (Edit printer), on this device." else "Nozzle slices `${p.optString("model")}` with the bundled `${p.optString("profile")}` profile on this device${withNote(p)}.") +
+                (p.optJSONObject("colourMix")?.let { m -> " Every part prints as a ${100 - m.optInt("bPercent", 50)}/${m.optInt("bPercent", 50)} colour mix of tool ${m.optInt("a")} and tool ${m.optInt("b")}, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others)." } ?: "") +
                 (models?.let { m -> runCatching { m.entry(p.optString("model")).parts.joinToString { "${it.file} (${it.sha256.take(12)}…)" } }.getOrNull()?.let { " Files: $it." } } ?: "")
             StepKind.SCAN_GCODE -> "Nozzle checks the sliced G-code: " + (0 until (p.optJSONArray("checks")?.length() ?: 0)).joinToString { p.getJSONArray("checks").getJSONObject(it).optString("check").replace('_', ' ') } + "."
             StepKind.UPLOAD_GUARD -> "Nozzle hands the known-unsafe fixture `${p.optString("fixture")}` to the upload path and expects it to be refused before anything is sent."

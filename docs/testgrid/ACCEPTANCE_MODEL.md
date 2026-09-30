@@ -40,5 +40,13 @@ Confirmed on a device: the on-device engine keeps the two parts' own coordinates
 (`SlicingCoordinator.sliceProject`); the owner's PAXX U1 printed the two-tool part as alternating stripes (bundles
 `58f24794` and `2d3afb85`, [evidence/README.md](evidence/README.md)).
 
+## `nozzle-colour-swatch-v1` (colour mixing; multi-material suites only)
+
+One 40 × 10 × 6 mm block, about 30 layers at 0.2 mm. The `mix-slice` test assigns it to a 50/50 mix of tools 1 and 2
+through the printer's own mixing system: Full Spectrum on a Snapmaker U1, PrusaSlicer ColorMix on other printers with
+two or more slots, the same "+ Add 50/50" the project editor offers. The sliced file must alternate its two filaments
+layer by layer (`alternates_tools`). The printed swatch should read as one blended colour at arm's length. SHA-256
+`4e56f2cf29166733f15fe4170c850c26574af0de4a7378eef5822e6ce53f4e40`. Not yet run on a device.
+
 The 20 mm test cube (`site-src/assets/test-cube-20mm.stl`) remains the quick smoke-test part; it is not a Test Grid
 acceptance model. The owner's clean U1 print of that cube on 2026-09-28 is prior history, not Test Grid evidence.

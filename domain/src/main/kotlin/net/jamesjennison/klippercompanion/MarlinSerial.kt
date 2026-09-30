@@ -126,7 +126,12 @@ object MarlinSerial {
         val supportsSdCard: Boolean get() = caps["SDCARD"] == true
     }
 
-    private val M115_FIELD_RE = Regex("""(FIRMWARE_NAME|MACHINE_TYPE|EXTRUDER_COUNT)\s*:\s*("[^"]*"|[^\s]+)""")
+    // Value runs from after the ':' up to whitespace immediately before the next recognized field name (or end of
+    // line): real Marlin M115 output doesn't quote multi-word values like "Marlin 2.1.2" or "Prusa MK3S", so the
+    // field name is the only reliable boundary - whitespace alone isn't, since a value legitimately contains it.
+    private val M115_FIELD_RE = Regex(
+        """(FIRMWARE_NAME|MACHINE_TYPE|EXTRUDER_COUNT)\s*:\s*("[^"]*"|.*?)(?=\s+(?:FIRMWARE_NAME|MACHINE_TYPE|EXTRUDER_COUNT)\s*:|$)"""
+    )
     private val CAP_LINE_RE = Regex("""(?i)^\s*Cap\s*:\s*([A-Z0-9_]+)\s*:\s*([01])\s*$""")
 
     /**
@@ -146,7 +151,8 @@ object MarlinSerial {
                 return@let
             }
             for (m in M115_FIELD_RE.findAll(line)) {
-                val value = m.groupValues[2].trim('"')
+                val raw = m.groupValues[2].trim()
+                val value = if (raw.length >= 2 && raw.startsWith("\"") && raw.endsWith("\"")) raw.substring(1, raw.length - 1) else raw
                 when (m.groupValues[1]) {
                     "FIRMWARE_NAME" -> firmwareName = value
                     "MACHINE_TYPE" -> machineType = value

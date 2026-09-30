@@ -1043,11 +1043,13 @@ interchange).
   for CDC-ACM or by vendor:product ID table for CH34x/CP210x/FTDI; per-chip open/restart control-transfer sequences;
   baud encoding for each chip family) and `MarlinSerial.kt` (checksum, numbered-line framing, reply parsing, `M115`
   capability parsing, `M27`/`M20` parsing, a one-line-in-flight send window with resend recovery) in `:domain`;
-  `UsbSerialTransport.kt` (opens the `UsbDeviceConnection`, claims the interface, issues the control sequence, runs
-  bulk IN/OUT) and `UsbSerialPrinterService.kt` (a `PrinterService` reading firmware/temperatures and SD progress) in
-  `:transport`; `UsbSerialDeviceManager.kt` (USB permission request/broadcast, device enumeration, the synthetic
-  `"usb:<vendorId>:<productId>:<serialNumber>"` identity) and a device-picker UI in the add-printer wizard and Edit
-  printer in `:app`.
+  `UsbSerialPrinterService.kt` (a `PrinterService` reading firmware/temperatures and SD progress, built only against
+  the plain `UsbSerialPort` interface) in `:transport`; `UsbSerialTransport.kt` (the concrete `UsbSerialPort`: opens
+  the `UsbDeviceConnection`, claims the interface, issues the control sequence, runs bulk IN/OUT), `UsbSerialDeviceManager.kt`
+  (USB permission request/broadcast, device enumeration, the synthetic `"usb:<vendorId>:<productId>:<serialNumber>"`
+  identity) and a device-picker UI in the add-printer wizard and Edit printer, all in `:app` - `:transport` is plain
+  JVM Kotlin (reused by `:desktop`) and its `verifyNoAndroidImports` check task forbids `android.*`/`androidx.*`
+  imports there, so the real Android implementation cannot live alongside the interface it implements.
 - **Change:** one new kind, `PrinterKind.USB_SERIAL` (`UsbSerialPrinterService`). Live temperatures (`M105` polling, or
   `M155 S2` auto-report when the firmware's `M115` `Cap:` line advertises `AUTOREPORT_TEMP:1`) and SD job progress
   (`M27`), read-only. No camera, no on-device slicing add-ons, no Klipper extras, no pause/resume/cancel. Connecting

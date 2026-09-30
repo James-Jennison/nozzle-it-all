@@ -143,8 +143,10 @@ class UsbSerialPrinterService(
         }
         val sd = lastSdStatus
         val state = if (sd.printing) "printing" else "standby"
-        val progress = if (sd.printing && sd.bytesTotal != null && sd.bytesTotal > 0 && sd.bytesPrinted != null)
-            (sd.bytesPrinted.toDouble() / sd.bytesTotal.toDouble()).toFloat().coerceIn(0f, 1f) else 0f
+        val total = sd.bytesTotal
+        val printed = sd.bytesPrinted
+        val progress = if (sd.printing && total != null && total > 0 && printed != null)
+            (printed.toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f) else 0f
         return PrinterSnapshot(ready = true, state = state, filename = sd.filename, progress = progress)
     }
 

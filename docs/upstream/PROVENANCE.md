@@ -1355,9 +1355,9 @@ interchange).
 
 ## P-0043 — The prime tower is placed on the bed
 
-- **Upstream:** nozzle-engine `7734a0c557cb63594c913a271c4907e7b4c9bee1` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
-  branch `fix/arm64-get-at-miscompile`, pull request 11): `490e5b5` (P-0042) plus two commits, `4c182b1` (the tower's
-  place) and `7734a0c` (the flushing volumes, below). The placement is ported
+- **Upstream:** nozzle-engine `1b74455563de3f1dd2944aaa6d80e9d94bb76ace` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine `main`):
+  `490e5b5` (P-0042) plus three commits, `4c182b1` (the tower's place), `7734a0c` (the flushing volumes, below) and
+  `1b74455` (the vendor's corner, below). The placement is ported
   from Snapmaker Orca's GUI, which the engine fork already carries but does not build headless:
   `src/slic3r/GUI/PartPlate.cpp` (`WIPE_TOWER_DEFAULT_X_POS` / `_Y_POS` 13, 214.5; `I3_WIPE_TOWER_DEFAULT_X_POS` /
   `_Y_POS` 0, 250; `PartPlateList::set_default_wipe_tower_pos_for_plate`; `PartPlate::estimate_wipe_tower_size`) and
@@ -1402,8 +1402,19 @@ interchange).
   that already covers the filaments is left alone. `prime_tower_test.sh` gained a five-filament Centauri Carbon case
   and a six-filament MK4S MMU3 case, and a time limit on every slice: both crash the previous engine and pass on
   this one, with a 6 x 6 matrix in the G-code. Golden outputs: all 384 match.
+- **The vendor's corner (`1b74455`):** `4c182b1` gave every printer Snapmaker Orca's default corner, the back left
+  (13, 214.5). Upstream OrcaSlicer (824b216, `src/slic3r/GUI/PartPlate.cpp`: `WIPE_TOWER_DEFAULT_X_POS` / `_Y_POS`
+  165, 250) and ElegooSlicer (the same constants) start at the back, right of the middle. On the owner's Centauri
+  Carbon the back left is the lowest part of the bed (saved mesh -0.29 to -0.15 mm there, +0.04 to +0.09 mm at
+  upstream's corner) and partly outside the probed area (10 to 246 mm); on 2026-10-01 the color reference print's
+  tower came loose there at layer 3 of 39. Now Snapmaker's printers (`printer_model` starting "Snapmaker") keep
+  Snapmaker Orca's corner and every other printer gets upstream OrcaSlicer's; the bed slinger corner (0, 250) is the
+  same in both. Not ported: upstream's lower corner for Bambu's "N9" printer type (Y 160), which needs the vendor's
+  printer type table. `prime_tower_test.sh` checks both corners; the Centauri Carbon color reference slice now puts
+  the tower at X 161.80..204.26, Y 213.00..255.00; golden outputs unchanged (all 384 match). This commit reached the
+  engine's `main` by a direct push, not a pull request (a branch that tracked `origin/main`).
 - **Known divergence:** upstream's GUI leaves a generated tower that overruns the plate for the user to move; the
-  bridge moves it. A multi-filament slice's tower now starts at upstream's GUI corner (13, 214.5) instead of
-  libslic3r's (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a
+  bridge moves it. A multi-filament slice's tower now starts at the vendor GUI's corner instead of libslic3r's
+  (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a
   warning upstream, which the bridge does not surface.
 - **Touches:** every multi-filament slice (Android, desktop, web), engine tests and CI.

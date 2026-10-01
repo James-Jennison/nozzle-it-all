@@ -34,7 +34,8 @@ internal fun defaultCustomMachine(model: SlicingPrinterModel, context: Context):
 internal fun defaultCustomMachineFrom(machineJson: String): CustomMachine {
     val shape = parseBedShape(machineJson)
     val xs = shape.points.map { it.first }; val ys = shape.points.map { it.second }
-    fun text(key: String): String = JSONObject(machineJson).opt(key).let { v -> if (v is org.json.JSONArray) (0 until v.length()).joinToString("\n") { v.getString(it) } else v?.toString().orEmpty() }
+    // The text the engine would load (Orca's unescape), not the profile's serialized form.
+    fun text(key: String): String = OrcaStrings.scalar(JSONObject(machineJson).opt(key)).orEmpty()
     return CustomMachine(
         (xs.max() - xs.min()).toDouble(), (ys.max() - ys.min()).toDouble(), shape.heightMm.toDouble(),
         originAtCenter = xs.min() < 0f, startGcode = text("machine_start_gcode"), endGcode = text("machine_end_gcode"),

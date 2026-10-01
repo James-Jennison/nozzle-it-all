@@ -1,6 +1,7 @@
 package com.nozzleitall.testgrid
 
 import net.jamesjennison.klippercompanion.ElegooProfiles
+import net.jamesjennison.klippercompanion.OrcaStrings
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -28,7 +29,7 @@ data class ProfileInfo(
             val area = machine.optJSONArray("printable_area")?.let { a -> (0 until a.length()).mapNotNull { point(a.optString(it)) } }.orEmpty()
             val bed = if (area.isEmpty()) null else listOf(area.minOf { it.first }, area.minOf { it.second }, area.maxOf { it.first }, area.maxOf { it.second })
             return ProfileInfo(id, machine.optString("name", id), Canon.sha256(Canon.bytes(hashes)), hashes, bed,
-                machine.opt("printable_height")?.toString()?.toDoubleOrNull(), text(machine.opt("machine_start_gcode")), text(machine.opt("machine_end_gcode")),
+                machine.opt("printable_height")?.toString()?.toDoubleOrNull(), gcode(machine.opt("machine_start_gcode")), gcode(machine.opt("machine_end_gcode")),
                 numbers(machine.opt("nozzle_diameter")), strings(filament?.opt("filament_type")))
         }
 
@@ -37,7 +38,8 @@ data class ProfileInfo(
             val x = parts[0].trim().toDoubleOrNull() ?: return null; val y = parts[1].trim().toDoubleOrNull() ?: return null
             return x to y
         }
-        private fun text(v: Any?): String = when (v) { is JSONArray -> (0 until v.length()).joinToString("\n") { v.optString(it) }; null -> ""; else -> v.toString() }
+        /** A G-code option as the engine loads it: Orca's serialized form unescaped (OrcaStrings.scalar). */
+        private fun gcode(v: Any?): String = OrcaStrings.scalar(v).orEmpty()
         private fun strings(v: Any?): List<String> = when (v) { is JSONArray -> (0 until v.length()).map { v.optString(it) }; null -> emptyList(); else -> listOf(v.toString()) }
         private fun numbers(v: Any?): List<Double> = strings(v).flatMap { it.split(',') }.mapNotNull { it.trim().toDoubleOrNull() }
     }

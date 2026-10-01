@@ -83,8 +83,11 @@ fun applyCustomMachine(machineJson: String, c: CustomMachine): String {
     o.put("printable_height", mm(c.maxHeightMm))
     // Any exclusion zones belong to the profile's own bed, not this one. "0x0" is OrcaSlicer's own "no exclusion" value.
     if (o.has("bed_exclude_area")) o.put("bed_exclude_area", JSONArray().put("0x0"))
-    if (c.startGcode.isNotBlank()) o.put("machine_start_gcode", c.startGcode.replace("\r\n", "\n").replace('\r', '\n'))
-    if (c.endGcode.isNotBlank()) o.put("machine_end_gcode", c.endGcode.replace("\r\n", "\n").replace('\r', '\n'))
+    // In Orca's serialized form, as Orca saves it: the engine unescapes string options on load, so a backslash the user
+    // typed must reach it escaped.
+    fun gcode(text: String) = OrcaStrings.escape(text.replace("\r\n", "\n").replace('\r', '\n'))
+    if (c.startGcode.isNotBlank()) o.put("machine_start_gcode", gcode(c.startGcode))
+    if (c.endGcode.isNotBlank()) o.put("machine_end_gcode", gcode(c.endGcode))
     // A filament changer's lanes feed the one nozzle: a single-extruder multi-material machine whose changes are the plain
     // T<n> the changer's Klipper macros implement. An empty change_filament_gcode makes the engine emit exactly that; a
     // template such as the generic profiles' M600 would pause for a manual swap at every change on top of it.

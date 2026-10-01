@@ -41,7 +41,21 @@ class CustomMachineTest {
         val kept = JSONObject(applyCustomMachine(genericKlipper, voron.copy(startGcode = "", endGcode = "")))
         assertEquals(original.getString("machine_start_gcode"), kept.getString("machine_start_gcode")); assertEquals(original.optString("machine_end_gcode"), kept.optString("machine_end_gcode"))
         val changed = JSONObject(applyCustomMachine(genericKlipper, voron.copy(startGcode = "A\r\nB\rC", endGcode = "PRINT_END")))
-        assertEquals("A\nB\nC", changed.getString("machine_start_gcode")); assertEquals("PRINT_END", changed.getString("machine_end_gcode"))
+        // Stored in Orca's serialized form, which the engine unescapes on load.
+        assertEquals("A\\nB\\nC", changed.getString("machine_start_gcode")); assertEquals("PRINT_END", changed.getString("machine_end_gcode"))
+    }
+
+    @Test fun gcodeWithBackslashesAndQuotesReachesTheEngineAsTyped() {
+        val typed = "M117 \"C:\\dir\"\nPRINT_START"
+        val machine = applyCustomMachine(genericKlipper, voron.copy(startGcode = typed))
+        assertEquals(typed, OrcaStrings.unescape(JSONObject(machine).getString("machine_start_gcode")))
+        assertEquals("editing reads back what was typed", typed, defaultCustomMachineFrom(machine).startGcode)
+    }
+
+    @Test fun editingShowsAnEscapedProfilesGcodeAsLines() {
+        // Snapmaker Orca's U1 machines keep their start G-code escaped; the editor shows it as the engine would run it.
+        val escaped = JSONObject(genericKlipper).put("machine_start_gcode", ";U1\\nPRINT_START\\nG28").toString()
+        assertEquals(";U1\nPRINT_START\nG28", defaultCustomMachineFrom(escaped).startGcode)
     }
 
     @Test fun everythingElseInTheProfileIsUntouchedAndTheNozzleStays() {

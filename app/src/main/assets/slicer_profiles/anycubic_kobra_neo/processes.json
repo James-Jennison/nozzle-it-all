@@ -6,14 +6,14 @@
    "label": "0.12mm Detail",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Anycubic/0_12mm_detail_anycubic_kobra_neo_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Anycubic/0_12mm_detail_anycubic_kobra_neo_0_4_nozzle.json"
   },
   {
    "name": "0.16mm Standard @Anycubic Kobra Neo 0.4 nozzle",
    "label": "0.16mm Standard",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Anycubic/0_16mm_standard_anycubic_kobra_neo_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Anycubic/0_16mm_standard_anycubic_kobra_neo_0_4_nozzle.json"
   },
   {
    "name": "0.20mm Standard @Anycubic Kobra Neo 0.4 nozzle",
@@ -27,7 +27,7 @@
    "label": "0.28mm Standard",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Anycubic/0_28mm_standard_anycubic_kobra_neo_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Anycubic/0_28mm_standard_anycubic_kobra_neo_0_4_nozzle.json"
   }
  ]
 }

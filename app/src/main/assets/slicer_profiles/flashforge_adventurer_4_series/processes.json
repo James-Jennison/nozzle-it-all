@@ -13,7 +13,7 @@
    "label": "0.30mm Fast",
    "layer_height": "0.3",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Flashforge/0_30mm_fast_flashforge_ad4_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Flashforge/0_30mm_fast_flashforge_ad4_0_4_nozzle.json"
   }
  ]
 }

@@ -13,7 +13,7 @@
    "label": "cubicon default",
    "layer_height": "0.2",
    "infill": "15",
-   "file": "slicer_profiles/_processes/Cubicon/cubicon_default_cubicon_xceler_plus_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Cubicon/cubicon_default_cubicon_xceler_plus_0_4_nozzle.json"
   }
  ]
 }

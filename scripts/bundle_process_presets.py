@@ -4,7 +4,7 @@
 Writes app/src/main/assets/slicer_profiles/<pack>/processes.json:
   {"default": <name>, "presets": [{"name", "label", "layer_height", "infill", "file", "made_by"?, "color_mixing"?}]}
 "file" is an asset path. The default is the pack's own process.json; the others are shared, flattened once per vendor
-under slicer_profiles/_processes/<vendor>/ (a pack-local copy only where the pack's fix_bed_type changes the plate).
+under slicer_profiles/shared_processes/<vendor>/ (a pack-local copy only where the pack's fix_bed_type changes the plate).
 
 Which presets a pack offers is the engine's call, as in Orca: the machine vendor's own instantiable process presets that
 nozzle-engine --compatible-presets (Orca's is_compatible_with_printer) accepts for the pack's machine.json.
@@ -27,7 +27,7 @@ from bundle_vendor_profiles import fix_bed_type  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 PACKS = os.path.join(ROOT, "app/src/main/assets/slicer_profiles")
-SHARED = "_processes"
+SHARED = "shared_processes"  # not "_processes": Android packaging leaves out asset folders whose names start with "_"
 LIBRARY = os.path.join(ROOT, "engine/profiles/library")
 DERIVED = sorted(glob.glob(os.path.join(ROOT, "engine/profiles/derived/*.json")))
 

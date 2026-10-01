@@ -210,6 +210,9 @@
               {
                 "check": "centered",
                 "toleranceMm": 5
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }
@@ -1034,6 +1037,9 @@
               {
                 "check": "requires_macro",
                 "macro": "PRINT_START"
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }
@@ -1243,6 +1249,9 @@
               {
                 "check": "requires_macro",
                 "macro": "PRINT_START"
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }

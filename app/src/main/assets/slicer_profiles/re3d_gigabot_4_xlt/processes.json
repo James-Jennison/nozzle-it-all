@@ -6,7 +6,7 @@
    "label": "0.2 Fine",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/re3D/0_2_fine.json"
+   "file": "slicer_profiles/shared_processes/re3D/0_2_fine.json"
   },
   {
    "name": "0.26 Standard",
@@ -20,7 +20,7 @@
    "label": "0.32 Draft",
    "layer_height": "0.32",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/re3D/0_32_draft.json"
+   "file": "slicer_profiles/shared_processes/re3D/0_32_draft.json"
   }
  ]
 }

@@ -6,14 +6,14 @@
    "label": "0.10mm Standard",
    "layer_height": "0.1",
    "infill": "10%",
-   "file": "slicer_profiles/_processes/Wanhao France/0_10mm_standard_wanhao_d12_500.json"
+   "file": "slicer_profiles/shared_processes/Wanhao France/0_10mm_standard_wanhao_d12_500.json"
   },
   {
    "name": "0.15mm Standard @Wanhao-D12-500",
    "label": "0.15mm Standard",
    "layer_height": "0.15",
    "infill": "10%",
-   "file": "slicer_profiles/_processes/Wanhao France/0_15mm_standard_wanhao_d12_500.json"
+   "file": "slicer_profiles/shared_processes/Wanhao France/0_15mm_standard_wanhao_d12_500.json"
   },
   {
    "name": "0.20mm Standard @Wanhao-D12-500",
@@ -27,7 +27,7 @@
    "label": "0.24mm Standard",
    "layer_height": "0.24",
    "infill": "10%",
-   "file": "slicer_profiles/_processes/Wanhao France/0_24mm_standard_wanhao_d12_500.json"
+   "file": "slicer_profiles/shared_processes/Wanhao France/0_24mm_standard_wanhao_d12_500.json"
   }
  ]
 }

@@ -363,6 +363,29 @@ class RunnerTest {
         assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode({ (it / 4) % 2 }, twoThirds)), null, 4, mixes)!!.contains("4 layers in a row"))
     }
 
+    @Test fun theHeaterTargetCheckCatchesABedTemperatureBeyondTheProfile() {
+        // The Snapmaker U1 refused `M140 S32769` from a Full Spectrum slice on 2026-09-30: the engine build read a
+        // per-extruder value from beyond the end of the profile's one-element list. This check fails that file.
+        val check = org.json.JSONObject().put("check", "heater_targets")
+        val u1 = SimulatedSlicer(Support.profiles(), Support.tmp()).profile("snapmaker_u1")
+        assertTrue(u1.plateTemperatures.contains(60))
+        fun gcode(body: String): java.io.File = java.io.File(Support.tmp(), "heat-${System.nanoTime()}.gcode").apply {
+            writeText("G90\nM83\n$body\n;TYPE:Outer wall\nG1 X10 Y10\nG1 X20 Y10 E1\n")
+        }
+        assertNull(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M140 S60\nM190 S60\nM104 S220\nM109 S220")), u1))
+        assertNull(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M140 S0\nM104 S0 ; heaters off")), u1))
+        val bad = GcodeScan.scan(gcode("M140 S32769\nM190 S32769\nM104 S220"))
+        assertEquals(setOf(32769), bad.bedTargets); assertEquals(setOf(220), bad.nozzleTargets)
+        assertTrue(GcodeScan.evaluate(check, bad, u1)!!.contains("32769"))
+        assertTrue(GcodeScan.evaluate(check, bad, null)!!.contains("outside 0 to 150"))
+        // Klipper's macro spelling of the same request, and a nozzle beyond any hot end.
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode("SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=32769")), null)!!.contains("32769"))
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M109 R999")), null)!!.contains("nozzle"))
+        // In range, but not a temperature the U1's filament profile declares: wrong element, not garbage.
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M140 S47")), u1)!!.contains("does not declare"))
+        assertNull(GcodeScan.evaluate(org.json.JSONObject(check.toString()).put("declaredPlateTemperatures", false), GcodeScan.scan(gcode("M140 S47")), u1))
+    }
+
     @Test fun theAlternationCheckFailsWhenEveryLayerStaysOnOneFilament() {
         val check = org.json.JSONObject().put("check", "alternates_tools").put("minLayers", 10).put("minFraction", 0.8)
         fun gcode(toolFor: (Int) -> Int): java.io.File = java.io.File(Support.tmp(), "alt-${System.nanoTime()}.gcode").apply {

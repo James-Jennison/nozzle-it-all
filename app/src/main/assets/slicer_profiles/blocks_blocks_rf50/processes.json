@@ -6,14 +6,14 @@
    "label": "0.12mm Fine 0.4 nozzle",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Blocks/0_12mm_fine_0_4_nozzle_blocks_rf50.json"
+   "file": "slicer_profiles/shared_processes/Blocks/0_12mm_fine_0_4_nozzle_blocks_rf50.json"
   },
   {
    "name": "0.16mm Optimal 0.4 nozzle @Blocks_RF50",
    "label": "0.16mm Optimal 0.4 nozzle",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Blocks/0_16mm_optimal_0_4_nozzle_blocks_rf50.json"
+   "file": "slicer_profiles/shared_processes/Blocks/0_16mm_optimal_0_4_nozzle_blocks_rf50.json"
   },
   {
    "name": "0.20mm Standard 0.4 nozzle @Blocks_RF50",
@@ -27,14 +27,14 @@
    "label": "0.24mm Draft 0.4 nozzle",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Blocks/0_24mm_draft_0_4_nozzle_blocks_rf50.json"
+   "file": "slicer_profiles/shared_processes/Blocks/0_24mm_draft_0_4_nozzle_blocks_rf50.json"
   },
   {
    "name": "0.28mm Extra Draft 0.4 nozzle @Blocks_RF50",
    "label": "0.28mm Extra Draft 0.4 nozzle",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Blocks/0_28mm_extra_draft_0_4_nozzle_blocks_rf50.json"
+   "file": "slicer_profiles/shared_processes/Blocks/0_28mm_extra_draft_0_4_nozzle_blocks_rf50.json"
   }
  ]
 }

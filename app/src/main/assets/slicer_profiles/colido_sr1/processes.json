@@ -6,28 +6,28 @@
    "label": "0.08mm Extra Fine",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/CoLiDo/0_08mm_extra_fine_colido_sr1.json"
+   "file": "slicer_profiles/shared_processes/CoLiDo/0_08mm_extra_fine_colido_sr1.json"
   },
   {
    "name": "0.12mm Fine @CoLiDo SR1",
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/CoLiDo/0_12mm_fine_colido_sr1.json"
+   "file": "slicer_profiles/shared_processes/CoLiDo/0_12mm_fine_colido_sr1.json"
   },
   {
    "name": "0.15mm Optimal @CoLiDo SR1",
    "label": "0.15mm Optimal",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/CoLiDo/0_15mm_optimal_colido_sr1.json"
+   "file": "slicer_profiles/shared_processes/CoLiDo/0_15mm_optimal_colido_sr1.json"
   },
   {
    "name": "0.16mm Optimal @CoLiDo SR1",
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/CoLiDo/0_16mm_optimal_colido_sr1.json"
+   "file": "slicer_profiles/shared_processes/CoLiDo/0_16mm_optimal_colido_sr1.json"
   },
   {
    "name": "0.20mm Standard @CoLiDo SR1",
@@ -41,21 +41,21 @@
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/CoLiDo/0_24mm_draft_colido_sr1.json"
+   "file": "slicer_profiles/shared_processes/CoLiDo/0_24mm_draft_colido_sr1.json"
   },
   {
    "name": "0.28mm Extra Draft @CoLiDo SR1",
    "label": "0.28mm Extra Draft",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/CoLiDo/0_28mm_extra_draft_colido_sr1.json"
+   "file": "slicer_profiles/shared_processes/CoLiDo/0_28mm_extra_draft_colido_sr1.json"
   },
   {
    "name": "0.32mm Standard @CoLiDo SR1",
    "label": "0.32mm Standard",
    "layer_height": "0.32",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/CoLiDo/0_32mm_standard_colido_sr1.json"
+   "file": "slicer_profiles/shared_processes/CoLiDo/0_32mm_standard_colido_sr1.json"
   }
  ]
 }

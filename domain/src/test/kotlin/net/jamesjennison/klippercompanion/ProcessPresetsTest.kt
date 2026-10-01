@@ -7,7 +7,7 @@ class ProcessPresetsTest {
     private val json = """
         {"default": "0.20mm Standard @Elegoo CC 0.4 nozzle", "presets": [
          {"name": "0.10mm Color Mixing @Elegoo CC 0.4 nozzle", "label": "0.10mm Color Mixing", "layer_height": "0.1", "infill": "15%",
-          "file": "slicer_profiles/_processes/Elegoo/0_10mm_color_mixing_elegoo_cc_0_4_nozzle.json", "made_by": "Nozzle It All", "color_mixing": true},
+          "file": "slicer_profiles/shared_processes/Elegoo/0_10mm_color_mixing_elegoo_cc_0_4_nozzle.json", "made_by": "Nozzle It All", "color_mixing": true},
          {"name": "0.20mm Standard @Elegoo CC 0.4 nozzle", "label": "0.20mm Standard", "layer_height": "0.2", "infill": "15",
           "file": "slicer_profiles/elegoo_centauri_carbon_cosmos_afc/process.json"},
          {"name": "0.08mm HueForge @Creality K2 Plus 0.4 nozzle", "label": "0.08mm HueForge", "layer_height": "0.08", "infill": "", "file": "x.json"}

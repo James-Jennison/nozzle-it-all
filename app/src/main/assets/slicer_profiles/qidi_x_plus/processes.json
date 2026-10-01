@@ -6,14 +6,14 @@
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_12mm_fine_qidi_xplus.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_12mm_fine_qidi_xplus.json"
   },
   {
    "name": "0.16mm Optimal @Qidi XPlus",
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_16mm_optimal_qidi_xplus.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_16mm_optimal_qidi_xplus.json"
   },
   {
    "name": "0.20mm Standard @Qidi XPlus",
@@ -27,14 +27,14 @@
    "label": "0.25mm Draft",
    "layer_height": "0.25",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_25mm_draft_qidi_xplus.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_25mm_draft_qidi_xplus.json"
   },
   {
    "name": "0.30mm Extra Draft @Qidi XPlus",
    "label": "0.30mm Extra Draft",
    "layer_height": "0.3",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_30mm_extra_draft_qidi_xplus.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_30mm_extra_draft_qidi_xplus.json"
   }
  ]
 }

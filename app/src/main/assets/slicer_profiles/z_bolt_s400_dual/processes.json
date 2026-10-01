@@ -1,0 +1,75 @@
+{
+ "default": "0.20mm Standard @Z-Bolt 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @Z-Bolt 0.4 nozzle",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_08mm_extra_fine_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.08mm High Quality @Z-Bolt 0.4 nozzle",
+   "label": "0.08mm High Quality",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_08mm_high_quality_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.12mm Fine @Z-Bolt 0.4 nozzle",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_12mm_fine_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.12mm High Quality @Z-Bolt 0.4 nozzle",
+   "label": "0.12mm High Quality",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_12mm_high_quality_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.16mm High Quality @Z-Bolt 0.4 nozzle",
+   "label": "0.16mm High Quality",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_16mm_high_quality_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.16mm Optimal @Z-Bolt 0.4 nozzle",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_16mm_optimal_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @Z-Bolt 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/z_bolt_s400_dual/process.json"
+  },
+  {
+   "name": "0.20mm Strength @Z-Bolt 0.4 nozzle",
+   "label": "0.20mm Strength",
+   "layer_height": "0.2",
+   "infill": "25%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_20mm_strength_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.24mm Draft @Z-Bolt 0.4 nozzle",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_24mm_draft_z_bolt_0_4_nozzle.json"
+  },
+  {
+   "name": "0.28mm Extra Draft @Z-Bolt 0.4 nozzle",
+   "label": "0.28mm Extra Draft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Z-Bolt/0_28mm_extra_draft_z_bolt_0_4_nozzle.json"
+  }
+ ]
+}

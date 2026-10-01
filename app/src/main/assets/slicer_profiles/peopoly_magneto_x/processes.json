@@ -1,0 +1,61 @@
+{
+ "default": "fdm_process_peopoly_common_0_2",
+ "presets": [
+  {
+   "name": "0.16mm Optimal @Magneto X",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Peopoly/0_16mm_optimal_magneto_x.json"
+  },
+  {
+   "name": "0.20mm ABS-GF 0.4 Nozzle Standard @MagnetoX",
+   "label": "0.20mm ABS-GF 0.4 Nozzle Standard",
+   "layer_height": "0.2",
+   "infill": "20",
+   "file": "slicer_profiles/shared_processes/Peopoly/0_20mm_abs_gf_0_4_nozzle_standard_magnetox.json"
+  },
+  {
+   "name": "0.20mm PET-CF 0.4 Nozzle Standard @MagnetoX",
+   "label": "0.20mm PET-CF 0.4 Nozzle Standard",
+   "layer_height": "0.2",
+   "infill": "20",
+   "file": "slicer_profiles/shared_processes/Peopoly/0_20mm_pet_cf_0_4_nozzle_standard_magnetox.json"
+  },
+  {
+   "name": "0.20mm Standard @Magneto X",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Peopoly/0_20mm_standard_magneto_x.json"
+  },
+  {
+   "name": "0.20mm Strength @Magneto X",
+   "label": "0.20mm Strength",
+   "layer_height": "0.2",
+   "infill": "25%",
+   "file": "slicer_profiles/shared_processes/Peopoly/0_20mm_strength_magneto_x.json"
+  },
+  {
+   "name": "fdm_process_peopoly_common_0_2",
+   "label": "fdm_process_peopoly_common_0_2",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/peopoly_magneto_x/process.json"
+  },
+  {
+   "name": "0.24mm Draft @Magneto X",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Peopoly/0_24mm_draft_magneto_x.json"
+  },
+  {
+   "name": "0.28mm Extra Draft @Magneto X",
+   "label": "0.28mm Extra Draft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Peopoly/0_28mm_extra_draft_magneto_x.json"
+  }
+ ]
+}

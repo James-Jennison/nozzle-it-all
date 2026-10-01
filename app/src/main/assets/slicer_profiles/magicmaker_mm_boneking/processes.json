@@ -1,0 +1,61 @@
+{
+ "default": "0.10mm Fine @MM BoneKing",
+ "presets": [
+  {
+   "name": "0.10mm Fine @MM BoneKing",
+   "label": "0.10mm Fine",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/magicmaker_mm_boneking/process.json"
+  },
+  {
+   "name": "0.10mm Fine Fast @MM BoneKing",
+   "label": "0.10mm Fine Fast",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_10mm_fine_fast_mm_boneking.json"
+  },
+  {
+   "name": "0.12mm Fine BestFast @MM BoneKing",
+   "label": "0.12mm Fine BestFast",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_12mm_fine_bestfast_mm_boneking.json"
+  },
+  {
+   "name": "0.12mm Fine SuperFast @MM BoneKing",
+   "label": "0.12mm Fine SuperFast",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_12mm_fine_superfast_mm_boneking.json"
+  },
+  {
+   "name": "0.20mm Standard @MM BoneKing",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_20mm_standard_mm_boneking.json"
+  },
+  {
+   "name": "0.20mm Standard Fast @MM BoneKing",
+   "label": "0.20mm Standard Fast",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_20mm_standard_fast_mm_boneking.json"
+  },
+  {
+   "name": "0.30mm Draft @MM BoneKing",
+   "label": "0.30mm Draft",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_30mm_draft_mm_boneking.json"
+  },
+  {
+   "name": "0.30mm Draft Fast @MM BoneKing",
+   "label": "0.30mm Draft Fast",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_30mm_draft_fast_mm_boneking.json"
+  }
+ ]
+}

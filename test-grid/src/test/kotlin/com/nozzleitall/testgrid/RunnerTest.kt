@@ -326,6 +326,66 @@ class RunnerTest {
         assertEquals(ResultState.PASS, st.session.record.test("mix-print")!!.result)
     }
 
+    @Test fun theColorReferenceSlicesEachTileAsItsOwnMix() {
+        val clock = Support.Clock()
+        val st = Support.start("paxx-u1", SimulatedPrinter(SimulatedPrinter.Preset.PAXX_U1, clock::now), clock)
+        Support.drive(st.session)
+        val ref = st.session.record.test("color-reference-slice")!!
+        assertEquals(ref.step("scan")!!.detail, ResultState.PASS, ref.result)
+        val detail = ref.step("slice")!!.detail
+        assertTrue(detail, detail.contains("6 color mixes") && detail.contains("tool 1 67% + tool 2 33%") && detail.contains("Print profile: 0.10mm Color Mixing"))
+        assertEquals(ResultState.PASS, st.session.record.test("color-reference-print")!!.result)
+    }
+
+    @Test fun theColorMixCheckJudgesEachLabeledObjectOnItsOwn() {
+        val check = org.json.JSONObject().put("check", "color_mixes")
+        val mixes = listOf("a.stl" to ColourMix(1, 2, 50), "b.stl" to ColourMix(3, 4, 67))
+        // The engine's Klipper labels: one block per object per layer, plus a wipe tower that doesn't count.
+        fun gcode(toolA: (Int) -> Int, toolB: (Int) -> Int): java.io.File = java.io.File(Support.tmp(), "objects-${System.nanoTime()}.gcode").apply {
+            writeText(buildString {
+                append("G90\nM83\nEXCLUDE_OBJECT_DEFINE NAME=a.stl_id_0_copy_0\n")
+                for (layer in 0 until 30) {
+                    append(";LAYER_CHANGE\nG1 Z${0.2 * (layer + 1)}\n")
+                    append("EXCLUDE_OBJECT_START NAME=wipe_tower\nT3\n;TYPE:Prime tower\nG1 X0 Y0\nG1 X5 Y0 E1\nEXCLUDE_OBJECT_END NAME=wipe_tower\n")
+                    append("EXCLUDE_OBJECT_START NAME=a.stl_id_0_copy_0\nT${toolA(layer)}\n;TYPE:Outer wall\nG1 X10 Y10\nG1 X20 Y10 E1\nEXCLUDE_OBJECT_END NAME=a.stl_id_0_copy_0\n")
+                    append("EXCLUDE_OBJECT_START NAME=b.stl_id_1_copy_0\nT${toolB(layer)}\n;TYPE:Outer wall\nG1 X30 Y10\nG1 X40 Y10 E1\nEXCLUDE_OBJECT_END NAME=b.stl_id_1_copy_0\n")
+                }
+            })
+        }
+        val twoThirds = { l: Int -> if ((l + 1) * 67 / 100 > l * 67 / 100) 3 else 2 }
+        assertNull(GcodeScan.evaluate(check, GcodeScan.scan(gcode({ it % 2 }, twoThirds)), null, 4, mixes))
+        // Tile b on tool 4 throughout: right tools on a, wrong proportion and a long run on b.
+        val stuck = GcodeScan.evaluate(check, GcodeScan.scan(gcode({ it % 2 }, { if (it == 0) 2 else 3 })), null, 4, mixes)!!
+        assertTrue(stuck, stuck.startsWith("Part 2 (b.stl") && stuck.contains("prints 97% of its layers"))
+        // Tile a picking up tile b's filament.
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode({ it % 3 }, twoThirds)), null, 4, mixes)!!.contains("printed with T0, T1, T2, expected T0 and T1"))
+        // Blocks of four layers: the proportion is right, but the colors stripe.
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode({ (it / 4) % 2 }, twoThirds)), null, 4, mixes)!!.contains("4 layers in a row"))
+    }
+
+    @Test fun theHeaterTargetCheckCatchesABedTemperatureBeyondTheProfile() {
+        // The Snapmaker U1 refused `M140 S32769` from a Full Spectrum slice on 2026-09-30: the engine build read a
+        // per-extruder value from beyond the end of the profile's one-element list. This check fails that file.
+        val check = org.json.JSONObject().put("check", "heater_targets")
+        val u1 = SimulatedSlicer(Support.profiles(), Support.tmp()).profile("snapmaker_u1")
+        assertTrue(u1.plateTemperatures.contains(60))
+        fun gcode(body: String): java.io.File = java.io.File(Support.tmp(), "heat-${System.nanoTime()}.gcode").apply {
+            writeText("G90\nM83\n$body\n;TYPE:Outer wall\nG1 X10 Y10\nG1 X20 Y10 E1\n")
+        }
+        assertNull(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M140 S60\nM190 S60\nM104 S220\nM109 S220")), u1))
+        assertNull(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M140 S0\nM104 S0 ; heaters off")), u1))
+        val bad = GcodeScan.scan(gcode("M140 S32769\nM190 S32769\nM104 S220"))
+        assertEquals(setOf(32769), bad.bedTargets); assertEquals(setOf(220), bad.nozzleTargets)
+        assertTrue(GcodeScan.evaluate(check, bad, u1)!!.contains("32769"))
+        assertTrue(GcodeScan.evaluate(check, bad, null)!!.contains("outside 0 to 150"))
+        // Klipper's macro spelling of the same request, and a nozzle beyond any hot end.
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode("SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET=32769")), null)!!.contains("32769"))
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M109 R999")), null)!!.contains("nozzle"))
+        // In range, but not a temperature the U1's filament profile declares: wrong element, not garbage.
+        assertTrue(GcodeScan.evaluate(check, GcodeScan.scan(gcode("M140 S47")), u1)!!.contains("does not declare"))
+        assertNull(GcodeScan.evaluate(org.json.JSONObject(check.toString()).put("declaredPlateTemperatures", false), GcodeScan.scan(gcode("M140 S47")), u1))
+    }
+
     @Test fun theAlternationCheckFailsWhenEveryLayerStaysOnOneFilament() {
         val check = org.json.JSONObject().put("check", "alternates_tools").put("minLayers", 10).put("minFraction", 0.8)
         fun gcode(toolFor: (Int) -> Int): java.io.File = java.io.File(Support.tmp(), "alt-${System.nanoTime()}.gcode").apply {
@@ -619,7 +679,7 @@ class RunnerTest {
             }
             else -> fail("unexpected $p").let { p }
         }
-        assertEquals(listOf("print-single", "multi-print", "mix-print"), asked)
+        assertEquals(listOf("print-single", "multi-print", "mix-print", "color-reference-print"), asked)
         val single = st.session.record.test("print-single")!!
         assertEquals(ResultState.PASS, single.result)
         assertTrue(single.step("complete")!!.detail.startsWith("Confirmed by the operator"))
@@ -627,6 +687,6 @@ class RunnerTest {
         assertEquals(ResultState.FAIL, st.session.record.test("multi-print")!!.result)
         // The colour-mixing print is asked the same way, and the operator said it finished.
         assertEquals(ResultState.PASS, st.session.record.test("mix-print")!!.result)
-        assertTrue(st.session.record.interventions.count { it.kind == "operator_confirmed" } == 3)
+        assertTrue(st.session.record.interventions.count { it.kind == "operator_confirmed" } == 4)
     }
 }

@@ -12,6 +12,10 @@ data class ProfileInfo(
     /** Printable-area bounding box (minX, minY, maxX, maxY) in mm. */
     val bed: List<Double>?, val height: Double?, val startGcode: String, val endGcode: String,
     val nozzleDiameters: List<Double>, val filamentTypes: List<String>,
+    /** Every bed temperature the filament profile declares (hot/cool/eng/textured/supertack plate, first and other layers), in °C. */
+    val plateTemperatures: Set<Int> = emptySet(),
+    /** The nozzle temperatures the filament profile declares (first and other layers), in °C. */
+    val nozzleTemperatures: Set<Int> = emptySet(),
 ) {
     companion object {
         val PACK_FILES = listOf("machine.json", "process.json", "filament.json")
@@ -30,8 +34,13 @@ data class ProfileInfo(
             val bed = if (area.isEmpty()) null else listOf(area.minOf { it.first }, area.minOf { it.second }, area.maxOf { it.first }, area.maxOf { it.second })
             return ProfileInfo(id, machine.optString("name", id), Canon.sha256(Canon.bytes(hashes)), hashes, bed,
                 machine.opt("printable_height")?.toString()?.toDoubleOrNull(), gcode(machine.opt("machine_start_gcode")), gcode(machine.opt("machine_end_gcode")),
-                numbers(machine.opt("nozzle_diameter")), strings(filament?.opt("filament_type")))
+                numbers(machine.opt("nozzle_diameter")), strings(filament?.opt("filament_type")),
+                celsius(filament) { it.endsWith("plate_temp") || it.endsWith("plate_temp_initial_layer") },
+                celsius(filament) { it == "nozzle_temperature" || it == "nozzle_temperature_initial_layer" })
         }
+
+        private fun celsius(filament: JSONObject?, key: (String) -> Boolean): Set<Int> =
+            filament?.keys()?.asSequence()?.filter(key)?.flatMap { numbers(filament.opt(it)).map { t -> t.toInt() } }?.toSet().orEmpty()
 
         private fun point(s: String): Pair<Double, Double>? {
             val parts = s.split('x'); if (parts.size != 2) return null
@@ -98,13 +107,22 @@ data class GcodeSummary(
      * purge moves don't count. Empty when the file has no layer markers.
      */
     val layerTools: List<Set<Int>> = emptyList(),
+    /**
+     * The same per object, by the object's label in the G-code (Klipper's `EXCLUDE_OBJECT_START NAME=`, or Orca's
+     * `; printing object` comment), with the layers the object doesn't print on left out. Empty when objects aren't labeled.
+     */
+    val objectLayerTools: Map<String, List<Set<Int>>> = emptyMap(),
+    /** Bed temperatures the file asks for (M140/M190 S, SET_HEATER_TEMPERATURE HEATER=heater_bed), in °C, rounded. */
+    val bedTargets: Set<Int> = emptySet(),
+    /** Nozzle temperatures the file asks for (M104/M109 S or R, SET_HEATER_TEMPERATURE HEATER=extruder*), in °C, rounded. */
+    val nozzleTargets: Set<Int> = emptySet(),
 ) {
     /** Layers (after the first) whose model tools differ from the layer below: a 50/50 colour mix changes on every one. */
     val alternatingLayers: Int get() = layerTools.zipWithNext().count { (a, b) -> a != b }
 
     fun toJson(): Map<String, Any?> = mapOf("sha256" to sha256, "bytes" to bytes, "lines" to lines, "extrusionMoves" to extrusionMoves,
         "objectExtents" to objectExtents, "allExtents" to allExtents, "printExtents" to printExtents, "toolsUsed" to toolsUsed.sorted(), "maxZ" to maxZ,
-        "layers" to layerTools.size, "alternatingLayers" to alternatingLayers,
+        "layers" to layerTools.size, "alternatingLayers" to alternatingLayers, "objects" to objectLayerTools.keys.sorted().take(40), "bedTargets" to bedTargets.sorted(), "nozzleTargets" to nozzleTargets.sorted(),
         "macros" to macros.sorted().take(40), "stockElegooCommand" to stockElegooCommand)
 }
 
@@ -114,6 +132,8 @@ object GcodeScan {
         "top surface", "bottom surface", "bridge", "internal bridge", "gap infill", "perimeter", "external perimeter", "support", "support interface")
     private val TOOL = Regex("""^T(\d{1,2})\b""")
     private val WORD = Regex("""^([A-Za-z_][A-Za-z0-9_]*)""")
+    private val OBJECT_START = Regex("""^EXCLUDE_OBJECT_START\s+NAME=(\S+)""", RegexOption.IGNORE_CASE)
+    private val OBJECT_COMMENT = Regex("""^;\s*(stop )?printing object\s+(.+?)(?:\s+id:\d+.*)?$""", RegexOption.IGNORE_CASE)
 
     /** A Bambu `.gcode.3mf` bundle is a zip; its plate G-code (Metadata/plate_N.gcode) is what gets checked. */
     private fun readable(file: File): java.io.Reader {
@@ -134,18 +154,25 @@ object GcodeScan {
         // type markers, only object feature types count; a file without any falls back to every extruding move.
         val obj = Extents(); val untyped = Extents(); val all = Extents(); val printed = Extents()
         val tools = sortedSetOf<Int>(); val macros = sortedSetOf<String>()
+        val bedTargets = sortedSetOf<Int>(); val nozzleTargets = sortedSetOf<Int>()
         var maxZ: Double? = null
         // The tool that is active when each move runs; before any T command the printer is on T0.
         var tool = 0
         val layers = mutableListOf<MutableSet<Int>>()
+        // The labeled object being printed, and each object's tools per layer (indexed like layers).
+        var current: String? = null
+        val objectLayers = linkedMapOf<String, MutableList<MutableSet<Int>>>()
         readable(file).buffered().useLines { seq ->
             seq.forEach { raw ->
                 lines++
                 val trimmed = raw.trim()
                 if (trimmed.startsWith(";TYPE:", ignoreCase = true)) { type = trimmed.substring(6).trim().lowercase(); sawType = true; return@forEach }
                 if (trimmed.equals(";LAYER_CHANGE", ignoreCase = true)) { layers += mutableSetOf<Int>(); return@forEach }
+                OBJECT_COMMENT.find(trimmed)?.let { m -> current = if (m.groupValues[1].isEmpty()) m.groupValues[2].trim() else null; return@forEach }
                 val code = trimmed.substringBefore(';').trim()
                 if (code.isEmpty()) return@forEach
+                OBJECT_START.find(code)?.let { current = it.groupValues[1]; macros += "EXCLUDE_OBJECT_START"; return@forEach }
+                if (code.uppercase().startsWith("EXCLUDE_OBJECT_END")) { current = null; macros += "EXCLUDE_OBJECT_END"; return@forEach }
                 TOOL.find(code)?.let { tool = it.groupValues[1].toInt(); tools += tool; return@forEach }
                 val word = code.split(Regex("\\s+"))[0].uppercase()
                 when {
@@ -164,10 +191,23 @@ object GcodeScan {
                         if (extruding && (nx != x || ny != y)) {
                             moves++
                             all.add(x, y); all.add(nx, ny)
-                            if (!sawType) { untyped.add(x, y); untyped.add(nx, ny) } else { printed.add(x, y); printed.add(nx, ny); if (type in OBJECT_TYPES) { obj.add(x, y); obj.add(nx, ny); layers.lastOrNull()?.add(tool) } }
+                            if (!sawType) { untyped.add(x, y); untyped.add(nx, ny) } else { printed.add(x, y); printed.add(nx, ny); if (type in OBJECT_TYPES) {
+                                obj.add(x, y); obj.add(nx, ny); layers.lastOrNull()?.add(tool)
+                                val name = current
+                                if (name != null && layers.isNotEmpty()) objectLayers.getOrPut(name) { mutableListOf() }.let { l -> while (l.size < layers.size) l += mutableSetOf<Int>(); l[layers.size - 1] += tool }
+                            } }
                             maxZ = maxOf(maxZ ?: nz, nz)
                         }
                         x = nx; y = ny; z = nz
+                    }
+                    word == "M140" || word == "M190" -> (arg(code, 'S') ?: arg(code, 'R'))?.let { bedTargets += Math.round(it).toInt() }
+                    word == "M104" || word == "M109" -> (arg(code, 'S') ?: arg(code, 'R'))?.let { nozzleTargets += Math.round(it).toInt() }
+                    // Klipper's macro form of the same requests (a profile's PRINT_START may use it directly).
+                    word == "SET_HEATER_TEMPERATURE" -> {
+                        val heater = Regex("""HEATER=(\S+)""", RegexOption.IGNORE_CASE).find(code)?.groupValues?.get(1)?.lowercase()
+                        val target = Regex("""TARGET=(-?\d*\.?\d+)""", RegexOption.IGNORE_CASE).find(code)?.groupValues?.get(1)?.toDoubleOrNull()
+                        if (heater != null && target != null) { if (heater == "heater_bed") bedTargets += Math.round(target).toInt() else if (heater.startsWith("extruder")) nozzleTargets += Math.round(target).toInt() }
+                        macros += word
                     }
                     !Regex("^[GMT]\\d").containsMatchIn(word) -> WORD.find(word)?.let { macros += it.groupValues[1].uppercase() }
                 }
@@ -175,7 +215,7 @@ object GcodeScan {
         }
         val stock = file.bufferedReader().useLines { ElegooProfiles.stockElegooCommand(it) }
         return GcodeSummary(Canon.sha256(file), file.length(), lines, moves, if (sawType) obj.box() else untyped.box(), all.box(), if (sawType) printed.box() else all.box(), tools, macros, stock, maxZ,
-            layers.filter { it.isNotEmpty() })
+            layers.filter { it.isNotEmpty() }, objectLayers.mapValues { (_, l) -> l.filter { it.isNotEmpty() } }, bedTargets, nozzleTargets)
     }
 
     private fun arg(code: String, letter: Char): Double? =
@@ -189,7 +229,8 @@ object GcodeScan {
 
     /** Evaluates one scan_gcode check. Returns null when it passes, or why it fails. */
     /** [slots]: tool or filament slots the printer's saved profile declares (CFS, CANVAS, an MMU: one nozzle, several slots). */
-    fun evaluate(check: JSONObject, s: GcodeSummary, profile: ProfileInfo?, slots: Int = 1): String? = when (check.optString("check")) {
+    /** [partMixes]: the slice's color mix for each part file, in order (empty when the slice has no mix). */
+    fun evaluate(check: JSONObject, s: GcodeSummary, profile: ProfileInfo?, slots: Int = 1, partMixes: List<Pair<String, ColourMix>> = emptyList()): String? = when (check.optString("check")) {
         "non_empty" -> if (s.extrusionMoves > 0) null else "The G-code has no extruding moves."
         "no_stock_elegoo_commands" -> s.stockElegooCommand?.let { "The G-code contains ${it}, an Elegoo stock-firmware command. Klipper lacks it and COSMOS 26.07+ emergency-stops on it: this file must never be sent to a Moonraker printer." }
         "requires_macro" -> check.optString("macro").uppercase().let { m -> if (m in s.macros) null else "The start/end G-code never calls $m, which this firmware's profile requires (legacy or wrong start G-code)." }
@@ -228,8 +269,55 @@ object GcodeScan {
                 else -> null
             }
         }
+        // Each part prints as its own color mix: only that mix's two filaments, in the right proportion, finely interleaved.
+        "color_mixes" -> colorMixes(check, s, partMixes)
+        // Every heater target must be one the printer can reach and, for the bed, one the filament profile declares. A
+        // per-extruder lookup that reads past the end of the profile's list shows up here: the Snapmaker U1 refused
+        // `M140 S32769` from a Full Spectrum slice whose engine build had that bug (2026-09-30).
+        "heater_targets" -> {
+            val maxBed = check.optInt("maxBedC", 150); val maxNozzle = check.optInt("maxNozzleC", 350)
+            val declared = profile?.plateTemperatures.orEmpty()
+            val bedOutside = s.bedTargets.filter { it < 0 || it > maxBed }
+            val bedUndeclared = if (declared.isEmpty() || !check.optBoolean("declaredPlateTemperatures", true)) emptyList() else s.bedTargets.filter { it != 0 && it !in declared && it !in bedOutside }
+            val nozzleOutside = s.nozzleTargets.filter { it < 0 || it > maxNozzle }
+            when {
+                bedOutside.isNotEmpty() -> "The G-code asks the bed for ${bedOutside.joinToString(", ")} °C, outside 0 to $maxBed °C (a per-extruder value read from beyond the profile's list, as in the U1's M140 S32769)."
+                bedUndeclared.isNotEmpty() -> "The G-code asks the bed for ${bedUndeclared.joinToString(", ")} °C, which the filament profile does not declare (it has ${declared.sorted().joinToString(", ")} °C)."
+                nozzleOutside.isNotEmpty() -> "The G-code asks the nozzle for ${nozzleOutside.joinToString(", ")} °C, outside 0 to $maxNozzle °C."
+                else -> null
+            }
+        }
         "uses_tools" -> check.optInt("count", 1).let { n -> if (s.toolsUsed.size >= n) null else "The G-code selects ${s.toolsUsed.size} tool(s); at least $n are expected." }
         else -> "Unknown check \"${check.optString("check")}\"."
+    }
+
+    /** The labeled object that is [file] (the engine labels each object after its part file, then "_id_N_copy_N"). */
+    private fun objectFor(file: String, s: GcodeSummary): List<Set<Int>>? {
+        val stem = file.substringBeforeLast('.')
+        return s.objectLayerTools.entries.firstOrNull { (n, _) -> n == stem || n.startsWith("$stem.") || n.startsWith("${stem}_") }?.value
+    }
+
+    private fun colorMixes(check: JSONObject, s: GcodeSummary, partMixes: List<Pair<String, ColourMix>>): String? {
+        if (partMixes.isEmpty()) return "The slice has no color mix to check."
+        val minLayers = check.optInt("minLayers", 10); val tolerance = check.optInt("tolerancePercent", 12); val maxRun = check.optInt("maxRun", 3)
+        val single = partMixes.map { it.second }.distinct().size == 1
+        val problems = partMixes.mapIndexedNotNull { i, (file, m) ->
+            val what = "Part ${i + 1} ($file, ${m.label})"
+            val layers = objectFor(file, s) ?: (if (single && s.objectLayerTools.isEmpty()) s.layerTools else null)
+                ?: return@mapIndexedNotNull "$what: no object labeled after it in the G-code" + (if (s.objectLayerTools.isEmpty()) " (the G-code labels no objects)" else " (objects: ${s.objectLayerTools.keys.take(8).joinToString()})")
+            val want = setOf(m.a - 1, m.b - 1); val used = layers.flatten().toSet()
+            val runs = layers.filter { it.size == 1 }.map { it.first() }
+            val bShare = if (runs.isEmpty()) 0.0 else 100.0 * runs.count { it == m.b - 1 } / runs.size
+            val longest = runs.fold(0 to (null as Int? to 0)) { (best, cur), t -> val n = if (cur.first == t) cur.second + 1 else 1; maxOf(best, n) to (t to n) }.first
+            when {
+                layers.size < minLayers -> "$what: prints on ${layers.size} layer(s); at least $minLayers are needed to judge the mix"
+                used != want -> "$what: printed with T${used.sorted().joinToString(", T")}, expected T${want.sorted().joinToString(" and T")}"
+                kotlin.math.abs(bShare - m.bPercent) > tolerance -> "$what: tool ${m.b} prints ${"%.0f".format(java.util.Locale.ROOT, bShare)}% of its layers, expected ${m.bPercent}% ± $tolerance"
+                longest > maxRun -> "$what: one filament prints $longest layers in a row (at most $maxRun keeps the colors blending)"
+                else -> null
+            }
+        }
+        return problems.takeIf { it.isNotEmpty() }?.joinToString("; ", postfix = ".")
     }
 }
 

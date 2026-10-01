@@ -5,7 +5,7 @@
     0
   ],
   "id": "paxx-u1",
-  "suiteVersion": "1.8.0",
+  "suiteVersion": "1.9.0",
   "title": "Snapmaker U1 on PAXX extended firmware",
   "description": "Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.",
   "coverage": "reference",
@@ -211,6 +211,9 @@
               {
                 "check": "centered",
                 "toleranceMm": 5
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }
@@ -1060,6 +1063,9 @@
               {
                 "check": "requires_macro",
                 "macro": "PRINT_START"
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }
@@ -1269,6 +1275,9 @@
               {
                 "check": "requires_macro",
                 "macro": "PRINT_START"
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }
@@ -1423,6 +1432,266 @@
       "uncertainResultProhibitsRetry": true,
       "dependsOn": [
         "mix-slice"
+      ]
+    },
+    {
+      "id": "color-reference-slice",
+      "title": "Slice the color reference tiles (6 color mixes)",
+      "category": "slicing",
+      "scope": "multi_material",
+      "safetyLevel": 0,
+      "description": "Slices the first 6 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 1 50% + tool 3 50%; tile 3: tool 2 50% + tool 3 50%; tile 4: tool 1 67% + tool 2 33%; tile 5: tool 1 33% + tool 2 67%; tile 6: tool 3 50% + tool 4 50%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. It uses the printer's own color-mixing print profile, 0.10mm Color Mixing @Snapmaker U1 (0.4 nozzle), with its 0.1 mm layers. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-color-reference-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-color-reference-v1",
+            "profile": "snapmaker_u1",
+            "colourMixes": [
+              {
+                "a": 1,
+                "b": 2,
+                "bPercent": 50
+              },
+              {
+                "a": 1,
+                "b": 3,
+                "bPercent": 50
+              },
+              {
+                "a": 2,
+                "b": 3,
+                "bPercent": 50
+              },
+              {
+                "a": 1,
+                "b": 2,
+                "bPercent": 33
+              },
+              {
+                "a": 1,
+                "b": 2,
+                "bPercent": 67
+              },
+              {
+                "a": 3,
+                "b": 4,
+                "bPercent": 50
+              }
+            ],
+            "process": "0.10mm Color Mixing @Snapmaker U1 (0.4 nozzle)"
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "uses_tools",
+                "count": 4
+              },
+              {
+                "check": "max_tool_index",
+                "max": 3
+              },
+              {
+                "check": "within_bed"
+              },
+              {
+                "check": "color_mixes",
+                "minLayers": 10,
+                "tolerancePercent": 12,
+                "maxRun": 3
+              },
+              {
+                "check": "requires_macro",
+                "macro": "PRINT_START"
+              },
+              {
+                "check": "heater_targets"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code is produced",
+        "Each tile prints with only its own two filaments",
+        "Each tile's filaments take turns in the mix's proportion, at most three layers of one in a row"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "color-reference-print",
+      "title": "Print the color reference tiles",
+      "category": "physical_print",
+      "scope": "multi_material",
+      "safetyLevel": 4,
+      "description": "Prints the six color reference tiles sliced in this run, each its own mix, at 0.1 mm layers. The toolheads change many times on every layer, so the print takes far longer than its size suggests (about an hour or more).",
+      "requiredHardware": [
+        "multi_tool"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        },
+        {
+          "id": "loaded",
+          "text": "Snapmaker's color reference filaments are loaded: cyan in tool 1, magenta in tool 2, yellow in tool 3 and gray in tool 4."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the color reference G-code",
+          "params": {
+            "fromTest": "color-reference-slice"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "title": "Start the color reference tiles",
+          "params": {
+            "fromTest": "color-reference-slice"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 1200
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "unattended",
+          "kind": "observe",
+          "params": {
+            "question": "Did the tiles finish without you having to intervene (no failed tool or filament change)?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "blend",
+          "kind": "observe",
+          "params": {
+            "question": "From about an arm's length, does each tile read as one even blended color, rather than stripes of two colors?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "reference",
+          "kind": "observe",
+          "params": {
+            "question": "Compare tile 2 (cyan + yellow, 50/50) with color No. 54 on Snapmaker's Full Spectrum color reference chart: is it a close match?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "steps",
+          "kind": "observe",
+          "params": {
+            "question": "Tiles 4, 1 and 5 are cyan and magenta at 33%, 50% and 67% magenta: do they step evenly from bluer to pinker?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "tiles",
+            "prompt": "Photo of the tiles' front faces side by side, in good daylight, in tile order"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "The print completes",
+        "Each tile reads as one even blended color from arm's length",
+        "Tile 2 matches Snapmaker's reference color No. 54",
+        "Tiles 4, 1 and 5 step from bluer to pinker"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "tiles",
+          "kind": "photo",
+          "description": "The front faces of the finished tiles, in tile order"
+        }
+      ],
+      "timeout": {
+        "seconds": 18000,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded print file",
+          "params": {
+            "fromTest": "color-reference-slice"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "color-reference-slice"
       ]
     }
   ]

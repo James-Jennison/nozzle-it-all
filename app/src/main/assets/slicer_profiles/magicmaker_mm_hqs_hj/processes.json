@@ -1,0 +1,26 @@
+{
+ "default": "0.10mm Fine @MM hqs hj",
+ "presets": [
+  {
+   "name": "0.10mm Fine @MM hqs hj",
+   "label": "0.10mm Fine",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/magicmaker_mm_hqs_hj/process.json"
+  },
+  {
+   "name": "0.20mm Standard @MM hqs hj",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_20mm_standard_mm_hqs_hj.json"
+  },
+  {
+   "name": "0.30mm Draft @MM hqs hj",
+   "label": "0.30mm Draft",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/MagicMaker/0_30mm_draft_mm_hqs_hj.json"
+  }
+ ]
+}

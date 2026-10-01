@@ -1,0 +1,40 @@
+{
+ "default": "0.20mm Standard @FLSun Q5",
+ "presets": [
+  {
+   "name": "0.08mm Fine @FLSun Q5",
+   "label": "0.08mm Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FLSun/0_08mm_fine_flsun_q5.json"
+  },
+  {
+   "name": "0.16mm Optimal @FLSun Q5",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FLSun/0_16mm_optimal_flsun_q5.json"
+  },
+  {
+   "name": "0.20mm Standard @FLSun Q5",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/flsun_q5/process.json"
+  },
+  {
+   "name": "0.24mm Draft @FLSun Q5",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FLSun/0_24mm_draft_flsun_q5.json"
+  },
+  {
+   "name": "0.30mm Extra Draft @FLSun Q5",
+   "label": "0.30mm Extra Draft",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FLSun/0_30mm_extra_draft_flsun_q5.json"
+  }
+ ]
+}

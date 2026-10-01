@@ -1,0 +1,19 @@
+{
+ "default": "0.20mm Standard @Kingroon KLP1",
+ "presets": [
+  {
+   "name": "0.12mm Standard @Kingroon KLP1",
+   "label": "0.12mm Standard",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Kingroon/0_12mm_standard_kingroon_klp1.json"
+  },
+  {
+   "name": "0.20mm Standard @Kingroon KLP1",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/kingroon_klp1/process.json"
+  }
+ ]
+}

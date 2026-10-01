@@ -91,8 +91,8 @@ object SlicingCoordinator {
     // doc); callers pass null for a Bambu target in that case, which this doesn't itself enforce
     // (ModelViewer/SliceAndPrintPanel already keep Paint mode and target-printer independent, so
     // this is defense-in-depth, not the only guard).
-    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform()): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
-        when (val resolved = resolveProfilePaths(context, profile)) {
+    suspend fun slice(context: Context, modelFile: File, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), paintSessionHandle: Long? = null, transform: ModelTransform = ModelTransform(), processPreset: String? = null): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
+        when (val resolved = resolveProfilePaths(context, profile, processPreset)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
                 val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
@@ -150,10 +150,14 @@ object SlicingCoordinator {
     // non-blank, slicing goes through nativeSliceMultiObjectMix instead of nativeSliceMultiObjectEx so the engine can
     // resolve an object's tool index against a virtual (blended/gradient) extruder id, not just a physical one. Left
     // blank (the default, and every caller before this parameter existed), slicing is byte-for-byte unchanged.
-    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList(), outputTag: String? = null, mixedFilamentDefinitions: String? = null, virtualExtruders: String = ""): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
+    // processPreset (both slice() and sliceProject()): the print profile to slice with - the full OrcaSlicer process preset
+    // name, as ProcessPresets lists it for this printer's pack (slicer_profiles/<pack>/processes.json). Null is the pack's
+    // default process, unchanged from before this parameter existed; a name the pack doesn't offer fails the slice.
+    // `overrides` apply on top of the chosen preset.
+    suspend fun sliceProject(context: Context, objects: List<Pair<File, ModelTransform>>, profile: PrinterProfile, overrides: Map<String, String> = emptyMap(), toolSlotIndices: List<Int> = emptyList(), slotMaterials: List<MaterialProfile?> = emptyList(), extras: List<ObjectExtrasText> = emptyList(), outputTag: String? = null, mixedFilamentDefinitions: String? = null, virtualExtruders: String = "", processPreset: String? = null): SliceOutcome = withContext(Dispatchers.IO) { sliceLock.withLock { if (systemLowMemory(context.applicationContext)) return@withContext SliceOutcome.Failed(LOW_MEMORY_MESSAGE); NativeEngine.nativeResetCancel(); markStarted(context.applicationContext); SliceService.start(context.applicationContext); try {
         if (objects.isEmpty()) return@withContext SliceOutcome.Failed("Add at least one object to this project before slicing.")
         require(toolSlotIndices.isEmpty() || toolSlotIndices.size == objects.size) { "toolSlotIndices must be empty or match objects in length." }
-        when (val resolved = resolveProfilePaths(context, profile)) {
+        when (val resolved = resolveProfilePaths(context, profile, processPreset)) {
             is ProfileResolution.Blocked -> return@withContext resolved.outcome
             is ProfileResolution.Ready -> return@withContext try {
                 val bambuTarget = profile.kind == PrinterKind.BAMBU_LAB
@@ -250,7 +254,7 @@ object SlicingCoordinator {
     // factored out so the real Centauri Carbon live-firmware-match logic (and its own hard-won
     // real bug fixes, see the git history on the branch this shipped on) exists in exactly one
     // place, not two that could quietly drift apart.
-    private suspend fun resolveProfilePaths(context: Context, profile: PrinterProfile): ProfileResolution {
+    private suspend fun resolveProfilePaths(context: Context, profile: PrinterProfile, processPreset: String? = null): ProfileResolution {
         val model = profile.slicingModel ?: return ProfileResolution.Blocked(SliceOutcome.Failed("This printer has no slicing profile selected. Choose one from Edit printer first."))
         // A Centauri Carbon profile only ever slices for a printer connected on its own firmware's protocol: an Elegoo-firmware
         // profile (M729 start G-code) never for a Moonraker/COSMOS printer, a COSMOS profile never for an Elegoo-firmware one.
@@ -292,7 +296,9 @@ object SlicingCoordinator {
         SlicingEngineSupport.unsupportedReason(model)?.let { return ProfileResolution.Blocked(SliceOutcome.Failed(it)) }
         val pack = slicingProfilePack(model, cosmosGeneration, profile.customMachine)
             ?: return ProfileResolution.Blocked(SliceOutcome.Failed("No bundled slicer profile exists yet for this printer's confirmed firmware."))
-        return ProfileResolution.Ready(pack.materialize(context), pack)
+        val preset = pack.processPresets(context).resolve(processPreset)
+            ?: return ProfileResolution.Blocked(SliceOutcome.Failed("The print profile \"$processPreset\" isn't available for this printer. Choose another print profile."))
+        return ProfileResolution.Ready(pack.materialize(context, preset.file), pack)
     }
 }
 

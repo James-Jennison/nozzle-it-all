@@ -7,6 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.io.File
 
 class ManifestTest {
     private fun minimal(): JSONObject = JSONObject(java.io.File(Support.root, "test-grid/src/main/resources/testgrid/suites/paxx-u1.json").readText())
@@ -74,6 +75,34 @@ class ManifestTest {
         assertTrue(parseProblem(same).contains("two different tools"))
         val all = minimal(); mixSlice(all).put("bPercent", 100)
         assertTrue(parseProblem(all).contains("bPercent must be 1 to 99"))
+    }
+
+    @Test fun perPartColorMixesAreValidatedLikeOneMix() {
+        fun params(o: JSONObject) = (0 until o.getJSONArray("tests").length()).map { o.getJSONArray("tests").getJSONObject(it) }.first { it.getString("id") == "mix-slice" }
+            .getJSONArray("steps").let { s -> (0 until s.length()).map { s.getJSONObject(it) } }.first { it.getString("kind") == "slice" }.getJSONObject("params")
+        val mix = { a: Int, b: Int, p: Int -> JSONObject().put("a", a).put("b", b).put("bPercent", p) }
+        val both = minimal(); params(both).put("colourMixes", org.json.JSONArray().put(mix(1, 2, 50)))
+        assertTrue(parseProblem(both).contains("can't both be given"))
+        val bad = minimal(); params(bad).apply { remove("colourMix"); put("colourMixes", org.json.JSONArray().put(mix(1, 2, 50)).put(mix(3, 3, 50))) }
+        assertTrue(parseProblem(bad).contains("params.colourMixes[1].a and .b must be two different tools"))
+        val blank = minimal(); params(blank).put("process", " ")
+        assertTrue(parseProblem(blank).contains("params.process must name a print profile"))
+    }
+
+    @Test fun theU1AndCanvasSuitesHaveTheColorReferenceTests() {
+        listOf("paxx-u1", "cosmos-centauri-carbon").forEach { id ->
+            val s = SuiteCatalog.bundled(id)!!
+            assertTrue(id, s.tests.map { it.id }.containsAll(listOf("color-reference-slice", "color-reference-print")))
+        }
+    }
+
+    @Test fun everyNamedPrintProfileIsOneItsPackOffers() {
+        val named = SuiteCatalog.bundled().flatMap { s -> s.tests.flatMap { t -> t.steps.filter { it.kindId == "slice" && it.params.has("process") }.map { Triple(s.id, it.params.getString("profile"), it.params.getString("process")) } } }
+        assertTrue(named.isNotEmpty())
+        named.forEach { (suite, pack, process) ->
+            val presets = JSONObject(File(Support.root, "app/src/main/assets/slicer_profiles/$pack/processes.json").readText()).getJSONArray("presets")
+            assertTrue("$suite: $pack has no print profile \"$process\"", (0 until presets.length()).any { presets.getJSONObject(it).getString("name") == process })
+        }
     }
 
     @Test fun everyMultiToolSuiteHasTheColourMixingTests() {

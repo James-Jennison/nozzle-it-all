@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @Flashforge Artemis 0.4 Nozzle",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Flashforge Artemis 0.4 Nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.18",
+   "infill": "15%",
+   "file": "slicer_profiles/flashforge_artemis/process.json"
+  }
+ ]
+}

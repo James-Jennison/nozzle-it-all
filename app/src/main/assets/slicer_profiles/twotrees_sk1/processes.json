@@ -1,0 +1,61 @@
+{
+ "default": "0.20mm Standard @SK1",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @SK1",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/TwoTrees/0_08mm_extra_fine_sk1.json"
+  },
+  {
+   "name": "0.12mm Fine @SK1",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/TwoTrees/0_12mm_fine_sk1.json"
+  },
+  {
+   "name": "0.16mm Optimal @SK1",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/TwoTrees/0_16mm_optimal_sk1.json"
+  },
+  {
+   "name": "0.20mm Quality @SK1",
+   "label": "0.20mm Quality",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/TwoTrees/0_20mm_quality_sk1.json"
+  },
+  {
+   "name": "0.20mm Standard @SK1",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/twotrees_sk1/process.json"
+  },
+  {
+   "name": "0.24mm Draft @SK1",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/TwoTrees/0_24mm_draft_sk1.json"
+  },
+  {
+   "name": "0.24mm HSpeed @SK1",
+   "label": "0.24mm HSpeed",
+   "layer_height": "0.24",
+   "infill": "10%",
+   "file": "slicer_profiles/shared_processes/TwoTrees/0_24mm_hspeed_sk1.json"
+  },
+  {
+   "name": "0.28mm Extra Draft @SK1",
+   "label": "0.28mm Extra Draft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/TwoTrees/0_28mm_extra_draft_sk1.json"
+  }
+ ]
+}

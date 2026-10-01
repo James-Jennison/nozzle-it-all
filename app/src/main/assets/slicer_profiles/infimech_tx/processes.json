@@ -1,0 +1,40 @@
+{
+ "default": "0.20mm Standard @InfiMech TX",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @InfiMech TX",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/InfiMech/0_08mm_extra_fine_infimech_tx.json"
+  },
+  {
+   "name": "0.12mm Fine @InfiMech TX",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/InfiMech/0_12mm_fine_infimech_tx.json"
+  },
+  {
+   "name": "0.16mm Optimal @InfiMech TX",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/InfiMech/0_16mm_optimal_infimech_tx.json"
+  },
+  {
+   "name": "0.20mm Standard @InfiMech TX",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/infimech_tx/process.json"
+  },
+  {
+   "name": "0.24mm Draft @InfiMech TX",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/InfiMech/0_24mm_draft_infimech_tx.json"
+  }
+ ]
+}

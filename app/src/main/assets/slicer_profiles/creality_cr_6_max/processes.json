@@ -1,0 +1,47 @@
+{
+ "default": "0.20mm Standard @Creality CR-6 0.4",
+ "presets": [
+  {
+   "name": "0.10mm HighDetail @Creality 0.4 CR-6 0.4",
+   "label": "0.10mm HighDetail",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_10mm_highdetail_creality_0_4_cr_6_0_4.json"
+  },
+  {
+   "name": "0.12mm Detail @Creality 0.4 CR-6",
+   "label": "0.12mm Detail",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_12mm_detail_creality_0_4_cr_6.json"
+  },
+  {
+   "name": "0.16mm Optimal @Creality CR-6 0.4",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_16mm_optimal_creality_cr_6_0_4.json"
+  },
+  {
+   "name": "0.20mm Standard @Creality CR-6 0.4",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_cr_6_max/process.json"
+  },
+  {
+   "name": "0.24mm Draft @Creality CR-6 0.4",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_24mm_draft_creality_cr_6_0_4.json"
+  },
+  {
+   "name": "0.28mm SuperDraft @Creality CR-6 0.4",
+   "label": "0.28mm SuperDraft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_28mm_superdraft_creality_cr_6_0_4.json"
+  }
+ ]
+}

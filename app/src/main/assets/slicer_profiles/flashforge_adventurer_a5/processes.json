@@ -1,0 +1,26 @@
+{
+ "default": "0.20mm Standard @FF Adventurer A5 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.12mm Fine @FF Adventurer A5 0.4 nozzle",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Flashforge/0_12mm_fine_ff_adventurer_a5_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @FF Adventurer A5 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/flashforge_adventurer_a5/process.json"
+  },
+  {
+   "name": "0.24mm Draft @FF Adventurer A5 0.4 nozzle",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Flashforge/0_24mm_draft_ff_adventurer_a5_0_4_nozzle.json"
+  }
+ ]
+}

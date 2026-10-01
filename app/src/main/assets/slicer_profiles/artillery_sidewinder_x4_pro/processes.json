@@ -1,0 +1,82 @@
+{
+ "default": "0.20mm Standard @Artillery Genius",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @Artillery X4Pro 0.4 nozzle",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_08mm_extra_fine_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.08mm High Quality @Artillery X4Pro 0.4 nozzle",
+   "label": "0.08mm High Quality",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_08mm_high_quality_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.12mm Fine @Artillery X4Pro 0.4 nozzle",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_12mm_fine_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.12mm High Quality @Artillery X4Pro 0.4 nozzle",
+   "label": "0.12mm High Quality",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_12mm_high_quality_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.16mm High Quality @Artillery X4Pro 0.4 nozzle",
+   "label": "0.16mm High Quality",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_16mm_high_quality_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.16mm Optimal @Artillery X4Pro 0.4 nozzle",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_16mm_optimal_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @Artillery Genius",
+   "label": "0.20mm Standard @Artillery Genius",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/artillery_sidewinder_x4_pro/process.json"
+  },
+  {
+   "name": "0.20mm Standard @Artillery X4Pro 0.4 nozzle",
+   "label": "0.20mm Standard @Artillery X4Pro 0.4 nozzle",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_20mm_standard_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Strength @Artillery X4Pro 0.4 nozzle",
+   "label": "0.20mm Strength",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_20mm_strength_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.24mm Draft @Artillery X4Pro 0.4 nozzle",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_24mm_draft_artillery_x4pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.28mm Extra Draft @Artillery X4Pro 0.4 nozzle",
+   "label": "0.28mm Extra Draft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_28mm_extra_draft_artillery_x4pro_0_4_nozzle.json"
+  }
+ ]
+}

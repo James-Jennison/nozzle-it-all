@@ -1270,3 +1270,52 @@ interchange).
 - **Known divergence:** none in slicing output: the fixed engine's x86-64 golden outputs are unchanged; on arm64 the
   only change is that per-extruder values are now read from the right element.
 - **Touches:** engine build (NDK), slicing (per-extruder settings on Android), Test Grid checks and suites.
+
+## P-0042 — The G-code thumbnail draws a mixed filament in the mix's color
+
+- **Upstream:** nozzle-engine `490e5b5255ffb96b1d8740677e4a6196acc3cca5` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
+  branch `fix/arm64-get-at-miscompile`, pull request 11): `a3c56ef` (P-0041) plus one commit. Nothing was imported from
+  outside this repository or the engine fork; the colors come from code the engine already had (Snapmaker Orca's
+  `MixedFilamentManager`, `src/libslic3r/MixedFilament.cpp`, and PrusaSlicer 2.9.6's
+  `FullSpectrum::VirtualExtruder::effective_color`, `src/libslic3r/Feature/FullSpectrum/VirtualExtruder.cpp`).
+- **Root cause:** on 2026-10-01 the owner's Snapmaker U1 color reference print (six tiles, six Full Spectrum mixes)
+  showed a thumbnail with every tile in one color. The bridge's thumbnail renderer
+  (`nozzle/bridge/android/thumbnail_render.cpp`, shared by the Android, desktop and web bridges) looked a part's
+  filament id up in `filament_colour` alone. A mixed filament's id is past the physical filaments, so every Full
+  Spectrum mix fell back to filament 1's color, and a ColorMix virtual extruder was drawn as whichever physical
+  filament shared its id. (That the one color was white rather than the first toolhead's is the app's own bug, fixed
+  separately: every Moonraker printer was read as an empty Qidi Box, so the slice never got the U1's colors.)
+- **Engine change:** the renderer asks the engine for the color it shows for each mixed filament id, from the same
+  state `Print::apply` builds (PrintApply.cpp): the physical colors padded to the filament count, then the model's
+  virtual extruders (`effective_color`), else the mixed filament manager's auto-generated and custom rows
+  (`MixedFilament::display_color`, ids resolved by `mixed_filament_from_id`). Physical filaments are drawn as before.
+  The two includes are guarded with `__has_include`, so the bridge still builds against an engine without either
+  feature.
+- **App change:** the pin and the places that repeat it (`OpenSourceNotice.ENGINE_COMMIT`, the settings schema's
+  `commit`, the site's open-source page). No app code changed.
+- **Test evidence:** gthost-build01, 2026-10-01 (local early morning):
+  - Engine `tools/nozzle/colourmix_test.sh` gained two checks, using the new `tools/nozzle/thumbnail_color.py`
+    (standard library only: decodes the largest embedded thumbnail and tests its most common opaque pixel against a
+    base color under the renderer's shading). The virtual-extruder slice (red + green, 50/50) must be drawn in
+    `#535208`, what `--color-mix` answers for that mix; a `mixed_filament_definitions` slice on mixed filament 6
+    (blue + yellow) must print with T2 and T3 only and be drawn in `#3E9967`, the Color Mixing panel's color for that
+    row; neither may pass as filament 1's red. With the fix all six checks pass (worst channel error 0.6 and 0.5).
+    Against the previous build (`a3c56ef`'s CI binaries) both thumbnail checks fail: the virtual extruder was drawn
+    blue (filament 3) and the mix red (filament 1).
+  - The six tiles of the color reference, sliced by the desktop engine with the U1's real colors (`#00FFFF`,
+    `#D93B90`, `#F4C032`, `#9199A4`) and its six mixes: the previous build's thumbnail has one color (cyan,
+    filament 1), the fixed build's has six.
+  - nozzle-engine CI on the fix (pull request 11, run 36853299329): success at 2026-10-01T11:19Z: desktop engine,
+    golden outputs on every bundled printer profile (unchanged), engine contract, color mixing through the Android
+    bridge (with the two new thumbnail checks), Android engine (arm64-v8a, NDK 29) and the WebAssembly engine all
+    green; native engine SHA-256 `0d851ce739ef85127b4c2cb59d72dfe974e8ff7c604eadd26053546d94ef7e81` (build record in
+    `engine/fork/PROVENANCE.txt`).
+  - Testing build (`Nozzle It All - Testing`, `com.nozzleitall.app.testgrid`) rebuilt on gthost from
+    `integration/color-reference-ndk29` with this pin and the Qidi Box fix (pull request 59); the engine export's
+    `.nozzle-engine-commit` is `490e5b5`, `libslic3rengine.so` SHA-256
+    `73074b5e4cd3d031f26d5b40c9a7d0293ad286980c0f49d7aea1830a23c981d9`. Installed on the Razr 2023 (ZY22HXCVPM, a first
+    install) on 2026-10-01 at 04:11 local; it launches. The color reference slice has not been re-run on a phone
+    with this build yet (the U1 was mid-print).
+- **Known divergence:** none in slicing output (golden outputs unchanged); only the embedded thumbnail of a slice
+  that uses a mixed filament differs.
+- **Touches:** G-code thumbnails (Android, desktop, web), engine tests.

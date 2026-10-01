@@ -1283,8 +1283,17 @@ interchange).
     (build record in `engine/fork/PROVENANCE.txt`).
   - Testing build (`Nozzle It All - Testing`, `.testgrid`) rebuilt on gthost with this pin and NDK 29: `application-label` "Nozzle It All - Testing",
     `com.nozzleitall.app.testgrid`, `libslic3rengine.so` SHA-256 `493123b57b59b560c084910fda2a1686e5948a5e73503b977c94f38e71c6521b`
-    (clang 21.0.0 build), installed over the previous Testing app on the Razr with `adb install -r` on 2026-09-30 at 21:16
-    local. The U1 print of the Full Spectrum swatch from this build is the owner's to re-run.
+    (clang 21.0.0 build). The first install (main + this fix) crashed at launch with Room's "A migration from 9 to 8 was
+    required but not found": the owner's Testing app had been built from the color-reference branch (PR #54/#55, Room
+    9), so the Testing app was rebuilt from `integration/color-reference-ndk29` (that branch with this fix merged in,
+    `8d88a9c`, pushed, not for merging) and installed over it with `adb install -r` on 2026-09-30 at 21:45 local:
+    launches, keeps the saved printers (lava, CC1) and the Room 9 database. Test Mode on the Razr against the real U1
+    (lava, PAXX extended firmware, identified), suite "Snapmaker U1 on PAXX extended firmware", level 0: all four
+    slicing tests PASS on the phone's engine, their `scan_gcode` steps run `heater_targets` and record `bedTargets: [60]`
+    (single-material, multi-material, the 50/50 Full Spectrum swatch and the color reference tiles, 6 mixes with
+    process "0.10mm Color Mixing @Snapmaker U1 (0.4 nozzle)"). The sliced files on the phone say `M140 S60` / `M190 S60`
+    where the owner's print had got `M140 S32769`. The U1 print of the color reference tiles from this build is the
+    owner's to re-run.
 - **Known divergence:** none in slicing output: the fixed engine's x86-64 golden outputs are unchanged; on arm64 the
   only change is that per-extruder values are now read from the right element.
 - **Touches:** engine build (NDK), slicing (per-extruder settings on Android), Test Grid checks and suites.

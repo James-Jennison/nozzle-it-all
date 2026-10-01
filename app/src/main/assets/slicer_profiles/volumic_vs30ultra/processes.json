@@ -1,0 +1,145 @@
+{
+ "default": "Normal speed - 0.15mm",
+ "presets": [
+  {
+   "name": "Compatible speed - 0.10mm",
+   "label": "Compatible speed - 0.10mm",
+   "layer_height": "0.1",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/compatible_speed_0_10mm.json"
+  },
+  {
+   "name": "High speed - 0.10mm",
+   "label": "High speed - 0.10mm",
+   "layer_height": "0.1",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/high_speed_0_10mm.json"
+  },
+  {
+   "name": "Normal speed - 0.10mm",
+   "label": "Normal speed - 0.10mm",
+   "layer_height": "0.1",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/normal_speed_0_10mm.json"
+  },
+  {
+   "name": "Very high speed - 0.10mm",
+   "label": "Very high speed - 0.10mm",
+   "layer_height": "0.1",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/very_high_speed_0_10mm.json"
+  },
+  {
+   "name": "Compatible speed - 0.15mm",
+   "label": "Compatible speed - 0.15mm",
+   "layer_height": "0.15",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/compatible_speed_0_15mm.json"
+  },
+  {
+   "name": "High speed - 0.15mm",
+   "label": "High speed - 0.15mm",
+   "layer_height": "0.15",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/high_speed_0_15mm.json"
+  },
+  {
+   "name": "Normal speed - 0.15mm",
+   "label": "Normal speed - 0.15mm",
+   "layer_height": "0.15",
+   "infill": "25%",
+   "file": "slicer_profiles/volumic_vs30ultra/process.json"
+  },
+  {
+   "name": "Very high speed - 0.15mm",
+   "label": "Very high speed - 0.15mm",
+   "layer_height": "0.15",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/very_high_speed_0_15mm.json"
+  },
+  {
+   "name": "Compatible speed - 0.20mm",
+   "label": "Compatible speed - 0.20mm",
+   "layer_height": "0.2",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/compatible_speed_0_20mm.json"
+  },
+  {
+   "name": "High speed - 0.20mm",
+   "label": "High speed - 0.20mm",
+   "layer_height": "0.2",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/high_speed_0_20mm.json"
+  },
+  {
+   "name": "Normal speed - 0.20mm",
+   "label": "Normal speed - 0.20mm",
+   "layer_height": "0.2",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/normal_speed_0_20mm.json"
+  },
+  {
+   "name": "Very high speed - 0.20mm",
+   "label": "Very high speed - 0.20mm",
+   "layer_height": "0.2",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/very_high_speed_0_20mm.json"
+  },
+  {
+   "name": "Compatible speed - 0.25mm",
+   "label": "Compatible speed - 0.25mm",
+   "layer_height": "0.25",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/compatible_speed_0_25mm.json"
+  },
+  {
+   "name": "High speed - 0.25mm",
+   "label": "High speed - 0.25mm",
+   "layer_height": "0.25",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/high_speed_0_25mm.json"
+  },
+  {
+   "name": "Normal speed - 0.25mm",
+   "label": "Normal speed - 0.25mm",
+   "layer_height": "0.25",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/normal_speed_0_25mm.json"
+  },
+  {
+   "name": "Very high speed - 0.25mm",
+   "label": "Very high speed - 0.25mm",
+   "layer_height": "0.25",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/very_high_speed_0_25mm.json"
+  },
+  {
+   "name": "Compatible speed - 0.30mm",
+   "label": "Compatible speed - 0.30mm",
+   "layer_height": "0.3",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/compatible_speed_0_30mm.json"
+  },
+  {
+   "name": "High speed - 0.30mm",
+   "label": "High speed - 0.30mm",
+   "layer_height": "0.3",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/high_speed_0_30mm.json"
+  },
+  {
+   "name": "Normal speed - 0.30mm",
+   "label": "Normal speed - 0.30mm",
+   "layer_height": "0.3",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/normal_speed_0_30mm.json"
+  },
+  {
+   "name": "Very high speed - 0.30mm",
+   "label": "Very high speed - 0.30mm",
+   "layer_height": "0.3",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Volumic/very_high_speed_0_30mm.json"
+  }
+ ]
+}

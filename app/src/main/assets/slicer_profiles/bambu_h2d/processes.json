@@ -1,0 +1,54 @@
+{
+ "default": "0.20mm Standard @BBL H2D",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @BBL H2D",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_08mm_extra_fine_bbl_h2d.json"
+  },
+  {
+   "name": "0.12mm Fine @BBL H2D",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_12mm_fine_bbl_h2d.json"
+  },
+  {
+   "name": "0.16mm Balanced Quality @BBL H2D",
+   "label": "0.16mm Balanced Quality",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_16mm_balanced_quality_bbl_h2d.json"
+  },
+  {
+   "name": "0.16mm Standard @BBL H2D",
+   "label": "0.16mm Standard",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_16mm_standard_bbl_h2d.json"
+  },
+  {
+   "name": "0.20mm Balanced Strength @BBL H2D",
+   "label": "0.20mm Balanced Strength",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_20mm_balanced_strength_bbl_h2d.json"
+  },
+  {
+   "name": "0.20mm Standard @BBL H2D",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/bambu_h2d/process.json"
+  },
+  {
+   "name": "0.24mm Standard @BBL H2D",
+   "label": "0.24mm Standard",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_24mm_standard_bbl_h2d.json"
+  }
+ ]
+}

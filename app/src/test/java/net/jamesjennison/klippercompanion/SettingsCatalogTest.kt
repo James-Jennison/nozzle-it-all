@@ -38,6 +38,9 @@ class SettingsCatalogTest {
         val tampered = """{"name":"x","base":"b","overrides":{"wall_loops":"5","machine_start_gcode":"M112"}}"""
         assertEquals(mapOf("wall_loops" to "5"), CustomProfile.decode(tampered)!!.overrides)
         assertNull(CustomProfile.decode("not json"))
+        val based = p.copy(basePreset = "0.10mm Color Mixing @Elegoo CC 0.4 nozzle")
+        assertEquals(based, CustomProfile.decode(based.encode()))
+        assertNull(CustomProfile.decode(p.encode())!!.basePreset)
     }
     @Test fun compareReportsOnlyDifferingKeys() {
         val diff = compareOverrides(mapOf("wall_loops" to "3", "brim_width" to "5"), mapOf("wall_loops" to "4", "brim_width" to "5", "spiral_mode" to "1"))

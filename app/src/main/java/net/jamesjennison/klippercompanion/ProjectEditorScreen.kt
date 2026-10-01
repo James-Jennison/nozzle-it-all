@@ -226,6 +226,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // no-op control (§20).
     var toolCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
     var nozzleCount by remember(projectId, newProjectName) { mutableIntStateOf(1) }
+    // The print profiles (process presets) this printer's pack offers; null until loaded or when the printer has no pack.
+    var processPresets by remember { mutableStateOf<ProcessPresets?>(null) }
     LaunchedEffect(profile?.slicingModel, profile?.customMachine) {
         val model = profile?.slicingModel ?: return@LaunchedEffect
         try {
@@ -235,6 +237,9 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
             val setup = withContext(Dispatchers.IO) { toolSetupFor(model, CosmosProfileGeneration.CURRENT, context.applicationContext, profile?.customMachine) }
             toolCount = setup?.slots ?: 1; nozzleCount = setup?.nozzles ?: 1
         } catch (e: Exception) { bedShape = null; machineLimits = null; filamentRange = null; toolCount = 1; nozzleCount = 1 }
+        processPresets = try {
+            withContext(Dispatchers.IO) { slicingProfilePack(model, CosmosProfileGeneration.CURRENT, profile?.customMachine)?.processPresets(context.applicationContext) }
+        } catch (e: Exception) { null }
     }
     var stage by remember(projectId, newProjectName) { mutableStateOf(ProjectEditorStage.EDIT) }
     // WO-30 follow-up (owner: "too much text/settings visible at once"): the EDIT stage's plate,
@@ -246,10 +251,32 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // layer-height-in-mm text field with named Draft/Standard/Fine presets, and adds a real
     // geometry-driven "Auto" support decision - see BasicSlicing.kt.
     var quality by remember(projectId, newProjectName) { mutableStateOf(QualityPreset.STANDARD) }
-    var infillText by remember(projectId, newProjectName) { mutableStateOf(DEFAULT_SLICE_CUSTOMIZATION.infillPercent.toString()) }
+    // Blank keeps the print profile's own infill.
+    var infillText by remember(projectId, newProjectName) { mutableStateOf("") }
     var supportMode by remember(projectId, newProjectName) { mutableStateOf(SupportMode.AUTO) }
     var adhesionBrim by remember(projectId, newProjectName) { mutableStateOf(true) }
     var advancedOverrides by remember(projectId, newProjectName) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    // The print profile: the project's saved preset (Project.processPreset), or the pack's default. A preset this printer
+    // doesn't offer (the project was set up for another printer) falls back to the default, and the Settings tab says so.
+    val savedPreset = project?.processPreset
+    val printProfile = processPresets?.let { it.find(savedPreset) ?: it.default }
+    val savedPresetMissing = savedPreset != null && processPresets != null && processPresets?.find(savedPreset) == null
+    // Several presets: the Print profile picker replaces the Quality chips, and the chosen preset sets the layer height.
+    val pickerMode = processPresets?.hasChoice == true
+    val effectiveQuality = if (pickerMode) null else quality
+    val effectiveLayerHeightMm = advancedOverrides["layer_height"]?.toDoubleOrNull() ?: effectiveQuality?.layerHeightMm ?: printProfile?.layerHeightMm ?: quality.layerHeightMm
+    val effectiveInfillPercent = infillText.trim().toIntOrNull() ?: printProfile?.infillPercent
+    // The chosen preset's own values, shown as Advanced settings' placeholders.
+    var printProfileValues by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(printProfile?.file) {
+        val file = printProfile?.file ?: run { printProfileValues = emptyMap(); return@LaunchedEffect }
+        printProfileValues = withContext(Dispatchers.IO) {
+            runCatching {
+                val o = org.json.JSONObject(context.assets.open(file).use { it.reader().readText() })
+                o.keys().asSequence().associateWith { k -> o.optJSONArray(k)?.let { a -> if (a.length() == 1) a.optString(0) else null } ?: o.optString(k) }
+            }.getOrElse { emptyMap() }
+        }
+    }
     var customizeError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var working by remember(projectId, newProjectName) { mutableStateOf(false) }
     var sliceStageLabel by remember(projectId, newProjectName) { mutableStateOf("") }
@@ -286,6 +313,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var fullSpectrumMixes by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.FullSpectrumFormat.Mix>>(emptyList()) }
     var virtualExtruders by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.PrusaColorMixFormat.Virtual>>(emptyList()) }
     var colourMixError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    var mixingSuggestionDismissed by remember(projectId, newProjectName) { mutableStateOf(false) }
     var colourMixLoadedFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     // The slot's material (colour-mixing defect: this used to be recomputed ad hoc from "whichever object sits on
     // this slot" at the mixing UI's own call sites, which could disagree with what sliceOnePlate() actually sends the
@@ -426,9 +454,9 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // Slices one plate's objects; shared by "Slice" (the active plate) and "Slice all plates". [tag] keeps the
     // output next to other plates' results instead of replacing them.
     suspend fun sliceOnePlate(plateObjects: List<ProjectObject>, tag: String?): SliceOutcome {
-        val infill = validateInfillPercent(infillText) ?: return SliceOutcome.Failed("Enter an infill percentage between 0 and 100.")
+        val infill = if (infillText.isBlank()) null else validateInfillPercent(infillText) ?: return SliceOutcome.Failed("Enter an infill percentage between 0 and 100.")
         val target = profile ?: return SliceOutcome.Failed("Select a printer first.")
-        val basicSettings = BasicSliceSettings(quality, infill, supportMode, adhesionBrim)
+        val basicSettings = BasicSliceSettings(effectiveQuality, infill, supportMode, adhesionBrim)
         // AUTO support consults every object on this plate, since the whole plate slices together.
         val needsSupport = plateObjects.any { obj -> geometry[obj.id]?.let { meshNeedsSupport(it) } == true }
         // Kept as triples so a dropped (unparseable-URI) object can never desync the file list from the per-object
@@ -445,7 +473,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
             slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) }, outputTag = tag,
             mixedFilamentDefinitions = mixedFilamentDefinitions.ifBlank { null },
-            virtualExtruders = if (virtualExtruders.isEmpty()) "" else com.nozzleitall.printer.ext.PrusaColorMixFormat.sliceRequestJson(virtualExtruders))
+            virtualExtruders = if (virtualExtruders.isEmpty()) "" else com.nozzleitall.printer.ext.PrusaColorMixFormat.sliceRequestJson(virtualExtruders),
+            processPreset = printProfile?.name?.takeIf { pickerMode })
         if (outcome is SliceOutcome.Success) {
             // Calibration towers change a machine setting with height: patch the sliced plain G-code (not a Bambu bundle).
             val cal = CalibrationSpec.decode(project?.calibration)
@@ -455,10 +484,9 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     }
 
     fun validateBeforeSlicing(): Boolean {
-        val infill = validateInfillPercent(infillText)
-        if (infill == null) { customizeError = "Enter an infill percentage between 0 and 100."; return false }
+        if (infillText.isNotBlank() && validateInfillPercent(infillText) == null) { customizeError = "Enter an infill percentage between 0 and 100."; return false }
         // A blocking issue (a real machine limit) stops slicing outright; a non-blocking one is shown but allowed.
-        val blockingIssue = validateSliceConfiguration(machineLimits, quality.layerHeightMm, filamentRange, vm.currentMaterial()).firstOrNull { it.blocking }
+        val blockingIssue = validateSliceConfiguration(machineLimits, effectiveLayerHeightMm, filamentRange, vm.currentMaterial()).firstOrNull { it.blocking }
         if (blockingIssue != null) { customizeError = blockingIssue.message; return false }
         customizeError = null
         sliced = null; sliceError = null; stagedFilename = null; plateResults = emptyMap()
@@ -614,7 +642,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                     val autoNeedsSupport = objects.any { obj -> geometry[obj.id]?.let { meshNeedsSupport(it) } == true }
                     // Phase 5 (§16): real slice-time validation, shown live (not only after
                     // tapping Slice) so the owner sees a problem while still adjusting settings.
-                    val validationIssues = validateSliceConfiguration(machineLimits, quality.layerHeightMm, filamentRange, currentMaterial)
+                    val validationIssues = validateSliceConfiguration(machineLimits, effectiveLayerHeightMm, filamentRange, currentMaterial)
                     // Phase 2 real bug fix, still real: this screen's own upload step (LiveFileChanges/
                     // Moonraker.start, below) always assumed Moonraker unconditionally - Prusa Link
                     // would silently fail that way. Phase 6 follow-up (WO-23): SlicingCoordinator.
@@ -973,13 +1001,60 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                                 }, enabled = toolCount >= 2, modifier = Modifier.testTag("project-colormix-add")) { Text("+ Add 50/50 blend (Tool 1 + Tool 2)") }
                                             }
                                             colourMixError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-colour-mixing-error")) }
+                                            // With a mix or blend in the project, suggest the printer's color mixing print
+                                            // profile (thin layers blend mixed colors better) unless it's already chosen.
+                                            val mixingPreset = processPresets?.colorMixingPreset
+                                            if (mixingPreset != null && printProfile?.name != mixingPreset.name && !mixingSuggestionDismissed &&
+                                                (fullSpectrumMixes.isNotEmpty() || virtualExtruders.isNotEmpty())) {
+                                                Card(Modifier.fillMaxWidth().testTag("project-color-mixing-suggestion")) {
+                                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        Text("Switch to the ${mixingPreset.displayLabel} print profile?", style = MaterialTheme.typography.titleSmall)
+                                                        Text("This printer has a print profile made for color mixing. Its thinner layers blend mixed colors more evenly.", style = MaterialTheme.typography.bodySmall)
+                                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                            Button({ scope.launch { vm.setProcessPreset(mixingPreset.name) } }, modifier = Modifier.testTag("project-color-mixing-switch")) { Text("Switch") }
+                                                            TextButton({ mixingSuggestionDismissed = true }, modifier = Modifier.testTag("project-color-mixing-dismiss")) { Text("Not now") }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                             1 -> {
-                                Text("Quality", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (pickerMode) processPresets?.let { presets ->
+                                    // The print profile (OrcaSlicer process preset): the printer vendor's own presets for
+                                    // this printer, plus any Nozzle It All derived (marked). Advanced settings apply on top.
+                                    Text("Print profile", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    var presetMenuOpen by remember { mutableStateOf(false) }
+                                    Box {
+                                        OutlinedButton({ presetMenuOpen = true }, modifier = Modifier.fillMaxWidth().testTag("project-print-profile")) {
+                                            Text(printProfile?.displayLabel ?: "", modifier = Modifier.weight(1f), maxLines = 1)
+                                            Text("▾")
+                                        }
+                                        DropdownMenu(presetMenuOpen, { presetMenuOpen = false }) {
+                                            presets.presets.forEach { preset ->
+                                                DropdownMenuItem(
+                                                    text = { Text(preset.displayLabel + if (preset.name == presets.defaultName) " · default" else "") },
+                                                    onClick = {
+                                                        presetMenuOpen = false
+                                                        scope.launch { vm.setProcessPreset(preset.name.takeIf { it != presets.defaultName }) }
+                                                    },
+                                                    modifier = Modifier.testTag("project-print-profile-${preset.name}"),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (savedPresetMissing) Text(
+                                        "This project's print profile \"${savedPreset?.substringBefore(" @")}\" isn't available for ${profile?.label ?: "this printer"}, so ${printProfile?.displayLabel} is used instead.",
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.testTag("project-print-profile-missing"),
+                                    )
+                                    printProfile?.madeBy?.let {
+                                        Text("Made by $it from the printer vendor's own profile, not by the vendor. Not yet tested on a real printer.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                if (!pickerMode) Text("Quality", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (!pickerMode) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     QualityPreset.entries.forEach { preset ->
                                         val on = quality == preset
                                         Surface(
@@ -995,7 +1070,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                         }
                                     }
                                 }
-                                OutlinedTextField(infillText, { infillText = it }, label = { Text("Strength - infill (%)") }, singleLine = true, modifier = Modifier.testTag("project-infill"))
+                                OutlinedTextField(infillText, { infillText = it }, label = { Text("Strength - infill (%)") }, singleLine = true,
+                                    placeholder = { Text(printProfile?.infillPercent?.let { "$it (print profile)" } ?: "print profile default") }, modifier = Modifier.testTag("project-infill"))
                                 // Real geometry-driven default (Phase 4's own "intelligent
                                 // defaulting"): Auto reads whether any object on the plate
                                 // actually has a real overhang (meshNeedsSupport) rather than
@@ -1010,7 +1086,11 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     Checkbox(adhesionBrim, { adhesionBrim = it }, modifier = Modifier.testTag("project-adhesion-brim"))
                                     Text("Brim (bed adhesion)")
                                 }
-                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", multiToolFamily(nozzleCount, toolCount), { advancedOverrides = it })
+                                AdvancedSettingsPanel(advancedOverrides, profile?.slicingModel?.name ?: "", multiToolFamily(nozzleCount, toolCount),
+                                    basePreset = printProfile?.name?.takeIf { pickerMode }, baseValues = printProfileValues,
+                                    presetLabel = { name -> processPresets?.find(name)?.displayLabel },
+                                    onSelectPreset = { name -> scope.launch { vm.setProcessPreset(name.takeIf { it != processPresets?.defaultName }) } },
+                                ) { advancedOverrides = it }
                                 validationIssues.forEach { issue ->
                                     Text(
                                         issue.message,
@@ -1093,7 +1173,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(project?.name ?: "Project", style = MaterialTheme.typography.titleSmall)
                                 Text("Slices this project's whole plate on-device for ${profile?.label ?: state.address}, uploads the result to ${state.address}, then waits for you to confirm the print separately.")
-                                Text("${objects.size} object(s) · ${quality.label} (${quality.layerHeightMm}mm) · $infillText% infill · supports ${supportMode.name.lowercase()}", style = MaterialTheme.typography.bodySmall)
+                                Text("${objects.size} object(s) · ${if (pickerMode) printProfile?.displayLabel else "${quality.label} (${quality.layerHeightMm}mm)"} · ${effectiveInfillPercent?.let { "$it%" } ?: "profile"} infill · supports ${supportMode.name.lowercase()}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-slice-summary"))
                             }
                         }
                         if (working) Text(sliceStageLabel)

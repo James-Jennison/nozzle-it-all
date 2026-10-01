@@ -1,0 +1,26 @@
+{
+ "default": "0.16mm Optimal @Anycubic Kobra 2 Pro 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.16mm Optimal @Anycubic Kobra 2 Pro 0.4 nozzle",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/anycubic_kobra_2_pro/process.json"
+  },
+  {
+   "name": "0.20mm Standard @Anycubic Kobra 2 Pro 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Anycubic/0_20mm_standard_anycubic_kobra_2_pro_0_4_nozzle.json"
+  },
+  {
+   "name": "0.28mm Draft @Anycubic Kobra 2 Pro 0.4 nozzle",
+   "label": "0.28mm Draft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Anycubic/0_28mm_draft_anycubic_kobra_2_pro_0_4_nozzle.json"
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @Creality Sermoon D3 Pro 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Creality Sermoon D3 Pro 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_sermoon_d3_pro/process.json"
+  }
+ ]
+}

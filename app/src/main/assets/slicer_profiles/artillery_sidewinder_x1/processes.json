@@ -1,0 +1,26 @@
+{
+ "default": "0.20mm Standard @Artillery X1",
+ "presets": [
+  {
+   "name": "0.16mm Optimal @Artillery X1",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Artillery/0_16mm_optimal_artillery_x1.json"
+  },
+  {
+   "name": "0.20mm Standard @Artillery X1",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/artillery_sidewinder_x1/process.json"
+  },
+  {
+   "name": "0.24mm Draft @Artillery X1",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Artillery/0_24mm_draft_artillery_x1.json"
+  }
+ ]
+}

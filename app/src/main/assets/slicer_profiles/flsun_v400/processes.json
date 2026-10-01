@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @FLSun V400",
+ "presets": [
+  {
+   "name": "0.20mm Standard @FLSun V400",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/flsun_v400/process.json"
+  }
+ ]
+}

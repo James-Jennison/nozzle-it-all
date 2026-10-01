@@ -173,6 +173,22 @@ dependencies {
  add("releaseSmokeImplementation", "androidx.compose.ui:ui-test-manifest")
 }
 
+// The printer libraries' process presets (engine/profiles/library/<library>/process, shared with Desktop), packaged as
+// printer_library/<library>/process/*.json assets: the Print profile picker's presets for the packs built from a library
+// (slicer_profiles/<pack>/processes.json, scripts/bundle_process_presets.py) point at them instead of a second copy.
+abstract class PrinterLibraryAssets : DefaultTask() {
+ @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val library: DirectoryProperty
+ @get:OutputDirectory abstract val outputDir: DirectoryProperty
+ @get:javax.inject.Inject abstract val fs: FileSystemOperations
+ @TaskAction fun copy() {
+  fs.sync { from(library) { include("*/process/*.json") }; into(outputDir.dir("printer_library")) }
+ }
+}
+val printerLibraryAssets = tasks.register<PrinterLibraryAssets>("printerLibraryAssets") {
+ library.set(rootProject.layout.projectDirectory.dir("engine/profiles/library"))
+}
+androidComponents.onVariants { it.sources.assets?.addGeneratedSourceDirectory(printerLibraryAssets, PrinterLibraryAssets::outputDir) }
+
 // Phase 9g: CycloneDX 1.5 SBOM of everything that ships - the resolved release runtime dependencies (with SHA-256 of
 // each artifact) plus the pinned native engine (engine/fork/ENGINE_PIN.json) and the source archives of its Android
 // dependencies (engine/fork/android/DEPENDENCIES.json). Offline, no plugin.

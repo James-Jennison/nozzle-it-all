@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @InfiMech TX",
+ "presets": [
+  {
+   "name": "0.20mm Standard @InfiMech TX",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/infimech_generic_klipper_printer_2/process.json"
+  }
+ ]
+}

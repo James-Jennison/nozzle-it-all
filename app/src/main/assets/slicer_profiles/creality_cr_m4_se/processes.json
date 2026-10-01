@@ -1,0 +1,26 @@
+{
+ "default": "0.20mm Standard @Creality CR-M4 SE 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.1mm Standard @Creality CR-M4 SE 0.4 nozzle",
+   "label": "0.1mm Standard",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Creality/0_1mm_standard_creality_cr_m4_se_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @Creality CR-M4 SE 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15",
+   "file": "slicer_profiles/creality_cr_m4_se/process.json"
+  },
+  {
+   "name": "0.20mm Ultrafast @Creality CR-M4 SE 0.4 nozzle",
+   "label": "0.20mm Ultrafast",
+   "layer_height": "0.2",
+   "infill": "15",
+   "file": "slicer_profiles/_processes/Creality/0_20mm_ultrafast_creality_cr_m4_se_0_4_nozzle.json"
+  }
+ ]
+}

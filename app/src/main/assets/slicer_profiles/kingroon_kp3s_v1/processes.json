@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @Kingroon KP3S V1",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Kingroon KP3S V1",
+   "label": "0.20mm Standard",
+   "layer_height": "",
+   "infill": "15%",
+   "file": "slicer_profiles/kingroon_kp3s_v1/process.json"
+  }
+ ]
+}

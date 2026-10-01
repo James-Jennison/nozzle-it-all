@@ -1,0 +1,26 @@
+{
+ "default": "0.20mm Standard @Creality CR-10 Smart 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @Creality CR-10 Smart 0.4 nozzle",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Creality/0_08mm_extra_fine_creality_cr_10_smart_0_4_nozzle.json"
+  },
+  {
+   "name": "0.16mm Optimal @Creality CR-10 Smart 0.4 nozzle",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Creality/0_16mm_optimal_creality_cr_10_smart_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @Creality CR-10 Smart 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_cr_10_smart/process.json"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "default": "0.20mm Standard @Artillery Genius",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Artillery Genius",
+   "label": "0.20mm Standard @Artillery Genius",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/artillery_sidewinder_x3_pro/process.json"
+  },
+  {
+   "name": "0.20mm Standard @Artillery X3Pro 0.4 nozzle",
+   "label": "0.20mm Standard @Artillery X3Pro 0.4 nozzle",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Artillery/0_20mm_standard_artillery_x3pro_0_4_nozzle.json"
+  }
+ ]
+}

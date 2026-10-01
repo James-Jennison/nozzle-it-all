@@ -49,8 +49,12 @@ object QidiBox {
     val QUERY_OBJECTS: Map<String, String> = mapOf("save_variables" to "variables") +
         (0 until SLOTS_PER_BOX * MAX_BOXES).associate { "box_stepper slot$it" to "runout_button" }
 
-    /** Whether a query's `status` came from a printer with a Box (its slot sensors exist). */
-    fun present(status: JSONObject?): Boolean = status?.has("box_stepper slot0") == true
+    /**
+     * Whether a query's `status` came from a printer with a Box: its first slot's sensor reports a value. Klipper answers
+     * a query for an object it doesn't have with the asked fields set to null, so the key alone says nothing (found on a
+     * real Snapmaker U1, which was read as a Box of four empty slots and lost its toolheads' materials and colors).
+     */
+    fun present(status: JSONObject?): Boolean = status?.optJSONObject("box_stepper slot0")?.opt("runout_button") is Number
 
     /**
      * The Box slots from a query's [status] and the printer's [dictionary] (null when it couldn't be read: slots then show

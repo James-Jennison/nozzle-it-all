@@ -31,5 +31,5 @@ if ! command -v m4 >/dev/null; then
 fi
 
 NOZZLE_ENGINE_CHECKOUT=/nonexistent NOZZLE_ENGINE_CACHE="$CACHE/nozzle-engine-src" NOZZLE_ANDROID_FORK_ROOT="$CACHE/android-root-fork" \
-  ANDROID_DEPS_PREFIX="$DEPS" GMP_ARCHIVE="$GMP" ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}/ndk/27.1.12297006}" \
+  ANDROID_DEPS_PREFIX="$DEPS" GMP_ARCHIVE="$GMP" ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}/ndk/29.0.14206865}" \
   bash "$NOZZLE_ROOT/engine/fork/android/prepare_engine_root.sh" | tail -1

@@ -1352,3 +1352,47 @@ interchange).
 - **Known divergence:** none in slicing output (golden outputs unchanged); only the embedded thumbnail of a slice
   that uses a mixed filament differs.
 - **Touches:** G-code thumbnails (Android, desktop, web), engine tests.
+
+## P-0043 — The prime tower is placed on the bed
+
+- **Upstream:** nozzle-engine `4c182b1cfea39334a43d822cede7cee109023904` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
+  branch `fix/arm64-get-at-miscompile`, pull request 11): `490e5b5` (P-0042) plus one commit. The placement is ported
+  from Snapmaker Orca's GUI, which the engine fork already carries but does not build headless:
+  `src/slic3r/GUI/PartPlate.cpp` (`WIPE_TOWER_DEFAULT_X_POS` / `_Y_POS` 13, 214.5; `I3_WIPE_TOWER_DEFAULT_X_POS` /
+  `_Y_POS` 0, 250; `PartPlateList::set_default_wipe_tower_pos_for_plate`; `PartPlate::estimate_wipe_tower_size`) and
+  `src/slic3r/GUI/GLCanvas3D.cpp` (`reload_scene`: the clamp into the plate, `WIPE_TOWER_MARGIN` plus the brim).
+- **Root cause:** on 2026-10-01 the Centauri Carbon's color reference slice (four filaments, the 0.10 mm Color Mixing
+  profile) failed Test Mode's `within_bed` check: "Extrusion reaches [11.798, 126.21, 145.29, 258.8], outside the
+  printable area [0.0, 0.0, 256.0, 256.0]". Every move past the edge was prime tower. libslic3r never decides where
+  the tower stands: `wipe_tower_x` / `wipe_tower_y` default to 15, 220, a stand-in upstream's GUI and CLI always
+  replace. Neither the app nor the bridge set a position, so a tower about 36 mm deep with a 3 mm brim ran 2.8 mm
+  past a 256 mm bed. The desktop engine reproduces it exactly, and the same four-filament slice also overran on a
+  Snapmaker U1 at 0.1 mm layers (Y 276.4 of 271), a Bambu X1 Carbon, an A1 mini and an Ender-3.
+- **Engine change:** `nozzle/bridge/android/slic3r_engine.cpp` (shared by the Android, desktop and web bridges), in
+  the two functions every slice ends in. Before slicing: upstream's default corner, size estimate and clamp; a
+  position the caller sets (anything but libslic3r's default) is the starting corner instead. After the tower is
+  generated: upstream's estimate takes 0.2 mm layers and the `prime_tower_width` rectangle, and its GUI then leaves
+  an overrunning tower for the user to drag back, so the bridge checks the tower's real first-layer footprint (brim
+  included, and the skirt around it where the tower is the outermost thing on the bed), moves it back inside by the
+  overrun and runs only the position-dependent steps again. A tower larger than the bed is an error ("The prime
+  tower is larger than the bed...") instead of G-code off the bed. A bed that is not a rectangle (a delta) uses the
+  square inside its circle.
+- **App change:** the pin and the places that repeat it (`OpenSourceNotice.ENGINE_COMMIT`, the settings schema's
+  `commit`, the site's open-source page). No app code changed.
+- **Test evidence:** gthost-build01, 2026-10-01 (local early morning), desktop engine built from the commit:
+  - The failing slice (CC1 pack, shared 0.10 mm Color Mixing profile, two tiles on two mixes of four filaments):
+    previous engine, tower Y 216.80..258.80 (the phone's numbers); fixed engine, Y 211.30..253.30.
+  - New engine test `tools/nozzle/prime_tower_test.sh` with `tools/nozzle/within_bed.py` (standard library only),
+    added to the engine's CI: Centauri Carbon and Snapmaker U1 with four filaments at 0.1 mm, an Ender-3 with two
+    filaments and a skirt, and a caller-set position that must be kept. Five checks pass on the fix; the first three
+    fail on the previous build.
+  - Also checked by hand: a Bambu X1 Carbon at 0.08 mm and an A1 mini at 0.1 mm (previous Y 274.2 of 256 and 265.7
+    of 180; fixed 252.8 and 178.8), a deliberately deep tower (moved after generation, ends at Y 255.00) and an
+    impossible one (prime volume 1800: the error above).
+  - Golden outputs on every bundled printer profile: all 384 match, so a slice without a prime tower is unchanged.
+    `tools/nozzle/colourmix_test.sh`: all six checks pass.
+- **Known divergence:** upstream's GUI leaves a generated tower that overruns the plate for the user to move; the
+  bridge moves it. A multi-filament slice's tower now starts at upstream's GUI corner (13, 214.5) instead of
+  libslic3r's (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a
+  warning upstream, which the bridge does not surface.
+- **Touches:** every multi-filament slice (Android, desktop, web), engine tests and CI.

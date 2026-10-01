@@ -1322,8 +1322,9 @@ interchange).
 
 ## P-0043 — The prime tower is placed on the bed
 
-- **Upstream:** nozzle-engine `4c182b1cfea39334a43d822cede7cee109023904` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
-  branch `fix/arm64-get-at-miscompile`, pull request 11): `490e5b5` (P-0042) plus one commit. The placement is ported
+- **Upstream:** nozzle-engine `7734a0c557cb63594c913a271c4907e7b4c9bee1` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
+  branch `fix/arm64-get-at-miscompile`, pull request 11): `490e5b5` (P-0042) plus two commits, `4c182b1` (the tower's
+  place) and `7734a0c` (the flushing volumes, below). The placement is ported
   from Snapmaker Orca's GUI, which the engine fork already carries but does not build headless:
   `src/slic3r/GUI/PartPlate.cpp` (`WIPE_TOWER_DEFAULT_X_POS` / `_Y_POS` 13, 214.5; `I3_WIPE_TOWER_DEFAULT_X_POS` /
   `_Y_POS` 0, 250; `PartPlateList::set_default_wipe_tower_pos_for_plate`; `PartPlate::estimate_wipe_tower_size`) and
@@ -1358,6 +1359,16 @@ interchange).
     impossible one (prime volume 1800: the error above).
   - Golden outputs on every bundled printer profile: all 384 match, so a slice without a prime tower is unchanged.
     `tools/nozzle/colourmix_test.sh`: all six checks pass.
+- **Flushing volumes (`7734a0c`):** testing the placement with five filaments on the Prusa MK4S MMU3 pack crashed
+  the previous engine and hung the new one, inside the tower's priming code. Root cause: the engine sizes the tower's
+  tool-change tables from `flush_volumes_matrix` and indexes them by filament; the default matrix is 4 x 4, so five
+  or more filaments without their own matrix read past it, on any printer. The app always sends a matrix for its
+  slots (`MultiToolFilamentConfig`), so no app slice was affected. The bridge now grows the matrix before
+  `Print::apply` with upstream's resize (`PresetBundle::update_multi_material_filament_presets` in
+  `src/libslic3r/PresetBundle.cpp`: a missing pair gets the two filaments' `flush_volumes_vector` volumes); a matrix
+  that already covers the filaments is left alone. `prime_tower_test.sh` gained a five-filament Centauri Carbon case
+  and a six-filament MK4S MMU3 case, and a time limit on every slice: both crash the previous engine and pass on
+  this one, with a 6 x 6 matrix in the G-code. Golden outputs: all 384 match.
 - **Known divergence:** upstream's GUI leaves a generated tower that overruns the plate for the user to move; the
   bridge moves it. A multi-filament slice's tower now starts at upstream's GUI corner (13, 214.5) instead of
   libslic3r's (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a

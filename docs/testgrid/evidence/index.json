@@ -16,6 +16,21 @@
       "suite": "paxx-u1 1.0.0"
     },
     {
+      "attachments": 1,
+      "bundleDigest": "2c3ad361adc3c12b2d1b3086af14515e73d09227582e1cc16bd6f10f95d5eedb",
+      "bytes": 1670487,
+      "completedAt": 1790815583162,
+      "contentDigest": "e72528cefab27bd2ebbd4ad5e43103965661d86801b9a36eb02cd514de2de9c9",
+      "file": "2c3ad361adc3c12b2d1b3086af14515e73d09227582e1cc16bd6f10f95d5eedb.nozzle-evidence.zip",
+      "firmwareFamily": "cosmos",
+      "kind": "physical",
+      "location": "gthost-build01:~/testgrid-evidence/bundles",
+      "maxSafetyLevel": 4,
+      "printer": "Elegoo Centauri Carbon",
+      "runId": "b4e000e7-8d5b-4e1e-9fd6-57ba0cdfbba8",
+      "suite": "cosmos-centauri-carbon 1.8.0"
+    },
+    {
       "attachments": 4,
       "bundleDigest": "2d3afb851e9f023370a0de1a9587c338ef38ecbf95b12be45576f7fd0aa44214",
       "bytes": 12564157,
@@ -29,6 +44,21 @@
       "printer": "Snapmaker U1",
       "runId": "2da1f8f0-892b-4f89-88b0-299d9a0e9b5a",
       "suite": "paxx-u1 1.1.0"
+    },
+    {
+      "attachments": 1,
+      "bundleDigest": "2f65cc236af1541ab5427bed80788c7d22b5776bae3fdbf540507eb08cfc87df",
+      "bytes": 1830295,
+      "completedAt": 1790770394445,
+      "contentDigest": "d2e1255104a4b5a652ccae7cc2fdcf1fe3c2d9a8a5ad4402c9d0e02affbb716f",
+      "file": "2f65cc236af1541ab5427bed80788c7d22b5776bae3fdbf540507eb08cfc87df.nozzle-evidence.zip",
+      "firmwareFamily": "paxx-extended",
+      "kind": "physical",
+      "location": "gthost-build01:~/testgrid-evidence/bundles",
+      "maxSafetyLevel": 4,
+      "printer": "Snapmaker U1",
+      "runId": "e0346c0b-c9b6-488c-b97d-f9126c61aecb",
+      "suite": "paxx-u1 1.8.0"
     },
     {
       "attachments": 1,

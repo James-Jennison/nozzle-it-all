@@ -71,6 +71,18 @@
       "bundleDigest": "b18cf044158543ba8e732e653c596767ea4b0c0702347f9d63699afc6ee0d1f3",
       "date": "2026-09-29",
       "note": "Level 4 run on the owner's Centauri Carbon with CANVAS, COSMOS Release 26.09.0, built from 988df75 with nozzle-engine 2b7b6cf (tower declared for the adaptive mesh). Two-tool print PASS with the prime tower printed on the bed (owner watched it; visible in the photo) and no colour bleed. Everything else carried over."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "2f65cc236af1541ab5427bed80788c7d22b5776bae3fdbf540507eb08cfc87df",
+      "date": "2026-09-30",
+      "note": "Level 4 run on the owner's Snapmaker U1, PAXX extended firmware 1.6.0.267_20260815150420, built from ece2b73 with nozzle-engine f766512 (paxx-u1 1.8.0). Colour-mix swatch: mix-slice PASS (50/50 of tool 1 blue #08ABFB and tool 2 magenta #D93B90 through Full Spectrum, alternating layer by layer), mix-print PASS (owner reported a blended purple; photo attached). The other 13 tests carried over from runs 40e84308, 5624aa6e (bundle cc752cad) and 2da1f8f0 (bundle 2d3afb85)."
+    },
+    {
+      "acceptedBy": "owner (codeframe78)",
+      "bundleDigest": "2c3ad361adc3c12b2d1b3086af14515e73d09227582e1cc16bd6f10f95d5eedb",
+      "date": "2026-09-30",
+      "note": "Level 4 run b4e000e7 on the owner's Centauri Carbon with CANVAS, COSMOS Release 26.09.0, built from ece2b73 with nozzle-engine f766512 (cosmos-centauri-carbon 1.8.0). Colour-mix swatch: mix-slice PASS (50/50 ColorMix of lanes 1 and 2, one whole layer per lane, alternating), mix-print PASS (sides read as one blended purple; photo attached). The colour shift partway up is not a Nozzle fault: lane 2's spool kept failing to reach the hub (an earlier attempt that morning paused after three CANVAS load timeouts), and the owner swapped it mid-print for a spool of a close colour. The other 14 tests carried over from runs fa7d2ea1, d9da0749 and 47be97a3. The run's own G-code was left on the printer because it was still the loaded file."
     }
   ],
   "format": "nozzle.evidence-acceptance",

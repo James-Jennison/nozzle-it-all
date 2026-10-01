@@ -1558,7 +1558,7 @@
       "category": "physical_print",
       "scope": "multi_material",
       "safetyLevel": 4,
-      "description": "Prints the two color reference tiles sliced in this run, each its own mix. The CANVAS changes filament about 60 times and purges on each change, so the print takes about 1.5 to 2 hours and uses more filament than its size suggests.",
+      "description": "Prints the two color reference tiles sliced in this run, each its own mix. The CANVAS changes filament about 40 times and purges on each change, so the print takes about 1 to 1.5 hours and uses more filament than its size suggests.",
       "requiredHardware": [
         "canvas"
       ],

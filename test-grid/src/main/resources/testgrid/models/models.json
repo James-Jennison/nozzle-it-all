@@ -124,7 +124,7 @@
         "tile": {
           "x": 15,
           "y": 4,
-          "z": 6
+          "z": 4
         },
         "tiles": 6
       },
@@ -139,37 +139,37 @@
         {
           "bytes": 684,
           "file": "nozzle-color-reference-v1-1.stl",
-          "sha256": "ae667084d07bf32b5b43408966d4d63b6a46ffc963145f0355211ed6b63c2f9c",
+          "sha256": "0afa34fb4c8c7d7ef55341561803c18d67bcedfd259b909bc9874bc6be5054a6",
           "tool": 1
         },
         {
           "bytes": 684,
           "file": "nozzle-color-reference-v1-2.stl",
-          "sha256": "1e2ff16ae7abfa22d4ce339186c256b28bc486cd0b0a868ce81e3609327c8855",
+          "sha256": "56cd5ddd5ab09b8dc1d3e0467b63a8e6d5d8e8a8b068ef77f243000f580a69f6",
           "tool": 1
         },
         {
           "bytes": 684,
           "file": "nozzle-color-reference-v1-3.stl",
-          "sha256": "809a6f701b32c44df3e9ca277b579cc9a48ddc0f23562c23f5e062b6aad18401",
+          "sha256": "a4e286ebda515dc01acac5088eadd4dbdce54a394f0890d32896467eca6744c1",
           "tool": 1
         },
         {
           "bytes": 684,
           "file": "nozzle-color-reference-v1-4.stl",
-          "sha256": "5f9f862f28b897405dd49f436e115e0d487bc79ee61eec7fa3d7d867807a0568",
+          "sha256": "2318dd2877312b7ff037602a3068a0a36ebc71fc976a39324001882a73a1f096",
           "tool": 1
         },
         {
           "bytes": 684,
           "file": "nozzle-color-reference-v1-5.stl",
-          "sha256": "60984ec5a51b5c7afe57513d62bf48a1deb8595d063e06a9e3fe2e4d08a7513f",
+          "sha256": "2afb6b240aaad04b09ee24f286fc41c806ac398f442aca1096d307ed29a7913f",
           "tool": 1
         },
         {
           "bytes": 684,
           "file": "nozzle-color-reference-v1-6.stl",
-          "sha256": "d3ee8e337fa608c0feed22bb90feec0cef1017b5d213de882fab00eb6a3605ea",
+          "sha256": "db4d7f1cacd0a1caea4748857c3c2d291b678d7e9461fbeeaa472ce5d6373638",
           "tool": 1
         }
       ],

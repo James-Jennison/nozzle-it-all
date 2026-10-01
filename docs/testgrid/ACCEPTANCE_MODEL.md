@@ -51,21 +51,21 @@ layer by layer (`alternates_tools`). The printed swatch should read as one blend
 
 ## `nozzle-color-reference-v1` (color reference; U1 and CANVAS suites)
 
-Six tiles, each 15 × 4 × 6 mm, 5 mm apart in a row along X (115 mm overall), one STL per tile
+Six tiles, each 15 × 4 × 4 mm, 5 mm apart in a row along X (115 mm overall), one STL per tile
 (`nozzle-color-reference-v1-1.stl` to `-6.stl`). The `color-reference-slice` test gives each tile its own two-filament
 mix, following Snapmaker's Full Spectrum color reference (two colors at 33-67% each work best). On the U1, with
 Snapmaker's reference filaments loaded (tool 1 cyan, 2 magenta, 3 yellow, 4 gray), the six tiles are:
 
 | Tile | Mix | SHA-256 |
 | --- | --- | --- |
-| 1 | cyan + magenta 50/50 | `ae667084d07bf32b5b43408966d4d63b6a46ffc963145f0355211ed6b63c2f9c` |
-| 2 | cyan + yellow 50/50 (Snapmaker's No. 54) | `1e2ff16ae7abfa22d4ce339186c256b28bc486cd0b0a868ce81e3609327c8855` |
-| 3 | magenta + yellow 50/50 | `809a6f701b32c44df3e9ca277b579cc9a48ddc0f23562c23f5e062b6aad18401` |
-| 4 | cyan 67% + magenta 33% | `5f9f862f28b897405dd49f436e115e0d487bc79ee61eec7fa3d7d867807a0568` |
-| 5 | cyan 33% + magenta 67% | `60984ec5a51b5c7afe57513d62bf48a1deb8595d063e06a9e3fe2e4d08a7513f` |
-| 6 | yellow + gray 50/50 | `d3ee8e337fa608c0feed22bb90feec0cef1017b5d213de882fab00eb6a3605ea` |
+| 1 | cyan + magenta 50/50 | `0afa34fb4c8c7d7ef55341561803c18d67bcedfd259b909bc9874bc6be5054a6` |
+| 2 | cyan + yellow 50/50 (Snapmaker's No. 54) | `56cd5ddd5ab09b8dc1d3e0467b63a8e6d5d8e8a8b068ef77f243000f580a69f6` |
+| 3 | magenta + yellow 50/50 | `a4e286ebda515dc01acac5088eadd4dbdce54a394f0890d32896467eca6744c1` |
+| 4 | cyan 67% + magenta 33% | `2318dd2877312b7ff037602a3068a0a36ebc71fc976a39324001882a73a1f096` |
+| 5 | cyan 33% + magenta 67% | `2afb6b240aaad04b09ee24f286fc41c806ac398f442aca1096d307ed29a7913f` |
+| 6 | yellow + gray 50/50 | `db4d7f1cacd0a1caea4748857c3c2d291b678d7e9461fbeeaa472ce5d6373638` |
 
-The U1 slices with its own "0.10mm Color Mixing" print profile (0.1 mm layers, about 60 per tile). The CANVAS suite
+The U1 slices with its own "0.10mm Color Mixing" print profile (0.1 mm layers, about 40 per tile). The CANVAS suite
 slices only tiles 1 and 2 (lanes 1+2 at 50/50, lanes 3+4 at 67% lane 4), at the default 0.2 mm, because every filament
 change on one nozzle also purges. The `color_mixes` check reads each tile's own layers from the G-code's object labels
 and requires only its mix's two filaments, in its proportion, never more than three layers of one in a row.

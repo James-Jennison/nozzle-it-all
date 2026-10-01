@@ -24,7 +24,7 @@ import java.nio.ByteOrder
  * parts (tool 1, tool 2), for material/tool change, purge and colour bleed. Never part of single-material acceptance.
  * nozzle-colour-swatch-v1 (multi-material): one 40 × 10 × 6 mm block, sliced as a 50/50 colour mix of two tools. Its
  * 30 layers (at 0.2 mm) alternate between them, and its long sides show whether the two read as one blended colour.
- * nozzle-color-reference-v1 (multi-material): six separate 15 × 4 × 6 mm tiles in one row, 5 mm apart, one part each, so
+ * nozzle-color-reference-v1 (multi-material): six separate 15 × 4 × 4 mm tiles in one row, 5 mm apart, one part each, so
  * every tile can print its own color mix. Their front faces show the mixes side by side for one photo; the tiles are
  * numbered 1 to 6 from left to right as seen from the front of the printer. A suite may slice only the first few.
  */
@@ -56,7 +56,7 @@ object AcceptanceModel {
     val MULTI_A = Solid("$MULTI_ID-a", listOf(Box(0.0, 0.0, 0.0, 10.0, 40.0, 3.0), Box(20.0, 0.0, 0.0, 30.0, 40.0, 3.0)))
     val MULTI_B = Solid("$MULTI_ID-b", listOf(Box(10.0, 0.0, 0.0, 20.0, 40.0, 3.0), Box(30.0, 0.0, 0.0, 40.0, 40.0, 3.0)))
     val SWATCH = Solid(SWATCH_ID, listOf(Box(0.0, 0.0, 0.0, 40.0, 10.0, 6.0)))
-    val REFERENCE: List<Solid> = (0 until REFERENCE_TILES).map { i -> Solid("$REFERENCE_ID-${i + 1}", listOf(Box(i * 20.0, 0.0, 0.0, i * 20.0 + 15.0, 4.0, 6.0))) }
+    val REFERENCE: List<Solid> = (0 until REFERENCE_TILES).map { i -> Solid("$REFERENCE_ID-${i + 1}", listOf(Box(i * 20.0, 0.0, 0.0, i * 20.0 + 15.0, 4.0, 4.0))) }
 
     /** Published measurements and the tolerances the reference suites accept (mm). */
     val SINGLE_DIMENSIONS: JSONObject get() = JSONObject(mapOf(
@@ -71,7 +71,7 @@ object AcceptanceModel {
 
     val SWATCH_DIMENSIONS: JSONObject get() = JSONObject().put("footprint", JSONObject().put("x", 40.0).put("y", 10.0)).put("height", 6.0)
 
-    val REFERENCE_DIMENSIONS: JSONObject get() = JSONObject().put("tiles", REFERENCE_TILES).put("tile", JSONObject().put("x", 15.0).put("y", 4.0).put("z", 6.0)).put("gap", 5.0)
+    val REFERENCE_DIMENSIONS: JSONObject get() = JSONObject().put("tiles", REFERENCE_TILES).put("tile", JSONObject().put("x", 15.0).put("y", 4.0).put("z", 4.0)).put("gap", 5.0)
         .put("footprint", JSONObject().put("x", REFERENCE_TILES * 20.0 - 5.0).put("y", 4.0))
 
     fun files(): Map<String, ByteArray> = sortedMapOf(

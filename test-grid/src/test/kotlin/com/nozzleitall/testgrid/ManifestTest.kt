@@ -7,6 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.io.File
 
 class ManifestTest {
     private fun minimal(): JSONObject = JSONObject(java.io.File(Support.root, "test-grid/src/main/resources/testgrid/suites/paxx-u1.json").readText())
@@ -92,6 +93,15 @@ class ManifestTest {
         listOf("paxx-u1", "cosmos-centauri-carbon").forEach { id ->
             val s = SuiteCatalog.bundled(id)!!
             assertTrue(id, s.tests.map { it.id }.containsAll(listOf("color-reference-slice", "color-reference-print")))
+        }
+    }
+
+    @Test fun everyNamedPrintProfileIsOneItsPackOffers() {
+        val named = SuiteCatalog.bundled().flatMap { s -> s.tests.flatMap { t -> t.steps.filter { it.kindId == "slice" && it.params.has("process") }.map { Triple(s.id, it.params.getString("profile"), it.params.getString("process")) } } }
+        assertTrue(named.isNotEmpty())
+        named.forEach { (suite, pack, process) ->
+            val presets = JSONObject(File(Support.root, "app/src/main/assets/slicer_profiles/$pack/processes.json").readText()).getJSONArray("presets")
+            assertTrue("$suite: $pack has no print profile \"$process\"", (0 until presets.length()).any { presets.getJSONObject(it).getString("name") == process })
         }
     }
 

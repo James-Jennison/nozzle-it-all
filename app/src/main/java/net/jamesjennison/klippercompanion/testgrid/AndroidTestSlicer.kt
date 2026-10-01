@@ -56,9 +56,9 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
         val model = SlicingModelCatalog.all.firstOrNull { it.assetDir == request.profile.id }?.model ?: return SliceResult.Failed("Profile ${request.profile.id} is not bundled.")
         val profile = printer.copy(slicingModel = model)
         var mixing: String? = null
-        // The printer's own print profiles (process presets) aren't selectable from a slice yet; that comes with the
-        // project editor's print-profile picker. Until then a step that names one fails rather than slicing another.
-        request.process?.let { return SliceResult.Failed("This build can't select the print profile \"$it\" yet (the project editor's print-profile picker isn't in it).") }
+        // The printer's own print profile (process preset), as the project editor's print-profile picker selects it;
+        // null is the pack's default. A name the pack doesn't offer fails the slice rather than slicing another.
+        val process = request.process
         val partMixes = request.partMixes
         val outcome = runBlocking {
             if (partMixes.isNotEmpty()) {
@@ -85,7 +85,7 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
                                 added.addedId ?: return@runBlocking SliceOutcome.Failed("Full Spectrum added no mix for ${m.label}.")
                             }
                             mixing = "Full Spectrum"
-                            sliceColourMix(model, parts, partMixes.map { ids.getValue(it) }, materials, mixedFilamentDefinitions = definitions)
+                            sliceColourMix(model, parts, partMixes.map { ids.getValue(it) }, materials, mixedFilamentDefinitions = definitions, processPreset = process)
                         }
                         Prusa.COLOR_MIX in features -> {
                             // The project editor's "+ Add blend", once per mix (each takes the next virtual id), normalized by the engine.
@@ -97,12 +97,12 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
                             val virtual = AndroidColorMix.normalize(physical, drafts)
                             ids.entries.firstOrNull { (_, id) -> virtual.none { it.id == id } }?.let { return@runBlocking SliceOutcome.Failed("ColorMix dropped the ${it.key.label} blend.") }
                             mixing = "ColorMix"
-                            sliceColourMix(model, parts, partMixes.map { ids.getValue(it) }, materials, virtualExtruders = PrusaColorMixFormat.sliceRequestJson(virtual))
+                            sliceColourMix(model, parts, partMixes.map { ids.getValue(it) }, materials, virtualExtruders = PrusaColorMixFormat.sliceRequestJson(virtual), processPreset = process)
                         }
                         else -> return@runBlocking SliceOutcome.FirmwareBlocked("Nozzle doesn't offer color mixing for this printer (${printer.kind.name}, $slots tool slot(s)).")
                     }
                 } catch (e: ColourMixEngineError) { SliceOutcome.Failed("Color mixing: ${e.message}") }
-            } else if (request.parts.size == 1) SlicingCoordinator.slice(context, request.parts[0].first, profile)
+            } else if (request.parts.size == 1) SlicingCoordinator.slice(context, request.parts[0].first, profile, processPreset = process)
             else {
                 // Two things the project editor already does, found missing on the first real multi-material slice: each
                 // part keeps its place relative to the others (the engine centres every object, then applies its offset),
@@ -116,7 +116,7 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
                 // worked out for what is actually printed (with generic white everywhere, black to cyan bled on a CANVAS print).
                 val colours = liveSlots().associate { it.tool + 1 to it.colorHex?.takeIf { c -> c.isNotBlank() } }
                 SlicingCoordinator.sliceProject(context, request.parts.mapIndexed { i, p -> p.first to ModelTransform(offsets[i].first.toFloat(), offsets[i].second.toFloat()) }, profile,
-                    toolSlotIndices = tools, slotMaterials = if (slots > 1) (1..slots).map { if (it in tools) pla.copy(colorHex = colours[it] ?: pla.colorHex) else null } else emptyList(), outputTag = "testgrid")
+                    toolSlotIndices = tools, slotMaterials = if (slots > 1) (1..slots).map { if (it in tools) pla.copy(colorHex = colours[it] ?: pla.colorHex) else null } else emptyList(), outputTag = "testgrid", processPreset = process)
             }
         }
         return when (outcome) {
@@ -141,10 +141,12 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
         slotMaterials: List<net.jamesjennison.klippercompanion.MaterialProfile?>,
         mixedFilamentDefinitions: String? = null,
         virtualExtruders: String = "",
+        processPreset: String? = null,
     ): SliceOutcome = runBlocking {
         SlicingCoordinator.sliceProject(
             context, parts, printer.copy(slicingModel = model), toolSlotIndices = toolSlotIndices, slotMaterials = slotMaterials,
             mixedFilamentDefinitions = mixedFilamentDefinitions, virtualExtruders = virtualExtruders, outputTag = "testgrid-colourmix",
+            processPreset = processPreset,
         )
     }
 }

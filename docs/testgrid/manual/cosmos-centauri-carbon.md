@@ -1,7 +1,7 @@
 # Elegoo Centauri Carbon on OpenCentauri COSMOS
 
 Suite `cosmos-centauri-carbon` version 1.9.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `2ff578153955d520a1ccc435073e2d10b7648ddb13be305f0d75443edbfc4280`.
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `a48a93333bc2fbc3c19c537618cd462497f65d47e5b0e05fa424fe092846463a`.
 
 Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.
 
@@ -390,11 +390,11 @@ Time limit: 300 min; if exceeded the test is recorded as fail.
 Category: **Slicing** · Scope: Multi-material / tool changing · Level 1 · read-only discovery and telemetry · does not change printer state
 Needs detected hardware: canvas. Skipped otherwise.
 
-Slices the first 2 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 3 33% + tool 4 67%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.
+Slices the first 2 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 3 33% + tool 4 67%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. It uses Nozzle It All's color-mixing print profile for the Centauri Carbon, 0.10mm Color Mixing @Elegoo CC 0.4 nozzle, with its 0.1 mm layers. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.
 
 Steps:
 1. Nozzle checks the acceptance model `nozzle-color-reference-v1` against its published SHA-256.
-2. Nozzle slices `nozzle-color-reference-v1` with the bundled `elegoo_centauri_carbon_cosmos_afc` profile on this device. Each part prints as its own color mix, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others): part 1: tool 1 50% + tool 2 50%; part 2: tool 3 33% + tool 4 67%. Files: nozzle-color-reference-v1-1.stl (0afa34fb4c8c…), nozzle-color-reference-v1-2.stl (56cd5ddd5ab0…), nozzle-color-reference-v1-3.stl (a4e286ebda51…), nozzle-color-reference-v1-4.stl (2318dd287731…), nozzle-color-reference-v1-5.stl (2afb6b240aaa…), nozzle-color-reference-v1-6.stl (db4d7f1cacd0…).
+2. Nozzle slices `nozzle-color-reference-v1` with the bundled `elegoo_centauri_carbon_cosmos_afc` profile on this device. Each part prints as its own color mix, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others): part 1: tool 1 50% + tool 2 50%; part 2: tool 3 33% + tool 4 67%. Print profile: `0.10mm Color Mixing @Elegoo CC 0.4 nozzle`. Files: nozzle-color-reference-v1-1.stl (0afa34fb4c8c…), nozzle-color-reference-v1-2.stl (56cd5ddd5ab0…), nozzle-color-reference-v1-3.stl (a4e286ebda51…), nozzle-color-reference-v1-4.stl (2318dd287731…), nozzle-color-reference-v1-5.stl (2afb6b240aaa…), nozzle-color-reference-v1-6.stl (db4d7f1cacd0…).
 3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, color mixes, requires macro.
 
 Expected:
@@ -408,7 +408,7 @@ Category: **Physical printing** · Scope: Multi-material / tool changing · Leve
 Runs only if `color-reference-slice` passed.
 Needs detected hardware: canvas. Skipped otherwise.
 
-Prints the two color reference tiles sliced in this run, each its own mix. The CANVAS changes filament about 40 times and purges on each change, so the print takes about 1 to 1.5 hours and uses more filament than its size suggests.
+Prints the two color reference tiles sliced in this run, each its own mix, at 0.1 mm layers. The CANVAS changes filament about 80 times and purges on each change, so the print takes about 2 to 2.5 hours and uses more filament than its size suggests.
 
 Preconditions:
 - [ ] The printer is idle: not printing, paused or heating for a job. (also checked automatically: printer_idle)

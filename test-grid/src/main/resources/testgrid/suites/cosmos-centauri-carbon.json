@@ -1470,7 +1470,7 @@
       "category": "slicing",
       "scope": "multi_material",
       "safetyLevel": 1,
-      "description": "Slices the first 2 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 3 33% + tool 4 67%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.",
+      "description": "Slices the first 2 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 3 33% + tool 4 67%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. It uses Nozzle It All's color-mixing print profile for the Centauri Carbon, 0.10mm Color Mixing @Elegoo CC 0.4 nozzle, with its 0.1 mm layers. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.",
       "requiredHardware": [
         "canvas"
       ],
@@ -1500,7 +1500,8 @@
                 "b": 4,
                 "bPercent": 67
               }
-            ]
+            ],
+            "process": "0.10mm Color Mixing @Elegoo CC 0.4 nozzle"
           }
         },
         {
@@ -1558,7 +1559,7 @@
       "category": "physical_print",
       "scope": "multi_material",
       "safetyLevel": 4,
-      "description": "Prints the two color reference tiles sliced in this run, each its own mix. The CANVAS changes filament about 40 times and purges on each change, so the print takes about 1 to 1.5 hours and uses more filament than its size suggests.",
+      "description": "Prints the two color reference tiles sliced in this run, each its own mix, at 0.1 mm layers. The CANVAS changes filament about 80 times and purges on each change, so the print takes about 2 to 2.5 hours and uses more filament than its size suggests.",
       "requiredHardware": [
         "canvas"
       ],

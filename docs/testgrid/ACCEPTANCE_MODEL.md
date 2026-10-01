@@ -66,8 +66,8 @@ Snapmaker's reference filaments loaded (tool 1 cyan, 2 magenta, 3 yellow, 4 gray
 | 6 | yellow + gray 50/50 | `db4d7f1cacd0a1caea4748857c3c2d291b678d7e9461fbeeaa472ce5d6373638` |
 
 The U1 slices with its own "0.10mm Color Mixing" print profile (0.1 mm layers, about 40 per tile). The CANVAS suite
-slices only tiles 1 and 2 (lanes 1+2 at 50/50, lanes 3+4 at 67% lane 4), at the default 0.2 mm, because every filament
-change on one nozzle also purges. The `color_mixes` check reads each tile's own layers from the G-code's object labels
+slices only tiles 1 and 2 (lanes 1+2 at 50/50, lanes 3+4 at 67% lane 4), because every filament change on one nozzle also
+purges, with Nozzle It All's "0.10mm Color Mixing @Elegoo CC 0.4 nozzle" print profile. The `color_mixes` check reads each tile's own layers from the G-code's object labels
 and requires only its mix's two filaments, in its proportion, never more than three layers of one in a row.
 
 The 20 mm test cube (`site-src/assets/test-cube-20mm.stl`) remains the quick smoke-test part; it is not a Test Grid

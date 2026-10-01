@@ -1,6 +1,7 @@
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
+import java.util.zip.ZipFile
 
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("com.google.devtools.ksp") }
 
@@ -174,6 +175,52 @@ dependencies {
  androidTestImplementation("androidx.test.ext:junit:1.2.1")
  debugImplementation("androidx.compose.ui:ui-test-manifest")
  add("releaseSmokeImplementation", "androidx.compose.ui:ui-test-manifest")
+}
+
+// The printer libraries' process presets (engine/profiles/library/<library>/process, shared with Desktop), packaged as
+// printer_library/<library>/process/*.json assets: the Print profile picker's presets for the packs built from a library
+// (slicer_profiles/<pack>/processes.json, scripts/bundle_process_presets.py) point at them instead of a second copy.
+abstract class PrinterLibraryAssets : DefaultTask() {
+ @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val library: DirectoryProperty
+ @get:OutputDirectory abstract val outputDir: DirectoryProperty
+ @get:javax.inject.Inject abstract val fs: FileSystemOperations
+ @TaskAction fun copy() {
+  fs.sync { from(library) { include("*/process/*.json") }; into(outputDir.dir("printer_library")) }
+ }
+}
+val printerLibraryAssets = tasks.register<PrinterLibraryAssets>("printerLibraryAssets") {
+ library.set(rootProject.layout.projectDirectory.dir("engine/profiles/library"))
+}
+androidComponents.onVariants { it.sources.assets?.addGeneratedSourceDirectory(printerLibraryAssets, PrinterLibraryAssets::outputDir) }
+
+// Every print profile a pack's processes.json lists must be in the APK itself. Android packaging leaves out asset folders
+// whose names start with "_", and the unit tests read the source tree, so they can't see it: the shared presets once
+// shipped missing that way (P-0040). Every assemble<Variant> runs this against the APK it built.
+abstract class VerifyPackagedProfiles : DefaultTask() {
+ @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE) abstract val apkFolder: DirectoryProperty
+ @get:Internal abstract val loader: Property<com.android.build.api.variant.BuiltArtifactsLoader>
+ @TaskAction fun verify() {
+  val apks = loader.get().load(apkFolder.get())?.elements.orEmpty().map { File(it.outputFile) }
+  if (apks.isEmpty()) throw GradleException("No APK in ${apkFolder.get().asFile}")
+  for (apk in apks) ZipFile(apk).use { zip ->
+   val lists = zip.entries().asSequence().filter { it.name.startsWith("assets/slicer_profiles/") && it.name.endsWith("/processes.json") }.toList()
+   if (lists.isEmpty()) throw GradleException("${apk.name}: no slicer_profiles/*/processes.json packaged")
+   val missing = lists.flatMap { list ->
+    val presets = (zip.getInputStream(list).use { groovy.json.JsonSlurper().parse(it) } as Map<*, *>)["presets"] as List<*>
+    presets.map { (it as Map<*, *>)["file"] as String }.filter { zip.getEntry("assets/$it") == null }.map { "${list.name.removePrefix("assets/")} lists $it" }
+   }
+   if (missing.isNotEmpty()) throw GradleException("${apk.name}: ${missing.size} print profile file(s) listed but not packaged, e.g. ${missing.take(3).joinToString("; ")}")
+   logger.lifecycle("${apk.name}: every print profile the ${lists.size} packs list is packaged")
+  }
+ }
+}
+androidComponents.onVariants { variant ->
+ val name = variant.name.replaceFirstChar { it.uppercase() }
+ val verify = tasks.register<VerifyPackagedProfiles>("verify${name}PackagedProfiles") {
+  group = "verification"; description = "Checks that the ${variant.name} APK holds every print profile its packs list"
+  apkFolder.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.APK)); loader.set(variant.artifacts.getBuiltArtifactsLoader())
+ }
+ tasks.matching { it.name == "assemble$name" }.configureEach { dependsOn(verify) }
 }
 
 // Phase 9g: CycloneDX 1.5 SBOM of everything that ships - the resolved release runtime dependencies (with SHA-256 of

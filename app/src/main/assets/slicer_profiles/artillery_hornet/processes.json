@@ -1,0 +1,26 @@
+{
+ "default": "0.20mm Standard @Artillery Hornet",
+ "presets": [
+  {
+   "name": "0.16mm Optimal @Artillery Hornet",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_16mm_optimal_artillery_hornet.json"
+  },
+  {
+   "name": "0.20mm Standard @Artillery Hornet",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/artillery_hornet/process.json"
+  },
+  {
+   "name": "0.24mm Draft @Artillery Hornet",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Artillery/0_24mm_draft_artillery_hornet.json"
+  }
+ ]
+}

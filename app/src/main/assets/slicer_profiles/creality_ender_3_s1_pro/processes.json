@@ -1,0 +1,19 @@
+{
+ "default": "0.20mm Standard @Creality Ender3S1Pro",
+ "presets": [
+  {
+   "name": "0.16mm Optimal @Creality Ender3S1Pro",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_16mm_optimal_creality_ender3s1pro.json"
+  },
+  {
+   "name": "0.20mm Standard @Creality Ender3S1Pro",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_ender_3_s1_pro/process.json"
+  }
+ ]
+}

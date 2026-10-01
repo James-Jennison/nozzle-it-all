@@ -1,0 +1,26 @@
+{
+ "default": ".20mm Standard @Dremel 3D20 0.4",
+ "presets": [
+  {
+   "name": ".10mm Detail @Dremel 3D20 0.4",
+   "label": ".10mm Detail",
+   "layer_height": "0.1",
+   "infill": "30%",
+   "file": "slicer_profiles/shared_processes/Dremel/10mm_detail_dremel_3d20_0_4.json"
+  },
+  {
+   "name": ".20mm Standard @Dremel 3D20 0.4",
+   "label": ".20mm Standard",
+   "layer_height": "0.2",
+   "infill": "18%",
+   "file": "slicer_profiles/dremel_3d20/process.json"
+  },
+  {
+   "name": ".30mm Draft @Dremel 3D20 0.4",
+   "label": ".30mm Draft",
+   "layer_height": "0.3",
+   "infill": "18%",
+   "file": "slicer_profiles/shared_processes/Dremel/30mm_draft_dremel_3d20_0_4.json"
+  }
+ ]
+}

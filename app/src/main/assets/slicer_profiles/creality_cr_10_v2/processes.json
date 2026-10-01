@@ -1,0 +1,19 @@
+{
+ "default": "0.20mm Standard @Creality CR10V2",
+ "presets": [
+  {
+   "name": "0.16mm Optimal @Creality CR10V2",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_16mm_optimal_creality_cr10v2.json"
+  },
+  {
+   "name": "0.20mm Standard @Creality CR10V2",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_cr_10_v2/process.json"
+  }
+ ]
+}

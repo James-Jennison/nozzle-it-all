@@ -198,25 +198,30 @@ class SimulatedSlicer(private val readProfileFile: (String, String) -> ByteArray
         request.profile.plateTemperatures.filter { it > 0 }.maxOrNull()?.let { sb.append("M140 S$it\nM190 S$it\n") }
         request.profile.nozzleTemperatures.maxOrNull()?.let { sb.append("M104 S$it\nM109 S$it\n") }
         sb.append("G90\nM83\n")
-        // A colour mix alternates its two tools layer by layer, as the engine's 50/50 Full Spectrum and ColorMix do.
-        val mix = request.mix
+        // A color mix interleaves its two tools layer by layer, as the engine's Full Spectrum and ColorMix do: tool b
+        // on the layers where its running share (bPercent) passes a whole layer, so a 50/50 mix alternates. Each mixed
+        // part is labeled the way the engine labels objects for Klipper.
+        val mixes = request.partMixes
+        val mixing = mixes.isNotEmpty()
+        fun mixTool(m: ColourMix, layer: Int) = if ((layer + 1) * m.bPercent / 100 > layer * m.bPercent / 100) m.b else m.a
         var z = 0.2; var layer = 0
         while (z <= maxZ + 1e-6) {
             sb.append(";LAYER_CHANGE\nG1 Z%.2f F600\n".format(java.util.Locale.ROOT, z))
-            if (mix != null) sb.append("T${(if (layer % 2 == 0) mix.a else mix.b) - 1}\n")
-            boxes.forEach { (part, b) ->
-                if (mix == null && boxes.size > 1) sb.append("T${part.tool - 1}\n")
+            boxes.forEachIndexed { i, (part, b) ->
+                if (mixing) sb.append("EXCLUDE_OBJECT_START NAME=${part.file}_id_${i}_copy_0\nT${mixTool(mixes[i], layer) - 1}\n")
+                else if (boxes.size > 1) sb.append("T${part.tool - 1}\n")
                 sb.append(";TYPE:Outer wall\n")
                 val x0 = b[0] + dx; val y0 = b[1] + dy; val x1 = b[3] + dx; val y1 = b[4] + dy
                 sb.append("G0 X%.3f Y%.3f\n".format(java.util.Locale.ROOT, x0, y0))
                 listOf(x1 to y0, x1 to y1, x0 to y1, x0 to y0).forEach { (x, y) -> sb.append("G1 X%.3f Y%.3f E0.5\n".format(java.util.Locale.ROOT, x, y)) }
+                if (mixing) sb.append("EXCLUDE_OBJECT_END NAME=${part.file}_id_${i}_copy_0\n")
             }
-            z += if (mix != null) 0.2 else if (maxZ > 5) 2.0 else 1.0; layer++
+            z += if (mixing) 0.2 else if (maxZ > 5) 2.0 else 1.0; layer++
         }
         sb.append(request.profile.endGcode).append('\n')
         outDir.mkdirs()
         val out = File(outDir, "${request.outputName}.gcode")
         out.writeText(sb.toString())
-        return SliceResult.Success(out, mix?.let { "simulated mixing" })
+        return SliceResult.Success(out, if (mixing) "simulated mixing" else null)
     }
 }

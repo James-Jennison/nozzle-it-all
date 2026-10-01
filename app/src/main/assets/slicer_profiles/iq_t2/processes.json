@@ -1,0 +1,33 @@
+{
+ "default": "0.20mm Standard @iQ TiQ2 P1 - PACF Pro Fiberthree (0.4 Nozzle)",
+ "presets": [
+  {
+   "name": "0.20mm Standard @iQ TiQ2 P1 - HPP4GF25 Grauts (0.4 Nozzle)",
+   "label": "0.20mm Standard @iQ TiQ2 P1 - HPP4GF25 Grauts (0.4 Nozzle)",
+   "layer_height": "0.2",
+   "infill": "30%",
+   "file": "slicer_profiles/shared_processes/iQ/0_20mm_standard_iq_tiq2_p1_hpp4gf25_grauts_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @iQ TiQ2 P1 - PACF Pro Fiberthree (0.4 Nozzle)",
+   "label": "0.20mm Standard @iQ TiQ2 P1 - PACF Pro Fiberthree (0.4 Nozzle)",
+   "layer_height": "0.2",
+   "infill": "30%",
+   "file": "slicer_profiles/iq_t2/process.json"
+  },
+  {
+   "name": "0.20mm Standard @iQ TiQ2 P1 - PETG Polymax Polymaker (0.4 Nozzle)",
+   "label": "0.20mm Standard @iQ TiQ2 P1 - PETG Polymax Polymaker (0.4 Nozzle)",
+   "layer_height": "0.2",
+   "infill": "30%",
+   "file": "slicer_profiles/shared_processes/iQ/0_20mm_standard_iq_tiq2_p1_petg_polymax_polymaker_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @iQ TiQ2 P2 - PACF Pro Fiberthree + VXL90 Xioneer (0.4 Nozzle)",
+   "label": "0.20mm Standard @iQ TiQ2 P2 - PACF Pro Fiberthree + VXL90 Xioneer (0.4 Nozzle)",
+   "layer_height": "0.2",
+   "infill": "50%",
+   "file": "slicer_profiles/shared_processes/iQ/0_20mm_standard_iq_tiq2_p2_pacf_pro_fiberthree_plus_vxl90_xioneer_0_4_nozzle.json"
+  }
+ ]
+}

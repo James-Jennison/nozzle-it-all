@@ -16,12 +16,21 @@ import java.util.UUID
  */
 data class ColourMix(val a: Int, val b: Int, val bPercent: Int) {
     fun toJson(): JSONObject = JSONObject().put("a", a).put("b", b).put("bPercent", bPercent)
+    /** "tool 1 50% + tool 2 50%". */
+    val label: String get() = "tool $a ${100 - bPercent}% + tool $b $bPercent%"
     companion object {
         fun fromJson(o: JSONObject?): ColourMix? = o?.let { ColourMix(it.optInt("a"), it.optInt("b"), it.optInt("bPercent", 50)) }
     }
 }
 
-data class SliceRequest(val modelId: String, val parts: List<Pair<File, ModelPart>>, val profile: ProfileInfo, val outputName: String, val mix: ColourMix? = null)
+/**
+ * [partMixes]: empty, or one color mix per part (equal mixes are one mix that several parts share). [process]: the
+ * printer's own print profile (process preset) to slice with, by name, instead of the profile pack's default.
+ */
+data class SliceRequest(val modelId: String, val parts: List<Pair<File, ModelPart>>, val profile: ProfileInfo, val outputName: String,
+                        val partMixes: List<ColourMix> = emptyList(), val process: String? = null) {
+    init { require(partMixes.isEmpty() || partMixes.size == parts.size) { "partMixes must be empty or one per part." } }
+}
 
 sealed class SliceResult {
     /** [mixing]: the colour-mixing system the slice used ("Full Spectrum", "ColorMix"), when the request had a mix. */
@@ -717,14 +726,23 @@ class RunSession private constructor(
             StepKind.SLICE -> {
                 val sl = slicer ?: throw UnsupportedByTarget("No slicer is available on this platform.")
                 val profile = sl.profile(profileFor(p))
-                val parts = env.models.materialize(p.optString("model"), File(env.workDir, "models"))
+                val allParts = env.models.materialize(p.optString("model"), File(env.workDir, "models"))
+                // colourMix: one mix for every part. colourMixes: one mix per part, in order; only that many parts are sliced.
+                val single = ColourMix.fromJson(p.optJSONObject("colourMix"))
+                val listed = p.optJSONArray("colourMixes")?.let { a -> (0 until a.length()).mapNotNull { ColourMix.fromJson(a.optJSONObject(it)) } }.orEmpty()
+                if (listed.size > allParts.size) return StepStatus.FAILED to "The step names ${listed.size} color mixes, but ${p.optString("model")} has only ${allParts.size} parts."
+                val parts = if (listed.isNotEmpty()) allParts.take(listed.size) else allParts
+                val partMixes = listed.ifEmpty { single?.let { m -> List(parts.size) { m } }.orEmpty() }
+                val process = p.strOrNull("process")
                 val out = "nozzle-testgrid-${suite.id}-${test.id}".replace(Regex("[^a-z0-9._-]"), "-")
                 s.data.put("profile", JSONObject().put("id", profile.id).put("name", profile.name).put("sha256", profile.sha256))
                     .put("model", p.optString("model")).put("modelParts", JSONArray(parts.map { JSONObject().put("file", it.second.file).put("sha256", it.second.sha256) }))
                     .put("simulatedSlicer", sl.simulated)
-                val mix = ColourMix.fromJson(p.optJSONObject("colourMix"))
-                mix?.let { s.data.put("colourMix", it.toJson()) }
-                when (val r = sl.slice(SliceRequest(p.optString("model"), parts, profile, out, mix))) {
+                single?.let { s.data.put("colourMix", it.toJson()) }
+                if (listed.isNotEmpty()) s.data.put("colourMixes", JSONArray(listed.map { it.toJson() }))
+                process?.let { s.data.put("process", it) }
+                val partMixJson = JSONArray(parts.zip(partMixes).map { (part, m) -> m.toJson().put("file", part.second.file) })
+                when (val r = sl.slice(SliceRequest(p.optString("model"), parts, profile, out, partMixes, process))) {
                     is SliceResult.Success -> {
                         r.mixing?.let { s.data.put("mixingSystem", it) }
                         val sum = GcodeScan.scan(r.gcode)
@@ -732,9 +750,12 @@ class RunSession private constructor(
                         val entry = JSONObject().put("test", test.id).put("file", r.gcode.absolutePath).put("sha256", sum.sha256).put("bytes", sum.bytes)
                             .put("profile", s.data.getJSONObject("profile")).put("model", p.optString("model")).put("modelParts", s.data.getJSONArray("modelParts"))
                             .put("simulatedSlicer", sl.simulated)
+                        if (partMixes.isNotEmpty()) entry.put("partMixes", partMixJson)
+                        process?.let { entry.put("process", it) }
                         slices().put(test.id, entry); record.context.put("latestSlice", test.id)
                         StepStatus.PASSED to (if (sl.simulated) "Simulated slice (not a real engine run): " else "Sliced: ") + "${sum.bytes} bytes, ${sum.extrusionMoves} extruding moves" +
-                            (r.mixing?.let { " (tool ${mix!!.a} + tool ${mix.b} colour mix, through $it)" } ?: "") + "."
+                            (r.mixing?.let { sys -> partMixes.distinct().let { d -> if (d.size == 1) " (tool ${d[0].a} + tool ${d[0].b} colour mix, through $sys)" else " (${d.size} color mixes, through $sys: ${d.joinToString("; ") { it.label }})" } } ?: "") +
+                            (process?.let { " Print profile: $it." } ?: "") + "."
                     }
                     is SliceResult.Blocked -> StepStatus.BLOCKED to r.reason
                     is SliceResult.Failed -> StepStatus.FAILED to r.message
@@ -747,7 +768,8 @@ class RunSession private constructor(
                 if (sum.sha256 != slice.optString("sha256")) return StepStatus.FAILED to "The sliced file changed after slicing (SHA-256 mismatch)."
                 val profile = slicer?.profile(slice.getJSONObject("profile").getString("id"))
                 val checks = p.optJSONArray("checks") ?: JSONArray()
-                val failures = (0 until checks.length()).mapNotNull { checks.optJSONObject(it) }.mapNotNull { c -> GcodeScan.evaluate(c, sum, profile, record.target.optInt("toolSlots", 1))?.let { "${c.optString("check")}: $it" } }
+                val partMixes = slice.optJSONArray("partMixes")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) }.map { it.getString("file") to ColourMix.fromJson(it)!! } }.orEmpty()
+                val failures = (0 until checks.length()).mapNotNull { checks.optJSONObject(it) }.mapNotNull { c -> GcodeScan.evaluate(c, sum, profile, record.target.optInt("toolSlots", 1), partMixes)?.let { "${c.optString("check")}: $it" } }
                 s.data.put("summary", JSONObject(sum.toJson())).put("checks", checks)
                 if (failures.isEmpty()) StepStatus.PASSED to "All ${checks.length()} G-code checks passed." else StepStatus.FAILED to failures.joinToString(" ")
             }

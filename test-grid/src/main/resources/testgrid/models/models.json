@@ -113,6 +113,68 @@
       ],
       "scope": "multi_material",
       "title": "Nozzle colour-mixing swatch v1"
+    },
+    {
+      "dimensions": {
+        "footprint": {
+          "x": 115,
+          "y": 4
+        },
+        "gap": 5,
+        "tile": {
+          "x": 15,
+          "y": 4,
+          "z": 4
+        },
+        "tiles": 6
+      },
+      "features": [
+        "several color mixes in one print",
+        "mix ratios",
+        "every loaded tool",
+        "comparison with a published color reference"
+      ],
+      "id": "nozzle-color-reference-v1",
+      "parts": [
+        {
+          "bytes": 684,
+          "file": "nozzle-color-reference-v1-1.stl",
+          "sha256": "0afa34fb4c8c7d7ef55341561803c18d67bcedfd259b909bc9874bc6be5054a6",
+          "tool": 1
+        },
+        {
+          "bytes": 684,
+          "file": "nozzle-color-reference-v1-2.stl",
+          "sha256": "56cd5ddd5ab09b8dc1d3e0467b63a8e6d5d8e8a8b068ef77f243000f580a69f6",
+          "tool": 1
+        },
+        {
+          "bytes": 684,
+          "file": "nozzle-color-reference-v1-3.stl",
+          "sha256": "a4e286ebda515dc01acac5088eadd4dbdce54a394f0890d32896467eca6744c1",
+          "tool": 1
+        },
+        {
+          "bytes": 684,
+          "file": "nozzle-color-reference-v1-4.stl",
+          "sha256": "2318dd2877312b7ff037602a3068a0a36ebc71fc976a39324001882a73a1f096",
+          "tool": 1
+        },
+        {
+          "bytes": 684,
+          "file": "nozzle-color-reference-v1-5.stl",
+          "sha256": "2afb6b240aaad04b09ee24f286fc41c806ac398f442aca1096d307ed29a7913f",
+          "tool": 1
+        },
+        {
+          "bytes": 684,
+          "file": "nozzle-color-reference-v1-6.stl",
+          "sha256": "db4d7f1cacd0a1caea4748857c3c2d291b678d7e9461fbeeaa472ce5d6373638",
+          "tool": 1
+        }
+      ],
+      "scope": "multi_material",
+      "title": "Nozzle color reference v1 (six color-mix tiles)"
     }
   ],
   "version": [

@@ -1,0 +1,117 @@
+{
+ "default": "0.20mm Standard @MK3S",
+ "presets": [
+  {
+   "name": "0.05mm UltraDetail @MK3S",
+   "label": "0.05mm UltraDetail @MK3S",
+   "layer_height": "0.05",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_05mm_ultradetail_mk3s.json"
+  },
+  {
+   "name": "0.05mm UltraDetail @MK3S 0.4",
+   "label": "0.05mm UltraDetail @MK3S 0.4",
+   "layer_height": "0.05",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_05mm_ultradetail_mk3s_0_4.json"
+  },
+  {
+   "name": "0.07mm UltraDetail @MK3S",
+   "label": "0.07mm UltraDetail @MK3S",
+   "layer_height": "0.07",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_07mm_ultradetail_mk3s.json"
+  },
+  {
+   "name": "0.07mm UltraDetail @MK3S 0.4",
+   "label": "0.07mm UltraDetail @MK3S 0.4",
+   "layer_height": "0.07",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_07mm_ultradetail_mk3s_0_4.json"
+  },
+  {
+   "name": "0.10mm Detail @MK3S",
+   "label": "0.10mm Detail @MK3S",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_10mm_detail_mk3s.json"
+  },
+  {
+   "name": "0.10mm Detail @MK3S 0.4",
+   "label": "0.10mm Detail @MK3S 0.4",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_10mm_detail_mk3s_0_4.json"
+  },
+  {
+   "name": "0.15mm Quality @MK3S",
+   "label": "0.15mm Quality @MK3S",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_quality_mk3s.json"
+  },
+  {
+   "name": "0.15mm Quality @MK3S 0.4",
+   "label": "0.15mm Quality @MK3S 0.4",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_quality_mk3s_0_4.json"
+  },
+  {
+   "name": "0.15mm Speed @MK3S",
+   "label": "0.15mm Speed",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_speed_mk3s.json"
+  },
+  {
+   "name": "0.20mm Quality @MK3S",
+   "label": "0.20mm Quality",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_quality_mk3s.json"
+  },
+  {
+   "name": "0.20mm Speed @MK3S",
+   "label": "0.20mm Speed @MK3S",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_speed_mk3s.json"
+  },
+  {
+   "name": "0.20mm Speed @MK3S 0.4",
+   "label": "0.20mm Speed @MK3S 0.4",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_speed_mk3s_0_4.json"
+  },
+  {
+   "name": "0.20mm Standard @MK3S",
+   "label": "0.20mm Standard @MK3S",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/prusa_mk3s/process.json"
+  },
+  {
+   "name": "0.20mm Standard @MK3S 0.4",
+   "label": "0.20mm Standard @MK3S 0.4",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_standard_mk3s_0_4.json"
+  },
+  {
+   "name": "0.30mm Draft @MK3S",
+   "label": "0.30mm Draft @MK3S",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_30mm_draft_mk3s.json"
+  },
+  {
+   "name": "0.30mm Draft @MK3S 0.4",
+   "label": "0.30mm Draft @MK3S 0.4",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Prusa/0_30mm_draft_mk3s_0_4.json"
+  }
+ ]
+}

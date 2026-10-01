@@ -96,12 +96,16 @@ object SettingsCatalog {
 }
 
 /** A named, saved set of overrides layered over a printer's bundled profile ("inherits" the base profile). */
-data class CustomProfile(val name: String, val basePrinter: String, val overrides: Map<String, String>) {
-    fun encode(): String = org.json.JSONObject().put("name", name).put("base", basePrinter).put("overrides", org.json.JSONObject(overrides as Map<*, *>)).toString()
+// basePreset: the print profile (ProcessPreset.name) the overrides were saved on top of; null for one saved before print
+// profiles existed, or on the pack's default.
+data class CustomProfile(val name: String, val basePrinter: String, val overrides: Map<String, String>, val basePreset: String? = null) {
+    fun encode(): String = org.json.JSONObject().put("name", name).put("base", basePrinter).put("overrides", org.json.JSONObject(overrides as Map<*, *>))
+        .apply { basePreset?.let { put("base_preset", it) } }.toString()
     companion object {
         fun decode(json: String): CustomProfile? = runCatching {
             val o = org.json.JSONObject(json); val ov = o.getJSONObject("overrides")
-            CustomProfile(o.getString("name"), o.getString("base"), ov.keys().asSequence().associateWith { ov.getString(it) }.let(SettingsCatalog::sanitize))
+            CustomProfile(o.getString("name"), o.getString("base"), ov.keys().asSequence().associateWith { ov.getString(it) }.let(SettingsCatalog::sanitize),
+                o.optString("base_preset").ifBlank { null })
         }.getOrNull()
     }
 }

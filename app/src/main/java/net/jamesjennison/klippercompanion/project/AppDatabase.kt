@@ -71,7 +71,12 @@ val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
     }
 }
 
-@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 8, exportSchema = true)
+// Print profiles: version 9 - projects.processPreset, the print profile chosen in Prepare.
+val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE projects ADD COLUMN processPreset TEXT") }
+}
+
+@Database(entities = [Project::class, ProjectObject::class, Plate::class], version = 9, exportSchema = true)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun projectDao(): ProjectDao
 
@@ -81,7 +86,7 @@ abstract class AppDatabase : RoomDatabase() {
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext, AppDatabase::class.java, "nozzle_it_all.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { instance = it }
         }
     }
 }

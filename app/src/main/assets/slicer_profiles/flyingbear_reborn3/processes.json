@@ -1,0 +1,40 @@
+{
+ "default": "0.20mm Standard @FlyingBear Reborn3",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @FlyingBear Reborn3",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FlyingBear/0_08mm_extra_fine_flyingbear_reborn3.json"
+  },
+  {
+   "name": "0.12mm Fine @FlyingBear Reborn3",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FlyingBear/0_12mm_fine_flyingbear_reborn3.json"
+  },
+  {
+   "name": "0.16mm Optimal @FlyingBear Reborn3",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FlyingBear/0_16mm_optimal_flyingbear_reborn3.json"
+  },
+  {
+   "name": "0.20mm Standard @FlyingBear Reborn3",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/flyingbear_reborn3/process.json"
+  },
+  {
+   "name": "0.24mm Draft @FlyingBear Reborn3",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/FlyingBear/0_24mm_draft_flyingbear_reborn3.json"
+  }
+ ]
+}

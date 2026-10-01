@@ -1,0 +1,26 @@
+{
+ "default": "0.20mm Standard @Anycubic Chiron",
+ "presets": [
+  {
+   "name": "0.15mm Optimal @Anycubic Chiron",
+   "label": "0.15mm Optimal",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Anycubic/0_15mm_optimal_anycubic_chiron.json"
+  },
+  {
+   "name": "0.20mm Standard @Anycubic Chiron",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/anycubic_chiron/process.json"
+  },
+  {
+   "name": "0.30mm Draft @Anycubic Chiron",
+   "label": "0.30mm Draft",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Anycubic/0_30mm_draft_anycubic_chiron.json"
+  }
+ ]
+}

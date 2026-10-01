@@ -1,0 +1,47 @@
+{
+ "default": "0.20mm Standard @Tronxy",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @Tronxy",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Tronxy/0_08mm_extra_fine_tronxy.json"
+  },
+  {
+   "name": "0.12mm Fine @Tronxy",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Tronxy/0_12mm_fine_tronxy.json"
+  },
+  {
+   "name": "0.15mm Optimal @Tronxy",
+   "label": "0.15mm Optimal",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Tronxy/0_15mm_optimal_tronxy.json"
+  },
+  {
+   "name": "0.20mm Standard @Tronxy",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/tronxy_x5sa_400_marlin_firmware/process.json"
+  },
+  {
+   "name": "0.24mm Draft @Tronxy",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Tronxy/0_24mm_draft_tronxy.json"
+  },
+  {
+   "name": "0.28mm Extra Draft @Tronxy",
+   "label": "0.28mm Extra Draft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Tronxy/0_28mm_extra_draft_tronxy.json"
+  }
+ ]
+}

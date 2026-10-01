@@ -1,0 +1,33 @@
+{
+ "default": "0.20mm Standard @Creality K1_CFS-C 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.08mm SuperDetail @Creality K1_CFS-C 0.4 nozzle",
+   "label": "0.08mm SuperDetail",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_08mm_superdetail_creality_k1_cfs_c_0_4_nozzle.json"
+  },
+  {
+   "name": "0.16mm Optimal @Creality K1_CFS-C 0.4 nozzle",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_16mm_optimal_creality_k1_cfs_c_0_4_nozzle.json"
+  },
+  {
+   "name": "0.20mm Standard @Creality K1_CFS-C 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_k1_cfs_c/process.json"
+  },
+  {
+   "name": "0.24mm Draft @Creality K1_CFS-C 0.4 nozzle",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_24mm_draft_creality_k1_cfs_c_0_4_nozzle.json"
+  }
+ ]
+}

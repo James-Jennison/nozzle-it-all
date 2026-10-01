@@ -1211,6 +1211,39 @@ interchange).
 - **Touches:** shared printer-mixing formats (`:printer-api`, `:desktop`), Android Prepare/project editor UI,
   Android's Test Grid slicer hook, unit and instrumented test suites.
 
+## P-0040 — Print profiles (process presets) on Android, and a Color Mixing preset for the Centauri Carbon
+
+- **What:** Android Prepare gets a Print profile picker: the OrcaSlicer process presets the printer vendor ships for the
+  printer's machine, instead of one fixed process per pack. The chosen preset is saved per project
+  (`Project.processPreset`, Room 8→9); Advanced settings apply on top, and a saved custom profile records the preset
+  it was based on (`CustomProfile.basePreset`). `SlicingCoordinator.slice`/`sliceProject` take
+  `processPreset: String?` (the full Orca preset name; null is the pack default).
+- **Which presets (facts from OrcaSlicer at 824b216, decided by the engine):** `scripts/bundle_process_presets.py`
+  writes `slicer_profiles/<pack>/processes.json`. A pack is offered its machine vendor's own instantiable process
+  presets that nozzle-engine's `--compatible-presets` (nozzle-engine PR #10; OrcaSlicer's own
+  `is_compatible_with_printer`) accepts for the pack's `machine.json`. Shared preset files are flattened once per
+  vendor under `slicer_profiles/shared_processes/<vendor>/` with the same `fix_bed_type` repair the vendor packs get. The
+  COSMOS packs are checked as Orca's "Elegoo Centauri Carbon 0.4 nozzle". The four Prusa MMU3 packs, whose machines no
+  Orca vendor ships, offer their own process only.
+- **Printer libraries:** the Snapmaker U1 and Elegoo CANVAS packs offer their printer library's presets
+  (`engine/profiles/library`, the set Desktop uses), packaged by the `printerLibraryAssets` Gradle task as
+  `printer_library/` assets, beside the pack's own process (still the default; the pack files are unchanged, so
+  Android's default G-code doesn't change). The library preset a pack's process came from isn't listed twice (U1's
+  "0.20 Standard" is the library's "0.20mm Standard" under its `renamed_from` name).
+- **Derived preset (original, not copied):** `engine/profiles/derived/elegoo_centauri_color_mixing.json` makes
+  "0.10mm Color Mixing @Elegoo CC 0.4 nozzle" and "...@Elegoo CC2 0.4 nozzle" from Elegoo's own 0.12mm Fine presets
+  with the parameter changes of Snapmaker's U1 "0.10mm Color Mixing" recipe (listed in the file, with what was left
+  out and why). Offered only on multi-filament packs (CANVAS, COSMOS AFC) and marked "(Nozzle It All)" in the picker.
+  Not yet tested on a real printer.
+- **Packaging:** the shared folder was first named `_processes`. Android packaging leaves out asset folders whose
+  names start with "_", so none of its 972 files reached the APK and any non-default profile from it failed to open
+  (found 2026-10-01 by the Centauri Carbon color reference slice in Test Mode on a Razr 2023; the unit tests read the
+  source tree and passed). Renamed to `shared_processes`. `:app:verify<Variant>PackagedProfiles`, which every
+  `assemble<Variant>` runs, opens the built APK and fails the build when a file a pack's `processes.json` lists is
+  not in it.
+- **Test evidence:** `ProcessPresetsTest` (`:domain`), `BasicSlicingTest`/`SettingsCatalogTest` (`:app`),
+  `ElegooCanvasTest` (`:desktop`, slices with the derived preset through the real engine).
+
 ## P-0041 — Per-extruder lookups miscompiled on arm64 (the U1's `M140 S32769`): engine hardening, NDK 29, heater-target check
 
 - **Upstream:** nozzle-engine `a3c56ef690cba3790fd9bad23143af5db4ecfe74` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine

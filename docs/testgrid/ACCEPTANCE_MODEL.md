@@ -46,7 +46,29 @@ One 40 × 10 × 6 mm block, about 30 layers at 0.2 mm. The `mix-slice` test assi
 through the printer's own mixing system: Full Spectrum on a Snapmaker U1, PrusaSlicer ColorMix on other printers with
 two or more slots, the same "+ Add 50/50" the project editor offers. The sliced file must alternate its two filaments
 layer by layer (`alternates_tools`). The printed swatch should read as one blended colour at arm's length. SHA-256
-`4e56f2cf29166733f15fe4170c850c26574af0de4a7378eef5822e6ce53f4e40`. Not yet run on a device.
+`4e56f2cf29166733f15fe4170c850c26574af0de4a7378eef5822e6ce53f4e40`. Passed on the owner's PAXX U1 and CC1 CANVAS
+(bundles `2f65cc23` and `2c3ad361`).
+
+## `nozzle-color-reference-v1` (color reference; U1 and CANVAS suites)
+
+Six tiles, each 15 × 4 × 4 mm, 5 mm apart in a row along X (115 mm overall), one STL per tile
+(`nozzle-color-reference-v1-1.stl` to `-6.stl`). The `color-reference-slice` test gives each tile its own two-filament
+mix, following Snapmaker's Full Spectrum color reference (two colors at 33-67% each work best). On the U1, with
+Snapmaker's reference filaments loaded (tool 1 cyan, 2 magenta, 3 yellow, 4 gray), the six tiles are:
+
+| Tile | Mix | SHA-256 |
+| --- | --- | --- |
+| 1 | cyan + magenta 50/50 | `0afa34fb4c8c7d7ef55341561803c18d67bcedfd259b909bc9874bc6be5054a6` |
+| 2 | cyan + yellow 50/50 (Snapmaker's No. 54) | `56cd5ddd5ab09b8dc1d3e0467b63a8e6d5d8e8a8b068ef77f243000f580a69f6` |
+| 3 | magenta + yellow 50/50 | `a4e286ebda515dc01acac5088eadd4dbdce54a394f0890d32896467eca6744c1` |
+| 4 | cyan 67% + magenta 33% | `2318dd2877312b7ff037602a3068a0a36ebc71fc976a39324001882a73a1f096` |
+| 5 | cyan 33% + magenta 67% | `2afb6b240aaad04b09ee24f286fc41c806ac398f442aca1096d307ed29a7913f` |
+| 6 | yellow + gray 50/50 | `db4d7f1cacd0a1caea4748857c3c2d291b678d7e9461fbeeaa472ce5d6373638` |
+
+The U1 slices with its own "0.10mm Color Mixing" print profile (0.1 mm layers, about 40 per tile). The CANVAS suite
+slices only tiles 1 and 2 (lanes 1+2 at 50/50, lanes 3+4 at 67% lane 4), because every filament change on one nozzle also
+purges, with Nozzle It All's "0.10mm Color Mixing @Elegoo CC 0.4 nozzle" print profile. The `color_mixes` check reads each tile's own layers from the G-code's object labels
+and requires only its mix's two filaments, in its proportion, never more than three layers of one in a row.
 
 The 20 mm test cube (`site-src/assets/test-cube-20mm.stl`) remains the quick smoke-test part; it is not a Test Grid
 acceptance model. The owner's clean U1 print of that cube on 2026-09-28 is prior history, not Test Grid evidence.

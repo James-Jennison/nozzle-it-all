@@ -1,0 +1,40 @@
+{
+ "default": "Compatible speed - 0.15mm",
+ "presets": [
+  {
+   "name": "Compatible speed - 0.10mm",
+   "label": "Compatible speed - 0.10mm",
+   "layer_height": "0.1",
+   "infill": "25%",
+   "file": "slicer_profiles/shared_processes/Volumic/compatible_speed_0_10mm.json"
+  },
+  {
+   "name": "Compatible speed - 0.15mm",
+   "label": "Compatible speed - 0.15mm",
+   "layer_height": "0.15",
+   "infill": "25%",
+   "file": "slicer_profiles/volumic_vs20mk2/process.json"
+  },
+  {
+   "name": "Compatible speed - 0.20mm",
+   "label": "Compatible speed - 0.20mm",
+   "layer_height": "0.2",
+   "infill": "25%",
+   "file": "slicer_profiles/shared_processes/Volumic/compatible_speed_0_20mm.json"
+  },
+  {
+   "name": "Compatible speed - 0.25mm",
+   "label": "Compatible speed - 0.25mm",
+   "layer_height": "0.25",
+   "infill": "25%",
+   "file": "slicer_profiles/shared_processes/Volumic/compatible_speed_0_25mm.json"
+  },
+  {
+   "name": "Compatible speed - 0.30mm",
+   "label": "Compatible speed - 0.30mm",
+   "layer_height": "0.3",
+   "infill": "25%",
+   "file": "slicer_profiles/shared_processes/Volumic/compatible_speed_0_30mm.json"
+  }
+ ]
+}

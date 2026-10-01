@@ -1,0 +1,61 @@
+{
+ "default": "0.20mm Standard @Rook MK1 LDO",
+ "presets": [
+  {
+   "name": "0.08mm Super Fine @Delta Flyer Refit",
+   "label": "0.08mm Super Fine",
+   "layer_height": "0.08",
+   "infill": "5%",
+   "file": "slicer_profiles/shared_processes/RolohaunDesign/0_08mm_super_fine_delta_flyer_refit.json"
+  },
+  {
+   "name": "0.10mm Fine @Delta Flyer Refit",
+   "label": "0.10mm Fine",
+   "layer_height": "0.1",
+   "infill": "5%",
+   "file": "slicer_profiles/shared_processes/RolohaunDesign/0_10mm_fine_delta_flyer_refit.json"
+  },
+  {
+   "name": "0.16mm Optimal @Delta Flyer Refit",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "10%",
+   "file": "slicer_profiles/shared_processes/RolohaunDesign/0_16mm_optimal_delta_flyer_refit.json"
+  },
+  {
+   "name": "0.20mm Standard @Delta Flyer Refit",
+   "label": "0.20mm Standard @Delta Flyer Refit",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/RolohaunDesign/0_20mm_standard_delta_flyer_refit.json"
+  },
+  {
+   "name": "0.20mm Standard @Rook MK1 LDO",
+   "label": "0.20mm Standard @Rook MK1 LDO",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/rolohaundesign_rolohaun_delta_flyer_refit/process.json"
+  },
+  {
+   "name": "0.2mm Vase Mode @Delta Flyer Refit",
+   "label": "0.2mm Vase Mode",
+   "layer_height": "0.2",
+   "infill": "0%",
+   "file": "slicer_profiles/shared_processes/RolohaunDesign/0_2mm_vase_mode_delta_flyer_refit.json"
+  },
+  {
+   "name": "0.24mm Draft @Delta Flyer Refit",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "10%",
+   "file": "slicer_profiles/shared_processes/RolohaunDesign/0_24mm_draft_delta_flyer_refit.json"
+  },
+  {
+   "name": "0.28mm Rough Draft @Delta Flyer Refit",
+   "label": "0.28mm Rough Draft",
+   "layer_height": "0.28",
+   "infill": "10%",
+   "file": "slicer_profiles/shared_processes/RolohaunDesign/0_28mm_rough_draft_delta_flyer_refit.json"
+  }
+ ]
+}

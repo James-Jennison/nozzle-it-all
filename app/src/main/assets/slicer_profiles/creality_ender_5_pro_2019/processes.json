@@ -1,0 +1,33 @@
+{
+ "default": "0.20mm Standard @Creality Ender5Pro (2019)",
+ "presets": [
+  {
+   "name": "0.12mm Fine @Creality Ender5Pro (2019)",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_12mm_fine_creality_ender5pro_2019.json"
+  },
+  {
+   "name": "0.15mm Optimal @Creality Ender5Pro (2019)",
+   "label": "0.15mm Optimal",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_15mm_optimal_creality_ender5pro_2019.json"
+  },
+  {
+   "name": "0.20mm Standard @Creality Ender5Pro (2019)",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_ender_5_pro_2019/process.json"
+  },
+  {
+   "name": "0.24mm Draft @Creality Ender5Pro (2019)",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/shared_processes/Creality/0_24mm_draft_creality_ender5pro_2019.json"
+  }
+ ]
+}

@@ -51,7 +51,7 @@ Requirements:
 
 - JDK 17
 - Android SDK 36
-- Android NDK `27.1.12297006`
+- Android NDK `29.0.14206865`
 - The prebuilt Android dependency prefix (`orcaslicer-android-engine/deps/install/arm64-v8a`) for the native slicing
   target; `engine/fork/android/prepare_engine_root.sh` combines it with the pinned engine source
 

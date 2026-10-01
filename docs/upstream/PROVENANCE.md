@@ -1237,3 +1237,54 @@ interchange).
   Not yet tested on a real printer.
 - **Test evidence:** `ProcessPresetsTest` (`:domain`), `BasicSlicingTest`/`SettingsCatalogTest` (`:app`),
   `ElegooCanvasTest` (`:desktop`, slices with the derived preset through the real engine).
+
+## P-0041 — Per-extruder lookups miscompiled on arm64 (the U1's `M140 S32769`): engine hardening, NDK 29, heater-target check
+
+- **Upstream:** nozzle-engine `a3c56ef690cba3790fd9bad23143af5db4ecfe74` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
+  branch `fix/arm64-get-at-miscompile`): `f766512` (the colour-mixing pin) plus one commit. Nothing was imported from
+  outside this repository or the engine fork.
+- **Root cause:** on 2026-09-30 the Snapmaker U1 refused `M140 S32769` ("heater_bed: Requested temperature (32769.0)
+  out of range (0.0:100.0)") from the Test Grid's Full Spectrum swatch slice. The Android engine was built with NDK
+  27.1.12297006 (clang 18.0.2). Its loop vectorizer miscompiles GCode.cpp's bed-temperature reduction over
+  `print.extruders()` (unsigned ids) once the inlined `ConfigOptionVector::get_at` bounds check is involved: the vector
+  lanes test `(size & 1) & ~(id & 1)` instead of `id < size`, so even ids read past the end of a one-element
+  `bed_temperature_initial_layer` vector (a heap chunk header, 0x8001 = 32769) and in-range ids land on the first value.
+  The IR is target-independent and the source is not undefined behaviour: GCC (the x86-64 desktop engine and the golden
+  outputs), clang 21 (NDK 29) and Emscripten 3.1.74 / 6.0.10 (the web engine) compile the same source correctly, and
+  `-fno-vectorize` fixes NDK 27.1 and 27.2. Two sites in the shipped engine were affected (the bed-temperature and the
+  `min_vitrification_temperature` reductions in GCode.cpp). The mix-slice Test Grid test had passed earlier only
+  because its evidence keeps the G-code's SHA-256, not the file, and no check read the heater targets.
+- **Engine change:** `get_at()` indexes through `checked_index()`, whose empty asm statement makes the index opaque to
+  the vectorizer (plain C++ rewrites of the check still miscompile under NDK 27; the barrier was verified on the Razr
+  under NDK 27 -O3 and NDK 29, and compiles with GCC and Emscripten). The nullable `is_nil(idx)` overloads no longer
+  index past the end (a missing per-extruder value is the first one's; an empty vector is nil). A Catch2 case in
+  `tests/libslic3r/test_config.cpp` mirrors the GCode.cpp reductions. `tools/nozzle/build_android_engine.sh` builds
+  with NDK 29.0.14206865.
+- **App change:** `app/build.gradle.kts` `ndkVersion` 29.0.14206865 (clang 21), the same default in
+  `engine/fork/android/prepare_engine_root.sh` and `ci_engine_root.sh`, README updated. The Android dependency prefix
+  (Boost, CGAL, TBB, …) is still the NDK 27 build; libc++'s ABI is stable across NDK releases and the NDK 29 engine ran
+  on the device against it. Test Grid: the new `heater_targets` G-code check (every M140/M190/M104/M109 or
+  `SET_HEATER_TEMPERATURE` target within range, and every bed target one the filament profile declares) is in every
+  suite's `scan_gcode` step, so a slice like the U1's fails at the scan instead of at the printer; the simulated slicer
+  emits the profile's heater targets so the check is exercised by the JVM suites; `MANIFEST_SCHEMA.md` documents it.
+- **Test evidence:** gthost-build01, 2026-09-30/10-01 (local evening of 2026-09-30):
+  - Engine Catch2 `[Config]` (GCC x86-64): the new case passes (9 assertions) with the fix and fails 1 of 9 without it
+    (the `is_nil(7)` of a one-element nullable vector, the out-of-bounds read). The one other `[Config]` failure,
+    "DynamicPrintConfig serialization", fails identically on `f766512` and is unrelated (the fork's cereal round trip).
+  - Engine `slic3r_cli_test` built for arm64 from the fix with NDK 29 and, as a control, with NDK 27.1: both slice the
+    failing Test Grid request (`request-6.txt`, the U1 Full Spectrum swatch) on the Razr (ZP22235MHM) to `M140 S60`
+    where the shipped engine emitted `M140 S32769`. NDK 29 `libslic3rengine.so` SHA-256
+    `5455b5a865b533ae50dce6e8d792bc43aaa623fe0428c30fad1b05f1715128f0`.
+  - `./gradlew :test-grid:test` (RunnerTest 34, ManifestTest 14): all pass, including
+    `theHeaterTargetCheckCatchesABedTemperatureBeyondTheProfile`.
+  - nozzle-engine CI on the fix (pull request #11, run 36812452726): success at 2026-10-01T04:00Z: desktop engine, golden outputs on every bundled printer profile
+    (unchanged), engine contract, colour mixing through the Android bridge, Android engine (arm64-v8a, NDK 29) and the
+    WebAssembly engine all green; native engine SHA-256 `9cf32883dc03ea7d00a2cdd86e1b4592db1f026f257777d97c28ad515a034455`
+    (build record in `engine/fork/PROVENANCE.txt`).
+  - Testing build (`Nozzle It All - Testing`, `.testgrid`) rebuilt on gthost with this pin and NDK 29: `application-label` "Nozzle It All - Testing",
+    `com.nozzleitall.app.testgrid`, `libslic3rengine.so` SHA-256 `493123b57b59b560c084910fda2a1686e5948a5e73503b977c94f38e71c6521b`
+    (clang 21.0.0 build), installed over the previous Testing app on the Razr with `adb install -r` on 2026-09-30 at 21:16
+    local. The U1 print of the Full Spectrum swatch from this build is the owner's to re-run.
+- **Known divergence:** none in slicing output: the fixed engine's x86-64 golden outputs are unchanged; on arm64 the
+  only change is that per-extruder values are now read from the right element.
+- **Touches:** engine build (NDK), slicing (per-extruder settings on Android), Test Grid checks and suites.

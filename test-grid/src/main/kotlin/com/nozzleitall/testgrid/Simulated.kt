@@ -193,7 +193,11 @@ class SimulatedSlicer(private val readProfileFile: (String, String) -> ByteArray
         val dx = (bed[0] + bed[2]) / 2 - (minX + maxX) / 2; val dy = (bed[1] + bed[3]) / 2 - (minY + maxY) / 2
         val sb = StringBuilder()
         sb.append("; Nozzle Test Grid SIMULATED slice: not produced by a slicing engine\n; model ${request.modelId}\n; profile ${request.profile.id} ${request.profile.sha256}\n")
-        sb.append(request.profile.startGcode).append("\nG90\nM83\n")
+        sb.append(request.profile.startGcode).append('\n')
+        // The heater targets a real slice resolves from the filament profile (the start G-code above still has its placeholders).
+        request.profile.plateTemperatures.filter { it > 0 }.maxOrNull()?.let { sb.append("M140 S$it\nM190 S$it\n") }
+        request.profile.nozzleTemperatures.maxOrNull()?.let { sb.append("M104 S$it\nM109 S$it\n") }
+        sb.append("G90\nM83\n")
         // A color mix interleaves its two tools layer by layer, as the engine's Full Spectrum and ColorMix do: tool b
         // on the layers where its running share (bPercent) passes a whole layer, so a 50/50 mix alternates. Each mixed
         // part is labeled the way the engine labels objects for Klipper.

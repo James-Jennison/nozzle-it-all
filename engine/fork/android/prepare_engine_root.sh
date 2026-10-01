@@ -21,7 +21,7 @@ mkdir -p "$ROOT"
 DEPS="$ROOT/deps/install/arm64-v8a"
 if [ ! -d "$DEPS" ]; then mkdir -p "$DEPS"; cp -as "$ANDROID_DEPS/." "$DEPS/"; fi
 if [ ! -f "$DEPS/include/gmpxx.h" ]; then
-  NDK="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/27.1.12297006}"; TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+  NDK="${ANDROID_NDK_ROOT:-$HOME/Android/Sdk/ndk/29.0.14206865}"; TC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
   GMP_ARCHIVE="${GMP_ARCHIVE:-$(dirname "$(dirname "$ANDROID_DEPS")")/src/gmp-6.2.1.tar.xz}"
   GMP_SHA="$(python3 -c 'import json,sys;print(next(d["sha256"] for d in json.load(open(sys.argv[1]))["dependencies"] if d["file"]=="gmp-6.2.1.tar.xz"))' "$NOZZLE_ROOT/engine/fork/android/DEPENDENCIES.json")"
   [ "$(sha256sum "$GMP_ARCHIVE" | cut -d' ' -f1)" = "$GMP_SHA" ] || { echo "$GMP_ARCHIVE does not match the pinned GMP hash"; exit 1; }

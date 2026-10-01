@@ -193,7 +193,7 @@ object StepLimits {
     val AXES = setOf("X", "Y", "Z")
     val MONITOR_CONDITIONS = setOf("printing", "complete", "idle", "paused", "progress_increases", "heater_reaches", "heater_below")
     val RESPONSES = setOf("yes_no", "pass_partial_fail", "number", "text", "choice")
-    val GCODE_CHECKS = setOf("non_empty", "no_stock_elegoo_commands", "requires_macro", "within_bed", "centered", "max_tool_index", "uses_tools", "alternates_tools", "color_mixes")
+    val GCODE_CHECKS = setOf("non_empty", "no_stock_elegoo_commands", "requires_macro", "within_bed", "centered", "max_tool_index", "uses_tools", "alternates_tools", "color_mixes", "heater_targets")
     val PRECONDITION_CHECKS = setOf("printer_idle", "printer_connected")
     /** What an observe step shows the operator alongside the question: what Nozzle itself sees, to compare against. */
     val OBSERVE_SHOWS = setOf("status", "slots", "camera")

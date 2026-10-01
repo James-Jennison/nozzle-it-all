@@ -6,35 +6,35 @@
    "label": "0.10mm FAST DETAIL",
    "layer_height": "0.1",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_10mm_fast_detail_core_one_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_10mm_fast_detail_core_one_0_4.json"
   },
   {
    "name": "0.15mm SPEED @CORE One 0.4",
    "label": "0.15mm SPEED",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_15mm_speed_core_one_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_speed_core_one_0_4.json"
   },
   {
    "name": "0.15mm STRUCTURAL @CORE One 0.4",
    "label": "0.15mm STRUCTURAL",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_15mm_structural_core_one_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_structural_core_one_0_4.json"
   },
   {
    "name": "0.20mm SOLUBLE FULL @CORE One 0.4",
    "label": "0.20mm SOLUBLE FULL",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_20mm_soluble_full_core_one_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_soluble_full_core_one_0_4.json"
   },
   {
    "name": "0.20mm SOLUBLE INTERFACE @CORE One 0.4",
    "label": "0.20mm SOLUBLE INTERFACE",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_20mm_soluble_interface_core_one_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_soluble_interface_core_one_0_4.json"
   },
   {
    "name": "0.20mm SPEED @CORE One 0.4",
@@ -48,7 +48,7 @@
    "label": "0.20mm STRUCTURAL",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_20mm_structural_core_one_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_structural_core_one_0_4.json"
   }
  ]
 }

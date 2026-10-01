@@ -6,21 +6,21 @@
    "label": "0.10mm FastDetail",
    "layer_height": "0.1",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_10mm_fastdetail_prusa_xl_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_10mm_fastdetail_prusa_xl_0_4.json"
   },
   {
    "name": "0.15mm Speed @Prusa XL 0.4",
    "label": "0.15mm Speed",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_15mm_speed_prusa_xl_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_speed_prusa_xl_0_4.json"
   },
   {
    "name": "0.15mm Structural @Prusa XL 0.4",
    "label": "0.15mm Structural",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_15mm_structural_prusa_xl_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_structural_prusa_xl_0_4.json"
   },
   {
    "name": "0.20mm Speed @Prusa XL 0.4",
@@ -34,14 +34,14 @@
    "label": "0.20mm Structural",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_20mm_structural_prusa_xl_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_structural_prusa_xl_0_4.json"
   },
   {
    "name": "0.25mm Structural @Prusa XL 0.4",
    "label": "0.25mm Structural",
    "layer_height": "0.25",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_25mm_structural_prusa_xl_0_4.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_25mm_structural_prusa_xl_0_4.json"
   }
  ]
 }

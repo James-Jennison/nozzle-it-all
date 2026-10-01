@@ -6,21 +6,21 @@
    "label": "0.08mm Extra Fine",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Vzbot/0_08mm_extra_fine_vzbot.json"
+   "file": "slicer_profiles/shared_processes/Vzbot/0_08mm_extra_fine_vzbot.json"
   },
   {
    "name": "0.12mm Fine @Vzbot",
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Vzbot/0_12mm_fine_vzbot.json"
+   "file": "slicer_profiles/shared_processes/Vzbot/0_12mm_fine_vzbot.json"
   },
   {
    "name": "0.15mm Optimal @Vzbot",
    "label": "0.15mm Optimal",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Vzbot/0_15mm_optimal_vzbot.json"
+   "file": "slicer_profiles/shared_processes/Vzbot/0_15mm_optimal_vzbot.json"
   },
   {
    "name": "0.20mm Standard @Vzbot",
@@ -34,28 +34,28 @@
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Vzbot/0_24mm_draft_vzbot.json"
+   "file": "slicer_profiles/shared_processes/Vzbot/0_24mm_draft_vzbot.json"
   },
   {
    "name": "0.28mm Extra Draft @Vzbot",
    "label": "0.28mm Extra Draft @Vzbot",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Vzbot/0_28mm_extra_draft_vzbot.json"
+   "file": "slicer_profiles/shared_processes/Vzbot/0_28mm_extra_draft_vzbot.json"
   },
   {
    "name": "0.28mm Extra Draft @Vzbot 0.5nozzle",
    "label": "0.28mm Extra Draft @Vzbot 0.5nozzle",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Vzbot/0_28mm_extra_draft_vzbot_0_5nozzle.json"
+   "file": "slicer_profiles/shared_processes/Vzbot/0_28mm_extra_draft_vzbot_0_5nozzle.json"
   },
   {
    "name": "0.28mm Extra Draft @Vzbot 0.6nozzle",
    "label": "0.28mm Extra Draft @Vzbot 0.6nozzle",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Vzbot/0_28mm_extra_draft_vzbot_0_6nozzle.json"
+   "file": "slicer_profiles/shared_processes/Vzbot/0_28mm_extra_draft_vzbot_0_6nozzle.json"
   }
  ]
 }

@@ -6,14 +6,14 @@
    "label": "0.08 Extra Fine",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Snapmaker/0_08_extra_fine_snapmaker_j1_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Snapmaker/0_08_extra_fine_snapmaker_j1_0_4_nozzle.json"
   },
   {
    "name": "0.12 Fine @Snapmaker J1 (0.4 nozzle)",
    "label": "0.12 Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Snapmaker/0_12_fine_snapmaker_j1_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Snapmaker/0_12_fine_snapmaker_j1_0_4_nozzle.json"
   },
   {
    "name": "0.16 Optimal @Snapmaker J1 (0.4 nozzle)",
@@ -27,35 +27,35 @@
    "label": "0.20 Standard",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Snapmaker/0_20_standard_snapmaker_j1_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Snapmaker/0_20_standard_snapmaker_j1_0_4_nozzle.json"
   },
   {
    "name": "0.20 Strength @Snapmaker J1 (0.4 nozzle)",
    "label": "0.20 Strength",
    "layer_height": "0.2",
    "infill": "25%",
-   "file": "slicer_profiles/_processes/Snapmaker/0_20_strength_snapmaker_j1_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Snapmaker/0_20_strength_snapmaker_j1_0_4_nozzle.json"
   },
   {
    "name": "0.24 Draft @Snapmaker J1 (0.4 nozzle)",
    "label": "0.24 Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Snapmaker/0_24_draft_snapmaker_j1_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Snapmaker/0_24_draft_snapmaker_j1_0_4_nozzle.json"
   },
   {
    "name": "0.25 Benchy @Snapmaker J1 (0.4 nozzle)",
    "label": "0.25 Benchy",
    "layer_height": "0.25",
    "infill": "10%",
-   "file": "slicer_profiles/_processes/Snapmaker/0_25_benchy_snapmaker_j1_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Snapmaker/0_25_benchy_snapmaker_j1_0_4_nozzle.json"
   },
   {
    "name": "0.28 Extra Draft @Snapmaker J1 (0.4 nozzle)",
    "label": "0.28 Extra Draft",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Snapmaker/0_28_extra_draft_snapmaker_j1_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Snapmaker/0_28_extra_draft_snapmaker_j1_0_4_nozzle.json"
   }
  ]
 }

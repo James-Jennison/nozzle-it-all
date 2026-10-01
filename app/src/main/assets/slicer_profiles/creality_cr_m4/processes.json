@@ -6,14 +6,14 @@
    "label": "0.10mm HighDetail",
    "layer_height": "0.1",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Creality/0_10mm_highdetail_creality_cr_m4.json"
+   "file": "slicer_profiles/shared_processes/Creality/0_10mm_highdetail_creality_cr_m4.json"
   },
   {
    "name": "0.15mm Detail @Creality CR-M4",
    "label": "0.15mm Detail",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Creality/0_15mm_detail_creality_cr_m4.json"
+   "file": "slicer_profiles/shared_processes/Creality/0_15mm_detail_creality_cr_m4.json"
   },
   {
    "name": "0.20mm Standard @Creality CR-M4",

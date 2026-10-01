@@ -6,14 +6,14 @@
    "label": "0.12mm Standard",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Eryone/0_12mm_standard_thinker_x400.json"
+   "file": "slicer_profiles/shared_processes/Eryone/0_12mm_standard_thinker_x400.json"
   },
   {
    "name": "0.16mm Standard @Thinker X400",
    "label": "0.16mm Standard",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Eryone/0_16mm_standard_thinker_x400.json"
+   "file": "slicer_profiles/shared_processes/Eryone/0_16mm_standard_thinker_x400.json"
   },
   {
    "name": "0.20mm Standard @Thinker X400",
@@ -27,7 +27,7 @@
    "label": "0.24mm Standard",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Eryone/0_24mm_standard_thinker_x400.json"
+   "file": "slicer_profiles/shared_processes/Eryone/0_24mm_standard_thinker_x400.json"
   }
  ]
 }

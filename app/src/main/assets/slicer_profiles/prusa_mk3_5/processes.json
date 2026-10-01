@@ -6,42 +6,42 @@
    "label": "0.10mm Speed",
    "layer_height": "0.10",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_10mm_speed_mk3_5.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_10mm_speed_mk3_5.json"
   },
   {
    "name": "0.15mm High Flow @MK3.5",
    "label": "0.15mm High Flow",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_15mm_high_flow_mk3_5.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_high_flow_mk3_5.json"
   },
   {
    "name": "0.15mm Speed @MK3.5",
    "label": "0.15mm Speed",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_15mm_speed_mk3_5.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_speed_mk3_5.json"
   },
   {
    "name": "0.15mm Standard @MK3.5",
    "label": "0.15mm Standard",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_15mm_standard_mk3_5.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_15mm_standard_mk3_5.json"
   },
   {
    "name": "0.20mm High Flow @MK3.5",
    "label": "0.20mm High Flow",
    "layer_height": "0.20",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_20mm_high_flow_mk3_5.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_high_flow_mk3_5.json"
   },
   {
    "name": "0.20mm Speed @MK3.5",
    "label": "0.20mm Speed",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Prusa/0_20mm_speed_mk3_5.json"
+   "file": "slicer_profiles/shared_processes/Prusa/0_20mm_speed_mk3_5.json"
   },
   {
    "name": "0.20mm Standard @MK3.5",

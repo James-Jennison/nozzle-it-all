@@ -6,21 +6,21 @@
    "label": "0.10mm HueForge",
    "layer_height": "0.1",
    "infill": "0%",
-   "file": "slicer_profiles/_processes/LH/0_10mm_hueforge_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_10mm_hueforge_lh_stinger.json"
   },
   {
    "name": "0.14mm Detail @LH Stinger",
    "label": "0.14mm Detail",
    "layer_height": "0.14",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/LH/0_14mm_detail_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_14mm_detail_lh_stinger.json"
   },
   {
    "name": "0.14mm Detail Strength @LH Stinger",
    "label": "0.14mm Detail Strength",
    "layer_height": "0.14",
    "infill": "40%",
-   "file": "slicer_profiles/_processes/LH/0_14mm_detail_strength_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_14mm_detail_strength_lh_stinger.json"
   },
   {
    "name": "0.20mm Daily @LH Stinger",
@@ -34,49 +34,49 @@
    "label": "0.20mm PETG",
    "layer_height": "0.2",
    "infill": "20%",
-   "file": "slicer_profiles/_processes/LH/0_20mm_petg_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_20mm_petg_lh_stinger.json"
   },
   {
    "name": "0.20mm Quiet @LH Stinger",
    "label": "0.20mm Quiet",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/LH/0_20mm_quiet_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_20mm_quiet_lh_stinger.json"
   },
   {
    "name": "0.20mm Solid @LH Stinger",
    "label": "0.20mm Solid",
    "layer_height": "0.2",
    "infill": "98%",
-   "file": "slicer_profiles/_processes/LH/0_20mm_solid_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_20mm_solid_lh_stinger.json"
   },
   {
    "name": "0.20mm Speed @LH Stinger",
    "label": "0.20mm Speed",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/LH/0_20mm_speed_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_20mm_speed_lh_stinger.json"
   },
   {
    "name": "0.20mm Strength @LH Stinger",
    "label": "0.20mm Strength",
    "layer_height": "0.2",
    "infill": "40%",
-   "file": "slicer_profiles/_processes/LH/0_20mm_strength_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_20mm_strength_lh_stinger.json"
   },
   {
    "name": "0.20mm TPU @LH Stinger",
    "label": "0.20mm TPU",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/LH/0_20mm_tpu_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_20mm_tpu_lh_stinger.json"
   },
   {
    "name": "0.25mm Vase Mode @LH Stinger",
    "label": "0.25mm Vase Mode",
    "layer_height": "0.25",
    "infill": "0%",
-   "file": "slicer_profiles/_processes/LH/0_25mm_vase_mode_lh_stinger.json"
+   "file": "slicer_profiles/shared_processes/LH/0_25mm_vase_mode_lh_stinger.json"
   }
  ]
 }

@@ -6,7 +6,7 @@
    "label": "0.15mm Optimal",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Anycubic/0_15mm_optimal_anycubic_vyper.json"
+   "file": "slicer_profiles/shared_processes/Anycubic/0_15mm_optimal_anycubic_vyper.json"
   },
   {
    "name": "0.20mm Standard @Anycubic Vyper",
@@ -20,7 +20,7 @@
    "label": "0.30mm Draft",
    "layer_height": "0.3",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Anycubic/0_30mm_draft_anycubic_vyper.json"
+   "file": "slicer_profiles/shared_processes/Anycubic/0_30mm_draft_anycubic_vyper.json"
   }
  ]
 }

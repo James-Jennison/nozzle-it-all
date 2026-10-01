@@ -6,7 +6,7 @@
    "label": "0.18mm Optimal",
    "layer_height": "0.18",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Sovol/0_18mm_optimal_sovol_sv06plus.json"
+   "file": "slicer_profiles/shared_processes/Sovol/0_18mm_optimal_sovol_sv06plus.json"
   },
   {
    "name": "0.20mm Standard @Sovol SV06Plus",

@@ -6,14 +6,14 @@
    "label": "0.08mm Extra Fine",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Creality/0_08mm_extra_fine_creality_sermoon_d3_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Creality/0_08mm_extra_fine_creality_sermoon_d3_0_4_nozzle.json"
   },
   {
    "name": "0.16mm Optimal @Creality Sermoon D3 0.4 nozzle",
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Creality/0_16mm_optimal_creality_sermoon_d3_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Creality/0_16mm_optimal_creality_sermoon_d3_0_4_nozzle.json"
   },
   {
    "name": "0.20mm Standard @Creality Sermoon D3 0.4 nozzle",

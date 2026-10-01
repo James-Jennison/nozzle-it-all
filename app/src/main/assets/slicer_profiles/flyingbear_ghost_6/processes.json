@@ -6,14 +6,14 @@
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/FlyingBear/0_12mm_fine_flyingbear_ghost_6_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/FlyingBear/0_12mm_fine_flyingbear_ghost_6_0_4_nozzle.json"
   },
   {
    "name": "0.16mm Optimal @FlyingBear Ghost 6 0.4 nozzle",
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/FlyingBear/0_16mm_optimal_flyingbear_ghost_6_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/FlyingBear/0_16mm_optimal_flyingbear_ghost_6_0_4_nozzle.json"
   },
   {
    "name": "0.20mm Standard @FlyingBear Ghost 6 0.4 nozzle",
@@ -27,7 +27,7 @@
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/FlyingBear/0_24mm_draft_flyingbear_ghost_6_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/FlyingBear/0_24mm_draft_flyingbear_ghost_6_0_4_nozzle.json"
   }
  ]
 }

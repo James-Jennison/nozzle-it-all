@@ -6,35 +6,35 @@
    "label": "0.08mm Extra Fine",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_08mm_extra_fine_x_max_4.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_08mm_extra_fine_x_max_4.json"
   },
   {
    "name": "0.12mm Fine @X-Max 4",
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_12mm_fine_x_max_4.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_12mm_fine_x_max_4.json"
   },
   {
    "name": "0.16mm Balanced Quality @X-Max 4",
    "label": "0.16mm Balanced Quality",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_16mm_balanced_quality_x_max_4.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_16mm_balanced_quality_x_max_4.json"
   },
   {
    "name": "0.16mm Standard @X-Max 4",
    "label": "0.16mm Standard",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_16mm_standard_x_max_4.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_16mm_standard_x_max_4.json"
   },
   {
    "name": "0.20mm Balanced Strength @X-Max 4",
    "label": "0.20mm Balanced Strength",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_20mm_balanced_strength_x_max_4.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_20mm_balanced_strength_x_max_4.json"
   },
   {
    "name": "0.20mm Standard @X-Max 4",
@@ -48,7 +48,7 @@
    "label": "0.24mm Standard",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Qidi/0_24mm_standard_x_max_4.json"
+   "file": "slicer_profiles/shared_processes/Qidi/0_24mm_standard_x_max_4.json"
   }
  ]
 }

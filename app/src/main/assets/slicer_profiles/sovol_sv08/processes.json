@@ -6,7 +6,7 @@
    "label": "0.18mm Optimal",
    "layer_height": "0.18",
    "infill": "10%",
-   "file": "slicer_profiles/_processes/Sovol/0_18mm_optimal_sovol_sv08.json"
+   "file": "slicer_profiles/shared_processes/Sovol/0_18mm_optimal_sovol_sv08.json"
   },
   {
    "name": "0.20mm Standard @Sovol SV08",
@@ -20,7 +20,7 @@
    "label": "0.20mm Standard @Sovol SV08 0.4 nozzle",
    "layer_height": "0.20",
    "infill": "10%",
-   "file": "slicer_profiles/_processes/Sovol/0_20mm_standard_sovol_sv08_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Sovol/0_20mm_standard_sovol_sv08_0_4_nozzle.json"
   }
  ]
 }

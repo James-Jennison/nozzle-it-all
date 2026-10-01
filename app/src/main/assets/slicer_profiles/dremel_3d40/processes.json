@@ -6,14 +6,14 @@
    "label": ".05mm Super Detail",
    "layer_height": "0.05",
    "infill": "20%",
-   "file": "slicer_profiles/_processes/Dremel/05mm_super_detail_dremel_3d40_0_4.json"
+   "file": "slicer_profiles/shared_processes/Dremel/05mm_super_detail_dremel_3d40_0_4.json"
   },
   {
    "name": ".10mm Detail @Dremel 3D40 0.4",
    "label": ".10mm Detail",
    "layer_height": "0.1",
    "infill": "20%",
-   "file": "slicer_profiles/_processes/Dremel/10mm_detail_dremel_3d40_0_4.json"
+   "file": "slicer_profiles/shared_processes/Dremel/10mm_detail_dremel_3d40_0_4.json"
   },
   {
    "name": ".20mm Standard @Dremel 3D40 0.4",
@@ -27,14 +27,14 @@
    "label": ".30mm Draft",
    "layer_height": "0.3",
    "infill": "20%",
-   "file": "slicer_profiles/_processes/Dremel/30mm_draft_dremel_3d40_0_4.json"
+   "file": "slicer_profiles/shared_processes/Dremel/30mm_draft_dremel_3d40_0_4.json"
   },
   {
    "name": ".34mm SuperDraft @Dremel 3D40 0.4",
    "label": ".34mm SuperDraft",
    "layer_height": "0.34",
    "infill": "10%",
-   "file": "slicer_profiles/_processes/Dremel/34mm_superdraft_dremel_3d40_0_4.json"
+   "file": "slicer_profiles/shared_processes/Dremel/34mm_superdraft_dremel_3d40_0_4.json"
   }
  ]
 }

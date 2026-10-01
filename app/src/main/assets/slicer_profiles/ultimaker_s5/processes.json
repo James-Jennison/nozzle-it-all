@@ -13,7 +13,7 @@
    "label": "0.2mm Fast",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/UltiMaker/0_2mm_fast_ultimaker_s5.json"
+   "file": "slicer_profiles/shared_processes/UltiMaker/0_2mm_fast_ultimaker_s5.json"
   }
  ]
 }

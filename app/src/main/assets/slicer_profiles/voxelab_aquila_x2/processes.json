@@ -6,7 +6,7 @@
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Voxelab/0_16mm_optimal_voxelab_aquilax2.json"
+   "file": "slicer_profiles/shared_processes/Voxelab/0_16mm_optimal_voxelab_aquilax2.json"
   },
   {
    "name": "0.20mm Standard @Voxelab AquilaX2",

@@ -6,7 +6,7 @@
    "label": "0.15mm Optimal",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Artillery/0_15mm_optimal_artillery_genius_pro.json"
+   "file": "slicer_profiles/shared_processes/Artillery/0_15mm_optimal_artillery_genius_pro.json"
   },
   {
    "name": "0.20mm Standard @Artillery Genius Pro",
@@ -20,7 +20,7 @@
    "label": "0.25mm Draft",
    "layer_height": "0.25",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Artillery/0_25mm_draft_artillery_genius_pro.json"
+   "file": "slicer_profiles/shared_processes/Artillery/0_25mm_draft_artillery_genius_pro.json"
   }
  ]
 }

@@ -6,7 +6,7 @@
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Flashforge/0_12mm_fine_flashforge_g3u_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Flashforge/0_12mm_fine_flashforge_g3u_0_4_nozzle.json"
   },
   {
    "name": "0.20mm Standard @Flashforge G3U 0.4 Nozzle",
@@ -20,7 +20,7 @@
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Flashforge/0_24mm_draft_flashforge_g3u_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/Flashforge/0_24mm_draft_flashforge_g3u_0_4_nozzle.json"
   }
  ]
 }

@@ -1210,3 +1210,167 @@ interchange).
   screen, not a placeholder.
 - **Touches:** shared printer-mixing formats (`:printer-api`, `:desktop`), Android Prepare/project editor UI,
   Android's Test Grid slicer hook, unit and instrumented test suites.
+
+## P-0041 — Per-extruder lookups miscompiled on arm64 (the U1's `M140 S32769`): engine hardening, NDK 29, heater-target check
+
+- **Upstream:** nozzle-engine `a3c56ef690cba3790fd9bad23143af5db4ecfe74` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
+  branch `fix/arm64-get-at-miscompile`): `f766512` (the colour-mixing pin) plus one commit. Nothing was imported from
+  outside this repository or the engine fork.
+- **Root cause:** on 2026-09-30 the Snapmaker U1 refused `M140 S32769` ("heater_bed: Requested temperature (32769.0)
+  out of range (0.0:100.0)") from the Test Grid's Full Spectrum swatch slice. The Android engine was built with NDK
+  27.1.12297006 (clang 18.0.2). Its loop vectorizer miscompiles GCode.cpp's bed-temperature reduction over
+  `print.extruders()` (unsigned ids) once the inlined `ConfigOptionVector::get_at` bounds check is involved: the vector
+  lanes test `(size & 1) & ~(id & 1)` instead of `id < size`, so even ids read past the end of a one-element
+  `bed_temperature_initial_layer` vector (a heap chunk header, 0x8001 = 32769) and in-range ids land on the first value.
+  The IR is target-independent and the source is not undefined behaviour: GCC (the x86-64 desktop engine and the golden
+  outputs), clang 21 (NDK 29) and Emscripten 3.1.74 / 6.0.10 (the web engine) compile the same source correctly, and
+  `-fno-vectorize` fixes NDK 27.1 and 27.2. Two sites in the shipped engine were affected (the bed-temperature and the
+  `min_vitrification_temperature` reductions in GCode.cpp). The mix-slice Test Grid test had passed earlier only
+  because its evidence keeps the G-code's SHA-256, not the file, and no check read the heater targets.
+- **Engine change:** `get_at()` indexes through `checked_index()`, whose empty asm statement makes the index opaque to
+  the vectorizer (plain C++ rewrites of the check still miscompile under NDK 27; the barrier was verified on the Razr
+  under NDK 27 -O3 and NDK 29, and compiles with GCC and Emscripten). The nullable `is_nil(idx)` overloads no longer
+  index past the end (a missing per-extruder value is the first one's; an empty vector is nil). A Catch2 case in
+  `tests/libslic3r/test_config.cpp` mirrors the GCode.cpp reductions. `tools/nozzle/build_android_engine.sh` builds
+  with NDK 29.0.14206865.
+- **App change:** `app/build.gradle.kts` `ndkVersion` 29.0.14206865 (clang 21), the same default in
+  `engine/fork/android/prepare_engine_root.sh` and `ci_engine_root.sh`, README updated. The Android dependency prefix
+  (Boost, CGAL, TBB, …) is still the NDK 27 build; libc++'s ABI is stable across NDK releases and the NDK 29 engine ran
+  on the device against it. Test Grid: the new `heater_targets` G-code check (every M140/M190/M104/M109 or
+  `SET_HEATER_TEMPERATURE` target within range, and every bed target one the filament profile declares) is in every
+  suite's `scan_gcode` step, so a slice like the U1's fails at the scan instead of at the printer; the simulated slicer
+  emits the profile's heater targets so the check is exercised by the JVM suites; `MANIFEST_SCHEMA.md` documents it.
+- **Test evidence:** gthost-build01, 2026-09-30/10-01 (local evening of 2026-09-30):
+  - Engine Catch2 `[Config]` (GCC x86-64): the new case passes (9 assertions) with the fix and fails 1 of 9 without it
+    (the `is_nil(7)` of a one-element nullable vector, the out-of-bounds read). The one other `[Config]` failure,
+    "DynamicPrintConfig serialization", fails identically on `f766512` and is unrelated (the fork's cereal round trip).
+  - Engine `slic3r_cli_test` built for arm64 from the fix with NDK 29 and, as a control, with NDK 27.1: both slice the
+    failing Test Grid request (`request-6.txt`, the U1 Full Spectrum swatch) on the Razr (ZP22235MHM) to `M140 S60`
+    where the shipped engine emitted `M140 S32769`. NDK 29 `libslic3rengine.so` SHA-256
+    `5455b5a865b533ae50dce6e8d792bc43aaa623fe0428c30fad1b05f1715128f0`.
+  - `./gradlew :test-grid:test` (RunnerTest 34, ManifestTest 14): all pass, including
+    `theHeaterTargetCheckCatchesABedTemperatureBeyondTheProfile`.
+  - nozzle-engine CI on the fix (pull request #11, run 36812452726): success at 2026-10-01T04:00Z: desktop engine, golden outputs on every bundled printer profile
+    (unchanged), engine contract, colour mixing through the Android bridge, Android engine (arm64-v8a, NDK 29) and the
+    WebAssembly engine all green; native engine SHA-256 `9cf32883dc03ea7d00a2cdd86e1b4592db1f026f257777d97c28ad515a034455`
+    (build record in `engine/fork/PROVENANCE.txt`).
+  - Testing build (`Nozzle It All - Testing`, `.testgrid`) rebuilt on gthost with this pin and NDK 29: `application-label` "Nozzle It All - Testing",
+    `com.nozzleitall.app.testgrid`, `libslic3rengine.so` SHA-256 `493123b57b59b560c084910fda2a1686e5948a5e73503b977c94f38e71c6521b`
+    (clang 21.0.0 build). The first install (main + this fix) crashed at launch with Room's "A migration from 9 to 8 was
+    required but not found": the owner's Testing app had been built from the color-reference branch (PR #54/#55, Room
+    9), so the Testing app was rebuilt from `integration/color-reference-ndk29` (that branch with this fix merged in,
+    `8d88a9c`, pushed, not for merging) and installed over it with `adb install -r` on 2026-09-30 at 21:45 local:
+    launches, keeps the saved printers (lava, CC1) and the Room 9 database. Test Mode on the Razr against the real U1
+    (lava, PAXX extended firmware, identified), suite "Snapmaker U1 on PAXX extended firmware", level 0: all four
+    slicing tests PASS on the phone's engine, their `scan_gcode` steps run `heater_targets` and record `bedTargets: [60]`
+    (single-material, multi-material, the 50/50 Full Spectrum swatch and the color reference tiles, 6 mixes with
+    process "0.10mm Color Mixing @Snapmaker U1 (0.4 nozzle)"). The sliced files on the phone say `M140 S60` / `M190 S60`
+    where the owner's print had got `M140 S32769`. The U1 print of the color reference tiles from this build is the
+    owner's to re-run.
+- **Known divergence:** none in slicing output: the fixed engine's x86-64 golden outputs are unchanged; on arm64 the
+  only change is that per-extruder values are now read from the right element.
+- **Touches:** engine build (NDK), slicing (per-extruder settings on Android), Test Grid checks and suites.
+
+## P-0042 — The G-code thumbnail draws a mixed filament in the mix's color
+
+- **Upstream:** nozzle-engine `490e5b5255ffb96b1d8740677e4a6196acc3cca5` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
+  branch `fix/arm64-get-at-miscompile`, pull request 11): `a3c56ef` (P-0041) plus one commit. Nothing was imported from
+  outside this repository or the engine fork; the colors come from code the engine already had (Snapmaker Orca's
+  `MixedFilamentManager`, `src/libslic3r/MixedFilament.cpp`, and PrusaSlicer 2.9.6's
+  `FullSpectrum::VirtualExtruder::effective_color`, `src/libslic3r/Feature/FullSpectrum/VirtualExtruder.cpp`).
+- **Root cause:** on 2026-10-01 the owner's Snapmaker U1 color reference print (six tiles, six Full Spectrum mixes)
+  showed a thumbnail with every tile in one color. The bridge's thumbnail renderer
+  (`nozzle/bridge/android/thumbnail_render.cpp`, shared by the Android, desktop and web bridges) looked a part's
+  filament id up in `filament_colour` alone. A mixed filament's id is past the physical filaments, so every Full
+  Spectrum mix fell back to filament 1's color, and a ColorMix virtual extruder was drawn as whichever physical
+  filament shared its id. (That the one color was white rather than the first toolhead's is the app's own bug, fixed
+  separately: every Moonraker printer was read as an empty Qidi Box, so the slice never got the U1's colors.)
+- **Engine change:** the renderer asks the engine for the color it shows for each mixed filament id, from the same
+  state `Print::apply` builds (PrintApply.cpp): the physical colors padded to the filament count, then the model's
+  virtual extruders (`effective_color`), else the mixed filament manager's auto-generated and custom rows
+  (`MixedFilament::display_color`, ids resolved by `mixed_filament_from_id`). Physical filaments are drawn as before.
+  The two includes are guarded with `__has_include`, so the bridge still builds against an engine without either
+  feature.
+- **App change:** the pin and the places that repeat it (`OpenSourceNotice.ENGINE_COMMIT`, the settings schema's
+  `commit`, the site's open-source page). No app code changed.
+- **Test evidence:** gthost-build01, 2026-10-01 (local early morning):
+  - Engine `tools/nozzle/colourmix_test.sh` gained two checks, using the new `tools/nozzle/thumbnail_color.py`
+    (standard library only: decodes the largest embedded thumbnail and tests its most common opaque pixel against a
+    base color under the renderer's shading). The virtual-extruder slice (red + green, 50/50) must be drawn in
+    `#535208`, what `--color-mix` answers for that mix; a `mixed_filament_definitions` slice on mixed filament 6
+    (blue + yellow) must print with T2 and T3 only and be drawn in `#3E9967`, the Color Mixing panel's color for that
+    row; neither may pass as filament 1's red. With the fix all six checks pass (worst channel error 0.6 and 0.5).
+    Against the previous build (`a3c56ef`'s CI binaries) both thumbnail checks fail: the virtual extruder was drawn
+    blue (filament 3) and the mix red (filament 1).
+  - The six tiles of the color reference, sliced by the desktop engine with the U1's real colors (`#00FFFF`,
+    `#D93B90`, `#F4C032`, `#9199A4`) and its six mixes: the previous build's thumbnail has one color (cyan,
+    filament 1), the fixed build's has six.
+  - nozzle-engine CI on the fix (pull request 11, run 36853299329): success at 2026-10-01T11:19Z: desktop engine,
+    golden outputs on every bundled printer profile (unchanged), engine contract, color mixing through the Android
+    bridge (with the two new thumbnail checks), Android engine (arm64-v8a, NDK 29) and the WebAssembly engine all
+    green; native engine SHA-256 `0d851ce739ef85127b4c2cb59d72dfe974e8ff7c604eadd26053546d94ef7e81` (build record in
+    `engine/fork/PROVENANCE.txt`).
+  - Testing build (`Nozzle It All - Testing`, `com.nozzleitall.app.testgrid`) rebuilt on gthost from
+    `integration/color-reference-ndk29` with this pin and the Qidi Box fix (pull request 59); the engine export's
+    `.nozzle-engine-commit` is `490e5b5`, `libslic3rengine.so` SHA-256
+    `73074b5e4cd3d031f26d5b40c9a7d0293ad286980c0f49d7aea1830a23c981d9`. Installed on the Razr 2023 (ZY22HXCVPM, a first
+    install) on 2026-10-01 at 04:11 local; it launches. The color reference slice has not been re-run on a phone
+    with this build yet (the U1 was mid-print).
+- **Known divergence:** none in slicing output (golden outputs unchanged); only the embedded thumbnail of a slice
+  that uses a mixed filament differs.
+- **Touches:** G-code thumbnails (Android, desktop, web), engine tests.
+
+## P-0043 — The prime tower is placed on the bed
+
+- **Upstream:** nozzle-engine `7734a0c557cb63594c913a271c4907e7b4c9bee1` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
+  branch `fix/arm64-get-at-miscompile`, pull request 11): `490e5b5` (P-0042) plus two commits, `4c182b1` (the tower's
+  place) and `7734a0c` (the flushing volumes, below). The placement is ported
+  from Snapmaker Orca's GUI, which the engine fork already carries but does not build headless:
+  `src/slic3r/GUI/PartPlate.cpp` (`WIPE_TOWER_DEFAULT_X_POS` / `_Y_POS` 13, 214.5; `I3_WIPE_TOWER_DEFAULT_X_POS` /
+  `_Y_POS` 0, 250; `PartPlateList::set_default_wipe_tower_pos_for_plate`; `PartPlate::estimate_wipe_tower_size`) and
+  `src/slic3r/GUI/GLCanvas3D.cpp` (`reload_scene`: the clamp into the plate, `WIPE_TOWER_MARGIN` plus the brim).
+- **Root cause:** on 2026-10-01 the Centauri Carbon's color reference slice (four filaments, the 0.10 mm Color Mixing
+  profile) failed Test Mode's `within_bed` check: "Extrusion reaches [11.798, 126.21, 145.29, 258.8], outside the
+  printable area [0.0, 0.0, 256.0, 256.0]". Every move past the edge was prime tower. libslic3r never decides where
+  the tower stands: `wipe_tower_x` / `wipe_tower_y` default to 15, 220, a stand-in upstream's GUI and CLI always
+  replace. Neither the app nor the bridge set a position, so a tower about 36 mm deep with a 3 mm brim ran 2.8 mm
+  past a 256 mm bed. The desktop engine reproduces it exactly, and the same four-filament slice also overran on a
+  Snapmaker U1 at 0.1 mm layers (Y 276.4 of 271), a Bambu X1 Carbon, an A1 mini and an Ender-3.
+- **Engine change:** `nozzle/bridge/android/slic3r_engine.cpp` (shared by the Android, desktop and web bridges), in
+  the two functions every slice ends in. Before slicing: upstream's default corner, size estimate and clamp; a
+  position the caller sets (anything but libslic3r's default) is the starting corner instead. After the tower is
+  generated: upstream's estimate takes 0.2 mm layers and the `prime_tower_width` rectangle, and its GUI then leaves
+  an overrunning tower for the user to drag back, so the bridge checks the tower's real first-layer footprint (brim
+  included, and the skirt around it where the tower is the outermost thing on the bed), moves it back inside by the
+  overrun and runs only the position-dependent steps again. A tower larger than the bed is an error ("The prime
+  tower is larger than the bed...") instead of G-code off the bed. A bed that is not a rectangle (a delta) uses the
+  square inside its circle.
+- **App change:** the pin and the places that repeat it (`OpenSourceNotice.ENGINE_COMMIT`, the settings schema's
+  `commit`, the site's open-source page). No app code changed.
+- **Test evidence:** gthost-build01, 2026-10-01 (local early morning), desktop engine built from the commit:
+  - The failing slice (CC1 pack, shared 0.10 mm Color Mixing profile, two tiles on two mixes of four filaments):
+    previous engine, tower Y 216.80..258.80 (the phone's numbers); fixed engine, Y 211.30..253.30.
+  - New engine test `tools/nozzle/prime_tower_test.sh` with `tools/nozzle/within_bed.py` (standard library only),
+    added to the engine's CI: Centauri Carbon and Snapmaker U1 with four filaments at 0.1 mm, an Ender-3 with two
+    filaments and a skirt, and a caller-set position that must be kept. Five checks pass on the fix; the first three
+    fail on the previous build.
+  - Also checked by hand: a Bambu X1 Carbon at 0.08 mm and an A1 mini at 0.1 mm (previous Y 274.2 of 256 and 265.7
+    of 180; fixed 252.8 and 178.8), a deliberately deep tower (moved after generation, ends at Y 255.00) and an
+    impossible one (prime volume 1800: the error above).
+  - Golden outputs on every bundled printer profile: all 384 match, so a slice without a prime tower is unchanged.
+    `tools/nozzle/colourmix_test.sh`: all six checks pass.
+- **Flushing volumes (`7734a0c`):** testing the placement with five filaments on the Prusa MK4S MMU3 pack crashed
+  the previous engine and hung the new one, inside the tower's priming code. Root cause: the engine sizes the tower's
+  tool-change tables from `flush_volumes_matrix` and indexes them by filament; the default matrix is 4 x 4, so five
+  or more filaments without their own matrix read past it, on any printer. The app always sends a matrix for its
+  slots (`MultiToolFilamentConfig`), so no app slice was affected. The bridge now grows the matrix before
+  `Print::apply` with upstream's resize (`PresetBundle::update_multi_material_filament_presets` in
+  `src/libslic3r/PresetBundle.cpp`: a missing pair gets the two filaments' `flush_volumes_vector` volumes); a matrix
+  that already covers the filaments is left alone. `prime_tower_test.sh` gained a five-filament Centauri Carbon case
+  and a six-filament MK4S MMU3 case, and a time limit on every slice: both crash the previous engine and pass on
+  this one, with a 6 x 6 matrix in the G-code. Golden outputs: all 384 match.
+- **Known divergence:** upstream's GUI leaves a generated tower that overruns the plate for the user to move; the
+  bridge moves it. A multi-filament slice's tower now starts at upstream's GUI corner (13, 214.5) instead of
+  libslic3r's (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a
+  warning upstream, which the bridge does not surface.
+- **Touches:** every multi-filament slice (Android, desktop, web), engine tests and CI.

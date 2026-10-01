@@ -202,6 +202,9 @@
               {
                 "check": "centered",
                 "toleranceMm": 5
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }
@@ -981,6 +984,9 @@
               },
               {
                 "check": "within_bed"
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }
@@ -1185,6 +1191,9 @@
                 "check": "alternates_tools",
                 "minLayers": 10,
                 "minFraction": 0.8
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }

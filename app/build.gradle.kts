@@ -20,7 +20,7 @@ android {
   applicationId = "com.nozzleitall.app"; minSdk = 28; targetSdk = 36; versionCode = (providers.gradleProperty("nozzleVersionCode").orNull ?: "1").toInt(); versionName = providers.gradleProperty("nozzleVersionName").orNull ?: "0.1.0"; testInstrumentationRunner = "net.jamesjennison.klippercompanion.NozzleTestRunner"
   // arm64-v8a only, matching every physical device this app has ever been verified on (Razr
   // 2023) and the only ABI the vendored slicing engine's dependencies were built for. NDK
-  // 27.1.12297006 (pinned below) matches what that engine was built and verified with.
+  // 29.0.14206865 (pinned below) matches what that engine was built and verified with.
   ndk { abiFilters += "arm64-v8a" }
   manifestPlaceholders["appLabel"] = "Nozzle It All"
   // Phase 10: optional MyMiniFactory developer credentials, supplied by the owner at build time (never committed).
@@ -112,7 +112,10 @@ android {
  // Pinned rather than "latest": the exact NDK this native build has been verified against
  // (see the oneTBB cross-compile proof in the WO-13 plan/commit history). A different NDK
  // silently changes native codegen - do not bump this without re-verifying the native build.
- ndkVersion = "27.1.12297006"
+ // 27.1.12297006 (clang 18) miscompiled the engine's per-extruder lookups on arm64 (the U1
+ // "heater_bed 32769" slice, 2026-09-30; docs/upstream/PROVENANCE.md P-0041); 29.0.14206865
+ // (clang 21) is clean and is what the engine's own Android build uses.
+ ndkVersion = "29.0.14206865"
  externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
  // Several of Netty's jars (pulled in transitively by hivemq-mqtt-client) each carry their own
  // copy of this JAR-signing-era index file; it's not needed at runtime, so drop it rather than

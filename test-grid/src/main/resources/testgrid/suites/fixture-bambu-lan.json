@@ -166,6 +166,9 @@
               {
                 "check": "centered",
                 "toleranceMm": 5
+              },
+              {
+                "check": "heater_targets"
               }
             ]
           }

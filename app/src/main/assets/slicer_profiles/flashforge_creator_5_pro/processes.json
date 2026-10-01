@@ -6,14 +6,14 @@
    "label": "0.12mm Standard",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Flashforge/0_12mm_standard_ff_c5.json"
+   "file": "slicer_profiles/shared_processes/Flashforge/0_12mm_standard_ff_c5.json"
   },
   {
    "name": "0.20mm Standard @FF C5",
    "label": "0.20mm Standard @FF C5",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Flashforge/0_20mm_standard_ff_c5.json"
+   "file": "slicer_profiles/shared_processes/Flashforge/0_20mm_standard_ff_c5.json"
   },
   {
    "name": "0.20mm Standard @Flashforge AD5M Pro 0.4 Nozzle",
@@ -27,7 +27,7 @@
    "label": "0.24mm Standard",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Flashforge/0_24mm_standard_ff_c5.json"
+   "file": "slicer_profiles/shared_processes/Flashforge/0_24mm_standard_ff_c5.json"
   }
  ]
 }

@@ -6,21 +6,21 @@
    "label": "0.08mm Extra Fine",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Geeetech/0_08mm_extra_fine_geeetech_m1.json"
+   "file": "slicer_profiles/shared_processes/Geeetech/0_08mm_extra_fine_geeetech_m1.json"
   },
   {
    "name": "0.10mm Fine @Geeetech M1",
    "label": "0.10mm Fine",
    "layer_height": "0.1",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Geeetech/0_10mm_fine_geeetech_m1.json"
+   "file": "slicer_profiles/shared_processes/Geeetech/0_10mm_fine_geeetech_m1.json"
   },
   {
    "name": "0.16mm Optimal @Geeetech M1",
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Geeetech/0_16mm_optimal_geeetech_m1.json"
+   "file": "slicer_profiles/shared_processes/Geeetech/0_16mm_optimal_geeetech_m1.json"
   },
   {
    "name": "0.20mm Standard @Geeetech M1",
@@ -34,7 +34,7 @@
    "label": "0.25mm Draft",
    "layer_height": "0.25",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Geeetech/0_25mm_draft_geeetech_m1.json"
+   "file": "slicer_profiles/shared_processes/Geeetech/0_25mm_draft_geeetech_m1.json"
   }
  ]
 }

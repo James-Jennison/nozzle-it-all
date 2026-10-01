@@ -6,14 +6,14 @@
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BIQU/0_12mm_fine_biqu_hurakan_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/BIQU/0_12mm_fine_biqu_hurakan_0_4_nozzle.json"
   },
   {
    "name": "0.15mm Optimal @BIQU Hurakan (0.4 nozzle)",
    "label": "0.15mm Optimal",
    "layer_height": "0.15",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BIQU/0_15mm_optimal_biqu_hurakan_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/BIQU/0_15mm_optimal_biqu_hurakan_0_4_nozzle.json"
   },
   {
    "name": "0.20mm Standard @BIQU Hurakan (0.4 nozzle)",
@@ -27,7 +27,7 @@
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BIQU/0_24mm_draft_biqu_hurakan_0_4_nozzle.json"
+   "file": "slicer_profiles/shared_processes/BIQU/0_24mm_draft_biqu_hurakan_0_4_nozzle.json"
   }
  ]
 }

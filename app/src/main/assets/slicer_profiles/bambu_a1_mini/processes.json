@@ -6,42 +6,42 @@
    "label": "0.08mm Extra Fine",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_08mm_extra_fine_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_08mm_extra_fine_bbl_a1m.json"
   },
   {
    "name": "0.08mm High Quality @BBL A1M",
    "label": "0.08mm High Quality",
    "layer_height": "0.08",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_08mm_high_quality_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_08mm_high_quality_bbl_a1m.json"
   },
   {
    "name": "0.12mm Fine @BBL A1M",
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_12mm_fine_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_12mm_fine_bbl_a1m.json"
   },
   {
    "name": "0.12mm High Quality @BBL A1M",
    "label": "0.12mm High Quality",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_12mm_high_quality_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_12mm_high_quality_bbl_a1m.json"
   },
   {
    "name": "0.16mm High Quality @BBL A1M",
    "label": "0.16mm High Quality",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_16mm_high_quality_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_16mm_high_quality_bbl_a1m.json"
   },
   {
    "name": "0.16mm Optimal @BBL A1M",
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_16mm_optimal_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_16mm_optimal_bbl_a1m.json"
   },
   {
    "name": "0.20mm Standard @BBL A1M",
@@ -55,21 +55,21 @@
    "label": "0.20mm Strength",
    "layer_height": "0.2",
    "infill": "25%",
-   "file": "slicer_profiles/_processes/BBL/0_20mm_strength_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_20mm_strength_bbl_a1m.json"
   },
   {
    "name": "0.24mm Draft @BBL A1M",
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_24mm_draft_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_24mm_draft_bbl_a1m.json"
   },
   {
    "name": "0.28mm Extra Draft @BBL A1M",
    "label": "0.28mm Extra Draft",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/BBL/0_28mm_extra_draft_bbl_a1m.json"
+   "file": "slicer_profiles/shared_processes/BBL/0_28mm_extra_draft_bbl_a1m.json"
   }
  ]
 }

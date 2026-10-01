@@ -6,14 +6,14 @@
    "label": "High Detail (0.12mm)",
    "layer_height": "0.12",
    "infill": "5%",
-   "file": "slicer_profiles/_processes/M3D/high_detail_0_12mm_m3d_enabler_d8500.json"
+   "file": "slicer_profiles/shared_processes/M3D/high_detail_0_12mm_m3d_enabler_d8500.json"
   },
   {
    "name": "0.15mm Standard @M3D Enabler D8500",
    "label": "0.15mm Standard",
    "layer_height": "0.15",
    "infill": "5%",
-   "file": "slicer_profiles/_processes/M3D/0_15mm_standard_m3d_enabler_d8500.json"
+   "file": "slicer_profiles/shared_processes/M3D/0_15mm_standard_m3d_enabler_d8500.json"
   },
   {
    "name": "0.20mm Standard @M3D Enabler D8500",
@@ -27,35 +27,35 @@
    "label": "Fuzzy Skin",
    "layer_height": "0.20",
    "infill": "5%",
-   "file": "slicer_profiles/_processes/M3D/fuzzy_skin_m3d_enabler_d8500.json"
+   "file": "slicer_profiles/shared_processes/M3D/fuzzy_skin_m3d_enabler_d8500.json"
   },
   {
    "name": "High Strength @M3D Enabler D8500",
    "label": "High Strength",
    "layer_height": "0.20",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/M3D/high_strength_m3d_enabler_d8500.json"
+   "file": "slicer_profiles/shared_processes/M3D/high_strength_m3d_enabler_d8500.json"
   },
   {
    "name": "Mesh Design @M3D Enabler D8500",
    "label": "Mesh Design",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/M3D/mesh_design_m3d_enabler_d8500.json"
+   "file": "slicer_profiles/shared_processes/M3D/mesh_design_m3d_enabler_d8500.json"
   },
   {
    "name": "Vase Mode @M3D Enabler D8500",
    "label": "Vase Mode",
    "layer_height": "0.20",
    "infill": "0%",
-   "file": "slicer_profiles/_processes/M3D/vase_mode_m3d_enabler_d8500.json"
+   "file": "slicer_profiles/shared_processes/M3D/vase_mode_m3d_enabler_d8500.json"
   },
   {
    "name": "Rapid Draft (0.28mm) @M3D Enabler D8500",
    "label": "Rapid Draft (0.28mm)",
    "layer_height": "0.32",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/M3D/rapid_draft_0_28mm_m3d_enabler_d8500.json"
+   "file": "slicer_profiles/shared_processes/M3D/rapid_draft_0_28mm_m3d_enabler_d8500.json"
   }
  ]
 }

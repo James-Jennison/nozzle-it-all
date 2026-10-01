@@ -1222,7 +1222,7 @@ interchange).
   writes `slicer_profiles/<pack>/processes.json`. A pack is offered its machine vendor's own instantiable process
   presets that nozzle-engine's `--compatible-presets` (nozzle-engine PR #10; OrcaSlicer's own
   `is_compatible_with_printer`) accepts for the pack's `machine.json`. Shared preset files are flattened once per
-  vendor under `slicer_profiles/_processes/<vendor>/` with the same `fix_bed_type` repair the vendor packs get. The
+  vendor under `slicer_profiles/shared_processes/<vendor>/` with the same `fix_bed_type` repair the vendor packs get. The
   COSMOS packs are checked as Orca's "Elegoo Centauri Carbon 0.4 nozzle". The four Prusa MMU3 packs, whose machines no
   Orca vendor ships, offer their own process only.
 - **Printer libraries:** the Snapmaker U1 and Elegoo CANVAS packs offer their printer library's presets
@@ -1235,6 +1235,12 @@ interchange).
   with the parameter changes of Snapmaker's U1 "0.10mm Color Mixing" recipe (listed in the file, with what was left
   out and why). Offered only on multi-filament packs (CANVAS, COSMOS AFC) and marked "(Nozzle It All)" in the picker.
   Not yet tested on a real printer.
+- **Packaging:** the shared folder was first named `_processes`. Android packaging leaves out asset folders whose
+  names start with "_", so none of its 972 files reached the APK and any non-default profile from it failed to open
+  (found 2026-10-01 by the Centauri Carbon color reference slice in Test Mode on a Razr 2023; the unit tests read the
+  source tree and passed). Renamed to `shared_processes`. `:app:verify<Variant>PackagedProfiles`, which every
+  `assemble<Variant>` runs, opens the built APK and fails the build when a file a pack's `processes.json` lists is
+  not in it.
 - **Test evidence:** `ProcessPresetsTest` (`:domain`), `BasicSlicingTest`/`SettingsCatalogTest` (`:app`),
   `ElegooCanvasTest` (`:desktop`, slices with the derived preset through the real engine).
 

@@ -6,14 +6,14 @@
    "label": "0.12mm Fine",
    "layer_height": "0.12",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Creality/0_12mm_fine_creality_cr10se_0_4.json"
+   "file": "slicer_profiles/shared_processes/Creality/0_12mm_fine_creality_cr10se_0_4.json"
   },
   {
    "name": "0.16mm Optimal @Creality CR10SE 0.4",
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Creality/0_16mm_optimal_creality_cr10se_0_4.json"
+   "file": "slicer_profiles/shared_processes/Creality/0_16mm_optimal_creality_cr10se_0_4.json"
   },
   {
    "name": "0.20mm Standard @Creality CR10SE 0.4",
@@ -27,7 +27,7 @@
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Creality/0_24mm_draft_creality_cr10se_0_4.json"
+   "file": "slicer_profiles/shared_processes/Creality/0_24mm_draft_creality_cr10se_0_4.json"
   }
  ]
 }

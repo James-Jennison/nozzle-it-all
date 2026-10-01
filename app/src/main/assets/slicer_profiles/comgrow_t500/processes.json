@@ -6,14 +6,14 @@
    "label": "0.16mm Optimal",
    "layer_height": "0.16",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Comgrow/0_16mm_optimal_comgrow_t500_0_4.json"
+   "file": "slicer_profiles/shared_processes/Comgrow/0_16mm_optimal_comgrow_t500_0_4.json"
   },
   {
    "name": "0.18mm Optimal @Comgrow T500",
    "label": "0.18mm Optimal",
    "layer_height": "0.18",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Comgrow/0_18mm_optimal_comgrow_t500.json"
+   "file": "slicer_profiles/shared_processes/Comgrow/0_18mm_optimal_comgrow_t500.json"
   },
   {
    "name": "0.20mm Standard @Comgrow T500",
@@ -27,21 +27,21 @@
    "label": "0.20mm Standard @Comgrow T500 0.4",
    "layer_height": "0.2",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Comgrow/0_20mm_standard_comgrow_t500_0_4.json"
+   "file": "slicer_profiles/shared_processes/Comgrow/0_20mm_standard_comgrow_t500_0_4.json"
   },
   {
    "name": "0.24mm Draft @Comgrow T500 0.4",
    "label": "0.24mm Draft",
    "layer_height": "0.24",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Comgrow/0_24mm_draft_comgrow_t500_0_4.json"
+   "file": "slicer_profiles/shared_processes/Comgrow/0_24mm_draft_comgrow_t500_0_4.json"
   },
   {
    "name": "0.28mm SuperDraft @Comgrow T500 0.4",
    "label": "0.28mm SuperDraft",
    "layer_height": "0.28",
    "infill": "15%",
-   "file": "slicer_profiles/_processes/Comgrow/0_28mm_superdraft_comgrow_t500_0_4.json"
+   "file": "slicer_profiles/shared_processes/Comgrow/0_28mm_superdraft_comgrow_t500_0_4.json"
   }
  ]
 }

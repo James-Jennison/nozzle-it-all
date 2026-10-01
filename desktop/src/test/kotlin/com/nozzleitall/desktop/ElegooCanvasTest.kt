@@ -34,6 +34,8 @@ class ElegooCanvasTest {
     }
 
     /** ElegooSlicer's CANVAS G-code: M6211 swap-and-purge then T<n> on every change, its start/end blocks, no M600. */
+    private fun perSlotOf(suffix: String) = listOf("elegoo_pla_$suffix", "elegoo_pla_matte_$suffix", "elegoo_pla_silk_$suffix", "elegoo_pla_basic_$suffix")
+
     private fun assertElegooCanvas(g: String, tag: String) {
         val start = Regex("^M6211 A1 L200 T([0-3]) Q\\d+ R\\d+ S\\d+\\s*\\nT([0-3])\\s*$", RegexOption.MULTILINE).find(g)
         assertNotNull("ElegooSlicer's start G-code loads the first filament with M6211", start)
@@ -84,11 +86,19 @@ class ElegooCanvasTest {
             assertEquals("Elegoo PLA @${tag.replace("CC", "ECC")}", lib.filaments[m04.defaultFilament]!!.name)
             assertEquals("0.20mm Standard", lib.processes[m04.defaultProcess]!!.label)
             assertEquals("each filament preset once", m04.filaments.size, m04.filaments.toSet().size)
+            // Elegoo ships no colour-mixing process; Nozzle's own (engine/profiles/derived) is offered, marked as ours.
+            val mixing = lib.processesFor(m04).single { it.name == "0.10mm Color Mixing @Elegoo $tag 0.4 nozzle" }
+            assertEquals("0.10mm Color Mixing (Nozzle It All)", mixing.displayLabel)
+            assertEquals("0.1", mixing.layerHeight)
+            assertTrue("Elegoo's own presets are unmarked", lib.processesFor(m04).filter { it != mixing }.all { it.madeBy == null })
+            val mixed = sliceFourColours(prof, lib.materialize(File(tmp, "mixing"), m04, mixing.id), tmp, perSlotOf(suffix), applyPreset = false)
+            assertElegooCanvas(mixed, tag)
+            assertTrue("sliced at 0.10 mm", Regex("^; layer_height = 0\\.1$", RegexOption.MULTILINE).containsMatchIn(mixed))
             assertNotNull("PLA+ is its own preset", lib.filamentsFor(m04).firstOrNull { it.name == "Elegoo PLA+ @${tag.replace("CC", "ECC")}" })
             val dir = lib.materialize(File(tmp, "cache"), m04, null)
             assertEquals("the pack is the family's 0.4 mm machine", org.json.JSONObject(File(ProfileCatalog.materialize(File(tmp, "cache"), id), "machine.json").readText()).similar(
                 org.json.JSONObject(File(dir, "machine.json").readText())), true)
-            val perSlot = listOf("elegoo_pla_$suffix", "elegoo_pla_matte_$suffix", "elegoo_pla_silk_$suffix", "elegoo_pla_basic_$suffix")
+            val perSlot = perSlotOf(suffix)
             perSlot.forEach { assertNotNull(it, lib.filaments[it]) }
             val g = sliceFourColours(prof, dir, tmp, perSlot, applyPreset = false)
             assertElegooCanvas(g, tag)

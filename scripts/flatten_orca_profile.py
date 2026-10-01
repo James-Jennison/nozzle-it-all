@@ -11,10 +11,11 @@ bundled pack is flattened offline (see app/src/main/assets/slicer_profiles/PROVE
 import argparse, json, os, sys
 
 
-def index(profiles_root, vendor, nested=False):
-    """Profiles by (kind, name). nested: also read kind sub-folders (ElegooSlicer keeps machine/ECC/, filament/ECC2/, ...)."""
+def index(profiles_root, vendor, nested=False, only=False):
+    """Profiles by (kind, name). nested: also read kind sub-folders (ElegooSlicer keeps machine/ECC/, filament/ECC2/, ...).
+    only: the vendor's own folder alone (the presets Orca loads for that vendor's printers), not the others' parents."""
     by_name = {}
-    roots = [os.path.join(profiles_root, vendor)] + [os.path.join(profiles_root, d) for d in sorted(os.listdir(profiles_root)) if d != vendor]
+    roots = [os.path.join(profiles_root, vendor)] + ([] if only else [os.path.join(profiles_root, d) for d in sorted(os.listdir(profiles_root)) if d != vendor])
     for root in roots:
         if not os.path.isdir(root): continue
         for sub in ("machine", "process", "filament"):

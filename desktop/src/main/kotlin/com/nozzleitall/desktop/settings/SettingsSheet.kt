@@ -48,7 +48,7 @@ fun SettingsSheet(catalog: SettingsCatalog, profile: ProfileValues, p: PrepareSt
             // The printer's own process presets where it has a profile family (Snapmaker's for the U1), else Nozzle's
             // guided presets for printers bundled with a single profile.
             val processes = p.processes()
-            if (scope == Scope.PROCESS && processes.isNotEmpty()) DenseSelect("Process preset", processes.map { Choice(it.id, it.label) },
+            if (scope == Scope.PROCESS && processes.isNotEmpty()) DenseSelect("Process preset", processes.map { Choice(it.id, it.displayLabel) },
                 p.currentProcess()?.id ?: processes.first().id, Modifier.width(170.dp)) { v -> p.processId = v; p.changed() }
             else if (scope == Scope.PROCESS) DenseSelect("Quality preset", QualityPreset.entries.map { Choice(it.name, it.label + " · " + (it.overrides["layer_height"] ?: "") + " mm") }, p.preset.name, Modifier.width(150.dp)) { v ->
                 QualityPreset.entries.firstOrNull { it.name == v }?.let { p.preset = it; p.changed() }

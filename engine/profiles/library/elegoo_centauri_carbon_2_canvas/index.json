@@ -59,7 +59,8 @@
     "0_20mm_standard_elegoo_cc2_0_4_nozzle",
     "0_20mm_strength_elegoo_cc2_0_4_nozzle",
     "0_24mm_draft_elegoo_cc2_0_4_nozzle",
-    "0_28mm_extra_draft_elegoo_cc2_0_4_nozzle"
+    "0_28mm_extra_draft_elegoo_cc2_0_4_nozzle",
+    "0_10mm_color_mixing_elegoo_cc2_0_4_nozzle"
    ],
    "filaments": [
     "elegoo_abs_ecc2",
@@ -281,6 +282,13 @@
    "name": "0.28mm Extra Draft @Elegoo CC2 0.4 nozzle",
    "label": "0.28mm Extra Draft",
    "layer_height": "0.28"
+  },
+  {
+   "id": "0_10mm_color_mixing_elegoo_cc2_0_4_nozzle",
+   "name": "0.10mm Color Mixing @Elegoo CC2 0.4 nozzle",
+   "label": "0.10mm Color Mixing",
+   "layer_height": "0.1",
+   "made_by": "Nozzle It All"
   },
   {
    "id": "0_18mm_fine_elegoo_cc2_0_6_nozzle",

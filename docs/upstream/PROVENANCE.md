@@ -1211,7 +1211,7 @@ interchange).
 - **Touches:** shared printer-mixing formats (`:printer-api`, `:desktop`), Android Prepare/project editor UI,
   Android's Test Grid slicer hook, unit and instrumented test suites.
 
-## P-0040 — Per-extruder lookups miscompiled on arm64 (the U1's `M140 S32769`): engine hardening, NDK 29, heater-target check
+## P-0041 — Per-extruder lookups miscompiled on arm64 (the U1's `M140 S32769`): engine hardening, NDK 29, heater-target check
 
 - **Upstream:** nozzle-engine `a3c56ef690cba3790fd9bad23143af5db4ecfe74` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
   branch `fix/arm64-get-at-miscompile`): `f766512` (the colour-mixing pin) plus one commit. Nothing was imported from

@@ -113,7 +113,7 @@ android {
  // (see the oneTBB cross-compile proof in the WO-13 plan/commit history). A different NDK
  // silently changes native codegen - do not bump this without re-verifying the native build.
  // 27.1.12297006 (clang 18) miscompiled the engine's per-extruder lookups on arm64 (the U1
- // "heater_bed 32769" slice, 2026-09-30; docs/upstream/PROVENANCE.md P-0040); 29.0.14206865
+ // "heater_bed 32769" slice, 2026-09-30; docs/upstream/PROVENANCE.md P-0041); 29.0.14206865
  // (clang 21) is clean and is what the engine's own Android build uses.
  ndkVersion = "29.0.14206865"
  externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }

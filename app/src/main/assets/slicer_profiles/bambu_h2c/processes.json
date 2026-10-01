@@ -1,0 +1,54 @@
+{
+ "default": "0.20mm Standard @BBL H2C",
+ "presets": [
+  {
+   "name": "0.08mm High Quality @BBL H2C",
+   "label": "0.08mm High Quality",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_08mm_high_quality_bbl_h2c.json"
+  },
+  {
+   "name": "0.12mm High Quality @BBL H2C",
+   "label": "0.12mm High Quality",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_12mm_high_quality_bbl_h2c.json"
+  },
+  {
+   "name": "0.16mm High Quality @BBL H2C",
+   "label": "0.16mm High Quality",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_16mm_high_quality_bbl_h2c.json"
+  },
+  {
+   "name": "0.16mm Standard @BBL H2C",
+   "label": "0.16mm Standard",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_16mm_standard_bbl_h2c.json"
+  },
+  {
+   "name": "0.20mm High Quality @BBL H2C",
+   "label": "0.20mm High Quality",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_20mm_high_quality_bbl_h2c.json"
+  },
+  {
+   "name": "0.20mm Standard @BBL H2C",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/bambu_h2c/process.json"
+  },
+  {
+   "name": "0.24mm Standard @BBL H2C",
+   "label": "0.24mm Standard",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/BBL/0_24mm_standard_bbl_h2c.json"
+  }
+ ]
+}

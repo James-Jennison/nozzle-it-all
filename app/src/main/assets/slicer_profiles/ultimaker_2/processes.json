@@ -1,0 +1,26 @@
+{
+ "default": "0.18mm Standard @UltiMaker 2",
+ "presets": [
+  {
+   "name": "0.12mm Fine @UltiMaker 2",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/UltiMaker/0_12mm_fine_ultimaker_2.json"
+  },
+  {
+   "name": "0.18mm Standard @UltiMaker 2",
+   "label": "0.18mm Standard",
+   "layer_height": "0.18",
+   "infill": "20%",
+   "file": "slicer_profiles/ultimaker_2/process.json"
+  },
+  {
+   "name": "0.25mm Draft @UltiMaker 2",
+   "label": "0.25mm Draft",
+   "layer_height": "0.25",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/UltiMaker/0_25mm_draft_ultimaker_2.json"
+  }
+ ]
+}

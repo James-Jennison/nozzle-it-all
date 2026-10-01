@@ -52,10 +52,20 @@ internal fun slicingProfilePack(model: SlicingPrinterModel, cosmosGeneration: Co
 internal fun bedShapeFor(model: SlicingPrinterModel, cosmosGeneration: CosmosProfileGeneration?, context: Context, custom: CustomMachine? = null): BedShape? =
     slicingProfilePack(model, cosmosGeneration, custom)?.readBedShape(context)
 
-internal fun SlicingProfilePack.materialize(context: Context): List<String> {
+// The print profiles (process presets) this pack offers - its processes.json (scripts/bundle_process_presets.py), or
+// just its own process.json for a pack without one.
+internal fun SlicingProfilePack.processPresets(context: Context): ProcessPresets {
+    runCatching { context.assets.open("$assetDir/processes.json").use { it.reader().readText() } }.getOrNull()?.let { return ProcessPresets.parse(it) }
+    val own = org.json.JSONObject(context.assets.open(processPath).use { it.reader().readText() })
+    fun first(key: String) = own.optJSONArray(key)?.optString(0) ?: own.optString(key)
+    return ProcessPresets.single(own.optString("name").ifBlank { "Default" }, processPath, first("layer_height").toDoubleOrNull(), ProcessPresets.percent(first("sparse_infill_density")))
+}
+
+// processAsset: the print profile's asset file (ProcessPreset.file), the pack's own process.json when null.
+internal fun SlicingProfilePack.materialize(context: Context, processAsset: String? = null): List<String> {
     val dir = File(context.cacheDir, "slicer-profiles-active").apply { mkdirs() }
-    return listOf(machinePath, processPath, filamentPath).map { assetPath ->
-        val out = File(dir, assetPath.substringAfterLast('/'))
+    return listOf(machinePath to "machine.json", (processAsset ?: processPath) to "process.json", filamentPath to "filament.json").map { (assetPath, name) ->
+        val out = File(dir, name)
         if (assetPath == machinePath && custom != null) out.writeText(machineText(context))
         else context.assets.open(assetPath).use { input -> out.outputStream().use { input.copyTo(it) } }
         out.absolutePath

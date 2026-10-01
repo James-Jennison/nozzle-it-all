@@ -1,0 +1,12 @@
+{
+ "default": "0.18mm Fine 0.4 nozzle @Meltingplot MBL",
+ "presets": [
+  {
+   "name": "0.18mm Fine 0.4 nozzle @Meltingplot MBL",
+   "label": "0.18mm Fine 0.4 nozzle",
+   "layer_height": "0.18",
+   "infill": "15%",
+   "file": "slicer_profiles/meltingplot_mbl_133/process.json"
+  }
+ ]
+}

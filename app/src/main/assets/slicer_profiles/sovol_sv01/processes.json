@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @Sovol SV01",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Sovol SV01",
+   "label": "0.20mm Standard",
+   "layer_height": "0.20",
+   "infill": "15%",
+   "file": "slicer_profiles/sovol_sv01/process.json"
+  }
+ ]
+}

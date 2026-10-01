@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @iQ TiQ8 P1 - ABS Natur Material4Print (0.4 Nozzle)",
+ "presets": [
+  {
+   "name": "0.20mm Standard @iQ TiQ8 P1 - ABS Natur Material4Print (0.4 Nozzle)",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "35%",
+   "file": "slicer_profiles/iq_t8/process.json"
+  }
+ ]
+}

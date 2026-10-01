@@ -1,0 +1,68 @@
+{
+ "default": "0.20mm Standard @Anker",
+ "presets": [
+  {
+   "name": "0.05mm Ultradetail @Anker",
+   "label": "0.05mm Ultradetail",
+   "layer_height": "0.05",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Anker/0_05mm_ultradetail_anker.json"
+  },
+  {
+   "name": "0.10mm Detail @Anker",
+   "label": "0.10mm Detail",
+   "layer_height": "0.10",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Anker/0_10mm_detail_anker.json"
+  },
+  {
+   "name": "0.15mm Fast @Anker",
+   "label": "0.15mm Fast",
+   "layer_height": "0.15",
+   "infill": "10%",
+   "file": "slicer_profiles/_processes/Anker/0_15mm_fast_anker.json"
+  },
+  {
+   "name": "0.15mm Optimal @Anker",
+   "label": "0.15mm Optimal",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Anker/0_15mm_optimal_anker.json"
+  },
+  {
+   "name": "0.20mm Fast @Anker",
+   "label": "0.20mm Fast",
+   "layer_height": "0.20",
+   "infill": "10%",
+   "file": "slicer_profiles/_processes/Anker/0_20mm_fast_anker.json"
+  },
+  {
+   "name": "0.20mm Standard @Anker",
+   "label": "0.20mm Standard",
+   "layer_height": "0.20",
+   "infill": "15%",
+   "file": "slicer_profiles/anker_m5c/process.json"
+  },
+  {
+   "name": "0.25mm Draft @Anker",
+   "label": "0.25mm Draft",
+   "layer_height": "0.25",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Anker/0_25mm_draft_anker.json"
+  },
+  {
+   "name": "0.25mm Fast @Anker",
+   "label": "0.25mm Fast",
+   "layer_height": "0.25",
+   "infill": "10%",
+   "file": "slicer_profiles/_processes/Anker/0_25mm_fast_anker.json"
+  },
+  {
+   "name": "0.30mm Superdraft @Anker",
+   "label": "0.30mm Superdraft",
+   "layer_height": "0.30",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Anker/0_30mm_superdraft_anker.json"
+  }
+ ]
+}

@@ -1,0 +1,47 @@
+{
+ "default": "0.10mm Fine @MM hj SK",
+ "presets": [
+  {
+   "name": "0.10mm Fine @MM hj SK",
+   "label": "0.10mm Fine",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/magicmaker_mm_hj_sk/process.json"
+  },
+  {
+   "name": "0.10mm Fine Fast @MM hj SK",
+   "label": "0.10mm Fine Fast",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/MagicMaker/0_10mm_fine_fast_mm_hj_sk.json"
+  },
+  {
+   "name": "0.20mm Standard @MM hj SK",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/MagicMaker/0_20mm_standard_mm_hj_sk.json"
+  },
+  {
+   "name": "0.20mm Standard Fast @MM hj SK",
+   "label": "0.20mm Standard Fast",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/MagicMaker/0_20mm_standard_fast_mm_hj_sk.json"
+  },
+  {
+   "name": "0.30mm Draft @MM hj SK",
+   "label": "0.30mm Draft",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/MagicMaker/0_30mm_draft_mm_hj_sk.json"
+  },
+  {
+   "name": "0.30mm Draft Fast @MM hj SK",
+   "label": "0.30mm Draft Fast",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/MagicMaker/0_30mm_draft_fast_mm_hj_sk.json"
+  }
+ ]
+}

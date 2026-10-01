@@ -39,6 +39,9 @@ data class Project(
     // same shape Desktop keeps in its 3MF sidecar (PrusaColorMixFormat.SIDECAR); Android has no 3MF
     // export path, so this is that sidecar's content kept in the project row instead of a file.
     val colorMixJson: String? = null,
+    // The print profile chosen in Prepare: the full OrcaSlicer process preset name (ProcessPresets, the printer pack's
+    // processes.json), null for the pack's default. Advanced overrides apply on top of it.
+    val processPreset: String? = null,
 )
 
 // One imported model within a Project's build plate. `transform` reuses the existing

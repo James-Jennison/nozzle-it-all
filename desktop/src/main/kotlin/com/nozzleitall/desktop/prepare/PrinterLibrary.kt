@@ -13,7 +13,10 @@ class PrinterLibrary private constructor(val profileId: String, val machines: Li
                                          val filaments: Map<String, FilamentLibrary.Entry>) {
     data class Machine(val id: String, val name: String, val nozzle: String, val defaultProcess: String?, val defaultFilament: String?,
                        val processes: List<String>, val filaments: List<String>)
-    data class Process(val id: String, val name: String, val label: String, val layerHeight: String)
+    /** [madeBy] is set for a preset Nozzle It All made where the vendor ships none (engine/profiles/derived). */
+    data class Process(val id: String, val name: String, val label: String, val layerHeight: String, val madeBy: String? = null) {
+        val displayLabel: String get() = madeBy?.let { "$label ($it)" } ?: label
+    }
 
     fun machineFor(nozzle: String?): Machine =
         machines.firstOrNull { it.nozzle == nozzle } ?: machines.firstOrNull { it.nozzle == "0.4" } ?: machines.first()
@@ -49,7 +52,8 @@ class PrinterLibrary private constructor(val profileId: String, val machines: Li
                     Machine(it.getString("id"), it.getString("name"), it.optString("nozzle"), it.optString("default_process").ifBlank { null },
                         it.optString("default_filament").ifBlank { null }, ids(it, "processes"), ids(it, "filaments")) } }
                 val processes = o.getJSONArray("processes").let { a -> (0 until a.length()).map { a.getJSONObject(it) }.associate {
-                    it.getString("id") to Process(it.getString("id"), it.getString("name"), it.getString("label"), it.optString("layer_height")) } }
+                    it.getString("id") to Process(it.getString("id"), it.getString("name"), it.getString("label"), it.optString("layer_height"),
+                        it.optString("made_by").ifBlank { null }) } }
                 val filaments = o.getJSONArray("filaments").let { a -> (0 until a.length()).map { a.getJSONObject(it) }.associate {
                     it.getString("id") to FilamentLibrary.Entry(it.getString("id"), it.getString("name"), it.optString("vendor"), it.optString("type"), it.optString("family")) } }
                 PrinterLibrary(profileId, machines, processes, filaments).takeIf { machines.isNotEmpty() }

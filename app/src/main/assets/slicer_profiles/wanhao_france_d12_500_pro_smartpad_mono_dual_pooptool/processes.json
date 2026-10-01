@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @Wanhao-D12-500 PoopTool",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Wanhao-D12-500 PoopTool",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "10%",
+   "file": "slicer_profiles/wanhao_france_d12_500_pro_smartpad_mono_dual_pooptool/process.json"
+  }
+ ]
+}

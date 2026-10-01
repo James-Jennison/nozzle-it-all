@@ -63,6 +63,13 @@ class BasicSlicingTest {
         assertTrue(meshNeedsSupport(geometry(0f, shallowTriangle), thresholdDeg = 20.0))
     }
 
+    @Test fun nullQualityAndInfillKeepThePrintProfilesOwnValues() {
+        val overrides = BasicSliceSettings(quality = null, infillPercent = null).toOverrides(false)
+        assertNull(overrides["layer_height"])
+        assertNull(overrides["sparse_infill_density"])
+        assertEquals("25%", BasicSliceSettings(quality = null, infillPercent = 25).toOverrides(false)["sparse_infill_density"])
+    }
+
     @Test fun toOverridesUsesTheRealQualityPresetLayerHeights() {
         assertEquals("0.28", BasicSliceSettings(quality = QualityPreset.DRAFT).toOverrides(false)["layer_height"])
         assertEquals("0.2", BasicSliceSettings(quality = QualityPreset.STANDARD).toOverrides(false)["layer_height"])

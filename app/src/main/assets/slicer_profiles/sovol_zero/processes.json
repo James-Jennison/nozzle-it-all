@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @Sovol Zero 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Sovol Zero 0.4 nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.20",
+   "infill": "10%",
+   "file": "slicer_profiles/sovol_zero/process.json"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "default": "0.20mm Standard @Flashforge AD5M Pro 0.4 Nozzle",
+ "presets": [
+  {
+   "name": "0.16mm Standard @FF G4",
+   "label": "0.16mm Standard",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Flashforge/0_16mm_standard_ff_g4.json"
+  },
+  {
+   "name": "0.20mm Standard @FF G4",
+   "label": "0.20mm Standard @FF G4",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Flashforge/0_20mm_standard_ff_g4.json"
+  },
+  {
+   "name": "0.20mm Standard @Flashforge AD5M Pro 0.4 Nozzle",
+   "label": "0.20mm Standard @Flashforge AD5M Pro 0.4 Nozzle",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/flashforge_guider4/process.json"
+  },
+  {
+   "name": "0.24mm Standard @FF G4",
+   "label": "0.24mm Standard",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Flashforge/0_24mm_standard_ff_g4.json"
+  }
+ ]
+}

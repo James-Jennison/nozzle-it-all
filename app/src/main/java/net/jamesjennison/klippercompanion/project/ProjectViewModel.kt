@@ -358,6 +358,16 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         _project.value = updated
     }
 
+    // The project's print profile (Project.processPreset): a preset name from the printer pack's ProcessPresets, null for
+    // the pack's default.
+    suspend fun setProcessPreset(name: String?) {
+        val current = _project.value ?: return
+        if (current.processPreset == name) return
+        val updated = current.copy(processPreset = name, modifiedAt = System.currentTimeMillis())
+        dao.updateProject(updated)
+        _project.value = updated
+    }
+
     // Colour mixing (0.2.0, WO-30): re-homes every object's toolSlotIndex after a mix/blend is
     // edited or removed - [transform] is the same old-slot-to-new-slot decision Desktop's
     // PrepareState.followRemap applies (see ColourMixPersistence.applyFullSpectrumRemap/

@@ -1,0 +1,33 @@
+{
+ "default": "0.2mm Standard @Creality Ender-5 Max 0.4 nozzle",
+ "presets": [
+  {
+   "name": "0.20mm Standard @Creality Ender-5 Max 0.4mm nozzle",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "10",
+   "file": "slicer_profiles/_processes/Creality/0_20mm_standard_creality_ender_5_max_0_4mm_nozzle.json"
+  },
+  {
+   "name": "0.20mm Ultrafast @Creality Ender-5 Max 0.4mm nozzle",
+   "label": "0.20mm Ultrafast",
+   "layer_height": "0.2",
+   "infill": "10",
+   "file": "slicer_profiles/_processes/Creality/0_20mm_ultrafast_creality_ender_5_max_0_4mm_nozzle.json"
+  },
+  {
+   "name": "0.2mm Standard @Creality Ender-5 Max 0.4 nozzle",
+   "label": "0.2mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/creality_ender_5_max/process.json"
+  },
+  {
+   "name": "0.2mm Ultrafast @Creality Ender-5 Max 0.4 nozzle",
+   "label": "0.2mm Ultrafast",
+   "layer_height": "0.2",
+   "infill": "10",
+   "file": "slicer_profiles/_processes/Creality/0_2mm_ultrafast_creality_ender_5_max_0_4_nozzle.json"
+  }
+ ]
+}

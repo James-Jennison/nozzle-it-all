@@ -1,0 +1,33 @@
+{
+ "default": "0.20mm Standard @Sovol SV06 ACE",
+ "presets": [
+  {
+   "name": "0.08mm High Quality @Sovol SV06 ACE",
+   "label": "0.08mm High Quality",
+   "layer_height": "0.08",
+   "infill": "10%",
+   "file": "slicer_profiles/_processes/Sovol/0_08mm_high_quality_sovol_sv06_ace.json"
+  },
+  {
+   "name": "0.12mm Quality @Sovol SV06 ACE",
+   "label": "0.12mm Quality",
+   "layer_height": "0.12",
+   "infill": "10%",
+   "file": "slicer_profiles/_processes/Sovol/0_12mm_quality_sovol_sv06_ace.json"
+  },
+  {
+   "name": "0.20mm Standard @Sovol SV06 ACE",
+   "label": "0.20mm Standard",
+   "layer_height": "0.20",
+   "infill": "10%",
+   "file": "slicer_profiles/sovol_sv06_ace/process.json"
+  },
+  {
+   "name": "0.28mm Fast @Sovol SV06 ACE",
+   "label": "0.28mm Fast",
+   "layer_height": "0.28",
+   "infill": "10%",
+   "file": "slicer_profiles/_processes/Sovol/0_28mm_fast_sovol_sv06_ace.json"
+  }
+ ]
+}

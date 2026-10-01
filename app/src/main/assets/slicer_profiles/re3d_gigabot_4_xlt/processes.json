@@ -1,0 +1,26 @@
+{
+ "default": "0.26 Standard",
+ "presets": [
+  {
+   "name": "0.2 Fine",
+   "label": "0.2 Fine",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/re3D/0_2_fine.json"
+  },
+  {
+   "name": "0.26 Standard",
+   "label": "0.26 Standard",
+   "layer_height": "0.26",
+   "infill": "15%",
+   "file": "slicer_profiles/re3d_gigabot_4_xlt/process.json"
+  },
+  {
+   "name": "0.32 Draft",
+   "label": "0.32 Draft",
+   "layer_height": "0.32",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/re3D/0_32_draft.json"
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+{
+ "default": "0.20mm Standard @Comgrow T500",
+ "presets": [
+  {
+   "name": "0.20mm Optimal @Comgrow T300 0.4 - official",
+   "label": "0.20mm Optimal",
+   "layer_height": "0.2",
+   "infill": "10%",
+   "file": "slicer_profiles/_processes/Comgrow/0_20mm_optimal_comgrow_t300_0_4_official.json"
+  },
+  {
+   "name": "0.20mm Standard @Comgrow T500",
+   "label": "0.20mm Standard",
+   "layer_height": "0.20",
+   "infill": "15%",
+   "file": "slicer_profiles/comgrow_t300/process.json"
+  }
+ ]
+}

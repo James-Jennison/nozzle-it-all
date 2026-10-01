@@ -1,0 +1,26 @@
+{
+ "default": "0.20mm Standard @Kingroon KP3S PRO S1",
+ "presets": [
+  {
+   "name": "0.08mm Standard @Kingroon KP3S PRO S1",
+   "label": "0.08mm Standard",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Kingroon/0_08mm_standard_kingroon_kp3s_pro_s1.json"
+  },
+  {
+   "name": "0.12mm Standard @Kingroon KP3S PRO S1",
+   "label": "0.12mm Standard",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Kingroon/0_12mm_standard_kingroon_kp3s_pro_s1.json"
+  },
+  {
+   "name": "0.20mm Standard @Kingroon KP3S PRO S1",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/kingroon_kp3s_pro_s1/process.json"
+  }
+ ]
+}

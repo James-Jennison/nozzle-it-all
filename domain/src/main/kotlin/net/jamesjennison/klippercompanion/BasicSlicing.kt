@@ -23,9 +23,11 @@ enum class QualityPreset(val label: String, val layerHeightMm: Double) {
 // overhangs. ON/OFF stay as explicit overrides for when the owner disagrees with that read.
 enum class SupportMode { OFF, AUTO, ON }
 
+// quality/infillPercent null: keep the print profile's own layer height/infill (Prepare's Print profile picker, where the
+// chosen process preset already sets both - ProcessPresets).
 data class BasicSliceSettings(
-    val quality: QualityPreset = QualityPreset.STANDARD,
-    val infillPercent: Int = DEFAULT_SLICE_CUSTOMIZATION.infillPercent,
+    val quality: QualityPreset? = QualityPreset.STANDARD,
+    val infillPercent: Int? = DEFAULT_SLICE_CUSTOMIZATION.infillPercent,
     val supportMode: SupportMode = SupportMode.AUTO,
     // Matches this app's own bundled profile packs' own default (every slicer_profiles/*/
     // process.json sets brim_width=5) - true is "keep the profile's own real default", not an
@@ -62,10 +64,9 @@ fun meshNeedsSupport(geometry: MeshGeometry, thresholdDeg: Double = 45.0): Boole
 // needsSupport: the real geometry-derived answer from meshNeedsSupport() - only consulted when
 // supportMode is AUTO; an explicit ON/OFF always wins over what the geometry says.
 fun BasicSliceSettings.toOverrides(needsSupport: Boolean): Map<String, String> {
-    val overrides = mutableMapOf(
-        "layer_height" to quality.layerHeightMm.let { v -> if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString() },
-        "sparse_infill_density" to "${infillPercent}%",
-    )
+    val overrides = mutableMapOf<String, String>()
+    quality?.let { overrides["layer_height"] = it.layerHeightMm.let { v -> if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString() } }
+    infillPercent?.let { overrides["sparse_infill_density"] = "$it%" }
     val supportsOn = when (supportMode) {
         SupportMode.ON -> true
         SupportMode.OFF -> false

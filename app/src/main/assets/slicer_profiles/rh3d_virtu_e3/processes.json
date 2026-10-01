@@ -1,0 +1,89 @@
+{
+ "default": "0.20mm Standard @VIRTU E3",
+ "presets": [
+  {
+   "name": "0.10mm Fast @VIRTU E3",
+   "label": "0.10mm Fast",
+   "layer_height": "0.1",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_10mm_fast_virtu_e3.json"
+  },
+  {
+   "name": "0.10mm Slow @VIRTU E3",
+   "label": "0.10mm Slow",
+   "layer_height": "0.1",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_10mm_slow_virtu_e3.json"
+  },
+  {
+   "name": "0.10mm Standard @VIRTU E3",
+   "label": "0.10mm Standard",
+   "layer_height": "0.1",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_10mm_standard_virtu_e3.json"
+  },
+  {
+   "name": "0.15mm Fast @VIRTU E3",
+   "label": "0.15mm Fast",
+   "layer_height": "0.15",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_15mm_fast_virtu_e3.json"
+  },
+  {
+   "name": "0.15mm Slow @VIRTU E3",
+   "label": "0.15mm Slow",
+   "layer_height": "0.15",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_15mm_slow_virtu_e3.json"
+  },
+  {
+   "name": "0.15mm Standard @VIRTU E3",
+   "label": "0.15mm Standard",
+   "layer_height": "0.15",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_15mm_standard_virtu_e3.json"
+  },
+  {
+   "name": "0.20mm Fast @VIRTU E3",
+   "label": "0.20mm Fast",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_20mm_fast_virtu_e3.json"
+  },
+  {
+   "name": "0.20mm Slow @VIRTU E3",
+   "label": "0.20mm Slow",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_20mm_slow_virtu_e3.json"
+  },
+  {
+   "name": "0.20mm Standard @VIRTU E3",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "20%",
+   "file": "slicer_profiles/rh3d_virtu_e3/process.json"
+  },
+  {
+   "name": "0.25mm Fast @VIRTU E3",
+   "label": "0.25mm Fast",
+   "layer_height": "0.25",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_25mm_fast_virtu_e3.json"
+  },
+  {
+   "name": "0.25mm Slow @VIRTU E3",
+   "label": "0.25mm Slow",
+   "layer_height": "0.25",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_25mm_slow_virtu_e3.json"
+  },
+  {
+   "name": "0.25mm Standard @VIRTU E3",
+   "label": "0.25mm Standard",
+   "layer_height": "0.25",
+   "infill": "20%",
+   "file": "slicer_profiles/_processes/RH3D/0_25mm_standard_virtu_e3.json"
+  }
+ ]
+}

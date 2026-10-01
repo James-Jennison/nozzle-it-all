@@ -1,0 +1,12 @@
+{
+ "default": "0.20mm Standard @MINI",
+ "presets": [
+  {
+   "name": "0.20mm Standard @MINI",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/prusa_mini/process.json"
+  }
+ ]
+}

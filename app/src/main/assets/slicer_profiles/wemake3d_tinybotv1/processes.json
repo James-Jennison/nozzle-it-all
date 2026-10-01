@@ -1,0 +1,40 @@
+{
+ "default": "0.2mm Standard @WEMAKE3D TinyBotV1 0.4mm nozzle",
+ "presets": [
+  {
+   "name": "0.1mm Extra Fine @WEMAKE3D TinyBotV1 0.4mm nozzle",
+   "label": "0.1mm Extra Fine",
+   "layer_height": "0.1",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/WEMAKE3D/0_1mm_extra_fine_wemake3d_tinybotv1_0_4mm_nozzle.json"
+  },
+  {
+   "name": "0.12mm Extra Fine @WEMAKE3D TinyBotV1 0.4mm nozzle",
+   "label": "0.12mm Extra Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/WEMAKE3D/0_12mm_extra_fine_wemake3d_tinybotv1_0_4mm_nozzle.json"
+  },
+  {
+   "name": "0.2mm Standard @WEMAKE3D TinyBotV1 0.4mm nozzle",
+   "label": "0.2mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/wemake3d_tinybotv1/process.json"
+  },
+  {
+   "name": "0.3mm Draft @WEMAKE3D TinyBotV1 0.4mm nozzle",
+   "label": "0.3mm Draft",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/WEMAKE3D/0_3mm_draft_wemake3d_tinybotv1_0_4mm_nozzle.json"
+  },
+  {
+   "name": "0.32mm Draft @WEMAKE3D TinyBotV1 0.4mm nozzle",
+   "label": "0.32mm Draft",
+   "layer_height": "0.32",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/WEMAKE3D/0_32mm_draft_wemake3d_tinybotv1_0_4mm_nozzle.json"
+  }
+ ]
+}

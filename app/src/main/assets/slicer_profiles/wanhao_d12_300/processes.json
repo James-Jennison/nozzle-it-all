@@ -1,0 +1,33 @@
+{
+ "default": "0.15mm Optimal @Wanhao D12-300",
+ "presets": [
+  {
+   "name": "0.12mm Fine @Wanhao D12-400",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Wanhao/0_12mm_fine_wanhao_d12_400.json"
+  },
+  {
+   "name": "0.15mm Optimal @Wanhao D12-300",
+   "label": "0.15mm Optimal",
+   "layer_height": "0.15",
+   "infill": "15%",
+   "file": "slicer_profiles/wanhao_d12_300/process.json"
+  },
+  {
+   "name": "0.20mm Standard @Wanhao D12-300",
+   "label": "0.20mm Standard",
+   "layer_height": "0.2",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Wanhao/0_20mm_standard_wanhao_d12_300.json"
+  },
+  {
+   "name": "0.24mm Draft @Wanhao D12-300",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Wanhao/0_24mm_draft_wanhao_d12_300.json"
+  }
+ ]
+}

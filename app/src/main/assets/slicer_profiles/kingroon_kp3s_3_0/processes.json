@@ -1,0 +1,12 @@
+{
+ "default": "0.30mm Standard @Kingroon KP3S 3.0",
+ "presets": [
+  {
+   "name": "0.30mm Standard @Kingroon KP3S 3.0",
+   "label": "0.30mm Standard",
+   "layer_height": "0.3",
+   "infill": "15%",
+   "file": "slicer_profiles/kingroon_kp3s_3_0/process.json"
+  }
+ ]
+}

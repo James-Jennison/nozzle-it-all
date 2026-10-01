@@ -1,0 +1,54 @@
+{
+ "default": "0.20mm Standard @Geeetech common",
+ "presets": [
+  {
+   "name": "0.08mm Extra Fine @Geeetech common",
+   "label": "0.08mm Extra Fine",
+   "layer_height": "0.08",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Geeetech/0_08mm_extra_fine_geeetech_common.json"
+  },
+  {
+   "name": "0.12mm Fine @Geeetech common",
+   "label": "0.12mm Fine",
+   "layer_height": "0.12",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Geeetech/0_12mm_fine_geeetech_common.json"
+  },
+  {
+   "name": "0.16mm Optimal @Geeetech common",
+   "label": "0.16mm Optimal",
+   "layer_height": "0.16",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Geeetech/0_16mm_optimal_geeetech_common.json"
+  },
+  {
+   "name": "0.20mm Standard @Geeetech common",
+   "label": "0.20mm Standard",
+   "layer_height": "0.20",
+   "infill": "15%",
+   "file": "slicer_profiles/geeetech_a30_pro/process.json"
+  },
+  {
+   "name": "0.20mm Strength @Geeetech common",
+   "label": "0.20mm Strength",
+   "layer_height": "0.20",
+   "infill": "25%",
+   "file": "slicer_profiles/_processes/Geeetech/0_20mm_strength_geeetech_common.json"
+  },
+  {
+   "name": "0.24mm Draft @Geeetech common",
+   "label": "0.24mm Draft",
+   "layer_height": "0.24",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Geeetech/0_24mm_draft_geeetech_common.json"
+  },
+  {
+   "name": "0.28mm Extra Draft @Geeetech common",
+   "label": "0.28mm Extra Draft",
+   "layer_height": "0.28",
+   "infill": "15%",
+   "file": "slicer_profiles/_processes/Geeetech/0_28mm_extra_draft_geeetech_common.json"
+  }
+ ]
+}

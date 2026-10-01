@@ -167,6 +167,25 @@ class FilamentLanesTest {
         assertNull("no Box", QidiBox.slots(JSONObject().put("save_variables", JSONObject()), null))
     }
 
+    // What a printer without a Box answers to the Box's part of the query, as a real Snapmaker U1 did (2026-10-01):
+    // Klipper returns every asked object, with null fields for the ones it doesn't have.
+    private fun withoutABox(status: JSONObject): JSONObject {
+        status.put("save_variables", JSONObject().put("variables", JSONObject.NULL))
+        QidiBox.QUERY_OBJECTS.keys.filter { it.startsWith("box_stepper ") }.forEach { status.put(it, JSONObject().put("runout_button", JSONObject.NULL)) }
+        return status.put("AFC", JSONObject().put("current_load", JSONObject.NULL)).put("mmu", JSONObject().put("num_gates", JSONObject.NULL))
+    }
+
+    @Test fun aPrinterWithoutABoxIsNotReadAsOne() {
+        assertFalse(QidiBox.present(withoutABox(JSONObject()))); assertNull(QidiBox.slots(withoutABox(JSONObject()), null))
+        val u1 = withoutABox(JSONObject().put("print_task_config", u1TaskConfig).put("toolhead", JSONObject().put("extruder", "extruder")))
+        FakeMoonraker(null, u1).use { fake ->
+            val s = Moonraker(fake.address).filamentSlots()
+            assertEquals("Snapmaker U1 toolheads", s.source)
+            assertEquals(listOf("#FF0000", null, "#0000FF", null), s.slots.map { it.colorHex })
+        }
+        FakeMoonraker(canvas, withoutABox(JSONObject())).use { fake -> assertEquals("Filament changer lanes (AFC)", Moonraker(fake.address).filamentSlots().source) }
+    }
+
     @Test fun moonrakerReadsAQidiBoxWithItsDictionary() =
         FakeMoonraker(null, qidiStatus(false), mapOf(QidiFilamentDictionary.CONFIG_FILE to qidiDictionary)).use { fake ->
             val s = Moonraker(fake.address).filamentSlots()

@@ -193,7 +193,7 @@ object StepLimits {
     val AXES = setOf("X", "Y", "Z")
     val MONITOR_CONDITIONS = setOf("printing", "complete", "idle", "paused", "progress_increases", "heater_reaches", "heater_below")
     val RESPONSES = setOf("yes_no", "pass_partial_fail", "number", "text", "choice")
-    val GCODE_CHECKS = setOf("non_empty", "no_stock_elegoo_commands", "requires_macro", "within_bed", "centered", "max_tool_index", "uses_tools", "alternates_tools")
+    val GCODE_CHECKS = setOf("non_empty", "no_stock_elegoo_commands", "requires_macro", "within_bed", "centered", "max_tool_index", "uses_tools", "alternates_tools", "color_mixes")
     val PRECONDITION_CHECKS = setOf("printer_idle", "printer_connected")
     /** What an observe step shows the operator alongside the question: what Nozzle itself sees, to compare against. */
     val OBSERVE_SHOWS = setOf("status", "slots", "camera")
@@ -253,11 +253,18 @@ object SuiteValidator {
         when (k) {
             StepKind.SLICE -> {
                 if (a.optString("model").isBlank()) p += "params.model is required"; if (a.optString("profile").isBlank()) p += "params.profile is required"
-                a.optJSONObject("colourMix")?.let { m ->
+                fun mixProblems(m: JSONObject, at: String) {
                     val x = m.optInt("a"); val y = m.optInt("b"); val pc = m.optInt("bPercent", 50)
-                    if (x !in 1..16 || y !in 1..16 || x == y) p += "params.colourMix.a and .b must be two different tools, 1 to 16"
-                    if (pc !in 1..99) p += "params.colourMix.bPercent must be 1 to 99"
+                    if (x !in 1..16 || y !in 1..16 || x == y) p += "$at.a and .b must be two different tools, 1 to 16"
+                    if (pc !in 1..99) p += "$at.bPercent must be 1 to 99"
                 }
+                a.optJSONObject("colourMix")?.let { mixProblems(it, "params.colourMix") }
+                a.optJSONArray("colourMixes")?.let { l ->
+                    if (a.has("colourMix")) p += "params.colourMix and params.colourMixes can't both be given"
+                    if (l.length() !in 1..16) p += "params.colourMixes must list 1 to 16 mixes"
+                    (0 until l.length()).forEach { i -> l.optJSONObject(i)?.let { mixProblems(it, "params.colourMixes[$i]") } ?: run { p += "params.colourMixes[$i] must be an object" } }
+                }
+                if (a.has("process") && a.optString("process").isBlank()) p += "params.process must name a print profile"
             }
             StepKind.VERIFY_MODEL -> if (a.optString("model").isBlank()) p += "params.model is required"
             StepKind.PROFILE_MATCH -> if (a.optString("profile").isBlank()) p += "params.profile is required"

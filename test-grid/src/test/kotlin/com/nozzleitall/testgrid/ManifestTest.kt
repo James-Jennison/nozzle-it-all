@@ -76,6 +76,25 @@ class ManifestTest {
         assertTrue(parseProblem(all).contains("bPercent must be 1 to 99"))
     }
 
+    @Test fun perPartColorMixesAreValidatedLikeOneMix() {
+        fun params(o: JSONObject) = (0 until o.getJSONArray("tests").length()).map { o.getJSONArray("tests").getJSONObject(it) }.first { it.getString("id") == "mix-slice" }
+            .getJSONArray("steps").let { s -> (0 until s.length()).map { s.getJSONObject(it) } }.first { it.getString("kind") == "slice" }.getJSONObject("params")
+        val mix = { a: Int, b: Int, p: Int -> JSONObject().put("a", a).put("b", b).put("bPercent", p) }
+        val both = minimal(); params(both).put("colourMixes", org.json.JSONArray().put(mix(1, 2, 50)))
+        assertTrue(parseProblem(both).contains("can't both be given"))
+        val bad = minimal(); params(bad).apply { remove("colourMix"); put("colourMixes", org.json.JSONArray().put(mix(1, 2, 50)).put(mix(3, 3, 50))) }
+        assertTrue(parseProblem(bad).contains("params.colourMixes[1].a and .b must be two different tools"))
+        val blank = minimal(); params(blank).put("process", " ")
+        assertTrue(parseProblem(blank).contains("params.process must name a print profile"))
+    }
+
+    @Test fun theU1AndCanvasSuitesHaveTheColorReferenceTests() {
+        listOf("paxx-u1", "cosmos-centauri-carbon").forEach { id ->
+            val s = SuiteCatalog.bundled(id)!!
+            assertTrue(id, s.tests.map { it.id }.containsAll(listOf("color-reference-slice", "color-reference-print")))
+        }
+    }
+
     @Test fun everyMultiToolSuiteHasTheColourMixingTests() {
         SuiteCatalog.bundled().filter { s -> s.tests.any { it.id == "multi-slice" } }.forEach { s ->
             assertTrue(s.id, s.tests.map { it.id }.containsAll(listOf("mix-slice", "mix-print")))

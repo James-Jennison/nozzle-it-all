@@ -1,7 +1,7 @@
 # Elegoo Centauri Carbon on OpenCentauri COSMOS
 
-Suite `cosmos-centauri-carbon` version 1.8.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `528c3d494dfaa0287f73362dfd952785f591288eec9ec5176ba81dc28f704fb0`.
+Suite `cosmos-centauri-carbon` version 1.9.0 (reference), for Elegoo Centauri Carbon on `cosmos` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `55de5a66655eabe8949265be0c797b38029e04529e4cb77cc72d06e292ed997b`.
 
 Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.
 
@@ -378,6 +378,62 @@ Expected:
 
 Evidence to collect:
 - photo: A long side of the finished swatch
+
+Cleanup (offered even if the test fails; each step needs approval):
+- **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
+
+Time limit: 300 min; if exceeded the test is recorded as fail.
+
+## 17. Slice the color reference tiles (2 color mixes) (`color-reference-slice`)
+
+Category: **Slicing** · Scope: Multi-material / tool changing · Level 1 · read-only discovery and telemetry · does not change printer state
+Needs detected hardware: canvas. Skipped otherwise.
+
+Slices the first 2 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 3 33% + tool 4 67%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.
+
+Steps:
+1. Nozzle checks the acceptance model `nozzle-color-reference-v1` against its published SHA-256.
+2. Nozzle slices `nozzle-color-reference-v1` with the bundled `elegoo_centauri_carbon_cosmos_afc` profile on this device. Each part prints as its own color mix, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others): part 1: tool 1 50% + tool 2 50%; part 2: tool 3 33% + tool 4 67%. Files: nozzle-color-reference-v1-1.stl (ae667084d07b…), nozzle-color-reference-v1-2.stl (1e2ff16ae7ab…), nozzle-color-reference-v1-3.stl (809a6f701b32…), nozzle-color-reference-v1-4.stl (5f9f862f28b8…), nozzle-color-reference-v1-5.stl (60984ec5a51b…), nozzle-color-reference-v1-6.stl (d3ee8e337fa6…).
+3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, color mixes, requires macro.
+
+Expected:
+- G-code is produced
+- Each tile prints with only its own two filaments
+- Each tile's filaments take turns in the mix's proportion, at most three layers of one in a row
+
+## 18. Print the color reference tiles (`color-reference-print`)
+
+Category: **Physical printing** · Scope: Multi-material / tool changing · Level 4 · physical printing · changes printer state · needs your approval per step
+Runs only if `color-reference-slice` passed.
+Needs detected hardware: canvas. Skipped otherwise.
+
+Prints the two color reference tiles sliced in this run, each its own mix. The CANVAS changes filament about 60 times and purges on each change, so the print takes about 1.5 to 2 hours and uses more filament than its size suggests.
+
+Preconditions:
+- [ ] The printer is idle: not printing, paused or heating for a job. (also checked automatically: printer_idle)
+- [ ] You are standing at the printer and can reach its power switch or emergency stop.
+- [ ] A clean, empty build plate is installed.
+- [ ] You can watch the printer for the whole print.
+- [ ] Four clearly different colors are loaded in lanes 1 to 4 (for example cyan, magenta, yellow and gray).
+
+Steps:
+1. **Approve:** Upload the color reference G-code: Upload the sliced G-code under a unique `nozzle-testgrid-…` name; Nozzle verifies it by SHA-256. Nothing prints.
+2. **Approve:** Start the color reference tiles: Start printing the uploaded file. The printer heats, moves and extrudes.
+3. Nozzle watches status until `printing`, up to 1200 s.
+4. Nozzle watches status until `complete`, up to 14400 s.
+5. **You answer:** Did the tiles finish without you having to intervene (no failed tool or filament change)? (yes/no)
+6. **You answer:** From about an arm's length, does each tile read as one even blended color, rather than stripes of two colors? (pass/partial/fail)
+7. **You answer:** Tile 2 is lanes 3 and 4 at 67% lane 4: does it lean clearly toward lane 4's color? (pass/partial/fail)
+8. **You attach:** Photo of the tiles' front faces side by side, in good daylight, in tile order (evidence `tiles`).
+
+Expected:
+- The print completes
+- Each tile reads as one even blended color from arm's length
+- Tile 2 leans toward lane 4's color
+
+Evidence to collect:
+- photo: The front faces of the finished tiles, in tile order
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).

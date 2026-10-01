@@ -1,7 +1,7 @@
 # Snapmaker U1 on PAXX extended firmware
 
-Suite `paxx-u1` version 1.8.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `055006dc53a0269f49f10ffb19e1700270f606bdcba438df81e36e371e69c04e`.
+Suite `paxx-u1` version 1.9.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `8dd37632f993238b77a871da5655a2c87d5c47cf1815146bdadc33dce47137f3`.
 
 Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.
 
@@ -369,6 +369,64 @@ Expected:
 
 Evidence to collect:
 - photo: A long side of the finished swatch
+
+Cleanup (offered even if the test fails; each step needs approval):
+- **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).
+- **Approve:** Delete earlier Test Grid files the printer no longer has loaded: Delete earlier `nozzle-testgrid-…` files that the printer no longer has loaded; Nozzle shows their names first. The file still loaded from the last print stays.
+
+Time limit: 300 min; if exceeded the test is recorded as fail.
+
+## 16. Slice the color reference tiles (6 color mixes) (`color-reference-slice`)
+
+Category: **Slicing** · Scope: Multi-material / tool changing · Level 0 · software-only validation · does not change printer state
+Needs detected hardware: multi_tool. Skipped otherwise.
+
+Slices the first 6 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 1 50% + tool 3 50%; tile 3: tool 2 50% + tool 3 50%; tile 4: tool 1 67% + tool 2 33%; tile 5: tool 1 33% + tool 2 67%; tile 6: tool 3 50% + tool 4 50%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. It uses the printer's own color-mixing print profile, 0.10mm Color Mixing @Snapmaker U1 (0.4 nozzle), with its 0.1 mm layers. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.
+
+Steps:
+1. Nozzle checks the acceptance model `nozzle-color-reference-v1` against its published SHA-256.
+2. Nozzle slices `nozzle-color-reference-v1` with the bundled `snapmaker_u1` profile on this device. Each part prints as its own color mix, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others): part 1: tool 1 50% + tool 2 50%; part 2: tool 1 50% + tool 3 50%; part 3: tool 2 50% + tool 3 50%; part 4: tool 1 67% + tool 2 33%; part 5: tool 1 33% + tool 2 67%; part 6: tool 3 50% + tool 4 50%. Print profile: `0.10mm Color Mixing @Snapmaker U1 (0.4 nozzle)`. Files: nozzle-color-reference-v1-1.stl (ae667084d07b…), nozzle-color-reference-v1-2.stl (1e2ff16ae7ab…), nozzle-color-reference-v1-3.stl (809a6f701b32…), nozzle-color-reference-v1-4.stl (5f9f862f28b8…), nozzle-color-reference-v1-5.stl (60984ec5a51b…), nozzle-color-reference-v1-6.stl (d3ee8e337fa6…).
+3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, color mixes, requires macro.
+
+Expected:
+- G-code is produced
+- Each tile prints with only its own two filaments
+- Each tile's filaments take turns in the mix's proportion, at most three layers of one in a row
+
+## 17. Print the color reference tiles (`color-reference-print`)
+
+Category: **Physical printing** · Scope: Multi-material / tool changing · Level 4 · physical printing · changes printer state · needs your approval per step
+Runs only if `color-reference-slice` passed.
+Needs detected hardware: multi_tool. Skipped otherwise.
+
+Prints the six color reference tiles sliced in this run, each its own mix, at 0.1 mm layers. The toolheads change many times on every layer, so the print takes far longer than its size suggests (about an hour or more).
+
+Preconditions:
+- [ ] The printer is idle: not printing, paused or heating for a job. (also checked automatically: printer_idle)
+- [ ] You are standing at the printer and can reach its power switch or emergency stop.
+- [ ] A clean, empty build plate is installed.
+- [ ] You can watch the printer for the whole print.
+- [ ] Snapmaker's color reference filaments are loaded: cyan in tool 1, magenta in tool 2, yellow in tool 3 and gray in tool 4.
+
+Steps:
+1. **Approve:** Upload the color reference G-code: Upload the sliced G-code under a unique `nozzle-testgrid-…` name; Nozzle verifies it by SHA-256. Nothing prints.
+2. **Approve:** Start the color reference tiles: Start printing the uploaded file. The printer heats, moves and extrudes.
+3. Nozzle watches status until `printing`, up to 1200 s.
+4. Nozzle watches status until `complete`, up to 14400 s.
+5. **You answer:** Did the tiles finish without you having to intervene (no failed tool or filament change)? (yes/no)
+6. **You answer:** From about an arm's length, does each tile read as one even blended color, rather than stripes of two colors? (pass/partial/fail)
+7. **You answer:** Compare tile 2 (cyan + yellow, 50/50) with color No. 54 on Snapmaker's Full Spectrum color reference chart: is it a close match? (pass/partial/fail)
+8. **You answer:** Tiles 4, 1 and 5 are cyan and magenta at 33%, 50% and 67% magenta: do they step evenly from bluer to pinker? (pass/partial/fail)
+9. **You attach:** Photo of the tiles' front faces side by side, in good daylight, in tile order (evidence `tiles`).
+
+Expected:
+- The print completes
+- Each tile reads as one even blended color from arm's length
+- Tile 2 matches Snapmaker's reference color No. 54
+- Tiles 4, 1 and 5 step from bluer to pinker
+
+Evidence to collect:
+- photo: The front faces of the finished tiles, in tile order
 
 Cleanup (offered even if the test fails; each step needs approval):
 - **Approve:** Delete the uploaded print file: Delete the file this run uploaded (only that file).

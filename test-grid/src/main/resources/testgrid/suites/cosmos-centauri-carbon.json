@@ -5,7 +5,7 @@
     0
   ],
   "id": "cosmos-centauri-carbon",
-  "suiteVersion": "1.8.0",
+  "suiteVersion": "1.9.0",
   "title": "Elegoo Centauri Carbon on OpenCentauri COSMOS",
   "description": "Reference suite for a Centauri Carbon converted to OpenCentauri COSMOS (Klipper/Moonraker). COSMOS is its own firmware target: nothing here is evidence for Elegoo's stock firmware or OpenCentauri-patched stock firmware. CANVAS (through AFC) is graded separately and only when detected.",
   "coverage": "reference",
@@ -1462,6 +1462,233 @@
       "uncertainResultProhibitsRetry": true,
       "dependsOn": [
         "mix-slice"
+      ]
+    },
+    {
+      "id": "color-reference-slice",
+      "title": "Slice the color reference tiles (2 color mixes)",
+      "category": "slicing",
+      "scope": "multi_material",
+      "safetyLevel": 1,
+      "description": "Slices the first 2 tiles of the color reference model, each tile as its own two-filament color mix (tile 1: tool 1 50% + tool 2 50%; tile 2: tool 3 33% + tool 4 67%), the way the project editor mixes colors: Full Spectrum on a Snapmaker U1, ColorMix on other printers with two or more tools or slots. In the G-code each tile must print with only its mix's two filaments, in the mix's proportion, never more than three layers of one filament in a row.",
+      "requiredHardware": [
+        "canvas"
+      ],
+      "preconditions": [],
+      "steps": [
+        {
+          "id": "model",
+          "kind": "verify_model",
+          "params": {
+            "model": "nozzle-color-reference-v1"
+          }
+        },
+        {
+          "id": "slice",
+          "kind": "slice",
+          "params": {
+            "model": "nozzle-color-reference-v1",
+            "profile": "elegoo_centauri_carbon_cosmos_afc",
+            "colourMixes": [
+              {
+                "a": 1,
+                "b": 2,
+                "bPercent": 50
+              },
+              {
+                "a": 3,
+                "b": 4,
+                "bPercent": 67
+              }
+            ]
+          }
+        },
+        {
+          "id": "scan",
+          "kind": "scan_gcode",
+          "title": "Check the G-code",
+          "params": {
+            "checks": [
+              {
+                "check": "non_empty"
+              },
+              {
+                "check": "no_stock_elegoo_commands"
+              },
+              {
+                "check": "uses_tools",
+                "count": 4
+              },
+              {
+                "check": "max_tool_index",
+                "max": 3
+              },
+              {
+                "check": "within_bed"
+              },
+              {
+                "check": "color_mixes",
+                "minLayers": 10,
+                "tolerancePercent": 12,
+                "maxRun": 3
+              },
+              {
+                "check": "requires_macro",
+                "macro": "PRINT_START"
+              }
+            ]
+          }
+        }
+      ],
+      "expectedObservations": [
+        "G-code is produced",
+        "Each tile prints with only its own two filaments",
+        "Each tile's filaments take turns in the mix's proportion, at most three layers of one in a row"
+      ],
+      "requiredEvidence": [],
+      "cleanup": [],
+      "requiresOperatorConfirmation": false,
+      "mutatesPrinterState": false,
+      "uncertainResultProhibitsRetry": false,
+      "dependsOn": []
+    },
+    {
+      "id": "color-reference-print",
+      "title": "Print the color reference tiles",
+      "category": "physical_print",
+      "scope": "multi_material",
+      "safetyLevel": 4,
+      "description": "Prints the two color reference tiles sliced in this run, each its own mix. The CANVAS changes filament about 60 times and purges on each change, so the print takes about 1.5 to 2 hours and uses more filament than its size suggests.",
+      "requiredHardware": [
+        "canvas"
+      ],
+      "preconditions": [
+        {
+          "id": "idle",
+          "text": "The printer is idle: not printing, paused or heating for a job.",
+          "check": "printer_idle"
+        },
+        {
+          "id": "present",
+          "text": "You are standing at the printer and can reach its power switch or emergency stop."
+        },
+        {
+          "id": "plate",
+          "text": "A clean, empty build plate is installed."
+        },
+        {
+          "id": "watch",
+          "text": "You can watch the printer for the whole print."
+        },
+        {
+          "id": "loaded",
+          "text": "Four clearly different colors are loaded in lanes 1 to 4 (for example cyan, magenta, yellow and gray)."
+        }
+      ],
+      "steps": [
+        {
+          "id": "upload",
+          "kind": "upload",
+          "title": "Upload the color reference G-code",
+          "params": {
+            "fromTest": "color-reference-slice"
+          }
+        },
+        {
+          "id": "start",
+          "kind": "start_print",
+          "title": "Start the color reference tiles",
+          "params": {
+            "fromTest": "color-reference-slice"
+          }
+        },
+        {
+          "id": "printing",
+          "kind": "monitor",
+          "params": {
+            "until": "printing",
+            "pollSeconds": 5
+          },
+          "timeoutSeconds": 1200
+        },
+        {
+          "id": "complete",
+          "kind": "monitor",
+          "params": {
+            "until": "complete",
+            "pollSeconds": 60
+          },
+          "timeoutSeconds": 14400
+        },
+        {
+          "id": "unattended",
+          "kind": "observe",
+          "params": {
+            "question": "Did the tiles finish without you having to intervene (no failed tool or filament change)?",
+            "response": "yes_no"
+          }
+        },
+        {
+          "id": "blend",
+          "kind": "observe",
+          "params": {
+            "question": "From about an arm's length, does each tile read as one even blended color, rather than stripes of two colors?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "steps",
+          "kind": "observe",
+          "params": {
+            "question": "Tile 2 is lanes 3 and 4 at 67% lane 4: does it lean clearly toward lane 4's color?",
+            "response": "pass_partial_fail"
+          }
+        },
+        {
+          "id": "photo",
+          "kind": "attach",
+          "params": {
+            "evidence": "tiles",
+            "prompt": "Photo of the tiles' front faces side by side, in good daylight, in tile order"
+          }
+        }
+      ],
+      "expectedObservations": [
+        "The print completes",
+        "Each tile reads as one even blended color from arm's length",
+        "Tile 2 leans toward lane 4's color"
+      ],
+      "requiredEvidence": [
+        {
+          "id": "tiles",
+          "kind": "photo",
+          "description": "The front faces of the finished tiles, in tile order"
+        }
+      ],
+      "timeout": {
+        "seconds": 18000,
+        "onTimeout": "fail"
+      },
+      "cleanup": [
+        {
+          "id": "cleanup-delete",
+          "kind": "delete_uploaded",
+          "title": "Delete the uploaded print file",
+          "params": {
+            "fromTest": "color-reference-slice"
+          }
+        },
+        {
+          "id": "cleanup-leftovers",
+          "kind": "delete_leftovers",
+          "title": "Delete earlier Test Grid files the printer no longer has loaded"
+        }
+      ],
+      "requiresOperatorConfirmation": true,
+      "mutatesPrinterState": true,
+      "uncertainResultProhibitsRetry": true,
+      "dependsOn": [
+        "color-reference-slice"
       ]
     }
   ]

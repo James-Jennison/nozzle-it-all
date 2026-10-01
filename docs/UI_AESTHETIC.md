@@ -1,4 +1,13 @@
-# Klipper Companion visual direction
+# Klipper Companion visual direction (historical)
+
+> **Historical document, superseded.** This was the 2026-09-06 visual direction for the
+> Android app when it was still a Klipper companion (teal accent, Dashboard/Control/Files/Printers).
+> The current, binding design brief for the whole product family (Desktop, Android, Web and the
+> website) is [docs/family/PRODUCT_FAMILY.md](family/PRODUCT_FAMILY.md): violet identity accent,
+> print orange for heat, charcoal and slate surfaces, one token file
+> (`design/tokens/nozzle.tokens.json`) and the glossary. Where this file and the brief differ,
+> the brief wins. Kept for the record of how the Android UI got here; do not use it for new work.
+
 
 Owner request: draw inspiration from SimplyPrint, Mobileraker, OctoApp, Obico and
 Printer Tools to establish an original aesthetic for our Android app.

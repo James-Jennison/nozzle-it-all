@@ -72,7 +72,8 @@ it changes for CANVAS:
   the cut, swap and purge (COSMOS maps lanes CANVAS_1-4 to T0-T3);
 - `machine_start_gcode`: `PRINT_START ... TOOL={initial_tool}`; `single_extruder_multi_material`,
   `purge_in_prime_tower 0`, `manual_filament_change 0`, `default_bed_type 4` (Textured PEI), `thumbnails 144x144/PNG`.
-The index lists it with `tools: 4` (CANVAS lanes), so Nozzle offers four filament slots and colour mixing.
+The index lists it with `tools: 4` (CANVAS lanes), so Nozzle offers four filament slots. It offers no color mixing on
+CANVAS (docs/upstream/PROVENANCE.md P-0044).
 Tool-to-colour mapping happens on the printer (Mainsail/Fluidd's mapping at print start, or AFC `SET_MAP`), as
 OpenCentauri documents; `T0` is always `T0` in the file. **Not yet printed on a real CANVAS.**
 

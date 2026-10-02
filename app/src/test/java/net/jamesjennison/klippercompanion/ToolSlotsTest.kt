@@ -152,6 +152,15 @@ class ToolSlotsTest {
         assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.PRUSA_LINK, 5))
         assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 2))
     }
+    // Owner rule 2026-10-01: no color mixing on CANVAS (four lanes into one nozzle), whichever firmware the pack is for.
+    @Test fun aCanvasProfileGetsNeitherMixingSystem() {
+        assertTrue(colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 4, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS).isEmpty())
+        assertTrue(colourMixFeaturesFor(PrinterKind.ELEGOO, 4, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_CANVAS).isEmpty())
+        assertTrue(colourMixFeaturesFor(PrinterKind.ELEGOO, 4, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS).isEmpty())
+        assertEquals("every CANVAS pack is covered", com.nozzleitall.printer.ext.ProfileFeatures.CANVAS_PROFILES,
+            SlicingPrinterModel.entries.filter { ElegooProfiles.filamentSlots(it) != null }.map { SlicingModelCatalog.info(it).assetDir }.toSet())
+        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 4, SlicingPrinterModel.GENERIC_KLIPPER))
+    }
     @Test fun aSingleToolTargetGetsNeitherMixingSystem() {
         assertTrue(colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 1).isEmpty())
         assertTrue(colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 1).isEmpty())

@@ -65,10 +65,11 @@ Snapmaker's reference filaments loaded (tool 1 cyan, 2 magenta, 3 yellow, 4 gray
 | 5 | cyan 33% + magenta 67% | `2afb6b240aaad04b09ee24f286fc41c806ac398f442aca1096d307ed29a7913f` |
 | 6 | yellow + gray 50/50 | `db4d7f1cacd0a1caea4748857c3c2d291b678d7e9461fbeeaa472ce5d6373638` |
 
-The U1 slices with its own "0.10mm Color Mixing" print profile (0.1 mm layers, about 40 per tile). The CANVAS suite
-slices only tiles 1 and 2 (lanes 1+2 at 50/50, lanes 3+4 at 67% lane 4), because every filament change on one nozzle also
-purges, with Nozzle It All's "0.10mm Color Mixing @Elegoo CC 0.4 nozzle" print profile. The `color_mixes` check reads each tile's own layers from the G-code's object labels
-and requires only its mix's two filaments, in its proportion, never more than three layers of one in a row.
+The U1 slices with its own "0.10mm Color Mixing" print profile (0.1 mm layers, about 40 per tile). The CANVAS suites
+have no color mixing tests: Nozzle It All offers no color mixing on CANVAS (owner decision 2026-10-01, PROVENANCE
+P-0044), where every mixed layer is a filament change through one nozzle, with a cut and a purge. The `color_mixes`
+check reads each tile's own layers from the G-code's object labels and requires only its mix's two filaments, in its
+proportion, never more than three layers of one in a row.
 
 The 20 mm test cube (`site-src/assets/test-cube-20mm.stl`) remains the quick smoke-test part; it is not a Test Grid
 acceptance model. The owner's clean U1 print of that cube on 2026-09-28 is prior history, not Test Grid evidence.

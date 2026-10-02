@@ -86,14 +86,13 @@ class ElegooCanvasTest {
             assertEquals("Elegoo PLA @${tag.replace("CC", "ECC")}", lib.filaments[m04.defaultFilament]!!.name)
             assertEquals("0.20mm Standard", lib.processes[m04.defaultProcess]!!.label)
             assertEquals("each filament preset once", m04.filaments.size, m04.filaments.toSet().size)
-            // Elegoo ships no colour-mixing process; Nozzle's own (engine/profiles/derived) is offered, marked as ours.
-            val mixing = lib.processesFor(m04).single { it.name == "0.10mm Color Mixing @Elegoo $tag 0.4 nozzle" }
-            assertEquals("0.10mm Color Mixing (Nozzle It All)", mixing.displayLabel)
-            assertEquals("0.1", mixing.layerHeight)
-            assertTrue("Elegoo's own presets are unmarked", lib.processesFor(m04).filter { it != mixing }.all { it.madeBy == null })
-            val mixed = sliceFourColours(prof, lib.materialize(File(tmp, "mixing"), m04, mixing.id), tmp, perSlotOf(suffix), applyPreset = false)
-            assertElegooCanvas(mixed, tag)
-            assertTrue("sliced at 0.10 mm", Regex("^; layer_height = 0\\.1$", RegexOption.MULTILINE).containsMatchIn(mixed))
+            // Elegoo ships no color mixing process and Nozzle adds none: no color mixing on CANVAS (P-0044).
+            assertTrue("no color mixing profile", lib.processesFor(m04).none { it.name.contains("Color Mixing", ignoreCase = true) })
+            assertTrue("only Elegoo's own presets", lib.processesFor(m04).all { it.madeBy == null })
+            val fine = lib.processesFor(m04).single { it.name == "0.12mm Fine @Elegoo $tag 0.4 nozzle" }
+            val sliced = sliceFourColours(prof, lib.materialize(File(tmp, "fine"), m04, fine.id), tmp, perSlotOf(suffix), applyPreset = false)
+            assertElegooCanvas(sliced, tag)
+            assertTrue("sliced at 0.12 mm", Regex("^; layer_height = 0\\.12$", RegexOption.MULTILINE).containsMatchIn(sliced))
             assertNotNull("PLA+ is its own preset", lib.filamentsFor(m04).firstOrNull { it.name == "Elegoo PLA+ @${tag.replace("CC", "ECC")}" })
             val dir = lib.materialize(File(tmp, "cache"), m04, null)
             assertEquals("the pack is the family's 0.4 mm machine", org.json.JSONObject(File(ProfileCatalog.materialize(File(tmp, "cache"), id), "machine.json").readText()).similar(

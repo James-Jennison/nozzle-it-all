@@ -1,7 +1,7 @@
 # Snapmaker U1 on PAXX extended firmware
 
 Suite `paxx-u1` version 1.9.0 (reference), for Snapmaker U1 on `paxx-extended` firmware
-through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `8dd37632f993238b77a871da5655a2c87d5c47cf1815146bdadc33dce47137f3`.
+through the `android-moonraker` adapter. Needs Nozzle It All 0.1.0 or newer. Suite digest `0719d2b42cffd41237fedae0b971c3b787825c3fbf461f61f29f820b16dc0b9c`.
 
 Reference suite for the Snapmaker U1 running PAXX extended firmware, reached over the LAN through Moonraker. No Snapmaker cloud or Flutter component is involved. A PAXX result is not evidence for stock U1 firmware.
 
@@ -69,7 +69,7 @@ Slices the standard acceptance model on this device with the bundled profile and
 Steps:
 1. Nozzle checks the acceptance model `nozzle-acceptance-v1` against its published SHA-256.
 2. Nozzle slices `nozzle-acceptance-v1` with the bundled `snapmaker_u1` profile on this device. Files: nozzle-acceptance-v1.stl (f91f4bad8515…).
-3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, requires macro, within bed, centered.
+3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, requires macro, within bed, centered, heater targets.
 
 Expected:
 - G-code is produced
@@ -277,7 +277,7 @@ Two-part model, one part per tool or lane.
 Steps:
 1. Nozzle checks the acceptance model `nozzle-acceptance-mm-v1` against its published SHA-256.
 2. Nozzle slices `nozzle-acceptance-mm-v1` with the bundled `snapmaker_u1` profile on this device. Files: nozzle-acceptance-mm-v1-a.stl (c1338f179a8b…), nozzle-acceptance-mm-v1-b.stl (324aa51655b0…).
-3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, requires macro.
+3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, requires macro, heater targets.
 
 Expected:
 - G-code selects two tools
@@ -330,7 +330,7 @@ Slices the colour swatch as a 50/50 mix of tool 1 and tool 2, the same way the p
 Steps:
 1. Nozzle checks the acceptance model `nozzle-colour-swatch-v1` against its published SHA-256.
 2. Nozzle slices `nozzle-colour-swatch-v1` with the bundled `snapmaker_u1` profile on this device. Every part prints as a 50/50 colour mix of tool 1 and tool 2, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others). Files: nozzle-colour-swatch-v1.stl (4e56f2cf2916…).
-3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, alternates tools, requires macro.
+3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, alternates tools, requires macro, heater targets.
 
 Expected:
 - G-code is produced
@@ -386,7 +386,7 @@ Slices the first 6 tiles of the color reference model, each tile as its own two-
 Steps:
 1. Nozzle checks the acceptance model `nozzle-color-reference-v1` against its published SHA-256.
 2. Nozzle slices `nozzle-color-reference-v1` with the bundled `snapmaker_u1` profile on this device. Each part prints as its own color mix, with the printer's own mixing system (Full Spectrum on a Snapmaker U1, ColorMix on others): part 1: tool 1 50% + tool 2 50%; part 2: tool 1 50% + tool 3 50%; part 3: tool 2 50% + tool 3 50%; part 4: tool 1 67% + tool 2 33%; part 5: tool 1 33% + tool 2 67%; part 6: tool 3 50% + tool 4 50%. Print profile: `0.10mm Color Mixing @Snapmaker U1 (0.4 nozzle)`. Files: nozzle-color-reference-v1-1.stl (0afa34fb4c8c…), nozzle-color-reference-v1-2.stl (56cd5ddd5ab0…), nozzle-color-reference-v1-3.stl (a4e286ebda51…), nozzle-color-reference-v1-4.stl (2318dd287731…), nozzle-color-reference-v1-5.stl (2afb6b240aaa…), nozzle-color-reference-v1-6.stl (db4d7f1cacd0…).
-3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, color mixes, requires macro.
+3. Check the G-code: Nozzle checks the sliced G-code: non empty, no stock elegoo commands, uses tools, max tool index, within bed, color mixes, requires macro, heater targets.
 
 Expected:
 - G-code is produced

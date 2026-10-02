@@ -1413,6 +1413,15 @@ interchange).
   printer type table. `prime_tower_test.sh` checks both corners; the Centauri Carbon color reference slice now puts
   the tower at X 161.80..204.26, Y 213.00..255.00; golden outputs unchanged (all 384 match). This commit reached the
   engine's `main` by a direct push, not a pull request (a branch that tracked `origin/main`).
+- **The Centauri Carbon COSMOS pack's own position (app, no engine change):** with the tower at upstream's corner the
+  owner's color reference print reached layer 10 of 39, then the nozzle hit something and shifted layers
+  (2026-10-01; the tower stayed down). COSMOS's tool change purges at a tray behind the bed at X 202, Y 264 and wipes
+  between X 165 and X 202 (the printer's `MOVE_TO_TRAY`, `PURGE` and `CLEAN_NOZZLE` macros), so the tower stood
+  directly in front of the tray and under the nozzle's path back onto the bed; a piece of purge landing on it is
+  the likely cause, not proven. `elegoo_centauri_carbon_cosmos_afc/machine.json` now sets `wipe_tower_x 70`,
+  `wipe_tower_y 250` (the engine keeps a position the profile sets and clamps it onto the bed): back, left of the
+  middle, clear of the tray and off the low back left corner. Only that pack is changed. The engine's golden output
+  for that pack changes with it (the G-code's config block lists the position).
 - **Known divergence:** upstream's GUI leaves a generated tower that overruns the plate for the user to move; the
   bridge moves it. A multi-filament slice's tower now starts at the vendor GUI's corner instead of libslic3r's
   (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a

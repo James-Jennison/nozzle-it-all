@@ -528,7 +528,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.8.0).",
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.9.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -565,7 +565,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.8.0).",
+      "note": "No physical evidence yet (fixture suite elegoo-centauri-carbon-stock 1.9.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -602,7 +602,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.8.0).",
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.9.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",
@@ -639,7 +639,7 @@
         "slicing": "UNVERIFIED"
       },
       "history": [],
-      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.8.0).",
+      "note": "No physical evidence yet (fixture suite opencentauri-patched 1.9.0).",
       "nozzleVersion": "—",
       "printer": {
         "manufacturer": "Elegoo",

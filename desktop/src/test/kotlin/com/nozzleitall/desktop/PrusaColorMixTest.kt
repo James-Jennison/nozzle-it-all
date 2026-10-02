@@ -61,6 +61,15 @@ class PrusaColorMixTest {
         assertEquals(setOf(cm), com.nozzleitall.printer.ext.ProfileFeatures.of("klipper", 4))
         assertEquals(setOf(fs), com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(setOf(fs), 4))
         assertEquals(setOf(cm), com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(emptySet(), 2))
+        // Except CANVAS (owner rule 2026-10-01): four lanes into one nozzle, so every mixed layer is a cut and a purge.
+        for (id in com.nozzleitall.printer.ext.ProfileFeatures.CANVAS_PROFILES) {
+            val p = ProfileCatalog.byId(id)!!
+            assertEquals(id, 4, p.tools)
+            assertEquals(id, emptySet<String>(), com.nozzleitall.printer.ext.ProfileFeatures.of(p.familyHint, p.tools, p.id))
+            assertEquals(id, emptySet<String>(), com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(emptySet(), p.tools, p.id))
+        }
+        assertEquals("every CANVAS profile is covered", com.nozzleitall.printer.ext.ProfileFeatures.CANVAS_PROFILES,
+            ProfileCatalog.all.filter { "CANVAS" in it.name }.map { it.id }.toSet())
     }
 }
 

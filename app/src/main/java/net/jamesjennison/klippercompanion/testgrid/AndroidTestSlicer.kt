@@ -64,7 +64,7 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
             if (partMixes.isNotEmpty()) {
                 val slots = slicingProfilePack(model, CosmosProfileGeneration.CURRENT.takeIf { ElegooProfiles.isCosmos(model) }, profile.customMachine)?.readToolCount(context) ?: 1
                 // The same rule the project editor uses to offer mixing: Full Spectrum on a U1, ColorMix on any other printer with 2+ slots.
-                val features = colourMixFeaturesFor(printer.kind, slots)
+                val features = colourMixFeaturesFor(printer.kind, slots, model)
                 val mixes = partMixes.distinct()
                 mixes.firstOrNull { it.a !in 1..slots || it.b !in 1..slots }?.let { return@runBlocking SliceOutcome.Failed("The color mix uses tools ${it.a} and ${it.b}, but the profile has $slots tool slot(s).") }
                 val used = mixes.flatMap { listOf(it.a, it.b) }.toSet()

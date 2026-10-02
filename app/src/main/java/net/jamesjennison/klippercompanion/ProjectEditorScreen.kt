@@ -300,8 +300,8 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     // Colour mixing (0.2.0, §requirement 2): which system (if any) this plate's own target/tool count actually offers -
     // the same com.nozzleitall.printer.ext.ProfileFeatures rule Desktop's PrepareState.features() uses. Empty on every
     // single-tool target and on any Bambu/AMS-style target (ColorMix and Full Spectrum are both engine-side PrusaSlicer/
-    // Snapmaker Orca features, gated to the printers that actually run one of those two config stacks).
-    val colourMixFeatures = remember(profile?.kind, toolCount) { colourMixFeaturesFor(profile?.kind ?: PrinterKind.GENERIC_KLIPPER, toolCount) }
+    // Snapmaker Orca features, gated to the printers that actually run one of those two config stacks), and on CANVAS.
+    val colourMixFeatures = remember(profile?.kind, toolCount, profile?.slicingModel) { colourMixFeaturesFor(profile?.kind ?: PrinterKind.GENERIC_KLIPPER, toolCount, profile?.slicingModel) }
     // mixedFilamentDefinitions: Snapmaker Full Spectrum's own `mixed_filament_definitions` string (empty = none saved
     // yet); fullSpectrumMixes is just that same string parsed back for display. virtualExtruders: PrusaSlicer ColorMix's
     // own blends/gradients for this plate, fed to sliceOnePlate as `{"version":1,"virtual_extruders":[...]}` JSON
@@ -312,6 +312,10 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var mixedFilamentDefinitions by remember(projectId, newProjectName) { mutableStateOf("") }
     var fullSpectrumMixes by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.FullSpectrumFormat.Mix>>(emptyList()) }
     var virtualExtruders by remember(projectId, newProjectName) { mutableStateOf<List<com.nozzleitall.printer.ext.PrusaColorMixFormat.Virtual>>(emptyList()) }
+    // The saved blends this printer can print: none where it offers no ColorMix (CANVAS, or a project made for another
+    // printer), so they are neither offered nor sliced there, and an object on one prints with tool 1 (the rule for a
+    // removed blend). The project keeps them for a printer that does mix.
+    val blends = if (com.nozzleitall.printer.ext.Prusa.COLOR_MIX in colourMixFeatures) virtualExtruders else emptyList()
     var colourMixError by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var mixingSuggestionDismissed by remember(projectId, newProjectName) { mutableStateOf(false) }
     var colourMixLoadedFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
@@ -463,7 +467,9 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         // tool assignments and extras below.
         val slicableObjects = plateObjects.mapNotNull { obj -> Uri.parse(obj.sourceFileUri).path?.let { path -> Triple(obj, File(path), obj.transform()) } }
         val objectsToSlice = slicableObjects.map { (_, file, transform) -> file to transform }
-        val (toolSlotIndices, slotMaterials) = multiToolSliceInputsFor(slicableObjects.map { (obj, _, _) -> obj }, toolCount)
+        val (assignedSlots, slotMaterials) = multiToolSliceInputsFor(slicableObjects.map { (obj, _, _) -> obj }, toolCount)
+        val unofferedBlends = if (blends.isEmpty()) virtualExtruders.map { it.id }.toSet() else emptySet()
+        val toolSlotIndices = assignedSlots.map { if (it in unofferedBlends) 1 else it }
         // The project's material overrides temperatures on top of (not instead of) the basic settings; skipped for a
         // multi-tool target, where slotMaterials carries each object's own material.
         val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
@@ -473,7 +479,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         val outcome = SlicingCoordinator.sliceProject(context.applicationContext, objectsToSlice, target, overrides, toolSlotIndices, slotMaterials,
             slicableObjects.map { (obj, _, _) -> ObjectExtrasText(obj.paintJson.orEmpty(), obj.volumesJson.orEmpty()) }, outputTag = tag,
             mixedFilamentDefinitions = mixedFilamentDefinitions.ifBlank { null },
-            virtualExtruders = if (virtualExtruders.isEmpty()) "" else com.nozzleitall.printer.ext.PrusaColorMixFormat.sliceRequestJson(virtualExtruders),
+            virtualExtruders = if (blends.isEmpty()) "" else com.nozzleitall.printer.ext.PrusaColorMixFormat.sliceRequestJson(blends),
             processPreset = printProfile?.name?.takeIf { pickerMode })
         if (outcome is SliceOutcome.Success) {
             // Calibration towers change a machine setting with height: patch the sliced plain G-code (not a Bambu bundle).
@@ -1336,7 +1342,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                         // ColorMix (0.2.0): a blend prints as its own virtual "tool", picked the same way as a real
                         // one - its id already sits above toolCount (PrusaColorMix's own next_id numbering), so it
                         // slots straight into the same 1-based toolSlotIndex every physical tool uses.
-                        virtualExtruders.forEach { v ->
+                        blends.forEach { v ->
                             FilterChip(pendingToolSlot == v.id, { pendingToolSlot = v.id }, label = { Text("Blend ${v.summary}") }, modifier = Modifier.testTag("project-object-tool-blend-${v.id}"))
                         }
                         // Colour mixing defect 1: a Full Spectrum mix, like a ColorMix blend above, prints as its own

@@ -4,7 +4,7 @@
 #   NOZZLE_ENGINE=<nozzle-engine> scripts/bundle_elegoo_canvas.sh [<ElegooSlicer checkout>]     (default /mnt/faststorage/ElegooSlicer)
 #
 # NOZZLE_ENGINE: a desktop nozzle-engine at (or after) the pin, which decides each preset's compatibility (--compatible-presets).
-# engine/profiles/derived/elegoo_centauri_color_mixing.json adds Nozzle It All's own Color Mixing preset (Elegoo ships none).
+# Elegoo ships no Color Mixing preset and Nozzle It All adds none: no color mixing on CANVAS (docs/upstream/PROVENANCE.md P-0044).
 #
 # Writes the 0.4 mm packs (app/src/main/assets/slicer_profiles/elegoo_centauri_carbon{,_2}_canvas: every platform) and
 # the whole families (engine/profiles/library/...: nozzle sizes, process presets, Elegoo filament presets; Desktop).
@@ -26,7 +26,7 @@ SRC="Elegoo profiles from ElegooSlicer (github.com/ELEGOO-3D/ElegooSlicer $COMMI
 
 family() { # <library id> <machine name prefix>
   python3 "$ROOT/scripts/bundle_printer_library.py" --profiles "$PROFILES" --vendor Elegoo --nested "${PINS[@]}" --source "$SRC" \
-    --engine "${NOZZLE_ENGINE:?set NOZZLE_ENGINE to a nozzle-engine}" --derived "$ROOT/engine/profiles/derived/elegoo_centauri_color_mixing.json" \
+    --engine "${NOZZLE_ENGINE:?set NOZZLE_ENGINE to a nozzle-engine}" \
     --machine "$2 0.2 nozzle" --machine "$2 0.4 nozzle" --machine "$2 0.6 nozzle" --machine "$2 0.8 nozzle" \
     --out "$ROOT/engine/profiles/library/$1"
 }

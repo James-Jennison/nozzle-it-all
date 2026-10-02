@@ -349,8 +349,14 @@ class PrepareState(private val app: AppState) {
     }
 
     /** Colour-mixing features on offer: the connected printer's own report, else what the chosen profile offers. */
-    fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions?.let { com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(it, materials().size) }
-        ?: profile?.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools) } ?: emptySet()
+    fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions?.let { com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(it, materials().size, profile?.id) }
+        ?: profile?.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools, it.id) } ?: emptySet()
+
+    /**
+     * The virtual extruders this printer prints: none where it offers no ColorMix (CANVAS, or a project made for another
+     * printer). They are neither offered nor sliced there; the project keeps them for a printer that does mix.
+     */
+    fun offeredColorMix(): List<PrusaColorMixFormat.Virtual> = if (com.nozzleitall.printer.ext.Prusa.COLOR_MIX in features()) colorMix.toList() else emptyList()
 
     fun physicalColours(): List<String> = materials().map { it.colorHex ?: "#FFFFFF" }
 
@@ -360,7 +366,7 @@ class PrepareState(private val app: AppState) {
 
     /** Every slot a model can print with: the loaded filaments, then the mixes. */
     fun allSlots(): List<Pair<Int, String>> = materials().map { it.slot to listOfNotNull(it.vendor, it.type).joinToString(" ").ifBlank { "Filament" } } +
-        mixes.filter { it.enabled }.map { it.id to it.label } + colorMix.map { it.id to "[V] Extruder ${it.id}" }
+        mixes.filter { it.enabled }.map { it.id to it.label } + offeredColorMix().map { it.id to "[V] Extruder ${it.id}" }
 
     private fun setMixes(m: FullSpectrumFormat.Mixes) { mixDefinitions = m.definitions; mixes.clear(); mixes.addAll(m.rows); mixProblem = null }
 
@@ -659,6 +665,10 @@ class PrepareState(private val app: AppState) {
     fun toProject(forSlice: Boolean = false): Project3mf {
         val (bw, bd) = bed
         val plates = if (forSlice) listOf(currentPlate) else plateNames.indices.toList()
+        // Sliced for a printer that offers no ColorMix, an object or painted area on a virtual extruder prints with the
+        // default extruder (removeVirtualExtruder's rule).
+        val unoffered = if (forSlice && offeredColorMix().isEmpty()) colorMix.map { it.id }.toSet() else emptySet()
+        fun sliceSlot(slot: Int) = if (slot in unoffered) 1 else slot
         val m = (manifest ?: app.library.newManifest(name, app.version)).let { base ->
             val p = printer()
             base.copy(name = name, revision = base.revision + if (dirty || manifest == null) 1 else 0,
@@ -668,7 +678,7 @@ class PrepareState(private val app: AppState) {
                     family = p?.config?.identity?.family?.id ?: profile?.familyHint,
                     nozzleDiameters = machineVariant()?.let { m -> PrinterSetup.nozzles(machineJson()).map { it.toDoubleOrNull() ?: 0.4 } } ?: base.printer?.nozzleDiameters.orEmpty()),
                 plates = plates.mapIndexed { n, i -> ProjectManifest.PlateEntry(n + 1, plateNames[i], plateItems(i).map {
-                    ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList(), settings = it.settings.toMap()) },
+                    ProjectManifest.ObjectEntry(it.id, it.name, sliceSlot(it.slot), paintSlots = it.paintSlots.map { s -> if (s in unoffered) sliceSlot(it.slot) else s }, settings = it.settings.toMap()) },
                     base.plates.getOrNull(i)?.unknown ?: org.json.JSONObject()) },
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(currentProcess()?.let { "process:${it.id}" } ?: preset.name.lowercase(),
@@ -682,7 +692,7 @@ class PrepareState(private val app: AppState) {
         val objects = plates.flatMap { i ->
             val (ox, oy) = if (forSlice) 0.0 to 0.0 else Plates.origin(i, plateNames.size, bw.toDouble(), bd.toDouble())
             plateItems(i).map { ModelObject(it.id, it.name, it.mesh, Transform(it.placement().m.copyOf().also { t -> t[9] += ox; t[10] += oy }),
-                it.slot, it.settings.toMap(), if (forSlice) 0 else i) }
+                sliceSlot(it.slot), it.settings.toMap(), if (forSlice) 0 else i) }
         }
         return Project3mf(objects, metadata + ("Title" to name) + ("Application" to "Nozzle It All ${app.version}"),
             m, files, plateNames = if (forSlice || plateNames.size < 2) emptyList() else plateNames.toList())
@@ -704,7 +714,7 @@ class PrepareState(private val app: AppState) {
         val req = SliceRequest(toProject(forSlice = true), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, flushMatrix = editedFlush(),
             extraOverrides = printerOverrides() + (overrides.toMap() - FLUSH_KEY) +
             (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
-            virtualExtruders = colorMix.takeIf { it.isNotEmpty() }?.let { PrusaColorMix.sidecar(materials().map { m -> m.colorHex ?: "#FFFFFF" }, it.toList()) })
+            virtualExtruders = offeredColorMix().takeIf { it.isNotEmpty() }?.let { PrusaColorMix.sidecar(materials().map { m -> m.colorHex ?: "#FFFFFF" }, it) })
         slice = SliceState.Running(0f, "Starting")
         scope.launch {
             val outcome = withContext(Dispatchers.IO) { e.slice(req) { p, s -> slice = SliceState.Running(p, s) } }

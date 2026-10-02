@@ -76,6 +76,17 @@ The index lists it with `tools: 4` (CANVAS lanes), so Nozzle offers four filamen
 Tool-to-colour mapping happens on the printer (Mainsail/Fluidd's mapping at print start, or AFC `SET_MAP`), as
 OpenCentauri documents; `T0` is always `T0` in the file. **Not yet printed on a real CANVAS.**
 
+**Prime tower position (Nozzle's own, not from OpenCentauri's preset; 2026-10-01):** `wipe_tower_x 70`,
+`wipe_tower_y 250`, which the engine clamps to the back edge: the tower stands at the back, left of the middle.
+COSMOS's tool change purges at a tray behind the bed at X 202, Y 264 and wipes the nozzle between X 165 and X 202
+(`MOVE_TO_TRAY`, `PURGE`, `CLEAN_NOZZLE` in the printer's config), then comes forward at X 165, Y 250. The engine's
+default corner for this printer (165, 250, upstream OrcaSlicer's and ElegooSlicer's) puts the tower directly in
+front of that tray, under the nozzle's path; on the owner's printer a color reference print there hit something on
+the tower at layer 10 and shifted layers, most likely a piece of purge. The back left corner (Snapmaker Orca's
+default) is the lowest part of that printer's bed, where the tower came loose. X 70 is clear of the tray and on a
+part of the bed that mesh reads -0.16 to -0.03 mm. Only this pack sets a position; the Elegoo-firmware CANVAS packs
+keep the engine's default. See docs/upstream/PROVENANCE.md P-0043.
+
 ## The Elegoo stock-firmware CANVAS packs (Centauri Carbon, Centauri Carbon 2)
 
 `elegoo_centauri_carbon_canvas` and `elegoo_centauri_carbon_2_canvas` are Elegoo's own profiles, flattened from

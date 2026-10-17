@@ -51,4 +51,14 @@ class MenusTest {
         // The project has not been saved, so there is nothing to ask about; it just empties.
         assertTrue(p.items.isEmpty()); assertNull(p.selected)
     }
+
+    @Test fun fileMenuListsTheNewestProjectsFirstAndOpensOne() {
+        val a = app()
+        assertTrue(appMenus(a) {}.first { it.title == "File" }.items.filterNotNull().none { it.label.startsWith("Recent: ") })
+        val old = File(a.library.dir, "Old.3mf"); val new = File(a.library.dir, "New.3mf")
+        ThreeMf.writeAtomically(Project3mf(listOf(ModelObject(1, "cube", cube))), old); old.setLastModified(1_000_000)
+        ThreeMf.writeAtomically(Project3mf(listOf(ModelObject(1, "cube", cube))), new); new.setLastModified(2_000_000)
+        val recent = appMenus(a) {}.first { it.title == "File" }.items.filterNotNull().filter { it.label.startsWith("Recent: ") }
+        assertEquals(listOf("Recent: New", "Recent: Old"), recent.map { it.label })
+    }
 }

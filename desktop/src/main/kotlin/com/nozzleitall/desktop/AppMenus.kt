@@ -40,6 +40,10 @@ import com.nozzleitall.desktop.ui.*
 import com.nozzleitall.project.ThreeMf
 import com.nozzleitall.printer.Glossary
 
+/** The five most recently saved projects in the library, newest first (by file time, so building the menu never opens a project). */
+internal fun recentProjects(state: AppState): List<java.io.File> =
+    (state.library.dir.listFiles { f -> f.isFile && f.name.endsWith(".3mf", true) } ?: emptyArray()).sortedByDescending { it.lastModified() }.take(5)
+
 private fun browse(url: String) { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } }
 
 /** One menu item: what it says, its shortcut, whether it can run now, and what it does. */
@@ -67,6 +71,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Open project…", ctrl(Key.O, "O")) {
                 guarded { chooseFiles("Open a project", listOf("3mf"), multiple = false).firstOrNull()?.let { f -> runCatching { p.open(f); state.destination = Destination.PREPARE }.onFailure(::report) } }
             },
+            *recentProjects(state).map { f -> MenuAction("Recent: " + f.nameWithoutExtension.take(40)) { guarded { runCatching { p.open(f); state.destination = Destination.PREPARE }.onFailure(::report) } } }.toTypedArray(),
             MenuAction("Add model…", ctrl(Key.I, "I")) {
                 chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure(::report) }
                 state.destination = Destination.PREPARE

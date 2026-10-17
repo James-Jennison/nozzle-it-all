@@ -50,6 +50,8 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     val paintSlots = androidx.compose.runtime.mutableStateListOf<Int>().apply { addAll(paintSlots) }
     /** The file's filament for unpainted areas, when the file said (a model from another slicer). */
     var ownFilament: Int? = null
+    /** The object this is an instance of (Orca's instances), or null for an object in its own right. */
+    var instanceOf by mutableStateOf<Int?>(null)
     /** The file's filament numbers this model's paint uses, in order. */
     val painted: List<Int> by lazy { MeshIO.paintedFilaments(mesh) }
     /** The slot the file's filament [n] prints with. */
@@ -456,7 +458,7 @@ class PrepareState(private val app: AppState) {
             val local = if (ox == 0.0 && oy == 0.0) o else o.copy(placement = Transform(o.placement.m.copyOf().also { it[9] -= ox; it[10] -= oy }))
             addFromPlacement(local, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments,
                 ObjectSettings.usable(entries[o.id]?.settings?.takeIf { it.isNotEmpty() } ?: o.settings), plate)
-            entries[o.id]?.let { e -> items.lastOrNull()?.let { it.parts.addAll(e.parts); it.ranges.addAll(e.heightRanges); it.layerProfile.addAll(e.layerProfile) } }
+            entries[o.id]?.let { e -> items.lastOrNull()?.let { it.parts.addAll(e.parts); it.ranges.addAll(e.heightRanges); it.layerProfile.addAll(e.layerProfile); it.instanceOf = e.instanceOf } }
         }
         p.manifest?.settings?.preset?.let { key ->
             if (key.startsWith("process:")) processId = key.removePrefix("process:")
@@ -539,9 +541,36 @@ class PrepareState(private val app: AppState) {
         item.paintSlots[n - 1] = slot; changed()
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate).also { it.copyShapeFrom(s) }; changed(); arrange() } }
+    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> nextId = maxOf(nextId, (items.maxOfOrNull { it.id } ?: 0) + 1); items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate).also { it.copyShapeFrom(s) }; changed(); arrange() } }
     fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
-    fun changed() { dirty = true; invalidateSlice(); refreshRules() }
+    fun changed() { syncInstances(); dirty = true; invalidateSlice(); refreshRules() }
+
+    /**
+     * Orca's instances: another copy of the same object. It shares the object's mesh, filament, settings, parts, height ranges, layer
+     * profile and paint, so a change to the object reaches every instance; its place, turn and size are its own. An instance whose
+     * object is gone becomes an object in its own right.
+     */
+    fun addInstance() {
+        val s = items.firstOrNull { it.id == selected } ?: return
+        val root = s.instanceOf ?: s.id
+        nextId = maxOf(nextId, (items.maxOfOrNull { it.id } ?: 0) + 1)
+        items += PrepItem(nextId++, s.name.removeSuffix(" (instance)") + " (instance)", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate)
+            .also { it.copyShapeFrom(s); it.instanceOf = root; it.ownFilament = s.ownFilament }
+        changed(); arrange()
+    }
+    fun syncInstances() {
+        val byId = items.associateBy { it.id }
+        items.forEach { i ->
+            val root = i.instanceOf ?: return@forEach
+            val src = byId[root]?.takeIf { it !== i } ?: run { i.instanceOf = null; return@forEach }
+            if (i.slot != src.slot) i.slot = src.slot
+            if (i.paintSlots.toList() != src.paintSlots.toList()) { i.paintSlots.clear(); i.paintSlots.addAll(src.paintSlots) }
+            if (i.settings.toMap() != src.settings.toMap()) { i.settings.clear(); i.settings.putAll(src.settings) }
+            if (i.parts.toList() != src.parts.toList()) { i.parts.clear(); i.parts.addAll(src.parts) }
+            if (i.ranges.toList() != src.ranges.toList()) { i.ranges.clear(); i.ranges.addAll(src.ranges) }
+            if (i.layerProfile.toList() != src.layerProfile.toList()) { i.layerProfile.clear(); i.layerProfile.addAll(src.layerProfile) }
+        }
+    }
     private fun invalidateSlice() { if (slice !is SliceState.Running) { slice = SliceState.Idle; showPreview = false } }
 
     /** Shelf packing by footprint, largest first, with a 6 mm gap, centred on the bed. Objects that can't fit are reported. */
@@ -807,7 +836,7 @@ class PrepareState(private val app: AppState) {
                     family = p?.config?.identity?.family?.id ?: profile?.familyHint,
                     nozzleDiameters = machineVariant()?.let { m -> PrinterSetup.nozzles(machineJson()).map { it.toDoubleOrNull() ?: 0.4 } } ?: base.printer?.nozzleDiameters.orEmpty()),
                 plates = plates.mapIndexed { n, i -> ProjectManifest.PlateEntry(n + 1, plateNames[i], plateItems(i).map {
-                    ProjectManifest.ObjectEntry(it.id, it.name, sliceSlot(it.slot), paintSlots = it.paintSlots.map { s -> if (s in unoffered) sliceSlot(it.slot) else s }, settings = it.settings.toMap(), parts = it.parts.toList(), heightRanges = it.ranges.toList(), layerProfile = it.layerProfile.toList()) },
+                    ProjectManifest.ObjectEntry(it.id, it.name, sliceSlot(it.slot), paintSlots = it.paintSlots.map { s -> if (s in unoffered) sliceSlot(it.slot) else s }, settings = it.settings.toMap(), parts = it.parts.toList(), heightRanges = it.ranges.toList(), layerProfile = it.layerProfile.toList(), instanceOf = it.instanceOf) },
                     base.plates.getOrNull(i)?.unknown ?: org.json.JSONObject()) },
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(currentProcess()?.let { "process:${it.id}" } ?: preset.name.lowercase(),

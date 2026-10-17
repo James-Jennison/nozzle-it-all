@@ -46,7 +46,9 @@ data class ProjectManifest(
      */
     data class ObjectEntry(val objectId: Int, val name: String = "", val materialSlot: Int? = null, val unknown: JSONObject = JSONObject(), val paintSlots: List<Int> = emptyList(),
                            val settings: Map<String, String> = emptyMap(), val parts: List<ObjectPart> = emptyList(), val heightRanges: List<HeightRange> = emptyList(),
-                           val layerProfile: List<Double> = emptyList())
+                           val layerProfile: List<Double> = emptyList(),
+                           /** Orca's instances: this object is another instance of object [instanceOf], sharing its mesh, settings, parts, ranges, layer profile and paint; only its place, turn and size are its own. */
+                           val instanceOf: Int? = null)
     /**
      * An extra volume on an object, as Orca's object list adds them: [kind] "negative" (cuts material away), "modifier" (applies [settings]
      * inside it), "blocker" / "enforcer" (support) or "part" (adds material), a primitive [shape] ("box", "cylinder", "sphere") of [size]
@@ -105,7 +107,7 @@ data class ProjectManifest(
             }
             val plates = o.optJSONArray("plates")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { p ->
                 PlateEntry(p.optInt("index"), p.optString("name"), p.optJSONArray("objects")?.let { oa -> (0 until oa.length()).mapNotNull { oa.optJSONObject(it) }.map { e ->
-                    ObjectEntry(e.optInt("objectId"), e.optString("name"), e.intOrNull("materialSlot"), e.rest("objectId", "name", "materialSlot", "paintSlots", "settings", "parts", "heightRanges", "layerProfile"),
+                    ObjectEntry(e.optInt("objectId"), e.optString("name"), e.intOrNull("materialSlot"), e.rest("objectId", "name", "materialSlot", "paintSlots", "settings", "parts", "heightRanges", "layerProfile", "instanceOf"),
                         e.optJSONArray("paintSlots")?.let { ps -> (0 until ps.length()).map { ps.optInt(it, 1).coerceAtLeast(1) } } ?: emptyList(),
                         e.optJSONObject("settings")?.let { st -> st.keySet().filter { st.opt(it) is String }.associateWith { st.getString(it) } } ?: emptyMap(),
                         e.optJSONArray("parts")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.mapNotNull { q ->
@@ -114,7 +116,8 @@ data class ProjectManifest(
                             if (center?.size == 3 && size?.size == 3 && q.optString("kind").isNotEmpty()) ObjectPart(q.optString("kind"), q.optString("shape", "box"), center, size, q.optJSONObject("settings")?.let { st -> st.keySet().filter { st.opt(it) is String }.associateWith { st.getString(it) } } ?: emptyMap()) else null } } ?: emptyList(),
                         e.optJSONArray("heightRanges")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { q ->
                             HeightRange(q.optDouble("from"), q.optDouble("to"), q.optJSONObject("settings")?.let { st -> st.keySet().filter { st.opt(it) is String }.associateWith { st.getString(it) } } ?: emptyMap()) } } ?: emptyList(),
-                        e.optJSONArray("layerProfile")?.let { a -> (0 until a.length()).map { a.optDouble(it) } } ?: emptyList()) } } ?: emptyList(),
+                        e.optJSONArray("layerProfile")?.let { a -> (0 until a.length()).map { a.optDouble(it) } } ?: emptyList(),
+                        e.intOrNull("instanceOf")) } } ?: emptyList(),
                     p.rest("index", "name", "objects")) } } ?: emptyList()
             val materials = o.optJSONArray("materials")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { m ->
                 MaterialSlot(m.optInt("slot"), m.strOrNull("type"), m.strOrNull("vendor"), m.strOrNull("subType"), m.strOrNull("colorHex"), m.intOrNull("toolhead"),
@@ -146,7 +149,7 @@ data class ProjectManifest(
                     if (e.parts.isNotEmpty()) put("parts", JSONArray(e.parts.map { q -> JSONObject().put("kind", q.kind).put("shape", q.shape).put("center", JSONArray(q.center)).put("size", JSONArray(q.size))
                         .apply { if (q.settings.isNotEmpty()) put("settings", JSONObject(q.settings.toSortedMap())) } }))
                     if (e.heightRanges.isNotEmpty()) put("heightRanges", JSONArray(e.heightRanges.map { q -> JSONObject().put("from", q.from).put("to", q.to).put("settings", JSONObject(q.settings.toSortedMap())) }))
-                    if (e.layerProfile.isNotEmpty()) put("layerProfile", JSONArray(e.layerProfile)) }, e.unknown) })), p.unknown) }))
+                    if (e.layerProfile.isNotEmpty()) put("layerProfile", JSONArray(e.layerProfile)); e.instanceOf?.let { put("instanceOf", it) } }, e.unknown) })), p.unknown) }))
         o.put("materials", JSONArray(materials.map { m -> merge(JSONObject().put("slot", m.slot).putOpt("type", m.type).putOpt("vendor", m.vendor)
             .putOpt("subType", m.subType).putOpt("colorHex", m.colorHex).putOpt("toolhead", m.toolhead).putOpt("filamentProfile", m.filamentProfile), m.unknown) }))
         o.put("settings", merge(JSONObject().putOpt("preset", settings.preset).put("overrides", JSONObject(settings.overrides)), settings.unknown))

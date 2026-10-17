@@ -350,8 +350,10 @@ private fun StepObjects(state: AppState) {
             ObjectPartsSection(p, s, profileValues)
             HeightRangesSection(p, s, profileValues)
             VariableLayerSection(p, s)
+            s.instanceOf?.let { root -> Txt("Instance of ${p.items.firstOrNull { it.id == root }?.name ?: "another object"}: its settings, parts and paint follow that object; edit them there.", Nz.type.bodySmall, c.textMuted) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.duplicateSelected() }.padding(4.dp))
+                Txt("Add instance", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Add an instance that shares this object's settings, parts and paint") { p.addInstance() }.padding(4.dp))
                 Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.removeSelected() }.padding(4.dp))
             }
         }

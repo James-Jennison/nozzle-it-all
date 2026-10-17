@@ -135,6 +135,8 @@ class PrepareState(private val app: AppState) {
     var infill by mutableStateOf(15)
     /** Settings changed in All settings, in the engine's serialized form; applied after the preset and quick controls. */
     val overrides = androidx.compose.runtime.mutableStateMapOf<String, String>()
+    /** Set while the plate holds a calibration print (see [startCalibration]): the G-code gets its height-dependent step after slicing. */
+    var calibration by mutableStateOf<net.jamesjennison.klippercompanion.CalibrationSpec?>(null)
     /** Which settings the panel shows: the print (process), a material, or the printer. */
     var settingsScope by mutableStateOf(com.nozzleitall.desktop.settings.Scope.PROCESS)
     /** Everything (on) or only the essential settings (off). */
@@ -436,7 +438,7 @@ class PrepareState(private val app: AppState) {
         overrides.clear(); mixed.clear(); mixedSettings = emptyMap(); mixSublayers = true; mixProblem = null; headProfiles.clear()
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         plateNames.clear(); plateNames += "Plate 1"; currentPlate = 0
-        slice = SliceState.Idle; showPreview = false; nextId = 1
+        slice = SliceState.Idle; showPreview = false; nextId = 1; calibration = null
     }
 
     fun open(f: File) {
@@ -506,6 +508,25 @@ class PrepareState(private val app: AppState) {
         if (item.painted.isNotEmpty() && item.paintSlots.size < item.painted.max()) matchColours(item, o.filament)
         items += item
         nextId = maxOf(nextId, o.id + 1)
+    }
+
+    /** A new project holding the calibration model for [spec] on the plate, with the settings the test needs. */
+    fun startCalibration(spec: net.jamesjennison.klippercompanion.CalibrationSpec) {
+        newProject()
+        val tri = net.jamesjennison.klippercompanion.Calibration.mesh(spec)
+        // The calibration models list every triangle's corners; weld equal corners so the mesh is closed, as a loaded file is.
+        val index = HashMap<Triple<Float, Float, Float>, Int>(); val verts = ArrayList<Float>(); val tris = IntArray(tri.v.size / 3)
+        for (i in tris.indices) {
+            val key = Triple(tri.v[i * 3], tri.v[i * 3 + 1], tri.v[i * 3 + 2])
+            tris[i] = index.getOrPut(key) { verts += key.first; verts += key.second; verts += key.third; index.size }
+        }
+        val mesh = Mesh(verts.toFloatArray(), tris)
+        val (bw, bd) = bed
+        name = spec.kind.label
+        items += PrepItem(nextId++, spec.kind.label, mesh, bw / 2, bd / 2, plate = currentPlate)
+        overrides.putAll(net.jamesjennison.klippercompanion.Calibration.overrides(spec))
+        calibration = spec
+        dirty = true; invalidateSlice()
     }
 
     fun importModel(f: File) {
@@ -882,7 +903,9 @@ class PrepareState(private val app: AppState) {
                 }, { SliceOutcome.Failed(it.message ?: "Mixed filaments could not be set up.", "") })
             }
             slice = when (outcome) {
-                is SliceOutcome.Done -> SliceState.Done(outcome, withContext(Dispatchers.IO) { runCatching { GcodePreview.parse(outcome.gcode) }.getOrNull() })
+                is SliceOutcome.Done -> SliceState.Done(outcome, withContext(Dispatchers.IO) {
+                    calibration?.let { c -> runCatching { net.jamesjennison.klippercompanion.Calibration.applyToFile(outcome.gcode, c) } }
+                    runCatching { GcodePreview.parse(outcome.gcode) }.getOrNull() })
                     .also { previewLayer = (it.preview?.layers?.size ?: 1) - 1; showPreview = true }
                 is SliceOutcome.Failed -> SliceState.Failed(outcome.message)
                 SliceOutcome.Cancelled -> SliceState.Cancelled

@@ -21,8 +21,8 @@ class MenusTest {
     }
     private fun AppState.item(menu: String, label: String) = appMenus(this) {}.first { it.title == menu }.items.filterNotNull().first { it.label == label }
 
-    @Test fun theBarHasPlateAndViewMenusBetweenEditAndGo() {
-        assertEquals(listOf("File", "Edit", "Plate", "View", "Go", "Help"), appMenus(app()) {}.map { it.title })
+    @Test fun theBarHasPlateCalibrationAndViewMenusBetweenEditAndGo() {
+        assertEquals(listOf("File", "Edit", "Plate", "Calibration", "View", "Go", "Help"), appMenus(app()) {}.map { it.title })
     }
 
     @Test fun plateMenuAddsMovesBetweenAndDeletesPlates() {
@@ -60,5 +60,22 @@ class MenusTest {
         ThreeMf.writeAtomically(Project3mf(listOf(ModelObject(1, "cube", cube))), new); new.setLastModified(2_000_000)
         val recent = appMenus(a) {}.first { it.title == "File" }.items.filterNotNull().filter { it.label.startsWith("Recent: ") }
         assertEquals(listOf("Recent: New", "Recent: Old"), recent.map { it.label })
+    }
+
+    @Test fun calibrationMenuStartsATestPrintWithItsSettingsAndPostProcessing() {
+        val a = app(); val p = a.prepare
+        assertEquals(net.jamesjennison.klippercompanion.CalibrationKind.entries.map { it.label }, appMenus(a) {}.first { it.title == "Calibration" }.items.filterNotNull().map { it.label })
+        a.item("Calibration", "Temperature tower").run()
+        assertEquals(net.jamesjennison.klippercompanion.CalibrationKind.TEMPERATURE, p.calibration?.kind)
+        val item = p.items.single()
+        // Closed: every edge is shared by exactly two triangles once equal corners are welded.
+        val edges = HashMap<Pair<Int, Int>, Int>()
+        for (t in 0 until item.mesh.triangles.size / 3) for (k in 0 until 3) {
+            val u = item.mesh.triangles[t * 3 + k]; val v = item.mesh.triangles[t * 3 + (k + 1) % 3]
+            edges.merge(minOf(u, v) to maxOf(u, v), 1, Int::plus)
+        }
+        assertTrue("open or non-manifold edges", edges.values.all { it % 2 == 0 })
+        assertEquals(p.calibration!!.startTemp.toString(), p.overrides["nozzle_temperature"])
+        p.newProject(); assertNull(p.calibration); assertTrue(p.overrides.isEmpty())
     }
 }

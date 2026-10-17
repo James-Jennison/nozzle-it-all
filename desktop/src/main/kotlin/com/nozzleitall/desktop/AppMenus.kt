@@ -108,6 +108,9 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Previous plate", enabled = p.currentPlate > 0) { p.showPlate(p.currentPlate - 1) },
             MenuAction("Next plate", enabled = p.currentPlate < p.plateNames.lastIndex) { p.showPlate(p.currentPlate + 1) },
         )),
+        AppMenu("Calibration", Key.C, net.jamesjennison.klippercompanion.CalibrationKind.entries.map { k ->
+            MenuAction(k.label) { guarded { p.startCalibration(net.jamesjennison.klippercompanion.CalibrationSpec(k)); state.destination = Destination.PREPARE } }
+        }),
         AppMenu("View", Key.V, listOf(
             MenuAction("Isometric view") { p.camera.yaw = -35f; p.camera.pitch = 55f; p.camera.pan = androidx.compose.ui.geometry.Offset.Zero },
             MenuAction("Top view") { p.camera.pitch = 0f },

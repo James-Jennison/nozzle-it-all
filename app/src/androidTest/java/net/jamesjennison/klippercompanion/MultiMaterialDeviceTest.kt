@@ -73,11 +73,13 @@ class MultiMaterialDeviceTest {
         compose.onAllNodesWithTag("sliced-preview-legend").assertCountEquals(1)
     }
 
-    @Test fun aToolchangerOffersNoPrimeTowerAndSaysWhy() {
+    // Since ab8b5a23 a toolchanger keeps the prime tower switch (the tower primes each tool after a change and catches ooze) and the
+    // editor says there is no flushing between colours.
+    @Test fun aToolchangerKeepsThePrimeTowerForPrimingAndSaysThereIsNoFlushing() {
         open(seed("MMTower"))
         compose.waitUntil(10000) { compose.onAllNodesWithTag("project-no-purge-note").fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodesWithTag("project-prime-tower").assertCountEquals(0)
-        compose.onNodeWithTag("project-no-purge-note").assertTextContains("does not purge", substring = true)
+        compose.onAllNodesWithTag("project-prime-tower").assertCountEquals(1)
+        compose.onNodeWithTag("project-no-purge-note").assertTextContains("No flushing between colours", substring = true)
     }
 
     @Test fun materialPaintIsOfferedOnAMultiToolMachineAndStoresTheChosenTool() {
@@ -137,6 +139,6 @@ class MultiMaterialDeviceTest {
         compose.waitUntil(10000) { compose.onAllNodesWithTag("project-multimaterial-family").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("project-multimaterial-family").assertTextContains("Independent tools")
         compose.onNodeWithText("5 real tool slots", substring = true).assertExists()
-        compose.onAllNodesWithTag("project-prime-tower").assertCountEquals(0)
+        compose.onAllNodesWithTag("project-prime-tower").assertCountEquals(1)
     }
 }

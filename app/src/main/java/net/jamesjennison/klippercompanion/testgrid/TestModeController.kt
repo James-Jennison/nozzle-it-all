@@ -189,6 +189,8 @@ class TestModeController private constructor(private val context: Context) {
             update { it.copy(phase = TestModePhase.RUNNING, resumable = false) }
             val p = s.proceed()
             update { it.copy(pending = p) }
+            // A run with nothing to wait for (software-only, level 0) is finished already: go straight to the evidence, as act() does.
+            if (p is Pending.Finished) buildBundle()
         }
     }
 

@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop
 
+import com.nozzleitall.project.MeshIO
 import com.nozzleitall.desktop.prepare.ProfileCatalog
 import com.nozzleitall.desktop.settings.*
 import org.json.JSONObject
@@ -90,7 +91,7 @@ class SettingsReachTheEngineTest {
             "seam_position" to cat.byKey.getValue("seam_position").serialize("back"),
             "filament_start_gcode" to cat.byKey.getValue("filament_start_gcode").serialize(gcodeText))
         val tmp = Files.createTempDirectory("ov").toFile()
-        val cube = com.nozzleitall.desktop.prepare.MeshIO.readStl(File(root, "site-src/assets/test-cube-20mm.stl").readBytes())
+        val cube = com.nozzleitall.project.MeshIO.readStl(File(root, "site-src/assets/test-cube-20mm.stl").readBytes())
         val prof = ProfileCatalog.byId("snapmaker_u1")!!
         val obj = com.nozzleitall.project.ModelObject(1, "cube", cube, com.nozzleitall.project.Transform.translate(prof.bedW / 2.0 - 10, prof.bedD / 2.0 - 10, 0.0))
         val m = com.nozzleitall.project.ProjectManifest("p", 1, "n", com.nozzleitall.project.ProjectManifest.Producer("t", "desktop", "t"),

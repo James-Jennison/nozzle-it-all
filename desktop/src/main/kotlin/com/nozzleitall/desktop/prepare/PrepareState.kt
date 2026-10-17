@@ -25,6 +25,22 @@ private const val FLUSH_KEY = "flush_volumes_matrix"
 class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, rotZ: Float = 0f, scale: Float = 1f, slot: Int = 1,
                paintSlots: List<Int> = emptyList(), val sources: List<SourceFilament> = emptyList(), settings: Map<String, String> = emptyMap(),
                plate: Int = 0) {
+    /** Per-axis size on top of [scale] (Orca's unlocked scale fields); a negative one mirrors that axis. */
+    var sx by mutableStateOf(1f); var sy by mutableStateOf(1f); var sz by mutableStateOf(1f)
+    /** Extra volumes: negative volumes, modifiers, support blockers / enforcers, parts (coordinates from the mesh's bounding-box centre). */
+    val parts = androidx.compose.runtime.mutableStateListOf<ProjectManifest.ObjectPart>()
+    /** Height range modifiers: settings for layers between two heights. */
+    val ranges = androidx.compose.runtime.mutableStateListOf<ProjectManifest.HeightRange>()
+    /** A variable layer height profile, z / height pairs; empty = the process's layer height. */
+    val layerProfile = androidx.compose.runtime.mutableStateListOf<Double>()
+    val ex get() = scale * sx; val ey get() = scale * sy; val ez get() = scale * sz
+    /** Takes [from]'s size, mirroring, parts, height ranges and layer profile (a copy or a re-meshed object keeps them). */
+    fun copyShapeFrom(from: PrepItem) {
+        sx = from.sx; sy = from.sy; sz = from.sz
+        parts.clear(); parts.addAll(from.parts); ranges.clear(); ranges.addAll(from.ranges); layerProfile.clear(); layerProfile.addAll(from.layerProfile)
+    }
+    /** Whether the object has a variable layer height, by profile or by height ranges (the mixed sub-layer warning's question). */
+    val hasVariableLayer get() = layerProfile.size > 4 || ranges.isNotEmpty()
     /** The plate it's on (0-based); x and y are on that plate. */
     var plate by mutableStateOf(plate)
     /** The object's own print settings (Orca's per-object settings), engine keys to serialized values. */
@@ -43,15 +59,15 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     private val outline: FloatArray by lazy { hull2d(mesh.vertices, (bounds[0] + bounds[3]) / 2, (bounds[1] + bounds[4]) / 2) }
     /** How far the object reaches from (x, y) at its current turn and scale: min x, max x, min y, max y. */
     val reach: FloatArray get() {
-        val c = cos(Math.toRadians(rotZ.toDouble())).toFloat() * scale; val s = sin(Math.toRadians(rotZ.toDouble())).toFloat() * scale
+        val cr = cos(Math.toRadians(rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(rotZ.toDouble())).toFloat()
         val r = floatArrayOf(Float.MAX_VALUE, -Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE)
-        for (i in outline.indices step 2) { val px = outline[i] * c - outline[i + 1] * s; val py = outline[i] * s + outline[i + 1] * c
+        for (i in outline.indices step 2) { val ox = outline[i] * ex; val oy = outline[i + 1] * ey; val px = ox * cr - oy * sr; val py = ox * sr + oy * cr
             r[0] = min(r[0], px); r[1] = max(r[1], px); r[2] = min(r[2], py); r[3] = max(r[3], py) }
         return r
     }
     val footprintW get() = reach.let { it[1] - it[0] }
     val footprintD get() = reach.let { it[3] - it[2] }
-    val height get() = (bounds[5] - bounds[2]) * scale
+    val height get() = (bounds[5] - bounds[2]) * kotlin.math.abs(ez)
 
     /** The mesh's volume in mm³ before scaling (signed tetrahedra; a closed mesh's is exact). */
     val rawVolume: Double by lazy {
@@ -62,7 +78,7 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
         }
         kotlin.math.abs(sum / 6.0)
     }
-    val volume get() = rawVolume * scale * scale * scale
+    val volume get() = rawVolume * kotlin.math.abs(ex * ey * ez)
 
     /** Edges used by only one triangle (vertices at the same place counted as one): 0 for a closed, printable surface. */
     val openEdges: Int by lazy {
@@ -81,9 +97,11 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     /** Placement as a 3MF transform: centre the mesh on its own footprint, drop it onto the bed, rotate about Z, scale, move. */
     fun placement(): Transform {
         val mx = (bounds[0] + bounds[3]) / 2.0; val my = (bounds[1] + bounds[4]) / 2.0; val mz = bounds[2].toDouble()
-        val c = cos(Math.toRadians(rotZ.toDouble())) * scale; val s = sin(Math.toRadians(rotZ.toDouble())) * scale
-        val tx = -(mx * c - my * s) + x; val ty = -(mx * s + my * c) + y; val tz = -mz * scale
-        return Transform(doubleArrayOf(c, s, 0.0, -s, c, 0.0, 0.0, 0.0, scale.toDouble(), tx, ty, tz))
+        val cr = cos(Math.toRadians(rotZ.toDouble())); val sr = sin(Math.toRadians(rotZ.toDouble()))
+        val kx = ex.toDouble(); val ky = ey.toDouble(); val kz = ez.toDouble()
+        val tx = -(mx * kx * cr - my * ky * sr) + x; val ty = -(mx * kx * sr + my * ky * cr) + y
+        val tz = -(if (kz >= 0) mz else bounds[5].toDouble()) * kz   // a mirrored height sits on its other end
+        return Transform(doubleArrayOf(cr * kx, sr * kx, 0.0, -sr * ky, cr * ky, 0.0, 0.0, 0.0, kz, tx, ty, tz))
     }
 }
 
@@ -438,6 +456,7 @@ class PrepareState(private val app: AppState) {
             val local = if (ox == 0.0 && oy == 0.0) o else o.copy(placement = Transform(o.placement.m.copyOf().also { it[9] -= ox; it[10] -= oy }))
             addFromPlacement(local, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments,
                 ObjectSettings.usable(entries[o.id]?.settings?.takeIf { it.isNotEmpty() } ?: o.settings), plate)
+            entries[o.id]?.let { e -> items.lastOrNull()?.let { it.parts.addAll(e.parts); it.ranges.addAll(e.heightRanges); it.layerProfile.addAll(e.layerProfile) } }
         }
         p.manifest?.settings?.preset?.let { key ->
             if (key.startsWith("process:")) processId = key.removePrefix("process:")
@@ -471,9 +490,14 @@ class PrepareState(private val app: AppState) {
         val m = o.placement.m
         val scale = sqrt(m[0] * m[0] + m[1] * m[1]).toFloat().takeIf { it > 0 } ?: 1f
         val rot = Math.toDegrees(atan2(m[1], m[0])).toFloat()
+        // The other axes relative to the first: Y's length and handedness (a left-handed turn mirrors Y), Z's length and sign.
+        val yLen = sqrt(m[3] * m[3] + m[4] * m[4]).toFloat().takeIf { it > 0 } ?: scale
+        val mirrorY = m[0] * m[4] - m[1] * m[3] < 0
+        val relY = (if (mirrorY) -yLen else yLen) / scale; val relZ = (m[8].toFloat().takeIf { it != 0f } ?: scale) / scale
         val b = o.mesh.bounds(); val cx = (b[0] + b[3]) / 2.0; val cy = (b[1] + b[4]) / 2.0
         val p = o.placement.apply(cx, cy, 0.0)
         val item = PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot, paintSlots, sources, settings, plate)
+        item.sy = relY; item.sz = relZ
         // A painted model from another slicer (or saved before colours were mapped) gets its colours matched to the slots.
         if (item.painted.isNotEmpty() && item.paintSlots.size < item.painted.max()) matchColours(item, o.filament)
         items += item
@@ -515,9 +539,9 @@ class PrepareState(private val app: AppState) {
         item.paintSlots[n - 1] = slot; changed()
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate); changed(); arrange() } }
+    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate).also { it.copyShapeFrom(s) }; changed(); arrange() } }
     fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
-    fun changed() { dirty = true; invalidateSlice() }
+    fun changed() { dirty = true; invalidateSlice(); refreshRules() }
     private fun invalidateSlice() { if (slice !is SliceState.Running) { slice = SliceState.Idle; showPreview = false } }
 
     /** Shelf packing by footprint, largest first, with a 6 mm gap, centred on the bed. Objects that can't fit are reported. */
@@ -539,7 +563,7 @@ class PrepareState(private val app: AppState) {
 
     /** The same object with a new mesh (its turn, size, slot, colours and settings kept). */
     private fun withMesh(old: PrepItem, mesh: Mesh, id: Int = old.id, name: String = old.name, x: Float = old.x, y: Float = old.y) =
-        PrepItem(id, name, mesh, x, y, old.rotZ, old.scale, old.slot, old.paintSlots.toList(), old.sources, old.settings.toMap(), old.plate).also { it.ownFilament = old.ownFilament }
+        PrepItem(id, name, mesh, x, y, old.rotZ, old.scale, old.slot, old.paintSlots.toList(), old.sources, old.settings.toMap(), old.plate).also { it.ownFilament = old.ownFilament; it.copyShapeFrom(old) }
 
     private fun replace(old: PrepItem, vararg new: PrepItem) {
         val i = items.indexOfFirst { it.id == old.id }.takeIf { it >= 0 } ?: return
@@ -573,6 +597,52 @@ class PrepareState(private val app: AppState) {
             }
             if (moved > 0) notice = "$moved object${if (moved == 1) "" else "s"} didn't fit, so Arrange put ${if (moved == 1) "it" else "them"} on another plate."
             changed()
+    }
+
+    // --- Object tools beyond the plate ops: parts, height ranges, variable layer height, size and mirror (the engine takes them as slice request lines).
+    /** Adds an extra volume to [item], centred on its bounding box (coordinates are from that centre) at a quarter of its largest side. */
+    fun addPart(item: PrepItem, kind: String, shape: String) {
+        val b = item.bounds; val side = maxOf(b[3] - b[0], b[4] - b[1], b[5] - b[2]) / 4.0
+        item.parts += ProjectManifest.ObjectPart(kind, shape, listOf(0.0, 0.0, 0.0), listOf(side, side, side)); changed()
+    }
+    fun updatePart(item: PrepItem, index: Int, part: ProjectManifest.ObjectPart) { if (index in item.parts.indices) { item.parts[index] = part; changed() } }
+    fun removePart(item: PrepItem, index: Int) { if (index in item.parts.indices) { item.parts.removeAt(index); changed() } }
+    /** Adds a height range from 20% to 40% of the object's height that prints with a finer layer, the setting Orca's range starts with. */
+    fun addRange(item: PrepItem) {
+        val h = item.height.toDouble()
+        item.ranges += ProjectManifest.HeightRange(Math.round(h * 20) / 100.0, Math.round(h * 40) / 100.0, mapOf("layer_height" to (overrides["layer_height"] ?: preset.overrides["layer_height"] ?: "0.2")))
+        changed()
+    }
+    fun updateRange(item: PrepItem, index: Int, range: ProjectManifest.HeightRange) { if (index in item.ranges.indices) { item.ranges[index] = range; changed() } }
+    fun removeRange(item: PrepItem, index: Int) { if (index in item.ranges.indices) { item.ranges.removeAt(index); changed() } }
+    fun clearLayerProfile(item: PrepItem) { item.layerProfile.clear(); changed() }
+    /** Orca's adaptive layer height for [item] (finer where the surface is shallow), at [quality] 0..1, from the engine. */
+    fun adaptiveLayers(item: PrepItem, quality: Double) = runTool("Adaptive layers") {
+        val dir = profileDir()
+        val profile = withContext(Dispatchers.IO) {
+            PlateOps.adaptiveLayers(listOf("machine.json", "process.json", "filament.json").map { File(dir, it) }, printerOverrides() + overrides.toMap() - FLUSH_KEY, item.mesh,
+                Triple(kotlin.math.abs(item.ex.toDouble()), kotlin.math.abs(item.ey.toDouble()), kotlin.math.abs(item.ez.toDouble())), quality, plateWork())
+        }
+        item.layerProfile.clear(); item.layerProfile.addAll(profile); changed()
+    }
+
+    // --- Orca's settings rules (OptionRules): greyed-out and hidden settings, the Setting Overrides page, the IDEX layout choices and the checks.
+    var rules by mutableStateOf<OptionRules.Result?>(null)
+    var ruleChecks by mutableStateOf<OptionRules.Result?>(null)
+    private var rulesJob: kotlinx.coroutines.Job? = null
+    /** Asks the engine for the rules of the current configuration (off the UI thread; a newer change supersedes an older answer). */
+    fun refreshRules() {
+        rulesJob?.cancel()
+        val dir = runCatching { profileDir() }.getOrNull() ?: return
+        val files = listOf("machine.json", "filament.json", "process.json").map { File(dir, it) }
+        val settings = printerOverrides() + overrides.toMap() - FLUSH_KEY
+        val variable = items.any { it.hasVariableLayer }
+        val filaments = maxOf(1, allSlots().size)
+        rulesJob = app.scope.launch(Dispatchers.IO) {
+            val states = runCatching { OptionRules.states(files, settings, filamentCount = filaments, printerName = profileId) }.getOrNull()
+            val checks = runCatching { OptionRules.checks(files, settings, variable, filaments, profileId) }.getOrNull()
+            withContext(Dispatchers.Main) { rules = states; ruleChecks = checks }
+        }
     }
 
     // --- AI auto-paint (AutoPaint): the engine segments the model; the user's own provider says which slot goes where.
@@ -700,7 +770,7 @@ class PrepareState(private val app: AppState) {
         val item = items.firstOrNull { it.id == selected } ?: return
         if (heightMm <= 0f || heightMm >= item.height) { notice = "Cut between the object's base and its top (0-${"%.1f".format(item.height)} mm)."; return }
         runTool("Cut") {
-            val z = item.bounds[2] + heightMm / item.scale
+            val z = item.bounds[2] + heightMm / kotlin.math.abs(item.ez)
             val (upper, lower) = withContext(Dispatchers.IO) { PlateOps.cut(item.mesh, z, plateWork()) }
             val halves = listOfNotNull(lower?.let { withMesh(item, it, item.id, "${item.name} (lower)") },
                 upper?.let { withMesh(item, it, nextId++, "${item.name} (upper)", item.x + item.footprintW + 5f) })
@@ -737,7 +807,7 @@ class PrepareState(private val app: AppState) {
                     family = p?.config?.identity?.family?.id ?: profile?.familyHint,
                     nozzleDiameters = machineVariant()?.let { m -> PrinterSetup.nozzles(machineJson()).map { it.toDoubleOrNull() ?: 0.4 } } ?: base.printer?.nozzleDiameters.orEmpty()),
                 plates = plates.mapIndexed { n, i -> ProjectManifest.PlateEntry(n + 1, plateNames[i], plateItems(i).map {
-                    ProjectManifest.ObjectEntry(it.id, it.name, sliceSlot(it.slot), paintSlots = it.paintSlots.map { s -> if (s in unoffered) sliceSlot(it.slot) else s }, settings = it.settings.toMap()) },
+                    ProjectManifest.ObjectEntry(it.id, it.name, sliceSlot(it.slot), paintSlots = it.paintSlots.map { s -> if (s in unoffered) sliceSlot(it.slot) else s }, settings = it.settings.toMap(), parts = it.parts.toList(), heightRanges = it.ranges.toList(), layerProfile = it.layerProfile.toList()) },
                     base.plates.getOrNull(i)?.unknown ?: org.json.JSONObject()) },
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(currentProcess()?.let { "process:${it.id}" } ?: preset.name.lowercase(),

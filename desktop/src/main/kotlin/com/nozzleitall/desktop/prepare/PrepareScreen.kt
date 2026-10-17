@@ -92,7 +92,8 @@ fun PrepareScreen(state: AppState) {
                         else -> if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
                     }
                     PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors,
-                        when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 })
+                        when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 },
+                        item.sx, item.sy, item.sz, item.parts.toList())
                 }
                 val (bw, bd) = p.bed
                 Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(20.dp))) {
@@ -338,6 +339,7 @@ private fun StepObjects(state: AppState) {
             }
             ObjectRow("Position (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("X", s.x) { s.x = it; p.changed() }; ObjectNumber("Y", s.y) { s.y = it; p.changed() } } }
             ObjectRow("Turn and size") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() }; ObjectNumber("%", s.scale * 100) { v -> if (v > 0) { s.scale = v / 100; p.changed() } } } }
+            ObjectSizeSection(p, s)
             if (p.plateNames.size > 1) ObjectRow("Plate") {
                 com.nozzleitall.desktop.settings.DenseSelect("Move to plate", p.plateNames.mapIndexed { i, n -> com.nozzleitall.desktop.settings.Choice("$i", n) }, "${s.plate}",
                     Modifier.width(160.dp)) { v -> v.toIntOrNull()?.let { p.moveToPlate(s, it) } }
@@ -345,6 +347,9 @@ private fun StepObjects(state: AppState) {
             ObjectInfo(s)
             val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
             ObjectSettingsSection(p, s, profileValues)
+            ObjectPartsSection(p, s, profileValues)
+            HeightRangesSection(p, s, profileValues)
+            VariableLayerSection(p, s)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.duplicateSelected() }.padding(4.dp))
                 Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.removeSelected() }.padding(4.dp))

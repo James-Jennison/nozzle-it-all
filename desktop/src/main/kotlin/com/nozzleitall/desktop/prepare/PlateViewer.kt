@@ -13,6 +13,7 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.nozzleitall.project.Mesh
+import kotlin.math.abs
 import kotlin.math.*
 
 /** Camera looking at the bed centre: yaw/pitch in degrees, distance in mm, and a pan offset in screen pixels. */
@@ -20,7 +21,13 @@ class ViewCamera { var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(
 
 /** An object to draw. [paintColors] gives the colour of each painted filament number (index N for the file's filament N). */
 class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean,
-                  val paintColors: List<Color?> = emptyList(), val paintKind: Int = 0)
+                  val paintColors: List<Color?> = emptyList(), val paintKind: Int = 0,
+                  /** Per-axis size on top of [scale]; a negative one mirrors that axis. */
+                  val sx: Float = 1f, val sy: Float = 1f, val sz: Float = 1f,
+                  /** Extra volumes (negative volumes, modifiers, support blockers / enforcers, parts), drawn as outlines. */
+                  val parts: List<com.nozzleitall.project.ProjectManifest.ObjectPart> = emptyList(), val selectedPart: Int = -1) {
+    val ex get() = scale * sx; val ey get() = scale * sy; val ez get() = scale * sz
+}
 
 /** A ray in an object's own mesh coordinates (where the engine paints), with the brush radius there. */
 class PaintRay(val origin: DoubleArray, val dir: DoubleArray, val radius: Double)
@@ -199,6 +206,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         else {
             prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
             prepared.forEach { (o, d) -> drawObject(proj, o, d) }
+            prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
         }
     }
 }
@@ -209,13 +217,14 @@ private fun screenRay(tap: Offset, w: Float, h: Float, cam: ViewCamera, bedW: Fl
     val near = DoubleArray(3); val far = DoubleArray(3)
     proj.unproject(tap.x, tap.y, proj.depthRange, near); proj.unproject(tap.x, tap.y, -proj.depthRange, far)
     val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val minZ = b[2]
-    val cr = cos(Math.toRadians(o.rotZ.toDouble())); val sr = sin(Math.toRadians(o.rotZ.toDouble())); val k = o.scale.toDouble()
-    fun point(p: DoubleArray): DoubleArray { val x = p[0] - o.x; val y = p[1] - o.y; return doubleArrayOf(mx + (x * cr + y * sr) / k, my + (-x * sr + y * cr) / k, minZ + p[2] / k) }
+    val cr = cos(Math.toRadians(o.rotZ.toDouble())); val sr = sin(Math.toRadians(o.rotZ.toDouble()))
+    val kx = o.ex.toDouble(); val ky = o.ey.toDouble(); val kz = o.ez.toDouble(); val zBase = if (kz >= 0) b[2].toDouble() else b[5].toDouble()
+    fun point(p: DoubleArray): DoubleArray { val x = p[0] - o.x; val y = p[1] - o.y; return doubleArrayOf(mx + (x * cr + y * sr) / kx, my + (-x * sr + y * cr) / ky, zBase + p[2] / kz) }
     val a = point(near); val c = point(far)
     val dir = doubleArrayOf(c[0] - a[0], c[1] - a[1], c[2] - a[2]); val len = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2])
     if (len < 1e-9) return null
     for (i in 0..2) dir[i] /= len
-    return PaintRay(a, dir, radiusMm / k)
+    return PaintRay(a, dir, (radiusMm / abs(o.scale)).toDouble())
 }
 
 private fun hitTest(tap: Offset, objects: List<PlateObject>, cam: ViewCamera, w: Float, h: Float, bedW: Float, bedD: Float): Int? {
@@ -269,7 +278,7 @@ private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh
         val tri = tris[k]
         for (c in 0..2) {
             val vi = t[tri * 3 + c] * 3
-            val lx = (v[vi] - mx) * o.scale; val ly = (v[vi + 1] - my) * o.scale
+            val lx = (v[vi] - mx) * o.ex; val ly = (v[vi + 1] - my) * o.ey
             proj.p(o.x + lx * cr - ly * sr, o.y + lx * sr + ly * cr, 0f, tmp, 0); positions += Offset(tmp[0], tmp[1])
         }
         k += step
@@ -283,7 +292,7 @@ private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh
 
 private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh) {
     val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris; val normals = d.normals
-    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val minZ = b[2]
+    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val zBase = if (o.ez >= 0f) b[2] else b[5]
     val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
     val n = tris.size
     val screen = FloatArray(n * 9); val depth = FloatArray(n); val cornerColor = IntArray(n * 3)
@@ -300,7 +309,7 @@ private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh
         val base = states?.get(tri)?.let { s -> if (s == 0) own else palette.getOrNull(s) ?: own } ?: own
         for (c in 0..2) {
             val vi = t[tri * 3 + c] * 3
-            val lx = (v[vi] - mx) * o.scale; val ly = (v[vi + 1] - my) * o.scale; val lz = (v[vi + 2] - minZ) * o.scale
+            val lx = (v[vi] - mx) * o.ex; val ly = (v[vi + 1] - my) * o.ey; val lz = (v[vi + 2] - zBase) * o.ez
             w[c * 3] = o.x + lx * cr - ly * sr; w[c * 3 + 1] = o.y + lx * sr + ly * cr; w[c * 3 + 2] = lz
             proj.p(w[c * 3], w[c * 3 + 1], w[c * 3 + 2], screen, k * 9 + c * 3)
         }
@@ -312,9 +321,11 @@ private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh
         val flip = if (fn[2] < 0f) -1f else 1f
         for (c in 0..2) {
             val vi = t[tri * 3 + c] * 3
-            val ax = normals[vi]; val ay = normals[vi + 1]
+            // A normal follows the inverse of the size, so a stretched or mirrored object keeps lighting right.
+            var ax = normals[vi] / o.ex; var ay = normals[vi + 1] / o.ey; var az = normals[vi + 2] / o.ez
+            val nl = sqrt(ax * ax + ay * ay + az * az).takeIf { it > 0 } ?: 1f; ax /= nl; ay /= nl; az /= nl
             val rx = ax * cr - ay * sr; val ry = ax * sr + ay * cr
-            proj.dir(rx, ry, normals[vi + 2], vn)
+            proj.dir(rx, ry, az, vn)
             // Smooth where the surface is curved; keep the face normal at sharp edges (over about 40 degrees).
             val dot = (vn[0] * fn[0] + vn[1] * fn[1] + vn[2] * fn[2])
             val sx: Float; val sy: Float; val sz: Float
@@ -336,6 +347,32 @@ private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh
     for (k in order) for (i in 0..2) { positions += Offset(screen[k * 9 + i * 3], screen[k * 9 + i * 3 + 1]); colors += Color(cornerColor[k * 3 + i]) }
     // Dst keeps the vertex colours as they are; SrcOver would blend them with the paint's default black.
     drawIntoCanvas { it.drawVertices(Vertices(VertexMode.Triangles, positions, positions, colors, emptyList()), BlendMode.Dst, Paint()) }
+}
+
+/**
+ * An object's extra volumes as outlines of their boxes (a cylinder or sphere shows its bounding box): red for a negative volume,
+ * green and orange for support enforcers and blockers, blue for modifiers, the part colour for added parts. Part coordinates are
+ * relative to the centre of the mesh's bounding box and scale, mirror and turn with the object.
+ */
+private fun DrawScope.drawParts(proj: Projector, o: PlateObject, d: DisplayMesh) {
+    val b = d.bounds
+    val half = abs((b[5] - b[2]) * o.ez) / 2f
+    val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
+    val tmp = FloatArray(3)
+    fun world(px: Float, py: Float, pz: Float): Offset {
+        val lx = px * o.ex; val ly = py * o.ey
+        proj.p(o.x + lx * cr - ly * sr, o.y + lx * sr + ly * cr, pz * o.ez + half, tmp, 0)
+        return Offset(tmp[0], tmp[1])
+    }
+    o.parts.forEachIndexed { i, part ->
+        val colour = when (part.kind) { "negative" -> Color(0xFFE5484D); "enforcer" -> Color(0xFF3BA55D); "blocker" -> Color(0xFFF5A623); "modifier" -> Color(0xFF3E7BFA); else -> Color(0xFF9B59B6) }
+        val cx = part.center[0].toFloat(); val cy = part.center[1].toFloat(); val cz = part.center[2].toFloat()
+        val hx = part.size[0].toFloat() / 2; val hy = part.size[1].toFloat() / 2; val hz = part.size[2].toFloat() / 2
+        val pts = Array(8) { k -> world(cx + (if (k and 1 == 0) -hx else hx), cy + (if (k and 2 == 0) -hy else hy), cz + (if (k and 4 == 0) -hz else hz)) }
+        val width = if (i == o.selectedPart) 2.6f else 1.4f
+        for ((a, e) in listOf(0 to 1, 2 to 3, 4 to 5, 6 to 7, 0 to 2, 1 to 3, 4 to 6, 5 to 7, 0 to 4, 1 to 5, 2 to 6, 3 to 7))
+            drawLine(colour, pts[a], pts[e], width)
+    }
 }
 
 private fun norm(x: Float, y: Float, z: Float): FloatArray { val l = sqrt(x * x + y * y + z * z); return floatArrayOf(x / l, y / l, z / l) }

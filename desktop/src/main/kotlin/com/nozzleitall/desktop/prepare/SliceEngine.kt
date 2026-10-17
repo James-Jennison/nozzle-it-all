@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -134,16 +135,7 @@ class SliceEngine(private val binary: File, private val workDir: File) {
         }.getOrDefault(270.0 to 270.0)
 
         /** A binary STL of the object's own (untransformed) mesh, as the Web App's writeStl(). */
-        fun stlBytes(mesh: Mesh): ByteArray {
-            val n = mesh.triangleCount
-            val b = java.nio.ByteBuffer.allocate(84 + n * 50).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            b.position(80); b.putInt(n)
-            for (i in 0 until n) {
-                b.position(84 + i * 50 + 12)
-                for (c in 0..2) { val vi = mesh.triangles[i * 3 + c] * 3; for (a in 0..2) b.putFloat(mesh.vertices[vi + a]) }
-            }
-            return b.array()
-        }
+        fun stlBytes(mesh: Mesh): ByteArray = com.nozzleitall.project.MeshIO.stlBytes(mesh)
 
         /**
          * The engine request, in the Web App's format and with its choices (web/src/app/state.ts slice()): the three profile
@@ -191,10 +183,23 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 val m = o.placement.m
                 val scale = Math.hypot(m[0], m[1]).takeIf { it > 0 } ?: 1.0
                 val rot = Math.toDegrees(Math.atan2(m[1], m[0]))
+                // The other axes relative to X: Y's length (negative when the turn is left-handed, a mirror) and Z's length and sign.
+                val yLen = Math.hypot(m[3], m[4]).takeIf { it > 0 } ?: scale
+                val relY = (if (m[0] * m[4] - m[1] * m[3] < 0) -yLen else yLen) / scale
+                val relZ = (m[8].takeIf { it != 0.0 } ?: scale) / scale
                 val b = o.mesh.bounds(); val cx = (b[0] + b[3]) / 2.0; val cy = (b[1] + b[4]) / 2.0
                 val x = cx * m[0] + cy * m[3] + m[9]; val y = cx * m[1] + cy * m[4] + m[10]
                 val tool = if (slots.size > 1) objectSlots[o.id] ?: 1 else 0
                 lines += "object\t${stl.absolutePath}\t${x - bedW / 2}\t${y - bedD / 2}\t$rot\t$scale\t$tool"
+                if (abs(relY) != 1.0 || abs(relZ) != 1.0 || relY < 0 || relZ < 0)
+                    lines += "object_scale\t${i + 1}\t1\t${abs(relY)}\t${abs(relZ)}\t${(if (relY < 0) "y" else "") + (if (relZ < 0) "z" else "")}"
+                entries[o.id]?.let { e ->
+                    e.parts.forEach { lines += "object_part\t${i + 1}\t${it.spec()}" }
+                    e.heightRanges.forEach { r -> r.settings.toSortedMap().forEach { (k, v) ->
+                        require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
+                        lines += "object_range\t${i + 1}\t${r.from}\t${r.to}\t$k\t$v" } }
+                    if (e.layerProfile.size >= 4) lines += "object_layers\t${i + 1}\t${e.layerProfile.joinToString(",")}"
+                }
                 // The object's own settings (Orca's per-object settings), after the whole-plate ones.
                 entries[o.id]?.settings?.toSortedMap()?.forEach { (k, v) ->
                     require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }

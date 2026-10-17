@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
+import com.nozzleitall.project.MeshIO
 import com.nozzleitall.project.Mesh
 import org.json.JSONArray
 import org.json.JSONObject
@@ -66,6 +67,18 @@ object PlateOps {
             .put("upper", upper.absolutePath).put("lower", lower.absolutePath))
         fun read(f: File) = MeshIO.readStl(f.readBytes()).takeIf { it.triangleCount > 0 }
         return (read(upper) to read(lower)).also { upper.delete(); lower.delete() }
+    }
+
+    /**
+     * Orca's adaptive variable layer height (the layer editing "Adaptive" button) for [mesh] at [factors] (x, y, z size, the object's
+     * own axes) under the print settings in [profileFiles] and [overrides]: z / height pairs up the object. [quality] runs from 0 (smoothest,
+     * fewest layers) to 1 (finest where the surface is shallow).
+     */
+    fun adaptiveLayers(profileFiles: List<File>, overrides: Map<String, String>, mesh: Mesh, factors: Triple<Double, Double, Double>, quality: Double, work: File): List<Double> {
+        val o = run(JSONObject().put("op", "adaptive_layers").put("model", stl(mesh, work, "adaptive.stl").absolutePath).put("profiles", JSONArray(profileFiles.map { it.absolutePath }))
+            .put("overrides", JSONObject(overrides)).put("scale", JSONArray(listOf(factors.first, factors.second, factors.third))).put("quality", quality.coerceIn(0.0, 1.0)))
+        File(work, "adaptive.stl").delete()
+        return o.getJSONArray("profile").let { a -> (0 until a.length()).map { a.getDouble(it) } }
     }
 
     /** its_split: the mesh's parts, each the triangles joined to one another through shared edges, vertices renumbered. */

@@ -35,10 +35,12 @@ class CompanionScreenTest {
         var sent = 0
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address="http://fixture.local/", connected=true, snapshot=PrinterSnapshot(true,"printing")), {}, {}, {}, { _,_->sent++ }) } }
         compose.openFixtureDashboard()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Pause"))
         compose.onNodeWithText("Pause").performScrollTo().performClick()
         assertEquals(0,sent)
         compose.onNodeWithText("Go back").performClick()
         assertEquals(0,sent)
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Pause"))
         compose.onNodeWithText("Pause").performScrollTo().performClick()
         compose.onNodeWithText("Confirm").performClick()
         assertEquals(1,sent)
@@ -56,6 +58,7 @@ class CompanionScreenTest {
         val address = "http://fixture.local/"
         compose.setContent { CompanionTheme { CompanionScreen(ScreenState(address=address, connected=false, savedPrinters=listOf(address), snapshot=PrinterSnapshot(true,"printing")), {}, {}, {}, { _,_->error("Must not dispatch") }) } }
         compose.openFixtureDashboard(connected=false)
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Pause"))
         compose.onNodeWithText("Pause").performScrollTo().assertIsNotEnabled()
     }
     @Test fun savedProfileConnectAndForgetUseTheirExactAddresses() {
@@ -79,11 +82,12 @@ class CompanionScreenTest {
             CompositionLocalProvider(LocalDensity provides Density(density, 2f)) {
                 CompanionTheme { Box(Modifier.width(320.dp)) {
                     CompanionScreen(ScreenState(address="http://fixture.local/", connected=true,
-                        snapshot=PrinterSnapshot(true,"printing", filename="A very long model filename with multiple words.gcode", progress=.47f)), {}, {}, {}, { _,_->sent++ })
+                        snapshot=PrinterSnapshot(true,"printing", filename="A very long model filename with multiple words.gcode", progress=.47f), savedPrinters=listOf("http://fixture.local/")), {}, {}, {}, { _,_->sent++ })
                 } }
             }
         }
         compose.openFixtureDashboard()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Pause"))
         compose.onNodeWithText("Pause").performScrollTo().assertIsDisplayed().performClick()
         compose.onNodeWithText("Go back").assertIsDisplayed().performClick()
         assertEquals(0, sent)
@@ -103,6 +107,7 @@ class CompanionScreenTest {
             CompanionScreen(state, {}, {}, {}, { _,_-> state = state.copy(commandNotice=message) })
         } }
         compose.openFixtureDashboard()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Pause"))
         compose.onNodeWithText("Pause").performScrollTo().performClick()
         compose.onNodeWithText("Confirm").performClick()
         compose.onNodeWithText(message).assertIsDisplayed()

@@ -429,12 +429,20 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 // Settings is shown last, but each tab keeps its own index (and nav-N test tag).
                 listOf(Triple(0, "Home", CompanionSymbol.DASHBOARD), Triple(1, "Control", CompanionSymbol.CONTROL), Triple(2, "Files", CompanionSymbol.FILES),
                     Triple(3, "Prepare", CompanionSymbol.SLICE), Triple(5, "Discover", CompanionSymbol.DISCOVER), Triple(4, "Settings", CompanionSymbol.SETTINGS)).forEach { (index, title, symbol) ->
-                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
+                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = {
+                        // One line, at most 1.2x text: six tabs in a narrow window at a large text size used to wrap a letter per line and leave the screen no height.
+                        val d = androidx.compose.ui.platform.LocalDensity.current
+                        CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, minOf(d.fontScale, 1.2f))) {
+                            Text(title, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                    })
                 }
             }
         }) { padding ->
         // On a tablet or unfolded screen the single column would stretch edge to edge; keep it a readable width, centred.
-        val wideGutter = (((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - MAX_CONTENT_WIDTH_DP).coerceAtLeast(0)) / 2 + 16).dp
+        // The gutter follows the width this screen actually has (a split-screen or freeform window is narrower than the display).
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wideGutter = (((maxWidth.value.toInt() - MAX_CONTENT_WIDTH_DP).coerceAtLeast(0)) / 2 + 16).dp
         if (expandedCamera) {
             Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.Center) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -932,7 +940,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
         }
-    }
+            }
+}
     // A Bambu printer has no local workspace worth importing into and no Moonraker to upload to;
     // a share aimed at one is a print request instead. A model file (STL/3MF/OBJ, WO-13) is a
     // slice-and-print request regardless of printer kind (Bambu included, though that path

@@ -596,6 +596,73 @@ class PrepareState(private val app: AppState) {
         }
     }
 
+    // --- Paint tools (PaintOps): Orca's support, seam, colour and fuzzy-skin painting, run on the engine's TriangleSelector.
+    /** The kind being painted on the selected object, or null when painting is off. */
+    var paintKind by mutableStateOf<PaintOps.Kind?>(null)
+    /** What a stroke paints: support/seam 1 = enforcer and 2 = blocker, fuzzy skin 1; colour: the slot. 0 erases. */
+    var paintState by mutableStateOf(1)
+    var paintMode by mutableStateOf(PaintOps.Mode.BRUSH)
+    /** Brush radius in millimetres on the plate (the engine gets it in the model's own units). */
+    var paintRadius by mutableStateOf(3f)
+    var paintBusy by mutableStateOf(false)
+    private val paintQueue = ArrayDeque<Pair<Int, List<PaintRay>>>()
+    private class PaintStep(val id: Int, val kind: PaintOps.Kind, val before: Mesh, val slots: List<Int>)
+    private val paintHistory = ArrayDeque<PaintStep>()
+    val canUndoPaint: Boolean get() = paintHistory.isNotEmpty()
+
+    /** The file's filament number that prints in [slot] for [item]: an existing one, or a new one added to its paint slots. */
+    private fun colourStateForSlot(item: PrepItem, slot: Int): Int {
+        val at = item.paintSlots.indexOf(slot)
+        if (at >= 0) return at + 1
+        item.paintSlots.add(slot)
+        return item.paintSlots.size
+    }
+
+    /** Applies the strokes the viewer collected to the object [id], one batch at a time so each builds on the last. */
+    fun paintStroke(id: Int, rays: List<PaintRay>) {
+        if (paintKind == null || rays.isEmpty()) return
+        paintQueue.addLast(id to rays)
+        if (paintBusy) return
+        paintBusy = true
+        app.scope.launch(Dispatchers.Main) {
+            try {
+                while (paintQueue.isNotEmpty()) {
+                    val (target, batch) = paintQueue.removeFirst()
+                    val kind = paintKind ?: break
+                    val item = items.firstOrNull { it.id == target } ?: continue
+                    val slotsBefore = item.paintSlots.toList()
+                    val state = if (kind == PaintOps.Kind.COLOUR && paintState > 0) colourStateForSlot(item, paintState) else paintState
+                    val strokes = batch.map { PaintOps.Stroke(it.origin, it.dir, it.radius, state) }
+                    val mode = paintMode
+                    val mesh = withContext(Dispatchers.IO) { PaintOps.stroke(item.mesh, kind, strokes, mode) }
+                    val fresh = withMesh(item, mesh)
+                    paintHistory.addLast(PaintStep(target, kind, item.mesh, slotsBefore)); while (paintHistory.size > 30) paintHistory.removeFirst()
+                    replace(item, fresh); changed()
+                }
+            } catch (e: Exception) { notice = "Painting didn't work: ${e.message ?: e.javaClass.simpleName}" }
+            finally { paintBusy = false }
+        }
+    }
+
+    /** Takes back the last paint stroke (or clear). */
+    fun undoPaint() {
+        val step = paintHistory.removeLastOrNull() ?: return
+        val item = items.firstOrNull { it.id == step.id } ?: return
+        val fresh = withMesh(item, step.before)
+        fresh.paintSlots.clear(); fresh.paintSlots.addAll(step.slots)
+        replace(item, fresh); changed()
+    }
+
+    /** Removes all paint of [kind] from the selected object. */
+    fun clearPaint(kind: PaintOps.Kind) {
+        val item = items.firstOrNull { it.id == selected } ?: return
+        if (kind.of(item.mesh) == null) return
+        paintHistory.addLast(PaintStep(item.id, kind, item.mesh, item.paintSlots.toList())); while (paintHistory.size > 30) paintHistory.removeFirst()
+        replace(item, withMesh(item, kind.with(item.mesh, null))); changed()
+    }
+
+    fun stopPainting() { paintKind = null; paintQueue.clear() }
+
     /** Orca's Auto orient for the selected object, or every object when none is selected. */
     fun orient() {
         val targets = plateItems().filter { selected == null || it.id == selected }.ifEmpty { return }

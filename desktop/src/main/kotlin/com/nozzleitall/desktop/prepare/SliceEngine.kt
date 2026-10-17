@@ -155,7 +155,7 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             val entries = req.project.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
             val objectSlots = entries.mapValues { it.value.materialSlot ?: 1 }
             // Painted objects print their colours in the slots chosen for them; the highest slot in use sets the tool count.
-            val paint = req.project.objects.associate { o -> o.id to (if (o.mesh.isPainted) paintInSlots(o.mesh, entries[o.id]?.paintSlots.orEmpty(), objectSlots[o.id] ?: 1) else null) }
+            val paint = req.project.objects.associate { o -> o.id to (if (o.mesh.hasAnyPaint) paintInSlots(o.mesh, entries[o.id]?.paintSlots.orEmpty(), objectSlots[o.id] ?: 1) else null) }
             val usedSlots = req.project.objects.maxOfOrNull { o -> maxOf(objectSlots[o.id] ?: 1, paint[o.id]?.second ?: 1) } ?: 1
             val materials = req.materials.sortedBy { it.slot }.ifEmpty { listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")) }
             // A mixed filament names loaded filaments by number, so with any mixed filament every loaded slot is passed to the engine.
@@ -216,7 +216,7 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                     runCatching { Paint.remap(s) { n -> if (n == 0) 0 else (paintSlots.getOrNull(n - 1) ?: objectSlot).also { highest = maxOf(highest, it) } } }.getOrNull()
                 } }
             }
-            return Mesh(mesh.vertices, mesh.triangles, out) to highest
+            return mesh.withPaint(paint = out) to highest   // support, seam and fuzzy-skin paint are not tied to filament slots
         }
 
         fun parseStats(gcode: File): SliceStats {

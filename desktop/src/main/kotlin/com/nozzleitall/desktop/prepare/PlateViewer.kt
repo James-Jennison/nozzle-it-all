@@ -20,7 +20,13 @@ class ViewCamera { var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(
 
 /** An object to draw. [paintColors] gives the colour of each painted filament number (index N for the file's filament N). */
 class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean,
-                  val paintColors: List<Color?> = emptyList())
+                  val paintColors: List<Color?> = emptyList(), val paintKind: Int = 0)
+
+/** A ray in an object's own mesh coordinates (where the engine paints), with the brush radius there. */
+class PaintRay(val origin: DoubleArray, val dir: DoubleArray, val radius: Double)
+
+/** Painting on the plate: strokes on object [objectId] with a brush of [radiusMm] are handed to [onStrokes] in batches. */
+class PaintInput(val objectId: Int, val radiusMm: Float, val onStrokes: (List<PaintRay>) -> Unit)
 
 /**
  * A mesh ready to draw: possibly simplified, with smooth normals, and the original's bounds (so placement never shifts).
@@ -28,21 +34,26 @@ class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Colo
  */
 class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray, val states: IntArray? = null) { val tris = IntArray(mesh.triangleCount) { it } }
 
-private val displayCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Mesh, DisplayMesh>())
+private val displayCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Mesh, Array<DisplayMesh?>>())
 
-/** The display version of [mesh], computed once per mesh. Slicing always uses the full mesh. */
-fun displayMesh(mesh: Mesh, budget: Int = 150_000): DisplayMesh = displayCache.getOrPut(mesh) {
-    val (painted, states) = expandPaint(mesh)
-    val (m, kept) = simplifyWithStates(painted, states, budget)
-    DisplayMesh(m, vertexNormals(m, IntArray(m.triangleCount) { it }), mesh.bounds(), kept)
+/**
+ * The display version of [mesh], computed once per mesh and kind. Slicing always uses the full mesh. [kind] picks which paint shows:
+ * 0 colour, 1 support, 2 seam, 3 fuzzy skin (the state numbers of the others index [PlateObject.paintColors]).
+ */
+fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh = displayCache.getOrPut(mesh) { arrayOfNulls(4) }.let { slots ->
+    slots[kind] ?: run {
+        val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint })
+        val (m, kept) = simplifyWithStates(painted, states, budget)
+        DisplayMesh(m, vertexNormals(m, IntArray(m.triangleCount) { it }), mesh.bounds(), kept)
+    }.also { slots[kind] = it }
 }
 
 /**
  * The mesh with each painted triangle replaced by its painted pieces (as the engine subdivides it), and each triangle's
  * filament. Unpainted meshes come back unchanged with no states.
  */
-fun expandPaint(mesh: Mesh): Pair<Mesh, IntArray?> {
-    val paint = mesh.paint ?: return mesh to null
+fun expandPaint(mesh: Mesh, kindPaint: Array<String?>? = mesh.paint): Pair<Mesh, IntArray?> {
+    val paint = kindPaint ?: return mesh to null
     val v = mesh.vertices; val t = mesh.triangles
     val verts = PaintVerts(v.size + 1024); verts.addAll(v)
     val tris = PaintInts(t.size + 1024); val states = PaintInts(t.size / 3 + 1024)
@@ -129,6 +140,15 @@ private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Flo
         val f = eye / (eye - toward.coerceAtMost(eye * 0.8f))
         out[o] = w / 2 + rx * scale * f + pan.x; out[o + 1] = h / 2 + sy * scale * f + pan.y; out[o + 2] = -toward
     }
+    /** The world point on the line of sight through screen point ([sx], [sy]) at view depth [toward] (larger = nearer the viewer). */
+    fun unproject(sx: Float, sy: Float, toward: Float, out: DoubleArray) {
+        val f = eye / (eye - toward.coerceAtMost(eye * 0.8f))
+        val rx = (sx - w / 2 - pan.x) / (scale * f); val syy = (sy - h / 2 - pan.y) / (scale * f)
+        val ry = cp * syy + sp * toward; val z = -sp * syy + cp * toward
+        out[0] = (cx + rx * cyw + ry * syw).toDouble(); out[1] = (cy - rx * syw + ry * cyw).toDouble(); out[2] = z.toDouble()
+    }
+    val depthRange get() = eye * 0.5f
+
     /** A world-space direction in view space: x right, y down the screen, z toward the viewer. */
     fun dir(x: Float, y: Float, z: Float, out: FloatArray) {
         val rx = x * cyw - y * syw; val ry = x * syw + y * cyw
@@ -139,16 +159,30 @@ private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Flo
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: ViewCamera, bedColor: Color, lineColor: Color, modifier: Modifier = Modifier,
-                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), onSelect: (Int?) -> Unit = {}) {
-    val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh) } }
+                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), paint: PaintInput? = null, onSelect: (Int?) -> Unit = {}) {
+    val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh, kind = o.paintKind) } }
+    val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects); val preparedRef = rememberUpdatedState(prepared)
     Canvas(modifier.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag to orbit, scroll to zoom." }
         .pointerInput(camera) { awaitPointerEventScope {
             // Left-drag orbits; right-drag or Shift+drag pans.
             var last: Offset? = null
+            val strokes = ArrayList<PaintRay>()
             while (true) {
                 val ev = awaitPointerEvent()
                 val ch = ev.changes.firstOrNull() ?: continue
                 val prev = last
+                val painting = paintRef.value?.takeIf { !ev.buttons.isSecondaryPressed && !ev.keyboardModifiers.isShiftPressed && !ev.keyboardModifiers.isAltPressed }
+                if (painting != null && (ch.pressed || strokes.isNotEmpty())) {
+                    // Painting: the left button lays a stroke on the selected object (Alt-drag orbits, Shift-drag pans).
+                    val target = preparedRef.value.firstOrNull { (o, _) -> o.id == painting.objectId }
+                    if (target != null && ch.pressed && (prev == null || (ch.position - prev).getDistance() >= 3f)) {
+                        screenRay(ch.position, size.width.toFloat(), size.height.toFloat(), camera, bedW, bedD, target.first, target.second, painting.radiusMm)?.let { strokes += it }
+                        last = ch.position
+                    }
+                    if (strokes.size >= 16 || (!ch.pressed && strokes.isNotEmpty())) { painting.onStrokes(strokes.toList()); strokes.clear() }
+                    if (!ch.pressed) last = null
+                    continue
+                }
                 if (ev.type == PointerEventType.Move && ch.pressed && prev != null) {
                     val d = ch.position - prev
                     if (ev.buttons.isSecondaryPressed || ev.keyboardModifiers.isShiftPressed) camera.pan += d
@@ -158,7 +192,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             }
         } }
         .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f) } }
-        .pointerInput(objects) { detectTapGestures { tap -> onSelect(hitTest(tap, objects, camera, size.width.toFloat(), size.height.toFloat(), bedW, bedD)) } }) {
+        .pointerInput(objects) { detectTapGestures { tap -> if (paintRef.value == null) onSelect(hitTest(tap, objects, camera, size.width.toFloat(), size.height.toFloat(), bedW, bedD)) } }) {
         val proj = Projector(size.width, size.height, camera, bedW / 2, bedD / 2)
         drawBed(proj, bedW, bedD, bedColor, lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor)
@@ -167,6 +201,21 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             prepared.forEach { (o, d) -> drawObject(proj, o, d) }
         }
     }
+}
+
+/** The ray through [tap] in [o]'s mesh coordinates (inverse of how [drawObject] places the mesh), or null if the view is degenerate. */
+private fun screenRay(tap: Offset, w: Float, h: Float, cam: ViewCamera, bedW: Float, bedD: Float, o: PlateObject, d: DisplayMesh, radiusMm: Float): PaintRay? {
+    val proj = Projector(w, h, cam, bedW / 2, bedD / 2)
+    val near = DoubleArray(3); val far = DoubleArray(3)
+    proj.unproject(tap.x, tap.y, proj.depthRange, near); proj.unproject(tap.x, tap.y, -proj.depthRange, far)
+    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val minZ = b[2]
+    val cr = cos(Math.toRadians(o.rotZ.toDouble())); val sr = sin(Math.toRadians(o.rotZ.toDouble())); val k = o.scale.toDouble()
+    fun point(p: DoubleArray): DoubleArray { val x = p[0] - o.x; val y = p[1] - o.y; return doubleArrayOf(mx + (x * cr + y * sr) / k, my + (-x * sr + y * cr) / k, minZ + p[2] / k) }
+    val a = point(near); val c = point(far)
+    val dir = doubleArrayOf(c[0] - a[0], c[1] - a[1], c[2] - a[2]); val len = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2])
+    if (len < 1e-9) return null
+    for (i in 0..2) dir[i] /= len
+    return PaintRay(a, dir, radiusMm / k)
 }
 
 private fun hitTest(tap: Offset, objects: List<PlateObject>, cam: ViewCamera, w: Float, h: Float, bedW: Float, bedD: Float): Int? {

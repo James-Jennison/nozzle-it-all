@@ -32,7 +32,7 @@ object MeshIO {
                 val own = o.filament ?: 1
                 val paint = if (own == (default ?: 1)) o.mesh.paint
                     else Array<String?>(o.mesh.triangleCount) { i -> o.mesh.paint?.get(i)?.let { s -> Paint.remap(s) { if (it == 0) own else it } } ?: Paint.whole(own) }
-                Mesh(v, o.mesh.triangles, paint) }), p.filaments, default)
+                Mesh(v, o.mesh.triangles, paint, o.mesh.supportPaint, o.mesh.seamPaint, o.mesh.fuzzyPaint) }), p.filaments, default)
         }
         else -> throw ProjectFormatException("Nozzle It All opens STL, OBJ and 3MF files.")
     }
@@ -40,14 +40,15 @@ object MeshIO {
     fun merge(meshes: List<Mesh>): Mesh {
         if (meshes.size == 1) return meshes[0]
         val v = FloatArray(meshes.sumOf { it.vertices.size }); val t = IntArray(meshes.sumOf { it.triangles.size })
-        val paint = if (meshes.any { it.paint != null }) arrayOfNulls<String>(t.size / 3) else null
+        val kinds = listOf<(Mesh) -> Array<String?>?>({ it.paint }, { it.supportPaint }, { it.seamPaint }, { it.fuzzyPaint })
+        val merged = kinds.map { get -> if (meshes.any { get(it) != null }) arrayOfNulls<String>(t.size / 3) else null }
         var vo = 0; var to = 0
         meshes.forEach { m ->
             m.vertices.copyInto(v, vo); val base = vo / 3; for (i in m.triangles.indices) t[to + i] = m.triangles[i] + base
-            m.paint?.copyInto(paint!!, to / 3)
+            kinds.forEachIndexed { k, get -> get(m)?.copyInto(merged[k]!!, to / 3) }
             vo += m.vertices.size; to += m.triangles.size
         }
-        return Mesh(v, t, paint)
+        return Mesh(v, t, merged[0], merged[1], merged[2], merged[3])
     }
 
     /** The painted filament numbers a mesh uses (state 0, "the object's own", excluded). */

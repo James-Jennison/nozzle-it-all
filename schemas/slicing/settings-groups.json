@@ -115,7 +115,9 @@
         "min_width_top_surface",
         "ironing_.*",
         "support_ironing.*",
-        "center_of_surface_pattern"
+        "center_of_surface_pattern",
+        "top_color_penetration_layers",
+        "bottom_color_penetration_layers"
       ]
     },
     {
@@ -145,7 +147,8 @@
         "filter_out_gap_fill",
         "detect_narrow_internal_solid_infill",
         "small_area_infill_flow_compensation.*",
-        "interlocking_.*"
+        "interlocking_.*",
+        "tpms_.*"
       ]
     },
     {
@@ -189,7 +192,9 @@
         "skirt_.*",
         "min_skirt_length",
         "single_loop_draft_shield",
-        "draft_shield"
+        "draft_shield",
+        "leading_brim_length",
+        "extra_brim_width"
       ]
     },
     {
@@ -277,7 +282,8 @@
         "dithering_local_z_whole_objects",
         "dithering_local_z_infill",
         "local_z_wipe_tower_purge_lines",
-        "delta_temperature"
+        "delta_temperature",
+        "belt_purge_tower_width"
       ]
     },
     {
@@ -292,7 +298,8 @@
         "print_order",
         "enable_arc_fitting",
         "enable_wrapping_detection",
-        "infill_combination.*"
+        "infill_combination.*",
+        "imex_parallel_mode"
       ]
     },
     {
@@ -430,7 +437,9 @@
         "printer_notes",
         "pellet_modded_printer",
         "use_3mf",
-        "time_cost"
+        "time_cost",
+        "belt_.*",
+        "build_plate_tilt_.*"
       ]
     },
     {
@@ -460,7 +469,10 @@
         "cooling_filter_enabled",
         "fan_kickstart",
         "part_cooling_fan_min_pwm",
-        "fan_speedup_.*"
+        "fan_speedup_.*",
+        "enable_belt_purge_tower",
+        "is_imex",
+        "imex_.*"
       ]
     },
     {

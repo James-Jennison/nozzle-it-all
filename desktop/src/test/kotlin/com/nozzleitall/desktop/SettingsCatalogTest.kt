@@ -23,7 +23,7 @@ class SettingsCatalogTest {
             .map { it.getString("scope") + ":" + it.getString("key") }
         assertTrue("settings with no group: $lost", lost.isEmpty())
         assertEquals("each setting appears once", grouped.size, catalog.groups.sumOf { it.settings.size })
-        assertTrue(catalog.all.size > 500) // 567 on nozzle-engine (engine/fork/ENGINE_PIN.json)
+        assertTrue(catalog.all.size > 700) // 762 on the Orca 2.5.0 engine (engine/fork/ENGINE_PIN.json)
     }
 
     @Test fun everyGroupIsInExactlyOneTabOfItsScope() {

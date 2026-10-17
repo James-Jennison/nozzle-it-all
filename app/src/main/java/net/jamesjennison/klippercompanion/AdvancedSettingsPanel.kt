@@ -37,6 +37,7 @@ fun AdvancedSettingsPanel(
     var profiles by remember { mutableStateOf(store.all()) }
     var tier by remember { mutableStateOf(SettingTier.BASIC) }
     var query by remember { mutableStateOf("") }
+    var scope by remember { mutableStateOf(EngineSettings.PROCESS) }
     var profileName by remember { mutableStateOf("") }
     var compareWith by remember { mutableStateOf<CustomProfile?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag("advanced-settings")) {
@@ -44,9 +45,15 @@ fun AdvancedSettingsPanel(
         @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             SettingTier.entries.forEach { t -> FilterChip(tier == t, { tier = t }, label = { Text(t.label) }, modifier = Modifier.testTag("advanced-tier-${t.name.lowercase()}")) }
         }
+        // Print settings are the default; a filament or printer setting overrides the profile's for this print only.
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(EngineSettings.PROCESS to "Print", EngineSettings.FILAMENT to "Filament", EngineSettings.PRINTER to "Printer").forEach { (id, label) ->
+                FilterChip(scope == id, { scope = id }, label = { Text(label) }, modifier = Modifier.testTag("advanced-scope-$id"))
+            }
+        }
         OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("advanced-search"))
         // The curated entries first (the ones with tested ranges and help), then every other process setting the engine accepts.
-        val visible = SettingsCatalog.visible(tier, query, family) + EngineSettings.visible(tier, query)
+        val visible = (if (scope == EngineSettings.PROCESS) SettingsCatalog.visible(tier, query, family) else emptyList()) + EngineSettings.visible(tier, query, scope)
         if (visible.isEmpty()) Text("No settings match.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("advanced-empty"))
         visible.groupBy { it.group }.forEach { (group, defs) ->
             Text(group, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)

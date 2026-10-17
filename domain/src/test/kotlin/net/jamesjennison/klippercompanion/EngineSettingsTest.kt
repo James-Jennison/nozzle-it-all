@@ -41,4 +41,23 @@ class EngineSettingsTest {
     @Test fun credentialsAndEngineInternalsAreNeverOffered() {
         listOf("printhost_apikey", "printhost_password", "inherits", "compatible_printers").forEach { assertNull(it, EngineSettings.get(it)) }
     }
+
+    @Test fun filamentAndPrinterSettingsAreListedByScope() {
+        val filament = EngineSettings.visible(SettingTier.EXPERT, scope = EngineSettings.FILAMENT); val printer = EngineSettings.visible(SettingTier.EXPERT, scope = EngineSettings.PRINTER)
+        assertTrue(filament.size > 80); assertTrue(printer.size > 60)
+        assertTrue(filament.all { it.scope == EngineSettings.FILAMENT } && printer.all { it.scope == EngineSettings.PRINTER })
+        assertTrue(EngineSettings.get("nozzle_temperature")!!.vector); assertEquals(EngineSettings.FILAMENT, EngineSettings.get("nozzle_temperature")!!.scope)
+        assertTrue(EngineSettings.visible(SettingTier.EXPERT, "temperature", EngineSettings.FILAMENT).isNotEmpty())
+        // The profile's identity and technology are not per-print overrides; neither are the code, notes and shape fields.
+        listOf("printer_technology", "printer_model", "printable_area", "machine_start_gcode", "printer_notes").forEach { assertNull(it, EngineSettings.get(it)) }
+    }
+
+    @Test fun oneValueIsRepeatedForEachFilamentOrExtruderOfAListSetting() {
+        val sample = mapOf("nozzle_temperature" to "215", "wall_loops" to "3", "zaa_enabled" to "1")
+        assertEquals(sample, EngineSettings.expand(sample, 1, 1))
+        val four = EngineSettings.expand(sample, 4, 1)
+        assertEquals("215,215,215,215", four["nozzle_temperature"]); assertEquals("3", four["wall_loops"]); assertEquals("1", four["zaa_enabled"])
+        val printerList = EngineSettings.all.first { it.scope == EngineSettings.PRINTER && it.vector }
+        assertEquals("5,5", EngineSettings.expand(mapOf(printerList.key to "5"), 4, 2)[printerList.key])
+    }
 }

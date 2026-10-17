@@ -463,7 +463,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
         val toolSlotIndices = assignedSlots.map { if (it > toolCount && offeredMixed.isEmpty()) 1 else it }
         // The project's material overrides temperatures on top of (not instead of) the basic settings; skipped for a
         // multi-tool target, where slotMaterials carries each object's own material.
-        val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + SettingsCatalog.sanitize(advancedOverrides) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
+        val overrides = basicSettings.toOverrides(needsSupport) + (if (toolCount > 1) emptyMap() else (vm.currentMaterial()?.toOverrides() ?: emptyMap())) + EngineSettings.expand(SettingsCatalog.sanitize(advancedOverrides), toolCount, maxOf(nozzleCount, 1)) + (CalibrationSpec.decode(project?.calibration)?.let(Calibration::overrides) ?: emptyMap())
         // Colour mixing (0.2.0, requirement 2): both blank/empty for every printer that doesn't offer either system
         // (colourMixFeatures below) and for one that does but has no mixes/blends configured yet - sliceProject then
         // slices exactly as it always has.

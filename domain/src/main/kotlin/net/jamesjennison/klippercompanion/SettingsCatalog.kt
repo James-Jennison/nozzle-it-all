@@ -27,6 +27,9 @@ data class SettingDef(
     // Set for controls that do something on any multi-tool machine and nothing on a single-material one (the prime tower:
     // spools sharing a nozzle flush into it, and toolchangers prime each tool on it after a change).
     val multiToolOnly: Boolean = false,
+    // Which config the engine reads the key from (process, filament or printer), and whether it is a per-filament / per-extruder list,
+    // which one value is repeated across (see EngineSettings.expand).
+    val scope: String = "process", val vector: Boolean = false,
 )
 
 object SettingsCatalog {

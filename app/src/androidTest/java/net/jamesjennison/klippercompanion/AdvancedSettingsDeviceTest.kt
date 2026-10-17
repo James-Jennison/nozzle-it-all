@@ -42,6 +42,19 @@ class AdvancedSettingsDeviceTest {
         compose.waitUntil(3000) { overrides["zaa_enabled"] == "1" }
     }
 
+    @Test fun filamentAndPrinterSettingsHaveTheirOwnScopeAndBecomeOverrides() {
+        show()
+        compose.onNodeWithTag("advanced-tier-expert").performClick()
+        compose.onNodeWithTag("advanced-scope-filament").performClick()
+        compose.onNodeWithTag("advanced-search").performTextInput("nozzle_temperature")
+        compose.onNodeWithTag("setting-nozzle_temperature").assertExists()
+        compose.onAllNodesWithTag("setting-wall_loops").assertCountEquals(0) // a print setting, not shown under Filament
+        compose.onNodeWithTag("setting-input-nozzle_temperature").performScrollTo().performTextInput("215")
+        compose.waitUntil(3000) { overrides["nozzle_temperature"] == "215" }
+        compose.onNodeWithTag("advanced-scope-printer").performClick()
+        compose.onAllNodesWithTag("setting-nozzle_temperature").assertCountEquals(0)
+    }
+
     @Test fun validValuesBecomeOverridesInvalidOnesDoNotAndResetClears() {
         show()
         compose.onNodeWithTag("setting-input-wall_loops").performTextInput("99")

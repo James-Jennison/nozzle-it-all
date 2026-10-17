@@ -92,7 +92,14 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
         startPolling(entry)
     }
 
-    fun update(config: PrinterConfig) { remove(config.identity.id, persist = false); add(config) }
+    /** Replaces a saved printer's config (same id), keeping its place on the Printers page, and reconnects with the new details. */
+    fun update(config: PrinterConfig) {
+        val id = config.identity.id
+        val place = order.value.indexOf(id)
+        remove(id, persist = false); add(config, persist = false)
+        if (place >= 0) order.value = order.value.filter { it != id }.toMutableList().also { it.add(place.coerceAtMost(it.size), id) }
+        store.save(order.value.mapNotNull { printers[it]?.config })
+    }
 
     fun remove(id: String, persist: Boolean = true) {
         pollers.remove(id)?.cancel()

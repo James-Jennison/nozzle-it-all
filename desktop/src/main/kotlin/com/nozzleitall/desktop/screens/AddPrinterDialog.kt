@@ -13,6 +13,7 @@ import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import com.nozzleitall.desktop.AppState
 import com.nozzleitall.desktop.EXPORT_ONLY
+import com.nozzleitall.desktop.PrinterEntry
 import com.nozzleitall.desktop.PrinterStore
 import com.nozzleitall.desktop.prepare.ProfileCatalog
 import com.nozzleitall.desktop.ui.*
@@ -136,6 +137,71 @@ fun AddPrinterDialog(state: AppState, onDone: () -> Unit) {
                         else -> address.isNotBlank() && (!form.secretRequired || secret.isNotBlank()) && (!form.needsSerial || serial.isNotBlank())
                     }
                     NzButton("Add printer", { fleet.add(draft()); onDone() }, kind = ButtonKind.PRIMARY, enabled = ready, testTag = "save-printer")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Changes a saved printer's address, name, model, credentials and serial number. The printer keeps its id, so projects, the
+ * slicing profile and the order on the Printers page stay as they are. A blank credential field keeps the saved one.
+ */
+@Composable
+fun EditPrinterDialog(state: AppState, entry: PrinterEntry, onDone: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val fleet = state.fleet
+    val old = entry.config
+    val form = formFor(old.identity.family)
+    var address by remember { mutableStateOf(old.identity.address) }
+    var name by remember { mutableStateOf(old.identity.displayName) }
+    var model by remember { mutableStateOf(old.identity.model) }
+    var secret by remember { mutableStateOf("") }
+    var serial by remember { mutableStateOf(old.extras["serial"].orEmpty()) }
+    var busy by remember { mutableStateOf(false) }
+    var checked by remember { mutableStateOf<PrinterStatus?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun edited() = old.copy(
+        identity = old.identity.copy(displayName = name.trim().ifBlank { old.identity.displayName }, model = model.trim().ifBlank { old.identity.model }, address = address.trim()),
+        secret = secret.trim().ifEmpty { old.secret },
+        extras = if (serial.isNotBlank()) old.extras + ("serial" to serial.trim()) else old.extras - "serial")
+
+    fun check() {
+        if (form.needsAddress && address.isBlank()) { error = "Enter the printer's address."; return }
+        busy = true; error = null; checked = null
+        scope.launch {
+            val cfg = edited()
+            checked = withContext(Dispatchers.IO) { runCatching { fleet.registry.open(cfg).use { it.status() } }.getOrElse { PrinterStatus(PrinterState.OFFLINE, ConnectionRoute.LAN, message = it.message) } }
+            if (checked!!.state == PrinterState.OFFLINE || checked!!.state == PrinterState.ERROR) error = checked!!.message ?: "The printer didn't answer."
+            busy = false
+        }
+    }
+
+    DialogWindow(onCloseRequest = onDone, title = "Edit printer", state = rememberDialogState(width = 600.dp, height = 640.dp),
+        onPreviewKeyEvent = { if (it.key == Key.Escape && it.type == KeyEventType.KeyDown) { onDone(); true } else false }) {
+        NozzleTheme(fleet.settings.value.theme) {
+            val c = Nz.colors
+            Column(Modifier.fillMaxSize().background(c.surface).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Txt("Edit printer", Nz.type.headline)
+                Txt("${old.identity.family.label}. Its projects and slicing profile stay as they are.", Nz.type.body, c.textMuted)
+                form.note?.let { Banner(it, BannerKind.INFO) }
+                if (form.needsAddress) {
+                    Field("Printer address", address, { address = it; checked = null; error = null }, placeholder = "192.168.1.40 or printer.your-tailnet.ts.net",
+                        hint = "At home, the printer's local address. Away from home, its address on your private network (for example Tailscale).", error = error, onSubmit = ::check)
+                    if (form.needsSerial) Field("Serial number", serial, { serial = it; checked = null })
+                    form.secretLabel?.let { Field(it, secret, { v -> secret = v; checked = null }, secret = true, placeholder = if (old.secret.isNotEmpty()) "Saved - leave blank to keep it" else "",
+                        hint = "Stored only on this computer, in a file only you can read.") }
+                    NzButton(if (busy) "Checking…" else "Check connection", ::check, kind = ButtonKind.SECONDARY, enabled = !busy, testTag = "edit-probe")
+                    checked?.takeIf { it.state != PrinterState.OFFLINE && it.state != PrinterState.ERROR }?.let { s -> Banner("Connected: ${s.state.label}.", BannerKind.SUCCESS) }
+                    Field("Model", model, { model = it }, placeholder = "Snapmaker U1, Prusa MK4S, Bambu Lab P1S…")
+                }
+                Field("Name", name, { name = it }, placeholder = "Workshop printer")
+                Spacer(Modifier.weight(1f))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                    NzButton("Cancel", onDone, kind = ButtonKind.QUIET)
+                    // Saving does not need the printer to answer: the address may be one the printer will have later.
+                    NzButton("Save", { fleet.update(edited()); onDone() }, kind = ButtonKind.PRIMARY, enabled = !busy && (!form.needsAddress || address.isNotBlank()), testTag = "save-edited-printer")
                 }
             }
         }

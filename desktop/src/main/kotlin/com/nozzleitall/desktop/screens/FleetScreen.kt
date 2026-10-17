@@ -37,6 +37,7 @@ fun temp(t: Double?) = t?.let { "%.0f °C".format(it) } ?: "–"
 fun FleetScreen(state: AppState) {
     val fleet = state.fleet
     var adding by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SectionHeader("Printers", "Everything you print on, at a glance.") {
             NzButton("Add printer", { adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.ADD, testTag = "add-printer")
@@ -51,15 +52,16 @@ fun FleetScreen(state: AppState) {
             }
         } else {
             LazyVerticalGrid(GridCells.Adaptive(340.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it) { state.openPrinter(id) } } }
+                items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it, onEdit = { editing = id }) { state.openPrinter(id) } } }
             }
         }
     }
     if (adding) AddPrinterDialog(state) { adding = false }
+    editing?.let { id -> fleet.printers[id]?.let { EditPrinterDialog(state, it) { editing = null } } ?: run { editing = null } }
 }
 
 @Composable
-fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
+fun PrinterCard(entry: PrinterEntry, onEdit: (() -> Unit)? = null, onOpen: () -> Unit) {
     val c = Nz.colors
     val status = entry.status.value
     val identity = entry.config.identity
@@ -112,6 +114,7 @@ fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RouteBadge(status.route)
                 Spacer(Modifier.weight(1f))
+                if (onEdit != null) NzButton("Edit", onEdit, kind = ButtonKind.QUIET, testTag = "edit-printer-${identity.id}")
                 status.bed?.current?.let { Txt("Bed ${temp(it)}", Nz.type.metricSmall, c.textMuted) }
             }
         }

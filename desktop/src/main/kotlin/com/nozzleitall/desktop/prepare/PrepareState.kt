@@ -124,7 +124,12 @@ class PrepareState(private val app: AppState) {
     val camera = ViewCamera()
     var manifest by mutableStateOf<ProjectManifest?>(null)
     var name by mutableStateOf("Untitled project")
-    var dirty by mutableStateOf(false)
+    private var dirtyFlag by mutableStateOf(false)
+    /** Setting it true is what every edit does: that also records the change for Undo ([history]). */
+    var dirty: Boolean
+        get() = dirtyFlag
+        set(v) { dirtyFlag = v; if (v) history.recordChange() }
+    val history = PlateHistory(this)
     var passthrough: Map<String, ByteArray> = emptyMap()
     var metadata: Map<String, String> = emptyMap()
     var printerId by mutableStateOf<String?>(null)
@@ -180,6 +185,17 @@ class PrepareState(private val app: AppState) {
         ProjectManifest.MaterialSlot(7, "PLA", colorHex = "#FFB300"), ProjectManifest.MaterialSlot(8, "PLA", colorHex = "#8D6E63"))
     private var engine: SliceEngine? = null
     private var nextId = 1
+    internal val nextItemId get() = nextId
+    /** Puts the plates back as [history] kept them. */
+    internal fun restorePlate(restored: List<PrepItem>, restoredOverrides: Map<String, String>, names: List<String>, current: Int, select: Int?, next: Int) {
+        items.clear(); items.addAll(restored)
+        overrides.clear(); overrides.putAll(restoredOverrides)
+        plateNames.clear(); plateNames.addAll(names); currentPlate = current.coerceIn(0, plateNames.lastIndex)
+        selected = select?.takeIf { id -> items.any { it.id == id } }
+        nextId = next
+        paintHistory.clear()
+        syncInstances(); dirtyFlag = true; invalidateSlice(); refreshRules()
+    }
 
     val profile: PrinterProfileInfo? get() = ProfileCatalog.byId(profileId)
     /** The chosen profile's printable area. */
@@ -188,6 +204,7 @@ class PrepareState(private val app: AppState) {
     // --- Plates (Orca's plate list): names in order, the one shown, and the objects on it.
     val plateNames = androidx.compose.runtime.mutableStateListOf("Plate 1")
     var currentPlate by mutableStateOf(0)
+    init { history.reset() }   // after the fields it records
     fun plateItems(plate: Int = currentPlate): List<PrepItem> = items.filter { it.plate == plate }
 
     /** Shows plate [i]; a slice result belongs to the plate it was made for. */
@@ -439,6 +456,7 @@ class PrepareState(private val app: AppState) {
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         plateNames.clear(); plateNames += "Plate 1"; currentPlate = 0
         slice = SliceState.Idle; showPreview = false; nextId = 1; calibration = null
+        history.reset()
     }
 
     fun open(f: File) {
@@ -489,6 +507,7 @@ class PrepareState(private val app: AppState) {
         p.manifest?.printer?.printerId?.takeIf { it in app.fleet.printers }?.let { printerId = it }
         notice = p.manifestProblem
         dirty = false
+        history.reset()
     }
 
     /** Reverses [PrepItem.placement] for a mesh loaded from a 3MF: recovers bed position, Z rotation and uniform scale. */

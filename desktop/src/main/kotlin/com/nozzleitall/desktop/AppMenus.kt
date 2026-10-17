@@ -48,13 +48,15 @@ private fun browse(url: String) { runCatching { java.awt.Desktop.getDesktop().br
 
 /** One menu item: what it says, its shortcut, whether it can run now, and what it does. */
 class MenuAction(val label: String, val shortcut: Shortcut? = null, val enabled: Boolean = true, val run: () -> Unit)
-class Shortcut(val key: Key, val ctrl: Boolean = false, val shift: Boolean = false, val text: String) {
+/** [afterFocus]: tried only after the focused control has had its chance (Ctrl+Z in a text field undoes the typing); by default plain keys are, Ctrl shortcuts are not. */
+class Shortcut(val key: Key, val ctrl: Boolean = false, val shift: Boolean = false, val text: String, val afterFocus: Boolean = !ctrl) {
     fun matches(e: androidx.compose.ui.input.key.KeyEvent) = e.key == key && e.isCtrlPressed == ctrl && e.isShiftPressed == shift && !e.isAltPressed
 }
 /** A menu: title, the Alt+letter that opens it, and its items (null is a separator). */
 class AppMenu(val title: String, val mnemonic: Key, val items: List<MenuAction?>)
 
-private fun ctrl(key: Key, text: String, shift: Boolean = false) = Shortcut(key, ctrl = true, shift = shift, text = (if (shift) "Ctrl+Shift+" else "Ctrl+") + text)
+private fun ctrl(key: Key, text: String, shift: Boolean = false, afterFocus: Boolean = false) =
+    Shortcut(key, ctrl = true, shift = shift, text = (if (shift) "Ctrl+Shift+" else "Ctrl+") + text, afterFocus = afterFocus)
 
 /**
  * The application's menus, as data: drawn by [NozzleMenuBar] in Nozzle's own style, and their shortcuts handled by
@@ -92,6 +94,9 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Quit", ctrl(Key.Q, "Q")) { onQuit() },
         )),
         AppMenu("Edit", Key.E, listOf(
+            MenuAction("Undo", ctrl(Key.Z, "Z", afterFocus = true), enabled = p.history.canUndo) { p.history.undo() },
+            MenuAction("Redo", ctrl(Key.Z, "Z", shift = true, afterFocus = true), enabled = p.history.canRedo) { p.history.redo() },
+            null,
             MenuAction("Duplicate", ctrl(Key.D, "D"), enabled = p.selected != null) { p.duplicateSelected() },
             MenuAction("Delete", Shortcut(Key.Delete, text = "Delete"), enabled = p.selected != null) { p.removeSelected() },
             MenuAction("Delete all", enabled = p.items.isNotEmpty()) { guarded { p.items.clear(); p.selected = null; p.changed() } },
@@ -140,7 +145,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
  */
 fun handleMenuShortcut(menus: List<AppMenu>, e: androidx.compose.ui.input.key.KeyEvent, plain: Boolean = false): Boolean {
     if (e.type != KeyEventType.KeyDown) return false
-    val item = menus.flatMap { it.items }.filterNotNull().firstOrNull { it.shortcut?.matches(e) == true && it.shortcut.ctrl != plain } ?: return false
+    val item = menus.flatMap { it.items }.filterNotNull().firstOrNull { it.shortcut?.matches(e) == true && it.shortcut.afterFocus == plain } ?: return false
     if (item.enabled) item.run()
     return true
 }

@@ -59,6 +59,12 @@ class AutoPaintDeviceTest {
         assertTrue("the file carries per-face paint", mesh.isPainted)
         assertTrue("filament 2 is the painted slot", MeshIO.paintedFilaments(mesh).contains(2))
 
+        // The editor shows it: the preview's own triangles line up with the file's paint, in filament 2's colour.
+        val groups = PaintedFaces.groups(target, MeshLoader.load(target.absolutePath))
+        assertEquals("one group, for filament 2", 1, groups.size)
+        assertTrue("painted triangles are drawn", groups.single().vertices.size >= 18)
+        assertArrayEquals(OverlayBuilders.paintColor(PaintKind.MATERIAL, 2), groups.single().color, 0f)
+
         val profile = PrinterProfile("http://192.168.1.110/", "U1", slicingModel = SlicingPrinterModel.SNAPMAKER_U1)
         val pla = BUNDLED_MATERIAL_PROFILES.first { it.id == "bundled-pla" }
         val outcome = SlicingCoordinator.sliceProject(ctx, listOf(target to ModelTransform()), profile, toolSlotIndices = listOf(1), slotMaterials = listOf(pla, pla, null, null))

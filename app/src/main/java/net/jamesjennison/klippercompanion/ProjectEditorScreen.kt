@@ -116,7 +116,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var movingRegion by remember(projectId, newProjectName) { mutableStateOf<Int?>(null) }
     var regionGrab by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
     var overlays by remember(projectId, newProjectName) { mutableStateOf<Map<String, List<OverlayGroup>>>(emptyMap()) }
-    val overlayCache = remember(projectId, newProjectName) { HashMap<String, Triple<Pair<String?, String?>, MeshGeometry, List<OverlayGroup>>>() }
+    val overlayCache = remember(projectId, newProjectName) { HashMap<String, Triple<Triple<String?, String?, String>, MeshGeometry, List<OverlayGroup>>>() }
     val discCache = remember(projectId, newProjectName) { HashMap<String, Pair<MeshGeometry, List<PaintDisc?>>>() }
     val triMeshes = remember(projectId, newProjectName) { java.util.IdentityHashMap<MeshGeometry, TriMesh>() }
     var cutFraction by remember(projectId, newProjectName) { mutableStateOf(0.5f) }
@@ -173,12 +173,12 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
 
     // Paint dabs and region outlines shown on each object. Dabs are ray-cast once and cached (a drag appends strokes, an
     // undo only ever drops the tail), so painting never re-casts the whole history.
-    LaunchedEffect(objects.map { Triple(it.id, it.paintJson, it.volumesJson) }, geometry) {
+    LaunchedEffect(objects.map { listOf(it.id, it.paintJson, it.volumesJson, it.sourceFileUri) }, geometry) {
         val result = withContext(Dispatchers.Default) {
             val out = HashMap<String, List<OverlayGroup>>()
             for (obj in objects) {
                 val g = geometry[obj.id] ?: continue
-                val key = obj.paintJson to obj.volumesJson
+                val key = Triple(obj.paintJson, obj.volumesJson, obj.sourceFileUri)
                 val cached = overlayCache[obj.id]
                 if (cached != null && cached.first == key && cached.second === g) { out[obj.id] = cached.third; continue }
                 val strokes = PaintCodec.decode(obj.paintJson)
@@ -191,7 +191,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                 }
                 discCache[obj.id] = g to discs
                 val center = floatArrayOf(0f, 0f, 0f)
-                val groups = OverlayBuilders.paintGroups(discs.filterNotNull()) +
+                val groups = PaintedFaces.groups(java.io.File(android.net.Uri.parse(obj.sourceFileUri).path.orEmpty()), g) + OverlayBuilders.paintGroups(discs.filterNotNull()) +
                     VolumeCodec.decode(obj.volumesJson).map { v -> OverlayBuilders.volumeOutline(v, floatArrayOf(v.center[0] + g.origin[0], v.center[1] + g.origin[1], v.center[2] + g.origin[2])) }
                 overlayCache[obj.id] = Triple(key, g, groups)
                 out[obj.id] = groups

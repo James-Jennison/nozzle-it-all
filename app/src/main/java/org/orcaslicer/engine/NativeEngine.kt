@@ -187,4 +187,13 @@ object NativeEngine {
     // platforms build and parse). requestJson/return are the exact same JSON shapes as the CLI's request file / stdout; a
     // failure comes back as {"error":"..."} rather than throwing, matching the CLI's own convention.
     external fun nativeMixedFilament(requestJson: String): String
+
+    // AI auto-paint: the engine's `--semantic-paint` ops (see com.nozzleitall.printer.ext.AutoPaintFormat in :printer-api for the
+    // shared request/response JSON). The engine makes no provider calls; the app sends the prompt and views to the provider the
+    // user chose. A failure comes back as {"error":"..."}.
+    external fun nativeSemanticPaint(requestJson: String): String
+
+    // Paint tools: the engine's `--paint` ops (brush / bucket fill / smart fill / erase on libslic3r's TriangleSelector, and the
+    // painted pieces for drawing). Same JSON as the CLI; models are binary STL files.
+    external fun nativePaintOps(requestJson: String): String
 }

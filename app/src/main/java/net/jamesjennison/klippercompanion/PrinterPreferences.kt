@@ -39,7 +39,7 @@ object PrinterPreferences {
         val keep = profiles.map { it.address }.toSet()
         secrets.edit().apply {
             // The store is shared: only stale printer keys go. MyMiniFactory (mmf.*) and Bespok3d (bespok3d:*) entries belong to other features.
-            secrets.all.keys.filter { it !in keep && !it.startsWith("mmf.") && !it.startsWith("bespok3d:") }.forEach { remove(it) }
+            secrets.all.keys.filter { it !in keep && !it.startsWith("mmf.") && !it.startsWith("bespok3d:") && !it.startsWith("autopaint:") }.forEach { remove(it) }
             profiles.forEach { p -> if (p.apiKey.isBlank()) remove(p.address) else putString(p.address, p.apiKey) }
         }.apply()
     }

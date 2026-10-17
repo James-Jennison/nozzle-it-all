@@ -62,6 +62,17 @@ object Paint {
     /** The string for a whole triangle in one state. */
     fun whole(state: Int): String = encode(Node.Leaf(state))
 
+    /**
+     * [mesh] with each triangle in [faceSlots] (a filament / tool number from 1, 0 = leave) painted that number as a whole; colour paint a
+     * face already had stays where the answer left it alone, and the mesh's support, seam and fuzzy-skin paint is kept.
+     */
+    fun applyFaceSlots(mesh: Mesh, faceSlots: IntArray): Mesh {
+        require(faceSlots.size == mesh.triangleCount) { "The paint is for ${faceSlots.size} faces but the model has ${mesh.triangleCount}." }
+        val cache = HashMap<Int, String>()
+        val painted = Array(mesh.triangleCount) { i -> if (faceSlots[i] > 0) cache.getOrPut(faceSlots[i]) { whole(faceSlots[i]) } else mesh.paint?.get(i) }
+        return mesh.withPaint(paint = painted)
+    }
+
     fun map(n: Node, f: (Int) -> Int): Node = when (n) {
         is Node.Leaf -> Node.Leaf(f(n.state))
         is Node.Split -> n.copy(children = n.children.map { map(it, f) })

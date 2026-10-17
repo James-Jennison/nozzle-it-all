@@ -252,6 +252,21 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         touch()
     }
 
+    /** A new file for [objectId] in the same frame as the old one (AI auto-paint's painted 3MF), so its placement, strokes and regions stay. One undo step. */
+    suspend fun newModelFileFor(): File? {
+        val project = _project.value ?: return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ProjectFileStore.newModelFile(context, project.id, "3mf") }
+    }
+
+    suspend fun replaceObjectFile(objectId: String, file: File) {
+        val target = _objects.value.find { it.id == objectId } ?: return
+        record()
+        val updated = target.copy(sourceFileUri = Uri.fromFile(file).toString())
+        dao.upsertObjects(listOf(updated))
+        _objects.value = _objects.value.map { if (it.id == objectId) updated else it }
+        touch()
+    }
+
     /**
      * Replaces [objectId] with the cut halves. The first non-null half keeps the object's id and placement; the other
      * becomes a new object beside it (shifted [gapMm] along X, same plate and material). One undo step.

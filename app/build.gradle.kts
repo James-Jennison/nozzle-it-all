@@ -124,7 +124,7 @@ android {
  packaging { resources { excludes += "META-INF/INDEX.LIST"; pickFirsts += "META-INF/io.netty.versions.properties" } }
 }
 dependencies {
- implementation(project(":domain"))
+ implementation(project(":domain")); implementation(project(":project-format"))
  implementation(project(":transport")); implementation(project(":printer-api"))
  implementation(project(":test-grid"))
  implementation(platform("androidx.compose:compose-bom:2026.06.00"))

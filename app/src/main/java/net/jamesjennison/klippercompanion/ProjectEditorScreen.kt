@@ -104,6 +104,9 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
     var pickMode by remember(projectId, newProjectName) { mutableStateOf<PickMode?>(null) }
     var measurePointA by remember(projectId, newProjectName) { mutableStateOf<FloatArray?>(null) }
     var toolMessage by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
+    var autoPaintOpen by remember(projectId, newProjectName) { mutableStateOf(false) }
+    var autoPaintBusy by remember(projectId, newProjectName) { mutableStateOf(false) }
+    var autoPaintMessage by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var cutDialogFor by remember(projectId, newProjectName) { mutableStateOf<String?>(null) }
     var paintKind by remember(projectId, newProjectName) { mutableStateOf(PaintKind.SUPPORT_ENFORCER) }
     var paintTool by remember(projectId, newProjectName) { mutableStateOf(2) }
@@ -830,6 +833,26 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     }
                                 }
                                 toolMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("project-tool-message")) }
+                                if (autoPaintOpen) {
+                                    val secrets = remember { CredentialStore.open(context) }
+                                    AutoPaintDialog(remember { AutoPaint.load(secrets) }, autoPaintBusy, autoPaintMessage, onSave = { AutoPaint.save(secrets, it) }, onPaint = { settings, hint ->
+                                        val id = selectedId; val obj = objects.find { it.id == id }; val provider = settings.provider
+                                        if (id == null || obj == null || provider == null) return@AutoPaintDialog
+                                        val filaments = physical.mapIndexed { i, (hex, type) -> com.nozzleitall.printer.ext.AutoPaintFormat.Filament(i + 1, type, hex) }
+                                        autoPaintBusy = true; autoPaintMessage = "Looking at the model…"
+                                        scope.launch {
+                                            val result = runCatching {
+                                                val source = java.io.File(android.net.Uri.parse(obj.sourceFileUri).path!!)
+                                                val target = vm.newModelFileFor() ?: throw AutoPaint.AutoPaintError("No project is open.")
+                                                val n = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AutoPaint.paint(source, target, source.nameWithoutExtension, filaments, hint, provider, context.cacheDir) }
+                                                vm.replaceObjectFile(id, target); n
+                                            }
+                                            autoPaintBusy = false
+                                            result.onSuccess { n -> autoPaintOpen = false; toolMessage = "Painted $n faces. Slice to see it print in your filaments." }
+                                                .onFailure { e -> autoPaintMessage = (e as? AutoPaint.AutoPaintError)?.message ?: "Auto-paint failed: ${e.message}" }
+                                        }
+                                    }, onDismiss = { autoPaintOpen = false })
+                                }
                                 if (pickMode == PickMode.PAINT) {
                                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("project-paint-controls")) {
                                         PaintKind.entries.filter { it != PaintKind.MATERIAL || toolCount > 1 }.forEach { k -> FilterChip(paintKind == k, { paintKind = k }, label = { Text(k.label) }, modifier = Modifier.testTag("project-paint-kind-${k.name.lowercase()}")) }
@@ -841,6 +864,7 @@ private enum class ProjectEditorStage { EDIT, SLICING, REVIEW, PRINTER_READY, ST
                                     Text("Brush %.1f mm".format(brushRadiusMm), style = MaterialTheme.typography.bodySmall)
                                     Slider(brushRadiusMm, { brushRadiusMm = it }, valueRange = 1f..15f, modifier = Modifier.testTag("project-paint-radius"))
                                     OutlinedButton({ selectedId?.let { id -> scope.launch { vm.clearPaint(id) } } }, enabled = selectedId != null && objects.find { it.id == selectedId }?.paintJson != null, modifier = Modifier.testTag("project-paint-clear")) { Text("Clear paint on this model") }
+                                    if (toolCount > 1) OutlinedButton({ autoPaintMessage = null; autoPaintOpen = true }, enabled = selectedId != null, modifier = Modifier.testTag("project-autopaint")) { Text("AI auto-paint this model") }
                                 }
                                 selectedId?.let { id ->
                                     val obj = objects.find { it.id == id }

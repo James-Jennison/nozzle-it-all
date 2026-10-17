@@ -483,11 +483,15 @@ object ThreeMf {
         val f = DocumentBuilderFactory.newInstance()
         f.isNamespaceAware = true
         // Untrusted input: no DTDs, no external entities, no XInclude.
-        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        f.setFeature("http://xml.org/sax/features/external-general-entities", false)
-        f.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-        f.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, ""); f.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
-        f.isXIncludeAware = false; f.isExpandEntityReferences = false
+        // Android's parser has none of these Xerces switches, so each is tried on its own; without the DOCTYPE switch the DOCTYPE is refused here
+        // (entities can only be declared in one), which closes the same door.
+        fun tryIt(block: () -> Unit) = runCatching(block).isSuccess
+        val noDoctype = tryIt { f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+        tryIt { f.setFeature("http://xml.org/sax/features/external-general-entities", false) }
+        tryIt { f.setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+        tryIt { f.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, ""); f.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "") }
+        tryIt { f.isXIncludeAware = false }; tryIt { f.isExpandEntityReferences = false }
+        if (!noDoctype && String(bytes, Charsets.ISO_8859_1).contains("<!DOCTYPE", ignoreCase = true)) throw ProjectFormatException("Part of the 3MF is not valid XML.")
         return try { f.newDocumentBuilder().parse(ByteArrayInputStream(bytes)) } catch (e: Exception) { throw ProjectFormatException("Part of the 3MF is not valid XML.") }
     }
     private fun resources(doc: org.w3c.dom.Document): List<Element> = child(doc.documentElement, "resources")?.let { children(it, "object") } ?: emptyList()

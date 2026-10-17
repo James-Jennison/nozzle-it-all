@@ -103,10 +103,5 @@ object AutoPaint {
     }
 
     /** [mesh] with each face in [faceSlots] (1-based slot, 0 = leave) painted that slot; the mesh's other paint stays. */
-    fun applied(mesh: Mesh, faceSlots: IntArray): Mesh {
-        require(faceSlots.size == mesh.triangleCount) { "The paint is for ${faceSlots.size} faces but the model has ${mesh.triangleCount}." }
-        val cache = HashMap<Int, String>()
-        val paint = Array(mesh.triangleCount) { i -> if (faceSlots[i] > 0) cache.getOrPut(faceSlots[i]) { Paint.whole(faceSlots[i]) } else mesh.paint?.get(i) }
-        return Mesh(mesh.vertices, mesh.triangles, paint)
-    }
+    fun applied(mesh: Mesh, faceSlots: IntArray): Mesh = Paint.applyFaceSlots(mesh, faceSlots)
 }

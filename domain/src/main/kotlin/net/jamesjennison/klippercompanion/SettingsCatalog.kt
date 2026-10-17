@@ -13,6 +13,10 @@ sealed class SettingType {
     object Toggle : SettingType()
     // value shown to the user -> exact OrcaSlicer config string
     data class Choice(val options: List<Pair<String, String>>) : SettingType()
+    // A number or a percentage of another value ("0.42" or "120%"), as Orca's line widths and speeds are.
+    data class FloatOrPercent(val unit: String = "") : SettingType()
+    // Free text: a template or a name.
+    object Text : SettingType()
 }
 
 data class SettingDef(
@@ -67,7 +71,8 @@ object SettingsCatalog {
     )
 
     private val byKey = all.associateBy { it.key }
-    fun get(key: String): SettingDef? = byKey[key]
+    /** The curated entry for [key], else the engine's own definition of it (see [EngineSettings]). */
+    fun get(key: String): SettingDef? = byKey[key] ?: EngineSettings.get(key)
     val groups: List<String> = all.map { it.group }.distinct()
 
     /** Everything at or below [tier]'s disclosure level (Basic < Advanced < Expert), filtered by a free-text query. */
@@ -85,6 +90,8 @@ object SettingsCatalog {
             is SettingType.Percent -> text.removeSuffix("%").trim().toIntOrNull()?.takeIf { it in t.min..t.max }?.let { "$it%" }
             SettingType.Toggle -> when (text.lowercase()) { "1", "true", "on" -> "1"; "0", "false", "off" -> "0"; else -> null }
             is SettingType.Choice -> t.options.firstOrNull { it.second == text || it.first.equals(text, true) }?.second
+            is SettingType.FloatOrPercent -> text.removeSuffix("%").trim().toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.let { fmt(it) + if (text.endsWith("%")) "%" else "" }
+            SettingType.Text -> text.takeIf { it.isNotEmpty() && '\n' !in it && '"' !in it }
         }
     }
 

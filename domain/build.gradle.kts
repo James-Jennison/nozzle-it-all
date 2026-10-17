@@ -28,3 +28,10 @@ val engineSupportResources = tasks.register<Copy>("engineSupportResources") {
  into(layout.buildDirectory.dir("generated/engine-support/net/jamesjennison/klippercompanion"))
 }
 sourceSets.main { resources.srcDir(files(layout.buildDirectory.dir("generated/engine-support")).builtBy(engineSupportResources)) }
+
+// The engine's settings (schemas/slicing, shared with Desktop) as a resource: EngineSettings lists every process setting from them.
+val engineSettingsResources = tasks.register<Copy>("engineSettingsResources") {
+ from(rootProject.file("schemas/slicing")) { include("settings-schema.json", "settings-groups.json") }
+ into(layout.buildDirectory.dir("generated/engine-settings/settings"))
+}
+sourceSets.main { resources.srcDir(files(layout.buildDirectory.dir("generated/engine-settings")).builtBy(engineSettingsResources)) }

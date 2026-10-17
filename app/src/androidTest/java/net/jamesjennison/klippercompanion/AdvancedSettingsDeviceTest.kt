@@ -33,6 +33,15 @@ class AdvancedSettingsDeviceTest {
         compose.onNodeWithTag("advanced-empty").assertExists()
     }
 
+    @Test fun settingsBeyondTheCuratedListAreSearchableAndBecomeOverrides() {
+        show()
+        compose.onNodeWithTag("advanced-tier-expert").performClick()
+        compose.onNodeWithTag("advanced-search").performTextInput("zaa_enabled")
+        compose.onNodeWithTag("setting-zaa_enabled").assertExists()
+        compose.onNodeWithTag("setting-input-zaa_enabled").performScrollTo().performClick()
+        compose.waitUntil(3000) { overrides["zaa_enabled"] == "1" }
+    }
+
     @Test fun validValuesBecomeOverridesInvalidOnesDoNotAndResetClears() {
         show()
         compose.onNodeWithTag("setting-input-wall_loops").performTextInput("99")

@@ -45,7 +45,8 @@ fun AdvancedSettingsPanel(
             SettingTier.entries.forEach { t -> FilterChip(tier == t, { tier = t }, label = { Text(t.label) }, modifier = Modifier.testTag("advanced-tier-${t.name.lowercase()}")) }
         }
         OutlinedTextField(query, { query = it }, label = { Text("Search settings") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("advanced-search"))
-        val visible = SettingsCatalog.visible(tier, query, family)
+        // The curated entries first (the ones with tested ranges and help), then every other process setting the engine accepts.
+        val visible = SettingsCatalog.visible(tier, query, family) + EngineSettings.visible(tier, query)
         if (visible.isEmpty()) Text("No settings match.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("advanced-empty"))
         visible.groupBy { it.group }.forEach { (group, defs) ->
             Text(group, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -100,5 +101,5 @@ private fun SettingRow(def: SettingDef, value: String?, base: String?, onChange:
     }
 }
 
-private fun unitOf(t: SettingType) = when (t) { is SettingType.IntRange -> t.unit; is SettingType.Decimal -> t.unit; else -> "" }
+private fun unitOf(t: SettingType) = when (t) { is SettingType.IntRange -> t.unit; is SettingType.Decimal -> t.unit; is SettingType.FloatOrPercent -> t.unit; else -> "" }
 private fun rangeOf(t: SettingType) = when (t) { is SettingType.IntRange -> "${t.min}–${t.max}"; is SettingType.Decimal -> "${t.min}–${t.max}"; is SettingType.Percent -> "${t.min}–${t.max}%"; else -> "a valid value" }

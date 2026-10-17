@@ -388,13 +388,17 @@ private fun PlateToolbar(p: PrepareState) {
     val c = Nz.colors
     val sel = p.plateItems().firstOrNull { it.id == p.selected }
     var cutting by remember(sel?.id) { mutableStateOf(false) }
+    var painting by remember(sel?.id) { mutableStateOf(false) }
     var height by remember(sel?.id) { mutableStateOf(sel?.let { "%.1f".format(it.height / 2) } ?: "") }
     val idle = p.toolBusy == null
+    Column {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         NzButton("Arrange", { p.arrange() }, kind = ButtonKind.SECONDARY, icon = NzIcon.MOVE, enabled = idle, testTag = "plate-arrange")
         NzButton(if (sel == null) "Auto orient all" else "Auto orient", { p.orient() }, kind = ButtonKind.SECONDARY, enabled = idle, testTag = "plate-orient")
         NzButton("Split", { p.splitSelected() }, kind = ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-split")
         NzButton("Cut", { cutting = !cutting }, kind = if (cutting) ButtonKind.PRIMARY else ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-cut")
+        NzButton("AI auto-paint", { painting = !painting }, kind = if (painting) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
+            enabled = idle && sel != null && p.allSlots().size >= 2, testTag = "plate-autopaint")
         if (cutting && sel != null) {
             com.nozzleitall.desktop.settings.DenseInput(height, { height = it }, "Cut height above the base", Modifier.width(110.dp), units = "mm")
             NzButton("Cut here", { height.replace(',', '.').toFloatOrNull()?.let { p.cutSelected(it); cutting = false } }, kind = ButtonKind.PRIMARY, enabled = idle)
@@ -402,6 +406,35 @@ private fun PlateToolbar(p: PrepareState) {
         }
         Spacer(Modifier.weight(1f))
         p.toolBusy?.let { Txt("$it…", Nz.type.bodySmall, c.accent) }
+    }
+    if (painting && sel != null) AutoPaintPanel(p) { painting = false }
+    }
+}
+
+/** AI auto-paint: how to ask (any command that reads stdin, or an OpenAI-compatible server), an optional hint, and Paint. */
+@Composable
+private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
+    val c = Nz.colors
+    var s by remember { mutableStateOf(p.autoPaintSettings) }
+    var hint by remember { mutableStateOf("") }
+    fun update(n: AutoPaint.Settings) { s = n; p.saveAutoPaintSettings(n) }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Txt("The engine splits the model into numbered parts and shows them, with your filaments, to the model you choose. Nothing is sent until you press Paint.",
+            Nz.type.bodySmall, c.textMuted)
+        com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
+            com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.width(260.dp)) { update(s.copy(kind = it)) }
+        if (s.kind == "command") {
+            com.nozzleitall.desktop.settings.DenseInput(s.command, { update(s.copy(command = it)) }, "Command (reads the question on stdin)", Modifier.fillMaxWidth(), placeholder = "claude -p")
+        } else {
+            com.nozzleitall.desktop.settings.DenseInput(s.baseUrl, { update(s.copy(baseUrl = it)) }, "Server address", Modifier.fillMaxWidth(), placeholder = "http://localhost:11434/v1")
+            com.nozzleitall.desktop.settings.DenseInput(s.model, { update(s.copy(model = it)) }, "Model (must accept images)", Modifier.fillMaxWidth())
+            com.nozzleitall.desktop.settings.DenseInput(s.apiKey, { update(s.copy(apiKey = it)) }, "API key (blank for a local server)", Modifier.fillMaxWidth())
+        }
+        com.nozzleitall.desktop.settings.DenseInput(hint, { hint = it }, "What should it look like? (optional)", Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NzButton("Paint", { p.autoPaintSelected(hint); onDone() }, kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && s.provider != null, testTag = "autopaint-run")
+            NzButton("Close", onDone, kind = ButtonKind.QUIET)
+        }
     }
 }
 

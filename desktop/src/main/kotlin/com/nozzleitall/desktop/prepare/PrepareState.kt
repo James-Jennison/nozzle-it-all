@@ -575,6 +575,27 @@ class PrepareState(private val app: AppState) {
             changed()
     }
 
+    // --- AI auto-paint (AutoPaint): the engine segments the model; the user's own provider says which slot goes where.
+    var autoPaintSettings by mutableStateOf(AutoPaint.load(app.paths.config.resolve("auto-paint.json")))
+    fun saveAutoPaintSettings(s: AutoPaint.Settings) { autoPaintSettings = s; AutoPaint.save(app.paths.config.resolve("auto-paint.json"), s) }
+
+    /** Paints the selected object with the plate's slots as [hint] asks; the colours print in the same slot numbers they are offered under. */
+    fun autoPaintSelected(hint: String) {
+        val item = items.firstOrNull { it.id == selected } ?: return
+        val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }
+        val slots = allSlots()
+        if (slots.size < 2) { notice = "AI auto-paint needs at least two filaments to choose between."; return }
+        val filaments = slots.map { (id, label) -> com.nozzleitall.printer.ext.AutoPaintFormat.Filament(id, label, slotHex(id) ?: "#808080") }
+        runTool("AI auto-paint") {
+            val mesh = withContext(Dispatchers.IO) { AutoPaint.paint(item.mesh, item.name, filaments, hint, provider, plateWork()) }
+            val painted = withMesh(item, mesh)
+            val top = filaments.maxOf { it.index }
+            painted.paintSlots.clear(); painted.paintSlots.addAll(1..top)   // paint state N prints in slot N
+            replace(item, painted); selected = painted.id
+            changed()
+        }
+    }
+
     /** Orca's Auto orient for the selected object, or every object when none is selected. */
     fun orient() {
         val targets = plateItems().filter { selected == null || it.id == selected }.ifEmpty { return }

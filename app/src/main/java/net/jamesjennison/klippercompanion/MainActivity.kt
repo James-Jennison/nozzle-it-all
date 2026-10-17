@@ -965,7 +965,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         } else CalibrationSpec(calibrationKind)
         AlertDialog(onDismissRequest = { calibrationDialog = false }, title = { Text("Calibration print") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Scrolls, so the dialog stays a fixed size when the keyboard takes most of a short window and the range message appears.
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         CalibrationKind.entries.forEach { k -> FilterChip(calibrationKind == k, { calibrationKind = k }, label = { Text(k.label) }, modifier = Modifier.testTag("calibration-kind-${k.code}")) }
                     }

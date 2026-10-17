@@ -35,6 +35,7 @@ class ActiveFilenameDeviceTest {
         // Shared family vocabulary (FamilyTerms.kt): a completed job reads "Finished", not the old raw "standby".
         compose.onNodeWithText("Finished").assertExists()
         compose.openFixtureDashboard()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("No active file"))
         compose.onNodeWithText("No active file").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("0%").assertExists()
         // The detail view opened by openFixtureDashboard (MainActivity.kt's hero card) shows the same shared

@@ -1,6 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
-import com.nozzleitall.printer.ext.FullSpectrumFormat
+import com.nozzleitall.printer.ext.MixedFilamentFormat
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,222 +40,180 @@ fun SlotBadge(id: Int, hex: String?, size: androidx.compose.ui.unit.Dp = 30.dp) 
 }
 
 /**
- * Snapmaker Full Spectrum in the Filament card: the mixed filaments as numbered slots after the loaded ones (5, 6 ... on
- * a U1), each with its blended colour and Snapmaker's own label ("F2 33%+F4 67%"); add, adjust and remove; and
- * "Match colours", which opens Color Mixing Match. Every value shown comes from Snapmaker Orca's code in the engine.
+ * Mixed filaments in the Filament card (OrcaSlicer 2.5.0's own): each one is a numbered slot after the loaded filaments
+ * (5, 6 ... on a four-slot printer) with its blended colour and label ("F1 70% + F2 30%"); add, adjust and remove; and
+ * "Match colours", which finds the loaded filament or mix closest to each colour of a painted model. Every colour, label
+ * and recipe comes from Orca's code in the engine.
  */
 @Composable
 fun ColourMixingSection(p: PrepareState) {
     val c = Nz.colors
     val scope = rememberCoroutineScope()
     val physical = p.materials()
-    LaunchedEffect(p.mixDefinitions, physical.map { it.colorHex }) { p.refreshMixes(this) }
-    var editing by remember { mutableStateOf<Int?>(null) } // a mix id, or 0 for a new one
+    LaunchedEffect(physical.map { it.colorHex }, p.mixed.size, p.mixSublayers) { p.refreshMixes(this) }
+    var editing by remember { mutableStateOf<Int?>(null) } // a mixed row index, or -1 for a new one
     var matching by remember { mutableStateOf<PrepItem?>(null) }
 
     Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Txt("Colour mixing", Nz.type.label, c.text)
-        Txt("Full Spectrum", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
+        Txt("Mixed filaments", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
         val painted = p.items.firstOrNull { it.id == p.selected && it.painted.isNotEmpty() } ?: p.items.firstOrNull { it.painted.isNotEmpty() }
         if (painted != null) Txt("Match colours", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp))
-            .clickable(onClickLabel = "Match the model's colours with Full Spectrum") { matching = painted }.padding(4.dp))
-        IconToggle(NzIcon.ADD, "Add a mix", editing == 0) { editing = if (editing == 0) null else 0 }
+            .clickable(onClickLabel = "Match the model's colours with the loaded filaments and mixes") { matching = painted }.padding(4.dp))
+        IconToggle(NzIcon.ADD, "Add a mix", editing == -1) { editing = if (editing == -1) null else -1 }
     }
     p.mixProblem?.let { Txt(it, Nz.type.bodySmall, c.danger) }
-    if (p.mixes.isEmpty() && editing == null)
-        Txt("Mix two loaded filaments into a new colour, printed in alternating thin layers.", Nz.type.bodySmall, c.textMuted)
-    p.mixes.filter { it.enabled }.chunked(2).forEach { pair ->
+    if (p.mixed.isEmpty() && editing == null)
+        Txt("Mix loaded filaments into a new colour, printed in thin layers that blend, or as a gradient up the model.", Nz.type.bodySmall, c.textMuted)
+    p.mixed.withIndex().toList().chunked(2).forEach { pair ->
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            pair.forEach { m ->
-                Row(Modifier.weight(1f).height(30.dp).clip(RoundedCornerShape(6.dp)).background(c.surfaceSunken).border(1.dp, if (editing == m.id) c.accent else c.line, RoundedCornerShape(6.dp))
-                    .clickable(onClickLabel = "Adjust mix ${m.id}") { editing = if (editing == m.id) null else m.id }
-                    .semantics(mergeDescendants = true) { contentDescription = "Mix ${m.id}: ${m.label}" }, verticalAlignment = Alignment.CenterVertically) {
-                    SlotBadge(m.id, m.displayHex)
-                    Txt(m.label, Nz.type.bodySmall, modifier = Modifier.padding(horizontal = 8.dp).weight(1f), maxLines = 1)
+            pair.forEach { (i, m) ->
+                Row(Modifier.weight(1f).height(30.dp).clip(RoundedCornerShape(6.dp)).background(c.surfaceSunken).border(1.dp, if (editing == i) c.accent else c.line, RoundedCornerShape(6.dp))
+                    .clickable(onClickLabel = "Adjust mix ${p.mixedSlot(i)}") { editing = if (editing == i) null else i }
+                    .semantics(mergeDescendants = true) { contentDescription = "Mix ${p.mixedSlot(i)}: ${m.label}" }, verticalAlignment = Alignment.CenterVertically) {
+                    SlotBadge(p.mixedSlot(i), m.hex)
+                    Txt((if (m.gradient.enabled) "Gradient " else "") + m.label, Nz.type.bodySmall, modifier = Modifier.padding(horizontal = 8.dp).weight(1f), maxLines = 1)
                 }
             }
             if (pair.size == 1) Spacer(Modifier.weight(1f))
         }
     }
-    editing?.let { id -> MixEditor(p, p.mixes.firstOrNull { it.id == id }, physical) { editing = null } }
+    p.mixed.forEachIndexed { i, m -> m.problems.firstOrNull()?.let { Txt("Mix ${p.mixedSlot(i)}: $it", Nz.type.bodySmall, c.heat) } }
+    if (p.mixed.any { it.gradient.enabled }.not() && p.mixed.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Txt("Blend by", Nz.type.bodySmall, c.textMuted)
+        DenseSelect("Blend by", listOf(Choice("sublayer", "Splitting layers"), Choice("alternate", "Alternating layers")), if (p.mixSublayers) "sublayer" else "alternate", Modifier.weight(1f)) {
+            p.mixSublayers = it == "sublayer"; p.changed() }
+    }
+    editing?.let { i -> MixEditor(p, p.mixed.getOrNull(i), i, physical) { editing = null } }
     matching?.let { item -> ColourMatchWindow(p, item) { matching = null } }
 }
 
 /**
- * Snapmaker's mix editor (MixedFilamentDialog), in its four modes, computed by Snapmaker's own code in the engine:
- * Ratio (two filaments on a 10-90 % bar, or three on a triangle), Cycle (a layer pattern such as "1124"), Match (a
- * target colour; Snapmaker's search picks the mix, Min Mix Ratio 0-50 %), and Gradient (two filaments, bottom to top).
- * Every mode previews the result (its layer stripe and colour) and offers Snapmaker's recommended swatches.
+ * The mix editor: two or three loaded filaments and their shares (a bar for two, a triangle for three), or for two a
+ * gradient from the bottom of the model to its top. It previews the colour the engine blends, and offers preset swatches
+ * (every pair of loaded filaments at 25, 50 and 75 %), or a recipe found for a target colour.
  */
 @Composable
-private fun MixEditor(p: PrepareState, mix: FullSpectrumFormat.Mix?, physical: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>, onDone: () -> Unit) {
+private fun MixEditor(p: PrepareState, mix: MixedFilamentFormat.Row?, index: Int, physical: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>, onDone: () -> Unit) {
     val c = Nz.colors
     val scope = rememberCoroutineScope()
     val typed = physical.map { (it.colorHex ?: "#FFFFFF") to it.type }
     val ids = physical.map { it.slot }
-    // Edit opens on the mode the mix was made in (Snapmaker's ui_mode: 0 Ratio, 1 Cycle, 2 Match, 3 Gradient).
-    var mode by remember(mix?.id) { mutableStateOf(when (mix?.uiMode) { 1 -> "cycle"; 2 -> "match"; 3 -> "gradient"; else -> "ratio" }) }
-    // Ratio / Match / Gradient filaments, and the ratio state.
-    val filaments = remember(mix?.id) { mutableStateListOf<Int>().apply { addAll(mix?.components?.take(3) ?: ids.take(2)) } }
-    var share by remember(mix?.id) { mutableStateOf((mix?.mixBPercent ?: 50).coerceIn(10, 90)) }
-    var tri by remember(mix?.id) { mutableStateOf(mix?.weights?.takeIf { it.size == 3 }?.map { it / 100f } ?: listOf(1 / 3f, 1 / 3f, 1 / 3f)) }
-    var pattern by remember(mix?.id) { mutableStateOf(mix?.pattern?.ifBlank { null } ?: "12") }
-    var target by remember(mix?.id) { mutableStateOf(mix?.displayHex ?: "#808080") }
-    var minPct by remember { mutableStateOf(15) }
-    var matchDialog by remember { mutableStateOf<org.json.JSONObject?>(null) }
+    val filaments = remember(index) { mutableStateListOf<Int>().apply { addAll(mix?.components?.take(3)?.map { it } ?: ids.take(2)) } }
+    var share by remember(index) { mutableStateOf(mix?.takeIf { it.components.size == 2 }?.let { r -> (r.weights[1] * 100 / (r.weights.sum().takeIf { it > 0 } ?: 1)).coerceIn(10, 90) } ?: 50) }
+    var tri by remember(index) { mutableStateOf(mix?.weights?.takeIf { it.size == 3 }?.let { w -> val t = w.sum().toFloat().takeIf { it > 0 } ?: 1f; w.map { it / t } } ?: listOf(1 / 3f, 1 / 3f, 1 / 3f)) }
+    var gradient by remember(index) { mutableStateOf(mix?.gradient?.enabled == true) }
+    // A gradient's range, as the first filament's share at the bottom and at the top (Orca's "0.9,0.1" text).
+    val rangeNow = mix?.gradient?.range?.split(',')?.mapNotNull { it.trim().toDoubleOrNull() }?.takeIf { it.size == 2 }
+    var bottom by remember(index) { mutableStateOf(((rangeNow?.get(0) ?: 0.9) * 100).toInt().coerceIn(0, 100)) }
+    var top by remember(index) { mutableStateOf(((rangeNow?.get(1) ?: 0.1) * 100).toInt().coerceIn(0, 100)) }
+    var target by remember(index) { mutableStateOf(mix?.hex ?: "#808080") }
     var matchInfo by remember { mutableStateOf<String?>(null) }
-    var direction by remember { mutableStateOf(0) }
-    var preview by remember { mutableStateOf<FullSpectrumFormat.Mixes?>(null) }
+    var preview by remember { mutableStateOf<MixedFilamentFormat.Row?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
-    var presets by remember { mutableStateOf<List<FullSpectrum.Preset>>(emptyList()) }
+    var presets by remember { mutableStateOf<List<MixedFilamentFormat.Row>>(emptyList()) }
 
-    fun dialog(): org.json.JSONObject? = when (mode) {
-        "ratio" -> org.json.JSONObject().put("mode", "ratio").put("filaments", org.json.JSONArray(filaments.toList())).apply {
-            if (filaments.size == 3) put("weights", org.json.JSONArray(tri.map { (it * 100).toInt() })) else put("mix_b_percent", share) }
-        "cycle" -> org.json.JSONObject().put("mode", "cycle").put("pattern", pattern)
-        "match" -> matchDialog
-        else -> org.json.JSONObject().put("mode", "gradient").put("filaments", org.json.JSONArray(filaments.take(2))).put("direction", direction)
+    fun row(): MixedFilamentFormat.Row {
+        val weights = when {
+            gradient || filaments.size == 2 -> listOf(100 - share, share)
+            else -> tri.map { Math.round(it * 100).toInt().coerceAtLeast(1) }
+        }
+        val comps = if (gradient) filaments.take(2) else filaments.toList()
+        val grad = if (gradient) MixedFilamentFormat.Gradient(true, "%.2f,%.2f".format(java.util.Locale.ROOT, bottom / 100.0, top / 100.0)) else MixedFilamentFormat.Gradient()
+        return MixedFilamentFormat.Row(comps, if (gradient) listOf(50, 50) else weights, grad)
     }
-    // Preview (debounced), exactly what OK would store.
-    LaunchedEffect(mode, filaments.toList(), share, tri, pattern, matchDialog, direction) {
+    LaunchedEffect(filaments.toList(), share, tri, gradient, bottom, top) {
         kotlinx.coroutines.delay(150)
-        val d = dialog() ?: run { preview = null; return@LaunchedEffect }
-        runCatching { withContext(Dispatchers.IO) { FullSpectrum.preview(typed, d) } }
-            .onSuccess { preview = it; problem = null }.onFailure { preview = null; problem = it.message }
+        runCatching { withContext(Dispatchers.IO) { MixedFilament.display(typed, listOf(row())).single() } }
+            .onSuccess { preview = it; problem = it.problems.firstOrNull() }.onFailure { preview = null; problem = it.message }
     }
-    // Match: Snapmaker's search, 120 ms after the target or Min Mix Ratio changes.
-    LaunchedEffect(mode, target, minPct) {
-        if (mode != "match") return@LaunchedEffect
+    LaunchedEffect(Unit) { presets = runCatching { withContext(Dispatchers.IO) { MixedFilament.presets(typed) } }.getOrDefault(emptyList()) }
+    LaunchedEffect(target) {
         kotlinx.coroutines.delay(120)
-        runCatching { withContext(Dispatchers.IO) { FullSpectrum.matchOne(typed, target, minPct) } }
-            .onSuccess { matchDialog = it.dialog; matchInfo = "${it.quality} · ΔE %.1f".format(it.deltaE); problem = null }
-            .onFailure { matchDialog = null; matchInfo = null; problem = it.message }
+        runCatching { withContext(Dispatchers.IO) { MixedFilament.match(typed, target) } }
+            .onSuccess { matchInfo = "ΔE %.1f".format(it.deltaE) + " · " + it.parts.joinToString(" + ") { part -> "F${part.filament} ${part.ratio}%" } }
+            .onFailure { matchInfo = it.message }
     }
-    LaunchedEffect(mode, filaments.size, minPct) {
-        val m = when (mode) { "ratio" -> if (filaments.size == 3) "ratio3" else "ratio"; "cycle" -> null; else -> mode }
-        presets = m?.let { runCatching { withContext(Dispatchers.IO) { FullSpectrum.presets(typed, it, minPct) } }.getOrDefault(emptyList()) } ?: emptyList()
-    }
-    fun applyPreset(d: org.json.JSONObject) {
-        val f = d.optJSONArray("filaments")?.let { a -> (0 until a.length()).map { a.getInt(it) } }
-        f?.let { filaments.clear(); filaments.addAll(it) }
-        d.optJSONArray("weights")?.let { a -> val w = (0 until a.length()).map { a.getDouble(it).toFloat() }; val sum = w.sum().takeIf { it > 0 } ?: 1f
-            if (w.size == 3) tri = w.map { it / sum } else if (w.size == 2) share = ((w[1] / sum) * 100).toInt().coerceIn(10, 90) }
-        if (d.has("mix_b_percent")) share = d.getInt("mix_b_percent").coerceIn(10, 90)
-        if (d.has("direction")) direction = d.getInt("direction")
-        if (mode == "match") matchDialog = d
+    fun applyRow(r: MixedFilamentFormat.Row) {
+        filaments.clear(); filaments.addAll(r.components.take(3))
+        if (r.components.size == 2) share = (r.weights[1] * 100 / (r.weights.sum().takeIf { it > 0 } ?: 1)).coerceIn(10, 90)
+        else if (r.components.size == 3) { val t = r.weights.sum().toFloat().takeIf { it > 0 } ?: 1f; tri = r.weights.map { it / t } }
+        gradient = false
     }
 
-    // Opening the editor scrolls it into view (it opens below the mix list).
     val bring = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
-    LaunchedEffect(mix?.id) { kotlinx.coroutines.delay(50); bring.bringIntoView() }
+    LaunchedEffect(index) { kotlinx.coroutines.delay(50); bring.bringIntoView() }
     Column(Modifier.fillMaxWidth().bringIntoViewRequester(bring).clip(RoundedCornerShape(8.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Txt(if (mix == null) "Add Mix" else "Edit Mix ${mix.id}", Nz.type.label)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("ratio" to "Ratio", "cycle" to "Cycle", "match" to "Match", "gradient" to "Gradient").forEach { (m, label) ->
-                val on = mode == m
-                Txt(label, Nz.type.label, if (on) c.accent else c.textMuted, modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                    .background(if (on) c.accent.copy(alpha = 0.14f) else Color.Transparent).clickable { mode = m; if (m == "gradient" && filaments.size > 2) filaments.removeAt(2) }
-                    .padding(horizontal = 8.dp, vertical = 4.dp))
-            }
-        }
+        Txt(if (mix == null) "Add Mix" else "Edit Mix ${p.mixedSlot(index)}", Nz.type.label)
         val choices = physical.map { s -> Choice(s.slot.toString(), "${s.slot} · ${listOfNotNull(s.vendor, s.type).joinToString(" ").ifBlank { "Filament" }}") }
-        when (mode) {
-            "ratio", "gradient" -> {
-                filaments.forEachIndexed { i, id ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Txt(if (mode == "gradient") (if (i == 0) "Bottom" else "Top") else "Filament ${i + 1}", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(64.dp))
-                        SlotBadge(id, p.slotHex(id), 22.dp)
-                        DenseSelect("Filament ${i + 1}", choices.filter { it.value == id.toString() || it.value.toInt() !in filaments }, id.toString(), Modifier.weight(1f)) { v ->
-                            v.toIntOrNull()?.let { filaments[i] = it } }
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (mode == "ratio" && filaments.size < 3 && physical.size >= 3) Txt("+ Add one filament", Nz.type.label, c.accent, modifier = Modifier.clickable {
-                        ids.firstOrNull { it !in filaments }?.let { filaments.add(it) } })
-                    if (mode == "ratio" && filaments.size > 2) Txt("− Remove last filament", Nz.type.label, c.accent, modifier = Modifier.clickable { filaments.removeAt(filaments.lastIndex) })
-                    if (mode == "gradient") Txt("Swap filaments", Nz.type.label, c.accent, modifier = Modifier.clickable {
-                        val a0 = filaments[0]; filaments[0] = filaments[1]; filaments[1] = a0; direction = 0 })
-                }
-                if (mode == "ratio" && filaments.size == 2) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Txt("${100 - share}%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
-                    RatioBar(share, parseHex(p.slotHex(filaments[0])) ?: c.accent, parseHex(p.slotHex(filaments[1])) ?: c.accent, Modifier.weight(1f), 10, 90, 1) { share = it }
-                    Txt("$share%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
-                }
-                if (mode == "ratio" && filaments.size == 3) TrianglePicker(filaments.map { parseHex(p.slotHex(it)) ?: c.accent }, tri, 0.10f) { tri = it }
-            }
-            "cycle" -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Txt("Tap to add", Nz.type.bodySmall, c.textMuted)
-                    physical.forEach { s -> Box(Modifier.clickable(onClickLabel = "Append filament ${s.slot} to pattern") {
-                        pattern = (pattern + if (s.slot >= 10) "[${s.slot}]" else "${s.slot}").take(512) }) { SlotBadge(s.slot, s.colorHex, 22.dp) } }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Txt("Pattern", Nz.type.bodySmall, c.textMuted)
-                    com.nozzleitall.desktop.settings.DenseInput(pattern, { pattern = it.take(512) }, "Layer pattern", Modifier.weight(1f), placeholder = "12")
-                    Txt("Clear", Nz.type.label, c.accent, modifier = Modifier.clickable { pattern = "" })
-                }
-            }
-            "match" -> {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Txt("Target colour", Nz.type.bodySmall, c.textMuted)
-                    Box(Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(target) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(5.dp)))
-                    var hex by remember(target) { mutableStateOf(target.removePrefix("#")) }
-                    Txt("Hex: #", Nz.type.bodySmall, c.textMuted)
-                    com.nozzleitall.desktop.settings.DenseInput(hex, { t -> hex = t.take(6); if (Regex("[0-9A-Fa-f]{6}").matches(hex)) target = "#" + hex.uppercase() },
-                        "Target colour hex", Modifier.width(100.dp), error = !Regex("[0-9A-Fa-f]{6}").matches(hex))
-                    matchInfo?.let { Txt(it, Nz.type.bodySmall, c.textMuted) }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Txt("Min Mix Ratio", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(96.dp))
-                    RatioBar(minPct, c.line, c.accent, Modifier.weight(1f), 0, 50, 1) { minPct = it }
-                    Txt("$minPct%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
-                }
+        filaments.forEachIndexed { i, id ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Txt(if (gradient) (if (i == 0) "Bottom" else "Top") else "Filament ${i + 1}", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(64.dp))
+                SlotBadge(id, p.slotHex(id), 22.dp)
+                DenseSelect("Filament ${i + 1}", choices.filter { it.value == id.toString() || it.value.toInt() !in filaments }, id.toString(), Modifier.weight(1f)) { v ->
+                    v.toIntOrNull()?.let { filaments[i] = it } }
             }
         }
-        // Result: the layer stripe and the colour it reads as, with Snapmaker's label.
-        preview?.rows?.lastOrNull()?.let { r ->
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!gradient && filaments.size < 3 && physical.size >= 3) Txt("+ Add one filament", Nz.type.label, c.accent, modifier = Modifier.clickable {
+                ids.firstOrNull { it !in filaments }?.let { filaments.add(it) } })
+            if (!gradient && filaments.size > 2) Txt("− Remove last filament", Nz.type.label, c.accent, modifier = Modifier.clickable { filaments.removeAt(filaments.lastIndex) })
+            if (filaments.size == 2 || gradient) Txt(if (gradient) "Plain mix" else "Gradient", Nz.type.label, c.accent, modifier = Modifier.clickable {
+                gradient = !gradient; if (gradient && filaments.size > 2) filaments.removeAt(2) })
+            if (gradient) Txt("Swap filaments", Nz.type.label, c.accent, modifier = Modifier.clickable { val a0 = filaments[0]; filaments[0] = filaments[1]; filaments[1] = a0 })
+        }
+        if (gradient && filaments.size == 2) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Txt("At the bottom", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(96.dp))
+                RatioBar(100 - bottom, parseHex(p.slotHex(filaments[0])) ?: c.accent, parseHex(p.slotHex(filaments[1])) ?: c.accent, Modifier.weight(1f), 0, 100, 5) { bottom = 100 - it }
+                Txt("$bottom% F${filaments[0]}", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(64.dp))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Txt("At the top", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(96.dp))
+                RatioBar(100 - top, parseHex(p.slotHex(filaments[0])) ?: c.accent, parseHex(p.slotHex(filaments[1])) ?: c.accent, Modifier.weight(1f), 0, 100, 5) { top = 100 - it }
+                Txt("$top% F${filaments[0]}", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(64.dp))
+            }
+        } else if (filaments.size == 2) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Txt("${100 - share}%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
+            RatioBar(share, parseHex(p.slotHex(filaments[0])) ?: c.accent, parseHex(p.slotHex(filaments[1])) ?: c.accent, Modifier.weight(1f), 10, 90, 1) { share = it }
+            Txt("$share%", Nz.type.bodySmall, c.textMuted, modifier = Modifier.width(36.dp))
+        } else if (filaments.size == 3) TrianglePicker(filaments.map { parseHex(p.slotHex(it)) ?: c.accent }, tri, 0.10f) { tri = it }
+        preview?.let { r ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Txt("Mix Effect", Nz.type.bodySmall, c.textMuted)
-                Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(parseHex(r.displayHex) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(6.dp)))
-                LayerStripe(r.components, r.weights, p, Modifier.weight(1f).height(14.dp))
-                Txt(r.label, Nz.type.bodySmall, maxLines = 1)
+                Box(Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)).background(parseHex(r.hex) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(6.dp)))
+                Txt((if (gradient) "Gradient " else "") + r.label, Nz.type.bodySmall, maxLines = 1)
             }
         }
-        preview?.warning?.let { Txt(it, Nz.type.bodySmall, c.heat) }
         problem?.let { Txt(it, Nz.type.bodySmall, c.danger) }
-        if (presets.any { it.visible }) {
-            Txt("Mixing Recommendations", Nz.type.bodySmall, c.textMuted)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Txt("Match a colour", Nz.type.bodySmall, c.textMuted)
+            Box(Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(target) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(5.dp)))
+            var hex by remember(target) { mutableStateOf(target.removePrefix("#")) }
+            Txt("#", Nz.type.bodySmall, c.textMuted)
+            com.nozzleitall.desktop.settings.DenseInput(hex, { t -> hex = t.take(6); if (Regex("[0-9A-Fa-f]{6}").matches(hex)) target = "#" + hex.uppercase() },
+                "Target colour hex", Modifier.width(90.dp), error = !Regex("[0-9A-Fa-f]{6}").matches(hex))
+            matchInfo?.let { Txt(it, Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f), maxLines = 1) }
+            Txt("Use", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable {
+                scope.launch { runCatching { withContext(Dispatchers.IO) { MixedFilament.match(typed, target) } }.onSuccess { m -> m.row?.let { applyRow(it) } } } }.padding(4.dp))
+        }
+        if (presets.isNotEmpty()) {
+            Txt("Presets", Nz.type.bodySmall, c.textMuted)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                presets.filter { it.visible }.take(24).forEach { pr ->
-                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(pr.previewHex) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(5.dp))
-                        .clickable(onClickLabel = pr.tooltip) { applyPreset(pr.dialog) }.semantics { contentDescription = pr.tooltip })
+                presets.take(36).forEach { pr ->
+                    Box(Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)).background(parseHex(pr.hex) ?: c.surface).border(1.dp, c.line, RoundedCornerShape(5.dp))
+                        .clickable(onClickLabel = pr.label) { applyRow(pr) }.semantics { contentDescription = pr.label })
                 }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (mix != null) Txt("Delete", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable {
-                p.editMixes(scope) { phys, defs -> FullSpectrum.remove(phys, defs, mix.id) }; onDone() }.padding(4.dp))
+            if (mix != null) Txt("Delete", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.removeMixed(index, scope); onDone() }.padding(4.dp))
             Spacer(Modifier.weight(1f))
             NzButton("Cancel", onDone, kind = ButtonKind.SECONDARY)
-            NzButton("OK", {
-                dialog()?.let { d -> p.editMixes(scope) { _, defs -> FullSpectrum.save(typed, defs, d, mix?.id) }; onDone() }
-            }, kind = ButtonKind.PRIMARY, enabled = problem == null && preview != null)
+            NzButton("OK", { if (mix == null) p.addMixed(row(), scope) else p.updateMixed(index, row(), scope); onDone() }, kind = ButtonKind.PRIMARY, enabled = preview != null && problem == null)
         }
     }
-}
-
-/** The repeating layer order of a mix, one band per layer (a:b ratio or the weights), as Snapmaker's preview stripe. */
-@Composable
-private fun LayerStripe(components: List<Int>, weights: List<Int>, p: PrepareState, modifier: Modifier) {
-    val total = weights.sum().takeIf { it > 0 } ?: 1
-    val seq = ArrayList<Int>(); val emitted = IntArray(components.size)
-    val len = 20
-    for (pos in 0 until len) {
-        val pick = components.indices.maxByOrNull { i -> (pos + 1) * weights.getOrElse(i) { 0 } / total.toDouble() - emitted[i] } ?: 0
-        emitted[pick]++; seq += components.getOrElse(pick) { 1 }
-    }
-    Row(modifier.clip(RoundedCornerShape(3.dp))) { seq.forEach { id -> Box(Modifier.weight(1f).fillMaxHeight().background(parseHex(p.slotHex(id)) ?: Nz.colors.surface)) } }
 }
 
 /** Three filaments' shares on a triangle (each corner one filament), each share clamped to at least [minShare]. */
@@ -313,93 +271,59 @@ internal fun RatioBar(share: Int, first: Color, second: Color, modifier: Modifie
 }
 
 /**
- * Snapmaker's "Color Mixing Match" for [item]: every colour of the model becomes a loaded slot, or a new mix of loaded
- * slots, whichever looks closest (Snapmaker Orca's own search, run by the engine). Auto matches against Snapmaker's
- * recommended Full Spectrum filaments; Manual against the slots chosen here. Confirm applies the mapping and adds the mixes.
+ * "Match colours" for [item]: each colour of the model becomes the closest loaded filament, or a new mix of loaded
+ * filaments, whichever looks nearest (the engine's recipe search, run for every colour). Confirm adds the mixes and sets
+ * the slots the model's colours print in.
  */
 @Composable
 fun ColourMatchWindow(p: PrepareState, item: PrepItem, onClose: () -> Unit) {
     val c = Nz.colors
     val scope = rememberCoroutineScope()
     val physical = p.materials()
-    var mode by remember { mutableStateOf("auto") }
-    val manual = remember { mutableStateListOf<Int>().apply { addAll(physical.map { it.slot }) } }
-    var result by remember { mutableStateOf<FullSpectrumFormat.MatchResult?>(null) }
+    var results by remember { mutableStateOf<List<Pair<String, MixedFilamentFormat.Match>>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     // The model's colours, one entry per distinct colour with the file filaments using it: the file's own colours when it
-    // has them (a Bambu/Orca project, as Snapmaker Orca adopts them), otherwise the colour each one prints in now.
+    // has them, otherwise the colour each one prints in now.
     val targets = remember(item) {
         (item.painted + listOfNotNull(item.ownFilament)).distinct().mapNotNull { n ->
             (item.sources.firstOrNull { it.index == n }?.colorHex ?: p.slotHex(item.slotFor(n)))?.uppercase()?.let { it to n }
         }.groupBy({ it.first }, { it.second }).toList()
     }
-    fun start() {
-        busy = true; problem = null
-        scope.launch {
-            runCatching { withContext(Dispatchers.IO) {
-                FullSpectrum.match(mode, physical.map { (it.colorHex ?: "#FFFFFF") to it.type }, targets, p.mixDefinitions, manual.toList())
-            } }.onSuccess { result = it }.onFailure { problem = it.message }
-            busy = false
-        }
+    LaunchedEffect(Unit) {
+        busy = true
+        val typed = physical.map { (it.colorHex ?: "#FFFFFF") to it.type }
+        runCatching { withContext(Dispatchers.IO) { targets.map { (hex, _) -> hex to MixedFilament.match(typed, hex) } } }
+            .onSuccess { results = it }.onFailure { problem = it.message }
+        busy = false
     }
-    LaunchedEffect(Unit) { if (targets.isNotEmpty()) start() }
-
-    DialogWindow(onCloseRequest = onClose, title = "Match colours", state = rememberDialogState(width = 720.dp, height = 760.dp)) {
+    DialogWindow(onCloseRequest = onClose, title = "Match colours", state = rememberDialogState(width = 640.dp, height = 640.dp)) {
         Column(Modifier.fillMaxSize().background(c.surface).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Txt("Match with", Nz.type.label)
-                DenseSelect("Match mode", listOf(Choice("auto", "Recommended Full Spectrum filaments"), Choice("manual", "The filaments I choose")), mode,
-                    Modifier.width(300.dp)) { mode = it; result = null }
-                Spacer(Modifier.weight(1f))
-                NzButton(if (result == null) "Start matching" else "Match again", { start() }, kind = ButtonKind.SECONDARY, enabled = !busy && targets.isNotEmpty())
-            }
             if (targets.isEmpty()) Banner("This model has no colours from its file to match. Paint it or open a multi-colour file first.", BannerKind.INFO)
-            if (mode == "manual") Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Txt("Use", Nz.type.bodySmall, c.textMuted)
-                physical.forEach { s ->
-                    val on = s.slot in manual
-                    Box(Modifier.clip(RoundedCornerShape(8.dp)).border(2.dp, if (on) c.accent else Color.Transparent, RoundedCornerShape(8.dp)).padding(2.dp)
-                        .clickable(onClickLabel = if (on) "Don't use slot ${s.slot}" else "Use slot ${s.slot}") { if (on) manual.remove(s.slot) else manual.add(s.slot); result = null }) {
-                        SlotBadge(s.slot, s.colorHex)
-                    }
-                }
-            }
-            result?.palette?.takeIf { mode == "auto" && it.isNotEmpty() }?.let { pal ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Txt("Load", Nz.type.bodySmall, c.textMuted)
-                    pal.forEach { (slot, hex) -> SlotBadge(slot, hex) }
-                    Txt("in slots ${pal.joinToString { it.first.toString() }}.", Nz.type.bodySmall, c.textMuted)
-                }
-            }
-            // Original and matched, side by side.
-            Row(Modifier.fillMaxWidth().height(230.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MatchPreview("Original", item, Modifier.weight(1f)) { n -> item.sources.firstOrNull { it.index == n }?.colorHex ?: p.slotHex(item.slotFor(n)) }
                 MatchPreview("Matched", item, Modifier.weight(1f)) { n ->
-                    val r = result?.results?.firstOrNull { n in it.sourceIds } ?: return@MatchPreview null
-                    if (r.pure) result?.palette?.firstOrNull { it.first == r.slot }?.second ?: p.slotHex(r.slot) else r.previewHex
+                    val hex = targets.firstOrNull { n in it.second }?.first
+                    results.firstOrNull { it.first == hex }?.second?.let { m -> m.row?.hex ?: m.matchedHex }
                 }
             }
             if (busy) Txt("Matching…", Nz.type.bodySmall, c.textMuted)
             problem?.let { Banner(it, BannerKind.WARNING) }
             Txt("Colour mapping", Nz.type.label)
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                result?.results?.forEach { r ->
+                results.forEach { (hex, m) ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)).background(parseHex(r.targetHex) ?: c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(6.dp)))
+                        Box(Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)).background(parseHex(hex) ?: c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(6.dp)))
                         Txt("→", Nz.type.label, c.textMuted)
-                        val hex = if (r.pure) result?.palette?.firstOrNull { it.first == r.slot }?.second ?: p.slotHex(r.slot) else r.previewHex
-                        SlotBadge(r.slot, hex, 26.dp)
-                        Txt(if (r.pure) "Slot ${r.slot}" else "New mix ${r.slot}: " + r.components.zip(r.weights).joinToString(" + ") { (id, w) -> "F$id $w%" },
-                            Nz.type.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
-                        r.quality?.let { q -> Txt(q + (r.deltaE?.let { " · ΔE %.1f".format(it) } ?: ""), Nz.type.bodySmall, c.textMuted) }
+                        Box(Modifier.size(26.dp).clip(RoundedCornerShape(6.dp)).background(parseHex(m.row?.hex ?: m.matchedHex) ?: c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(6.dp)))
+                        Txt(m.parts.joinToString(" + ") { "F${it.filament} ${it.ratio}%" }, Nz.type.bodySmall, modifier = Modifier.weight(1f), maxLines = 1)
+                        Txt("ΔE %.1f".format(m.deltaE), Nz.type.bodySmall, c.textMuted)
                     }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 NzButton("Cancel", onClose, kind = ButtonKind.SECONDARY, modifier = Modifier.weight(1f))
-                NzButton("Confirm", { result?.let { p.applyMatch(item, it, scope) }; onClose() }, kind = ButtonKind.PRIMARY,
-                    enabled = result != null && !busy, modifier = Modifier.weight(1f))
+                NzButton("Confirm", { p.matchWithMixing(item, targets, scope); onClose() }, kind = ButtonKind.PRIMARY, enabled = results.isNotEmpty() && !busy, modifier = Modifier.weight(1f))
             }
         }
     }

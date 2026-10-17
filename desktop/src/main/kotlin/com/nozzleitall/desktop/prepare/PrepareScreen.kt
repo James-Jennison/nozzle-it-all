@@ -260,10 +260,8 @@ private fun MaterialsSection(state: AppState) {
         if (flushing) FlushVolumesWindow(p) { flushing = false }
         // Painted models: which slot prints each of the model's own colours.
         p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
-        // Full Spectrum (Snapmaker Orca's colour mixing), wherever the printer or profile offers it.
-        if (com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM in p.features() && slots.size >= 2) ColourMixingSection(p)
-        // PrusaSlicer's Color mix, on multi-slot printers without Full Spectrum.
-        if (com.nozzleitall.printer.ext.Prusa.COLOR_MIX in p.features() && slots.size >= 2) PrusaColorMixSection(p)
+        // Mixed filaments (OrcaSlicer's colour mixing), wherever the printer or profile offers them.
+        if (com.nozzleitall.printer.ext.MixedFilamentFormat.FEATURE in p.features() && slots.size >= 2) ColourMixingSection(p)
     }
 }
 

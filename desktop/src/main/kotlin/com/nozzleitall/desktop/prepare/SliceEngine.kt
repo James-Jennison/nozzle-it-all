@@ -29,8 +29,6 @@ data class SliceRequest(
     val applyPreset: Boolean = true,
     /** The user's own flushing-volume matrix over every material slot (row = from), or null to work it out from the colours. */
     val flushMatrix: List<Int>? = null,
-    /** PrusaSlicer ColorMix virtual extruders (its sidecar JSON), or null. */
-    val virtualExtruders: String? = null,
 )
 
 data class SliceStats(val layers: Int?, val seconds: Double?, val grams: Double?, val metres: Double?, val toolChanges: Int)
@@ -160,8 +158,8 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             val paint = req.project.objects.associate { o -> o.id to (if (o.mesh.isPainted) paintInSlots(o.mesh, entries[o.id]?.paintSlots.orEmpty(), objectSlots[o.id] ?: 1) else null) }
             val usedSlots = req.project.objects.maxOfOrNull { o -> maxOf(objectSlots[o.id] ?: 1, paint[o.id]?.second ?: 1) } ?: 1
             val materials = req.materials.sortedBy { it.slot }.ifEmpty { listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")) }
-            // Full Spectrum mixes name physical slots by number, so with any mixes every loaded slot is passed to the engine.
-            val mixing = !req.extraOverrides[FullSpectrum.DEFINITIONS_KEY].isNullOrBlank() || req.virtualExtruders != null
+            // A mixed filament names loaded filaments by number, so with any mixed filament every loaded slot is passed to the engine.
+            val mixing = req.extraOverrides["filament_is_mixed"]?.split(',')?.any { it.trim() == "1" } == true
             val slots = if (mixing) materials else materials.take(maxOf(usedSlots, 1))
             // Each slot slices with its own filament profile when it has one (one combined per-slot filament file, as a
             // slicer combines its filament presets); otherwise the printer profile's own filament.
@@ -185,8 +183,6 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
                 lines += "set\t$k\t$v"
             }
-            // PrusaSlicer ColorMix: the virtual extruders, in PrusaSlicer's own file format, for the engine to print.
-            req.virtualExtruders?.let { json -> lines += "virtual_extruders\t" + File(job, "virtual_extruders.json").apply { writeText(json) }.absolutePath }
             val (bedW, bedD) = bedOf(File(req.profileDir, "machine.json").readText())
             req.project.objects.forEachIndexed { i, o ->
                 // A painted object goes as a 3MF, which the engine's own importer reads paint from; others as STL.

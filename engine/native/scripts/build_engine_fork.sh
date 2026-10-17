@@ -6,7 +6,7 @@
 # Output: $WORK/dist/nozzle-engine and a provenance record (also copied to engine/fork/PROVENANCE.txt).
 set -euo pipefail
 NOZZLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-PREFIX="${SNAPMAKER_DEPS:-$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["desktop_deps_prefix"])' "$NOZZLE_ROOT/engine/fork/ENGINE_PIN.json")}"
+PREFIX="${NOZZLE_ENGINE_DEPS:-${SNAPMAKER_DEPS:-$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["desktop_deps_prefix"])' "$NOZZLE_ROOT/engine/fork/ENGINE_PIN.json")}}"
 WORK="${NOZZLE_NATIVE_FORK_WORK:-/mnt/faststorage/build-work/nozzle-native-fork}"
 SRC="$WORK/src"; BDIR="$WORK/build"; DIST="$WORK/dist"
 JOBS="${HEAVY_BUILD_JOBS:-${JOBS:-6}}"

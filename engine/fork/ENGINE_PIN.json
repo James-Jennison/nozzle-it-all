@@ -2,7 +2,7 @@
   "base": {
     "name": "nozzle-engine",
     "repo": "https://github.com/James-Jennison/nozzle-engine.git",
-    "commit": "21332f824330eb20e15dfced5d26bea8c72fba0a",
+    "commit": "b23b3ecd1eb35a444abe399f53936ba63ae398d4",
     "local_checkout": "/mnt/faststorage/nozzle-engine-2.5",
     "licence": "AGPL-3.0",
     "branch": "engine/orca-2.5-base"

@@ -13,11 +13,8 @@ import com.nozzleitall.testgrid.StlGeometry
 import com.nozzleitall.testgrid.TestSlicer
 import com.nozzleitall.testgrid.VirtualClock
 import kotlinx.coroutines.runBlocking
-import com.nozzleitall.printer.ext.Prusa
-import com.nozzleitall.printer.ext.PrusaColorMixFormat
-import com.nozzleitall.printer.ext.Snapmaker
-import net.jamesjennison.klippercompanion.AndroidColorMix
-import net.jamesjennison.klippercompanion.AndroidFullSpectrum
+import com.nozzleitall.printer.ext.MixedFilamentFormat
+import net.jamesjennison.klippercompanion.AndroidMixedFilament
 import net.jamesjennison.klippercompanion.BUNDLED_MATERIAL_PROFILES
 import net.jamesjennison.klippercompanion.ColourMixEngineError
 import net.jamesjennison.klippercompanion.BuildConfig
@@ -63,7 +60,7 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
         val outcome = runBlocking {
             if (partMixes.isNotEmpty()) {
                 val slots = slicingProfilePack(model, CosmosProfileGeneration.CURRENT.takeIf { ElegooProfiles.isCosmos(model) }, profile.customMachine)?.readToolCount(context) ?: 1
-                // The same rule the project editor uses to offer mixing: Full Spectrum on a U1, ColorMix on any other printer with 2+ slots.
+                // The same rule the project editor uses to offer mixing: any printer with 2+ slots except CANVAS.
                 val features = colourMixFeaturesFor(printer.kind, slots, model)
                 val mixes = partMixes.distinct()
                 mixes.firstOrNull { it.a !in 1..slots || it.b !in 1..slots }?.let { return@runBlocking SliceOutcome.Failed("The color mix uses tools ${it.a} and ${it.b}, but the profile has $slots tool slot(s).") }
@@ -75,32 +72,16 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
                 val offsets = StlGeometry.partOffsets(request.parts.map { StlGeometry.bounds(it.first.readBytes()) })
                 val parts = request.parts.mapIndexed { i, p -> p.first to ModelTransform(offsets[i].first.toFloat(), offsets[i].second.toFloat()) }
                 try {
-                    when {
-                        Snapmaker.FULL_SPECTRUM in features -> {
-                            // The project editor's "+ Add mix", once per mix, then each object on its own mix's id.
-                            var definitions = ""
-                            val ids = mixes.associateWith { m ->
-                                val added = AndroidFullSpectrum.add(physical.map { it.first }, definitions, m.a, m.b, m.bPercent)
-                                definitions = added.definitions
-                                added.addedId ?: return@runBlocking SliceOutcome.Failed("Full Spectrum added no mix for ${m.label}.")
-                            }
-                            mixing = "Full Spectrum"
-                            sliceColourMix(model, parts, partMixes.map { ids.getValue(it) }, materials, mixedFilamentDefinitions = definitions, processPreset = process)
-                        }
-                        Prusa.COLOR_MIX in features -> {
-                            // The project editor's "+ Add blend", once per mix (each takes the next virtual id), normalized by the engine.
-                            val drafts = mutableListOf<PrusaColorMixFormat.Virtual>()
-                            val ids = mixes.associateWith { m ->
-                                PrusaColorMixFormat.Virtual(AndroidColorMix.nextId(slots, drafts), "blend",
-                                    listOf(PrusaColorMixFormat.Component(m.a, (100 - m.bPercent) / 100.0), PrusaColorMixFormat.Component(m.b, m.bPercent / 100.0))).also { drafts += it }.id
-                            }
-                            val virtual = AndroidColorMix.normalize(physical, drafts)
-                            ids.entries.firstOrNull { (_, id) -> virtual.none { it.id == id } }?.let { return@runBlocking SliceOutcome.Failed("ColorMix dropped the ${it.key.label} blend.") }
-                            mixing = "ColorMix"
-                            sliceColourMix(model, parts, partMixes.map { ids.getValue(it) }, materials, virtualExtruders = PrusaColorMixFormat.sliceRequestJson(virtual), processPreset = process)
-                        }
-                        else -> return@runBlocking SliceOutcome.FirmwareBlocked("Nozzle doesn't offer color mixing for this printer (${printer.kind.name}, $slots tool slot(s)).")
+                    if (MixedFilamentFormat.FEATURE !in features) return@runBlocking SliceOutcome.FirmwareBlocked("Nozzle doesn't offer color mixing for this printer (${printer.kind.name}, $slots tool slot(s)).")
+                    // The project editor's "+ Add mix", once per mix, then each object on its own mix's tool (after the loaded ones).
+                    var rows = emptyList<MixedFilamentFormat.Row>()
+                    val tools = mixes.associateWith { m ->
+                        val row = MixedFilamentFormat.Row(listOf(m.a, m.b), listOf(100 - m.bPercent, m.bPercent))
+                        rows = AndroidMixedFilament.add(physical, rows, row) ?: rows
+                        slots + 1 + rows.indexOfFirst { it.components == row.components && it.weights == row.weights }
                     }
+                    mixing = "Mixed filaments"
+                    sliceColourMix(model, parts, partMixes.map { tools.getValue(it) }, materials, mixedRows = rows, processPreset = process)
                 } catch (e: ColourMixEngineError) { SliceOutcome.Failed("Color mixing: ${e.message}") }
             } else if (request.parts.size == 1) SlicingCoordinator.slice(context, request.parts[0].first, profile, processPreset = process)
             else {
@@ -128,8 +109,7 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
     }
 
     /**
-     * Colour mixing (0.2.0, requirement 3): a slice option for Full Spectrum ([mixedFilamentDefinitions]) and
-     * ColorMix ([virtualExtruders]), through the exact same SlicingCoordinator.sliceProject path the project
+     * Mixed filaments: a slice option ([mixedRows]), through the exact same SlicingCoordinator.sliceProject path the project
      * editor's own colour-mixing UI uses (ProjectEditorScreen.kt's sliceOnePlate) - not a parallel test-only
      * pipeline. slice() calls it for a request with a colour mix (the suites' mix-slice test); the device tests
      * call it directly.
@@ -139,13 +119,12 @@ class AndroidTestSlicer(private val context: Context, private val printer: Print
         parts: List<Pair<File, ModelTransform>>,
         toolSlotIndices: List<Int>,
         slotMaterials: List<net.jamesjennison.klippercompanion.MaterialProfile?>,
-        mixedFilamentDefinitions: String? = null,
-        virtualExtruders: String = "",
+        mixedRows: List<MixedFilamentFormat.Row> = emptyList(),
         processPreset: String? = null,
     ): SliceOutcome = runBlocking {
         SlicingCoordinator.sliceProject(
             context, parts, printer.copy(slicingModel = model), toolSlotIndices = toolSlotIndices, slotMaterials = slotMaterials,
-            mixedFilamentDefinitions = mixedFilamentDefinitions, virtualExtruders = virtualExtruders, outputTag = "testgrid-colourmix",
+            mixedRows = mixedRows, outputTag = "testgrid-colourmix",
             processPreset = processPreset,
         )
     }

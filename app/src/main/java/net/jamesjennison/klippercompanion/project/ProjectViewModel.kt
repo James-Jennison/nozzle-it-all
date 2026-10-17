@@ -343,15 +343,14 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
         dao.updateProject(updated); _project.value = updated
     }
 
-    // Colour mixing (0.2.0, WO-30): persists the project's Full Spectrum definitions and/or ColorMix
-    // virtual extruders (see Project.mixedFilamentDefinitions/colorMixJson and
-    // ColourMixPersistence.encodeColorMix) - same update-in-place pattern as setAttribution, so a
-    // mix survives closing and reopening the editor instead of living only in Compose `remember` state.
-    suspend fun setColourMixing(mixedFilamentDefinitions: String?, colorMixJson: String?) {
+    // Persists the project's mixed filaments (Project.mixedFilamentsJson / mixedBlendMode, see ColourMixPersistence.encode) -
+    // same update-in-place pattern as setAttribution, so a mix survives closing and reopening the editor instead of
+    // living only in Compose `remember` state.
+    suspend fun setColourMixing(mixedBlendMode: String?, mixedFilamentsJson: String?) {
         val current = _project.value ?: return
         val updated = current.copy(
-            mixedFilamentDefinitions = mixedFilamentDefinitions?.takeIf { it.isNotBlank() },
-            colorMixJson = colorMixJson,
+            mixedBlendMode = mixedBlendMode?.takeIf { it.isNotBlank() },
+            mixedFilamentsJson = mixedFilamentsJson,
             modifiedAt = System.currentTimeMillis(),
         )
         dao.updateProject(updated)
@@ -370,8 +369,7 @@ class ProjectViewModel(private val context: Context, private val dao: ProjectDao
 
     // Colour mixing (0.2.0, WO-30): re-homes every object's toolSlotIndex after a mix/blend is
     // edited or removed - [transform] is the same old-slot-to-new-slot decision Desktop's
-    // PrepareState.followRemap applies (see ColourMixPersistence.applyFullSpectrumRemap/
-    // applyColorMixRemoval), just run here against every persisted object across all plates
+    // PrepareState.followRemap applies (see ColourMixPersistence.applyRemoval), just run here against every persisted object across all plates
     // (_objects, not the active plate's `objects`) so a removed mix can't leave an object on another
     // plate silently pointing at a slot that no longer exists.
     suspend fun remapToolSlots(transform: (Int?) -> Int?) {

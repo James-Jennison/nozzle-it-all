@@ -137,31 +137,26 @@ class ToolSlotsTest {
         assertTrue(materials.all { it == null })
     }
 
-    // Colour mixing (0.2.0, requirement 5): colourMixFeaturesFor must reproduce
-    // com.nozzleitall.printer.ext.ProfileFeatures.of's own real gating rule for every PrinterKind Android actually
-    // has - a U1 family gets Full Spectrum, any other real multi-slot target gets ColorMix, and a single-tool
-    // target (any kind) gets neither. Mirrors PrusaColorMixTest.colorMixIsForEveryMultiSlotPrinterWithoutFullSpectrum
-    // on the Desktop side, since Android has no PrinterFamily/familyHint of its own to test that rule against directly.
-    @Test fun stockU1WithMultipleToolsGetsFullSpectrum() {
-        assertEquals(setOf(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM), colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 4))
-    }
-    @Test fun paxxU1WithMultipleToolsGetsFullSpectrum() {
-        assertEquals(setOf(com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM), colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1_PAXX, 4))
-    }
-    @Test fun anyOtherMultiSlotTargetGetsColorMixNotFullSpectrum() {
-        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.PRUSA_LINK, 5))
-        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 2))
+    // colourMixFeaturesFor must reproduce com.nozzleitall.printer.ext.ProfileFeatures.of's own gating rule for every
+    // PrinterKind Android actually has: any real multi-slot target is offered mixed filaments (OrcaSlicer's own), and a
+    // single-tool target (any kind) is not.
+    @Test fun anyMultiSlotTargetGetsMixedFilaments() {
+        val f = setOf(com.nozzleitall.printer.ext.MixedFilamentFormat.FEATURE)
+        assertEquals(f, colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 4))
+        assertEquals(f, colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1_PAXX, 4))
+        assertEquals(f, colourMixFeaturesFor(PrinterKind.PRUSA_LINK, 5))
+        assertEquals(f, colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 2))
     }
     // Owner rule 2026-10-01: no color mixing on CANVAS (four lanes into one nozzle), whichever firmware the pack is for.
-    @Test fun aCanvasProfileGetsNeitherMixingSystem() {
+    @Test fun aCanvasProfileGetsNoMixing() {
         assertTrue(colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 4, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_COSMOS_CANVAS).isEmpty())
         assertTrue(colourMixFeaturesFor(PrinterKind.ELEGOO, 4, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_CANVAS).isEmpty())
         assertTrue(colourMixFeaturesFor(PrinterKind.ELEGOO, 4, SlicingPrinterModel.ELEGOO_CENTAURI_CARBON_2_CANVAS).isEmpty())
         assertEquals("every CANVAS pack is covered", com.nozzleitall.printer.ext.ProfileFeatures.CANVAS_PROFILES,
             SlicingPrinterModel.entries.filter { ElegooProfiles.filamentSlots(it) != null }.map { SlicingModelCatalog.info(it).assetDir }.toSet())
-        assertEquals(setOf(com.nozzleitall.printer.ext.Prusa.COLOR_MIX), colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 4, SlicingPrinterModel.GENERIC_KLIPPER))
+        assertEquals(setOf(com.nozzleitall.printer.ext.MixedFilamentFormat.FEATURE), colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 4, SlicingPrinterModel.GENERIC_KLIPPER))
     }
-    @Test fun aSingleToolTargetGetsNeitherMixingSystem() {
+    @Test fun aSingleToolTargetGetsNoMixing() {
         assertTrue(colourMixFeaturesFor(PrinterKind.SNAPMAKER_U1, 1).isEmpty())
         assertTrue(colourMixFeaturesFor(PrinterKind.GENERIC_KLIPPER, 1).isEmpty())
         assertTrue(colourMixFeaturesFor(PrinterKind.BAMBU_LAB, 1).isEmpty())

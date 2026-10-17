@@ -120,6 +120,8 @@ class PrepareState(private val app: AppState) {
     val items = mutableStateListOf<PrepItem>()
     var selected by mutableStateOf<Int?>(null)
     var file by mutableStateOf<File?>(null)
+    /** The plate's camera, here (not in the screen) so the View menu can set it. */
+    val camera = ViewCamera()
     var manifest by mutableStateOf<ProjectManifest?>(null)
     var name by mutableStateOf("Untitled project")
     var dirty by mutableStateOf(false)

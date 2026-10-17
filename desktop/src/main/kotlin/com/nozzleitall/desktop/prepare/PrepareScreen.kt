@@ -43,7 +43,7 @@ fun PrepareScreen(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     val scope = rememberCoroutineScope()
-    val camera = remember { ViewCamera() }
+    val camera = p.camera
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         // Left: the project and everything about how it prints, with Slice always in view at the bottom. All settings

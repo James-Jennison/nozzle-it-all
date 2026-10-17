@@ -76,6 +76,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Save as…", ctrl(Key.S, "S", shift = true), enabled = p.items.isNotEmpty()) {
                 chooseSaveFile("Save project as", p.name + ".3mf")?.let { f -> runCatching { p.file = f; p.save() }.onFailure(::report) }
             },
+            MenuAction("Reload from disk", enabled = p.file != null) { p.file?.let { f -> guarded { runCatching { p.open(f) }.onFailure(::report) } } },
             MenuAction("Export 3MF…", enabled = p.items.isNotEmpty()) {
                 chooseSaveFile("Export project", p.name + ".3mf")?.let { f -> runCatching { ThreeMf.writeAtomically(p.toProject(), f) }.onFailure(::report) }
             },
@@ -88,9 +89,28 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
         AppMenu("Edit", Key.E, listOf(
             MenuAction("Duplicate", ctrl(Key.D, "D"), enabled = p.selected != null) { p.duplicateSelected() },
             MenuAction("Delete", Shortcut(Key.Delete, text = "Delete"), enabled = p.selected != null) { p.removeSelected() },
+            MenuAction("Delete all", enabled = p.items.isNotEmpty()) { guarded { p.items.clear(); p.selected = null; p.changed() } },
             MenuAction("Arrange plate", ctrl(Key.A, "A", shift = true), enabled = p.items.isNotEmpty()) { p.arrange() },
             null,
             MenuAction("Show every setting", ctrl(Key.Period, ".")) { p.advancedSettings = true; p.settingsScope = com.nozzleitall.desktop.settings.Scope.PROCESS; state.destination = Destination.PREPARE },
+        )),
+        AppMenu("Plate", Key.P, listOf(
+            MenuAction("Slice plate", ctrl(Key.R, "R"), enabled = p.items.isNotEmpty()) { state.destination = Destination.PREPARE; p.slice(state.scope) },
+            null,
+            MenuAction("Add plate") { p.addPlate(); state.destination = Destination.PREPARE },
+            MenuAction("Delete this plate", enabled = p.plateNames.size > 1) { guarded { p.removePlate(p.currentPlate) } },
+            null,
+            MenuAction("Previous plate", enabled = p.currentPlate > 0) { p.showPlate(p.currentPlate - 1) },
+            MenuAction("Next plate", enabled = p.currentPlate < p.plateNames.lastIndex) { p.showPlate(p.currentPlate + 1) },
+        )),
+        AppMenu("View", Key.V, listOf(
+            MenuAction("Isometric view") { p.camera.yaw = -35f; p.camera.pitch = 55f; p.camera.pan = androidx.compose.ui.geometry.Offset.Zero },
+            MenuAction("Top view") { p.camera.pitch = 0f },
+            MenuAction("Side view") { p.camera.pitch = 89f },
+            null,
+            MenuAction("Rotate view left") { p.camera.yaw -= 90f },
+            MenuAction("Rotate view right") { p.camera.yaw += 90f },
+            MenuAction("Centre view") { p.camera.pan = androidx.compose.ui.geometry.Offset.Zero },
         )),
         AppMenu("Go", Key.G, Destination.entries.map { d -> MenuAction(d.label, Shortcut(d.key, ctrl = true, text = "Ctrl+" + if (d.key == Key.Comma) "," else d.key.toString().removePrefix("Key: "))) { state.destination = d } }),
         AppMenu("Help", Key.H, listOf(
@@ -98,6 +118,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Supported printers") { browse("https://nozzleitall.com/printers/") },
             MenuAction("Report a problem") { browse("https://nozzleitall.com/support/") },
             MenuAction("Source code and licences") { browse("https://nozzleitall.com/open-source/") },
+            MenuAction("Show the data folder") { runCatching { java.awt.Desktop.getDesktop().open(state.paths.data) }.onFailure(::report) },
             null,
             MenuAction("About Nozzle It All") { state.showAbout = true },
         )),

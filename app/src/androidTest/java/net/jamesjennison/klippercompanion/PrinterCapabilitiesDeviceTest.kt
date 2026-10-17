@@ -53,6 +53,7 @@ class PrinterCapabilitiesDeviceTest {
         compose.onNodeWithTag("printer-tile:$address").performClick()
         // PrusaLinkPrinterService's command() does support pause/resume/cancel, unlike Bambu -
         // this must still be offered, not swept into the same "hidden" bucket as Klipper extras.
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Cancel print"))
         compose.onNodeWithText("Cancel print").assertExists()
     }
 

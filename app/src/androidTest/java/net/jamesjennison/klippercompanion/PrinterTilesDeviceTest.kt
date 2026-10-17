@@ -24,7 +24,9 @@ class PrinterTilesDeviceTest {
         compose.onNodeWithTag("printer-tile:$first").assertExists()
         compose.onNodeWithTag("printer-tile:$second").performScrollTo().performClick()
         assertEquals(second,selected)
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("second.gcode"))
         compose.onNodeWithText("second.gcode").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("screen-list").performScrollToNode(hasText("Resume"))
         compose.onNodeWithText("Resume").performScrollTo().assertIsEnabled()
         assertEquals(0,sends)
         // The header's "All printers" button was removed from Home (redundant with the bottom

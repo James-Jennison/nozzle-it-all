@@ -53,7 +53,7 @@ class M2DeviceTest {
         compose.setContent {CompanionTheme {MacroForm("TEST",MacroOptions(parameters="TEMP=0,300,200"),{}, {command=it})}}
         compose.onNodeWithText("TEMP").performTextReplacement("200;G28")
         compose.onNodeWithText("Review command").performClick()
-        compose.onNodeWithText("TEMP: enter a plain number.").assertIsDisplayed();assertNull(command)
+        compose.onNodeWithText("TEMP: enter a plain number.").performScrollTo().assertIsDisplayed();assertNull(command)
         compose.onNodeWithText("TEMP").performTextReplacement("210")
         compose.onNodeWithText("Review command").performClick()
         assertEquals("TEST TEMP=210",command!!.arguments["script"])

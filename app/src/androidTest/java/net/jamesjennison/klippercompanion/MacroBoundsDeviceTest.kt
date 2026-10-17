@@ -16,7 +16,7 @@ class MacroBoundsDeviceTest {
         compose.setContent {CompanionTheme {MacroForm("TEST",MacroOptions(parameters="TEMP=0,300,200"),{}, {prepared.add(it)})}}
         compose.onNodeWithText("TEMP").performTextReplacement("300.00000000000000000000000001")
         compose.onNodeWithText("Review command").performClick()
-        compose.onNodeWithText("TEMP: use 0 to 300.").assertIsDisplayed()
+        compose.onNodeWithText("TEMP: use 0 to 300.").performScrollTo().assertIsDisplayed()
         assertTrue(prepared.isEmpty())
         val file=java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null),"macro-bounds-fixture.png")
         file.outputStream().use {compose.onNode(isDialog()).captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}

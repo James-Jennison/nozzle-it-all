@@ -44,7 +44,7 @@ internal object RasterWorkers {
  * Index storage is hard capped at2M ints (8MB); over-budget binning falls back to
  * the identical serial rasterizer, not reduced geometry/quality. Reused buffers.
  */
-internal class RasterBands {
+internal class RasterBands(private val useTiles:Boolean=true) {
     private val side=16
     private val count=side*side
     private val bins=Array(count) { IntArray(0) }
@@ -54,9 +54,18 @@ internal class RasterBands {
     private val active=IntArray(count)
     private val next=AtomicInteger()
     internal val indexCapacity get()=bins.sumOf { it.size.toLong() }
+    internal var budgetFallbacks=0;private set
     companion object { const val INDEX_BUDGET=2_000_000 }
 
     fun draw(proj:Projector,d:DisplayMesh,screen:FloatArray,colors:IntArray,surface:DepthSurface,check:()->Unit) {
+        // Measurements show scheduling/binning overhead outweighs the pixel work
+        // below this size. This selects an exact algorithm, never a detail level.
+        if(!useTiles || surface.width.toLong()*surface.height<2_500_000L) {
+            serial(proj,d,screen,colors,surface,check);return
+        }
+        drawTiled(proj,d,screen,colors,surface,check)
+    }
+    internal fun drawTiled(proj:Projector,d:DisplayMesh,screen:FloatArray,colors:IntArray,surface:DepthSurface,check:()->Unit) {
         if(ranges.size<d.tris.size)ranges=IntArray(d.tris.size)
         sizes.fill(0)
         val t=d.mesh.triangles
@@ -74,7 +83,7 @@ internal class RasterBands {
             val top=first/rows;val bottom=last/rows;val lo=left/columns;val hi=right/columns
             ranges[tri]=(lo shl 12) or (hi shl 8) or (top shl 4) or bottom
             needed+=(hi-lo+1)*(bottom-top+1)
-            if(needed>INDEX_BUDGET) { serial(proj,d,screen,colors,surface,check);return }
+            if(needed>INDEX_BUDGET) { budgetFallbacks++;serial(proj,d,screen,colors,surface,check);return }
             for(y in top..bottom)for(x in lo..hi)sizes[y*side+x]++
         }
         val capacities=IntArray(count) { i->if(bins[i].size<sizes[i])max(sizes[i],bins[i].size*3/2).coerceAtMost(d.tris.size) else bins[i].size }
@@ -113,6 +122,7 @@ internal class RasterBands {
         for(tri in d.tris) {
             if(tri and 1023==0)check()
             for(k in 0..2) { val at=t[tri*3+k]*3;for(axis in 0..2)triangle[k*3+axis]=screen[at+axis] }
+            if(maxOf(triangle[0],triangle[3],triangle[6]) < -1 || minOf(triangle[0],triangle[3],triangle[6]) > proj.w+1 || maxOf(triangle[1],triangle[4],triangle[7]) < -1 || minOf(triangle[1],triangle[4],triangle[7]) > proj.h+1)continue
             surface.triangle(triangle,0,colors,tri*3,proj.eye,check)
         }
     }

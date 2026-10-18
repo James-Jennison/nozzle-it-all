@@ -6,14 +6,14 @@ import kotlin.math.*
  * at each pixel, not sorted by their average depth (which fails on overlapping long faces).
  * Buffers are bounded to four million samples even on oversized/HiDPI viewports.
  */
-internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
+internal class DepthSurface(viewWidth: Float, viewHeight: Float,useTiles:Boolean=true) {
     val scale = min(1f, sqrt(4_000_000.0 / (viewWidth.toDouble()*viewHeight).coerceAtLeast(1.0)).toFloat())
     val width = ceil(viewWidth*scale).toInt().coerceAtLeast(1)
     val height = ceil(viewHeight*scale).toInt().coerceAtLeast(1)
     val pixels = ByteArray(width*height*4) // BGRA, opaque where covered; transparent elsewhere.
     private val depths = FloatArray(width*height) { Float.POSITIVE_INFINITY }
     val objectScratch=ObjectRasterScratch()
-    val bands=RasterBands()
+    val bands=RasterBands(useTiles)
 
     fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY) }
 
@@ -89,7 +89,7 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
 }
 
 /** Owned by one viewport; reuse frame storage without retaining old-size buffers. */
-internal class DepthSurfaceCache {
+internal class DepthSurfaceCache(private val useTiles:Boolean=true) {
     val shadows=ShadowScratch()
     private var surface: DepthSurface? = null
     private var width = -1f
@@ -98,7 +98,7 @@ internal class DepthSurfaceCache {
     fun frame(viewWidth: Float, viewHeight: Float): DepthSurface {
         val current = surface?.takeIf { width == viewWidth && height == viewHeight }
         if (current != null) { current.clear(); return current }
-        return DepthSurface(viewWidth, viewHeight).also {
+        return DepthSurface(viewWidth, viewHeight,useTiles).also {
             surface = it; width = viewWidth; height = viewHeight
         }
     }

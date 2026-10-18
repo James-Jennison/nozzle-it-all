@@ -179,7 +179,7 @@ class ViewportFramesTest {
             repeat(16) { i->val at=i*9;screen[at]=-100f;screen[at+1]=-100f;screen[at+3]=200f;screen[at+4]=200f;screen[at+6]=200f;screen[at+7]=200f+i*.0001f }
             val proj=Projector(width.toFloat(),height.toFloat(),request().camera.copy(distance=20f/1.8f),128f,128f)
             for(i in 0 until count)expected.triangle(screen,i*9,colors,i*3,proj.eye)
-            actual.bands.draw(proj,d,screen,colors,actual,{})
+            actual.bands.drawTiled(proj,d,screen,colors,actual,{})
             assertArrayEquals("bands ${width}x$height",expected.pixels,actual.pixels)
             assertTrue(actual.bands.indexCapacity<=RasterBands.INDEX_BUDGET)
         }
@@ -200,5 +200,20 @@ class ViewportFramesTest {
             await(started);assertFalse(result.isDone)
             release.countDown();assertTrue(result.get(10,TimeUnit.SECONDS));assertEquals(RasterWorkers.count-1,finished.get())
         } finally { release.countDown();owner.shutdownNow() }
+    }
+
+    @Test fun excessiveTileDuplicationFallsBackBeforeAllocatingOverBudget() {
+        val count=11000;val mesh=Mesh(FloatArray(count*9),IntArray(count*3) { it })
+        val d=DisplayMesh(mesh,FloatArray(count*9),mesh.bounds());val surface=DepthSurface(64f,64f)
+        val triangle=floatArrayOf(-100f,-100f,0f,200f,-100f,0f,0f,200f,0f)
+        val screen=FloatArray(count*9) { triangle[it%9] };val colors=IntArray(count*3) { 0xffaabbcc.toInt() }
+        try {
+            surface.bands.drawTiled(request().projector(),d,screen,colors,surface) {
+                if(surface.bands.budgetFallbacks>0)throw ObsoleteFrame()
+            }
+            fail("expected test interruption at the serial fallback")
+        } catch(_:ObsoleteFrame) { }
+        assertEquals(1,surface.bands.budgetFallbacks)
+        assertTrue(surface.bands.indexCapacity<=RasterBands.INDEX_BUDGET)
     }
 }

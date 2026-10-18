@@ -193,8 +193,9 @@ private fun ProjectHeader(state: AppState) {
  * folded, so the whole setup can be read at a glance.
  */
 @Composable
-private fun Section(title: String, summary: String, initiallyOpen: Boolean = true, action: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+private fun Section(title: String, summary: String, initiallyOpen: Boolean = true, action: (@Composable () -> Unit)? = null, bare: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     val c = Nz.colors
+    if (bare) { Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), content = content); return }
     var open by remember(title) { mutableStateOf(initiallyOpen) }
     val shape = RoundedCornerShape(NozzleTokens.Radius.card)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.line, shape).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -367,8 +368,8 @@ private fun StepObjects(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     val onPlate = p.plateItems()
-    Section("Objects", if (onPlate.isEmpty()) "None yet" else "${onPlate.size} on ${p.plateNames.getOrNull(p.currentPlate) ?: "the plate"}", initiallyOpen = onPlate.isNotEmpty(),
-        action = { if (onPlate.isNotEmpty()) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() } }) {
+    // The tab is already called Objects, and Arrange is on the plate's toolbar, so this page has no card heading of its own.
+    Section("Objects", "", bare = true) {
         if (onPlate.isEmpty()) { Txt("Nothing on this plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
         val slots = p.materials()
         onPlate.forEach { item ->
@@ -383,7 +384,8 @@ private fun StepObjects(state: AppState) {
         }
         val s = onPlate.firstOrNull { it.id == p.selected }
         if (s != null) {
-            ObjectRow("Material") {
+            if (s.painted.isNotEmpty()) Txt("This object's colours are painted: choose what each prints as under Colours on the Setup tab.", Nz.type.bodySmall, c.textMuted)
+            else ObjectRow("Material") {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     slots.forEach { m ->
                         val on = s.slot == m.slot
@@ -394,7 +396,7 @@ private fun StepObjects(state: AppState) {
                 }
             }
             ObjectRow("Position (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("X", s.x) { s.x = it; p.changed() }; ObjectNumber("Y", s.y) { s.y = it; p.changed() } } }
-            ObjectRow("Turn and size") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() }; ObjectNumber("%", s.scale * 100) { v -> if (v > 0) { s.scale = v / 100; p.changed() } } } }
+            ObjectRow("Turn") { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() } }
             ObjectSizeSection(p, s)
             if (p.plateNames.size > 1) ObjectRow("Plate") {
                 com.nozzleitall.desktop.settings.DenseSelect("Move to plate", p.plateNames.mapIndexed { i, n -> com.nozzleitall.desktop.settings.Choice("$i", n) }, "${s.plate}",
@@ -450,7 +452,6 @@ private fun PlateTabs(p: PrepareState) {
 @Composable
 private fun ObjectInfo(s: PrepItem) {
     val c = Nz.colors
-    ObjectRow("Size") { Txt("${"%.1f".format(s.footprintW)} × ${"%.1f".format(s.footprintD)} × ${"%.1f".format(s.height)} mm", Nz.type.bodySmall) }
     ObjectRow("Volume") { Txt("${"%.1f".format(s.volume / 1000.0)} cm³ · ${"%,d".format(s.mesh.triangleCount)} triangles", Nz.type.bodySmall) }
     if (s.openEdges > 0) ObjectRow("Surface") { Txt("${s.openEdges} open edge${if (s.openEdges == 1) "" else "s"}: it may not slice as expected", Nz.type.bodySmall, c.danger) }
 }

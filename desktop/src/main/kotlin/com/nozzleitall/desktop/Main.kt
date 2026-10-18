@@ -31,13 +31,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
 /** The places in the app. Printers come first: Nozzle is organised around the printers you own, not a settings tree. */
-enum class Destination(val label: String, val icon: NzIcon, val key: Key) {
+enum class Destination(val label: String, val icon: NzIcon, val key: Key, val inRail: Boolean = true) {
     FLEET("Printers", NzIcon.FLEET, Key.One),
     PROJECTS("Projects", NzIcon.PROJECTS, Key.Two),
     PREPARE("Prepare", NzIcon.PREPARE, Key.Three),
-    MONITOR("Print & Monitor", NzIcon.MONITOR, Key.Four),
-    MATERIALS("Materials & Toolheads", NzIcon.MATERIALS, Key.Five),
-    SETTINGS("Settings", NzIcon.SETTINGS, Key.Comma),
+    // One printer's own page (a Monitor tab and a Materials tab). It is reached from a printer on the Printers page, so it
+    // has no place of its own in the rail, where Printers stays lit while you are on it.
+    MONITOR("Print & Monitor", NzIcon.MONITOR, Key.Four, inRail = false),
+    MATERIALS("Materials & Toolheads", NzIcon.MATERIALS, Key.Five, inRail = false),
+    SETTINGS("Settings", NzIcon.SETTINGS, Key.Comma);
+
+    /** The rail item that is lit while this destination is shown. */
+    val railItem: Destination get() = if (inRail) this else FLEET
 }
 
 class AppState(val paths: AppPaths, val scope: CoroutineScope) {
@@ -138,7 +143,7 @@ private fun NavigationRail(state: AppState) {
         androidx.compose.foundation.Image(painterResource("brand/mark-violet.svg"), contentDescription = Glossary.PRODUCT_FAMILY, modifier = Modifier.size(36.dp))
         Spacer(Modifier.height(14.dp))
         // Full Spectrum isn't a place of its own: its colour mixing is part of the Filament card in Prepare.
-        Destination.entries.filter { it != Destination.SETTINGS }.forEach { RailItem(it, state) }
+        Destination.entries.filter { it.inRail && it != Destination.SETTINGS }.forEach { RailItem(it, state) }
         Spacer(Modifier.weight(1f))
         Box(Modifier.width(48.dp).height(1.dp).background(c.line))
         Spacer(Modifier.height(6.dp))
@@ -149,7 +154,7 @@ private fun NavigationRail(state: AppState) {
 @Composable
 private fun RailItem(d: Destination, state: AppState) {
     val c = Nz.colors
-    val selected = state.destination == d
+    val selected = state.destination.railItem == d
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val shape = RoundedCornerShape(14.dp)

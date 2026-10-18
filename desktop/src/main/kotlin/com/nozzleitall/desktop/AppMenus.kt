@@ -125,7 +125,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Rotate view right") { p.camera.yaw += 90f },
             MenuAction("Centre view") { p.camera.pan = androidx.compose.ui.geometry.Offset.Zero },
         )),
-        AppMenu("Go", Key.G, Destination.entries.map { d -> MenuAction(d.label, Shortcut(d.key, ctrl = true, text = "Ctrl+" + if (d.key == Key.Comma) "," else d.key.toString().removePrefix("Key: "))) { state.destination = d } }),
+        AppMenu("Go", Key.G, Destination.entries.filter { it.inRail }.map { d -> MenuAction(d.label, Shortcut(d.key, ctrl = true, text = "Ctrl+" + if (d.key == Key.Comma) "," else d.key.toString().removePrefix("Key: "))) { state.destination = d } }),
         AppMenu("Help", Key.H, listOf(
             MenuAction("Nozzle It All help") { browse("https://nozzleitall.com/docs/") },
             MenuAction("Supported printers") { browse("https://nozzleitall.com/printers/") },

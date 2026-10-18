@@ -35,6 +35,24 @@ fun PrinterPicker(state: AppState): PrinterEntry? {
     return current?.let { state.fleet.printers[it] }
 }
 
+/**
+ * The top of one printer's page: back to the printers, the printer to look at, and its two tabs (the live Monitor and the
+ * Materials & toolheads it has loaded). Returns the printer, or null when there are none.
+ */
+@Composable
+fun PrinterHeader(state: AppState, on: com.nozzleitall.desktop.Destination, what: String): PrinterEntry? {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NzButton("Printers", { state.destination = com.nozzleitall.desktop.Destination.FLEET }, kind = ButtonKind.QUIET, icon = NzIcon.FLEET)
+        Spacer(Modifier.weight(1f))
+        listOf(com.nozzleitall.desktop.Destination.MONITOR to "Monitor", com.nozzleitall.desktop.Destination.MATERIALS to "Materials & toolheads").forEach { (d, label) ->
+            NzButton(label, { state.destination = d }, kind = if (d == on) ButtonKind.PRIMARY else ButtonKind.SECONDARY, testTag = "printer-tab-${d.name.lowercase()}")
+        }
+    }
+    val entry = PrinterPicker(state)
+    SectionHeader(entry?.config?.identity?.displayName ?: "No printer", what)
+    return entry
+}
+
 @Composable
 fun NoPrinterYet(state: AppState, what: String) = Card(Modifier.fillMaxWidth()) {
     EmptyState(NzIcon.FLEET, "No printers yet", "Add a printer to see $what.") {
@@ -45,8 +63,7 @@ fun NoPrinterYet(state: AppState, what: String) = Card(Modifier.fillMaxWidth()) 
 @Composable
 fun MonitorScreen(state: AppState) {
     Column(Modifier.fillMaxSize().padding(28.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        SectionHeader("Print & Monitor", "Watch a job and control the printer. Every command asks first.")
-        val entry = PrinterPicker(state) ?: run { NoPrinterYet(state, "live status, cameras and controls"); return@Column }
+        val entry = PrinterHeader(state, com.nozzleitall.desktop.Destination.MONITOR, "Watch a job and control the printer. Every command asks first.") ?: run { NoPrinterYet(state, "live status, cameras and controls"); return@Column }
         val status = entry.status.value
         val caps = entry.capabilities.value
         val flow = rememberActionFlow(entry)

@@ -101,13 +101,13 @@ object AutoPaint {
         return out
     }
 
-    /** Runs a command line through the shell with [prompt] on stdin; its stdout is the answer. */
+    /** Runs a command line through the shell. The provider must consume [prompt] on stdin;
+     * stdout is its answer. Untrusted stderr is drained, never exposed as diagnostics. */
     internal fun askCommand(commandLine: String, prompt: String, timeoutSeconds: Long = 300): String {
         val windows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
         val process = start(ProcessBuilder(if (windows) listOf("cmd", "/c", commandLine) else listOf("sh", "-c", commandLine)).redirectErrorStream(false))
         val p = process.process
-        val errText = StringBuilder()
-        val drain = Thread { runCatching { errText.append(p.errorStream.bufferedReader().readText()) } }.apply { isDaemon = true; start() }
+        val drain = Thread { runCatching { p.errorStream.use { it.transferTo(java.io.OutputStream.nullOutputStream()) } } }.apply { isDaemon = true; start() }
         var inputFailure: Exception? = null
         val input = Thread {
             try { p.outputStream.use { it.write(prompt.toByteArray()) } }
@@ -117,17 +117,21 @@ object AutoPaint {
         input.join(1000)
         if (input.isAlive || inputFailure != null) throw AutoPaintError("The command did not read the complete question.")
         drain.join(1000)
-        if (p.exitValue() != 0) throw AutoPaintError("The command failed (exit ${p.exitValue()}): ${errText.toString().trim().lineSequence().lastOrNull().orEmpty()}")
+        if (p.exitValue() != 0) throw AutoPaintError("The command failed (exit ${p.exitValue()}).")
         return out
     }
 
     /** POSTs [body] to an OpenAI-compatible chat-completions endpoint and returns the response text. */
     internal fun askServer(p: Provider.OpenAiCompatible, body: String, timeoutSeconds: Long = 300): String {
-        val req = HttpRequest.newBuilder(URI.create(AutoPaintFormat.chatUrl(p.baseUrl))).timeout(Duration.ofSeconds(timeoutSeconds))
+        val uri = URI.create(AutoPaintFormat.chatUrl(p.baseUrl))
+        if (p.apiKey.isNotBlank() && !uri.scheme.equals("https", ignoreCase = true))
+            throw AutoPaintError("A server using an API key must use HTTPS.")
+        val req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(timeoutSeconds))
             .header("Content-Type", "application/json").apply { if (p.apiKey.isNotBlank()) header("Authorization", "Bearer ${p.apiKey}") }
             .POST(HttpRequest.BodyPublishers.ofString(body)).build()
         val res = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build().send(req, HttpResponse.BodyHandlers.ofString())
-        if (res.statusCode() !in 200..299) throw AutoPaintError("The server answered ${res.statusCode()}: ${res.body().take(200)}")
+        // Error bodies are untrusted and may reflect authorization or private model data.
+        if (res.statusCode() !in 200..299) throw AutoPaintError("The server answered HTTP ${res.statusCode()}.")
         return res.body()
     }
 

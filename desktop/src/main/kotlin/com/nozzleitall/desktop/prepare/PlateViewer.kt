@@ -188,6 +188,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 accent: Color = Color(0xFF3E7BFA), onMove: (Int, Float, Float) -> Unit = { _, _, _ -> }, onTurn: (Int, Float) -> Unit = { _, _ -> }, onResize: (Int, Float) -> Unit = { _, _ -> },
                 onSelection: ((Int?, Boolean, Boolean) -> Unit)? = null, onTransformStart: (Int) -> Unit = {}, onTransformEnd: () -> Unit = {}) {
     val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh, kind = o.paintKind) } }
+    val depthFrames = remember { DepthSurfaceCache() }
     val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects); val preparedRef = rememberUpdatedState(prepared)
     val selectRef = rememberUpdatedState<(Int?, Boolean, Boolean) -> Unit>({ id, ctrl, shift -> onSelection?.invoke(id, ctrl, shift) ?: onSelect(id) })
     val moveRef = rememberUpdatedState(onMove); val turnRef = rememberUpdatedState(onTurn); val resizeRef = rememberUpdatedState(onResize)
@@ -277,7 +278,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
         else {
             prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
-            val surface = DepthSurface(size.width, size.height)
+            val surface = depthFrames.frame(size.width, size.height)
             prepared.forEach { (o, d) -> drawObject(proj, o, d, surface) }
             val info = org.jetbrains.skia.ImageInfo(surface.width, surface.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.PREMUL)
             org.jetbrains.skia.Image.makeRaster(info, surface.pixels, surface.width*4).use { image ->

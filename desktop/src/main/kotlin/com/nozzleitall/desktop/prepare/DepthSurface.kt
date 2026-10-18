@@ -13,6 +13,8 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
     val pixels = ByteArray(width*height*4) // BGRA, opaque where covered; transparent elsewhere.
     private val depths = FloatArray(width*height) { Float.POSITIVE_INFINITY }
 
+    fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY) }
+
     fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float) {
         val ax = screen[at]*scale; val ay = screen[at+1]*scale
         val bx = screen[at+3]*scale; val by = screen[at+4]*scale
@@ -43,6 +45,20 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
                 pixels[index*4+channel] = (((a*((ca ushr shift) and 255)+b*((cb ushr shift) and 255)+c*((cc ushr shift) and 255))/q).roundToInt().coerceIn(0,255)).toByte()
             }
             pixels[index*4+3] = 255.toByte()
+        }
+    }
+}
+
+/** Owned by one viewport; reuse frame storage without retaining old-size buffers. */
+internal class DepthSurfaceCache {
+    private var surface: DepthSurface? = null
+    private var width = -1f
+    private var height = -1f
+    fun frame(viewWidth: Float, viewHeight: Float): DepthSurface {
+        val current = surface?.takeIf { width == viewWidth && height == viewHeight }
+        if (current != null) { current.clear(); return current }
+        return DepthSurface(viewWidth, viewHeight).also {
+            surface = it; width = viewWidth; height = viewHeight
         }
     }
 }

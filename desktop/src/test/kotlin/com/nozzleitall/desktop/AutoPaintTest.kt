@@ -16,6 +16,33 @@ import kotlinx.coroutines.*
 
 /** AI auto-paint: the engine segments and reads the answer, the provider (a command, or a local OpenAI-style server) answers. */
 class AutoPaintTest {
+    @Test fun commandErrorsNeverExposeUntrustedStderr() {
+        try { AutoPaint.askCommand("cat >/dev/null; echo private-fixture >&2; exit 7", "fixture", 2); fail("expected failure") }
+        catch (e: AutoPaint.AutoPaintError) { assertEquals("The command failed (exit 7).", e.message) }
+    }
+    @Test fun authenticatedServersRequireHttpsBeforeAnyRequest() {
+        try {
+            AutoPaint.askServer(Provider.OpenAiCompatible("http://127.0.0.1:1/v1", "fixture", "not-a-real-credential"), "{}", 1)
+            fail("expected HTTPS requirement")
+        } catch (e: AutoPaint.AutoPaintError) { assertEquals("A server using an API key must use HTTPS.", e.message) }
+    }
+
+    @Test fun serverErrorsNeverExposeTheResponseBody() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val reflected = "private fixture response must not appear in diagnostics"
+        server.createContext("/v1/chat/completions") { ex ->
+            ex.requestBody.use { it.readBytes() }
+            val bytes = reflected.toByteArray()
+            ex.sendResponseHeaders(401, bytes.size.toLong()); ex.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        try {
+            AutoPaint.askServer(Provider.OpenAiCompatible("http://127.0.0.1:${server.address.port}/v1", "fixture"), "{}", 2)
+            fail("expected HTTP failure")
+        } catch (e: AutoPaint.AutoPaintError) { assertEquals("The server answered HTTP 401.", e.message) }
+        finally { server.stop(0) }
+    }
+
     private fun engineReady() = assumeTrue("slicing engine available", SliceEngine.locateEngine() != null)
     private val filaments = listOf(AutoPaintFormat.Filament(1, "PLA", "#FF0000", "Red"), AutoPaintFormat.Filament(2, "PLA", "#0000FF", "Blue"))
 

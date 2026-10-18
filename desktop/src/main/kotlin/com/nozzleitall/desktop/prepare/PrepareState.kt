@@ -272,6 +272,29 @@ class PrepareState(private val app: AppState) {
         changed()
     }
 
+    /**
+     * Sync filament from the printer: what each toolhead reports loaded (material, vendor, colour) is copied into the project's own
+     * slots, so it stays when the printer is later off. Returns a sentence saying what happened.
+     */
+    fun syncFromPrinter(): String {
+        val entry = printer() ?: return "Choose a printer first (Setup > Printer)."
+        val name = entry.config.identity.displayName
+        val heads = entry.status.value.toolheads
+        if (heads.isEmpty()) return "$name doesn't report loaded filament, so there is nothing to sync. Set the slots by hand."
+        var synced = 0
+        heads.forEach { t ->
+            val m = t.material ?: return@forEach
+            val i = manualSlots.indexOfFirst { it.slot == t.index + 1 }
+            if (i >= 0) {
+                manualSlots[i] = manualSlots[i].copy(type = m.type ?: manualSlots[i].type, vendor = m.vendor ?: manualSlots[i].vendor,
+                    subType = m.subType ?: manualSlots[i].subType, colorHex = m.colorHex ?: manualSlots[i].colorHex)
+                synced++
+            }
+        }
+        if (synced > 0) changed()
+        return if (synced == 0) "$name reports every slot empty. Load filament, or set the slots by hand." else "Synced $synced of ${heads.size} slots from $name."
+    }
+
     /** Materials in slot order: the printer's loaded toolheads when it reports them, otherwise the manual slots. */
     fun materials(): List<ProjectManifest.MaterialSlot> {
         val heads = printer()?.status?.value?.toolheads.orEmpty()

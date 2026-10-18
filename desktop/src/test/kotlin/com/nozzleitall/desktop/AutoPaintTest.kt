@@ -35,6 +35,14 @@ class AutoPaintTest {
         assertEquals(setOf(2), MeshIO.paintedFilaments(m).toSet())
     }
 
+    @Test fun aPlainClaudeCommandIsUpgradedSoNoSessionIsSavedOrAnnounced() {
+        val f = Files.createTempDirectory("ap").resolve("auto-paint.json").toFile()
+        AutoPaint.save(f, AutoPaint.Settings("command", "claude -p"))
+        val c = AutoPaint.load(f).command
+        assertTrue(c.contains("--no-session-persistence")); assertTrue(c.contains("{dir}"))
+        assertEquals("my-tool --x", AutoPaint.Settings("command", "my-tool --x").also { AutoPaint.save(f, it) }.let { AutoPaint.load(f).command })
+    }
+
     @Test fun settingsSurviveARestartAndStayOwnerOnly() {
         val f = Files.createTempDirectory("ap").resolve("auto-paint.json").toFile()
         AutoPaint.save(f, AutoPaint.Settings("server", "", "http://h/v1", "m", "k"))

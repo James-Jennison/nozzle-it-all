@@ -300,6 +300,7 @@ private fun MaterialsSection(state: AppState) {
         action = { com.nozzleitall.desktop.settings.IconToggle(NzIcon.TUNE, "Material settings", p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) {
             p.settingsScope = if (p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) com.nozzleitall.desktop.settings.Scope.PROCESS else com.nozzleitall.desktop.settings.Scope.FILAMENT } }) {
         if (fromPrinter) Txt("As loaded in ${p.printer()?.config?.identity?.displayName}", Nz.type.bodySmall, c.textMuted)
+        if (p.printer() != null) NzButton("Sync filament from printer", { p.notice = p.syncFromPrinter() }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, icon = NzIcon.IMPORT, testTag = "sync-filament")
         // Two columns of slots: the number on the material's colour, then the filament it slices with. Click to change it.
         var editingSlot by remember { mutableStateOf<Int?>(null) }
         val library = p.filamentLibrary()
@@ -536,7 +537,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
             com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
                 com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.fillMaxWidth()) { update(s.copy(kind = it)) }
             if (s.kind == "command") {
-                com.nozzleitall.desktop.settings.DenseInput(s.command, { update(s.copy(command = it)) }, "Command (reads the question on stdin)", Modifier.fillMaxWidth(), placeholder = "claude -p")
+                com.nozzleitall.desktop.settings.DenseInput(s.command, { update(s.copy(command = it)) }, "Command (reads the question on stdin; {dir} is the folder with the views)", Modifier.fillMaxWidth(), placeholder = AutoPaint.DEFAULT_COMMAND)
             } else {
                 com.nozzleitall.desktop.settings.DenseInput(s.baseUrl, { update(s.copy(baseUrl = it)) }, "Server address", Modifier.fillMaxWidth(), placeholder = "http://localhost:11434/v1")
                 com.nozzleitall.desktop.settings.DenseInput(s.model, { update(s.copy(model = it)) }, "Model (must accept images)", Modifier.fillMaxWidth())

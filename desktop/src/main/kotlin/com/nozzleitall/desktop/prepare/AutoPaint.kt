@@ -24,7 +24,13 @@ object AutoPaint {
     class AutoPaintError(message: String) : Exception(message)
 
     /** The provider the user configured, as saved in config/auto-paint.json (the key is kept with the rest of the app's secrets: owner-only). */
-    data class Settings(val kind: String = "command", val command: String = "", val baseUrl: String = "", val model: String = "", val apiKey: String = "") {
+    /**
+     * Claude Code as the command: print mode, only the Read tool, allowed to read the folder with the views ({dir}), and no saved
+     * session, so a run leaves no conversation behind and the Claude app doesn't announce a new session each time.
+     */
+    const val DEFAULT_COMMAND = "claude -p --output-format json --allowedTools Read --add-dir {dir} --no-session-persistence"
+
+    data class Settings(val kind: String = "command", val command: String = DEFAULT_COMMAND, val baseUrl: String = "", val model: String = "", val apiKey: String = "") {
         val provider: Provider? get() = when (kind) {
             "command" -> command.takeIf { it.isNotBlank() }?.let { Provider.Command(it) }
             else -> if (baseUrl.isNotBlank() && model.isNotBlank()) Provider.OpenAiCompatible(baseUrl.trim(), model.trim(), apiKey.trim()) else null
@@ -34,7 +40,7 @@ object AutoPaint {
 
     fun load(file: File): Settings = runCatching {
         val j = JSONObject(file.readText())
-        Settings(j.optString("kind", "command"), j.optString("command"), j.optString("baseUrl"), j.optString("model"), j.optString("apiKey"))
+        Settings(j.optString("kind", "command"), j.optString("command").let { if (it.trim() == "claude -p") DEFAULT_COMMAND else it }, j.optString("baseUrl"), j.optString("model"), j.optString("apiKey"))
     }.getOrDefault(Settings())
 
     fun save(file: File, s: Settings) {
@@ -98,7 +104,7 @@ object AutoPaint {
     fun ask(prepared: Prepared, provider: Provider): IntArray {
         val seg = prepared.seg
         val raw = when (provider) {
-            is Provider.Command -> askCommand(provider.commandLine, seg.commandPrompt)
+            is Provider.Command -> askCommand(provider.commandLine.replace("{dir}", prepared.dir.absolutePath), seg.commandPrompt)
             is Provider.OpenAiCompatible -> {
                 val body = engineRun(AutoPaintFormat.openAiRequest(provider.model, seg.prompt, seg.views.map { it.path })).getString("body")
                 askServer(provider, body)

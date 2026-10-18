@@ -193,6 +193,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             var grab: Grab? = null; var grabObj: PlateObject? = null; var grabFrom = Offset.Zero; var grabZ = 0f
             var pressedAt = Offset.Zero; var moved = false; var clickId: Int? = null; var primaryPress = false
             var modifierClick = false; var pressCtrl = false; var pressShift = false
+            var grabStarted = false
             try { while (true) {
                 val ev = awaitPointerEvent()
                 val ch = ev.changes.firstOrNull() ?: continue
@@ -214,16 +215,22 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 if (grab != null) {
                     val o = grabObj!!
                     if (!ch.pressed) {
-                        endRef.value()
+                        if (grabStarted) endRef.value()
                         if (!moved && grab == Grab.MOVE) selectRef.value(clickId, false, false)
-                        grab = null; grabObj = null; last = null; primaryPress = false; continue
+                        grab = null; grabObj = null; last = null; primaryPress = false; grabStarted = false; continue
                     }
                     val at = proj.bedPoint(ch.position.x, ch.position.y, grabZ)
-                    if (at != null && moved && ev.type == PointerEventType.Move) when (grab) {
+                    if (at != null && moved && ev.type == PointerEventType.Move) {
+                        if (!grabStarted) {
+                            if (!o.selected) selectRef.value(o.id, false, false)
+                            startRef.value(o.id); grabStarted = true
+                        }
+                        when (grab) {
                         Grab.MOVE -> moveRef.value(o.id, o.x + (at.x - grabFrom.x), o.y + (at.y - grabFrom.y))
                         Grab.ROTATE -> turnRef.value(o.id, PlateHandles.rotationAfterDrag(o.rotZ, o.x, o.y, grabFrom.x, grabFrom.y, at.x, at.y, if (ev.keyboardModifiers.isCtrlPressed) 15f else 0f))
                         Grab.SCALE -> resizeRef.value(o.id, PlateHandles.scaleAfterDrag(o.scale, o.x, o.y, grabFrom.x, grabFrom.y, at.x, at.y))
                         null -> {}
+                        }
                     }
                     continue
                 }
@@ -240,8 +247,6 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                     }
                     if (start != null) {
                         grab = start.grab; grabObj = start.obj; grabFrom = start.from; grabZ = start.z; last = ch.position
-                        if (!start.obj.selected) selectRef.value(start.obj.id, false, false)
-                        startRef.value(start.obj.id)
                         continue
                     }
                 }
@@ -255,7 +260,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                     primaryPress = false; modifierClick = false
                 }
                 last = if (ch.pressed) ch.position else null
-            } } finally { if (grab != null) endRef.value() }
+            } } finally { if (grabStarted) endRef.value() }
         } }
         .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f) } }
         ) {

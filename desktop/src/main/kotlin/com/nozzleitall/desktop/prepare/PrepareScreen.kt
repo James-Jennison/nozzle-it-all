@@ -2,7 +2,10 @@ package com.nozzleitall.desktop.prepare
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.shape.CircleShape
@@ -506,11 +509,23 @@ private fun StepObjects(state: AppState) {
         val slots = p.materials()
         onPlate.forEach { item ->
             val sel = item.id in p.selectedIds
-            var ctrl by remember(item.id) { mutableStateOf(false) }
-            var shift by remember(item.id) { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else Color.Transparent)
-                .onPointerEvent(PointerEventType.Press) { e -> ctrl = e.keyboardModifiers.isCtrlPressed; shift = e.keyboardModifiers.isShiftPressed }
-                .selectable(sel, role = Role.Button) { focus.clearFocus(); p.selectObject(item.id, ctrl, shift, listRange = true); ctrl = false; shift = false }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                .semantics(mergeDescendants = true) { selected = sel; role = Role.Button; onClick { focus.clearFocus(); p.selectObject(item.id); true } }
+                .onKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.Spacebar)) {
+                        p.selectObject(item.id, e.isCtrlPressed, e.isShiftPressed, listRange = true); true
+                    } else false
+                }.focusable()
+                .pointerInput(item.id) { awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    if (!currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
+                    val up = waitForUpOrCancellation()
+                    if (up != null) {
+                        val modifiers = currentEvent.keyboardModifiers
+                        focus.clearFocus(); p.selectObject(item.id, modifiers.isCtrlPressed, modifiers.isShiftPressed, listRange = true)
+                        up.consume()
+                    }
+                } }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(parseHex(p.slotHex(item.slot)) ?: c.accent))
                 Txt(item.name, Nz.type.bodySmall, if (sel) c.accent else c.text, modifier = Modifier.weight(1f), maxLines = 1)

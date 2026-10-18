@@ -76,6 +76,9 @@ class MultiSelectionTest {
         val a = app()
         fun action(label: String) = appMenus(a) {}.first { it.title == "Edit" }.items.filterNotNull().first { it.label == label }
         assertTrue(action("Select all").shortcut!!.afterFocus)
+        assertTrue(action("Deselect").shortcut!!.afterFocus)
+        assertTrue(action("Delete").shortcut!!.afterFocus)
+        assertTrue(action("Duplicate").shortcut!!.afterFocus)
         action("Select all").run(); assertEquals(setOf(1, 2, 3), a.prepare.selectedIds)
         action("Deselect").run(); assertTrue(a.prepare.selectedIds.isEmpty())
         assertNull(action("Arrange plate").shortcut)

@@ -100,7 +100,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             null,
             MenuAction("Select all", ctrl(Key.A, "A", afterFocus = true), enabled = state.destination == Destination.PREPARE && p.plateItems().isNotEmpty()) { p.selectAll() },
             MenuAction("Deselect", ctrl(Key.A, "A", shift = true, afterFocus = true), enabled = state.destination == Destination.PREPARE && p.selected != null) { p.deselect() },
-            MenuAction("Duplicate", ctrl(Key.D, "D"), enabled = p.selected != null) { p.duplicateSelected() },
+            MenuAction("Duplicate", ctrl(Key.D, "D", afterFocus = true), enabled = p.selected != null) { p.duplicateSelected() },
             MenuAction("Delete", Shortcut(Key.Delete, text = "Delete"), enabled = p.selected != null) { p.removeSelected() },
             MenuAction("Delete all", enabled = p.items.isNotEmpty()) { guarded { p.items.clear(); p.selected = null; p.changed() } },
             MenuAction("Arrange plate", enabled = p.items.isNotEmpty()) { p.arrange() },

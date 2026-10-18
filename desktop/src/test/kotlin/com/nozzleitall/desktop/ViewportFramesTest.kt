@@ -124,7 +124,7 @@ class ViewportFramesTest {
         val mesh=grid();val d=displayMesh(mesh);val o=obj(mesh);val camera=ViewCamera();val surface=DepthSurface(320f,240f)
         rasterObject(Projector(320f,240f,camera,128f,128f),o,d,surface)
         val pose=surface.objectScratch.pose(o,d,{})
-        val original=pose.colors.copyOf();val oldCamera=camera.snapshot();camera.orbit(40f,0f)
+        val original=pose.colors.copyOf();val oldCamera=camera.snapshot();camera.orbit(40f,20f)
         try {
             rasterObject(Projector(320f,240f,camera,128f,128f),o,d,surface) {
                 // Observe actual writes, not a checkpoint count that could fire

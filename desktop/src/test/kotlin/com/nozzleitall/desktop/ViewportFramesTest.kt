@@ -23,6 +23,26 @@ class ViewportFramesTest {
     private class Resource:AutoCloseable { var closes=0;override fun close() { closes++ } }
     private fun await(latch:CountDownLatch)=assertTrue(latch.await(10,TimeUnit.SECONDS))
 
+    @Test(timeout=20000) fun publicationDoesNotWaitForOwnersFrameScheduledDispatcher()=runBlocking {
+        val frameScheduled=object:CoroutineDispatcher() {
+            override fun dispatch(context:kotlin.coroutines.CoroutineContext,block:Runnable) {
+                error("Frame pump must not queue publication through the owner's frame dispatcher")
+            }
+        }
+        val owner=CoroutineScope(SupervisorJob()+frameScheduled)
+        val ready=CompletableDeferred<Resource>();val disposed=CompletableDeferred<Unit>()
+        val pump=LatestFramePump(owner,render={ _,_->
+            assertFalse(SwingUtilities.isEventDispatchThread());Resource()
+        },publish={ _,resource,_->assertTrue(SwingUtilities.isEventDispatchThread());ready.complete(resource) },
+            dispose={ assertFalse(SwingUtilities.isEventDispatchThread());disposed.complete(Unit) })
+        try {
+            withContext(Dispatchers.Main) { pump.offer(request()) }
+            withTimeout(5000) { ready.await() }.close()
+            owner.cancel() // Explicit dispatcher must still inherit owner cancellation.
+            withTimeout(5000) { disposed.await() }
+        } finally { withContext(Dispatchers.Main) { pump.close() };owner.cancel() }
+    }
+
     @Test(timeout=20000) fun cameraFramesDoNotStarveAndPendingRequestsAreConflated()=runBlocking {
         val owner=CoroutineScope(SupervisorJob()+Dispatchers.Main)
         val start=CountDownLatch(1);val release=CountDownLatch(1)

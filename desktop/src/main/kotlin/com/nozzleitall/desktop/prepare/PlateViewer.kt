@@ -148,7 +148,7 @@ internal class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Fl
     private val cyw = cos(yaw).toFloat(); private val syw = sin(yaw).toFloat(); private val cp = cos(pitch).toFloat(); private val sp = sin(pitch).toFloat()
     private val scale = min(w, h) / cam.distance * 1.6f; private val pan = cam.pan
     // A gentle perspective: the eye sits well back from the scene, so near parts are only slightly larger.
-    private val eye = cam.distance * 1.8f
+    internal val eye = cam.distance * 1.8f
     /** Returns screen x, y and a depth (larger = farther). */
     fun p(x: Float, y: Float, z: Float, out: FloatArray, o: Int) {
         val dx = x - cx; val dy = y - cy
@@ -277,7 +277,12 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
         else {
             prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
-            prepared.forEach { (o, d) -> drawObject(proj, o, d) }
+            val surface = DepthSurface(size.width, size.height)
+            prepared.forEach { (o, d) -> drawObject(proj, o, d, surface) }
+            val info = org.jetbrains.skia.ImageInfo(surface.width, surface.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.PREMUL)
+            org.jetbrains.skia.Image.makeRaster(info, surface.pixels, surface.width*4).use { image ->
+                drawIntoCanvas { it.nativeCanvas.drawImageRect(image, org.jetbrains.skia.Rect.makeWH(size.width,size.height)) }
+            }
             prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
             if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
         }
@@ -392,12 +397,12 @@ private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh
     }
 }
 
-private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh) {
+private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh, surface: DepthSurface) {
     val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris; val normals = d.normals
     val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val zBase = if (o.ez >= 0f) b[2] else b[5]
     val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
     val n = tris.size
-    val screen = FloatArray(n * 9); val depth = FloatArray(n); val cornerColor = IntArray(n * 3)
+    val screen = FloatArray(n * 9); val cornerColor = IntArray(n * 3)
     // Lights live in view space so a model reads the same from any angle: a key light from the upper left, a softer fill
     // from the right, a highlight, and a rim on silhouettes that separates the model from the background.
     val key = norm(-0.45f, -0.60f, 0.66f); val fill = norm(0.70f, 0.05f, 0.45f)
@@ -442,13 +447,8 @@ private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh
             val blue = (base.blue * light + 0.22f * spec + 0.12f * rim).coerceIn(0f, 1f)
             cornerColor[k * 3 + c] = Color(red, green, blue).toArgbInt()
         }
-        depth[k] = (screen[k * 9 + 2] + screen[k * 9 + 5] + screen[k * 9 + 8]) / 3
+        surface.triangle(screen, k*9, cornerColor, k*3, proj.eye)
     }
-    val order = (0 until n).sortedByDescending { depth[it] }
-    val positions = ArrayList<Offset>(n * 3); val colors = ArrayList<Color>(n * 3)
-    for (k in order) for (i in 0..2) { positions += Offset(screen[k * 9 + i * 3], screen[k * 9 + i * 3 + 1]); colors += Color(cornerColor[k * 3 + i]) }
-    // Dst keeps the vertex colours as they are; SrcOver would blend them with the paint's default black.
-    drawIntoCanvas { it.drawVertices(Vertices(VertexMode.Triangles, positions, positions, colors, emptyList()), BlendMode.Dst, Paint()) }
 }
 
 /**

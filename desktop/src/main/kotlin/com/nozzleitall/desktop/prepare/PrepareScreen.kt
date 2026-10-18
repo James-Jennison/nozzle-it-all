@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.nozzleitall.design.NozzleTokens
@@ -486,6 +488,7 @@ private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzle
 private fun StepObjects(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val onPlate = p.plateItems()
     // The tab is already called Objects, and Arrange is on the plate's toolbar, so this page has no card heading of its own.
     Section("Objects", "", bare = true) {
@@ -496,8 +499,8 @@ private fun StepObjects(state: AppState) {
         }
         if (onPlate.isEmpty()) { Txt("Nothing on this plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Txt("Select all", Nz.type.label, c.accent, modifier = Modifier.clickable { p.selectAll() }.padding(4.dp))
-            if (p.selectedIds.isNotEmpty()) Txt("Deselect", Nz.type.label, c.accent, modifier = Modifier.clickable { p.deselect() }.padding(4.dp))
+            Txt("Select all", Nz.type.label, c.accent, modifier = Modifier.clickable { focus.clearFocus(); p.selectAll() }.padding(4.dp))
+            if (p.selectedIds.isNotEmpty()) Txt("Deselect", Nz.type.label, c.accent, modifier = Modifier.clickable { focus.clearFocus(); p.deselect() }.padding(4.dp))
         }
         Txt("Ctrl-click to toggle · Shift-click for a range", Nz.type.bodySmall, c.textMuted)
         val slots = p.materials()
@@ -507,7 +510,7 @@ private fun StepObjects(state: AppState) {
             var shift by remember(item.id) { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else Color.Transparent)
                 .onPointerEvent(PointerEventType.Press) { e -> ctrl = e.keyboardModifiers.isCtrlPressed; shift = e.keyboardModifiers.isShiftPressed }
-                .selectable(sel, role = Role.Button) { p.selectObject(item.id, ctrl, shift, listRange = true); ctrl = false; shift = false }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                .selectable(sel, role = Role.Button) { focus.clearFocus(); p.selectObject(item.id, ctrl, shift, listRange = true); ctrl = false; shift = false }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(parseHex(p.slotHex(item.slot)) ?: c.accent))
                 Txt(item.name, Nz.type.bodySmall, if (sel) c.accent else c.text, modifier = Modifier.weight(1f), maxLines = 1)
@@ -521,10 +524,11 @@ private fun StepObjects(state: AppState) {
             Txt("${p.selectedIds.size} objects selected", Nz.type.label, c.accent)
             Txt("Move, turn and scale together around the selection centre. Select one object for paint, cut and individual settings.", Nz.type.bodySmall, c.textMuted)
             ObjectRow("Move (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                ObjectNumber("X", s.x) { p.moveSelection(s.id, it, s.y) }; ObjectNumber("Y", s.y) { p.moveSelection(s.id, s.x, it) }
+                GroupNumber("X", s.x) { p.editSelection { p.moveSelection(s.id, it, s.y) } }; GroupNumber("Y", s.y) { p.editSelection { p.moveSelection(s.id, s.x, it) } }
             } }
-            ObjectRow("Turn together") { ObjectNumber("°", groupTurn) { p.turnSelection(s.id, it - groupTurn); groupTurn = it } }
-            ObjectRow("Scale together") { ObjectNumber("%", groupScale) { if (it > 0f) { p.resizeSelection(s.id, it / groupScale); groupScale = it } } }
+            ObjectRow("Turn together") { GroupNumber("°", groupTurn) { p.editSelection { p.turnSelection(s.id, it - groupTurn) }; groupTurn = it } }
+            ObjectRow("Scale together") { GroupNumber("%", groupScale) { if (it > 0f) { p.editSelection { p.resizeSelection(s.id, it / groupScale) }; groupScale = it } } }
+            Txt("Enter or leave a field to apply · Esc to cancel", Nz.type.bodySmall, c.textMuted)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clickable { p.duplicateSelected() }.padding(4.dp))
                 Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clickable { p.removeSelected() }.padding(4.dp))
@@ -730,6 +734,28 @@ private fun ObjectRow(label: String, content: @Composable () -> Unit) = Row(Modi
 private fun ObjectNumber(units: String, value: Float, onValue: (Float) -> Unit) {
     var text by remember(value) { mutableStateOf("%.1f".format(value).removeSuffix(".0")) }
     com.nozzleitall.desktop.settings.DenseInput(text, { t -> text = t; t.replace(',', '.').toFloatOrNull()?.let(onValue) }, units, Modifier.width(80.dp), units = units)
+}
+
+/** Group numeric edits commit once, so typing speed never changes the Undo boundary. */
+@Composable
+private fun GroupNumber(units: String, value: Float, onCommit: (Float) -> Unit) {
+    var text by remember(value) { mutableStateOf("%.1f".format(value).removeSuffix(".0")) }
+    var focused by remember { mutableStateOf(false) }
+    var cancelled by remember { mutableStateOf(false) }
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    com.nozzleitall.desktop.settings.DenseInput(text, { text = it }, units,
+        Modifier.width(80.dp).onFocusChanged { state ->
+            if (focused && !state.hasFocus && !cancelled) text.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() && it != value }?.let(onCommit)
+            focused = state.hasFocus
+            if (focused) cancelled = false
+        }.onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown) false
+            else when (e.key) {
+                Key.Enter -> { focus.clearFocus(); true }
+                Key.Escape -> { cancelled = true; text = "%.1f".format(value).removeSuffix(".0"); focus.clearFocus(); true }
+                else -> false
+            }
+        }, units = units)
 }
 
 @Composable

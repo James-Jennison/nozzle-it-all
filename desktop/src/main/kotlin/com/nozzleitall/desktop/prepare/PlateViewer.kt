@@ -192,6 +192,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             // Direct handling: a press on an object moves it, on the turn knob turns it, on the corner knob resizes it.
             var grab: Grab? = null; var grabObj: PlateObject? = null; var grabFrom = Offset.Zero; var grabZ = 0f
             var pressedAt = Offset.Zero; var moved = false; var clickId: Int? = null; var primaryPress = false
+            var modifierClick = false; var pressCtrl = false; var pressShift = false
             try { while (true) {
                 val ev = awaitPointerEvent()
                 val ch = ev.changes.firstOrNull() ?: continue
@@ -230,9 +231,12 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                     pressedAt = ch.position; moved = false; primaryPress = true
                     val start = pickGrab(proj, objectsRef.value, ch.position)
                     clickId = start?.obj?.id
-                    if ((ev.keyboardModifiers.isCtrlPressed || ev.keyboardModifiers.isShiftPressed) && start?.grab != Grab.ROTATE) {
-                        selectRef.value(clickId, ev.keyboardModifiers.isCtrlPressed, ev.keyboardModifiers.isShiftPressed)
-                        primaryPress = false; last = ch.position; continue
+                    pressCtrl = ev.keyboardModifiers.isCtrlPressed; pressShift = ev.keyboardModifiers.isShiftPressed
+                    modifierClick = pressShift || (pressCtrl && start?.grab != Grab.ROTATE)
+                    if (modifierClick) {
+                        // Resolve click vs pan/cancel before changing selection. Shared knobs aren't object bodies.
+                        clickId = start?.takeIf { it.grab == Grab.MOVE }?.obj?.id
+                        last = ch.position; continue
                     }
                     if (start != null) {
                         grab = start.grab; grabObj = start.obj; grabFrom = start.from; grabZ = start.z; last = ch.position
@@ -244,9 +248,12 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 if (ev.type == PointerEventType.Move && ch.pressed && prev != null) {
                     val d = ch.position - prev
                     if (ev.buttons.isSecondaryPressed || ev.keyboardModifiers.isShiftPressed) camera.pan += d
-                    else { camera.yaw -= d.x * 0.4f; camera.pitch = (camera.pitch - d.y * 0.3f).coerceIn(5f, 89f) }
+                    else if (!modifierClick) { camera.yaw -= d.x * 0.4f; camera.pitch = (camera.pitch - d.y * 0.3f).coerceIn(5f, 89f) }
                 }
-                if (!ch.pressed && primaryPress) { if (!moved) selectRef.value(clickId, false, false); primaryPress = false }
+                if (!ch.pressed && primaryPress) {
+                    if (!moved) selectRef.value(clickId, modifierClick && pressCtrl, modifierClick && pressShift)
+                    primaryPress = false; modifierClick = false
+                }
                 last = if (ch.pressed) ch.position else null
             } } finally { if (grab != null) endRef.value() }
         } }

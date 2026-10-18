@@ -41,6 +41,19 @@ class MultiSelectionTest {
         assertFalse(p.history.canUndo)
         p.history.redo(); assertEquals(100f, p.items[1].x, 0f)
     }
+    @Test fun togglingAnchorOffStillAnchorsTheNextRangeAtThatRow() {
+        val p = app().prepare
+        p.selectObject(1); p.selectObject(3, toggle = true); p.selectObject(3, toggle = true)
+        p.selectObject(2, range = true, listRange = true)
+        assertEquals(setOf(2, 3), p.selectedIds)
+    }
+    @Test fun separateNumericCommitsRemainSeparateUndoSteps() {
+        val p = app().prepare; p.selectAll()
+        p.editSelection { p.moveSelection(1, 50f, 50f) }
+        p.editSelection { p.moveSelection(1, 60f, 50f) }
+        p.history.undo(); assertEquals(50f, p.items[0].x, 0f)
+        p.history.undo(); assertEquals(40f, p.items[0].x, 0f)
+    }
     @Test fun rotationAndScalePreserveTheGroupAroundItsCentre() {
         val p = app().prepare; p.selectObject(1); p.selectObject(2, toggle = true)
         p.beginSelectionTransform(1); p.turnSelection(1, 45f); p.turnSelection(1, 90f); p.endSelectionTransform()

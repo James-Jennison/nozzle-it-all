@@ -153,7 +153,7 @@ class PrepareState(private val app: AppState) {
             else -> setOf(id)
         }
         setSelection(ids, id)
-        if (range) selectionAnchor = anchor ?: id
+        selectionAnchor = if (range) anchor ?: id else id
     }
     var file by mutableStateOf<File?>(null)
     /** The plate's camera, here (not in the screen) so the View menu can set it. */
@@ -662,6 +662,10 @@ class PrepareState(private val app: AppState) {
     fun changed() { syncInstances(); dirty = true; invalidateSlice(); refreshRules() }
 
     private var selectionTransform: SelectionTransforms? = null
+    fun editSelection(action: () -> Unit) {
+        history.beginEdit()
+        try { action() } finally { history.endEdit() }
+    }
     fun beginSelectionTransform(id: Int) {
         if (id !in selectedIds) selectObject(id)
         history.beginEdit()

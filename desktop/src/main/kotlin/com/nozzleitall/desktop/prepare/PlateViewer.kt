@@ -1,9 +1,19 @@
 package com.nozzleitall.desktop.prepare
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -62,14 +72,17 @@ private val displayCache = java.util.WeakHashMap<Mesh, MutableMap<Long,java.lang
  * The display version of [mesh], computed once per mesh and kind. Slicing always uses the full mesh. [kind] picks which paint shows:
  * 0 colour, 1 support, 2 seam, 3 fuzzy skin (the state numbers of the others index [PlateObject.paintColors]).
  */
-fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh {
+fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0, checkCancelled: () -> Unit = {}): DisplayMesh {
+    checkCancelled()
     val key=(budget.toLong() shl 32) or (kind.toLong() and 0xffffffffL)
     synchronized(displayCache) { displayCache[mesh]?.get(key)?.get()?.let { return it } }
     // Never hold the process-wide map monitor during expansion/simplification.
     // Racing misses may compute twice, but publish/return one still-live result.
-    val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint })
-    val (m, kept) = simplifyWithStates(painted, states, budget)
-    val computed=DisplayMesh(m, cornerNormals(m), mesh.bounds(), kept)
+    val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint }, checkCancelled)
+    checkCancelled()
+    val (m, kept) = simplifyWithStates(painted, states, budget, checkCancelled)
+    val computed=DisplayMesh(m, cornerNormals(m, checkCancelled), mesh.bounds(), kept)
+    checkCancelled()
     return synchronized(displayCache) {
         val slots=displayCache.getOrPut(mesh) { object:LinkedHashMap<Long,java.lang.ref.WeakReference<DisplayMesh>>(8,.75f,true) {
             override fun removeEldestEntry(eldest:MutableMap.MutableEntry<Long,java.lang.ref.WeakReference<DisplayMesh>>?)=size>8
@@ -82,13 +95,14 @@ fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh {
  * The mesh with each painted triangle replaced by its painted pieces (as the engine subdivides it), and each triangle's
  * filament. Unpainted meshes come back unchanged with no states.
  */
-fun expandPaint(mesh: Mesh, kindPaint: Array<String?>? = mesh.paint): Pair<Mesh, IntArray?> {
+fun expandPaint(mesh: Mesh, kindPaint: Array<String?>? = mesh.paint, checkCancelled: () -> Unit = {}): Pair<Mesh, IntArray?> {
     val paint = kindPaint ?: return mesh to null
     val v = mesh.vertices; val t = mesh.triangles
     val verts = PaintVerts(v.size + 1024); verts.addAll(v)
     val tris = PaintInts(t.size + 1024); val states = PaintInts(t.size / 3 + 1024)
     fun corner(i: Int) = floatArrayOf(v[i * 3], v[i * 3 + 1], v[i * 3 + 2])
     for (k in 0 until mesh.triangleCount) {
+        if (k and 1023 == 0) checkCancelled()
         val s = paint[k]
         val node = s?.let { runCatching { com.nozzleitall.project.Paint.decode(it) }.getOrNull() }
         if (node == null || node is com.nozzleitall.project.Paint.Node.Leaf) {
@@ -96,6 +110,7 @@ fun expandPaint(mesh: Mesh, kindPaint: Array<String?>? = mesh.paint): Pair<Mesh,
             continue
         }
         com.nozzleitall.project.Paint.leaves(node, corner(t[k * 3]), corner(t[k * 3 + 1]), corner(t[k * 3 + 2])) { a, b, c, state ->
+            checkCancelled()
             for (p in arrayOf(a, b, c)) { tris.add(verts.size / 3); verts.add(p[0]); verts.add(p[1]); verts.add(p[2]) }
             states.add(state)
         }
@@ -112,10 +127,10 @@ private class PaintInts(cap: Int) { var a = IntArray(cap); var size = 0
     fun toArray() = a.copyOf(size) }
 
 /** [simplifyForDisplay], keeping each surviving triangle's state. */
-fun simplifyWithStates(mesh: Mesh, states: IntArray?, budget: Int): Pair<Mesh, IntArray?> {
-    if (states == null) return simplifyForDisplay(mesh, budget) to null
+fun simplifyWithStates(mesh: Mesh, states: IntArray?, budget: Int, checkCancelled: () -> Unit = {}): Pair<Mesh, IntArray?> {
+    if (states == null) return simplifyForDisplay(mesh, budget, checkCancelled = checkCancelled) to null
     val kept = IntArray(mesh.triangleCount); var n = 0
-    val m = simplifyForDisplay(mesh, budget) { k -> kept[n++] = states[k] }
+    val m = simplifyForDisplay(mesh, budget, checkCancelled) { k -> kept[n++] = states[k] }
     return if (m === mesh) mesh to states else m to kept.copyOf(m.triangleCount)
 }
 
@@ -124,7 +139,7 @@ fun simplifyWithStates(mesh: Mesh, states: IntArray?, budget: Int): Pair<Mesh, I
  * dropped. The shell stays closed (unlike skipping triangles, which leaves holes), just with less detail. The cell size
  * shrinks until the result fits [budget] triangles.
  */
-fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): Mesh {
+fun simplifyForDisplay(mesh: Mesh, budget: Int, checkCancelled: () -> Unit = {}, keep: ((Int) -> Unit)? = null): Mesh {
     if (mesh.triangleCount <= budget) return mesh
     val v = mesh.vertices; val t = mesh.triangles
     val b = mesh.bounds()
@@ -132,11 +147,13 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): 
     var resolution = 512
     var best: Mesh = mesh
     repeat(8) {
+        checkCancelled()
         val cell = extent / resolution
         val index = HashMap<Long, Int>(mesh.vertexCount / 2)
         val sums = ArrayList<Float>(); val counts = ArrayList<Int>()
         val remap = IntArray(mesh.vertexCount)
         for (i in 0 until mesh.vertexCount) {
+            if (i and 1023 == 0) checkCancelled()
             val ix = ((v[i * 3] - b[0]) / cell).toLong(); val iy = ((v[i * 3 + 1] - b[1]) / cell).toLong(); val iz = ((v[i * 3 + 2] - b[2]) / cell).toLong()
             val key = (ix shl 42) or (iy shl 21) or iz
             val id = index.getOrPut(key) { sums.add(0f); sums.add(0f); sums.add(0f); counts.add(0); counts.size - 1 }
@@ -145,6 +162,7 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): 
         }
         val tris = ArrayList<Int>(t.size); val survivors = ArrayList<Int>()
         for (k in 0 until mesh.triangleCount) {
+            if (k and 1023 == 0) checkCancelled()
             val a = remap[t[k * 3]]; val bb = remap[t[k * 3 + 1]]; val c = remap[t[k * 3 + 2]]
             if (a != bb && bb != c && a != c) { tris += a; tris += bb; tris += c; survivors += k }
         }
@@ -200,18 +218,38 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), previewView: PreviewView = PreviewView.TOOL, paint: PaintInput? = null, onSelect: (Int?) -> Unit = {},
                 accent: Color = Color(0xFF3E7BFA), onMove: (Int, Float, Float) -> Unit = { _, _, _ -> }, onTurn: (Int, Float) -> Unit = { _, _ -> }, onResize: (Int, Float) -> Unit = { _, _ -> },
                 onSelection: ((Int?, Boolean, Boolean) -> Unit)? = null, onTransformStart: (Int) -> Unit = {}, onTransformEnd: () -> Unit = {}) {
-    val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh, kind = o.paintKind) } }
+    val keys = if (preview == null) displayKeys(objects) else emptyList()
+    var completed by remember { mutableStateOf<PreparedDisplays?>(null) }
+    var failedKeys by remember { mutableStateOf<List<DisplayKey>?>(null) }
+    var retry by remember { mutableStateOf(0) }
+    LaunchedEffect(keys, retry) {
+        failedKeys = null
+        completed = null
+        try {
+            completed = prepareDisplays(keys)
+            preparationDiagnostic("published", keys.size)
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { failedKeys = keys; preparationDiagnostic("failed", keys.size) }
+    }
+    val prepared = if (preview == null) completed?.bind(objects).orEmpty() else emptyList()
+    val loading = keys.isNotEmpty() && completed?.keys != keys && failedKeys != keys
+    LaunchedEffect(loading) {
+        if (System.getenv("NOZZLE_VIEWPORT_TIMING") == "1")
+            while (loading && isActive) { delay(100); preparationDiagnostic("ui-heartbeat", keys.size) }
+    }
     val depthFrames = remember { DepthSurfaceCache() }
     val frameTiming = remember { ViewportTiming() }
     val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects); val preparedRef = rememberUpdatedState(prepared)
     val selectRef = rememberUpdatedState<(Int?, Boolean, Boolean) -> Unit>({ id, ctrl, shift -> onSelection?.invoke(id, ctrl, shift) ?: onSelect(id) })
     val moveRef = rememberUpdatedState(onMove); val turnRef = rememberUpdatedState(onTurn); val resizeRef = rememberUpdatedState(onResize)
     val startRef = rememberUpdatedState(onTransformStart); val endRef = rememberUpdatedState(onTransformEnd)
-    Canvas(modifier.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag an object to move it, drag empty space to orbit, scroll to zoom." }
+    Box(modifier) {
+    Canvas(Modifier.matchParentSize().semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag an object to move it, drag empty space to orbit, scroll to zoom." }
         .pointerInput(camera, preview != null) { awaitPointerEventScope {
             // Left-drag orbits; right-drag or Shift+drag pans.
             var last: Offset? = null
             val strokes = ArrayList<PaintRay>()
+            var strokeMesh: Mesh? = null; var strokeInput: PaintInput? = null
             // Direct handling: a press on an object moves it, on the turn knob turns it, on the corner knob resizes it.
             var grab: Grab? = null; var grabObj: PlateObject? = null; var grabFrom = Offset.Zero; var grabZ = 0f
             var pressedAt = Offset.Zero; var moved = false; var clickId: Int? = null; var primaryPress = false
@@ -225,6 +263,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 if (painting != null && (ch.pressed || strokes.isNotEmpty())) {
                     // Painting: the left button lays a stroke on the selected object (Alt-drag orbits, Shift-drag pans).
                     val target = preparedRef.value.firstOrNull { (o, _) -> o.id == painting.objectId }
+                    if (strokeMesh !== target?.first?.mesh || strokeInput !== painting) { strokes.clear(); strokeMesh = target?.first?.mesh; strokeInput = painting }
                     if (target != null && ch.pressed && (prev == null || (ch.position - prev).getDistance() >= 3f)) {
                         screenRay(ch.position, size.width.toFloat(), size.height.toFloat(), camera, bedW, bedD, target.first, target.second, painting.radiusMm)?.let { strokes += it }
                         last = ch.position
@@ -276,7 +315,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 if (ev.type == PointerEventType.Move && ch.pressed && prev != null) {
                     val d = ch.position - prev
                     if (ev.buttons.isSecondaryPressed || ev.keyboardModifiers.isShiftPressed) camera.pan += d
-                    else if (!modifierClick) camera.orbit(d.x, d.y)
+                    else if (!modifierClick) { camera.orbit(d.x, d.y); preparationDiagnostic("orbit-input", objectsRef.value.size) }
                 }
                 if (!ch.pressed && primaryPress) {
                     if (!moved) selectRef.value(clickId, modifierClick && pressCtrl, modifierClick && pressShift)
@@ -285,7 +324,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 last = if (ch.pressed) ch.position else null
             } } finally { if (grabStarted) endRef.value() }
         } }
-        .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f) } }
+        .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f); preparationDiagnostic("zoom-input", objectsRef.value.size) } }
         ) {
         val timingStart=frameTiming.start()
         val proj = Projector(size.width, size.height, camera, bedW / 2, bedD / 2)
@@ -303,6 +342,11 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
         }
         frameTiming.finish(timingStart,size.width.toInt(),size.height.toInt(),objects.size)
+    }
+    if (loading || failedKeys == keys && keys.isNotEmpty()) BasicText(
+        if (loading) "Preparing viewport… You can keep working." else "Viewport preparation failed. Click to retry.",
+        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).then(
+            if (!loading) Modifier.clickable { retry++ } else Modifier), style = TextStyle(color = lineColor))
     }
 }
 

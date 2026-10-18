@@ -8,13 +8,14 @@ import kotlin.math.sqrt
  * averaged vertex normal can incorrectly accept a blend of perpendicular cap/side faces.
  * This is display-only; positions, topology, paint and slicing input are never modified.
  */
-internal fun cornerNormals(mesh: Mesh): FloatArray {
+internal fun cornerNormals(mesh: Mesh, checkCancelled: () -> Unit = {}): FloatArray {
     val v = mesh.vertices; val t = mesh.triangles
     val faces = FloatArray(t.size)
     val lengths = FloatArray(mesh.triangleCount)
     // CSR adjacency: no per-vertex lists or boxed triangle indices.
     val counts = IntArray(v.size / 3)
     for (f in 0 until mesh.triangleCount) {
+        if (f and 1023 == 0) checkCancelled()
         val a = t[f*3]*3; val b = t[f*3+1]*3; val c = t[f*3+2]*3
         val ux = v[b]-v[a]; val uy = v[b+1]-v[a+1]; val uz = v[b+2]-v[a+2]
         val wx = v[c]-v[a]; val wy = v[c+1]-v[a+1]; val wz = v[c+2]-v[a+2]
@@ -30,6 +31,7 @@ internal fun cornerNormals(mesh: Mesh): FloatArray {
     val out = FloatArray(t.size*3)
     val creaseCos = 0.76604444f // cos(40 degrees), matching the viewport's intended crease policy.
     for (vertex in counts.indices) {
+        if (vertex and 1023 == 0) checkCancelled()
         val start=offsets[vertex]; val end=offsets[vertex+1]
         if (start == end) continue
         var sx=0f;var sy=0f;var sz=0f
@@ -42,9 +44,10 @@ internal fun cornerNormals(mesh: Mesh): FloatArray {
             val f=corners[i]/3
             lengths[f]==0f || faces[f*3]*ux+faces[f*3+1]*uy+faces[f*3+2]*uz >= 0.939703f*lengths[f]
         }
-        val tree=if(!allSmooth && end-start>32) NormalConeTree(faces,lengths,corners.copyOfRange(start,end)) else null
+        val tree=if(!allSmooth && end-start>32) NormalConeTree(faces,lengths,corners.copyOfRange(start,end),checkCancelled) else null
         val sum=if(tree!=null)DoubleArray(3) else null
         for (i in start until end) {
+            if (i and 1023 == 0) checkCancelled()
             val corner=corners[i];val f=corner/3
             if(lengths[f]<=0f) continue
             var nx=0f;var ny=0f;var nz=0f
@@ -68,10 +71,11 @@ internal fun cornerNormals(mesh: Mesh): FloatArray {
  * accept/reject whole cones; ambiguous leaves retain the original exact filter.
  * The margin prevents a rounded bound from accepting a face across a crease.
  */
-private class NormalConeTree(val faces:FloatArray,val lengths:FloatArray,val corners:IntArray) {
+private class NormalConeTree(val faces:FloatArray,val lengths:FloatArray,val corners:IntArray,val checkCancelled:()->Unit) {
     private class Node(val start:Int,val end:Int,val lo:FloatArray,val hi:FloatArray,val sum:DoubleArray,var left:Node?=null,var right:Node?=null)
     private fun coordinate(corner:Int,axis:Int):Float { val f=corner/3;return if(lengths[f]>0f) faces[f*3+axis]/lengths[f] else 0f }
     private fun build(start:Int,end:Int):Node {
+        checkCancelled()
         val lo=FloatArray(3){Float.POSITIVE_INFINITY};val hi=FloatArray(3){Float.NEGATIVE_INFINITY};val sum=DoubleArray(3)
         for(i in start until end) for(a in 0..2) {
             val value=coordinate(corners[i],a);lo[a]=minOf(lo[a],value);hi[a]=maxOf(hi[a],value)

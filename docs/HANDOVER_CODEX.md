@@ -1,10 +1,47 @@
 # Handover to Codex (written 2026-10-18)
 
-## Async preparation update (2026-10-18)
+## Current dense-rendering update (2026-10-18)
+
+Installed executable source is `a6fc8c438991bb3b2d88c2c2b696131fb0473142`.
+Full-quality frame composition now runs off Main with conflated camera requests,
+source/size rejection and presented-camera drawing/picking/painting. Bounded pose
+and lighting caches plus exact disjoint numeric tiles reduce the remaining CPU
+work without lowering geometry, resolution or pixel/depth quality. Source builds,
+tests and packaging ran only on GTHost. Full222/183pass/39conditional skips;
+entire native-enabled222/214pass/8opt-in skips; focused50/50 and dense benchmark2/2
+PASS. All15 frame regressions passed; the31 native availability skips executed in
+the native-enabled suite. Six unrelated legacy microbenchmarks remain unselected.
+Exact-source CI39170879593 SUCCESS.
+
+Installed450k/1.2M camera-input p95 zoom/orbit:12.213/15.197ms and25.689/20.045ms,
+versus prior1.2M319.988/328.610ms. Eighty extra1.2M inputs with stronger screenshot
+settlement passed16.153/24.806ms. Frames progressed during motion, final camera
+settled, resize/SelectAll/save and ordered geometry/paint/placement invariants PASS.
+Runtime used isolated4K Xvfb/software with actual3408x2046Canvas; exact3840x2160
+benchmarks are separate.1.2M4K full-quality render medians708→374ms orbit and
+693→286ms zoom/pan; final installed orbit settlement411ms, not60Hz/FPS proof.
+The owner's existing window was untouched and may still contain the earlier loaded
+build until the owner next launches the app; exact installed fresh instances were
+verified and stopped. No printer/device action, merge or release.
+
+All7 final-source Synthetic source/clarification cycles COMPLETE on pinned
+GLM5.3/KimiK3/DeepSeekV4.1Flash, plus3 initial139 cycles.51 immutable findings
+retained across both changes, with separate Codex dispositions; pending-proof
+blockers and the incorrect artifact-reference claim expressly withdrawn. Final
+evidence-cycle5204a01833a1 all3 checks PASS/intact; closurec8362113f99e =
+READY_WITH_RESIDUAL_RISK, no blocking reasons,3 disclosed software-cost/cache/test
+boundaries. Package SHA256 starts `beb31a74e40d`; installed jar starts
+`8b5ec072f1c8`; engine remains pinned `d66da0a39dcf`. Full hashes, measurements,
+sealed artifact identities, failures and limits: `docs/handover/NIA_DENSE_RENDERING.md`.
+Later documentation commits do not alter the executable/build/dependency source.
+
+Older installed-version sections below are historical, not current install claims.
+
+## Async preparation stage (historical, 2026-10-18)
 
 Installed Linux executable source is now `e3c5f7a00a0a30b20a7233c4837d4daf1ad94bd7`: display expansion/simplification/normals/initial lighting preparation runs off Main with cancellation and synchronous source-tag rejection for drawing/painting. GTHost full205total/168pass/37conditional skips/0failure; native-focused35/35PASS; exact-source CI39165583995 SUCCESS. Installed real900k preparation3.658sec, max observed Main heartbeat gap102.670ms (100ms interval); zoom/selection while pending, obsolete disposal result rejection, Undo and saved geometry/paint/placement invariants PASS. Capybara95934face save/orbit invariant also PASS. See `docs/handover/NIA_ASYNC_PREPARATION.md` for hashes, methods and limits. All6 Synthetic initial/closure cycles COMPLETE;49 original findings separately dispositioned. Closure48b1f8d2ebfb = READY_WITH_RESIDUAL_RISK, no blocking reasons;3 disclosed serialization/UI-test/unchanged-boundary residuals. All builds remote; owner window untouched. Later seal commits change documentation only.
 
-## Current Codex acceptance update (2026-10-18)
+## Earlier viewport stage (historical, 2026-10-18)
 
 Installed Linux application source is `6a9155547c60e3aba8623bc342a4a811b161d2c6`; the later seal changes documentation/report analysis only, not runtime code. Worst-case viewport benchmarking and bottleneck remediation are complete: shared projection/lighting/scratch, conservative span/offscreen rejection, bounded shadow compositing, high-valence normals, weak-cache lifetime/keying and short critical sections. Multi-select/Select All, auto-paint draft comparison/correction/keep/reset, full pointer orbit underneath, false triangle-shading/visibility fixes, HTTPS/diagnostic guards and stale-source rejection remain included.
 

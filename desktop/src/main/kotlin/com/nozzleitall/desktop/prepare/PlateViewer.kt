@@ -176,7 +176,7 @@ private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Flo
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: ViewCamera, bedColor: Color, lineColor: Color, modifier: Modifier = Modifier,
-                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), paint: PaintInput? = null, onSelect: (Int?) -> Unit = {},
+                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), previewView: PreviewView = PreviewView.TOOL, paint: PaintInput? = null, onSelect: (Int?) -> Unit = {},
                 accent: Color = Color(0xFF3E7BFA), onMove: (Int, Float, Float) -> Unit = { _, _, _ -> }, onTurn: (Int, Float) -> Unit = { _, _ -> }, onResize: (Int, Float) -> Unit = { _, _ -> }) {
     val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh, kind = o.paintKind) } }
     val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects); val preparedRef = rememberUpdatedState(prepared)
@@ -236,7 +236,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         .pointerInput(objects) { detectTapGestures { tap -> if (paintRef.value == null) onSelect(hitTest(tap, objects, camera, size.width.toFloat(), size.height.toFloat(), bedW, bedD)) } }) {
         val proj = Projector(size.width, size.height, camera, bedW / 2, bedD / 2)
         drawBed(proj, bedW, bedD, bedColor, lineColor)
-        if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor)
+        if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
         else {
             prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
             prepared.forEach { (o, d) -> drawObject(proj, o, d) }
@@ -446,20 +446,25 @@ private fun DrawScope.drawParts(proj: Projector, o: PlateObject, d: DisplayMesh)
 private fun norm(x: Float, y: Float, z: Float): FloatArray { val l = sqrt(x * x + y * y + z * z); return floatArrayOf(x / l, y / l, z / l) }
 private fun Color.toArgbInt(): Int = toArgb()
 
-private fun DrawScope.drawPreview(proj: Projector, preview: GcodePreview, layer: Int, toolColors: List<Color>, line: Color) {
+private fun DrawScope.drawPreview(proj: Projector, preview: GcodePreview, layer: Int, toolColors: List<Color>, line: Color, view: PreviewView) {
     val a = FloatArray(6)
     val upTo = layer.coerceIn(0, preview.layers.size - 1)
-    // Earlier layers faintly, the current layer fully, so the shape and the current path both read.
-    val start = max(0, upTo - 60)
+    val (lo, hi) = preview.speedRange
+    // Earlier layers dimmer, the current layer fully, so the shape and the current path both read.
+    val start = max(0, upTo - 80)
     for (li in start..upTo) {
         val l = preview.layers[li]; val current = li == upTo
-        val stride = if (current) 1 else max(1, l.count / 3000)
+        val stride = if (current) 1 else max(1, l.count / 2500)
         var i = 0
         while (i < l.count) {
             val s = l.segments
             proj.p(s[i * 4], s[i * 4 + 1], l.z, a, 0); proj.p(s[i * 4 + 2], s[i * 4 + 3], l.z, a, 3)
-            val col = toolColors.getOrElse(l.tools[i].toInt()) { line }
-            drawLine(if (current) col else col.copy(alpha = 0.25f), Offset(a[0], a[1]), Offset(a[3], a[4]), if (current) 1.6f else 1f)
+            val col = when (view) {
+                PreviewView.TOOL -> toolColors.getOrElse(l.tools[i].toInt()) { line }
+                PreviewView.LINE_TYPE -> Color(GcodePreview.FEATURES.getOrNull(l.kinds[i].toInt())?.second ?: 0xFF8C8C8C)
+                PreviewView.SPEED -> Color(GcodePreview.speedColour(if (hi > lo) (l.speeds[i] - lo) / (hi - lo) else 0.5f))
+            }
+            drawLine(if (current) col else col.copy(alpha = 0.5f), Offset(a[0], a[1]), Offset(a[3], a[4]), if (current) 1.8f else 1.2f)
             i += stride
         }
     }

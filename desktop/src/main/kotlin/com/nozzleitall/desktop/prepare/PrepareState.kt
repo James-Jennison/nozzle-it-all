@@ -175,6 +175,8 @@ class PrepareState(private val app: AppState) {
     var slice by mutableStateOf<SliceState>(SliceState.Idle)
     var previewLayer by mutableStateOf(0)
     var showPreview by mutableStateOf(false)
+    /** How the preview is coloured; null picks from the print (filaments if it uses several, else line types). */
+    var previewView by mutableStateOf<PreviewView?>(null)
     var notice by mutableStateOf<String?>(null)
     var uploadProgress by mutableStateOf<Float?>(null)
     /** Material slots when no printer reports its toolheads (1-based). */

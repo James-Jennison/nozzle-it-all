@@ -101,6 +101,7 @@ fun PrepareScreen(state: AppState) {
             }
             else PlateViewer(bw, bd, objects, camera, c.surfaceRaised, c.lineStrong, Modifier.fillMaxSize(),
                 preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors,
+                previewView = p.previewView ?: if ((done?.preview?.toolsUsed?.size ?: 0) > 1) PreviewView.TOOL else PreviewView.LINE_TYPE,
                 paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
                 onSelect = { focus.clearFocus(); p.selected = it }, accent = c.accent,
                 onMove = { id, x, y -> p.items.firstOrNull { it.id == id }?.let { it.x = x; it.y = y; p.changed() } },
@@ -109,6 +110,9 @@ fun PrepareScreen(state: AppState) {
             // Top left: the plate tools.
             if (!p.showPreview && onPlate.isNotEmpty()) Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
                 Floating { PlateToolbar(p, sel, drawer) { toggle(it) } }
+            }
+            if (p.showPreview && done?.preview != null) Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                PreviewLegend(p, done.preview, p.previewView ?: if (done.preview.toolsUsed.size > 1) PreviewView.TOOL else PreviewView.LINE_TYPE, slots)
             }
             // Top right: the drawer: print setup, the Send step, or the panel for the tool in use (paint, cut, AI auto-paint).
             val toolOpen = !p.showPreview && sel != null && (p.paintKind != null || drawer == Drawer.CUT || drawer == Drawer.AI)
@@ -150,6 +154,41 @@ fun PrepareScreen(state: AppState) {
                 }
             }
         }
+        }
+    }
+}
+
+/** What the preview's colours mean, and a switch between colouring by line type, filament and speed. */
+@Composable
+private fun PreviewLegend(p: PrepareState, preview: GcodePreview, view: PreviewView, slots: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>) {
+    val c = Nz.colors
+    val shape = RoundedCornerShape(14.dp)
+    Column(Modifier.width(250.dp).clip(shape).background(c.surface.copy(alpha = 0.94f)).border(1.dp, c.line, shape).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.surfaceSunken).padding(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            PreviewView.entries.forEach { v ->
+                val on = v == view
+                Box(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).background(if (on) c.accent else Color.Transparent).selectable(on, role = Role.Tab) { p.previewView = v }.padding(vertical = 5.dp)
+                    .semantics { testTag = "preview-view-${v.name.lowercase()}" }, contentAlignment = Alignment.Center) { Txt(v.label, Nz.type.bodySmall, if (on) c.onAccent else c.textMuted, maxLines = 1) }
+            }
+        }
+        fun entry(colour: Color, label: String) = @Composable {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(colour)); Txt(label, Nz.type.bodySmall, maxLines = 1)
+            }
+        }
+        when (view) {
+            PreviewView.LINE_TYPE -> preview.kindsUsed.forEach { k ->
+                val f = GcodePreview.FEATURES.getOrNull(k); entry(Color(f?.second ?: 0xFF8C8C8C), f?.first ?: "Other")()
+            }
+            PreviewView.TOOL -> preview.toolsUsed.forEach { t ->
+                val slot = slots.getOrNull(t); entry(parseHex(slot?.colorHex) ?: c.accent, "${t + 1} · " + (slot?.type ?: "Filament"))()
+            }
+            PreviewView.SPEED -> {
+                val (lo, hi) = preview.speedRange
+                Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(
+                    androidx.compose.ui.graphics.Brush.horizontalGradient((0..8).map { Color(GcodePreview.speedColour(it / 8f)) })))
+                Row { Txt("${lo.toInt()} mm/s", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f)); Txt("${hi.toInt()} mm/s", Nz.type.bodySmall, c.textMuted) }
+            }
         }
     }
 }
@@ -448,6 +487,11 @@ private fun StepObjects(state: AppState) {
     val onPlate = p.plateItems()
     // The tab is already called Objects, and Arrange is on the plate's toolbar, so this page has no card heading of its own.
     Section("Objects", "", bare = true) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Txt(if (onPlate.isEmpty()) "Objects" else "Objects (${onPlate.size})", Nz.type.label, modifier = Modifier.weight(1f))
+            com.nozzleitall.desktop.settings.IconToggle(NzIcon.IMPORT, "Add model", false) { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }
+            if (onPlate.size > 1) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() }
+        }
         if (onPlate.isEmpty()) { Txt("Nothing on this plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
         val slots = p.materials()
         onPlate.forEach { item ->

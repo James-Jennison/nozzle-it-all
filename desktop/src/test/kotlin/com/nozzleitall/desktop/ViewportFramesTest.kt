@@ -184,6 +184,9 @@ class ViewportFramesTest {
                 finally { Thread.interrupted() }
             }
             await(joining);ownerThread.get().interrupt();assertFalse(result.isDone)
+            val deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5)
+            while(ownerThread.get().isInterrupted && System.nanoTime()<deadline)Thread.yield()
+            assertFalse("Future.get must consume interruption before workers release",ownerThread.get().isInterrupted)
             release.countDown();assertTrue(result.get(10,TimeUnit.SECONDS))
             assertEquals(RasterWorkers.count-1,finished.get())
         } finally { release.countDown();owner.shutdownNow() }

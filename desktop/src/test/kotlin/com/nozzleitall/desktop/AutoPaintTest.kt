@@ -16,6 +16,27 @@ import kotlinx.coroutines.*
 
 /** AI auto-paint: the engine segments and reads the answer, the provider (a command, or a local OpenAI-style server) answers. */
 class AutoPaintTest {
+    @Test fun malformedServerAddressHasAGenericDiagnostic() {
+        try { AutoPaint.askServer(Provider.OpenAiCompatible("http://invalid address/v1", "fixture"), "{}", 1); fail("expected failure") }
+        catch (e: AutoPaint.AutoPaintError) { assertEquals("The server address is not valid.",e.message) }
+    }
+
+    @Test fun largeServerErrorBodyIsDiscardedInsteadOfReturned() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1",0),0)
+        server.createContext("/v1/chat/completions") { ex ->
+            ex.requestBody.use { it.readBytes() }
+            ex.sendResponseHeaders(503,16L*1024*1024)
+            val chunk = ByteArray(8192) { 65 }
+            ex.responseBody.use { out -> repeat(2048) { out.write(chunk) } }
+        }
+        server.start()
+        try {
+            AutoPaint.askServer(Provider.OpenAiCompatible("http://127.0.0.1:${server.address.port}/v1","fixture"),"{}",5)
+            fail("expected failure")
+        } catch (e: AutoPaint.AutoPaintError) { assertEquals("The server answered HTTP 503.",e.message) }
+        finally { server.stop(0) }
+    }
+
     @Test fun commandErrorsNeverExposeUntrustedStderr() {
         try { AutoPaint.askCommand("cat >/dev/null; echo private-fixture >&2; exit 7", "fixture", 2); fail("expected failure") }
         catch (e: AutoPaint.AutoPaintError) { assertEquals("The command failed (exit 7).", e.message) }
@@ -190,6 +211,18 @@ class AutoPaintTest {
             assertFalse(staleDir.exists())
             withContext(Dispatchers.Main) { p.aiApply() }
             assertSame(beforeRace,p.items[0].mesh); assertSame(mesh,p.items[1].mesh)
+            for (changeSlot in listOf(true,false)) {
+                withContext(Dispatchers.Main) { p.selected = 1; p.aiPrepare("") }; idle()
+                val changedDir = p.aiPrepared!!.dir
+                withContext(Dispatchers.Main) {
+                    p.aiSend()
+                    if (changeSlot) p.items[0].slot = 2 else p.items[0].paintSlots.add(3)
+                }
+                idle()
+                assertNull(p.aiPrepared); assertNull(p.aiAnswer); assertNull(p.aiPreviewMesh)
+                assertFalse(changedDir.exists()); assertTrue(p.notice!!.contains("changed"))
+                assertSame(beforeRace,p.items[0].mesh)
+            }
         } finally { withContext(Dispatchers.Main) { p.aiDiscard() }; app.scope.cancel() }
     }
 

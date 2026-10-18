@@ -747,7 +747,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
                 NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, enabled = p.aiPreviewMesh != null && p.toolBusy == null)
                 NzButton("Keep all original paint", { p.aiKeepOriginal() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
                 NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, enabled = p.toolBusy == null)
-                Txt("Optional, conservative tip smoothing; preserves small colour details and sharp creases. ${p.aiCleanedFaces} faces adjusted. It cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)
+                Txt("Optional tip smoothing on exact shared edges; may make no changes. Preserves small details and sharp creases. ${p.aiCleanedFaces} faces adjusted. Cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)
                 Txt("Correct regions (numbers match the images)", Nz.type.label)
                 val choices = listOf(com.nozzleitall.desktop.settings.Choice("0", "Keep original paint")) + prepared.filaments.map { f ->
                     com.nozzleitall.desktop.settings.Choice(f.index.toString(), "Slot ${f.index} · ${f.name.ifBlank { f.type }} · ${f.colorHex}")

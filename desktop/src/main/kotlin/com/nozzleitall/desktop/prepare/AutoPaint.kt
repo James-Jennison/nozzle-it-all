@@ -123,13 +123,18 @@ object AutoPaint {
 
     /** POSTs [body] to an OpenAI-compatible chat-completions endpoint and returns the response text. */
     internal fun askServer(p: Provider.OpenAiCompatible, body: String, timeoutSeconds: Long = 300): String {
-        val uri = URI.create(AutoPaintFormat.chatUrl(p.baseUrl))
+        val uri = try { URI.create(AutoPaintFormat.chatUrl(p.baseUrl)) }
+            catch (_: IllegalArgumentException) { throw AutoPaintError("The server address is not valid.") }
         if (p.apiKey.isNotBlank() && !uri.scheme.equals("https", ignoreCase = true))
             throw AutoPaintError("A server using an API key must use HTTPS.")
         val req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(timeoutSeconds))
             .header("Content-Type", "application/json").apply { if (p.apiKey.isNotBlank()) header("Authorization", "Bearer ${p.apiKey}") }
             .POST(HttpRequest.BodyPublishers.ofString(body)).build()
-        val res = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build().send(req, HttpResponse.BodyHandlers.ofString())
+        val handler = HttpResponse.BodyHandler<String> { info ->
+            if (info.statusCode() in 200..299) HttpResponse.BodySubscribers.ofString(Charsets.UTF_8)
+            else HttpResponse.BodySubscribers.replacing("") // Drain without buffering untrusted error bodies.
+        }
+        val res = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build().send(req, handler)
         // Error bodies are untrusted and may reflect authorization or private model data.
         if (res.statusCode() !in 200..299) throw AutoPaintError("The server answered HTTP ${res.statusCode()}.")
         return res.body()

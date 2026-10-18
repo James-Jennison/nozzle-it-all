@@ -905,7 +905,14 @@ class PrepareState(private val app: AppState) {
         aiPreviewMesh = null
         runTool("Waiting for the answer") {
             val answer = withContext(Dispatchers.IO) { AutoPaint.askReview(prepared, provider) }
-            if (generation == aiGeneration && aiPrepared === prepared) { aiAnswer = answer; rebuildAiPreview() }
+            if (generation == aiGeneration && aiPrepared === prepared) {
+                val target = items.firstOrNull { it.id == aiItemId }
+                if (target == null || target.mesh !== aiSource?.mesh || target.paintSlots.toList() != aiSourceSlots || target.slot != aiSourceSlot) {
+                    notice = "The object's paint or geometry changed. Prepare auto-paint again before applying."
+                    aiDiscard(); return@runTool
+                }
+                aiAnswer = answer; rebuildAiPreview()
+            }
         }
     }
 

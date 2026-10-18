@@ -75,4 +75,9 @@ class DepthSurfaceTest {
         val s = DepthSurface(16000f,10000f)
         assertTrue(s.width.toLong()*s.height < 4_010_000L); assertTrue(s.scale < 1f)
     }
+    @Test fun finiteCoordinatesWithOverflowingAreaAreIgnored() {
+        val s=DepthSurface(8f,8f)
+        s.triangle(floatArrayOf(Float.MAX_VALUE,Float.MAX_VALUE,0f,-Float.MAX_VALUE,Float.MAX_VALUE,0f,0f,-Float.MAX_VALUE,0f),0,IntArray(3){red},0,100f)
+        assertTrue(s.pixels.all { it==0.toByte() })
+    }
 }

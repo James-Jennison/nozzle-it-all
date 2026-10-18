@@ -49,20 +49,29 @@ class PaintInput(val objectId: Int, val radiusMm: Float, val onStrokes: (List<Pa
  * A mesh ready to draw: possibly simplified, with smooth normals, and the original's bounds (so placement never shifts).
  * [states] is each triangle's painted filament (0 = the object's own), when the model is painted.
  */
-class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray, val states: IntArray? = null) { val tris = IntArray(mesh.triangleCount) { it } }
+class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray, val states: IntArray? = null) {
+    val tris = IntArray(mesh.triangleCount) { it }
+    internal val lightingGroups by lazy { LightingGroups(this) }
+}
 
-private val displayCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Mesh, Array<DisplayMesh?>>())
+// Values must also be weak: DisplayMesh can contain the key Mesh itself.
+// A strong value would keep a WeakHashMap key alive forever across imports/Undo.
+private val displayCache = java.util.WeakHashMap<Mesh, MutableMap<Long,java.lang.ref.WeakReference<DisplayMesh>>>()
 
 /**
  * The display version of [mesh], computed once per mesh and kind. Slicing always uses the full mesh. [kind] picks which paint shows:
  * 0 colour, 1 support, 2 seam, 3 fuzzy skin (the state numbers of the others index [PlateObject.paintColors]).
  */
-fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh = displayCache.getOrPut(mesh) { arrayOfNulls(4) }.let { slots ->
-    slots[kind] ?: run {
+fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh = synchronized(displayCache) {
+    val slots=displayCache.getOrPut(mesh) { object:LinkedHashMap<Long,java.lang.ref.WeakReference<DisplayMesh>>(8,.75f,true) {
+        override fun removeEldestEntry(eldest:MutableMap.MutableEntry<Long,java.lang.ref.WeakReference<DisplayMesh>>?)=size>8
+    } }
+    val key=(budget.toLong() shl 32) or (kind.toLong() and 0xffffffffL)
+    slots[key]?.get() ?: run {
         val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint })
         val (m, kept) = simplifyWithStates(painted, states, budget)
         DisplayMesh(m, cornerNormals(m), mesh.bounds(), kept)
-    }.also { slots[kind] = it }
+    }.also { slots[key] = java.lang.ref.WeakReference(it) }
 }
 
 /**
@@ -277,7 +286,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         drawBed(proj, bedW, bedD, bedColor, lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
         else {
-            prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
+            prepared.forEach { (o, d) -> drawShadow(proj, o, d, depthFrames.shadows) }
             val surface = depthFrames.frame(size.width, size.height)
             prepared.forEach { (o, d) -> drawObject(proj, o, d, surface) }
             val info = org.jetbrains.skia.ImageInfo(surface.width, surface.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.PREMUL)
@@ -375,82 +384,9 @@ private fun displayBase(c: Color): Color {
 }
 
 /** A soft shadow straight down onto the bed, drawn as one translucent layer so overlaps don't darken. */
-internal fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh) {
-    val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris
-    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2
-    val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
-    val step = max(1, tris.size / 20_000); val tmp = FloatArray(3)
-    val positions = ArrayList<Offset>(tris.size / step * 3 + 3)
-    var k = 0
-    while (k < tris.size) {
-        val tri = tris[k]
-        for (c in 0..2) {
-            val vi = t[tri * 3 + c] * 3
-            val lx = (v[vi] - mx) * o.ex; val ly = (v[vi + 1] - my) * o.ey
-            proj.p(o.x + lx * cr - ly * sr, o.y + lx * sr + ly * cr, 0f, tmp, 0); positions += Offset(tmp[0], tmp[1])
-        }
-        k += step
-    }
-    drawIntoCanvas { canvas ->
-        canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), Paint().apply { alpha = 0.28f })
-        canvas.drawVertices(Vertices(VertexMode.Triangles, positions, positions, List(positions.size) { Color.Black }, emptyList()), BlendMode.Dst, Paint())
-        canvas.restore()
-    }
-}
+internal fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh, scratch: ShadowScratch) = rasterShadow(proj,o,d,scratch)
 
-internal fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh, surface: DepthSurface) {
-    val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris; val normals = d.normals
-    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val zBase = if (o.ez >= 0f) b[2] else b[5]
-    val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
-    val n = tris.size
-    val screen = FloatArray(n * 9); val cornerColor = IntArray(n * 3)
-    // Lights live in view space so a model reads the same from any angle: a key light from the upper left, a softer fill
-    // from the right, a highlight, and a rim on silhouettes that separates the model from the background.
-    val key = norm(-0.45f, -0.60f, 0.66f); val fill = norm(0.70f, 0.05f, 0.45f)
-    val half = norm(key[0], key[1], key[2] + 1f)
-    fun shade(c: Color) = displayBase(if (o.selected) lerpColor(c, Color.White, 0.18f) else c)
-    val own = shade(o.color)
-    val palette = o.paintColors.map { it?.let(::shade) ?: own }
-    val states = d.states
-    val fn = FloatArray(3); val vn = FloatArray(3); val w = FloatArray(9)
-    for ((k, tri) in tris.withIndex()) {
-        val base = states?.get(tri)?.let { s -> if (s == 0) own else palette.getOrNull(s) ?: own } ?: own
-        for (c in 0..2) {
-            val vi = t[tri * 3 + c] * 3
-            val lx = (v[vi] - mx) * o.ex; val ly = (v[vi + 1] - my) * o.ey; val lz = (v[vi + 2] - zBase) * o.ez
-            w[c * 3] = o.x + lx * cr - ly * sr; w[c * 3 + 1] = o.y + lx * sr + ly * cr; w[c * 3 + 2] = lz
-            proj.p(w[c * 3], w[c * 3 + 1], w[c * 3 + 2], screen, k * 9 + c * 3)
-        }
-        val ux = w[3] - w[0]; val uy = w[4] - w[1]; val uz = w[5] - w[2]; val qx = w[6] - w[0]; val qy = w[7] - w[1]; val qz = w[8] - w[2]
-        var nx = uy * qz - uz * qy; var ny = uz * qx - ux * qz; var nz = ux * qy - uy * qx
-        val len = sqrt(nx * nx + ny * ny + nz * nz).takeIf { it > 0 } ?: 1f; nx /= len; ny /= len; nz /= len
-        proj.dir(nx, ny, nz, fn)
-        // Two-sided: meshes with inconsistent winding still light from the side we see.
-        val flip = if (fn[2] < 0f) -1f else 1f
-        for (c in 0..2) {
-            // A normal follows the inverse of the size, so a stretched or mirrored object keeps lighting right.
-            val ni = (tri * 3 + c) * 3
-            var ax = normals[ni] / o.ex; var ay = normals[ni + 1] / o.ey; var az = normals[ni + 2] / o.ez
-            val nl = sqrt(ax * ax + ay * ay + az * az).takeIf { it > 0 } ?: 1f; ax /= nl; ay /= nl; az /= nl
-            val rx = ax * cr - ay * sr; val ry = ax * sr + ay * cr
-            proj.dir(rx, ry, az, vn)
-            // Smooth where the surface is curved; keep the face normal at sharp edges (over about 40 degrees).
-            val dot = (vn[0] * fn[0] + vn[1] * fn[1] + vn[2] * fn[2])
-            val sx: Float; val sy: Float; val sz: Float
-            if (dot * dot > 0.58f && dot > 0) { sx = vn[0] * flip; sy = vn[1] * flip; sz = vn[2] * flip } else { sx = fn[0] * flip; sy = fn[1] * flip; sz = fn[2] * flip }
-            val diffuse = max(0f, sx * key[0] + sy * key[1] + sz * key[2])
-            val soft = max(0f, sx * fill[0] + sy * fill[1] + sz * fill[2])
-            val spec = max(0f, sx * half[0] + sy * half[1] + sz * half[2]).let { s -> s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s }
-            val rim = (1f - max(0f, sz)).let { r -> r * r * r }
-            val light = 0.30f + 0.62f * diffuse + 0.20f * soft
-            val red = (base.red * light + 0.22f * spec + 0.10f * rim).coerceIn(0f, 1f)
-            val green = (base.green * light + 0.22f * spec + 0.10f * rim).coerceIn(0f, 1f)
-            val blue = (base.blue * light + 0.22f * spec + 0.12f * rim).coerceIn(0f, 1f)
-            cornerColor[k * 3 + c] = Color(red, green, blue).toArgbInt()
-        }
-        surface.triangle(screen, k*9, cornerColor, k*3, proj.eye)
-    }
-}
+internal fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh, surface: DepthSurface) = rasterObject(proj,o,d,surface)
 
 /**
  * An object's extra volumes as outlines of their boxes (a cylinder or sphere shows its bounding box): red for a negative volume,

@@ -55,20 +55,30 @@ class ViewportBenchmarkTest {
         }
         return Mesh(v,t)
     }
-    private fun fan(count: Int): Mesh {
+    private fun fan(count: Int, creased:Boolean=false): Mesh {
         val v=FloatArray((count+1)*3);val t=IntArray(count*3)
         for (i in 0 until count) { val a=i*2*PI/count;v[(i+1)*3]=(100*cos(a)).toFloat();v[(i+1)*3+1]=(100*sin(a)).toFloat();t[i*3]=0;t[i*3+1]=i+1;t[i*3+2]=(i+1)%count+1 }
+        if(creased)for(i in 0 until count)v[(i+1)*3+2]=(22*sin(7*i*2*PI/count)).toFloat()
         return Mesh(v,t)
     }
 
     @Test(timeout = 240000) fun highValencePreparation() {
         enabled()
-        for (n in listOf(4_000,16_000,64_000,150_000)) {
-            val m=fan(n)
-            measure("planar-fan-corner-normals",JSONObject().put("triangles",n).put("max_vertex_valence",n),warm=0,samples=1) {
+        for (creased in listOf(false,true))for (n in listOf(4_000,16_000,64_000,150_000)) {
+            val m=fan(n,creased)
+            measure(if(creased)"creased-fan-corner-normals" else "planar-fan-corner-normals",JSONObject().put("triangles",n).put("max_vertex_valence",n),warm=0,samples=1) {
                 val normals=cornerNormals(m);check(normals.size==n*9);check(normals.all { it.isFinite() })
             }
         }
+    }
+
+    @Test fun releasedMeshesAreNotRetainedByDisplayCache() {
+        enabled()
+        val mesh=torus();val refs=ArrayList<java.lang.ref.WeakReference<Mesh>>()
+        repeat(8) { val copy=Mesh(mesh.vertices,mesh.triangles);displayMesh(copy);refs.add(java.lang.ref.WeakReference(copy)) }
+        repeat(3) { System.gc();Thread.sleep(100) }
+        // Observational GC metric, not a timing-dependent correctness assertion.
+        println("NIA_VIEWPORT_BENCHMARK "+JSONObject().put("case","released-display-mesh-cache").put("label",System.getenv("NIA_BENCH_LABEL") ?: "unlabelled").put("meshes",8).put("observed_retained_after_gc",refs.count { it.get()!=null }))
     }
 
     @Test(timeout = 240000) fun viewportFrames() {
@@ -84,7 +94,7 @@ class ViewportBenchmarkTest {
                 scope.draw(Density(1f),LayoutDirection.Ltr,canvas,Size(width.toFloat(),height.toFloat())) {
                     val proj=Projector(size.width,size.height,camera,128f,128f)
                     drawBed(proj,256f,256f,Color(0xff20262a),Color(0xff3c474e))
-                    if(shadows) objects.forEach { drawShadow(proj,it,display) }
+                    if(shadows) objects.forEach { drawShadow(proj,it,display,cache.shadows) }
                     val surface=cache.frame(size.width,size.height)
                     objects.forEach { drawObject(proj,it,display,surface) }
                     if(present) {

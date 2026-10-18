@@ -12,8 +12,9 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
     val height = ceil(viewHeight*scale).toInt().coerceAtLeast(1)
     val pixels = ByteArray(width*height*4) // BGRA, opaque where covered; transparent elsewhere.
     private val depths = FloatArray(width*height) { Float.POSITIVE_INFINITY }
+    val objectScratch=ObjectRasterScratch()
 
-    fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY) }
+    fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY);objectScratch.litMesh=null;objectScratch.litProjection=null }
 
     fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float) {
         val ax = screen[at]*scale; val ay = screen[at+1]*scale
@@ -22,14 +23,26 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
         val az = screen[at+2]; val bz = screen[at+5]; val cz = screen[at+8]
         if (!ax.isFinite() || !ay.isFinite() || !bx.isFinite() || !by.isFinite() || !cx.isFinite() || !cy.isFinite() || !az.isFinite() || !bz.isFinite() || !cz.isFinite()) return
         val area = (bx-ax)*(cy-ay)-(by-ay)*(cx-ax)
-        if (abs(area) < 1e-8f) return
+        if (!area.isFinite() || abs(area) < 1e-8f) return
         val x0 = max(0,floor(minOf(ax,bx,cx)).toInt()); val x1 = min(width-1,ceil(maxOf(ax,bx,cx)).toInt())
         val y0 = max(0,floor(minOf(ay,by,cy)).toInt()); val y1 = min(height-1,ceil(maxOf(ay,by,cy)).toInt())
         if (x0 > x1 || y0 > y1) return
         // Projector clamps the perspective denominator at 20% of the eye distance.
         val qa = 1f/max(eye+az,eye*0.2f); val qb = 1f/max(eye+bz,eye*0.2f); val qc = 1f/max(eye+cz,eye*0.2f)
         val ca = colors[colorAt]; val cb = colors[colorAt+1]; val cc = colors[colorAt+2]
-        for (y in y0..y1) for (x in x0..x1) {
+        val da=(by.toDouble()-cy)/area;val db=(cy.toDouble()-ay)/area;val dc=-da-db
+        // Conservative span clipping only: the original float coverage/depth/color
+        // equations still decide every candidate pixel. A cancellation margin and
+        // one-pixel pad retain edge coverage even for long, very thin triangles.
+        val guard=0.000001+0.000001*(x1.toDouble()-x0+2)*(y1.toDouble()-y0+2)/abs(area)
+        for (y in y0..y1) {
+            val py=y+0.5f;val px0=x0+0.5f
+            val wa0=((bx-px0)*(cy-py)-(by-py)*(cx-px0))/area
+            val wb0=((cx-px0)*(ay-py)-(cy-py)*(ax-px0))/area
+            val range=span(x0,x1,wa0,wb0,1f-wa0-wb0,da,db,dc,guard)
+            if(range==Long.MIN_VALUE) continue
+            val first=(range ushr 32).toInt();val last=range.toInt()
+            for (x in first..last) {
             val px = x+0.5f; val py = y+0.5f
             val wa = ((bx-px)*(cy-py)-(by-py)*(cx-px))/area
             val wb = ((cx-px)*(ay-py)-(cy-py)*(ax-px))/area
@@ -45,12 +58,28 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
                 pixels[index*4+channel] = (((a*((ca ushr shift) and 255)+b*((cb ushr shift) and 255)+c*((cc ushr shift) and 255))/q).roundToInt().coerceIn(0,255)).toByte()
             }
             pixels[index*4+3] = 255.toByte()
+            }
         }
+    }
+
+    private fun span(x0:Int,x1:Int,a:Float,b:Float,c:Float,da:Double,db:Double,dc:Double,guard:Double):Long {
+        var lo=x0.toDouble();var hi=x1.toDouble()
+        for(i in 0..2) {
+            val value=when(i){0->a;1->b;else->c}.toDouble();val slope=when(i){0->da;1->db;else->dc}
+            if(slope==0.0) { if(value < -guard) return Long.MIN_VALUE }
+            else {
+                val edge=x0+(-guard-value)/slope
+                if(slope>0) lo=max(lo,edge) else hi=min(hi,edge)
+            }
+        }
+        val left=max(x0,ceil(lo).toInt()-1);val right=min(x1,floor(hi).toInt()+1)
+        return if(left>right) Long.MIN_VALUE else (left.toLong() shl 32) or (right.toLong() and 0xffffffffL)
     }
 }
 
 /** Owned by one viewport; reuse frame storage without retaining old-size buffers. */
 internal class DepthSurfaceCache {
+    val shadows=ShadowScratch()
     private var surface: DepthSurface? = null
     private var width = -1f
     private var height = -1f

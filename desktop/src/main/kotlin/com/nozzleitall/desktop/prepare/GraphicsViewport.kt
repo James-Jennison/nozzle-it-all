@@ -1,7 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
@@ -130,8 +129,8 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
                         CanvasDrawScope().draw(Density(1f),LayoutDirection.Ltr,target.canvas.asComposeCanvas(),Size(request.width.toFloat(),request.height.toFloat())) {
                             val scene=request.scene
                             drawBed(request.projector(),scene.bedW,scene.bedD,scene.bed,scene.line,behind=true)
+                            drawRect(scene.background,blendMode=androidx.compose.ui.graphics.BlendMode.DstOver)
                         }
-                        target.canvas.drawColor(request.scene.background.toArgb(),BlendMode.DST_OVER)
                     }
                 }
                 check()

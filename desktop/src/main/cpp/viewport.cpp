@@ -4,6 +4,8 @@
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <cmath>
+#include <chrono>
+#include <cstring>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -26,6 +28,7 @@ uniform vec4 camera, view;
 uniform vec3 translation, extent, origin;
 uniform vec2 turn;
 uniform int shadow;
+uniform int uniformScale;
 out vec3 color;
 out float depth;
 vec3 unit(vec3 n) { float l=length(n);return l>0.0?n/l:n; }
@@ -43,14 +46,14 @@ void main() {
     gl_Position=vec4(2.0*(v.x*view.x*view.y+view.z*denominator)/viewport.x,
         2.0*(v.y*view.x*view.y+view.w*denominator)/viewport.y,0.0,denominator);
     if(shadow!=0){color=vec3(0);return;}
-    vec3 n=direction(rotate(unit(normal/extent)));
-    vec3 f=direction(rotate(unit(face/extent)*sign(extent.x*extent.y*extent.z)));
+    vec3 n=direction(rotate(uniformScale!=0?normal*sign(extent):unit(normal/extent)));
+    vec3 f=direction(rotate((uniformScale!=0?face*sign(extent):unit(face/extent))*sign(extent.x*extent.y*extent.z)));
     float d=dot(n,f),flip=f.z<0.0?-1.0:1.0;
     n=(d*d>0.58 && d>0.0?n:f)*flip;
     vec3 key=normalize(vec3(-0.45,-0.60,0.66)),fill=normalize(vec3(0.70,0.05,0.45));
     float l=0.30+0.62*max(0.0,dot(n,key))+0.20*max(0.0,dot(n,fill));
-    float spec=pow(max(0.0,dot(n,normalize(key+vec3(0,0,1)))),16.0);
-    float rim=pow(1.0-max(0.0,n.z),3.0);
+    float s=max(0.0,dot(n,normalize(key+vec3(0,0,1))));s*=s;s*=s;s*=s;float spec=s*s;
+    float r=1.0-max(0.0,n.z);float rim=r*r*r;
     color=floor(clamp(albedo*l+vec3(0.22*spec)+vec3(0.10,0.10,0.12)*rim,0.0,1.0)*255.0+0.5)/255.0;
 })GLSL";
 const char* fragment = R"GLSL(#version 300 es
@@ -88,6 +91,8 @@ struct Renderer {
     int width=0,height=0;bool current=false;
     EGLenum previousApi=EGL_OPENGL_ES_API;
     std::unordered_map<GLuint,Mesh> meshes;
+    std::vector<uint8_t> staging;
+    double readMs=0,copyMs=0;
     GLenum readFormat=GL_RGBA;
     std::string name;
     void bind(){
@@ -136,10 +141,12 @@ struct Renderer {
         glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH32F_STENCIL8,w,h);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_RENDERBUFFER,depthStencil);
         if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)throw std::runtime_error("Viewport framebuffer incomplete");
-        // Use the implementation's guaranteed native byte format when available;
-        // otherwise RGBA/UNSIGNED_BYTE is core for this RGBA8 framebuffer.
-        GLint format=0,type=0;glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT,&format);glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE,&type);
-        readFormat=(format==0x80e1&&type==GL_UNSIGNED_BYTE)?GLenum(0x80e1):GL_RGBA; // BGRA implementation read format
+        // RGBA/UNSIGNED_BYTE is guaranteed for RGBA8. A reported implementation
+        // format is not a promise of faster readback into fresh image storage.
+        readFormat=GL_RGBA;
+        // Persistent resident staging avoids re-registering fresh image storage
+        // for each driver readback. Its native-order bytes copy contiguously.
+        staging.resize(size_t(w)*h*4);
         width=w;height=h;
     }
     ~Renderer(){
@@ -165,6 +172,7 @@ JNIEXPORT jstring JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_so
 JNIEXPORT jlong JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_create(JNIEnv* e,jobject){try{auto r=std::make_unique<Renderer>();r->init();return reinterpret_cast<jlong>(r.release());}catch(...){error(e);return 0;}}
 JNIEXPORT jstring JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_describe(JNIEnv* e,jobject,jlong h){try{return e->NewStringUTF(get(h).name.c_str());}catch(...){error(e);return nullptr;}}
 JNIEXPORT jboolean JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_bgra(JNIEnv* e,jobject,jlong h){try{return get(h).readFormat==0x80e1;}catch(...){error(e);return false;}}
+JNIEXPORT jfloatArray JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_timings(JNIEnv* e,jobject,jlong h){try{auto& r=get(h);float v[2]={float(r.readMs),float(r.copyMs)};auto a=e->NewFloatArray(2);if(a)e->SetFloatArrayRegion(a,0,2,v);return a;}catch(...){error(e);return nullptr;}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_begin(JNIEnv* e,jobject,jlong h,jint w,jint height,jfloatArray camera){try{
     auto& r=get(h);auto c=floats(e,camera);if(c.size()!=10)throw std::runtime_error("Invalid viewport camera");
     r.bind();r.resize(w,height);glBindFramebuffer(GL_FRAMEBUFFER,r.fbo);glViewport(0,0,w,height);
@@ -188,6 +196,7 @@ JNIEXPORT jint JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_uploa
         const float *a=&p[t[tri*3]*3],*b=&p[t[tri*3+1]*3],*d=&p[t[tri*3+2]*3];
         float u[3],v[3];for(int k=0;k<3;k++){u[k]=b[k]-a[k];v[k]=d[k]-a[k];}
         float f[3]={u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]};
+        float length=std::sqrt(f[0]*f[0]+f[1]*f[1]+f[2]*f[2]);if(length>0)for(float& component:f)component/=length;
         for(int corner=0;corner<3;corner++){size_t at=tri*3+corner;float* out=&data[at*12];
             std::copy_n(&p[t[at]*3],3,out);std::copy_n(&n[at*3],3,out+3);std::copy_n(f,3,out+6);std::copy_n(&c[tri*3],3,out+9);}
     }
@@ -208,6 +217,7 @@ JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_draw(
     glUniform2f(glGetUniformLocation(r.geometry,"turn"),std::cos(p[2]),std::sin(p[2]));
     glUniform3fv(glGetUniformLocation(r.geometry,"extent"),1,p.data()+3);glUniform3fv(glGetUniformLocation(r.geometry,"origin"),1,p.data()+6);
     glUniform1i(glGetUniformLocation(r.geometry,"shadow"),shadow?1:0);
+    glUniform1i(glGetUniformLocation(r.geometry,"uniformScale"),std::abs(p[3])==std::abs(p[4])&&std::abs(p[4])==std::abs(p[5]));
     if(shadow){
         glDisable(GL_DEPTH_TEST);glDisable(GL_BLEND);glEnable(GL_STENCIL_TEST);glStencilMask(255);glClear(GL_STENCIL_BUFFER_BIT);
         glStencilFunc(GL_ALWAYS,1,255);glStencilOp(GL_KEEP,GL_KEEP,GL_REPLACE);glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE);
@@ -222,10 +232,15 @@ JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_draw(
 }catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_read(JNIEnv* e,jobject,jlong h,jlong output,jint bytes){try{
     auto& r=get(h);if(!r.current||!output||bytes<0||int64_t(bytes)!=int64_t(r.width)*r.height*4)throw std::runtime_error("Invalid viewport readback");
-    // Projection is vertically inverted in the private FBO, so its bottom-first
-    // readback already has Skia's top-first order. No CPU row flip or swizzle.
-    glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,r.width,r.height,r.readFormat,GL_UNSIGNED_BYTE,reinterpret_cast<void*>(output));
+    // Projection inversion gives Skia row order. Read into resident storage, then
+    // copy once into independently owned immutable image data, without swizzling.
+    auto start=std::chrono::steady_clock::now();
+    glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,r.width,r.height,r.readFormat,GL_UNSIGNED_BYTE,r.staging.data());
+    auto read=std::chrono::steady_clock::now();
     if(glGetError()!=GL_NO_ERROR)throw std::runtime_error("Viewport readback failed");
+    std::memcpy(reinterpret_cast<void*>(output),r.staging.data(),bytes);
+    auto copy=std::chrono::steady_clock::now();
+    r.readMs=std::chrono::duration<double,std::milli>(read-start).count();r.copyMs=std::chrono::duration<double,std::milli>(copy-read).count();
 }catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_end(JNIEnv* e,jobject,jlong h){try{get(h).unbind();}catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_destroy(JNIEnv*,jobject,jlong h){delete reinterpret_cast<Renderer*>(h);}

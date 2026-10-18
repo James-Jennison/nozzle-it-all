@@ -29,6 +29,7 @@ internal object NativeViewport {
     external fun create():Long
     external fun describe(handle:Long):String
     external fun bgra(handle:Long):Boolean
+    external fun timings(handle:Long):FloatArray
     external fun begin(handle:Long,width:Int,height:Int,camera:FloatArray)
     external fun upload(handle:Long,positions:FloatArray,indices:IntArray,normals:FloatArray,colors:FloatArray):Int
     external fun releaseMesh(handle:Long,mesh:Int)
@@ -49,6 +50,7 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
     val renderer=NativeViewport.describe(handle)
     private val meshes=LinkedHashMap<GraphicsKey,GraphicsMesh>(8,.75f,true)
     private var retained=0L
+    private var frames=0
     internal var uploads=0;private set
     internal val retainedBytes get()=retained
     companion object {
@@ -116,6 +118,10 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
             // array followed by another full-frame copy/composite/snapshot.
             Data.makeUninitialized(bytes).use { data->
                 NativeViewport.read(handle,data.writableData(),bytes);check()
+                if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1" && ++frames%30==0) {
+                    val timing=NativeViewport.timings(handle)
+                    println("NIA_GRAPHICS_TIMING read_ms=${timing[0]} copy_ms=${timing[1]} uploads=$uploads format=rgba staging=true")
+                }
                 if(bed) Pixmap.make(info,data,request.width*4).use { pixmap->
                     Surface.makeRasterDirect(pixmap).use { target->
                         CanvasDrawScope().draw(Density(1f),LayoutDirection.Ltr,target.canvas.asComposeCanvas(),Size(request.width.toFloat(),request.height.toFloat())) {

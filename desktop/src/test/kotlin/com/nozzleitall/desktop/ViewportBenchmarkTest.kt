@@ -120,4 +120,34 @@ class ViewportBenchmarkTest {
             repeat(64) { screen[2]=it.toFloat();screen[5]=it.toFloat();screen[8]=it.toFloat();surface.triangle(screen,0,colors,0,1000f) }
         }
     }
+
+    /** Paired same-JVM control, with different object transforms so lighting cannot
+     * be shared merely because all three objects are identical instances. */
+    @Test(timeout = 240000) fun pairedDistinctPoseFrames() {
+        enabled()
+        val mesh=torus();val d=displayMesh(mesh)
+        val objects=(0..2).map { i -> PlateObject(i,"fixture",mesh,Color(0xffb09070),48f+i*80,128f,i*47f,1f,false,sy=.8f+i*.2f) }
+        for(reference in listOf(true,false)) {
+            val camera=ViewCamera().apply { fitBed(256f,256f) };val cache=DepthSurfaceCache();val old=ReferenceDepthSurface(3840f,2160f)
+            val canvas=Canvas(ImageBitmap(3840,2160));val scope=CanvasDrawScope()
+            measure("three-distinct-pose-full-frame",JSONObject().put("renderer",if(reference)"frozen-reference" else "optimized").put("width",3840).put("height",2160).put("objects",3).put("triangles_per_object",150000)) {
+                camera.orbit(1f,.5f)
+                scope.draw(Density(1f),LayoutDirection.Ltr,canvas,Size(3840f,2160f)) {
+                    val proj=Projector(size.width,size.height,camera,128f,128f)
+                    drawBed(proj,256f,256f,Color(0xff20262a),Color(0xff3c474e))
+                    val pixels:ByteArray;val width:Int;val height:Int
+                    if(reference) {
+                        old.clear();objects.forEach { referenceShadow(proj,it,d);referenceObject(proj,it,d,old) }
+                        pixels=old.pixels;width=old.width;height=old.height
+                    } else {
+                        objects.forEach { drawShadow(proj,it,d,cache.shadows) }
+                        val surface=cache.frame(size.width,size.height);objects.forEach { drawObject(proj,it,d,surface) }
+                        pixels=surface.pixels;width=surface.width;height=surface.height
+                    }
+                    val info=org.jetbrains.skia.ImageInfo(width,height,org.jetbrains.skia.ColorType.BGRA_8888,org.jetbrains.skia.ColorAlphaType.PREMUL)
+                    org.jetbrains.skia.Image.makeRaster(info,pixels,width*4).use { image -> drawIntoCanvas { it.nativeCanvas.drawImageRect(image,org.jetbrains.skia.Rect.makeWH(size.width,size.height)) } }
+                }
+            }
+        }
+    }
 }

@@ -4,20 +4,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import kotlin.math.*
 
-/** Corners with exactly the same position/normal share lighting, without merging
- * crease normals or changing mesh topology. Extra crease corners stay distinct. */
+/** Lighting depends on the exact normal, not position or material. Share that
+ * calculation even on STL triangle soup, without welding geometry/crease normals. */
 internal class LightingGroups(d:DisplayMesh) {
     val ids=IntArray(d.mesh.triangles.size)
     val corners:IntArray
     init {
-        val first=IntArray(d.mesh.vertexCount){-1};val extra=IntArray(ids.size);var count=0
-        for(c in ids.indices) {
-            val vertex=d.mesh.triangles[c];val previous=first[vertex]
-            if(previous<0) { first[vertex]=c;ids[c]=vertex }
-            else if((0..2).all { d.normals[c*3+it].toRawBits()==d.normals[previous*3+it].toRawBits() }) ids[c]=vertex
-            else { ids[c]=first.size+count;extra[count++]=c }
+        var capacity=1
+        while(capacity<ids.size.toLong()*2) {
+            require(capacity<=Int.MAX_VALUE/2) { "Display mesh is too large." }
+            capacity=capacity shl 1
         }
-        corners=IntArray(first.size+count) { if(it<first.size) first[it] else extra[it-first.size] }
+        val table=IntArray(capacity);val representatives=IntArray(ids.size);var count=0
+        for(c in ids.indices) {
+            val x=d.normals[c*3].toRawBits();val y=d.normals[c*3+1].toRawBits();val z=d.normals[c*3+2].toRawBits()
+            var hash=x*73856093 xor y*19349663 xor z*83492791
+            hash=hash xor (hash ushr 16);var slot=hash and (capacity-1)
+            while(table[slot]!=0) {
+                val group=table[slot]-1;val previous=representatives[group]*3
+                if(d.normals[previous].toRawBits()==x && d.normals[previous+1].toRawBits()==y && d.normals[previous+2].toRawBits()==z)break
+                slot=(slot+1) and (capacity-1)
+            }
+            if(table[slot]==0) { representatives[count]=c;table[slot]=++count }
+            ids[c]=table[slot]-1
+        }
+        corners=representatives.copyOf(count)
     }
 }
 

@@ -30,18 +30,23 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
         // Projector clamps the perspective denominator at 20% of the eye distance.
         val qa = 1f/max(eye+az,eye*0.2f); val qb = 1f/max(eye+bz,eye*0.2f); val qc = 1f/max(eye+cz,eye*0.2f)
         val ca = colors[colorAt]; val cb = colors[colorAt+1]; val cc = colors[colorAt+2]
-        val da=(by.toDouble()-cy)/area;val db=(cy.toDouble()-ay)/area;val dc=-da-db
+        val clipSpans=(x1.toLong()-x0+1)*(y1.toLong()-y0+1)>64
+        val da=if(clipSpans)(by.toDouble()-cy)/area else 0.0;val db=if(clipSpans)(cy.toDouble()-ay)/area else 0.0;val dc=-da-db
+        val constantColor=ca==cb && cb==cc
         // Conservative span clipping only: the original float coverage/depth/color
         // equations still decide every candidate pixel. A cancellation margin and
         // one-pixel pad retain edge coverage even for long, very thin triangles.
         val guard=0.000001+0.000001*(x1.toDouble()-x0+2)*(y1.toDouble()-y0+2)/abs(area)
         for (y in y0..y1) {
-            val py=y+0.5f;val px0=x0+0.5f
-            val wa0=((bx-px0)*(cy-py)-(by-py)*(cx-px0))/area
-            val wb0=((cx-px0)*(ay-py)-(cy-py)*(ax-px0))/area
-            val range=span(x0,x1,wa0,wb0,1f-wa0-wb0,da,db,dc,guard)
-            if(range==Long.MIN_VALUE) continue
-            val first=(range ushr 32).toInt();val last=range.toInt()
+            var first=x0;var last=x1
+            if(clipSpans) {
+                val py=y+0.5f;val px0=x0+0.5f
+                val wa0=((bx-px0)*(cy-py)-(by-py)*(cx-px0))/area
+                val wb0=((cx-px0)*(ay-py)-(cy-py)*(ax-px0))/area
+                val range=span(x0,x1,wa0,wb0,1f-wa0-wb0,da,db,dc,guard)
+                if(range==Long.MIN_VALUE)continue
+                first=(range ushr 32).toInt();last=range.toInt()
+            }
             for (x in first..last) {
             val px = x+0.5f; val py = y+0.5f
             val wa = ((bx-px)*(cy-py)-(by-py)*(cx-px))/area
@@ -53,7 +58,9 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
             val index = y*width+x
             if (z >= depths[index]) continue
             depths[index] = z
-            for (channel in 0..2) {
+            if(constantColor) {
+                pixels[index*4]=ca.toByte();pixels[index*4+1]=(ca ushr 8).toByte();pixels[index*4+2]=(ca ushr 16).toByte()
+            } else for (channel in 0..2) {
                 val shift = channel*8
                 pixels[index*4+channel] = (((a*((ca ushr shift) and 255)+b*((cb ushr shift) and 255)+c*((cc ushr shift) and 255))/q).roundToInt().coerceIn(0,255)).toByte()
             }

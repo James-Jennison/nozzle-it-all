@@ -1,5 +1,9 @@
 # Handover to Codex (written 2026-10-18)
 
+## Async preparation update (2026-10-18)
+
+Installed Linux executable source is now `e3c5f7a00a0a30b20a7233c4837d4daf1ad94bd7`: display expansion/simplification/normals/initial lighting preparation runs off Main with cancellation and synchronous source-tag rejection for drawing/painting. GTHost full205total/168pass/37conditional skips/0failure; native-focused35/35PASS; exact-source CI39165583995 SUCCESS. Installed real900k preparation3.658sec, max observed Main heartbeat gap102.670ms (100ms interval); zoom/selection while pending, obsolete disposal result rejection, Undo and saved geometry/paint/placement invariants PASS. Capybara95934face save/orbit invariant also PASS. See `docs/handover/NIA_ASYNC_PREPARATION.md` for hashes, methods and limits. Synthetic initial reviews COMPLETE, targeted closure in progress; do not infer final broker closure yet. All builds remote; owner window untouched.
+
 ## Current Codex acceptance update (2026-10-18)
 
 Installed Linux application source is `6a9155547c60e3aba8623bc342a4a811b161d2c6`; the later seal changes documentation/report analysis only, not runtime code. Worst-case viewport benchmarking and bottleneck remediation are complete: shared projection/lighting/scratch, conservative span/offscreen rejection, bounded shadow compositing, high-valence normals, weak-cache lifetime/keying and short critical sections. Multi-select/Select All, auto-paint draft comparison/correction/keep/reset, full pointer orbit underneath, false triangle-shading/visibility fixes, HTTPS/diagnostic guards and stale-source rejection remain included.

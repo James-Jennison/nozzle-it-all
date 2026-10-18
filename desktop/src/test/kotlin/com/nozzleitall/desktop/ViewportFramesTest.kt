@@ -23,6 +23,15 @@ class ViewportFramesTest {
     private class Resource:AutoCloseable { var closes=0;override fun close() { closes++ } }
     private fun await(latch:CountDownLatch)=assertTrue(latch.await(10,TimeUnit.SECONDS))
 
+    @Test(timeout=10000) fun optInMotionProbeOnlyChangesCameraAndRunsMarkersOnMain()=runBlocking {
+        val camera=ViewCamera();val before=camera.snapshot();val events=ArrayList<String>()
+        viewportMotionProbe(camera,steps=2,periodNanos=1_000_000,pauseMillis=0) { event,mode,_->
+            assertTrue(SwingUtilities.isEventDispatchThread());events.add("$event/$mode")
+        }
+        assertEquals(listOf("begin/orbit","end/orbit","begin/zoom","end/zoom"),events)
+        assertNotEquals(before,camera.snapshot());assertTrue(camera.distance.isFinite())
+    }
+
     @Test(timeout=20000) fun publicationDoesNotWaitForOwnersFrameScheduledDispatcher()=runBlocking {
         val frameScheduled=object:CoroutineDispatcher() {
             override fun dispatch(context:kotlin.coroutines.CoroutineContext,block:Runnable) {

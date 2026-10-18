@@ -270,6 +270,15 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
     }
     val shown=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) }
     val requestRef=rememberUpdatedState(request)
+    val motionProbe=remember { System.getenv("NOZZLE_VIEWPORT_TIMING")=="1" && System.getenv("NOZZLE_VIEWPORT_MOTION_PROBE")=="1" }
+    LaunchedEffect(motionProbe,completed,dimensions,preview!=null) {
+        if(motionProbe && preview==null && prepared.isNotEmpty() && dimensions.width>0 && dimensions.height>0) {
+            delay(2000) // Window resize/preparation restarts this opt-in probe.
+            viewportMotionProbe(camera) { event,mode,time->
+                println("NIA_MOTION_PROBE event=$event mode=$mode time_ns=$time steps=360 width=${dimensions.width} height=${dimensions.height} objects=${objects.size}")
+            }
+        }
+    }
     val rendering=prepared.isNotEmpty() && shown==null && renderFailed!=request
     LaunchedEffect(preview!=null) {
         if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1")

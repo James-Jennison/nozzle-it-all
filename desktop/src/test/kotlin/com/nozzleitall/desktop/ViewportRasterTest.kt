@@ -15,6 +15,16 @@ import kotlin.math.*
 import kotlin.random.Random
 
 class ViewportRasterTest {
+    @Test fun concurrentDisplayLookupsPublishOneLiveResultPerKey() {
+        val mesh=torus();val pool=java.util.concurrent.Executors.newFixedThreadPool(8)
+        val start=java.util.concurrent.CountDownLatch(1)
+        try {
+            val tasks=(0..15).map { pool.submit<DisplayMesh> { start.await();displayMesh(mesh,123456,2) } }
+            start.countDown()
+            val results=tasks.map { it.get(10,java.util.concurrent.TimeUnit.SECONDS) }
+            results.forEach { assertSame(results[0],it) }
+        } finally { pool.shutdownNow() }
+    }
     @Test fun timingUsesNearestRankP95ForTheActualSampleCount() {
         val samples=LongArray(30){if(it==29)100 else 10}.sortedArray()
         assertEquals(28,viewportP95Index(samples.size));assertEquals(10L,samples[viewportP95Index(samples.size)])

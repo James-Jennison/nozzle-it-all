@@ -62,16 +62,20 @@ private val displayCache = java.util.WeakHashMap<Mesh, MutableMap<Long,java.lang
  * The display version of [mesh], computed once per mesh and kind. Slicing always uses the full mesh. [kind] picks which paint shows:
  * 0 colour, 1 support, 2 seam, 3 fuzzy skin (the state numbers of the others index [PlateObject.paintColors]).
  */
-fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh = synchronized(displayCache) {
-    val slots=displayCache.getOrPut(mesh) { object:LinkedHashMap<Long,java.lang.ref.WeakReference<DisplayMesh>>(8,.75f,true) {
-        override fun removeEldestEntry(eldest:MutableMap.MutableEntry<Long,java.lang.ref.WeakReference<DisplayMesh>>?)=size>8
-    } }
+fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh {
     val key=(budget.toLong() shl 32) or (kind.toLong() and 0xffffffffL)
-    slots[key]?.get() ?: run {
-        val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint })
-        val (m, kept) = simplifyWithStates(painted, states, budget)
-        DisplayMesh(m, cornerNormals(m), mesh.bounds(), kept)
-    }.also { slots[key] = java.lang.ref.WeakReference(it) }
+    synchronized(displayCache) { displayCache[mesh]?.get(key)?.get()?.let { return it } }
+    // Never hold the process-wide map monitor during expansion/simplification.
+    // Racing misses may compute twice, but publish/return one still-live result.
+    val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint })
+    val (m, kept) = simplifyWithStates(painted, states, budget)
+    val computed=DisplayMesh(m, cornerNormals(m), mesh.bounds(), kept)
+    return synchronized(displayCache) {
+        val slots=displayCache.getOrPut(mesh) { object:LinkedHashMap<Long,java.lang.ref.WeakReference<DisplayMesh>>(8,.75f,true) {
+            override fun removeEldestEntry(eldest:MutableMap.MutableEntry<Long,java.lang.ref.WeakReference<DisplayMesh>>?)=size>8
+        } }
+        slots[key]?.get() ?: computed.also { slots[key]=java.lang.ref.WeakReference(it) }
+    }
 }
 
 /**
@@ -198,6 +202,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 onSelection: ((Int?, Boolean, Boolean) -> Unit)? = null, onTransformStart: (Int) -> Unit = {}, onTransformEnd: () -> Unit = {}) {
     val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh, kind = o.paintKind) } }
     val depthFrames = remember { DepthSurfaceCache() }
+    val frameTiming = remember { ViewportTiming() }
     val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects); val preparedRef = rememberUpdatedState(prepared)
     val selectRef = rememberUpdatedState<(Int?, Boolean, Boolean) -> Unit>({ id, ctrl, shift -> onSelection?.invoke(id, ctrl, shift) ?: onSelect(id) })
     val moveRef = rememberUpdatedState(onMove); val turnRef = rememberUpdatedState(onTurn); val resizeRef = rememberUpdatedState(onResize)
@@ -282,7 +287,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         } }
         .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f) } }
         ) {
-        val timingStart=ViewportTiming.start()
+        val timingStart=frameTiming.start()
         val proj = Projector(size.width, size.height, camera, bedW / 2, bedD / 2)
         drawBed(proj, bedW, bedD, bedColor, lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
@@ -297,7 +302,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
             if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
         }
-        ViewportTiming.finish(timingStart,size.width.toInt(),size.height.toInt(),objects.size)
+        frameTiming.finish(timingStart,size.width.toInt(),size.height.toInt(),objects.size)
     }
 }
 

@@ -31,7 +31,9 @@ Evidence folder: `/home/jjennison/.local/state/nozzle-it-all/acceptance/20261018
 
 ## Review and limits
 
-Synthetic initial reviews completed independently on exact pins: systems `hf:zai-org/GLM-5.3`, frontend `hf:moonshotai/Kimi-K3`, adversarial `hf:deepseek-ai/DeepSeek-V4.1-Flash`. No provider/model/privacy changes or fallback. Their28 original findings and separate Codex dispositions are retained under change `nia-async-preparation-e3c5f7a0`. Targeted current-source closure review is in progress; this paragraph is not a final closure claim.
+Synthetic initial reviews completed independently on exact pins: systems `hf:zai-org/GLM-5.3`, frontend `hf:moonshotai/Kimi-K3`, adversarial `hf:deepseek-ai/DeepSeek-V4.1-Flash`. No provider/model/privacy changes or fallback. All6 initial/targeted closure cycles COMPLETE. Their49 original findings and separate Codex dispositions are retained under change `nia-async-preparation-e3c5f7a0`; no agreement-by-vote or claim reviewers executed commands. Frontend's first closure response was rejected by the read-only output guard; one same-job retry completed. Adversarial's first closure response was INCOMPLETE; one same-job retry completed. No output safeguard was weakened or bypassed.
+
+Convergence `convergence-9f14a877b138`; closure `closure-48b1f8d2ebfb`: **READY_WITH_RESIDUAL_RISK**, no blocking reasons,3 explicit residual-risk records. No surviving current-source blocker/high defect. Rejected frontend's remaining MEDIUM error-persistence proposal: a changed key automatically starts a new preparation; any new failure restores retry for that source. Keeping an old error against different content would misrepresent current state. Its original claim and the separate Codex disposition remain visible. Full keyboard camera access and unrelated rendering/maintenance improvements were not silently imposed as new owner requirements.
 
 Explicit trade-offs and boundaries:
 

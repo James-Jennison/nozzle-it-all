@@ -534,15 +534,13 @@ private fun StepObjects(state: AppState) {
         }
         val s = onPlate.firstOrNull { it.id == p.selected }
         if (s != null && p.selectedIds.size > 1) {
-            var groupTurn by remember(p.selectedIds) { mutableStateOf(0f) }
-            var groupScale by remember(p.selectedIds) { mutableStateOf(100f) }
             Txt("${p.selectedIds.size} objects selected", Nz.type.label, c.accent)
-            Txt("Move, turn and scale together around the selection centre. Select one object for paint, cut and individual settings.", Nz.type.bodySmall, c.textMuted)
+            Txt("Values follow ${s.name}; edits move, turn and scale the group around its centre. Select one object for individual settings.", Nz.type.bodySmall, c.textMuted)
             ObjectRow("Move (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 GroupNumber("X", s.x) { p.editSelection { p.moveSelection(s.id, it, s.y) } }; GroupNumber("Y", s.y) { p.editSelection { p.moveSelection(s.id, s.x, it) } }
             } }
-            ObjectRow("Turn together") { GroupNumber("°", groupTurn) { p.editSelection { p.turnSelection(s.id, it - groupTurn) }; groupTurn = it } }
-            ObjectRow("Scale together") { GroupNumber("%", groupScale) { if (it > 0f) { p.editSelection { p.resizeSelection(s.id, it / groupScale) }; groupScale = it } } }
+            ObjectRow("Turn together") { GroupNumber("°", s.rotZ) { p.editSelection { p.turnSelection(s.id, it - s.rotZ) } } }
+            ObjectRow("Scale together") { GroupNumber("%", s.scale * 100f) { if (it > 0f) p.editSelection { p.resizeSelection(s.id, it / (s.scale * 100f)) } } }
             Txt("Enter or leave a field to apply · Esc to cancel", Nz.type.bodySmall, c.textMuted)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clickable { p.duplicateSelected() }.padding(4.dp))

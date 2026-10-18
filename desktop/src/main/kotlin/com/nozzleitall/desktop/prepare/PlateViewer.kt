@@ -250,7 +250,9 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
     var renderFailed by remember { mutableStateOf<FrameRequest?>(null) }
     var renderRetry by remember { mutableStateOf(0) }
     val scope=rememberCoroutineScope()
-    val rasterizer=remember { FrameRasterizer() }
+    // The small vector bed stays on the UI canvas. Avoid blending it across a
+    // full-resolution readback image on the frame worker before presentation.
+    val rasterizer=remember { FrameRasterizer(compositeBed=false) }
     val pump=remember(scope,rasterizer) { LatestFramePump(scope,rasterizer::render,
         publish={ ticket,image,cpu ->
             val old=rendered
@@ -375,7 +377,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         // state here: a pending recomposition may still hold an older draw lambda.
         val frame=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) && it.ticket.request.width==size.width.toInt() && it.ticket.request.height==size.height.toInt() }
         val proj = frame?.ticket?.request?.projector() ?: Projector(size.width,size.height,camera,bedW/2,bedD/2)
-        if(preview!=null || frame==null)drawBed(proj,bedW,bedD,bedColor,lineColor)
+        drawBed(proj,bedW,bedD,bedColor,lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
         else if(frame!=null) {
             drawIntoCanvas { it.nativeCanvas.drawImage(frame.image,0f,0f) }

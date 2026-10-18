@@ -85,6 +85,9 @@ class GraphicsViewportTest {
         val req=request(listOf(item(1,triangle(),Color.Red)))
         FrameRasterizer(useGraphics=false).use { it.render(req,{}).use { assertEquals(320,it.width) } }
         FrameRasterizer().use { it.render(req,{}).use { image->assertTrue(pixels(image).all { p->p ushr 24==255 }) } }
+        FrameRasterizer(compositeBed=false).use { it.render(req,{}).use { image->
+            val values=pixels(image);assertTrue(values.any { p->p ushr 24==255 });assertTrue(values.any { p->p ushr 24==0 })
+        } }
     }
 
     private fun torus(rows:Int=24,columns:Int=32):Mesh {

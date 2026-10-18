@@ -305,12 +305,12 @@ private fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, l
     val a = FloatArray(12)
     proj.p(0f, 0f, 0f, a, 0); proj.p(w, 0f, 0f, a, 3); proj.p(w, d, 0f, a, 6); proj.p(0f, d, 0f, a, 9)
     val path = Path().apply { moveTo(a[0], a[1]); lineTo(a[3], a[4]); lineTo(a[6], a[7]); lineTo(a[9], a[10]); close() }
-    drawPath(path, bed); drawPath(path, line, style = Stroke(1.5f))
+    drawPath(path, bed); drawPath(path, line, style = Stroke(2f))
     val t = FloatArray(6)
     var g = 0f
-    while (g <= w) { proj.p(g, 0f, 0f, t, 0); proj.p(g, d, 0f, t, 3); drawLine(line.copy(alpha = 0.35f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
+    while (g <= w) { proj.p(g, 0f, 0f, t, 0); proj.p(g, d, 0f, t, 3); drawLine(line.copy(alpha = 0.5f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
     g = 0f
-    while (g <= d) { proj.p(0f, g, 0f, t, 0); proj.p(w, g, 0f, t, 3); drawLine(line.copy(alpha = 0.35f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
+    while (g <= d) { proj.p(0f, g, 0f, t, 0); proj.p(w, g, 0f, t, 3); drawLine(line.copy(alpha = 0.5f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
 }
 
 /** Area-weighted vertex normals, so curved surfaces shade smoothly (sharp edges are kept per corner when drawing). */

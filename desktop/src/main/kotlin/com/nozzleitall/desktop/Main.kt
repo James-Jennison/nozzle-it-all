@@ -30,11 +30,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-/** The places in the app. Printers come first: Nozzle is organised around the printers you own, not a settings tree. */
+/**
+ * The places in the app. The Workspace is home: a model goes from plate to slice to send in one place, and a job bar on every
+ * screen follows whatever is printing. Printers and Settings sit beside it; Projects is reached from the Workspace and the File menu.
+ */
 enum class Destination(val label: String, val icon: NzIcon, val key: Key, val inRail: Boolean = true) {
-    FLEET("Printers", NzIcon.FLEET, Key.One),
-    PROJECTS("Projects", NzIcon.PROJECTS, Key.Two),
-    PREPARE("Prepare", NzIcon.PREPARE, Key.Three),
+    PREPARE("Workspace", NzIcon.PREPARE, Key.One),
+    FLEET("Printers", NzIcon.FLEET, Key.Two),
+    PROJECTS("Projects", NzIcon.PROJECTS, Key.Three, inRail = false),
     // One printer's own page (a Monitor tab and a Materials tab). It is reached from a printer on the Printers page, so it
     // has no place of its own in the rail, where Printers stays lit while you are on it.
     MONITOR("Print & Monitor", NzIcon.MONITOR, Key.Four, inRail = false),
@@ -43,7 +46,7 @@ enum class Destination(val label: String, val icon: NzIcon, val key: Key, val in
     SETTINGS("Settings", NzIcon.SETTINGS, Key.Comma);
 
     /** The rail item that is lit while this destination is shown. */
-    val railItem: Destination get() = if (inRail) this else FLEET
+    val railItem: Destination get() = if (inRail) this else if (this == PROJECTS) PREPARE else FLEET
 }
 
 class AppState(val paths: AppPaths, val scope: CoroutineScope) {
@@ -52,7 +55,7 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
     val prepare = PrepareState(this)
     /** Off unless the user turns it on in Settings: lets Nozzle It All Web on this computer reach these printers. */
     val connector = com.nozzleitall.desktop.connector.LocalConnector(fleet, java.io.File(paths.config, "connector-tokens.json"))
-    var destination by mutableStateOf(Destination.FLEET)
+    var destination by mutableStateOf(Destination.PREPARE)
     var selectedPrinter by mutableStateOf<String?>(null)
     val version: String = System.getProperty("nozzle.version") ?: "0.1.0-dev"
     var showAbout by mutableStateOf(false)
@@ -123,7 +126,9 @@ fun App(state: AppState) {
     val c = Nz.colors
     Row(Modifier.fillMaxSize().background(c.background)) {
         NavigationRail(state)
-        Box(Modifier.fillMaxSize().semantics { paneTitle = state.destination.label }) {
+        Column(Modifier.fillMaxSize().semantics { paneTitle = state.destination.label }) {
+          JobBar(state)
+          Box(Modifier.weight(1f).fillMaxWidth()) {
             when (state.destination) {
                 Destination.FLEET -> FleetScreen(state)
                 Destination.PROJECTS -> ProjectsScreen(state)
@@ -133,6 +138,7 @@ fun App(state: AppState) {
                 Destination.HISTORY -> HistoryScreen(state)
                 Destination.SETTINGS -> SettingsScreen(state)
             }
+          }
         }
     }
 }

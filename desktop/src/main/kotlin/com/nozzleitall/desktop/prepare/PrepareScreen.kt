@@ -39,43 +39,36 @@ fun chooseSaveFile(title: String, suggested: String): File? {
     return d.file?.let { File(d.directory, it) }
 }
 
-private enum class LeftTab(val label: String) { SETUP("Setup"), OBJECTS("Objects"), PRINT("Print") }
-private enum class Drawer { CUT, AI }
+private enum class Drawer { PRINTER, FILAMENT, PROCESS, SEND, CUT, AI }
 
+/**
+ * The Workspace: one place from model to print. A bar across the top holds the project, the printer, filaments and print profile
+ * (each opens its settings in a drawer) and the Slice / Send step; the objects are listed on the left and the plate takes the rest.
+ */
 @Composable
 fun PrepareScreen(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     val camera = p.camera
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
-    var tab by remember { mutableStateOf(LeftTab.SETUP) }
     var drawer by remember { mutableStateOf<Drawer?>(null) }
-    // Choosing an object opens its page; opening a printer or material settings page opens the Print tab.
-    LaunchedEffect(p.selected) { if (p.selected != null) tab = LeftTab.OBJECTS else drawer = null }
-    LaunchedEffect(p.settingsScope) { if (p.settingsScope != com.nozzleitall.desktop.settings.Scope.PROCESS) tab = LeftTab.PRINT }
-    Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Left: the project, then one page at a time (Setup, Objects or Print settings), with Slice always in view.
-        Column(Modifier.width(400.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProjectHeader(state)
+    fun toggle(d: Drawer) { drawer = if (drawer == d) null else d }
+    val done = p.slice as? SliceState.Done
+    // The tools need an object; settings pages from the printer and filament icons open the print settings drawer.
+    LaunchedEffect(p.selected) { if (p.selected == null && (drawer == Drawer.CUT || drawer == Drawer.AI)) drawer = null }
+    LaunchedEffect(p.settingsScope) { if (p.settingsScope != com.nozzleitall.desktop.settings.Scope.PROCESS) drawer = Drawer.PROCESS }
+    // A finished slice shows its preview and opens the Send step.
+    LaunchedEffect(done) { if (done != null) { if (done.preview != null) p.showPreview = true; drawer = Drawer.SEND } else if (drawer == Drawer.SEND) { drawer = null; p.showPreview = false } }
+    Column(Modifier.fillMaxSize()) {
+        WorkspaceBar(state, drawer, ::toggle)
+        Row(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Left: the objects on this plate, and the selected one's settings.
+        Column(Modifier.width(300.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             p.notice?.let { Banner(it, BannerKind.WARNING, "Dismiss" to { p.notice = null }) }
-            TabStrip(LeftTab.values().toList(), tab, { it.label }) { tab = it }
-            when (tab) {
-                LeftTab.SETUP -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StepPrinter(state)
-                    MaterialsSection(state)
-                }
-                LeftTab.OBJECTS -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StepObjects(state)
-                }
-                LeftTab.PRINT -> {
-                    val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
-                    com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
-                }
-            }
-            StepSlice(state)
+            (p.slice as? SliceState.Failed)?.let { Banner(it.message, BannerKind.DANGER) }
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { StepObjects(state) }
         }
         // Right: the plate fills the space. Its controls float over it, so nothing pushes the model smaller.
-        val done = p.slice as? SliceState.Done
         val onPlate = p.plateItems()
         val sel = onPlate.firstOrNull { it.id == p.selected }
         val slots = p.materials()
@@ -95,40 +88,50 @@ fun PrepareScreen(state: AppState) {
                 item.sx, item.sy, item.sz, item.parts.toList(), reach = item.reach, height = item.height)
         }
         val (bw, bd) = p.bed
+        // Zoom to fit the bed when the printer (and so the bed) changes.
+        LaunchedEffect(bw, bd) { camera.distance = (maxOf(bw, bd) * 1.9f).coerceIn(200f, 1500f) }
         val shape = RoundedCornerShape(20.dp)
         Box(Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.surfaceSunken).border(1.dp, c.line, shape)) {
             if (onPlate.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, if (p.items.isEmpty()) "Start with a model" else "${p.plateNames.getOrNull(p.currentPlate) ?: "This plate"} is empty",
-                "Add an STL, 3MF or OBJ file, or open a project from Projects. Nothing leaves this computer.", Modifier.align(Alignment.Center)) {
-                NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY)
+                "Add an STL, 3MF or OBJ file, or open a saved project. Nothing leaves this computer.", Modifier.align(Alignment.Center)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY, icon = NzIcon.IMPORT)
+                    NzButton("Open a project", { state.destination = Destination.PROJECTS }, kind = ButtonKind.SECONDARY, icon = NzIcon.PROJECTS)
+                }
             }
-            else PlateViewer(bw, bd, objects, camera, c.surface, c.lineStrong, Modifier.fillMaxSize(),
+            else PlateViewer(bw, bd, objects, camera, c.surfaceRaised, c.lineStrong, Modifier.fillMaxSize(),
                 preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors,
                 paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
                 onSelect = { focus.clearFocus(); p.selected = it }, accent = c.accent,
                 onMove = { id, x, y -> p.items.firstOrNull { it.id == id }?.let { it.x = x; it.y = y; p.changed() } },
                 onTurn = { id, deg -> p.items.firstOrNull { it.id == id }?.let { it.rotZ = deg; p.changed() } },
                 onResize = { id, sc -> p.items.firstOrNull { it.id == id }?.let { it.scale = sc; p.changed() } })
-            // Top left: what the viewport shows, then the plate tools under it.
-            Column(Modifier.align(Alignment.TopStart).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Floating {
-                    ViewToggle("Plate", NzIcon.PREPARE, !p.showPreview, true) { p.showPreview = false }
-                    ViewToggle("Preview", NzIcon.LAYERS, p.showPreview, done?.preview != null) { p.showPreview = true }
-                }
-                if (!p.showPreview && onPlate.isNotEmpty()) Floating { PlateToolbar(p, sel, drawer) { drawer = if (drawer == it) null else it } }
+            // Top left: the plate tools.
+            if (!p.showPreview && onPlate.isNotEmpty()) Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                Floating { PlateToolbar(p, sel, drawer) { toggle(it) } }
             }
-            // Top right: the panel for the tool in use (paint, cut, AI auto-paint).
-            if (!p.showPreview && sel != null) {
-                val open = p.paintKind != null || drawer != null
-                if (open) Column(Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp, bottom = 12.dp).width(340.dp).clip(RoundedCornerShape(14.dp)).background(c.surface.copy(alpha = 0.96f))
-                    .border(1.dp, c.line, RoundedCornerShape(14.dp)).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Top right: the drawer: print setup, the Send step, or the panel for the tool in use (paint, cut, AI auto-paint).
+            val toolOpen = !p.showPreview && sel != null && (p.paintKind != null || drawer == Drawer.CUT || drawer == Drawer.AI)
+            val settingsOpen = drawer == Drawer.PRINTER || drawer == Drawer.FILAMENT || drawer == Drawer.PROCESS || (drawer == Drawer.SEND && done != null)
+            if (toolOpen || settingsOpen) {
+                val panel = Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp, bottom = 12.dp).width(if (drawer == Drawer.PROCESS) 440.dp else 360.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(c.surface.copy(alpha = 0.97f)).border(1.dp, c.line, RoundedCornerShape(14.dp))
+                if (drawer == Drawer.PROCESS && !toolOpen) Column(panel.fillMaxHeight().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DrawerTitle("Print settings", { drawer = null })
+                    val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
+                    com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
+                } else Column(panel.verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     when {
-                        p.paintKind != null -> PaintPanel(p)
-                        drawer == Drawer.CUT -> CutPanel(p, sel) { drawer = null }
-                        drawer == Drawer.AI -> AutoPaintPanel(p) { drawer = null }
+                        toolOpen && p.paintKind != null -> PaintPanel(p)
+                        toolOpen && drawer == Drawer.CUT && sel != null -> CutPanel(p, sel) { drawer = null }
+                        toolOpen && drawer == Drawer.AI -> AutoPaintPanel(p) { drawer = null }
+                        drawer == Drawer.PRINTER -> { DrawerTitle("Printer", { drawer = null }); StepPrinter(state) }
+                        drawer == Drawer.FILAMENT -> { DrawerTitle("Filament", { drawer = null }); MaterialsSection(state) }
+                        drawer == Drawer.SEND && done != null -> { DrawerTitle("Send", { drawer = null }); SendDrawer(state, done) }
                     }
                 }
             }
-            // Bottom: the plates, a hint, and the layer slider in the preview.
+            // Bottom: what the app sees wrong, the layer slider in the preview, the plates and a hint.
             Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (p.showPreview && done?.preview != null) {
                     val layers = done.preview.layers
@@ -139,7 +142,7 @@ fun PrepareScreen(state: AppState) {
                         Txt("Layer ${p.previewLayer + 1} of ${layers.size} · Z ${"%.2f".format(layers[p.previewLayer].z)} mm", Nz.type.metricSmall, c.textMuted)
                     }
                 }
-                if (!p.showPreview) AdviceStrip(p, onChoosePrinter = { tab = LeftTab.SETUP })
+                if (!p.showPreview) AdviceStrip(p, onChoosePrinter = { drawer = Drawer.PRINTER })
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
                     Spacer(Modifier.weight(1f))
@@ -147,6 +150,87 @@ fun PrepareScreen(state: AppState) {
                 }
             }
         }
+        }
+    }
+}
+
+/** A setting that opens a drawer: its current value, lit while the drawer is open. */
+@Composable
+private fun BarChip(label: String, on: Boolean, tag: String, onClick: () -> Unit, content: (@Composable RowScope.() -> Unit)? = null) {
+    val c = Nz.colors
+    val shape = RoundedCornerShape(10.dp)
+    Row(Modifier.clip(shape).background(if (on) c.accent.copy(alpha = 0.14f) else c.surfaceSunken).border(1.dp, if (on) c.accent else c.line, shape)
+        .clickable(onClickLabel = label) { onClick() }.padding(horizontal = 10.dp, vertical = 6.dp).semantics { testTag = tag },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        content?.invoke(this)
+        Txt(label, Nz.type.bodySmall, if (on) c.accent else c.text, maxLines = 1)
+        Txt("▾", Nz.type.bodySmall, c.textMuted)
+    }
+}
+
+/** The bar across the top of the Workspace: the project, the printer / filament / print profile, the plate and preview views, and Slice. */
+@Composable
+private fun WorkspaceBar(state: AppState, drawer: Drawer?, toggle: (Drawer) -> Unit) {
+    val p = state.prepare
+    val c = Nz.colors
+    val done = p.slice as? SliceState.Done
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        com.nozzleitall.desktop.settings.DenseInput(p.name, { p.name = it; p.dirty = true }, "Project name", Modifier.width(170.dp))
+        NzButton("Save", { runCatching { p.save() }.onFailure { p.notice = "Couldn't save: ${it.message}" } }, kind = if (p.dirty) ButtonKind.SECONDARY else ButtonKind.QUIET, enabled = p.items.isNotEmpty(), testTag = "save-project")
+        com.nozzleitall.desktop.settings.IconToggle(NzIcon.IMPORT, "Add model", false) { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }
+        com.nozzleitall.desktop.settings.IconToggle(NzIcon.PROJECTS, "Projects", false) { state.destination = Destination.PROJECTS }
+        if (p.dirty) Box(Modifier.size(8.dp).clip(CircleShape).background(Nz.status.paused).semantics { contentDescription = "Unsaved changes" })
+        // The chips scroll sideways if the window is narrow; the project and Slice / Send ends keep their size.
+        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        BarChip(p.printer()?.config?.identity?.displayName ?: "No printer", drawer == Drawer.PRINTER, "chip-printer", { toggle(Drawer.PRINTER) })
+        val slots = p.materials()
+        BarChip(if (slots.size == 1) slots.first().type ?: "Filament" else "${slots.size} filaments", drawer == Drawer.FILAMENT, "chip-filament", { toggle(Drawer.FILAMENT) }) {
+            slots.take(6).forEach { m -> Box(Modifier.size(12.dp).clip(CircleShape).background(parseHex(m.colorHex) ?: c.surfaceRaised).border(1.dp, c.line, CircleShape)) }
+        }
+        BarChip(p.currentProcess()?.displayLabel ?: p.preset.label, drawer == Drawer.PROCESS, "chip-process", { toggle(Drawer.PROCESS) })
+        }
+        Floating {
+            ViewToggle("Plate", NzIcon.PREPARE, !p.showPreview, true) { p.showPreview = false }
+            ViewToggle("Preview", NzIcon.LAYERS, p.showPreview, done?.preview != null) { p.showPreview = true }
+        }
+        when (val s = p.slice) {
+            SliceState.Idle, SliceState.Cancelled, is SliceState.Failed ->
+                NzButton("Slice", { p.slice(state.scope) }, kind = ButtonKind.PRIMARY, icon = NzIcon.SLICE, enabled = p.plateItems().isNotEmpty(), testTag = "slice")
+            is SliceState.Running -> {
+                Txt(s.stage, Nz.type.bodySmall, c.textMuted, maxLines = 1)
+                Box(Modifier.width(120.dp)) { ProgressBar(s.progress, label = "Slicing progress") }
+                NzButton("Cancel", { p.cancelSlice() }, kind = ButtonKind.QUIET, icon = NzIcon.CLOSE)
+            }
+            is SliceState.Done -> {
+                val st = s.result.stats
+                Txt(listOfNotNull(formatDuration(st.seconds), st.grams?.let { "%.0f g".format(it) }).joinToString(" · "), Nz.type.metricSmall, maxLines = 1)
+                com.nozzleitall.desktop.settings.IconToggle(NzIcon.SLICE, "Slice again", false) { p.slice(state.scope) }
+                NzButton("Send", { toggle(Drawer.SEND) }, kind = ButtonKind.PRIMARY, icon = NzIcon.SEND, testTag = "open-send")
+            }
+        }
+    }
+}
+
+/** The Send step: the slice's numbers and warnings, then send, export or queue. */
+@Composable
+private fun SendDrawer(state: AppState, s: SliceState.Done) {
+    val p = state.prepare
+    val c = Nz.colors
+    val st = s.result.stats
+    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Metric("Time", formatDuration(st.seconds)); Metric("Material", st.grams?.let { "%.1f g".format(it) } ?: "–"); Metric("Layers", "${st.layers ?: "–"}")
+    }
+    if (st.toolChanges > 0) Txt("${st.toolChanges} toolhead changes", Nz.type.bodySmall, c.textMuted)
+    s.result.warnings.forEach { Banner(it, BannerKind.WARNING) }
+    SendPanel(state)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NzButton("Export file", { chooseSaveFile("Export sliced file", p.name + ".gcode")?.let { t -> s.result.gcode.copyTo(t, overwrite = true) } }, kind = ButtonKind.QUIET, icon = NzIcon.EXPORT)
+        NzButton("Add to queue", {
+            val printer = p.printer()
+            val toolMap = if (printer?.capabilities?.value?.multiMaterial == true && p.materials().size > 1) p.materials().map { (it.toolhead ?: (it.slot - 1)) } else emptyList()
+            state.fleet.enqueue(p.name, s.result.gcode, printer?.config?.identity?.id, toolMap)
+            p.notice = "Added to the print queue on the Printers page."
+        }, kind = ButtonKind.QUIET, testTag = "add-to-queue")
     }
 }
 
@@ -181,35 +265,6 @@ private fun Floating(modifier: Modifier = Modifier, content: @Composable RowScop
 @Composable
 private fun ViewToggle(label: String, icon: NzIcon, on: Boolean, enabled: Boolean, onClick: () -> Unit) =
     NzButton(label, onClick, kind = if (on) ButtonKind.PRIMARY else ButtonKind.QUIET, icon = icon, enabled = enabled)
-
-/** Pages of a panel as one segmented row. */
-@Composable
-private fun <T> TabStrip(items: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    val c = Nz.colors
-    val shape = RoundedCornerShape(10.dp)
-    Row(Modifier.fillMaxWidth().clip(shape).background(c.surfaceSunken).border(1.dp, c.line, shape).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        items.forEach { t ->
-            val on = t == selected
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (on) c.accent else Color.Transparent)
-                .selectable(on, role = Role.Tab) { onSelect(t) }.padding(vertical = 7.dp), contentAlignment = Alignment.Center) {
-                Txt(label(t), Nz.type.label, if (on) c.onAccent else c.textMuted)
-            }
-        }
-    }
-}
-
-/** The project name, whether it's saved, and adding and saving, at the top of the panel. */
-@Composable
-private fun ProjectHeader(state: AppState) {
-    val p = state.prepare
-    val c = Nz.colors
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        com.nozzleitall.desktop.settings.DenseInput(p.name, { p.name = it; p.dirty = true }, "Project name", Modifier.weight(1f))
-        com.nozzleitall.desktop.settings.IconToggle(NzIcon.IMPORT, "Add model", false) { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }
-        NzButton("Save", { runCatching { p.save() }.onFailure { p.notice = "Couldn't save: ${it.message}" } }, kind = ButtonKind.PRIMARY, enabled = p.items.isNotEmpty(), testTag = "save-project")
-    }
-    Txt(if (p.dirty) "Unsaved changes" else p.file?.let { "Saved" } ?: "Not saved yet", Nz.type.bodySmall, if (p.dirty) Nz.status.paused else c.textMuted)
-}
 
 /**
  * One part of the panel: a heading that folds it away, with a one-line [summary] of its current choice shown while
@@ -407,7 +462,7 @@ private fun StepObjects(state: AppState) {
         }
         val s = onPlate.firstOrNull { it.id == p.selected }
         if (s != null) {
-            if (s.painted.isNotEmpty()) Txt("This object's colours are painted: choose what each prints as under Colours on the Setup tab.", Nz.type.bodySmall, c.textMuted)
+            if (s.painted.isNotEmpty()) Txt("This object's colours are painted: choose what each prints as under Filament in the bar above.", Nz.type.bodySmall, c.textMuted)
             else ObjectRow("Material") {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     slots.forEach { m ->
@@ -614,51 +669,11 @@ private fun NumberField(label: String, value: Float, onValue: (Float) -> Unit) {
 }
 
 @Composable
-private fun StepSlice(state: AppState) {
-    val p = state.prepare
-    val c = Nz.colors
-    val scope = rememberCoroutineScope()
-    Card(Modifier.fillMaxWidth()) {
-        when (val s = p.slice) {
-            SliceState.Idle, SliceState.Cancelled, is SliceState.Failed -> {
-                if (s is SliceState.Failed) Banner(s.message, BannerKind.DANGER)
-                if (s is SliceState.Cancelled) Txt("Slicing was cancelled. Nothing was changed.", Nz.type.bodySmall, c.textMuted)
-                NzButton("Slice", { p.slice(state.scope) }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, icon = NzIcon.SLICE, enabled = p.plateItems().isNotEmpty(), testTag = "slice")
-            }
-            is SliceState.Running -> {
-                Txt(s.stage, Nz.type.body)
-                ProgressBar(s.progress, label = "Slicing progress")
-                NzButton("Cancel", { p.cancelSlice() }, kind = ButtonKind.SECONDARY, icon = NzIcon.CLOSE)
-            }
-            is SliceState.Done -> {
-                val st = s.result.stats
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Metric("Time", formatDuration(st.seconds)); Metric("Material", st.grams?.let { "%.1f g".format(it) } ?: "–"); Metric("Layers", "${st.layers ?: "–"}")
-                }
-                if (st.toolChanges > 0) Txt("${st.toolChanges} toolhead changes", Nz.type.bodySmall, c.textMuted)
-                s.result.warnings.forEach { Banner(it, BannerKind.WARNING) }
-                SendPanel(state)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NzButton("Export file", { chooseSaveFile("Export sliced file", p.name + ".gcode")?.let { t -> s.result.gcode.copyTo(t, overwrite = true) } }, kind = ButtonKind.QUIET, icon = NzIcon.EXPORT)
-                    NzButton("Add to queue", {
-                        val printer = p.printer()
-                        val toolMap = if (printer?.capabilities?.value?.multiMaterial == true && p.materials().size > 1) p.materials().map { (it.toolhead ?: (it.slot - 1)) } else emptyList()
-                        state.fleet.enqueue(p.name, s.result.gcode, printer?.config?.identity?.id, toolMap)
-                        p.notice = "Added to the print queue on the Printers page."
-                    }, kind = ButtonKind.QUIET, testTag = "add-to-queue")
-                    NzButton("Slice again", { p.slice(state.scope) }, kind = ButtonKind.QUIET)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SendPanel(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     val scope = rememberCoroutineScope()
-    val entry = p.printer() ?: run { Txt("No printer chosen: export the file and send it yourself, or choose a printer in step 1.", Nz.type.bodySmall, c.textMuted); return }
+    val entry = p.printer() ?: run { Txt("No printer chosen: export the file and send it yourself, or choose a printer in the bar above.", Nz.type.bodySmall, c.textMuted); return }
     val caps = entry.capabilities.value ?: run { Txt("Connecting to ${entry.config.identity.displayName}…", Nz.type.bodySmall, c.textMuted); return }
     val flow = rememberActionFlow(entry)
     var uploaded by remember(p.slice) { mutableStateOf<String?>(null) }

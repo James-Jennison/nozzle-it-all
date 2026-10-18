@@ -70,6 +70,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
     return listOf(
         AppMenu("File", Key.F, listOf(
             MenuAction("New project", ctrl(Key.N, "N")) { guarded { p.newProject(); state.destination = Destination.PREPARE } },
+            MenuAction("Projects…") { state.destination = Destination.PROJECTS },
             MenuAction("Open project…", ctrl(Key.O, "O")) {
                 guarded { chooseFiles("Open a project", listOf("3mf"), multiple = false).firstOrNull()?.let { f -> runCatching { p.open(f); state.destination = Destination.PREPARE }.onFailure(::report) } }
             },

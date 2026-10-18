@@ -9,6 +9,13 @@ import java.nio.file.Files
 import kotlinx.coroutines.*
 
 class AutoPaintReviewTest {
+    @Test fun sparsePaintStatesRequirePositionalSlotIdentityNotACompressedPalette() {
+        val mesh = grid().withPaint(paint = Array(grid().triangleCount) { Paint.whole(3) })
+        val (identity,highest) = SliceEngine.paintInSlots(mesh,listOf(1,2,3),1)
+        assertEquals(3,highest); assertEquals(setOf(3),Paint.states(Paint.decode(identity.paint!![0]!!)))
+        val (compressed,_) = SliceEngine.paintInSlots(mesh,listOf(1,3),1)
+        assertNotEquals(identity.paint!![0],compressed.paint!![0])
+    }
     @Test fun changingTargetSelectionInvalidatesEvenAnInflightPreparation() {
         val tmp = Files.createTempDirectory("ai-target").toFile()
         val app = AppState(AppPaths(File(tmp,"c"),File(tmp,"d"),File(tmp,"k")).ensure(), CoroutineScope(SupervisorJob()+Dispatchers.Default))

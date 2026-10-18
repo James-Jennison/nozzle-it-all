@@ -171,7 +171,7 @@ object AutoPaint {
         }
         val answer = engineRun(AutoPaintFormat.replyTextRequest(provider, raw)).getString("text")
         val result = AutoPaintFormat.parseAssignment(engineRun(AutoPaintFormat.assignRequest(prepared.stl.absolutePath, answer, prepared.filaments.maxOf { it.index })))
-        if (result.paintedFaces == 0) throw AutoPaintError("The answer left every part unpainted.")
+        // Zero is a valid keep-original assignment, including an entirely unchanged draft.
         require(result.segmentToFilament.size == seg.segmentCount) { "The answer has the wrong number of regions." }
         val allowed = prepared.filaments.map { it.index }.toSet() + 0
         require(result.segmentToFilament.all { it in allowed }) { "The answer uses an unavailable filament." }

@@ -172,7 +172,35 @@ class AutoPaintTest {
         try {
             try { AutoPaint.askReview(prepared,Provider.Command("cat >/dev/null; printf '%s' '$answer'")); fail("unavailable slot accepted") }
             catch (e: IllegalArgumentException) { assertTrue(e.message!!.contains("unavailable")) }
+            val accepted = AutoPaint.askReview(prepared,Provider.Command("cat >/dev/null; printf '%s' '${answer.replace("\"filament\":2","\"filament\":3")}'"))
+            assertTrue(accepted.slots.all { it in setOf(0,1,3) }); assertTrue(3 in accepted.slots)
         } finally { prepared.discard() }
+    }
+
+    @Test fun explicitAllKeepAnswerReachesReviewAndCompletesWithoutMutationOrUndo() = runBlocking {
+        engineReady()
+        val tmp = Files.createTempDirectory("ap-all-keep").toFile()
+        val app = AppState(AppPaths(File(tmp,"c"),File(tmp,"d"),File(tmp,"k")).ensure(),CoroutineScope(SupervisorJob()+Dispatchers.Default))
+        val p = app.prepare; val mesh = cube().withPaint(paint = Array(12) { Paint.whole(1) })
+        suspend fun idle() { withTimeout(60000) { while (p.toolBusy != null) delay(20) } }
+        try {
+            withContext(Dispatchers.Main) {
+                p.items.add(PrepItem(1,"cube",mesh,100f,100f)); p.selected = 1; p.history.reset(); p.aiPrepare("")
+            }
+            idle(); val prepared = p.aiPrepared!!
+            val reply = JSONObject().put("assignments",org.json.JSONArray((0 until prepared.seg.segmentCount).map {
+                JSONObject().put("segment",it).put("filament",0)
+            })).toString()
+            withContext(Dispatchers.Main) {
+                p.autoPaintSettings = AutoPaint.Settings(command = "cat >/dev/null; printf '%s' '$reply'")
+                p.aiSend()
+            }
+            idle(); assertNotNull(p.aiAnswer); assertNotNull(p.aiPreviewMesh)
+            assertTrue(p.aiAnswer!!.slots.all { it == 0 }); assertSame(mesh,p.items.single().mesh)
+            assertFalse(p.history.canUndo)
+            withContext(Dispatchers.Main) { p.aiApply() }
+            assertNull(p.aiAnswer); assertSame(mesh,p.items.single().mesh); assertFalse(p.history.canUndo)
+        } finally { withContext(Dispatchers.Main) { p.aiDiscard() }; app.scope.cancel() }
     }
 
     @Test fun anOpenAiCompatibleServerGetsTheViewsAndPaintsTheModel() {

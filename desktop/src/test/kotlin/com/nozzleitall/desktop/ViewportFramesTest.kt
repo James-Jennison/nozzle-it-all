@@ -181,7 +181,7 @@ class ViewportFramesTest {
             for(i in 0 until count)expected.triangle(screen,i*9,colors,i*3,proj.eye)
             actual.bands.draw(proj,d,screen,colors,actual,{})
             assertArrayEquals("bands ${width}x$height",expected.pixels,actual.pixels)
-            assertTrue(actual.bands.indexCapacity<=16L*count)
+            assertTrue(actual.bands.indexCapacity<=RasterBands.INDEX_BUDGET)
         }
     }
 

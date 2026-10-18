@@ -17,7 +17,7 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
 
     fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY) }
 
-    fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float,check:()->Unit = {},rowStart:Int=0,rowEnd:Int=height) {
+    fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float,check:()->Unit = {},rowStart:Int=0,rowEnd:Int=height,columnStart:Int=0,columnEnd:Int=width) {
         val ax = screen[at]*scale; val ay = screen[at+1]*scale
         val bx = screen[at+3]*scale; val by = screen[at+4]*scale
         val cx = screen[at+6]*scale; val cy = screen[at+7]*scale
@@ -51,7 +51,7 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
                 if(range==Long.MIN_VALUE)continue
                 first=(range ushr 32).toInt();last=range.toInt()
             }
-            for (x in first..last) {
+            for (x in max(first,columnStart)..min(last,columnEnd-1)) {
             val px = x+0.5f; val py = y+0.5f
             val wa = ((bx-px)*(cy-py)-(by-py)*(cx-px))/area
             val wb = ((cx-px)*(ay-py)-(cy-py)*(ax-px))/area

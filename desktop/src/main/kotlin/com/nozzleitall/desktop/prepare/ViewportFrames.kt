@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.coroutineContext
 
 /** Captured immutable-by-ownership scene; no Compose state is read by the renderer. */
-internal data class FrameScene(val prepared:List<Pair<PlateObject,DisplayMesh>>,val bedW:Float,val bedD:Float,val bed:Color,val line:Color)
+internal data class FrameScene(val prepared:List<Pair<PlateObject,DisplayMesh>>,val bedW:Float,val bedD:Float,val bed:Color,val line:Color,val background:Color=Color.Transparent)
 internal data class FrameRequest(val scene:FrameScene,val camera:CameraPose,val width:Int,val height:Int,val retry:Int=0) {
     fun sameSource(other:FrameRequest) = scene==other.scene && width==other.width && height==other.height
     fun projector() = Projector(width.toFloat(),height.toFloat(),camera,scene.bedW/2,scene.bedD/2)

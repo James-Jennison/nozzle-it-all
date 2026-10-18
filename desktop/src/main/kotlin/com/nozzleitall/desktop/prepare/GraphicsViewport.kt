@@ -1,6 +1,7 @@
 package com.nozzleitall.desktop.prepare
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asComposeCanvas
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
@@ -130,12 +131,15 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
                             val scene=request.scene
                             drawBed(request.projector(),scene.bedW,scene.bedD,scene.bed,scene.line,behind=true)
                         }
+                        target.canvas.drawColor(request.scene.background.toArgb(),BlendMode.DST_OVER)
                     }
                 }
                 check()
                 // RasterFromData retains its own SkData reference. No writes or
                 // buffer reuse after this transfer; snapshots outlive backend.
-                return Image.makeRaster(info,data,request.width*4)
+                val outputInfo=if(bed && request.scene.background.alpha==1f)
+                    ImageInfo(request.width,request.height,info.colorType,ColorAlphaType.OPAQUE) else info
+                return Image.makeRaster(outputInfo,data,request.width*4)
             }
         } finally { NativeViewport.end(handle) }
     }

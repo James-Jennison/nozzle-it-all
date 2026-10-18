@@ -97,6 +97,20 @@ class GraphicsViewportTest {
         } }
     }
 
+    @Test fun opaqueCompositeFillsBackgroundWithoutChangingModelLayer() {
+        val req=request(listOf(item(1,triangle(),Color.Red)))
+        val background=Color(0xff102030)
+        graphics().use { gpu->
+            val opaque=req.copy(scene=req.scene.copy(background=background),camera=req.camera.copy(pitch=55f,distance=600f))
+            gpu.composite(opaque,{}).use { image->
+                assertTrue(image.isOpaque)
+                val values=pixels(image);assertTrue(values.all { p->p ushr 24==255 });assertEquals(background.toArgb(),values[0])
+            }
+            val a=gpu.render(req,{}).use(::pixels);val b=gpu.render(req.copy(scene=req.scene.copy(background=background)),{}).use(::pixels)
+            assertArrayEquals(a,b)
+        }
+    }
+
     private fun torus(rows:Int=24,columns:Int=32):Mesh {
         val v=FloatArray(rows*columns*3);val t=IntArray(rows*columns*6)
         for(r in 0 until rows)for(c in 0 until columns) {

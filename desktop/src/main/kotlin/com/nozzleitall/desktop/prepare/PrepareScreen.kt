@@ -114,7 +114,7 @@ fun PrepareScreen(state: AppState) {
                 paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
                 onSelection = { id, ctrl, shift -> focus.clearFocus(); p.selectObject(id, ctrl, shift) }, accent = c.accent,
                 onMove = p::moveSelection, onTurn = p::turnSelection, onResize = p::resizeSelection,
-                onTransformStart = p::beginSelectionTransform, onTransformEnd = p::endSelectionTransform)
+                onTransformStart = p::beginSelectionTransform, onTransformEnd = p::endSelectionTransform, backgroundColor = c.surfaceSunken)
             // Top left: the plate tools.
             if (!p.showPreview && onPlate.isNotEmpty()) Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
                 Floating { PlateToolbar(p, sel, drawer) { toggle(it) } }

@@ -225,7 +225,7 @@ internal class Projector(val w: Float, val h: Float, cam: CameraPose, val cx: Fl
 fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: ViewCamera, bedColor: Color, lineColor: Color, modifier: Modifier = Modifier,
                 preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), previewView: PreviewView = PreviewView.TOOL, paint: PaintInput? = null, onSelect: (Int?) -> Unit = {},
                 accent: Color = Color(0xFF3E7BFA), onMove: (Int, Float, Float) -> Unit = { _, _, _ -> }, onTurn: (Int, Float) -> Unit = { _, _ -> }, onResize: (Int, Float) -> Unit = { _, _ -> },
-                onSelection: ((Int?, Boolean, Boolean) -> Unit)? = null, onTransformStart: (Int) -> Unit = {}, onTransformEnd: () -> Unit = {}) {
+                onSelection: ((Int?, Boolean, Boolean) -> Unit)? = null, onTransformStart: (Int) -> Unit = {}, onTransformEnd: () -> Unit = {}, backgroundColor:Color=Color.Transparent) {
     val keys = if (preview == null) displayKeys(objects) else emptyList()
     var completed by remember { mutableStateOf<PreparedDisplays?>(null) }
     var failedKeys by remember { mutableStateOf<List<DisplayKey>?>(null) }
@@ -250,9 +250,9 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
     var renderFailed by remember { mutableStateOf<FrameRequest?>(null) }
     var renderRetry by remember { mutableStateOf(0) }
     val scope=rememberCoroutineScope()
-    // The small vector bed stays on the UI canvas. Avoid blending it across a
-    // full-resolution readback image on the frame worker before presentation.
-    val rasterizer=remember { FrameRasterizer(compositeBed=false) }
+    // Composite the existing viewport background into graphics frames so the
+    // UI can copy an opaque image instead of blending every full-screen pixel.
+    val rasterizer=remember { FrameRasterizer() }
     val pump=remember(scope,rasterizer) { LatestFramePump(scope,rasterizer::render,
         publish={ ticket,image,cpu ->
             val old=rendered
@@ -260,7 +260,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             old?.close()
         },failed={ renderFailed=it.request },dispose=rasterizer::close) }
     DisposableEffect(pump) { onDispose { pump.close();rendered?.close();rendered=null } }
-    val request=FrameRequest(FrameScene(prepared,bedW,bedD,bedColor,lineColor),camera.snapshot(),dimensions.width,dimensions.height,renderRetry)
+    val request=FrameRequest(FrameScene(prepared,bedW,bedD,bedColor,lineColor,backgroundColor),camera.snapshot(),dimensions.width,dimensions.height,renderRetry)
     SideEffect {
         if(rendered?.ticket?.request?.sameSource(request)==false) {
             rendered?.close();rendered=null
@@ -377,7 +377,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         // state here: a pending recomposition may still hold an older draw lambda.
         val frame=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) && it.ticket.request.width==size.width.toInt() && it.ticket.request.height==size.height.toInt() }
         val proj = frame?.ticket?.request?.projector() ?: Projector(size.width,size.height,camera,bedW/2,bedD/2)
-        drawBed(proj,bedW,bedD,bedColor,lineColor)
+        if(preview!=null || frame==null)drawBed(proj,bedW,bedD,bedColor,lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
         else if(frame!=null) {
             drawIntoCanvas { it.nativeCanvas.drawImage(frame.image,0f,0f) }

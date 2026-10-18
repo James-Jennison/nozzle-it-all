@@ -858,7 +858,7 @@ class PrepareState(private val app: AppState) {
     fun aiSetCleanup(enabled: Boolean) { if (toolBusy == null) { aiCleanBoundaries = enabled; refreshAiPreview() } }
     fun aiRetryPreview() { if (toolBusy == null) refreshAiPreview() }
     private fun refreshAiPreview() {
-        aiPreviewMesh = null; aiCleanedFaces = 0
+        aiPreviewMesh = null; aiCleanedFaces = 0; aiShowOriginal = false
         runTool("Updating paint draft") { rebuildAiPreview() }
     }
     private suspend fun rebuildAiPreview() {

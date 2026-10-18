@@ -743,7 +743,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
                     Banner(if (p.toolBusy != null) "Building the painted draft…" else "The painted draft could not be built. Nothing can be applied until Retry succeeds.", BannerKind.WARNING)
                     NzButton("Retry draft preview", { p.aiRetryPreview() }, Modifier.fillMaxWidth(), enabled = p.toolBusy == null, kind = ButtonKind.SECONDARY)
                 }
-                NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
+                NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, enabled = p.aiPreviewMesh != null && p.toolBusy == null)
                 NzButton("Keep all original paint", { p.aiKeepOriginal() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
                 NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, enabled = p.toolBusy == null)
                 Txt("Optional, conservative tip smoothing; preserves small colour details and sharp creases. ${p.aiCleanedFaces} faces adjusted. It cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)

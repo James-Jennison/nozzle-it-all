@@ -97,6 +97,7 @@ fun PrepareScreen(state: AppState) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY, icon = NzIcon.IMPORT)
                     NzButton("Open a project", { state.destination = Destination.PROJECTS }, kind = ButtonKind.SECONDARY, icon = NzIcon.PROJECTS)
+                    if (state.fleet.order.value.isEmpty()) NzButton("Find my printer", { state.findPrinterRequested = true; state.destination = Destination.FLEET }, kind = ButtonKind.SECONDARY, icon = NzIcon.SEARCH, testTag = "workspace-find-printer")
                 }
             }
             else PlateViewer(bw, bd, objects, camera, c.surfaceRaised, c.lineStrong, Modifier.fillMaxSize(),
@@ -146,7 +147,7 @@ fun PrepareScreen(state: AppState) {
                         Txt("Layer ${p.previewLayer + 1} of ${layers.size} · Z ${"%.2f".format(layers[p.previewLayer].z)} mm", Nz.type.metricSmall, c.textMuted)
                     }
                 }
-                if (!p.showPreview) AdviceStrip(p, onChoosePrinter = { drawer = Drawer.PRINTER })
+                if (!p.showPreview) AdviceStrip(state, onChoosePrinter = { drawer = Drawer.PRINTER })
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
                     Spacer(Modifier.weight(1f))
@@ -275,18 +276,19 @@ private fun SendDrawer(state: AppState, s: SliceState.Done) {
 
 /** What the app can already see is wrong with the plate, one line each, with the fix when it has one. Each can be dismissed. */
 @Composable
-private fun AdviceStrip(p: PrepareState, onChoosePrinter: () -> Unit) {
+private fun AdviceStrip(state: AppState, onChoosePrinter: () -> Unit) {
+    val p = state.prepare
     val c = Nz.colors
     var dismissed by remember { mutableStateOf(setOf<String>()) }
     val onPlate = p.plateItems()
     val advice = PrepareAdvice.compute(PrepareAdvice.Input(
         offPlate = p.outOfBounds().map { it.name }, hasPrinter = p.printer() != null,
-        openEdges = onPlate.associate { it.name to it.openEdges }, objectCount = onPlate.size)).filter { it.id !in dismissed }
+        openEdges = onPlate.associate { it.name to it.openEdges }, objectCount = onPlate.size, anyPrinterSaved = state.fleet.order.value.isNotEmpty())).filter { it.id !in dismissed }
     advice.forEach { a ->
         Floating(Modifier.fillMaxWidth()) {
             Icon(NzIcon.ALERT, Nz.status.paused, 18.dp, modifier = Modifier.padding(start = 6.dp))
             Txt(a.text, Nz.type.bodySmall, c.text, modifier = Modifier.weight(1f).padding(horizontal = 6.dp))
-            if (a.action != null) NzButton(a.actionLabel ?: "Fix", { if (a.action == PrepareAdvice.ARRANGE) p.arrange() else onChoosePrinter() }, kind = ButtonKind.SECONDARY)
+            if (a.action != null) NzButton(a.actionLabel ?: "Fix", { when (a.action) { PrepareAdvice.ARRANGE -> p.arrange(); PrepareAdvice.FIND_PRINTER -> { state.findPrinterRequested = true; state.destination = Destination.FLEET }; else -> onChoosePrinter() } }, kind = ButtonKind.SECONDARY, testTag = "advice-${a.id}")
             NzButton("Dismiss", { dismissed = dismissed + a.id }, kind = ButtonKind.QUIET)
         }
     }

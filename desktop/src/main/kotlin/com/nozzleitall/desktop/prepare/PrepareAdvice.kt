@@ -10,6 +10,7 @@ data class Advice(val id: String, val text: String, val action: String? = null, 
 object PrepareAdvice {
     const val ARRANGE = "arrange"
     const val CHOOSE_PRINTER = "choose-printer"
+    const val FIND_PRINTER = "find-printer"
 
     class Input(
         /** Names of objects that hang off the plate. */
@@ -19,6 +20,8 @@ object PrepareAdvice {
         /** Object name to its count of open edges (a mesh that isn't closed may print with holes). */
         val openEdges: Map<String, Int>,
         val objectCount: Int,
+        /** True when at least one printer has been added to the app (false on a first run). */
+        val anyPrinterSaved: Boolean = true,
     )
 
     fun compute(i: Input): List<Advice> {
@@ -32,7 +35,8 @@ object PrepareAdvice {
             out += Advice("open-edges", (if (open.size == 1) "${worst.key} isn't a closed shape (${worst.value} open edges)" else "${open.size} objects aren't closed shapes (worst: ${worst.key}, ${worst.value} open edges)") +
                 ". It may print with holes: repair the mesh before printing.")
         }
-        if (!i.hasPrinter) out += Advice("no-printer", "No printer is chosen. You can slice, but sending needs one.", CHOOSE_PRINTER, "Choose printer")
+        if (!i.hasPrinter) out += if (i.anyPrinterSaved) Advice("no-printer", "No printer is chosen. You can slice, but sending needs one.", CHOOSE_PRINTER, "Choose printer")
+            else Advice("no-printer", "You haven't added a printer yet. Add yours to send prints and watch them here.", FIND_PRINTER, "Find my printer")
         return out
     }
 }

@@ -28,4 +28,14 @@ class PrepareAdviceTest {
         assertEquals(listOf("off-plate", "open-edges", "no-printer"), all.map { it.id })
         assertEquals(PrepareAdvice.CHOOSE_PRINTER, all.last().action)
     }
+
+    @Test fun aFirstRunWithNoPrinterSavedOffersToFindOne() {
+        val a = PrepareAdvice.compute(PrepareAdvice.Input(emptyList(), false, emptyMap(), 1, anyPrinterSaved = false)).single()
+        assertEquals(PrepareAdvice.FIND_PRINTER, a.action)
+    }
+
+    @Test fun withPrintersSavedItOnlyAsksToChooseOne() {
+        val a = PrepareAdvice.compute(PrepareAdvice.Input(emptyList(), false, emptyMap(), 1, anyPrinterSaved = true)).single()
+        assertEquals(PrepareAdvice.CHOOSE_PRINTER, a.action)
+    }
 }

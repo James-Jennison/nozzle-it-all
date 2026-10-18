@@ -187,7 +187,7 @@ fun AddPrinterDialog(state: AppState, autoScan: Boolean = false, onDone: () -> U
                         form.canProbe -> found != null || family == PrinterFamily.STOCK_U1 && address.isNotBlank()
                         else -> address.isNotBlank() && (!form.secretRequired || secret.isNotBlank()) && (!form.needsSerial || serial.isNotBlank())
                     }
-                    NzButton("Add printer", { fleet.add(draft()); onDone() }, kind = ButtonKind.PRIMARY, enabled = ready, testTag = "save-printer")
+                    NzButton("Add printer", { val cfg = draft(); fleet.add(cfg); if (state.prepare.printerId == null) state.prepare.choosePrinter(cfg.identity.id); onDone() }, kind = ButtonKind.PRIMARY, enabled = ready, testTag = "save-printer")
                 }
             }
         }

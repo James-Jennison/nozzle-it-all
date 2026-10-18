@@ -57,6 +57,8 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
     val connector = com.nozzleitall.desktop.connector.LocalConnector(fleet, java.io.File(paths.config, "connector-tokens.json"))
     var destination by mutableStateOf(Destination.PREPARE)
     var selectedPrinter by mutableStateOf<String?>(null)
+    /** Set to open the Printers page already looking for printers on the network (the first-run path); the page clears it. */
+    var findPrinterRequested by mutableStateOf(false)
     val version: String = System.getProperty("nozzle.version") ?: "0.1.0-dev"
     var showAbout by mutableStateOf(false)
     /** Which menu is open in the menu bar, if any. */

@@ -39,6 +39,8 @@ fun FleetScreen(state: AppState) {
     var adding by remember { mutableStateOf(false) }
     var scanFirst by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<String?>(null) }
+    // The first-run path from the Workspace: open straight into the network search.
+    LaunchedEffect(state.findPrinterRequested) { if (state.findPrinterRequested) { state.findPrinterRequested = false; scanFirst = true; adding = true } }
     Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SectionHeader("Printers", "Everything you print on, at a glance.") {
             NzButton("Add printer", { adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.ADD, testTag = "add-printer")
@@ -55,10 +57,12 @@ fun FleetScreen(state: AppState) {
                 }
             }
         } else {
-            LazyVerticalGrid(GridCells.Adaptive(380.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it, onEdit = { editing = id }) { state.openPrinter(id) } } }
-                // The queue sits under the cards, across the whole width, in the same scrolling list.
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { QueuePanel(state) }
+            // The cards, with the print queue beside them once there is something in it.
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                LazyVerticalGrid(GridCells.Adaptive(380.dp), Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it, onEdit = { editing = id }, onPrepare = { state.prepare.choosePrinter(id); state.destination = com.nozzleitall.desktop.Destination.PREPARE }) { state.openPrinter(id) } } }
+                }
+                if (fleet.queue.value.isNotEmpty()) Column(Modifier.width(400.dp).fillMaxHeight().verticalScroll(rememberScrollState())) { QueuePanel(state) }
             }
         }
     }
@@ -67,7 +71,7 @@ fun FleetScreen(state: AppState) {
 }
 
 @Composable
-fun PrinterCard(entry: PrinterEntry, onEdit: (() -> Unit)? = null, onOpen: () -> Unit) {
+fun PrinterCard(entry: PrinterEntry, onEdit: (() -> Unit)? = null, onPrepare: (() -> Unit)? = null, onOpen: () -> Unit) {
     val c = Nz.colors
     val status = entry.status.value
     val identity = entry.config.identity
@@ -121,7 +125,8 @@ fun PrinterCard(entry: PrinterEntry, onEdit: (() -> Unit)? = null, onOpen: () ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RouteBadge(status.route)
                 Spacer(Modifier.weight(1f))
-                status.bed?.current?.let { Txt("Bed ${temp(it)}", Nz.type.metricSmall, c.textMuted) }
+                status.bed?.current?.let { Txt("Bed ${temp(it)}", Nz.type.metricSmall, c.textMuted, modifier = Modifier.padding(end = 8.dp)) }
+                if (onPrepare != null) NzButton("Prepare a print", onPrepare, kind = ButtonKind.SECONDARY, icon = NzIcon.PREPARE, testTag = "prepare-for-${identity.id}")
             }
         }
     }

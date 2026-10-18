@@ -49,7 +49,8 @@ fun PrinterHeader(state: AppState, on: com.nozzleitall.desktop.Destination, what
         }
     }
     val entry = PrinterPicker(state)
-    SectionHeader(entry?.config?.identity?.displayName ?: "No printer", what)
+    // The printer's name is on its own card below, so the heading here is only what the page is for.
+    Txt(what, Nz.type.bodySmall, Nz.colors.textMuted)
     return entry
 }
 

@@ -54,12 +54,25 @@ object AutoPaint {
         val req = File.createTempFile("nozzle-autopaint", ".json").apply { deleteOnExit(); writeText(request.toString()) }
         try {
             val p = ProcessBuilder(engine.absolutePath, "--semantic-paint", req.absolutePath).redirectError(ProcessBuilder.Redirect.DISCARD).start()
-            val out = p.inputStream.bufferedReader().readText()
-            if (!p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) { p.destroyForcibly(); throw AutoPaintError("Preparing the model took too long.") }
+            val out = output(p, timeoutSeconds, "Preparing the model took too long.")
             val json = runCatching { JSONObject(out) }.getOrElse { throw AutoPaintError("This engine doesn't have AI auto-paint yet.") }
             AutoPaintFormat.error(json)?.let { throw AutoPaintError(it) }
             return json
         } finally { req.delete() }
+    }
+
+    /** Drain while waiting: reading to EOF first would make the advertised timeout ineffective for a hung provider. */
+    private fun output(p: Process, timeoutSeconds: Long, timeoutMessage: String): String {
+        var out = ""
+        val reader = Thread { runCatching { out = p.inputStream.bufferedReader().readText() } }.apply { isDaemon = true; start() }
+        if (!p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            p.descendants().forEach { it.destroyForcibly() }; p.destroyForcibly()
+            reader.join(1000)
+            throw AutoPaintError(timeoutMessage)
+        }
+        reader.join(1000)
+        if (reader.isAlive) throw AutoPaintError("The command left its output stream open.")
+        return out
     }
 
     /** Runs a command line through the shell with [prompt] on stdin; its stdout is the answer. */
@@ -69,8 +82,7 @@ object AutoPaint {
         val errText = StringBuilder()
         val drain = Thread { runCatching { errText.append(p.errorStream.bufferedReader().readText()) } }.apply { isDaemon = true; start() }
         p.outputStream.use { it.write(prompt.toByteArray()) }
-        val out = p.inputStream.bufferedReader().readText()
-        if (!p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) { p.destroyForcibly(); throw AutoPaintError("The command took too long to answer.") }
+        val out = output(p, timeoutSeconds, "The command took too long to answer.")
         drain.join(1000)
         if (p.exitValue() != 0) throw AutoPaintError("The command failed (exit ${p.exitValue()}): ${errText.toString().trim().lineSequence().lastOrNull().orEmpty()}")
         return out

@@ -131,6 +131,7 @@ class PrepareState(private val app: AppState) {
         primarySelection = primary?.takeIf { it in selectedIds } ?: selectedIds.lastOrNull()
         selectionAnchor = primarySelection
         if (selectedIds.size != 1) stopPainting()
+        if (aiItemId != null && (selectedIds.size != 1 || selected != aiItemId)) aiDiscard()
         history.selectionChanged()
     }
     fun selectedItems() = plateItems().filter { it.id in selectedIds }
@@ -868,15 +869,17 @@ class PrepareState(private val app: AppState) {
         val generation = aiGeneration
         val sourceSlots = item.paintSlots.toList()
         val sourceSlot = item.slot
+        aiItemId = item.id
         runTool("Preparing the views") {
             val prepared = withContext(Dispatchers.IO) { AutoPaint.prepare(item.mesh, item.name, filaments, hint, plateWork()) }
-            if (generation != aiGeneration) { prepared.discard(); return@runTool }
+            if (generation != aiGeneration || selectedIds != setOf(item.id)) { prepared.discard(); return@runTool }
             aiPrepared = prepared; aiItemId = item.id; aiSource = item; aiSourceSlots = sourceSlots; aiSourceSlot = sourceSlot
         }
     }
 
     fun aiSend() {
         if (toolBusy != null) return
+        if (selectedIds != setOfNotNull(aiItemId)) { aiDiscard(); return }
         val prepared = aiPrepared ?: return
         val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }
         val generation = aiGeneration
@@ -888,6 +891,7 @@ class PrepareState(private val app: AppState) {
 
     fun aiApply() {
         if (toolBusy != null) return
+        if (selectedIds != setOfNotNull(aiItemId)) { aiDiscard(); return }
         val prepared = aiPrepared ?: return
         val mesh = aiPreviewMesh ?: return
         val item = items.firstOrNull { it.id == aiItemId } ?: run { aiDiscard(); return }

@@ -29,6 +29,13 @@ class AutoPaintTest {
 
     private val answer = """Here you go: {"object":"cube","assignments":[{"segment":0,"filament":1},{"segment":1,"filament":2},{"segment":2,"filament":2}],"notes":"x"}"""
 
+    @Test fun aHungCommandActuallyTimesOutBeforeStdoutCloses() {
+        val start = System.nanoTime()
+        try { AutoPaint.askCommand("sleep 8", "", 1); fail("expected timeout") }
+        catch (e: AutoPaint.AutoPaintError) { assertTrue(e.message!!.contains("too long")) }
+        assertTrue((System.nanoTime() - start) / 1e9 < 5)
+    }
+
     @Test fun appliedPaintsOnlyTheFacesTheAnswerNamed() {
         val m = AutoPaint.applied(cube(), IntArray(12) { if (it < 4) 2 else 0 })
         assertEquals(Paint.whole(2), m.paint!![0]); assertNull(m.paint!![4])

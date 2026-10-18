@@ -20,9 +20,11 @@ import kotlin.math.*
 class ViewCamera {
     var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(55f)
     var distance by mutableStateOf(600f); var pan by mutableStateOf(Offset.Zero)
+    private var fittedDistance = 600f
+    fun fitBed(width: Float, depth: Float) { fittedDistance = (maxOf(width, depth) * 1.9f).coerceIn(200f, 1500f); distance = fittedDistance }
     /** Continuous orbit through both poles and underneath; bounded angles avoid precision loss after many turns. */
     fun orbit(dx: Float, dy: Float) { yaw = (yaw - dx * 0.4f) % 360f; pitch = (pitch - dy * 0.3f) % 360f }
-    fun reset() { yaw = -35f; pitch = 55f; pan = Offset.Zero }
+    fun reset() { yaw = -35f; pitch = 55f; pan = Offset.Zero; distance = fittedDistance }
 }
 
 /** An object to draw. [paintColors] gives the colour of each painted filament number (index N for the file's filament N). */

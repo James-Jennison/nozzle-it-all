@@ -98,7 +98,7 @@ fun PrepareScreen(state: AppState) {
         }
         val (bw, bd) = p.bed
         // Zoom to fit the bed when the printer (and so the bed) changes.
-        LaunchedEffect(bw, bd) { camera.distance = (maxOf(bw, bd) * 1.9f).coerceIn(200f, 1500f) }
+        LaunchedEffect(bw, bd) { camera.fitBed(bw, bd) }
         val shape = RoundedCornerShape(20.dp)
         Box(Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.surfaceSunken).border(1.dp, c.line, shape)) {
             if (onPlate.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, if (p.items.isEmpty()) "Start with a model" else "${p.plateNames.getOrNull(p.currentPlate) ?: "This plate"} is empty",

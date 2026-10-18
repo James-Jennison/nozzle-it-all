@@ -4,8 +4,22 @@ import com.nozzleitall.desktop.prepare.*
 import com.nozzleitall.project.*
 import org.junit.Assert.*
 import org.junit.Test
+import java.io.File
+import java.nio.file.Files
+import kotlinx.coroutines.*
 
 class AutoPaintReviewTest {
+    @Test fun changingTargetSelectionInvalidatesEvenAnInflightPreparation() {
+        val tmp = Files.createTempDirectory("ai-target").toFile()
+        val app = AppState(AppPaths(File(tmp,"c"),File(tmp,"d"),File(tmp,"k")).ensure(), CoroutineScope(SupervisorJob()+Dispatchers.Default))
+        val p = app.prepare; val mesh = grid()
+        p.items.addAll(listOf(PrepItem(1,"first",mesh,40f,40f),PrepItem(2,"second",mesh,80f,40f)))
+        p.selected = 1; p.aiItemId = 1 // Target already bound, but asynchronous preparation has not produced aiPrepared yet.
+        p.selected = 2
+        assertNull(p.aiItemId); assertNull(p.aiPrepared); assertNull(p.aiPreviewMesh)
+        p.aiApply(); assertSame(mesh,p.items[0].mesh); assertSame(mesh,p.items[1].mesh)
+        app.scope.cancel()
+    }
     private fun grid(): Mesh {
         val width = 20
         val vertices = FloatArray((width + 1) * (width + 1) * 3)
@@ -22,7 +36,10 @@ class AutoPaintReviewTest {
         assertEquals(115f, camera.pitch, 0.001f)
         camera.orbit(0f, -1000f); assertEquals(55f, camera.pitch, 0.001f)
         camera.orbit(1800f, 0f); assertEquals(-35f, camera.yaw, 0.001f)
-        camera.reset(); assertEquals(55f, camera.pitch, 0f)
+        camera.fitBed(256f,256f); val fitted = camera.distance
+        camera.distance = 80f; camera.pan = androidx.compose.ui.geometry.Offset(100f,200f)
+        camera.reset(); assertEquals(55f, camera.pitch, 0f); assertEquals(fitted, camera.distance, 0f)
+        assertEquals(androidx.compose.ui.geometry.Offset.Zero, camera.pan)
     }
     @Test fun regionCorrectionsAndResetNeverMutateOriginalDraft() {
         val draft = AutoPaintReview(intArrayOf(0,1,0), listOf(1,2))

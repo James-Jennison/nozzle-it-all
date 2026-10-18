@@ -154,7 +154,8 @@ fun PrepareScreen(state: AppState) {
                         Txt("Layer ${p.previewLayer + 1} of ${layers.size} · Z ${"%.2f".format(layers[p.previewLayer].z)} mm", Nz.type.metricSmall, c.textMuted)
                     }
                 }
-                if (!p.showPreview) AdviceStrip(state, onChoosePrinter = { drawer = Drawer.PRINTER })
+                // The full-width advice overlay must not cover AI review's final Apply/Discard controls.
+                if (!p.showPreview && drawer != Drawer.AI) AdviceStrip(state, onChoosePrinter = { drawer = Drawer.PRINTER })
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
                     Spacer(Modifier.weight(1f))

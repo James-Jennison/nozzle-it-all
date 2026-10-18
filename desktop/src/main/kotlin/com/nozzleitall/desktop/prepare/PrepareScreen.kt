@@ -38,83 +38,137 @@ fun chooseSaveFile(title: String, suggested: String): File? {
     return d.file?.let { File(d.directory, it) }
 }
 
+private enum class LeftTab(val label: String) { SETUP("Setup"), OBJECTS("Objects"), PRINT("Print") }
+private enum class Drawer { CUT, AI }
+
 @Composable
 fun PrepareScreen(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
-    val scope = rememberCoroutineScope()
     val camera = p.camera
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
-    Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Left: the project and everything about how it prints, with Slice always in view at the bottom. All settings
-        // opens in the same place, wider, so the plate stays visible.
-        // Left: the project, printer, filament and objects, then every print setting in dense tabs, with Slice always
-        // in view at the bottom.
-        BoxWithConstraints(Modifier.width(420.dp).fillMaxHeight()) {
-        val panelHeight = maxHeight
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    var tab by remember { mutableStateOf(LeftTab.SETUP) }
+    var drawer by remember { mutableStateOf<Drawer?>(null) }
+    // Choosing an object opens its page; opening a printer or material settings page opens the Print tab.
+    LaunchedEffect(p.selected) { if (p.selected != null) tab = LeftTab.OBJECTS else drawer = null }
+    LaunchedEffect(p.settingsScope) { if (p.settingsScope != com.nozzleitall.desktop.settings.Scope.PROCESS) tab = LeftTab.PRINT }
+    Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Left: the project, then one page at a time (Setup, Objects or Print settings), with Slice always in view.
+        Column(Modifier.width(400.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ProjectHeader(state)
             p.notice?.let { Banner(it, BannerKind.WARNING, "Dismiss" to { p.notice = null }) }
-            // Printer, filament and objects scroll within the upper part of the panel when they grow (an open mix or
-            // slot editor, many colours), so the print settings and Slice always stay in view.
-            Column(Modifier.fillMaxWidth().heightIn(max = panelHeight * 0.58f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StepPrinter(state)
-                MaterialsSection(state)
-                StepObjects(state)
+            TabStrip(LeftTab.values().toList(), tab, { it.label }) { tab = it }
+            when (tab) {
+                LeftTab.SETUP -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StepPrinter(state)
+                    MaterialsSection(state)
+                }
+                LeftTab.OBJECTS -> Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StepObjects(state)
+                }
+                LeftTab.PRINT -> {
+                    val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
+                    com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
+                }
             }
-            val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
-            com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
             StepSlice(state)
         }
+        // Right: the plate fills the space. Its controls float over it, so nothing pushes the model smaller.
+        val done = p.slice as? SliceState.Done
+        val onPlate = p.plateItems()
+        val sel = onPlate.firstOrNull { it.id == p.selected }
+        val slots = p.materials()
+        val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
+        val objects = onPlate.map { item ->
+            // A slot is a loaded filament or a Full Spectrum mix (drawn in its blended colour).
+            // While a non-colour paint tool is open on the selected object, that kind of paint is what the plate shows.
+            val shown = p.paintKind?.takeIf { item.id == p.selected && it != PaintOps.Kind.COLOUR }
+            val paintColors = when (shown) {
+                PaintOps.Kind.SUPPORT -> listOf(null, Color(0xFF3BA55D), Color(0xFFE5484D))
+                PaintOps.Kind.SEAM -> listOf(null, Color(0xFF3E7BFA), Color(0xFFF5A623))
+                PaintOps.Kind.FUZZY -> listOf(null, Color(0xFF9B59B6))
+                else -> if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
+            }
+            PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors,
+                when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 },
+                item.sx, item.sy, item.sz, item.parts.toList())
         }
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                val done = p.slice as? SliceState.Done
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    NzButton("Plate", { p.showPreview = false }, kind = if (!p.showPreview) ButtonKind.PRIMARY else ButtonKind.SECONDARY, icon = NzIcon.PREPARE)
-                    NzButton("Layer preview", { p.showPreview = true }, kind = if (p.showPreview) ButtonKind.PRIMARY else ButtonKind.SECONDARY, icon = NzIcon.LAYERS, enabled = done?.preview != null)
-                    Spacer(Modifier.weight(1f))
-                    Txt("Drag to orbit · Shift-drag to pan · Scroll to zoom", Nz.type.bodySmall, c.textMuted)
+        val (bw, bd) = p.bed
+        val shape = RoundedCornerShape(20.dp)
+        Box(Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.surfaceSunken).border(1.dp, c.line, shape)) {
+            if (onPlate.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, if (p.items.isEmpty()) "Start with a model" else "${p.plateNames.getOrNull(p.currentPlate) ?: "This plate"} is empty",
+                "Add an STL, 3MF or OBJ file, or open a project from Projects. Nothing leaves this computer.", Modifier.align(Alignment.Center)) {
+                NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY)
+            }
+            else PlateViewer(bw, bd, objects, camera, c.surface, c.lineStrong, Modifier.fillMaxSize(),
+                preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors,
+                paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
+                onSelect = { focus.clearFocus(); p.selected = it })
+            // Top left: what the viewport shows, then the plate tools under it.
+            Column(Modifier.align(Alignment.TopStart).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Floating {
+                    ViewToggle("Plate", NzIcon.PREPARE, !p.showPreview, true) { p.showPreview = false }
+                    ViewToggle("Preview", NzIcon.LAYERS, p.showPreview, done?.preview != null) { p.showPreview = true }
                 }
-                if (!p.showPreview) PlateTabs(p)
-                val onPlate = p.plateItems()
-                if (!p.showPreview && onPlate.isNotEmpty()) PlateToolbar(p)
-                val slots = p.materials()
-                val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
-                val objects = onPlate.map { item ->
-                    // A slot is a loaded filament or a Full Spectrum mix (drawn in its blended colour).
-                    // While a non-colour paint tool is open on the selected object, that kind of paint is what the plate shows.
-                    val shown = p.paintKind?.takeIf { item.id == p.selected && it != PaintOps.Kind.COLOUR }
-                    val paintColors = when (shown) {
-                        PaintOps.Kind.SUPPORT -> listOf(null, Color(0xFF3BA55D), Color(0xFFE5484D))
-                        PaintOps.Kind.SEAM -> listOf(null, Color(0xFF3E7BFA), Color(0xFFF5A623))
-                        PaintOps.Kind.FUZZY -> listOf(null, Color(0xFF9B59B6))
-                        else -> if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
+                if (!p.showPreview && onPlate.isNotEmpty()) Floating { PlateToolbar(p, sel, drawer) { drawer = if (drawer == it) null else it } }
+            }
+            // Top right: the panel for the tool in use (paint, cut, AI auto-paint).
+            if (!p.showPreview && sel != null) {
+                val open = p.paintKind != null || drawer != null
+                if (open) Column(Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp, bottom = 12.dp).width(340.dp).clip(RoundedCornerShape(14.dp)).background(c.surface.copy(alpha = 0.96f))
+                    .border(1.dp, c.line, RoundedCornerShape(14.dp)).verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when {
+                        p.paintKind != null -> PaintPanel(p)
+                        drawer == Drawer.CUT -> CutPanel(p, sel) { drawer = null }
+                        drawer == Drawer.AI -> AutoPaintPanel(p) { drawer = null }
                     }
-                    PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors,
-                        when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 },
-                        item.sx, item.sy, item.sz, item.parts.toList())
                 }
-                val (bw, bd) = p.bed
-                Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(20.dp))) {
-                    if (onPlate.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, if (p.items.isEmpty()) "Start with a model" else "${p.plateNames.getOrNull(p.currentPlate) ?: "This plate"} is empty",
-                        "Add an STL, 3MF or OBJ file, or open a project from Projects. Nothing leaves this computer.", Modifier.align(Alignment.Center)) {
-                        NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY)
-                    }
-                    else PlateViewer(bw, bd, objects, camera, c.surface, c.lineStrong, Modifier.fillMaxSize(),
-                        preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors,
-                        paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
-                        onSelect = { focus.clearFocus(); p.selected = it })
-                }
+            }
+            // Bottom: the plates, a hint, and the layer slider in the preview.
+            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (p.showPreview && done?.preview != null) {
                     val layers = done.preview.layers
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        NzButton("−", { p.previewLayer = (p.previewLayer - 1).coerceAtLeast(0) }, kind = ButtonKind.SECONDARY)
+                    Floating(Modifier.fillMaxWidth()) {
+                        NzButton("−", { p.previewLayer = (p.previewLayer - 1).coerceAtLeast(0) }, kind = ButtonKind.QUIET)
                         LayerSlider(p.previewLayer, layers.size, Modifier.weight(1f)) { p.previewLayer = it }
-                        NzButton("+", { p.previewLayer = (p.previewLayer + 1).coerceAtMost(layers.size - 1) }, kind = ButtonKind.SECONDARY)
+                        NzButton("+", { p.previewLayer = (p.previewLayer + 1).coerceAtMost(layers.size - 1) }, kind = ButtonKind.QUIET)
                         Txt("Layer ${p.previewLayer + 1} of ${layers.size} · Z ${"%.2f".format(layers[p.previewLayer].z)} mm", Nz.type.metricSmall, c.textMuted)
                     }
                 }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
+                    Spacer(Modifier.weight(1f))
+                    Txt("Drag to orbit · Shift-drag to pan · Scroll to zoom", Nz.type.bodySmall, c.textMuted)
+                }
+            }
+        }
+    }
+}
+
+/** A pill that floats over the viewport. */
+@Composable
+private fun Floating(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    val c = Nz.colors
+    val shape = RoundedCornerShape(14.dp)
+    Row(modifier.clip(shape).background(c.surface.copy(alpha = 0.94f)).border(1.dp, c.line, shape).padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+}
+
+@Composable
+private fun ViewToggle(label: String, icon: NzIcon, on: Boolean, enabled: Boolean, onClick: () -> Unit) =
+    NzButton(label, onClick, kind = if (on) ButtonKind.PRIMARY else ButtonKind.QUIET, icon = icon, enabled = enabled)
+
+/** Pages of a panel as one segmented row. */
+@Composable
+private fun <T> TabStrip(items: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
+    val c = Nz.colors
+    val shape = RoundedCornerShape(10.dp)
+    Row(Modifier.fillMaxWidth().clip(shape).background(c.surfaceSunken).border(1.dp, c.line, shape).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        items.forEach { t ->
+            val on = t == selected
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (on) c.accent else Color.Transparent)
+                .selectable(on, role = Role.Tab) { onSelect(t) }.padding(vertical = 7.dp), contentAlignment = Alignment.Center) {
+                Txt(label(t), Nz.type.label, if (on) c.onAccent else c.textMuted)
             }
         }
     }
@@ -399,36 +453,37 @@ private fun ObjectInfo(s: PrepItem) {
     if (s.openEdges > 0) ObjectRow("Surface") { Txt("${s.openEdges} open edge${if (s.openEdges == 1) "" else "s"}: it may not slice as expected", Nz.type.bodySmall, c.danger) }
 }
 
-/** Orca's plate tools: Arrange, Auto orient (the selection, or everything), Split and Cut for the selected object. */
+/** The plate tools: Arrange, Auto orient (the selection, or everything), Split, Cut, Paint and AI auto-paint for the selected object. */
 @Composable
-private fun PlateToolbar(p: PrepareState) {
-    val c = Nz.colors
-    val sel = p.plateItems().firstOrNull { it.id == p.selected }
-    var cutting by remember(sel?.id) { mutableStateOf(false) }
-    var painting by remember(sel?.id) { mutableStateOf(false) }
-    var height by remember(sel?.id) { mutableStateOf(sel?.let { "%.1f".format(it.height / 2) } ?: "") }
+private fun PlateToolbar(p: PrepareState, sel: PrepItem?, drawer: Drawer?, toggle: (Drawer) -> Unit) {
     val idle = p.toolBusy == null
-    Column {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        NzButton("Arrange", { p.arrange() }, kind = ButtonKind.SECONDARY, icon = NzIcon.MOVE, enabled = idle, testTag = "plate-arrange")
-        NzButton(if (sel == null) "Auto orient all" else "Auto orient", { p.orient() }, kind = ButtonKind.SECONDARY, enabled = idle, testTag = "plate-orient")
-        NzButton("Split", { p.splitSelected() }, kind = ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-split")
-        NzButton("Cut", { cutting = !cutting }, kind = if (cutting) ButtonKind.PRIMARY else ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-cut")
-        NzButton("Paint", { if (p.paintKind == null) { p.paintKind = PaintOps.Kind.SUPPORT; p.paintState = 1 } else p.stopPainting() },
-            kind = if (p.paintKind != null) ButtonKind.PRIMARY else ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-paint")
-        NzButton("AI auto-paint", { painting = !painting }, kind = if (painting) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-            enabled = idle && sel != null && p.allSlots().size >= 2, testTag = "plate-autopaint")
-        if (cutting && sel != null) {
-            com.nozzleitall.desktop.settings.DenseInput(height, { height = it }, "Cut height above the base", Modifier.width(110.dp), units = "mm")
-            NzButton("Cut here", { height.replace(',', '.').toFloatOrNull()?.let { p.cutSelected(it); cutting = false } }, kind = ButtonKind.PRIMARY, enabled = idle)
-            Txt("of ${"%.1f".format(sel.height)} mm", Nz.type.bodySmall, c.textMuted)
-        }
-        Spacer(Modifier.weight(1f))
-        p.toolBusy?.let { Txt("$it…", Nz.type.bodySmall, c.accent) }
+    NzButton("Arrange", { p.arrange() }, kind = ButtonKind.QUIET, icon = NzIcon.MOVE, enabled = idle, testTag = "plate-arrange")
+    NzButton(if (sel == null) "Auto orient all" else "Auto orient", { p.orient() }, kind = ButtonKind.QUIET, enabled = idle, testTag = "plate-orient")
+    NzButton("Split", { p.splitSelected() }, kind = ButtonKind.QUIET, enabled = idle && sel != null, testTag = "plate-split")
+    NzButton("Cut", { toggle(Drawer.CUT) }, kind = if (drawer == Drawer.CUT) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && sel != null, testTag = "plate-cut")
+    NzButton("Paint", { if (p.paintKind == null) { p.paintKind = PaintOps.Kind.SUPPORT; p.paintState = 1 } else p.stopPainting() },
+        kind = if (p.paintKind != null) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && sel != null, testTag = "plate-paint")
+    NzButton("AI auto-paint", { toggle(Drawer.AI) }, kind = if (drawer == Drawer.AI) ButtonKind.PRIMARY else ButtonKind.QUIET,
+        enabled = idle && sel != null && p.allSlots().size >= 2, testTag = "plate-autopaint")
+    p.toolBusy?.let { Txt("$it…", Nz.type.bodySmall, Nz.colors.accent, modifier = Modifier.padding(horizontal = 8.dp)) }
+}
+
+@Composable
+private fun DrawerTitle(title: String, onClose: (() -> Unit)?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Txt(title, Nz.type.title, modifier = Modifier.weight(1f))
+        if (onClose != null) NzButton("Close", onClose, kind = ButtonKind.QUIET)
     }
-    if (p.paintKind != null && sel != null) PaintPanel(p)
-    if (painting && sel != null) AutoPaintPanel(p) { painting = false }
-    }
+}
+
+@Composable
+private fun CutPanel(p: PrepareState, sel: PrepItem, onDone: () -> Unit) {
+    val c = Nz.colors
+    var height by remember(sel.id) { mutableStateOf("%.1f".format(sel.height / 2)) }
+    DrawerTitle("Cut", onDone)
+    Txt("Cut ${sel.name} in two at a height above its base.", Nz.type.bodySmall, c.textMuted)
+    com.nozzleitall.desktop.settings.DenseInput(height, { height = it }, "Cut height above the base (of ${"%.1f".format(sel.height)} mm)", Modifier.fillMaxWidth(), units = "mm")
+    NzButton("Cut here", { height.replace(',', '.').toFloatOrNull()?.let { p.cutSelected(it); onDone() } }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null)
 }
 
 /** Orca's paint tools: what to paint (support / seam enforcers and blockers, a colour, fuzzy skin), how (brush, bucket fill, smart fill) and how big. */
@@ -442,25 +497,21 @@ private fun PaintPanel(p: PrepareState) {
         PaintOps.Kind.FUZZY -> listOf(choice("1", "Fuzzy skin"), choice("0", "Erase"))
         PaintOps.Kind.COLOUR -> p.allSlots().map { (id, label) -> choice(id.toString(), "$id · $label") } + choice("0", "Erase")
     }
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            com.nozzleitall.desktop.settings.DenseSelect("Paint", PaintOps.Kind.values().map { choice(it.name, it.label) }, kind.name, Modifier.width(140.dp)) { v ->
-                val k = PaintOps.Kind.valueOf(v); p.paintKind = k; p.paintState = if (k == PaintOps.Kind.COLOUR) (p.allSlots().firstOrNull()?.first ?: 1) else 1 }
-            com.nozzleitall.desktop.settings.DenseSelect("What", what, p.paintState.toString(), Modifier.width(170.dp)) { v -> v.toIntOrNull()?.let { p.paintState = it } }
-            com.nozzleitall.desktop.settings.DenseSelect("Tool", PaintOps.Mode.values().map { choice(it.name, it.label) }, p.paintMode.name, Modifier.width(150.dp)) { v -> p.paintMode = PaintOps.Mode.valueOf(v) }
-            if (p.paintMode == PaintOps.Mode.BRUSH) {
-                var radius by remember(p.paintRadius) { mutableStateOf("%.1f".format(p.paintRadius).removeSuffix(".0")) }
-                com.nozzleitall.desktop.settings.DenseInput(radius, { radius = it; it.replace(',', '.').toFloatOrNull()?.takeIf { r -> r in 0.2f..40f }?.let { r -> p.paintRadius = r } }, "Brush radius", Modifier.width(110.dp), units = "mm")
-            }
-            Spacer(Modifier.weight(1f))
-            p.takeIf { it.paintBusy }?.let { Txt("Painting…", Nz.type.bodySmall, c.accent) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Txt("Drag on the model to paint. Alt-drag orbits, Shift-drag pans.", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f))
-            NzButton("Undo", { p.undoPaint() }, kind = ButtonKind.SECONDARY, enabled = p.canUndoPaint && !p.paintBusy)
-            NzButton("Clear ${kind.label.lowercase()}", { p.clearPaint(kind) }, kind = ButtonKind.SECONDARY, enabled = !p.paintBusy, testTag = "paint-clear")
-            NzButton("Done", { p.stopPainting() }, kind = ButtonKind.QUIET, testTag = "paint-done")
-        }
+    DrawerTitle("Paint", { p.stopPainting() })
+    Txt("Drag on the model to paint. Alt-drag orbits, Shift-drag pans.", Nz.type.bodySmall, c.textMuted)
+    com.nozzleitall.desktop.settings.DenseSelect("Paint", PaintOps.Kind.values().map { choice(it.name, it.label) }, kind.name, Modifier.fillMaxWidth()) { v ->
+        val k = PaintOps.Kind.valueOf(v); p.paintKind = k; p.paintState = if (k == PaintOps.Kind.COLOUR) (p.allSlots().firstOrNull()?.first ?: 1) else 1 }
+    com.nozzleitall.desktop.settings.DenseSelect("What", what, p.paintState.toString(), Modifier.fillMaxWidth()) { v -> v.toIntOrNull()?.let { p.paintState = it } }
+    com.nozzleitall.desktop.settings.DenseSelect("Tool", PaintOps.Mode.values().map { choice(it.name, it.label) }, p.paintMode.name, Modifier.fillMaxWidth()) { v -> p.paintMode = PaintOps.Mode.valueOf(v) }
+    if (p.paintMode == PaintOps.Mode.BRUSH) {
+        var radius by remember(p.paintRadius) { mutableStateOf("%.1f".format(p.paintRadius).removeSuffix(".0")) }
+        com.nozzleitall.desktop.settings.DenseInput(radius, { radius = it; it.replace(',', '.').toFloatOrNull()?.takeIf { r -> r in 0.2f..40f }?.let { r -> p.paintRadius = r } }, "Brush radius", Modifier.fillMaxWidth(), units = "mm")
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        NzButton("Undo", { p.undoPaint() }, kind = ButtonKind.SECONDARY, enabled = p.canUndoPaint && !p.paintBusy)
+        NzButton("Clear ${kind.label.lowercase()}", { p.clearPaint(kind) }, kind = ButtonKind.SECONDARY, enabled = !p.paintBusy, testTag = "paint-clear")
+        NzButton("Done", { p.stopPainting() }, kind = ButtonKind.PRIMARY, testTag = "paint-done")
+        p.takeIf { it.paintBusy }?.let { Txt("Painting…", Nz.type.bodySmall, c.accent) }
     }
 }
 
@@ -471,11 +522,12 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
     var s by remember { mutableStateOf(p.autoPaintSettings) }
     var hint by remember { mutableStateOf("") }
     fun update(n: AutoPaint.Settings) { s = n; p.saveAutoPaintSettings(n) }
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        DrawerTitle("AI auto-paint", onDone)
         Txt("The engine splits the model into numbered parts and shows them, with your filaments, to the model you choose. Nothing is sent until you press Paint.",
             Nz.type.bodySmall, c.textMuted)
         com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
-            com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.width(260.dp)) { update(s.copy(kind = it)) }
+            com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.fillMaxWidth()) { update(s.copy(kind = it)) }
         if (s.kind == "command") {
             com.nozzleitall.desktop.settings.DenseInput(s.command, { update(s.copy(command = it)) }, "Command (reads the question on stdin)", Modifier.fillMaxWidth(), placeholder = "claude -p")
         } else {
@@ -484,10 +536,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
             com.nozzleitall.desktop.settings.DenseInput(s.apiKey, { update(s.copy(apiKey = it)) }, "API key (blank for a local server)", Modifier.fillMaxWidth())
         }
         com.nozzleitall.desktop.settings.DenseInput(hint, { hint = it }, "What should it look like? (optional)", Modifier.fillMaxWidth())
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            NzButton("Paint", { p.autoPaintSelected(hint); onDone() }, kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && s.provider != null, testTag = "autopaint-run")
-            NzButton("Close", onDone, kind = ButtonKind.QUIET)
-        }
+        NzButton("Paint", { p.autoPaintSelected(hint); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && s.provider != null, testTag = "autopaint-run")
     }
 }
 

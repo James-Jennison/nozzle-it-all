@@ -51,7 +51,7 @@ fun FleetScreen(state: AppState) {
                 }
             }
         } else {
-            LazyVerticalGrid(GridCells.Adaptive(340.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            LazyVerticalGrid(GridCells.Adaptive(380.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it, onEdit = { editing = id }) { state.openPrinter(id) } } }
             }
         }
@@ -96,6 +96,7 @@ fun PrinterCard(entry: PrinterEntry, onEdit: (() -> Unit)? = null, onOpen: () ->
                     Txt(if (family.contains(identity.model, ignoreCase = true)) family else "${identity.model} · $family", Nz.type.bodySmall, c.textMuted, maxLines = 1)
                 }
                 if (status.route != ConnectionRoute.NONE) StatusPill(status.state)
+                if (onEdit != null) NzButton("Edit", onEdit, Modifier.padding(start = 8.dp), kind = ButtonKind.SECONDARY, icon = NzIcon.TUNE, testTag = "edit-printer-${identity.id}")
             }
             val job = status.job
             if (job != null) {
@@ -114,7 +115,6 @@ fun PrinterCard(entry: PrinterEntry, onEdit: (() -> Unit)? = null, onOpen: () ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RouteBadge(status.route)
                 Spacer(Modifier.weight(1f))
-                if (onEdit != null) NzButton("Edit", onEdit, kind = ButtonKind.QUIET, testTag = "edit-printer-${identity.id}")
                 status.bed?.current?.let { Txt("Bed ${temp(it)}", Nz.type.metricSmall, c.textMuted) }
             }
         }

@@ -53,6 +53,8 @@ fun FleetScreen(state: AppState) {
         } else {
             LazyVerticalGrid(GridCells.Adaptive(380.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it, onEdit = { editing = id }) { state.openPrinter(id) } } }
+                // The queue sits under the cards, across the whole width, in the same scrolling list.
+                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { QueuePanel(state) }
             }
         }
     }

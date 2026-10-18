@@ -617,6 +617,12 @@ private fun StepSlice(state: AppState) {
                 SendPanel(state)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NzButton("Export file", { chooseSaveFile("Export sliced file", p.name + ".gcode")?.let { t -> s.result.gcode.copyTo(t, overwrite = true) } }, kind = ButtonKind.QUIET, icon = NzIcon.EXPORT)
+                    NzButton("Add to queue", {
+                        val printer = p.printer()
+                        val toolMap = if (printer?.capabilities?.value?.multiMaterial == true && p.materials().size > 1) p.materials().map { (it.toolhead ?: (it.slot - 1)) } else emptyList()
+                        state.fleet.enqueue(p.name, s.result.gcode, printer?.config?.identity?.id, toolMap)
+                        p.notice = "Added to the print queue on the Printers page."
+                    }, kind = ButtonKind.QUIET, testTag = "add-to-queue")
                     NzButton("Slice again", { p.slice(state.scope) }, kind = ButtonKind.QUIET)
                 }
             }

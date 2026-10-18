@@ -64,6 +64,16 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
     private val historyStore = com.nozzleitall.desktop.history.JobHistoryStore(File(paths.data, "history.json"))
     val history = mutableStateOf(historyStore.load())
     var notifier: (String, String) -> Unit = com.nozzleitall.desktop.history.DesktopNotifier::notify
+    /** Sliced files waiting for a printer. Nothing here starts by itself: the user confirms each one (see QueuePanel). */
+    private val queueStore = com.nozzleitall.desktop.queue.PrintQueue(File(paths.data, "queue"))
+    val queue = mutableStateOf(queueStore.items())
+    private fun refreshQueue() { queue.value = queueStore.items() }
+    fun enqueue(name: String, file: File, printerId: String?, toolheadMap: List<Int>) = queueStore.add(name, file, printerId, toolheadMap).also { refreshQueue() }
+    fun dequeue(id: String) { queueStore.remove(id); refreshQueue() }
+    fun moveInQueue(id: String, by: Int) { queueStore.move(id, by); refreshQueue() }
+    fun retargetQueued(id: String, printerId: String?) { queueStore.retarget(id, printerId); refreshQueue() }
+    fun queuedFile(item: com.nozzleitall.desktop.queue.QueueItem): File = queueStore.file(item)
+    private val wasBusy = HashMap<String, Boolean>()
     private val pollers = HashMap<String, Job>()
 
     val stockHelperInstalled: Boolean get() = stockHelper() != null
@@ -110,6 +120,7 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
 
     fun remove(id: String, persist: Boolean = true) {
         pollers.remove(id)?.cancel()
+        queueStore.forgetPrinter(id); refreshQueue()
         printers.remove(id)?.session?.let { s -> scope.launch(Dispatchers.IO) { runCatching { s.close() } } }
         order.value = order.value.filter { it != id }
         if (persist) store.save(order.value.mapNotNull { printers[it]?.config })
@@ -153,7 +164,20 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
         }
     }
 
+    /** A printer that was working and is now free, with something waiting for it, is worth telling the user about. */
+    internal fun noteFree(entry: PrinterEntry, reading: PrinterStatus) {
+        val id = entry.config.identity.id
+        val busy = reading.state.isActiveJob
+        val free = reading.state == PrinterState.READY || reading.state == PrinterState.FINISHED || reading.state == PrinterState.CANCELLED
+        val before = wasBusy[id]
+        if (reading.state != PrinterState.OFFLINE && reading.state != PrinterState.UNKNOWN && reading.state != PrinterState.CONNECTING) wasBusy[id] = busy
+        if (before == true && free) queueStore.nextFor(id)?.let { next ->
+            if (settings.value.notifications) notifier("${entry.config.identity.displayName.ifBlank { entry.config.identity.address }} is free", "Next in the queue: ${next.name}. Clear the plate, then start it from the Printers page.")
+        }
+    }
+
     internal fun recordEnd(entry: PrinterEntry, reading: PrinterStatus) {
+        noteFree(entry, reading)
         val rec = tracker.observe(entry.config.identity.id, entry.config.identity.displayName.ifBlank { entry.config.identity.address }, reading) ?: return
         history.value = (listOf(rec) + history.value).take(500)
         runCatching { historyStore.save(history.value) }.onFailure { log("history not saved: ${it.message}") }

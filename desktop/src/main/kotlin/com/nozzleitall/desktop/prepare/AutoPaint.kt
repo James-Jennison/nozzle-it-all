@@ -108,8 +108,14 @@ object AutoPaint {
         val p = process.process
         val errText = StringBuilder()
         val drain = Thread { runCatching { errText.append(p.errorStream.bufferedReader().readText()) } }.apply { isDaemon = true; start() }
-        p.outputStream.use { it.write(prompt.toByteArray()) }
+        var inputFailure: Exception? = null
+        val input = Thread {
+            try { p.outputStream.use { it.write(prompt.toByteArray()) } }
+            catch (e: Exception) { inputFailure = e }
+        }.apply { isDaemon = true; start() }
         val out = output(process, timeoutSeconds, "The command took too long to answer.")
+        input.join(1000)
+        if (input.isAlive || inputFailure != null) throw AutoPaintError("The command did not read the complete question.")
         drain.join(1000)
         if (p.exitValue() != 0) throw AutoPaintError("The command failed (exit ${p.exitValue()}): ${errText.toString().trim().lineSequence().lastOrNull().orEmpty()}")
         return out

@@ -36,6 +36,12 @@ class AutoPaintTest {
         catch (e: AutoPaint.AutoPaintError) { assertTrue(e.message!!.contains("too long")) }
         assertTrue((System.nanoTime() - start) / 1e9 < 5)
     }
+    @Test fun aCommandIgnoringALargeQuestionCannotBlockTheTimeoutOnStdin() {
+        val start = System.nanoTime()
+        try { AutoPaint.askCommand("sleep 8", "x".repeat(1_000_000), 1); fail("expected timeout") }
+        catch (e: AutoPaint.AutoPaintError) { assertTrue(e.message!!.contains("too long")) }
+        assertTrue((System.nanoTime()-start)/1e9 < 5)
+    }
     @Test fun anExitedCommandCannotLeaveABackgroundChildInItsSession() {
         assumeTrue(System.getProperty("os.name").startsWith("Linux"))
         val pid = Files.createTempDirectory("ap-child").resolve("pid").toFile()

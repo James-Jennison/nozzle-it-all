@@ -54,6 +54,13 @@ class MultiSelectionTest {
         p.history.undo(); assertEquals(50f, p.items[0].x, 0f)
         p.history.undo(); assertEquals(40f, p.items[0].x, 0f)
     }
+    @Test fun staleTransformCallbacksAfterSelectionClearsDoNothing() {
+        val p = app().prepare; p.selectAll(); p.deselect()
+        p.moveSelection(1, 100f, 100f); p.turnSelection(1, 90f); p.resizeSelection(1, 2f)
+        p.beginSelectionTransform(999); p.endSelectionTransform()
+        assertEquals(40f, p.items[0].x, 0f); assertEquals(0f, p.items[0].rotZ, 0f)
+        assertEquals(1f, p.items[0].scale, 0f); assertFalse(p.history.canUndo)
+    }
     @Test fun rotationAndScalePreserveTheGroupAroundItsCentre() {
         val p = app().prepare; p.selectObject(1); p.selectObject(2, toggle = true)
         p.beginSelectionTransform(1); p.turnSelection(1, 45f); p.turnSelection(1, 90f); p.endSelectionTransform()

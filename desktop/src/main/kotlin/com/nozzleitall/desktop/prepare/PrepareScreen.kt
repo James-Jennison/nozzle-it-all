@@ -540,7 +540,7 @@ private fun StepObjects(state: AppState) {
                 GroupNumber("X", s.x) { p.editSelection { p.moveSelection(s.id, it, s.y) } }; GroupNumber("Y", s.y) { p.editSelection { p.moveSelection(s.id, s.x, it) } }
             } }
             ObjectRow("Turn together") { GroupNumber("°", s.rotZ) { p.editSelection { p.turnSelection(s.id, it - s.rotZ) } } }
-            ObjectRow("Scale together") { GroupNumber("%", s.scale * 100f) { if (it > 0f) p.editSelection { p.resizeSelection(s.id, it / (s.scale * 100f)) } } }
+            ObjectRow("Scale together") { GroupNumber("%", s.scale * 100f, positive = true) { p.editSelection { p.resizeSelection(s.id, it / (s.scale * 100f)) } } }
             Txt("Enter or leave a field to apply · Esc to cancel", Nz.type.bodySmall, c.textMuted)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clickable { p.duplicateSelected() }.padding(4.dp))
@@ -751,14 +751,18 @@ private fun ObjectNumber(units: String, value: Float, onValue: (Float) -> Unit) 
 
 /** Group numeric edits commit once, so typing speed never changes the Undo boundary. */
 @Composable
-private fun GroupNumber(units: String, value: Float, onCommit: (Float) -> Unit) {
+private fun GroupNumber(units: String, value: Float, positive: Boolean = false, onCommit: (Float) -> Unit) {
     var text by remember(value) { mutableStateOf("%.1f".format(value).removeSuffix(".0")) }
     var focused by remember { mutableStateOf(false) }
     var cancelled by remember { mutableStateOf(false) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     com.nozzleitall.desktop.settings.DenseInput(text, { text = it }, units,
         Modifier.width(80.dp).onFocusChanged { state ->
-            if (focused && !state.hasFocus && !cancelled) text.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() && it != value }?.let(onCommit)
+            if (focused && !state.hasFocus && !cancelled) {
+                val parsed = text.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() && (!positive || it > 0f) }
+                if (parsed != null && parsed != value) onCommit(parsed)
+                else text = "%.1f".format(value).removeSuffix(".0")
+            }
             focused = state.hasFocus
             if (focused) cancelled = false
         }.onPreviewKeyEvent { e ->

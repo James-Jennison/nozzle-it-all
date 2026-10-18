@@ -668,19 +668,23 @@ class PrepareState(private val app: AppState) {
     }
     fun beginSelectionTransform(id: Int) {
         if (id !in selectedIds) selectObject(id)
+        if (id !in selectedIds) return
         history.beginEdit()
         selectionTransform = SelectionTransforms(selectedItems(), id)
     }
     fun endSelectionTransform() { selectionTransform = null; history.endEdit() }
     fun moveSelection(id: Int, x: Float, y: Float) {
+        if (id !in selectedIds) return
         val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
         transform.move(x, y); changed()
     }
     fun turnSelection(id: Int, angle: Float) {
+        if (id !in selectedIds) return
         val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
         transform.turn(angle); changed()
     }
     fun resizeSelection(id: Int, scale: Float) {
+        if (id !in selectedIds) return
         val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
         transform.resize(scale); changed()
     }

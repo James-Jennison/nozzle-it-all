@@ -136,12 +136,32 @@ fun PrepareScreen(state: AppState) {
                         Txt("Layer ${p.previewLayer + 1} of ${layers.size} · Z ${"%.2f".format(layers[p.previewLayer].z)} mm", Nz.type.metricSmall, c.textMuted)
                     }
                 }
+                if (!p.showPreview) AdviceStrip(p, onChoosePrinter = { tab = LeftTab.SETUP })
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
                     Spacer(Modifier.weight(1f))
                     Txt("Drag to orbit · Shift-drag to pan · Scroll to zoom", Nz.type.bodySmall, c.textMuted)
                 }
             }
+        }
+    }
+}
+
+/** What the app can already see is wrong with the plate, one line each, with the fix when it has one. Each can be dismissed. */
+@Composable
+private fun AdviceStrip(p: PrepareState, onChoosePrinter: () -> Unit) {
+    val c = Nz.colors
+    var dismissed by remember { mutableStateOf(setOf<String>()) }
+    val onPlate = p.plateItems()
+    val advice = PrepareAdvice.compute(PrepareAdvice.Input(
+        offPlate = p.outOfBounds().map { it.name }, hasPrinter = p.printer() != null,
+        openEdges = onPlate.associate { it.name to it.openEdges }, objectCount = onPlate.size)).filter { it.id !in dismissed }
+    advice.forEach { a ->
+        Floating(Modifier.fillMaxWidth()) {
+            Icon(NzIcon.ALERT, Nz.status.paused, 18.dp, modifier = Modifier.padding(start = 6.dp))
+            Txt(a.text, Nz.type.bodySmall, c.text, modifier = Modifier.weight(1f).padding(horizontal = 6.dp))
+            if (a.action != null) NzButton(a.actionLabel ?: "Fix", { if (a.action == PrepareAdvice.ARRANGE) p.arrange() else onChoosePrinter() }, kind = ButtonKind.SECONDARY)
+            NzButton("Dismiss", { dismissed = dismissed + a.id }, kind = ButtonKind.QUIET)
         }
     }
 }

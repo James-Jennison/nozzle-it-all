@@ -856,16 +856,21 @@ class PrepareState(private val app: AppState) {
         refreshAiPreview()
     }
     fun aiSetCleanup(enabled: Boolean) { if (toolBusy == null) { aiCleanBoundaries = enabled; refreshAiPreview() } }
-    private fun refreshAiPreview() {
+    private fun refreshAiPreview() { runTool("Updating paint draft") { rebuildAiPreview() } }
+    private suspend fun rebuildAiPreview() {
         val source = aiSource ?: return
         val answer = aiAnswer ?: return
-        val raw = answer.faces()
-        val slots = if (aiCleanBoundaries) cleanPaintBoundaries(source.mesh, raw).also { cleaned ->
-            // Explicit owner corrections take precedence over automatic cleanup.
-            for (f in cleaned.indices) if (answer.slots[answer.faceRegions[f]] != answer.originalSlots[answer.faceRegions[f]]) cleaned[f] = raw[f]
-        } else raw
-        aiCleanedFaces = slots.indices.count { slots[it] != raw[it] }
-        aiPreviewMesh = AutoPaint.applied(AutoPaintReview.base(source.mesh, aiSourceSlots, aiSourceSlot), slots)
+        val generation = aiGeneration; val mapping = aiSourceSlots; val baseSlot = aiSourceSlot; val cleanup = aiCleanBoundaries
+        val (mesh, count) = withContext(Dispatchers.IO) {
+            val raw = answer.faces()
+            val slots = if (cleanup) cleanPaintBoundaries(source.mesh, raw).also { cleaned ->
+                // Explicit owner corrections take precedence over automatic cleanup.
+                for (f in cleaned.indices) if (answer.slots[answer.faceRegions[f]] != answer.originalSlots[answer.faceRegions[f]]) cleaned[f] = raw[f]
+            } else raw
+            AutoPaint.applied(AutoPaintReview.base(source.mesh, mapping, baseSlot), slots) to slots.indices.count { slots[it] != raw[it] }
+        }
+        if (generation != aiGeneration || aiAnswer !== answer) return
+        aiCleanedFaces = count; aiPreviewMesh = mesh
         aiShowOriginal = false
     }
 
@@ -895,7 +900,7 @@ class PrepareState(private val app: AppState) {
         val generation = aiGeneration
         runTool("Waiting for the answer") {
             val answer = withContext(Dispatchers.IO) { AutoPaint.askReview(prepared, provider) }
-            if (generation == aiGeneration && aiPrepared === prepared) { aiAnswer = answer; refreshAiPreview() }
+            if (generation == aiGeneration && aiPrepared === prepared) { aiAnswer = answer; rebuildAiPreview() }
         }
     }
 

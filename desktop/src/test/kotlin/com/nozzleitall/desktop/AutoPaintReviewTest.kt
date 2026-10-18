@@ -41,6 +41,17 @@ class AutoPaintReviewTest {
         camera.reset(); assertEquals(55f, camera.pitch, 0f); assertEquals(fitted, camera.distance, 0f)
         assertEquals(androidx.compose.ui.geometry.Offset.Zero, camera.pan)
     }
+    @Test fun projectionIsFiniteAndInvertibleThroughBothPolesAndUnderneath() {
+        val cam = ViewCamera()
+        for (pitch in listOf(-180f,-90f,0f,89.999f,90f,90.001f,180f,270f,360f)) {
+            cam.pitch = pitch
+            val proj = Projector(1000f,800f,cam,128f,128f)
+            val screen = FloatArray(3); proj.p(140f,145f,20f,screen,0)
+            assertTrue(screen.all { it.isFinite() })
+            val world = DoubleArray(3); proj.unproject(screen[0],screen[1],-screen[2],world)
+            assertEquals(140.0,world[0],0.001); assertEquals(145.0,world[1],0.001); assertEquals(20.0,world[2],0.001)
+        }
+    }
     @Test fun regionCorrectionsAndResetNeverMutateOriginalDraft() {
         val draft = AutoPaintReview(intArrayOf(0,1,0), listOf(1,2))
         val corrected = draft.corrected(0,0)

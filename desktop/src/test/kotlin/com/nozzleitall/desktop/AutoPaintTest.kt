@@ -12,6 +12,7 @@ import org.junit.Test
 import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
+import kotlinx.coroutines.*
 
 /** AI auto-paint: the engine segments and reads the answer, the provider (a command, or a local OpenAI-style server) answers. */
 class AutoPaintTest {
@@ -70,6 +71,51 @@ class AutoPaintTest {
         assertTrue("the question names the view files and carries the hint", seen.readText().let { "view-front.png" in it && "festive" in it })
         assertEquals(setOf(1, 2), MeshIO.paintedFilaments(painted).toSet())
         assertFalse(File(work, "autopaint").exists())
+    }
+
+    @Test fun preparedIdentityRegionsAnd768PixelViewsRoundTripThroughTheRealEngine() {
+        engineReady()
+        val work = Files.createTempDirectory("ap-identity").toFile()
+        val first = AutoPaint.prepare(cube(),"cube",filaments,"",work)
+        val second = AutoPaint.prepare(cube(),"cube",filaments,"",work)
+        try {
+            assertNotEquals(first.dir,second.dir); assertTrue(first.stl.exists())
+            assertEquals(12,first.faceRegions.size)
+            assertTrue(first.faceRegions.all { it in 0 until first.seg.segmentCount })
+            assertArrayEquals(first.faceRegions,second.faceRegions)
+            assertEquals(6,first.seg.views.size)
+            first.seg.views.forEach { assertEquals(768,javax.imageio.ImageIO.read(File(it.path)).width) }
+            val review = AutoPaint.askReview(first,Provider.Command("cat >/dev/null; printf '%s' '$answer'"))
+            assertArrayEquals(first.faceRegions,review.faceRegions)
+            assertTrue(review.faces().any { it > 0 })
+        } finally { first.discard(); second.discard() }
+    }
+
+    @Test fun draftPreviewCorrectionsApplyAndUndoAreNonDestructiveAndAtomic() = runBlocking {
+        engineReady()
+        val tmp = Files.createTempDirectory("ap-state").toFile()
+        val app = AppState(AppPaths(File(tmp,"c"),File(tmp,"d"),File(tmp,"k")).ensure(),CoroutineScope(SupervisorJob()+Dispatchers.Default))
+        val p = app.prepare; val mesh = cube()
+        suspend fun idle() { withTimeout(60000) { while (p.toolBusy != null) delay(20) } }
+        try {
+            withContext(Dispatchers.Main) {
+                p.items.add(PrepItem(1,"cube",mesh,100f,100f)); p.selected = 1; p.history.reset()
+                p.autoPaintSettings = AutoPaint.Settings(command = "cat >/dev/null; printf '%s' '$answer'")
+                p.aiPrepare("")
+            }
+            idle(); assertNotNull(p.aiPrepared)
+            withContext(Dispatchers.Main) { p.aiSend() }; idle()
+            assertNotNull(p.aiPreviewMesh); assertSame(mesh,p.items.single().mesh); assertFalse(p.aiCleanBoundaries)
+            assertFalse(p.history.canUndo)
+            withContext(Dispatchers.Main) { p.aiCorrect(0,2) }; idle()
+            assertEquals(2,p.aiAnswer!!.slots[0]); assertSame(mesh,p.items.single().mesh)
+            withContext(Dispatchers.Main) { p.aiApply() }
+            assertTrue(p.items.single().mesh.isPainted); assertTrue(p.history.canUndo)
+            withContext(Dispatchers.Main) { p.history.undo() }
+            assertSame(mesh,p.items.single().mesh); assertFalse(p.history.canUndo)
+            withContext(Dispatchers.Main) { p.history.redo() }
+            assertTrue(p.items.single().mesh.isPainted)
+        } finally { withContext(Dispatchers.Main) { p.aiDiscard() }; app.scope.cancel() }
     }
 
     @Test fun anOpenAiCompatibleServerGetsTheViewsAndPaintsTheModel() {

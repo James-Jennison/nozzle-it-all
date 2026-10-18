@@ -143,7 +143,7 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): 
     return best
 }
 
-private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Float, val cy: Float) {
+internal class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Float, val cy: Float) {
     private val yaw = Math.toRadians(cam.yaw.toDouble()); private val pitch = Math.toRadians(cam.pitch.toDouble())
     private val cyw = cos(yaw).toFloat(); private val syw = sin(yaw).toFloat(); private val cp = cos(pitch).toFloat(); private val sp = sin(pitch).toFloat()
     private val scale = min(w, h) / cam.distance * 1.6f; private val pan = cam.pan

@@ -700,6 +700,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
     var showReferenceViews by remember { mutableStateOf(false) }
     fun update(n: AutoPaint.Settings) { s = n; p.saveAutoPaintSettings(n) }
     val prepared = p.aiPrepared
+    var correctionRegion by remember(prepared) { mutableStateOf(0) }
     val answer = p.aiAnswer
     fun close() { p.aiDiscard(); onDone() }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -744,15 +745,23 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
                 NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
                 Txt("Optional, conservative tip smoothing; preserves small colour details and sharp creases. ${p.aiCleanedFaces} faces adjusted. It cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)
                 Txt("Correct regions (numbers match the images)", Nz.type.label)
-                NzButton("Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-apply")
-                NzButton("Discard", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
                 val choices = listOf(com.nozzleitall.desktop.settings.Choice("0", "Keep original paint")) + prepared.filaments.map { f ->
-                    com.nozzleitall.desktop.settings.Choice(f.index.toString(), "Slot ${f.index} · ${f.colorHex}")
+                    com.nozzleitall.desktop.settings.Choice(f.index.toString(), "Slot ${f.index} · ${f.name.ifBlank { f.type }} · ${f.colorHex}")
                 }
-                answer.slots.forEachIndexed { region, slot ->
-                    com.nozzleitall.desktop.settings.DenseSelect("Region $region", choices, slot.toString(), Modifier.fillMaxWidth()) { p.aiCorrect(region, it.toInt()) }
+                com.nozzleitall.desktop.settings.DenseSelect("Region", answer.slots.indices.map { region ->
+                    com.nozzleitall.desktop.settings.Choice(region.toString(), "Region $region")
+                }, correctionRegion.toString(), Modifier.fillMaxWidth()) { correctionRegion = it.toInt() }
+                val correctionSlot = answer.slots.getOrElse(correctionRegion) { 0 }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val filament = prepared.filaments.firstOrNull { it.index == correctionSlot }
+                    Box(Modifier.size(18.dp).background(parseHex(filament?.colorHex) ?: c.surfaceRaised, RoundedCornerShape(3.dp)).border(1.dp, c.line, RoundedCornerShape(3.dp)))
+                    com.nozzleitall.desktop.settings.DenseSelect("Paint region $correctionRegion with", choices, correctionSlot.toString(), Modifier.weight(1f)) { p.aiCorrect(correctionRegion, it.toInt()) }
                 }
                 NzButton("Reset region corrections", { p.aiResetCorrections() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+                val noChanges = answer.slots.all { it == 0 }
+                if (noChanges) Txt("No paint changes. Your original model will stay unchanged.", Nz.type.bodySmall, c.textMuted)
+                NzButton(if (noChanges) "Done — keep original" else "Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-apply")
+                NzButton("Discard", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
             }
         }
     }

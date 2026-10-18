@@ -29,6 +29,7 @@ private val frameDispatcher=Dispatchers.Default.limitedParallelism(1)
  * supersession must NOT cancel/reject every frame (that would starve continuous
  * orbit). Completed frames may present for the same scene/size; changed source
  * results never publish. Final settled camera is rendered from the pending slot.
+ * One additional conflated immutable result can wait while Main is drawing.
  * T is immutable after return; publish transfers ownership to Main, all rejected
  * or cancellation-lost results close here, including prompt dispatcher cancellation.
  */
@@ -40,39 +41,53 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
     private val requests=Channel<FrameTicket>(Channel.CONFLATED)
     private val latest=AtomicReference<FrameTicket?>()
     private var sequence=0L
-    // A rememberCoroutineScope can carry Compose's frame-flush dispatcher.
-    // Returning worker results through that dispatcher adds an entire display
-    // interval before publication and serializes it with the next render. Use
-    // Swing Main directly while preserving the caller's parent cancellation.
-    private val job=scope.launch(Dispatchers.Main.immediate) {
+    private class Completed<T:AutoCloseable>(val ticket:FrameTicket,val value:T,val nanos:Long):AutoCloseable {
+        override fun close()=value.close()
+    }
+    // One waiting immutable result, never an unbounded queue. Replaced or
+    // cancellation-undelivered results have never reached UI drawing and close
+    // here. The worker can render the next camera while Main presents this one.
+    private val results=Channel<Completed<T>>(Channel.CONFLATED,onUndeliveredElement={ it.close() })
+    private val publisher=scope.launch(Dispatchers.Main.immediate) {
+        try {
+            for(result in results) {
+                var owned:T?=result.value
+                try {
+                    if(latest.get()?.request?.sameSource(result.ticket.request)==true) {
+                        publish(result.ticket,result.value,result.nanos)
+                        owned=null
+                        frameDiagnostic("published",result.ticket)
+                    } else frameDiagnostic("discarded",result.ticket)
+                } finally { owned?.close() }
+            }
+        } finally { results.cancel() }
+    }
+    private val job=scope.launch(frameDispatcher) {
         try {
             for(ticket in requests) {
                 var owned:T?=null
                 var renderNanos=0L
                 try {
-                    withContext(frameDispatcher) {
-                        val context=coroutineContext
-                        val check={ context.ensureActive();if(latest.get()?.request?.sameSource(ticket.request)!=true)throw ObsoleteFrame() }
-                        check();frameDiagnostic("started",ticket)
-                        val start=System.nanoTime()
-                        owned=render(ticket.request,check)
-                        renderNanos=System.nanoTime()-start
-                        check()
-                    }
-                    if(latest.get()?.request?.sameSource(ticket.request)==true) {
-                        val value=owned!!
-                        publish(ticket,value,renderNanos)
-                        owned=null // publish owns it now.
-                        frameDiagnostic("published",ticket)
-                    } else frameDiagnostic("discarded",ticket)
+                    val context=coroutineContext
+                    val check={ context.ensureActive();if(latest.get()?.request?.sameSource(ticket.request)!=true)throw ObsoleteFrame() }
+                    check();frameDiagnostic("started",ticket)
+                    val start=System.nanoTime()
+                    owned=render(ticket.request,check)
+                    renderNanos=System.nanoTime()-start
+                    check()
+                    val completed=Completed(ticket,owned!!,renderNanos)
+                    if(results.trySend(completed).isSuccess)owned=null // channel/publisher owns it now.
                 } catch (_:ObsoleteFrame) { frameDiagnostic("discarded",ticket) }
                 catch(e:CancellationException) { throw e }
                 catch (_:Exception) {
-                    if(latest.get()?.request==ticket.request)failed(ticket)
+                    withContext(Dispatchers.Main.immediate) { if(latest.get()?.request==ticket.request)failed(ticket) }
                     frameDiagnostic("failed",ticket)
                 } finally { owned?.close() }
             }
-        } finally { withContext(NonCancellable+frameDispatcher) { dispose() } }
+        } finally {
+            results.close()
+            withContext(NonCancellable+frameDispatcher) { dispose() }
+        }
     }
     fun offer(request:FrameRequest) {
         if(latest.get()?.request==request)return
@@ -84,7 +99,7 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
      * caller may close it separately. Its finally disposes after render/joins,
      * including noncooperative work. Blocking Main here would defeat responsiveness.
      */
-    fun close() { latest.set(null);requests.close();job.cancel() }
+    fun close() { latest.set(null);requests.close();job.cancel();publisher.cancel();results.cancel() }
 }
 
 internal data class ViewportFrame(val ticket:FrameTicket,val image:Image,val renderNanos:Long):AutoCloseable {

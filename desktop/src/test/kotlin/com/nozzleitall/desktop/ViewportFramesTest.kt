@@ -45,12 +45,13 @@ class ViewportFramesTest {
 
     @Test(timeout=20000) fun cameraFramesDoNotStarveAndPendingRequestsAreConflated()=runBlocking {
         val owner=CoroutineScope(SupervisorJob()+Dispatchers.Main)
-        val start=CountDownLatch(1);val release=CountDownLatch(1)
+        val start=CountDownLatch(1);val release=CountDownLatch(1);val releaseSecond=CountDownLatch(1)
         val results=Channel<Pair<FrameTicket,Resource>>(Channel.UNLIMITED)
         var calls=0
         val pump=LatestFramePump(owner,render={ _,_->
             assertFalse(SwingUtilities.isEventDispatchThread())
             if(++calls==1) { start.countDown();check(release.await(10,TimeUnit.SECONDS)) }
+            else if(calls==2)check(releaseSecond.await(10,TimeUnit.SECONDS))
             Resource()
         },publish={ ticket,resource,_->assertTrue(SwingUtilities.isEventDispatchThread());results.trySend(ticket to resource) })
         try {
@@ -60,11 +61,34 @@ class ViewportFramesTest {
                 for(i in 1..100)pump.offer(first.copy(camera=first.camera.copy(yaw=i.toFloat())))
             } }
             release.countDown()
-            val a=withTimeout(5000) { results.receive() };val b=withTimeout(5000) { results.receive() }
+            val a=withTimeout(5000) { results.receive() };releaseSecond.countDown()
+            val b=withTimeout(5000) { results.receive() }
             assertEquals(1L,a.first.sequence);assertEquals(101L,b.first.sequence)
             assertEquals(100f,b.first.request.camera.yaw);assertEquals(2,calls)
             a.second.close();b.second.close()
-        } finally { release.countDown();withContext(Dispatchers.Main) { pump.close() };owner.cancel() }
+        } finally { release.countDown();releaseSecond.countDown();withContext(Dispatchers.Main) { pump.close() };owner.cancel() }
+    }
+
+    @Test(timeout=20000) fun workerContinuesWhileMainIsBusyAndClosesReplacedWaitingResult()=runBlocking {
+        val owner=CoroutineScope(SupervisorJob()+Dispatchers.Main)
+        val firstRendered=CountDownLatch(1);val firstDropped=CountDownLatch(1)
+        val shown=CompletableDeferred<FrameTicket>();val disposed=CompletableDeferred<Unit>()
+        val first=AutoCloseable { firstDropped.countDown() };var calls=0
+        val pump=LatestFramePump<AutoCloseable>(owner,render={ _,_->
+            if(++calls==1) { firstRendered.countDown();first } else AutoCloseable {}
+        },publish={ ticket,value,_->value.close();shown.complete(ticket) },dispose={ disposed.complete(Unit) })
+        try {
+            withContext(Dispatchers.Main) {
+                val a=request();pump.offer(a);await(firstRendered)
+                pump.offer(a.copy(camera=a.camera.copy(yaw=30f)))
+                // Deliberately hold Main: a worker that round-trips through Main
+                // between frames cannot reach the second render or this close.
+                await(firstDropped)
+            }
+            assertEquals(2L,withTimeout(5000) { shown.await() }.sequence)
+            withContext(Dispatchers.Main) { pump.close() }
+            withTimeout(5000) { disposed.await() };assertEquals(2,calls)
+        } finally { withContext(Dispatchers.Main) { pump.close() };owner.cancel() }
     }
 
     @Test(timeout=20000) fun obsoleteNonCooperativeSourceResultIsClosedNotPublished()=runBlocking {

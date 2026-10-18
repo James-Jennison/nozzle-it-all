@@ -5,14 +5,16 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import kotlin.math.*
 
-/** A few primitive buffers, keyed only by sample count, owned by one viewport.
- * No Mesh references and no unbounded accumulation across imported models. */
+/** One grow-only buffer owned by one viewport. Draws are sequential. Empty tail
+ * triangles are degenerate, so differing mesh sizes never thrash a size LRU.
+ * The production sampling rule bounds capacity below120,000 vertices. */
 internal class ShadowScratch {
     class Buffers(count:Int) { val positions=FloatArray(count*2);val colors=IntArray(count){0xff000000.toInt()} }
-    private val sizes=object:LinkedHashMap<Int,Buffers>(4,.75f,true) {
-        override fun removeEldestEntry(eldest:MutableMap.MutableEntry<Int,Buffers>?)=size>4
+    private var buffers=Buffers(0)
+    fun get(count:Int):Buffers {
+        if(buffers.colors.size<count)buffers=Buffers(count)
+        return buffers
     }
-    fun get(count:Int)=sizes.getOrPut(count){Buffers(count)}
 }
 
 internal fun DrawScope.rasterShadow(proj:Projector,o:PlateObject,d:DisplayMesh,scratch:ShadowScratch) {
@@ -34,6 +36,7 @@ internal fun DrawScope.rasterShadow(proj:Projector,o:PlateObject,d:DisplayMesh,s
         }
         k+=step
     }
+    buffers.positions.fill(0f,out) // Clear a previous larger shadow's tail.
     drawIntoCanvas { canvas ->
         // The shadow only touches its projected footprint. Avoid allocating and
         // compositing a full viewport-sized transparency layer per object.

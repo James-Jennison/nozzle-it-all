@@ -15,6 +15,24 @@ import kotlin.math.*
 import kotlin.random.Random
 
 class ViewportRasterTest {
+    @Test fun shadowScratchReusesLargestBufferAcrossMoreThanFourMeshSizes() {
+        val scratch=ShadowScratch();val largest=scratch.get(120_000)
+        repeat(3) { for(count in listOf(3,300,900,6000,12000,60000,120000))assertSame(largest,scratch.get(count)) }
+    }
+    @Test fun lightingGroupsKeepUlpDifferencesAndResolveHashCollisions() {
+        val mesh=torus();val normals=FloatArray(mesh.triangles.size*3)
+        for(c in mesh.triangles.indices) {
+            normals[c*3]=Float.fromBits(1f.toRawBits()+(c%137))
+            normals[c*3+1]=(c%11).toFloat();normals[c*3+2]=1f
+        }
+        val groups=LightingGroups(DisplayMesh(mesh,normals,mesh.bounds()))
+        val seen=HashMap<List<Int>,Int>();val reverse=HashMap<Int,List<Int>>()
+        for(c in mesh.triangles.indices) {
+            val key=(0..2).map { normals[c*3+it].toRawBits() };val id=groups.ids[c]
+            assertEquals(seen.getOrPut(key){id},id);assertEquals(reverse.getOrPut(id){key},key)
+        }
+        assertNotEquals(groups.ids[0],groups.ids[1])
+    }
     @Test fun conservativeSpansMatchFrozenPixelOracleForClippingSliversAndBothWindings() {
         val random=Random(1739);val actual=DepthSurface(64f,48f);val expected=ReferenceDepthSurface(64f,48f)
         repeat(600) { i ->
@@ -56,6 +74,7 @@ class ViewportRasterTest {
     }
     @Test fun primitiveShadowBuffersMatchFrozenShadow() {
         val mesh=torus();val d=displayMesh(mesh);val scratch=ShadowScratch()
+        scratch.get(120_000).positions.fill(12345f) // Prior larger mesh must leave no tail geometry.
         fun image(reference:Boolean,pitch:Float,pan:Offset):IntArray {
             val camera=ViewCamera().apply { fitBed(256f,256f);this.pitch=pitch;this.pan=pan }
             val proj=Projector(320f,240f,camera,128f,128f)

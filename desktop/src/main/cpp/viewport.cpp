@@ -41,7 +41,7 @@ void main() {
     depth=-v.z;
     float denominator=max(view.y-v.z,view.y*0.2);
     gl_Position=vec4(2.0*(v.x*view.x*view.y+view.z*denominator)/viewport.x,
-        -2.0*(v.y*view.x*view.y+view.w*denominator)/viewport.y,0.0,denominator);
+        2.0*(v.y*view.x*view.y+view.w*denominator)/viewport.y,0.0,denominator);
     if(shadow!=0){color=vec3(0);return;}
     vec3 n=direction(rotate(unit(normal/extent)));
     vec3 f=direction(rotate(unit(face/extent)*sign(extent.x*extent.y*extent.z)));
@@ -87,7 +87,8 @@ struct Renderer {
     GLuint geometry=0,quad=0,quadVao=0,fbo=0,texture=0,depthStencil=0;
     int width=0,height=0;bool current=false;
     EGLenum previousApi=EGL_OPENGL_ES_API;
-    std::unordered_map<GLuint,Mesh> meshes;std::vector<uint8_t> pixels;
+    std::unordered_map<GLuint,Mesh> meshes;
+    GLenum readFormat=GL_RGBA;
     std::string name;
     void bind(){
         if(current)return;
@@ -135,7 +136,11 @@ struct Renderer {
         glRenderbufferStorage(GL_RENDERBUFFER,GL_DEPTH32F_STENCIL8,w,h);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_STENCIL_ATTACHMENT,GL_RENDERBUFFER,depthStencil);
         if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)throw std::runtime_error("Viewport framebuffer incomplete");
-        pixels.resize(size_t(w)*h*4);width=w;height=h;
+        // Use the implementation's guaranteed native byte format when available;
+        // otherwise RGBA/UNSIGNED_BYTE is core for this RGBA8 framebuffer.
+        GLint format=0,type=0;glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT,&format);glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_TYPE,&type);
+        readFormat=(format==0x80e1&&type==GL_UNSIGNED_BYTE)?GLenum(0x80e1):GL_RGBA; // BGRA implementation read format
+        width=w;height=h;
     }
     ~Renderer(){
         bool bound=false;
@@ -159,6 +164,7 @@ extern "C" {
 JNIEXPORT jstring JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_sourceRevision(JNIEnv* e,jobject){return e->NewStringUTF(NIA_SOURCE_REVISION);}
 JNIEXPORT jlong JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_create(JNIEnv* e,jobject){try{auto r=std::make_unique<Renderer>();r->init();return reinterpret_cast<jlong>(r.release());}catch(...){error(e);return 0;}}
 JNIEXPORT jstring JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_describe(JNIEnv* e,jobject,jlong h){try{return e->NewStringUTF(get(h).name.c_str());}catch(...){error(e);return nullptr;}}
+JNIEXPORT jboolean JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_bgra(JNIEnv* e,jobject,jlong h){try{return get(h).readFormat==0x80e1;}catch(...){error(e);return false;}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_begin(JNIEnv* e,jobject,jlong h,jint w,jint height,jfloatArray camera){try{
     auto& r=get(h);auto c=floats(e,camera);if(c.size()!=10)throw std::runtime_error("Invalid viewport camera");
     r.bind();r.resize(w,height);glBindFramebuffer(GL_FRAMEBUFFER,r.fbo);glViewport(0,0,w,height);
@@ -215,12 +221,11 @@ JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_draw(
     }
 }catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_read(JNIEnv* e,jobject,jlong h,jlong output,jint bytes){try{
-    auto& r=get(h);if(!r.current||!output||bytes<0||size_t(bytes)!=r.pixels.size())throw std::runtime_error("Invalid viewport readback");
-    glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,r.width,r.height,GL_RGBA,GL_UNSIGNED_BYTE,r.pixels.data());
+    auto& r=get(h);if(!r.current||!output||bytes<0||int64_t(bytes)!=int64_t(r.width)*r.height*4)throw std::runtime_error("Invalid viewport readback");
+    // Projection is vertically inverted in the private FBO, so its bottom-first
+    // readback already has Skia's top-first order. No CPU row flip or swizzle.
+    glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,r.width,r.height,r.readFormat,GL_UNSIGNED_BYTE,reinterpret_cast<void*>(output));
     if(glGetError()!=GL_NO_ERROR)throw std::runtime_error("Viewport readback failed");
-    auto* dst=reinterpret_cast<uint8_t*>(output);
-    for(int y=0;y<r.height;y++){const uint8_t* src=r.pixels.data()+size_t(r.height-1-y)*r.width*4;uint8_t* row=dst+size_t(y)*r.width*4;
-        for(int x=0;x<r.width;x++){row[x*4]=src[x*4+2];row[x*4+1]=src[x*4+1];row[x*4+2]=src[x*4];row[x*4+3]=src[x*4+3];}}
 }catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_end(JNIEnv* e,jobject,jlong h){try{get(h).unbind();}catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_destroy(JNIEnv*,jobject,jlong h){delete reinterpret_cast<Renderer*>(h);}

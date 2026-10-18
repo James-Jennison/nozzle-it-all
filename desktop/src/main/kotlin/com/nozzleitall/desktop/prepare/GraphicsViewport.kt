@@ -28,6 +28,7 @@ internal object NativeViewport {
     external fun sourceRevision():String
     external fun create():Long
     external fun describe(handle:Long):String
+    external fun bgra(handle:Long):Boolean
     external fun begin(handle:Long,width:Int,height:Int,camera:FloatArray)
     external fun upload(handle:Long,positions:FloatArray,indices:IntArray,normals:FloatArray,colors:FloatArray):Int
     external fun releaseMesh(handle:Long,mesh:Int)
@@ -110,7 +111,7 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
             }
             check()
             val bytes=Math.multiplyExact(Math.multiplyExact(request.width,request.height),4)
-            val info=ImageInfo(request.width,request.height,ColorType.BGRA_8888,ColorAlphaType.PREMUL)
+            val info=ImageInfo(request.width,request.height,if(NativeViewport.bgra(handle))ColorType.BGRA_8888 else ColorType.RGBA_8888,ColorAlphaType.PREMUL)
             // Read into fresh image-owned native storage, not a reusable JVM byte
             // array followed by another full-frame copy/composite/snapshot.
             Data.makeUninitialized(bytes).use { data->

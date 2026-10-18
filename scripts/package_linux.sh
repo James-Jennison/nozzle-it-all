@@ -31,6 +31,10 @@ STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 PKG="$STAGE/desktop"
 dpkg-deb -R "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb "$PKG"
 install -Dm644 "$ROOT/desktop/packaging/linux/nozzle-it-all.desktop" "$PKG/usr/share/applications/nozzle-it-all.desktop"
+install -Dm644 "$ROOT/THIRD_PARTY_NOTICES.md" "$PKG/usr/share/doc/nozzle-it-all/THIRD_PARTY_NOTICES.md"
+# The optional viewport bridge statically links the pinned builder's GCC runtime.
+# Ship its full supplied copyright/licensing texts, not just a link to them.
+install -Dm644 /usr/share/doc/gcc-15-base/copyright "$PKG/usr/share/doc/nozzle-it-all/GCC-runtime-copyright"
 for size in 16 32 48 64 128 256 512; do
   install -Dm644 "$ROOT/desktop/packaging/icons/nozzle-it-all-$size.png" "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/nozzle-it-all.png"
 done
@@ -90,6 +94,8 @@ echo "== Provenance"
   echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -srm)"
   echo "source: $(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet || echo ' (with uncommitted changes)')"
   echo "java: $(java -version 2>&1 | head -1); gradle: $("${GRADLE[@]}" -q --version 2>/dev/null | awk '/^Gradle/{print $2}')"
+  echo "viewport compiler: $(g++ --version | head -1)"
+  echo "viewport library: $(sha256sum "$ROOT/desktop/build/native/viewport/libnia_viewport.so")"
   echo "stock adapter runtime modules: $MODULES"
   echo "slicing engine: $ENGINE sha256 $(sha256sum "$ENGINE" | cut -d' ' -f1)"
   [ -f "$ROOT/engine/native/PROVENANCE.txt" ] && sed 's/^/  /' "$ROOT/engine/native/PROVENANCE.txt"

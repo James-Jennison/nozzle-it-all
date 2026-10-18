@@ -231,6 +231,17 @@ Full OFL 1.1 license text for all three is combined at `third_party_licenses/OFL
 (kept out of `res/font/`, which Android's resource compiler restricts to font
 files only).
 
+## Linux desktop viewport graphics bridge
+
+The optional full-detail viewport backend uses the system EGL and OpenGL ES3
+implementations through their standard interfaces; graphics-driver binaries are
+not copied into the application. Those providers retain their own licenses.
+The application-owned JNI bridge is AGPL-3.0-or-later like the desktop source.
+Its Linux build statically links GCC libstdc++/libgcc runtime components under
+their applicable GPL licenses with the GCC Runtime Library Exception. The tested
+builder's complete supplied licensing/copyright text is installed with the Linux
+package at `/usr/share/doc/nozzle-it-all/GCC-runtime-copyright` alongside this file.
+
 ## Planned future incorporation
 
 On-device slicing's real lineage turned out to be upstream OrcaSlicer (see

@@ -65,6 +65,10 @@ val buildViewport=tasks.register<Exec>("buildViewportRenderer") {
  onlyIf { System.getProperty("os.name")=="Linux" && System.getProperty("os.arch") in listOf("amd64","x86_64") }
  inputs.file("src/main/cpp/viewport.cpp");inputs.property("sourceRevision",viewportRevision)
  inputs.property("javaHome",System.getProperty("java.home"))
+ if(System.getProperty("os.name")=="Linux") {
+  inputs.property("compilerVersion",providers.exec { commandLine("g++","--version") }.standardOutput.asText)
+  inputs.files(fileTree("/usr/include/EGL"),fileTree("/usr/include/GLES3"),fileTree("/usr/include/KHR"))
+ }
  outputs.file(viewportLibrary)
  doFirst {
   viewportLibrary.get().asFile.parentFile.mkdirs()

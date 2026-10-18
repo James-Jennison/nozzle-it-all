@@ -213,17 +213,17 @@ fun DenseInput(value: String, onChange: (String) -> Unit, label: String, modifie
 }
 
 @Composable
-fun DenseSelect(label: String, choices: List<Choice>, value: String, modifier: Modifier, onSelect: (String) -> Unit) {
+fun DenseSelect(label: String, choices: List<Choice>, value: String, modifier: Modifier, enabled: Boolean = true, onSelect: (String) -> Unit) {
     val c = Nz.colors
     var open by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(6.dp)
     Box(modifier) {
         Row(Modifier.fillMaxWidth().height(28.dp).clip(shape).background(c.surfaceSunken).border(1.dp, if (open) c.focus else c.line, shape)
-            .clickable(onClickLabel = "Choose $label") { open = !open }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Txt(choices.firstOrNull { it.value == value }?.label ?: value, Nz.type.bodySmall, c.text, modifier = Modifier.weight(1f), maxLines = 1)
+            .clickable(enabled = enabled, onClickLabel = "Choose $label") { open = !open }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Txt(choices.firstOrNull { it.value == value }?.label ?: value, Nz.type.bodySmall, if (enabled) c.text else c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
             Txt("▾", Nz.type.bodySmall, c.textMuted)
         }
-        if (open) Popup(offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 30.dp.roundToPx() }),
+        if (open && enabled) Popup(offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 30.dp.roundToPx() }),
             onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
             Column(Modifier.width(240.dp).heightIn(max = 320.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceRaised).border(1.dp, c.lineStrong, RoundedCornerShape(10.dp))
                 .verticalScroll(rememberScrollState()).padding(4.dp)) {

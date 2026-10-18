@@ -88,7 +88,7 @@ fun PrepareScreen(state: AppState) {
                 PaintOps.Kind.SUPPORT -> listOf(null, Color(0xFF3BA55D), Color(0xFFE5484D))
                 PaintOps.Kind.SEAM -> listOf(null, Color(0xFF3E7BFA), Color(0xFFF5A623))
                 PaintOps.Kind.FUZZY -> listOf(null, Color(0xFF9B59B6))
-                else -> if (aiMesh != null) List(maxOf(p.aiPrepared?.filaments?.maxOfOrNull { it.index } ?: 0, item.paintSlots.maxOrNull() ?: 0, item.slot) + 1) { n -> parseHex(p.slotHex(if (n == 0) item.slot else n)) }
+                else -> if (aiMesh != null) List(maxOf(p.aiPrepared?.filaments?.maxOfOrNull { it.index } ?: 0, item.paintSlots.maxOrNull() ?: 0, item.slot).coerceIn(0, 255) + 1) { n -> parseHex(p.slotHex(if (n == 0) item.slot else n)) }
                     else if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
             }
             PlateObject(item.id, item.name, aiMesh ?: item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id in p.selectedIds, paintColors,
@@ -744,8 +744,8 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
                     NzButton("Retry draft preview", { p.aiRetryPreview() }, Modifier.fillMaxWidth(), enabled = p.toolBusy == null, kind = ButtonKind.SECONDARY)
                 }
                 NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
-                NzButton("Keep all original paint", { p.aiKeepOriginal() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
-                NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
+                NzButton("Keep all original paint", { p.aiKeepOriginal() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
+                NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, enabled = p.toolBusy == null)
                 Txt("Optional, conservative tip smoothing; preserves small colour details and sharp creases. ${p.aiCleanedFaces} faces adjusted. It cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)
                 Txt("Correct regions (numbers match the images)", Nz.type.label)
                 val choices = listOf(com.nozzleitall.desktop.settings.Choice("0", "Keep original paint")) + prepared.filaments.map { f ->
@@ -758,9 +758,9 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val filament = prepared.filaments.firstOrNull { it.index == correctionSlot }
                     Box(Modifier.size(18.dp).background(parseHex(filament?.colorHex) ?: c.surfaceRaised, RoundedCornerShape(3.dp)).border(1.dp, c.line, RoundedCornerShape(3.dp)))
-                    com.nozzleitall.desktop.settings.DenseSelect("Paint region $correctionRegion with", choices, correctionSlot.toString(), Modifier.weight(1f)) { p.aiCorrect(correctionRegion, it.toInt()) }
+                    com.nozzleitall.desktop.settings.DenseSelect("Paint region $correctionRegion with", choices, correctionSlot.toString(), Modifier.weight(1f), enabled = p.toolBusy == null) { p.aiCorrect(correctionRegion, it.toInt()) }
                 }
-                NzButton("Reset region corrections", { p.aiResetCorrections() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+                NzButton("Reset region corrections", { p.aiResetCorrections() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
                 val noChanges = answer.slots.all { it == 0 }
                 if (noChanges) Txt("No paint changes. Your original model will stay unchanged.", Nz.type.bodySmall, c.textMuted)
                 NzButton(if (noChanges) "Done — keep original" else "Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && p.aiPreviewMesh != null, testTag = "autopaint-apply")

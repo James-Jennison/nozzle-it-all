@@ -50,7 +50,7 @@ class DisplayPreparationTest {
 
     @Test(timeout=20000) fun queuedCancelledWorkNeverStartsAndDisposalNeverPublishes() = runBlocking {
         val started=CountDownLatch(1);val release=CountDownLatch(1)
-        val first=launch { prepareDisplays(listOf(DisplayKey(mesh(),0))) { key,_ ->
+        val first=launch(Dispatchers.Main) { prepareDisplays(listOf(DisplayKey(mesh(),0))) { key,_ ->
             started.countDown();check(release.await(10,TimeUnit.SECONDS));displayMesh(key.mesh)
         }; fail("disposed viewport published") }
         await(started)

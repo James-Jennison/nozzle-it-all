@@ -332,11 +332,13 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
         else {
             prepared.forEach { (o, d) -> drawShadow(proj, o, d, depthFrames.shadows) }
-            val surface = depthFrames.frame(size.width, size.height)
-            prepared.forEach { (o, d) -> drawObject(proj, o, d, surface) }
-            val info = org.jetbrains.skia.ImageInfo(surface.width, surface.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.PREMUL)
-            org.jetbrains.skia.Image.makeRaster(info, surface.pixels, surface.width*4).use { image ->
-                drawIntoCanvas { it.nativeCanvas.drawImageRect(image, org.jetbrains.skia.Rect.makeWH(size.width,size.height)) }
+            if (prepared.isNotEmpty()) {
+                val surface = depthFrames.frame(size.width, size.height)
+                prepared.forEach { (o, d) -> drawObject(proj, o, d, surface) }
+                val info = org.jetbrains.skia.ImageInfo(surface.width, surface.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.PREMUL)
+                org.jetbrains.skia.Image.makeRaster(info, surface.pixels, surface.width*4).use { image ->
+                    drawIntoCanvas { it.nativeCanvas.drawImageRect(image, org.jetbrains.skia.Rect.makeWH(size.width,size.height)) }
+                }
             }
             prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
             if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
@@ -346,7 +348,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
     if (loading || failedKeys == keys && keys.isNotEmpty()) BasicText(
         if (loading) "Preparing viewport… You can keep working." else "Viewport preparation failed. Click to retry.",
         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).then(
-            if (!loading) Modifier.clickable { retry++ } else Modifier), style = TextStyle(color = lineColor))
+            if (!loading) Modifier.clickable { retry++ } else Modifier), style = TextStyle(color = accent))
     }
 }
 

@@ -40,7 +40,11 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
     private val requests=Channel<FrameTicket>(Channel.CONFLATED)
     private val latest=AtomicReference<FrameTicket?>()
     private var sequence=0L
-    private val job=scope.launch {
+    // A rememberCoroutineScope can carry Compose's frame-flush dispatcher.
+    // Returning worker results through that dispatcher adds an entire display
+    // interval before publication and serializes it with the next render. Use
+    // Swing Main directly while preserving the caller's parent cancellation.
+    private val job=scope.launch(Dispatchers.Main.immediate) {
         try {
             for(ticket in requests) {
                 var owned:T?=null

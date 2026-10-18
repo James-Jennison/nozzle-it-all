@@ -158,7 +158,10 @@ class ViewportFramesTest {
             if(scratch==null)scratch=surface.objectScratch else assertSame(scratch,surface.objectScratch)
             val reference=ReferenceDepthSurface(width.toFloat(),height.toFloat())
             val proj=Projector(width.toFloat(),height.toFloat(),request().camera,128f,128f)
-            for((o,d) in scene) { rasterObject(proj,o,d,surface);referenceObject(proj,o,d,reference) }
+            val canvas=Canvas(ImageBitmap(width,height))
+            CanvasDrawScope().draw(Density(1f),LayoutDirection.Ltr,canvas,Size(width.toFloat(),height.toFloat())) {
+                for((o,d) in scene) { rasterObject(proj,o,d,surface);referenceObject(proj,o,d,reference) }
+            }
             assertArrayEquals(reference.pixels,surface.pixels)
             assertEquals(2,surface.objectScratch.shadingPasses)
         }

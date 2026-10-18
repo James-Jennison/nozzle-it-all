@@ -46,11 +46,14 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
     }
     // One waiting immutable result, never an unbounded queue. Replaced or
     // cancellation-undelivered results have never reached UI drawing and close
-    // here. The worker can render the next camera while Main presents this one.
-    private val results=Channel<Completed<T>>(Channel.CONFLATED,onUndeliveredElement={ it.close() })
+    // here. Signal separately: a channel receiver can otherwise retain an old
+    // image inside its queued Main continuation, defeating result conflation.
+    private val pending=AtomicReference<Completed<T>?>()
+    private val results=Channel<Unit>(Channel.CONFLATED)
     private val publisher=scope.launch(Dispatchers.Main.immediate) {
         try {
-            for(result in results) {
+            for(signal in results) {
+                val result=pending.getAndSet(null) ?: continue
                 var owned:T?=result.value
                 try {
                     if(latest.get()?.request?.sameSource(result.ticket.request)==true) {
@@ -60,7 +63,7 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
                     } else frameDiagnostic("discarded",result.ticket)
                 } finally { owned?.close() }
             }
-        } finally { results.cancel() }
+        } finally { results.cancel();pending.getAndSet(null)?.close() }
     }
     private val job=scope.launch(frameDispatcher) {
         try {
@@ -76,7 +79,9 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
                     renderNanos=System.nanoTime()-start
                     check()
                     val completed=Completed(ticket,owned!!,renderNanos)
-                    if(results.trySend(completed).isSuccess)owned=null // channel/publisher owns it now.
+                    owned=null // atomic slot/publisher owns it now.
+                    pending.getAndSet(completed)?.close()
+                    if(results.trySend(Unit).isFailure)pending.getAndSet(null)?.close()
                 } catch (_:ObsoleteFrame) { frameDiagnostic("discarded",ticket) }
                 catch(e:CancellationException) { throw e }
                 catch (_:Exception) {
@@ -99,7 +104,7 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
      * caller may close it separately. Its finally disposes after render/joins,
      * including noncooperative work. Blocking Main here would defeat responsiveness.
      */
-    fun close() { latest.set(null);requests.close();job.cancel();publisher.cancel();results.cancel() }
+    fun close() { latest.set(null);requests.close();job.cancel();publisher.cancel();results.cancel();pending.getAndSet(null)?.close() }
 }
 
 internal data class ViewportFrame(val ticket:FrameTicket,val image:Image,val renderNanos:Long):AutoCloseable {

@@ -6,14 +6,16 @@ import com.nozzleitall.printer.*
 import com.nozzleitall.printer.external.AccountAdapter
 import com.nozzleitall.printer.external.ExternalAdapterClient
 import kotlinx.coroutines.*
+import com.nozzleitall.desktop.history.notificationBody
+import com.nozzleitall.desktop.history.notificationTitle
 import org.json.JSONObject
 import java.io.File
 
 /** Local app settings. Optional Stock U1 support is off unless the user turns it on. */
-data class DesktopSettings(val stockU1Enabled: Boolean = false, val theme: String = "system") {
-    fun toJson() = JSONObject().put("stockU1Enabled", stockU1Enabled).put("theme", theme)
+data class DesktopSettings(val stockU1Enabled: Boolean = false, val theme: String = "system", val notifications: Boolean = true) {
+    fun toJson() = JSONObject().put("stockU1Enabled", stockU1Enabled).put("theme", theme).put("notifications", notifications)
     companion object {
-        fun load(file: File) = runCatching { JSONObject(file.readText()) }.getOrNull()?.let { DesktopSettings(it.optBoolean("stockU1Enabled"), it.optString("theme", "system")) } ?: DesktopSettings()
+        fun load(file: File) = runCatching { JSONObject(file.readText()) }.getOrNull()?.let { DesktopSettings(it.optBoolean("stockU1Enabled"), it.optString("theme", "system"), it.optBoolean("notifications", true)) } ?: DesktopSettings()
     }
 }
 
@@ -57,6 +59,11 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
     val order = mutableStateOf<List<String>>(emptyList())
     val settings = mutableStateOf(DesktopSettings.load(paths.settings))
     private var stockClient: ExternalAdapterClient? = null
+    /** Notices when each printer's job ends, keeps the results (newest first) and tells the user outside the window. */
+    val tracker = com.nozzleitall.desktop.history.JobTracker()
+    private val historyStore = com.nozzleitall.desktop.history.JobHistoryStore(File(paths.data, "history.json"))
+    val history = mutableStateOf(historyStore.load())
+    var notifier: (String, String) -> Unit = com.nozzleitall.desktop.history.DesktopNotifier::notify
     private val pollers = HashMap<String, Job>()
 
     val stockHelperInstalled: Boolean get() = stockHelper() != null
@@ -138,11 +145,19 @@ class Fleet(private val paths: AppPaths, private val scope: CoroutineScope, priv
                 val s = entry.session ?: continue
                 val reading = s.status()
                 entry.status.value = reading
+                recordEnd(entry, reading)
                 if (reading.state != PrinterState.OFFLINE && entry.cameras.value.isEmpty() && s.capabilities.camera)
                     entry.cameras.value = runCatching { s.cameras() }.getOrDefault(emptyList())
                 delay(if (reading.state.isActiveJob) 2_000 else 4_000)
             }
         }
+    }
+
+    internal fun recordEnd(entry: PrinterEntry, reading: PrinterStatus) {
+        val rec = tracker.observe(entry.config.identity.id, entry.config.identity.displayName.ifBlank { entry.config.identity.address }, reading) ?: return
+        history.value = (listOf(rec) + history.value).take(500)
+        runCatching { historyStore.save(history.value) }.onFailure { log("history not saved: ${it.message}") }
+        if (settings.value.notifications) notifier(rec.notificationTitle(), rec.notificationBody())
     }
 
     /** Probes an address with built-in adapters only; the Stock helper is never started by a scan. */

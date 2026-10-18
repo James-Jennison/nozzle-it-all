@@ -44,7 +44,7 @@ fun PrinterHeader(state: AppState, on: com.nozzleitall.desktop.Destination, what
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         NzButton("Printers", { state.destination = com.nozzleitall.desktop.Destination.FLEET }, kind = ButtonKind.QUIET, icon = NzIcon.FLEET)
         Spacer(Modifier.weight(1f))
-        listOf(com.nozzleitall.desktop.Destination.MONITOR to "Monitor", com.nozzleitall.desktop.Destination.MATERIALS to "Materials & toolheads").forEach { (d, label) ->
+        listOf(com.nozzleitall.desktop.Destination.MONITOR to "Monitor", com.nozzleitall.desktop.Destination.MATERIALS to "Materials & toolheads", com.nozzleitall.desktop.Destination.HISTORY to "History").forEach { (d, label) ->
             NzButton(label, { state.destination = d }, kind = if (d == on) ButtonKind.PRIMARY else ButtonKind.SECONDARY, testTag = "printer-tab-${d.name.lowercase()}")
         }
     }

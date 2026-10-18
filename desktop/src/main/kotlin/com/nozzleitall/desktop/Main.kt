@@ -39,6 +39,7 @@ enum class Destination(val label: String, val icon: NzIcon, val key: Key, val in
     // has no place of its own in the rail, where Printers stays lit while you are on it.
     MONITOR("Print & Monitor", NzIcon.MONITOR, Key.Four, inRail = false),
     MATERIALS("Materials & Toolheads", NzIcon.MATERIALS, Key.Five, inRail = false),
+    HISTORY("History", NzIcon.LAYERS, Key.Six, inRail = false),
     SETTINGS("Settings", NzIcon.SETTINGS, Key.Comma);
 
     /** The rail item that is lit while this destination is shown. */
@@ -129,6 +130,7 @@ fun App(state: AppState) {
                 Destination.PREPARE -> PrepareScreen(state)
                 Destination.MONITOR -> MonitorScreen(state)
                 Destination.MATERIALS -> MaterialsScreen(state)
+                Destination.HISTORY -> HistoryScreen(state)
                 Destination.SETTINGS -> SettingsScreen(state)
             }
         }

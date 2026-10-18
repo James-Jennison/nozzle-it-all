@@ -35,6 +35,13 @@ fun SettingsScreen(state: AppState) {
             }
         }
         Card(Modifier.fillMaxWidth()) {
+            Txt("Notifications", Nz.type.title)
+            Toggle("Tell me when a print ends", fleet.settings.value.notifications, {
+                fleet.settings.value = fleet.settings.value.copy(notifications = it)
+                PrinterStore.atomicWrite(state.paths.settings, fleet.settings.value.toJson().toString(2), private = false)
+            }, "A desktop notification when a print finishes, is stopped or fails, while Nozzle It All is running. Past prints are under each printer's History tab.")
+        }
+        Card(Modifier.fillMaxWidth()) {
             Txt("Away from home", Nz.type.title)
             Txt(Glossary.explanations.getValue("remote-access"), Nz.type.body, c.textMuted)
         }

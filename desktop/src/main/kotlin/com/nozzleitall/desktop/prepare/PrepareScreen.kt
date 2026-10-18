@@ -92,7 +92,7 @@ fun PrepareScreen(state: AppState) {
             }
             PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors,
                 when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 },
-                item.sx, item.sy, item.sz, item.parts.toList())
+                item.sx, item.sy, item.sz, item.parts.toList(), reach = item.reach, height = item.height)
         }
         val (bw, bd) = p.bed
         val shape = RoundedCornerShape(20.dp)
@@ -104,7 +104,10 @@ fun PrepareScreen(state: AppState) {
             else PlateViewer(bw, bd, objects, camera, c.surface, c.lineStrong, Modifier.fillMaxSize(),
                 preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors,
                 paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
-                onSelect = { focus.clearFocus(); p.selected = it })
+                onSelect = { focus.clearFocus(); p.selected = it }, accent = c.accent,
+                onMove = { id, x, y -> p.items.firstOrNull { it.id == id }?.let { it.x = x; it.y = y; p.changed() } },
+                onTurn = { id, deg -> p.items.firstOrNull { it.id == id }?.let { it.rotZ = deg; p.changed() } },
+                onResize = { id, sc -> p.items.firstOrNull { it.id == id }?.let { it.scale = sc; p.changed() } })
             // Top left: what the viewport shows, then the plate tools under it.
             Column(Modifier.align(Alignment.TopStart).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Floating {
@@ -140,7 +143,7 @@ fun PrepareScreen(state: AppState) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
                     Spacer(Modifier.weight(1f))
-                    Txt("Drag to orbit · Shift-drag to pan · Scroll to zoom", Nz.type.bodySmall, c.textMuted)
+                    Txt("Drag: move or orbit · Shift: pan · Scroll: zoom", Nz.type.bodySmall, c.textMuted)
                 }
             }
         }

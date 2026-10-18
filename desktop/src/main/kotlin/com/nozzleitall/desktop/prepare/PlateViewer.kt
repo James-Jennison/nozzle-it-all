@@ -25,7 +25,9 @@ class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Colo
                   /** Per-axis size on top of [scale]; a negative one mirrors that axis. */
                   val sx: Float = 1f, val sy: Float = 1f, val sz: Float = 1f,
                   /** Extra volumes (negative volumes, modifiers, support blockers / enforcers, parts), drawn as outlines. */
-                  val parts: List<com.nozzleitall.project.ProjectManifest.ObjectPart> = emptyList(), val selectedPart: Int = -1) {
+                  val parts: List<com.nozzleitall.project.ProjectManifest.ObjectPart> = emptyList(), val selectedPart: Int = -1,
+                  /** How far the footprint reaches from (x, y): min x, max x, min y, max y. Empty = no direct handling. */
+                  val reach: FloatArray = FloatArray(0), /** Height of the object in mm, so a press on its upper part counts as on it. */ val height: Float = 0f) {
     val ex get() = scale * sx; val ey get() = scale * sy; val ez get() = scale * sz
 }
 
@@ -155,6 +157,14 @@ private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Flo
         out[0] = (cx + rx * cyw + ry * syw).toDouble(); out[1] = (cy - rx * syw + ry * cyw).toDouble(); out[2] = z.toDouble()
     }
     val depthRange get() = eye * 0.5f
+    /** Where the line of sight through screen point ([sx], [sy]) meets the bed (z = 0), or null if it runs parallel to it. */
+    fun bedPoint(sx: Float, sy: Float, z: Float = 0f): Offset? {
+        val a = DoubleArray(3); val b = DoubleArray(3)
+        unproject(sx, sy, depthRange, a); unproject(sx, sy, -depthRange, b)
+        val dz = a[2] - b[2]; if (abs(dz) < 1e-9) return null
+        val t = (a[2] - z) / dz
+        return Offset((a[0] + t * (b[0] - a[0])).toFloat(), (a[1] + t * (b[1] - a[1])).toFloat())
+    }
 
     /** A world-space direction in view space: x right, y down the screen, z toward the viewer. */
     fun dir(x: Float, y: Float, z: Float, out: FloatArray) {
@@ -166,14 +176,17 @@ private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Flo
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: ViewCamera, bedColor: Color, lineColor: Color, modifier: Modifier = Modifier,
-                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), paint: PaintInput? = null, onSelect: (Int?) -> Unit = {}) {
+                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), paint: PaintInput? = null, onSelect: (Int?) -> Unit = {},
+                accent: Color = Color(0xFF3E7BFA), onMove: (Int, Float, Float) -> Unit = { _, _, _ -> }, onTurn: (Int, Float) -> Unit = { _, _ -> }, onResize: (Int, Float) -> Unit = { _, _ -> }) {
     val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh, kind = o.paintKind) } }
     val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects); val preparedRef = rememberUpdatedState(prepared)
-    Canvas(modifier.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag to orbit, scroll to zoom." }
-        .pointerInput(camera) { awaitPointerEventScope {
+    Canvas(modifier.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag an object to move it, drag empty space to orbit, scroll to zoom." }
+        .pointerInput(camera, preview != null) { awaitPointerEventScope {
             // Left-drag orbits; right-drag or Shift+drag pans.
             var last: Offset? = null
             val strokes = ArrayList<PaintRay>()
+            // Direct handling: a press on an object moves it, on the turn knob turns it, on the corner knob resizes it.
+            var grab: Grab? = null; var grabObj: PlateObject? = null; var grabFrom = Offset.Zero; var grabZ = 0f
             while (true) {
                 val ev = awaitPointerEvent()
                 val ch = ev.changes.firstOrNull() ?: continue
@@ -189,6 +202,27 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                     if (strokes.size >= 16 || (!ch.pressed && strokes.isNotEmpty())) { painting.onStrokes(strokes.toList()); strokes.clear() }
                     if (!ch.pressed) last = null
                     continue
+                }
+                val proj = Projector(size.width.toFloat(), size.height.toFloat(), camera, bedW / 2, bedD / 2)
+                if (grab != null) {
+                    val o = grabObj!!
+                    if (!ch.pressed) { grab = null; grabObj = null; last = null; continue }
+                    val at = proj.bedPoint(ch.position.x, ch.position.y, grabZ)
+                    if (at != null && ev.type == PointerEventType.Move) when (grab) {
+                        Grab.MOVE -> onMove(o.id, o.x + (at.x - grabFrom.x), o.y + (at.y - grabFrom.y))
+                        Grab.ROTATE -> onTurn(o.id, PlateHandles.rotationAfterDrag(o.rotZ, o.x, o.y, grabFrom.x, grabFrom.y, at.x, at.y, if (ev.keyboardModifiers.isCtrlPressed) 15f else 0f))
+                        Grab.SCALE -> onResize(o.id, PlateHandles.scaleAfterDrag(o.scale, o.x, o.y, grabFrom.x, grabFrom.y, at.x, at.y))
+                        null -> {}
+                    }
+                    continue
+                }
+                if (ch.pressed && prev == null && paintRef.value == null && preview == null && ev.buttons.isPrimaryPressed && !ev.keyboardModifiers.isShiftPressed) {
+                    val start = pickGrab(proj, objectsRef.value, ch.position)
+                    if (start != null) {
+                        grab = start.grab; grabObj = start.obj; grabFrom = start.from; grabZ = start.z; last = ch.position
+                        if (!start.obj.selected) onSelect(start.obj.id)
+                        continue
+                    }
                 }
                 if (ev.type == PointerEventType.Move && ch.pressed && prev != null) {
                     val d = ch.position - prev
@@ -207,6 +241,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
             prepared.forEach { (o, d) -> drawObject(proj, o, d) }
             prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
+            if (paint == null) prepared.forEach { (o, _) -> if (o.selected && o.reach.size == 4) drawHandles(proj, o, accent) }
         }
     }
 }
@@ -225,6 +260,39 @@ private fun screenRay(tap: Offset, w: Float, h: Float, cam: ViewCamera, bedW: Fl
     if (len < 1e-9) return null
     for (i in 0..2) dir[i] /= len
     return PaintRay(a, dir, (radiusMm / abs(o.scale)).toDouble())
+}
+
+private class Pick(val grab: Grab, val obj: PlateObject, val from: Offset, val z: Float)
+
+/** What a press at [at] grabs: a knob of the selected object first, then whatever object the line of sight passes through (seen from above or from the side). */
+private fun pickGrab(proj: Projector, objects: List<PlateObject>, at: Offset): Pick? {
+    val tmp = FloatArray(3)
+    fun near(x: Float, y: Float) = run { proj.p(x, y, 0f, tmp, 0); hypot(tmp[0] - at.x, tmp[1] - at.y) < 14f }
+    objects.firstOrNull { it.selected && it.reach.size == 4 }?.let { o ->
+        val bed = proj.bedPoint(at.x, at.y) ?: return@let
+        val (rx, ry) = PlateHandles.rotateKnob(o.reach, o.x, o.y, o.rotZ); if (near(rx, ry)) return Pick(Grab.ROTATE, o, bed, 0f)
+        val (sx, sy) = PlateHandles.scaleKnob(o.reach, o.x, o.y); if (near(sx, sy)) return Pick(Grab.SCALE, o, bed, 0f)
+    }
+    var best: Pick? = null; var bestDist = Float.MAX_VALUE
+    for (o in objects) for (k in 0..4) {
+        val z = o.height * k / 4f
+        val p = proj.bedPoint(at.x, at.y, z) ?: continue
+        if (PlateHandles.footprintHit(o.reach, o.x, o.y, p.x, p.y)) { val d = hypot(o.x - p.x, o.y - p.y); if (d < bestDist) { bestDist = d; best = Pick(Grab.MOVE, o, p, z) }; break }
+    }
+    return best
+}
+
+/** The selected object's footprint, the ring with its turn knob, and the corner resize knob. */
+private fun DrawScope.drawHandles(proj: Projector, o: PlateObject, accent: Color) {
+    val t = FloatArray(3)
+    fun pt(x: Float, y: Float): Offset { proj.p(x, y, 0.2f, t, 0); return Offset(t[0], t[1]) }
+    val box = listOf(pt(o.x + o.reach[0], o.y + o.reach[2]), pt(o.x + o.reach[1], o.y + o.reach[2]), pt(o.x + o.reach[1], o.y + o.reach[3]), pt(o.x + o.reach[0], o.y + o.reach[3]))
+    for (i in 0..3) drawLine(accent.copy(alpha = 0.55f), box[i], box[(i + 1) % 4], 1.2f)
+    val r = PlateHandles.ringRadius(o.reach)
+    var prev = pt(o.x + r, o.y)
+    for (i in 1..64) { val a = i * 2 * PI / 64; val p = pt(o.x + r * cos(a).toFloat(), o.y + r * sin(a).toFloat()); drawLine(accent.copy(alpha = 0.7f), prev, p, 1.6f); prev = p }
+    val (rx, ry) = PlateHandles.rotateKnob(o.reach, o.x, o.y, o.rotZ); pt(rx, ry).let { drawCircle(Color.White, 8f, it); drawCircle(accent, 6f, it) }
+    val (sx, sy) = PlateHandles.scaleKnob(o.reach, o.x, o.y); pt(sx, sy).let { drawRect(Color.White, it - Offset(8f, 8f), androidx.compose.ui.geometry.Size(16f, 16f)); drawRect(accent, it - Offset(6f, 6f), androidx.compose.ui.geometry.Size(12f, 12f)) }
 }
 
 private fun hitTest(tap: Offset, objects: List<PlateObject>, cam: ViewCamera, w: Float, h: Float, bedW: Float, bedD: Float): Int? {

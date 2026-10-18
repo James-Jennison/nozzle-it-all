@@ -19,7 +19,7 @@ def read(path):
 
 
 def key(record):
-    return tuple(record.get(field) for field in ("case", "width", "height", "objects", "triangles_per_object", "triangles"))
+    return tuple(record.get(field) for field in ("case", "renderer", "width", "height", "objects", "triangles_per_object", "triangles"))
 
 
 def compare(baseline, candidate):

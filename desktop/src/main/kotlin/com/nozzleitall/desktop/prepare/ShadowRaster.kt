@@ -22,17 +22,27 @@ internal fun DrawScope.rasterShadow(proj:Projector,o:PlateObject,d:DisplayMesh,s
     val cr=cos(Math.toRadians(o.rotZ.toDouble())).toFloat();val sr=sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
     val step=max(1,d.tris.size/20_000);val samples=(d.tris.size+step-1)/step
     val buffers=scratch.get(samples*3);val tmp=FloatArray(3);var out=0;var k=0
+    var left=Float.POSITIVE_INFINITY;var top=Float.POSITIVE_INFINITY
+    var right=Float.NEGATIVE_INFINITY;var bottom=Float.NEGATIVE_INFINITY
     while(k<d.tris.size) {
         val tri=d.tris[k]
         for(c in 0..2) {
             val vi=t[tri*3+c]*3;val x=(v[vi]-mx)*o.ex;val y=(v[vi+1]-my)*o.ey
             proj.p(o.x+x*cr-y*sr,o.y+x*sr+y*cr,0f,tmp,0)
             buffers.positions[out++]=tmp[0];buffers.positions[out++]=tmp[1]
+            left=min(left,tmp[0]);right=max(right,tmp[0]);top=min(top,tmp[1]);bottom=max(bottom,tmp[1])
         }
         k+=step
     }
     drawIntoCanvas { canvas ->
-        canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f,0f,size.width,size.height),Paint().apply { alpha=.28f })
+        // The shadow only touches its projected footprint. Avoid allocating and
+        // compositing a full viewport-sized transparency layer per object.
+        // Two physical pixels retain antialiased edge coverage.
+        val bounds=if(left.isFinite() && top.isFinite() && right.isFinite() && bottom.isFinite())
+            androidx.compose.ui.geometry.Rect(max(0f,floor(left)-2f),max(0f,floor(top)-2f),min(size.width,ceil(right)+2f),min(size.height,ceil(bottom)+2f))
+        else androidx.compose.ui.geometry.Rect(0f,0f,size.width,size.height)
+        if(bounds.isEmpty)return@drawIntoCanvas
+        canvas.saveLayer(bounds,Paint().apply { alpha=.28f })
         try {
             org.jetbrains.skia.Paint().use { paint ->
                 paint.isAntiAlias=true

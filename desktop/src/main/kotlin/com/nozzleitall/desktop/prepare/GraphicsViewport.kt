@@ -1,6 +1,11 @@
 package com.nozzleitall.desktop.prepare
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.asComposeCanvas
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import java.io.File
 import kotlin.math.*
 import org.jetbrains.skia.*
@@ -27,7 +32,7 @@ internal object NativeViewport {
     external fun upload(handle:Long,positions:FloatArray,indices:IntArray,normals:FloatArray,colors:FloatArray):Int
     external fun releaseMesh(handle:Long,mesh:Int)
     external fun draw(handle:Long,mesh:Int,pose:FloatArray,shadow:Boolean)
-    external fun read(handle:Long,pixels:ByteArray)
+    external fun read(handle:Long,destination:Long,bytes:Int)
     external fun end(handle:Long)
     external fun destroy(handle:Long)
 }
@@ -43,7 +48,6 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
     val renderer=NativeViewport.describe(handle)
     private val meshes=LinkedHashMap<GraphicsKey,GraphicsMesh>(8,.75f,true)
     private var retained=0L
-    private var pixels=ByteArray(0)
     internal var uploads=0;private set
     internal val retainedBytes get()=retained
     companion object {
@@ -57,7 +61,9 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
         val lum=.2126f*color.red+.7152f*color.green+.0722f*color.blue
         return if(lum<.18f)lerpColor(color,Color(.34f,.36f,.40f),.55f*(1f-lum/.18f)) else color
     }
-    fun render(request:FrameRequest,check:()->Unit):Image {
+    fun render(request:FrameRequest,check:()->Unit):Image=renderPixels(request,check,false)
+    fun composite(request:FrameRequest,check:()->Unit):Image=renderPixels(request,check,true)
+    private fun renderPixels(request:FrameRequest,check:()->Unit,bed:Boolean):Image {
         check();check(handle!=0L)
         val c=request.camera;val yaw=Math.toRadians(c.yaw.toDouble());val pitch=Math.toRadians(c.pitch.toDouble())
         val camera=floatArrayOf(cos(yaw).toFloat(),sin(yaw).toFloat(),cos(pitch).toFloat(),sin(pitch).toFloat(),
@@ -104,13 +110,28 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
             }
             check()
             val bytes=Math.multiplyExact(Math.multiplyExact(request.width,request.height),4)
-            if(pixels.size!=bytes)pixels=ByteArray(bytes)
-            NativeViewport.read(handle,pixels);check()
-            return Image.makeRaster(ImageInfo(request.width,request.height,ColorType.BGRA_8888,ColorAlphaType.PREMUL),pixels,request.width*4)
+            val info=ImageInfo(request.width,request.height,ColorType.BGRA_8888,ColorAlphaType.PREMUL)
+            // Read into fresh image-owned native storage, not a reusable JVM byte
+            // array followed by another full-frame copy/composite/snapshot.
+            Data.makeUninitialized(bytes).use { data->
+                NativeViewport.read(handle,data.writableData(),bytes);check()
+                if(bed) Pixmap.make(info,data,request.width*4).use { pixmap->
+                    Surface.makeRasterDirect(pixmap).use { target->
+                        CanvasDrawScope().draw(Density(1f),LayoutDirection.Ltr,target.canvas.asComposeCanvas(),Size(request.width.toFloat(),request.height.toFloat())) {
+                            val scene=request.scene
+                            drawBed(request.projector(),scene.bedW,scene.bedD,scene.bed,scene.line,behind=true)
+                        }
+                    }
+                }
+                check()
+                // RasterFromData retains its own SkData reference. No writes or
+                // buffer reuse after this transfer; snapshots outlive backend.
+                return Image.makeRaster(info,data,request.width*4)
+            }
         } finally { NativeViewport.end(handle) }
     }
     override fun close() {
         if(handle!=0L) { NativeViewport.destroy(handle);handle=0L }
-        meshes.clear();retained=0;pixels=ByteArray(0)
+        meshes.clear();retained=0
     }
 }

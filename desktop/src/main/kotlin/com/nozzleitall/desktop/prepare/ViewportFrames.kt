@@ -104,11 +104,11 @@ internal class FrameRasterizer(private val useGraphics:Boolean=true):AutoCloseab
             if(useGraphics && System.getenv("NOZZLE_VIEWPORT_RENDERER")!="software")graphics=GraphicsViewport.createOrNull()
             if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1")println("NIA_GRAPHICS backend=${if(graphics!=null)"gles3" else "cpu"} renderer=${graphics?.renderer ?: "software"}")
         }
-        val accelerated=try { graphics?.render(request,check) }
+        val accelerated=try { graphics?.composite(request,check) }
         catch(e:ObsoleteFrame) { throw e }
         catch(e:CancellationException) { throw e }
         catch(_:IllegalStateException) { graphics?.close();graphics=null;null }
-        try {
+        if(accelerated!=null)return accelerated
         if(width!=request.width || height!=request.height) {
             target?.close();target=null
             width=request.width;height=request.height
@@ -119,9 +119,6 @@ internal class FrameRasterizer(private val useGraphics:Boolean=true):AutoCloseab
         val scene=request.scene;val proj=request.projector()
         CanvasDrawScope().draw(Density(1f),LayoutDirection.Ltr,target.canvas.asComposeCanvas(),Size(width.toFloat(),height.toFloat())) {
             drawBed(proj,scene.bedW,scene.bedD,scene.bed,scene.line)
-            if(accelerated!=null) {
-                drawIntoCanvas { it.nativeCanvas.drawImage(accelerated,0f,0f) }
-            } else {
             scene.prepared.forEach { (o,d)->check();rasterShadow(proj,o,d,depth.shadows,check) }
             if(scene.prepared.isNotEmpty()) {
                 val surface=depth.frame(size.width,size.height)
@@ -133,11 +130,9 @@ internal class FrameRasterizer(private val useGraphics:Boolean=true):AutoCloseab
                     drawIntoCanvas { it.nativeCanvas.drawImageRect(image,org.jetbrains.skia.Rect.makeWH(size.width,size.height)) }
                 }
             } else depth.release()
-            }
         }
         check()
         return target.makeImageSnapshot()
-        } finally { accelerated?.close() }
     }
     override fun close() { graphics?.close();graphics=null;target?.close();target=null;depth.release() }
 }

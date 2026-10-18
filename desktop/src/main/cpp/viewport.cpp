@@ -214,14 +214,13 @@ JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_draw(
         glDrawArrays(GL_TRIANGLES,0,it->second.count);
     }
 }catch(...){error(e);}}
-JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_read(JNIEnv* e,jobject,jlong h,jbyteArray output){try{
-    auto& r=get(h);if(!r.current||!output||size_t(e->GetArrayLength(output))!=r.pixels.size())throw std::runtime_error("Invalid viewport readback");
+JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_read(JNIEnv* e,jobject,jlong h,jlong output,jint bytes){try{
+    auto& r=get(h);if(!r.current||!output||bytes<0||size_t(bytes)!=r.pixels.size())throw std::runtime_error("Invalid viewport readback");
     glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,r.width,r.height,GL_RGBA,GL_UNSIGNED_BYTE,r.pixels.data());
     if(glGetError()!=GL_NO_ERROR)throw std::runtime_error("Viewport readback failed");
-    jbyte* dst=e->GetByteArrayElements(output,nullptr);if(!dst)throw std::runtime_error("Viewport readback allocation failed");
-    for(int y=0;y<r.height;y++){const uint8_t* src=r.pixels.data()+size_t(r.height-1-y)*r.width*4;jbyte* row=dst+size_t(y)*r.width*4;
+    auto* dst=reinterpret_cast<uint8_t*>(output);
+    for(int y=0;y<r.height;y++){const uint8_t* src=r.pixels.data()+size_t(r.height-1-y)*r.width*4;uint8_t* row=dst+size_t(y)*r.width*4;
         for(int x=0;x<r.width;x++){row[x*4]=src[x*4+2];row[x*4+1]=src[x*4+1];row[x*4+2]=src[x*4];row[x*4+3]=src[x*4+3];}}
-    e->ReleaseByteArrayElements(output,dst,0);
 }catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_end(JNIEnv* e,jobject,jlong h){try{get(h).unbind();}catch(...){error(e);}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_destroy(JNIEnv*,jobject,jlong h){delete reinterpret_cast<Renderer*>(h);}

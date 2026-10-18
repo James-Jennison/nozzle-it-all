@@ -119,7 +119,7 @@ class GraphicsViewportTest {
                 var request=request(emptyList()).copy(width=3840,height=2160,scene=request(emptyList()).scene.copy(prepared=objects.map { it to d }))
                 fun frame(step:Int) {
                     request=request.copy(camera=if(mode=="orbit")request.camera.copy(yaw=request.camera.yaw+.8f,pitch=request.camera.pitch+.4f) else request.camera.copy(distance=480f+step*1.5f,pan=Offset(step*.2f,step*.1f)))
-                    gpu.render(request,{}).close()
+                    gpu.composite(request,{}).close()
                 }
                 repeat(5) { frame(it) }
                 val times=DoubleArray(21) { i->val start=System.nanoTime();frame(i+5);(System.nanoTime()-start)/1e6 }.sorted()

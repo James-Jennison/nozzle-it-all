@@ -461,10 +461,23 @@ private fun hitTest(tap: Offset, objects: List<PlateObject>, cam: ViewCamera, w:
         proj.p(o.x, o.y, 0f, tmp, 0); hypot(tmp[0] - tap.x, tmp[1] - tap.y) < 90f }?.id
 }
 
-internal fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, line: Color) {
+internal fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, line: Color,behind:Boolean=false) {
     val a = FloatArray(12)
     proj.p(0f, 0f, 0f, a, 0); proj.p(w, 0f, 0f, a, 3); proj.p(w, d, 0f, a, 6); proj.p(0f, d, 0f, a, 9)
     val path = Path().apply { moveTo(a[0], a[1]); lineTo(a[3], a[4]); lineTo(a[6], a[7]); lineTo(a[9], a[10]); close() }
+    if(behind) {
+        // Reverse compositing order into fresh GPU readback storage: lines first,
+        // then opaque bed underneath, all DST_OVER. Existing model/shadow pixels
+        // stay in front, without allocating a second full-viewport image/layer.
+        val t=FloatArray(6)
+        var g=0f
+        while(g<=w) { proj.p(g,0f,0f,t,0);proj.p(g,d,0f,t,3);drawLine(line.copy(alpha=.5f),Offset(t[0],t[1]),Offset(t[3],t[4]),1f,blendMode=BlendMode.DstOver);g+=25f }
+        g=0f
+        while(g<=d) { proj.p(0f,g,0f,t,0);proj.p(w,g,0f,t,3);drawLine(line.copy(alpha=.5f),Offset(t[0],t[1]),Offset(t[3],t[4]),1f,blendMode=BlendMode.DstOver);g+=25f }
+        drawPath(path,line,style=Stroke(2f),blendMode=BlendMode.DstOver)
+        drawPath(path,bed,blendMode=BlendMode.DstOver)
+        return
+    }
     drawPath(path, bed); drawPath(path, line, style = Stroke(2f))
     val t = FloatArray(6)
     var g = 0f

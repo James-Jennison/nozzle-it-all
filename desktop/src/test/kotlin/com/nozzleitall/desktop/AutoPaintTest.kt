@@ -115,7 +115,33 @@ class AutoPaintTest {
             assertSame(mesh,p.items.single().mesh); assertFalse(p.history.canUndo)
             withContext(Dispatchers.Main) { p.history.redo() }
             assertTrue(p.items.single().mesh.isPainted)
+            val beforeRace = p.items.single().mesh
+            withContext(Dispatchers.Main) {
+                p.items.add(PrepItem(2,"other",mesh,150f,100f))
+                p.aiPrepare(""); p.selected = 2
+            }
+            idle(); assertNull(p.aiPrepared); assertNull(p.aiAnswer); assertNull(p.aiPreviewMesh)
+            assertSame(beforeRace,p.items[0].mesh); assertSame(mesh,p.items[1].mesh)
+            withContext(Dispatchers.Main) { p.selected = 1; p.aiPrepare("") }; idle()
+            val staleDir = p.aiPrepared!!.dir
+            withContext(Dispatchers.Main) {
+                p.autoPaintSettings = AutoPaint.Settings(command = "sleep 1; cat >/dev/null; printf '%s' '$answer'")
+                p.aiSend(); p.selected = 2
+            }
+            idle(); assertNull(p.aiPrepared); assertNull(p.aiAnswer); assertNull(p.aiPreviewMesh)
+            assertFalse(staleDir.exists())
+            withContext(Dispatchers.Main) { p.aiApply() }
+            assertSame(beforeRace,p.items[0].mesh); assertSame(mesh,p.items[1].mesh)
         } finally { withContext(Dispatchers.Main) { p.aiDiscard() }; app.scope.cancel() }
+    }
+
+    @Test fun reviewRejectsASlotMissingFromTheOfferedPalette() {
+        engineReady()
+        val prepared = AutoPaint.prepare(cube(),"cube",listOf(filaments[0],filaments[1].copy(index=3)),"",Files.createTempDirectory("ap-gap").toFile())
+        try {
+            try { AutoPaint.askReview(prepared,Provider.Command("cat >/dev/null; printf '%s' '$answer'")); fail("unavailable slot accepted") }
+            catch (e: IllegalArgumentException) { assertTrue(e.message!!.contains("unavailable")) }
+        } finally { prepared.discard() }
     }
 
     @Test fun anOpenAiCompatibleServerGetsTheViewsAndPaintsTheModel() {

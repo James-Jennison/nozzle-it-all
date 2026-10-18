@@ -61,6 +61,14 @@ class MultiSelectionTest {
         assertEquals(40f, p.items[0].x, 0f); assertEquals(0f, p.items[0].rotZ, 0f)
         assertEquals(1f, p.items[0].scale, 0f); assertFalse(p.history.canUndo)
     }
+    @Test fun displayedRoundingAndInvalidInputDoNotCommitGeometry() {
+        assertNull(groupNumberCommit("225.2", 225.2431f, positive = true))
+        assertNull(groupNumberCommit("55.1", 55.123f))
+        assertNull(groupNumberCommit(" 135.1 ", 135.123f))
+        for (text in listOf("0", "-100", "abc", "NaN", "Infinity")) assertNull(groupNumberCommit(text, 100f, positive = true))
+        assertEquals(200f, groupNumberCommit("200", 225.2431f, positive = true)!!, 0f)
+        assertEquals(90f, groupNumberCommit("90", 55.123f)!!, 0f)
+    }
     @Test fun rotationAndScalePreserveTheGroupAroundItsCentre() {
         val p = app().prepare; p.selectObject(1); p.selectObject(2, toggle = true)
         p.beginSelectionTransform(1); p.turnSelection(1, 45f); p.turnSelection(1, 90f); p.endSelectionTransform()

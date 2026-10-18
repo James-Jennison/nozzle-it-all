@@ -752,16 +752,16 @@ private fun ObjectNumber(units: String, value: Float, onValue: (Float) -> Unit) 
 /** Group numeric edits commit once, so typing speed never changes the Undo boundary. */
 @Composable
 private fun GroupNumber(units: String, value: Float, positive: Boolean = false, onCommit: (Float) -> Unit) {
-    var text by remember(value) { mutableStateOf("%.1f".format(value).removeSuffix(".0")) }
+    var text by remember(value) { mutableStateOf(groupNumberDisplay(value)) }
     var focused by remember { mutableStateOf(false) }
     var cancelled by remember { mutableStateOf(false) }
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     com.nozzleitall.desktop.settings.DenseInput(text, { text = it }, units,
         Modifier.width(80.dp).onFocusChanged { state ->
             if (focused && !state.hasFocus && !cancelled) {
-                val parsed = text.replace(',', '.').toFloatOrNull()?.takeIf { it.isFinite() && (!positive || it > 0f) }
-                if (parsed != null && parsed != value) onCommit(parsed)
-                else text = "%.1f".format(value).removeSuffix(".0")
+                val parsed = groupNumberCommit(text, value, positive)
+                if (parsed != null) onCommit(parsed)
+                else text = groupNumberDisplay(value)
             }
             focused = state.hasFocus
             if (focused) cancelled = false
@@ -769,7 +769,7 @@ private fun GroupNumber(units: String, value: Float, positive: Boolean = false, 
             if (e.type != KeyEventType.KeyDown) false
             else when (e.key) {
                 Key.Enter -> { focus.clearFocus(); true }
-                Key.Escape -> { cancelled = true; text = "%.1f".format(value).removeSuffix(".0"); focus.clearFocus(); true }
+                Key.Escape -> { cancelled = true; text = groupNumberDisplay(value); focus.clearFocus(); true }
                 else -> false
             }
         }, units = units)

@@ -44,18 +44,20 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
         try {
             for(ticket in requests) {
                 var owned:T?=null
-                val start=System.nanoTime()
+                var renderNanos=0L
                 try {
                     withContext(frameDispatcher) {
                         val context=coroutineContext
                         val check={ context.ensureActive();if(latest.get()?.request?.sameSource(ticket.request)!=true)throw ObsoleteFrame() }
                         check();frameDiagnostic("started",ticket)
+                        val start=System.nanoTime()
                         owned=render(ticket.request,check)
+                        renderNanos=System.nanoTime()-start
                         check()
                     }
                     if(latest.get()?.request?.sameSource(ticket.request)==true) {
                         val value=owned!!
-                        publish(ticket,value,System.nanoTime()-start)
+                        publish(ticket,value,renderNanos)
                         owned=null // publish owns it now.
                         frameDiagnostic("published",ticket)
                     } else frameDiagnostic("discarded",ticket)
@@ -77,7 +79,7 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
     fun close() { latest.set(null);requests.close();job.cancel() }
 }
 
-internal data class ViewportFrame(val ticket:FrameTicket,val image:Image,val cpuNanos:Long):AutoCloseable {
+internal data class ViewportFrame(val ticket:FrameTicket,val image:Image,val renderNanos:Long):AutoCloseable {
     override fun close()=image.close()
 }
 
@@ -120,7 +122,7 @@ internal class FrameRasterizer:AutoCloseable {
 }
 
 /** Explicit local metadata-only diagnostics. No model names/paths/content. */
-internal fun frameDiagnostic(event:String,ticket:FrameTicket?=null,cpu:Long=0) {
+internal fun frameDiagnostic(event:String,ticket:FrameTicket?=null,renderNanos:Long=0) {
     if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1")
-        println("NIA_RENDER event=$event seq=${ticket?.sequence ?: 0} requested_ns=${ticket?.requestedAt ?: 0} time_ns=${System.nanoTime()} cpu_ns=$cpu objects=${ticket?.request?.scene?.prepared?.size ?: 0} ui=${javax.swing.SwingUtilities.isEventDispatchThread()}")
+        println("NIA_RENDER event=$event seq=${ticket?.sequence ?: 0} requested_ns=${ticket?.requestedAt ?: 0} time_ns=${System.nanoTime()} render_ns=$renderNanos width=${ticket?.request?.width ?: 0} height=${ticket?.request?.height ?: 0} objects=${ticket?.request?.scene?.prepared?.size ?: 0} ui=${javax.swing.SwingUtilities.isEventDispatchThread()}")
 }

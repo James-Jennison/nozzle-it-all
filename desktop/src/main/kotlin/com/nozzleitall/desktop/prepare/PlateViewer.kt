@@ -264,7 +264,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         else { pump.invalidate();rendered?.close();rendered=null }
     }
     val shown=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) }
-    val shownRef=rememberUpdatedState(shown)
+    val requestRef=rememberUpdatedState(request)
     val rendering=prepared.isNotEmpty() && shown==null && renderFailed!=request
     LaunchedEffect(preview!=null) {
         if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1")
@@ -278,7 +278,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
     val startRef = rememberUpdatedState(onTransformStart); val endRef = rememberUpdatedState(onTransformEnd)
     Box(modifier) {
     Canvas(Modifier.matchParentSize().onSizeChanged { dimensions=it }.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag an object to move it, drag empty space to orbit, scroll to zoom." }
-        .pointerInput(camera, preview != null,bedW,bedD) { awaitPointerEventScope {
+        .pointerInput(camera, preview != null,bedW,bedD,dimensions) { awaitPointerEventScope {
             // Left-drag orbits; right-drag or Shift+drag pans.
             var last: Offset? = null
             val strokes = ArrayList<PaintRay>()
@@ -292,10 +292,12 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 val ev = awaitPointerEvent()
                 val ch = ev.changes.firstOrNull() ?: continue
                 val prev = last
+                // Read the live state, not a composition-captured image which
+                // might already have been replaced/closed before recomposition.
+                val frame=rendered?.takeIf { it.ticket.request.sameSource(requestRef.value) && it.ticket.request.width==size.width && it.ticket.request.height==size.height }
                 val painting = paintRef.value?.takeIf { !ev.buttons.isSecondaryPressed && !ev.keyboardModifiers.isShiftPressed && !ev.keyboardModifiers.isAltPressed }
                 if (painting != null && (ch.pressed || strokes.isNotEmpty())) {
                     // Painting: the left button lays a stroke on the selected object (Alt-drag orbits, Shift-drag pans).
-                    val frame=shownRef.value
                     val target = frame?.ticket?.request?.scene?.prepared?.firstOrNull { (o, _) -> o.id == painting.objectId }
                     if (strokeMesh !== target?.first?.mesh || strokeInput !== painting) { strokes.clear(); strokeMesh = target?.first?.mesh; strokeInput = painting }
                     if (target != null && ch.pressed && (prev == null || (ch.position - prev).getDistance() >= 3f)) {
@@ -306,7 +308,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                     if (!ch.pressed) last = null
                     continue
                 }
-                val proj = shownRef.value?.ticket?.request?.projector()
+                val proj = frame?.ticket?.request?.projector()
                     ?: Projector(size.width.toFloat(), size.height.toFloat(), camera, bedW / 2, bedD / 2)
                 if(grabObj!=null && objectsRef.value.firstOrNull { it.id==grabObj!!.id }?.mesh !== grabObj!!.mesh) {
                     if(grabStarted)endRef.value()
@@ -335,7 +337,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                     }
                     continue
                 }
-                if (ch.pressed && prev == null && paintRef.value == null && preview == null && shownRef.value!=null && ev.buttons.isPrimaryPressed) {
+                if (ch.pressed && prev == null && paintRef.value == null && preview == null && frame!=null && ev.buttons.isPrimaryPressed) {
                     pressedAt = ch.position; moved = false; primaryPress = true
                     val start = pickGrab(proj, objectsRef.value, ch.position)
                     clickId = start?.obj?.id
@@ -366,14 +368,17 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f); preparationDiagnostic("zoom-input", objectsRef.value.size);frameDiagnostic("zoom-input") } }
         ) {
         val timingStart=frameTiming.start()
-        val proj = shown?.ticket?.request?.projector() ?: Projector(size.width,size.height,camera,bedW/2,bedD/2)
-        if(preview!=null || shown==null)drawBed(proj,bedW,bedD,bedColor,lineColor)
+        // Publication closes the former image on Main. Always fetch current
+        // state here: a pending recomposition may still hold an older draw lambda.
+        val frame=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) && it.ticket.request.width==size.width.toInt() && it.ticket.request.height==size.height.toInt() }
+        val proj = frame?.ticket?.request?.projector() ?: Projector(size.width,size.height,camera,bedW/2,bedD/2)
+        if(preview!=null || frame==null)drawBed(proj,bedW,bedD,bedColor,lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
-        else if(shown!=null && shown.ticket.request.width==size.width.toInt() && shown.ticket.request.height==size.height.toInt()) {
-            drawIntoCanvas { it.nativeCanvas.drawImage(shown.image,0f,0f) }
+        else if(frame!=null) {
+            drawIntoCanvas { it.nativeCanvas.drawImage(frame.image,0f,0f) }
             prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
             if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
-            if(presented[0]!=shown.ticket.sequence) { presented[0]=shown.ticket.sequence;frameDiagnostic("presented",shown.ticket,shown.cpuNanos) }
+            if(presented[0]!=frame.ticket.sequence) { presented[0]=frame.ticket.sequence;frameDiagnostic("presented",frame.ticket,frame.renderNanos) }
         }
         frameTiming.finish(timingStart,size.width.toInt(),size.height.toInt(),objects.size)
     }

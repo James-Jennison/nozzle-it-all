@@ -59,7 +59,24 @@ val nozzleVersion = providers.gradleProperty("nozzleDesktopVersion").orElse("0.1
 // exists it is bundled into the Linux distribution's app resources, where SliceEngine.locateNative() looks first.
 val nozzleEngine = providers.gradleProperty("nozzleEngine").orElse("/mnt/faststorage/build-work/nozzle-native-fork/dist/nozzle-engine")
 val engineResources = layout.buildDirectory.dir("engine-resources")
+val viewportLibrary=layout.buildDirectory.file("native/viewport/libnia_viewport.so")
+val viewportRevision=providers.exec { commandLine("git","-C",rootProject.projectDir.absolutePath,"rev-parse","HEAD") }.standardOutput.asText.map { it.trim() }
+val buildViewport=tasks.register<Exec>("buildViewportRenderer") {
+ onlyIf { System.getProperty("os.name")=="Linux" && System.getProperty("os.arch") in listOf("amd64","x86_64") }
+ inputs.file("src/main/cpp/viewport.cpp");inputs.property("sourceRevision",viewportRevision)
+ inputs.property("javaHome",System.getProperty("java.home"))
+ outputs.file(viewportLibrary)
+ doFirst {
+  viewportLibrary.get().asFile.parentFile.mkdirs()
+  val javaHome=System.getProperty("java.home")
+  commandLine("g++","-std=c++17","-O3","-fPIC","-shared","-fvisibility=hidden","-static-libstdc++","-static-libgcc",
+   "-I$javaHome/include","-I$javaHome/include/linux","-DNIA_SOURCE_REVISION=\"${viewportRevision.get()}\"",
+   file("src/main/cpp/viewport.cpp").absolutePath,"-o",viewportLibrary.get().asFile.absolutePath,"-lEGL","-lGLESv2")
+ }
+}
 val prepareEngineResources = tasks.register<Sync>("prepareEngineResources") {
+ dependsOn(buildViewport)
+ from(viewportLibrary) { into("linux-x64") }
  from(nozzleEngine.map { path -> files(path).filter { it.isFile } }) {
   into("linux-x64")
   rename { "nozzle-engine" }
@@ -121,6 +138,8 @@ val verifyPaxxBaseline = tasks.register("verifyPaxxBaseline") {
 tasks.named("check") { dependsOn(verifyPaxxBaseline) }
 
 tasks.withType<Test>().configureEach {
+ dependsOn(buildViewport)
+ systemProperty("nozzle.viewport.library",viewportLibrary.get().asFile.absolutePath)
  // Room for real-world models (a million-triangle painted 3MF needs more than the 512 MB default).
  maxHeapSize = "4g"
  // Tests slice with the native engine when it has been built (SliceEngine.locateNative()).

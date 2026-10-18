@@ -91,12 +91,24 @@ internal data class ViewportFrame(val ticket:FrameTicket,val image:Image,val ren
  * reference-counted images; they remain valid after surface reuse/resize/close.
  * Full physical viewport resolution and existing depth-sample cap are preserved.
  */
-internal class FrameRasterizer:AutoCloseable {
+internal class FrameRasterizer(private val useGraphics:Boolean=true):AutoCloseable {
     private var target:Surface?=null
     private var width=0;private var height=0
     private val depth=DepthSurfaceCache()
+    private var graphics:GraphicsViewport?=null
+    private var graphicsChecked=false
     fun render(request:FrameRequest,check:()->Unit):Image {
         check();require(request.width>0 && request.height>0)
+        if(!graphicsChecked) {
+            graphicsChecked=true
+            if(useGraphics && System.getenv("NOZZLE_VIEWPORT_RENDERER")!="software")graphics=GraphicsViewport.createOrNull()
+            if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1")println("NIA_GRAPHICS backend=${if(graphics!=null)"gles3" else "cpu"} renderer=${graphics?.renderer ?: "software"}")
+        }
+        val accelerated=try { graphics?.render(request,check) }
+        catch(e:ObsoleteFrame) { throw e }
+        catch(e:CancellationException) { throw e }
+        catch(_:IllegalStateException) { graphics?.close();graphics=null;null }
+        try {
         if(width!=request.width || height!=request.height) {
             target?.close();target=null
             width=request.width;height=request.height
@@ -107,6 +119,9 @@ internal class FrameRasterizer:AutoCloseable {
         val scene=request.scene;val proj=request.projector()
         CanvasDrawScope().draw(Density(1f),LayoutDirection.Ltr,target.canvas.asComposeCanvas(),Size(width.toFloat(),height.toFloat())) {
             drawBed(proj,scene.bedW,scene.bedD,scene.bed,scene.line)
+            if(accelerated!=null) {
+                drawIntoCanvas { it.nativeCanvas.drawImage(accelerated,0f,0f) }
+            } else {
             scene.prepared.forEach { (o,d)->check();rasterShadow(proj,o,d,depth.shadows,check) }
             if(scene.prepared.isNotEmpty()) {
                 val surface=depth.frame(size.width,size.height)
@@ -118,11 +133,13 @@ internal class FrameRasterizer:AutoCloseable {
                     drawIntoCanvas { it.nativeCanvas.drawImageRect(image,org.jetbrains.skia.Rect.makeWH(size.width,size.height)) }
                 }
             } else depth.release()
+            }
         }
         check()
         return target.makeImageSnapshot()
+        } finally { accelerated?.close() }
     }
-    override fun close() { target?.close();target=null;depth.release() }
+    override fun close() { graphics?.close();graphics=null;target?.close();target=null;depth.release() }
 }
 
 /** Explicit local metadata-only diagnostics. No model names/paths/content. */

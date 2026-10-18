@@ -198,7 +198,7 @@ class ViewportFramesTest {
     @Test fun workerCompositeMatchesFrozenFullQualityPixelsAndSnapshotsSurviveReuseResizeClose() {
         val mesh=grid(10);val d=displayMesh(mesh);val o=obj(mesh)
         val first=request().copy(scene=request().scene.copy(prepared=listOf(o to d)))
-        val rasterizer=FrameRasterizer()
+        val rasterizer=FrameRasterizer(useGraphics=false)
         fun pixels(image:org.jetbrains.skia.Image)=IntArray(image.width*image.height).also { image.toComposeImageBitmap().readPixels(it) }
         val image=rasterizer.render(first,{})
         try {

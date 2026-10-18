@@ -76,6 +76,10 @@ internal class LatestFramePump<T:AutoCloseable>(scope:CoroutineScope,
         latest.set(ticket);requests.trySend(ticket);frameDiagnostic("requested",ticket)
     }
     fun invalidate() { latest.set(null);requests.tryReceive() }
+    /** Nonblocking Main teardown. The pump exclusively owns its backend; no
+     * caller may close it separately. Its finally disposes after render/joins,
+     * including noncooperative work. Blocking Main here would defeat responsiveness.
+     */
     fun close() { latest.set(null);requests.close();job.cancel() }
 }
 

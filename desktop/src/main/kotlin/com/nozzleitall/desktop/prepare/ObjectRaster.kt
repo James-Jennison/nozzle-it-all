@@ -54,6 +54,7 @@ internal class ObjectRasterScratch {
                 val first=poses.entries.iterator();val entry=first.next();poseBytes-=entry.value.bytes;first.remove()
             }
             poses[key]=result;poseBytes+=result.bytes
+            check(poseBytes<=POSE_CACHE_BYTES)
         }
         return result
     }
@@ -134,17 +135,26 @@ internal fun rasterObject(proj:Projector,o:PlateObject,d:DisplayMesh,surface:Dep
     if(outsideViewport(proj,o,d.bounds))return
     val s=surface.objectScratch;val t=d.mesh.triangles
     val pose=s.pose(o,d,check)
-    val cr=cos(Math.toRadians(o.rotZ.toDouble())).toFloat();val sr=sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
     s.vertices(d.mesh.vertexCount)
     for(i in 0 until d.mesh.vertexCount) {
         if(i and 1023==0)check()
         val at=i*3
         proj.p(pose.world[at],pose.world[at+1],pose.world[at+2],s.screen,at)
     }
-    val groups=d.lightingGroups;s.lights(groups.corners.size)
     val shadingKey=RasterShadingKey(proj.orientation,o.color,o.selected,o.paintColors)
     if(pose.shadingKey!=shadingKey) {
         pose.shadingKey=null // Never reuse a former key after a cancelled partial overwrite.
+        shadePose(proj,o,d,s,pose,check)
+        // Commit only a fully computed set: cancelled/failed partial colors never hit.
+        pose.shadingKey=shadingKey;s.shaded()
+    }
+    // Cache hits read only per-pose colors, never another object's lighting scratch.
+    surface.bands.draw(proj,d,s.screen,pose.colors,surface,check)
+}
+
+private fun shadePose(proj:Projector,o:PlateObject,d:DisplayMesh,s:ObjectRasterScratch,pose:RasterPose,check:()->Unit) {
+    val cr=cos(Math.toRadians(o.rotZ.toDouble())).toFloat();val sr=sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
+    val groups=d.lightingGroups;s.lights(groups.corners.size)
         for(g in groups.corners.indices) {
             if(g and 1023==0)check()
             val corner=groups.corners[g];if(corner<0)continue
@@ -178,8 +188,4 @@ internal fun rasterObject(proj:Projector,o:PlateObject,d:DisplayMesh,surface:Dep
             pose.colors[tri*3+k]=0xff000000.toInt() or (r8 shl 16) or (g8 shl 8) or b8
         }
     }
-        // Commit only a fully computed set: cancelled/failed partial colors never hit.
-        pose.shadingKey=shadingKey;s.shaded()
-    }
-    surface.bands.draw(proj,d,s.screen,pose.colors,surface,check)
 }

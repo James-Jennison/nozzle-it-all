@@ -260,6 +260,9 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
     DisposableEffect(pump) { onDispose { pump.close();rendered?.close();rendered=null } }
     val request=FrameRequest(FrameScene(prepared,bedW,bedD,bedColor,lineColor),camera.snapshot(),dimensions.width,dimensions.height,renderRetry)
     SideEffect {
+        if(rendered?.ticket?.request?.sameSource(request)==false) {
+            rendered?.close();rendered=null
+        }
         if(preview==null && dimensions.width>0 && dimensions.height>0)pump.offer(request)
         else { pump.invalidate();rendered?.close();rendered=null }
     }

@@ -125,25 +125,68 @@ class ViewportFramesTest {
         rasterObject(Projector(320f,240f,camera,128f,128f),o,d,surface)
         val pose=surface.objectScratch.pose(o,d,{})
         val original=pose.colors.copyOf();val oldCamera=camera.snapshot();camera.orbit(40f,0f)
-        var duringShading=0
         try {
             rasterObject(Projector(320f,240f,camera,128f,128f),o,d,surface) {
-                if(pose.shadingKey==null && ++duringShading==5)throw ObsoleteFrame()
+                // Observe actual writes, not a checkpoint count that could fire
+                // before the color loop on a differently sized fixture.
+                if(pose.shadingKey==null && !original.contentEquals(pose.colors))throw ObsoleteFrame()
             }
             fail("expected cancellation during color overwrite")
         } catch(_:ObsoleteFrame) { }
         assertNull(pose.shadingKey)
+        assertFalse(original.contentEquals(pose.colors))
         surface.clear();rasterObject(Projector(320f,240f,oldCamera,128f,128f),o,d,surface)
         assertArrayEquals(original,pose.colors)
     }
 
     @Test fun poseCacheIsByteBoundedAndDropsInactiveSceneReferences() {
         val mesh=grid(100);val d=displayMesh(mesh);val scratch=ObjectRasterScratch()
-        repeat(140) { scratch.pose(obj(mesh,x=it.toFloat()),d,{}) }
+        repeat(140) { scratch.pose(obj(mesh,x=it.toFloat()),d,{});assertTrue(scratch.retainedBytes<=ObjectRasterScratch.POSE_CACHE_BYTES) }
         assertTrue(scratch.retainedBytes<=ObjectRasterScratch.POSE_CACHE_BYTES)
         val kept=obj(mesh,x=139f);val bytes=scratch.pose(kept,d,{}).bytes
         scratch.retain(listOf(kept to d));assertEquals(bytes,scratch.retainedBytes)
         scratch.retain(emptyList());assertEquals(0L,scratch.retainedBytes)
+    }
+
+    @Test fun multipleObjectsReuseTheirOwnColorsAcrossFramesAndResize() {
+        val a=grid(12);val b=grid(15)
+        for(i in 0 until b.vertexCount)b.vertices[i*3+2]=(i%7).toFloat()
+        val scene=listOf(obj(a,color=Color.Red,x=115f) to displayMesh(a),obj(b,color=Color.Blue,x=140f) to displayMesh(b))
+        val cache=DepthSurfaceCache();var scratch:ObjectRasterScratch?=null
+        for((width,height) in listOf(320 to 240,320 to 240,400 to 280,320 to 240)) {
+            val surface=cache.frame(width.toFloat(),height.toFloat())
+            if(scratch==null)scratch=surface.objectScratch else assertSame(scratch,surface.objectScratch)
+            val reference=ReferenceDepthSurface(width.toFloat(),height.toFloat())
+            val proj=Projector(width.toFloat(),height.toFloat(),request().camera,128f,128f)
+            for((o,d) in scene) { rasterObject(proj,o,d,surface);referenceObject(proj,o,d,reference) }
+            assertArrayEquals(reference.pixels,surface.pixels)
+            assertEquals(2,surface.objectScratch.shadingPasses)
+        }
+        cache.release();assertNotSame(scratch,cache.frame(320f,240f).objectScratch)
+    }
+
+    @Test(timeout=20000) fun interruptionStillJoinsWorkersAndRestoresOwnerInterrupt() {
+        org.junit.Assume.assumeTrue(RasterWorkers.count>1)
+        val started=CountDownLatch(RasterWorkers.count-1);val joining=CountDownLatch(1);val release=CountDownLatch(1)
+        val finished=java.util.concurrent.atomic.AtomicInteger()
+        val ownerThread=java.util.concurrent.atomic.AtomicReference<Thread>()
+        val owner=java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val result=owner.submit<Boolean> {
+                ownerThread.set(Thread.currentThread())
+                try {
+                    RasterWorkers.run { worker ->
+                        if(worker==0) { await(started);joining.countDown() }
+                        else { assertTrue(Thread.currentThread().isDaemon);started.countDown();await(release);finished.incrementAndGet() }
+                    }
+                    false
+                } catch(_:InterruptedException) { Thread.currentThread().isInterrupted }
+                finally { Thread.interrupted() }
+            }
+            await(joining);ownerThread.get().interrupt();assertFalse(result.isDone)
+            release.countDown();assertTrue(result.get(10,TimeUnit.SECONDS))
+            assertEquals(RasterWorkers.count-1,finished.get())
+        } finally { release.countDown();owner.shutdownNow() }
     }
 
     @Test fun workerCompositeMatchesFrozenFullQualityPixelsAndSnapshotsSurviveReuseResizeClose() {
@@ -207,13 +250,25 @@ class ViewportFramesTest {
         val d=DisplayMesh(mesh,FloatArray(count*9),mesh.bounds());val surface=DepthSurface(64f,64f)
         val triangle=floatArrayOf(-100f,-100f,0f,200f,-100f,0f,0f,200f,0f)
         val screen=FloatArray(count*9) { triangle[it%9] };val colors=IntArray(count*3) { 0xffaabbcc.toInt() }
-        try {
-            surface.bands.drawTiled(request().projector(),d,screen,colors,surface) {
-                if(surface.bands.budgetFallbacks>0)throw ObsoleteFrame()
-            }
-            fail("expected test interruption at the serial fallback")
-        } catch(_:ObsoleteFrame) { }
+        surface.bands.drawTiled(request().projector(),d,screen,colors,surface,{})
+        val expected=ReferenceDepthSurface(64f,64f)
+        repeat(count) { expected.triangle(screen,it*9,colors,it*3,request().projector().eye) }
+        assertArrayEquals(expected.pixels,surface.pixels)
         assertEquals(1,surface.bands.budgetFallbacks)
         assertTrue(surface.bands.indexCapacity<=RasterBands.INDEX_BUDGET)
+    }
+
+    @Test fun rasterPolicyBoundaryPreservesFrozenPixels() {
+        val mesh=Mesh(FloatArray(27),IntArray(9) { it });val d=DisplayMesh(mesh,FloatArray(27),mesh.bounds())
+        val screen=floatArrayOf(-20f,-20f,0f,1700f,20f,0f,300f,1700f,0f,
+            -20f,-20f,0f,1700f,20f,0f,300f,1700f,0f, 0f,0f,-1f,1600f,1500f,-1f,1600f,1500.001f,-1f)
+        val colors=IntArray(9) { (0xff000000L or (it*1234567L)).toInt() }
+        for(height in listOf(1562,1563)) {
+            val actual=DepthSurface(1600f,height.toFloat());val expected=ReferenceDepthSurface(1600f,height.toFloat())
+            val proj=Projector(1600f,height.toFloat(),request().camera,128f,128f)
+            actual.bands.draw(proj,d,screen,colors,actual,{})
+            repeat(3) { expected.triangle(screen,it*9,colors,it*3,proj.eye) }
+            assertArrayEquals("policy boundary height=$height",expected.pixels,actual.pixels)
+        }
     }
 }

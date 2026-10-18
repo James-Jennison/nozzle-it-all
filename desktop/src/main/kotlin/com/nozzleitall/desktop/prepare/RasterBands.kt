@@ -46,6 +46,7 @@ internal object RasterWorkers {
  */
 internal class RasterBands(private val useTiles:Boolean=true) {
     private val side=16
+    init { require(side in 1..16) { "Tile coordinates occupy four bits" } }
     private val count=side*side
     private val bins=Array(count) { IntArray(0) }
     private val sizes=IntArray(count)
@@ -98,7 +99,7 @@ internal class RasterBands(private val useTiles:Boolean=true) {
         for(tri in d.tris) {
             if(tri and 1023==0)check()
             val range=ranges[tri];if(range<0)continue
-            for(y in ((range ushr 4) and 15)..(range and 15))for(x in (range ushr 12)..((range ushr 8) and 15)) {
+            for(y in ((range ushr 4) and 15)..(range and 15))for(x in ((range ushr 12) and 15)..((range ushr 8) and 15)) {
                 val tile=y*side+x;bins[tile][sizes[tile]++]=tri
             }
         }

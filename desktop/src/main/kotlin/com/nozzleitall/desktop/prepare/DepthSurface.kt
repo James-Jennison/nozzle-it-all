@@ -6,14 +6,13 @@ import kotlin.math.*
  * at each pixel, not sorted by their average depth (which fails on overlapping long faces).
  * Buffers are bounded to four million samples even on oversized/HiDPI viewports.
  */
-internal class DepthSurface(viewWidth: Float, viewHeight: Float,useTiles:Boolean=true) {
+internal class DepthSurface(viewWidth: Float, viewHeight: Float,useTiles:Boolean=true,
+    val objectScratch:ObjectRasterScratch=ObjectRasterScratch(),val bands:RasterBands=RasterBands(useTiles)) {
     val scale = min(1f, sqrt(4_000_000.0 / (viewWidth.toDouble()*viewHeight).coerceAtLeast(1.0)).toFloat())
     val width = ceil(viewWidth*scale).toInt().coerceAtLeast(1)
     val height = ceil(viewHeight*scale).toInt().coerceAtLeast(1)
     val pixels = ByteArray(width*height*4) // BGRA, opaque where covered; transparent elsewhere.
     private val depths = FloatArray(width*height) { Float.POSITIVE_INFINITY }
-    val objectScratch=ObjectRasterScratch()
-    val bands=RasterBands(useTiles)
 
     fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY) }
 
@@ -91,14 +90,19 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float,useTiles:Boolean
 /** Owned by one viewport; reuse frame storage without retaining old-size buffers. */
 internal class DepthSurfaceCache(private val useTiles:Boolean=true) {
     val shadows=ShadowScratch()
+    private var scratch=ObjectRasterScratch()
+    private var bands=RasterBands(useTiles)
     private var surface: DepthSurface? = null
     private var width = -1f
     private var height = -1f
-    fun release() { surface=null;width=-1f;height=-1f }
+    fun release() { surface=null;width=-1f;height=-1f;scratch=ObjectRasterScratch();bands=RasterBands(useTiles) }
     fun frame(viewWidth: Float, viewHeight: Float): DepthSurface {
         val current = surface?.takeIf { width == viewWidth && height == viewHeight }
         if (current != null) { current.clear(); return current }
-        return DepthSurface(viewWidth, viewHeight,useTiles).also {
+        // Drop old-size pixel/depth storage before allocation; retain only the
+        // size-independent bounded pose/bin scratch. This is not a GC/RSS promise.
+        surface=null
+        return DepthSurface(viewWidth, viewHeight,useTiles,scratch,bands).also {
             surface = it; width = viewWidth; height = viewHeight
         }
     }

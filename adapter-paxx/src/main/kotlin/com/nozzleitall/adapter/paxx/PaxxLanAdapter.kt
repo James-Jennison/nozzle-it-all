@@ -88,9 +88,9 @@ class U1LanSession(private val config: PrinterConfig, override val capabilities:
             val result = m.get("printer/objects/query", U1Protocol.statusQuery) as JSONObject
             val parsed = U1Protocol.parseStatus(result, route)
             val objects = result.optJSONObject("status")
-            // The U1's own filament report is authoritative only when it holds something: Klipper printers that merely define the
-            // object (Elegoo's COSMOS reports it as {}) fall through to their filament changer's lanes.
-            if ((objects?.optJSONObject("print_task_config")?.length() ?: 0) > 0) parsed else withLanes(parsed, objects)
+            // The U1's own filament report counts only when it has a filament list: Klipper printers that merely define the object
+            // (Elegoo's COSMOS answers every field with null) fall through to their filament changer's lanes.
+            if (objects?.optJSONObject("print_task_config")?.optJSONArray("filament_exist") != null) parsed else withLanes(parsed, objects)
         }
     } catch (e: PrinterRejected) {
         PrinterStatus(PrinterState.ERROR, route, message = e.message)

@@ -16,7 +16,7 @@ def f32(value):
     return format(struct.unpack("f", struct.pack("f", value))[0], ".9g")
 
 
-def model():
+def model(count=3):
     rows, columns = 250, 300
     vertices, triangles = [], []
     for r in range(rows):
@@ -28,26 +28,29 @@ def model():
             after = (c + 1) % columns
             triangles.extend((f'<triangle v1="{first+c}" v2="{nxt+c}" v3="{nxt+after}"/>', f'<triangle v1="{first+c}" v2="{nxt+after}" v3="{first+after}"/>'))
     mesh = "<mesh><vertices>" + "".join(vertices) + "</vertices><triangles>" + "".join(triangles) + "</triangles></mesh>"
-    objects = "".join(f'<object id="{i}" type="model" name="Viewport stress {i}">{mesh}</object>' for i in range(1, 4))
-    build = "".join(f'<item objectid="{i}" transform="1 0 0 0 1 0 0 0 1 {x} 128 0"/>' for i, x in enumerate((48, 128, 208), 1))
+    objects = "".join(f'<object id="{i}" type="model" name="Viewport stress {i}">{mesh}</object>' for i in range(1, count+1))
+    build = "".join(f'<item objectid="{i+1}" transform="1 0 0 0 1 0 0 0 1 {48+(i%3)*80} {128 if count==3 else 80+(i//3)*60} 0"/>' for i in range(count))
     return ('<?xml version="1.0" encoding="UTF-8"?><model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" unit="millimeter"><resources>' + objects + '</resources><build>' + build + '</build></model>').encode()
 
 
-def write(target):
+def write(target, count=3):
     entries = {
         "[Content_Types].xml": b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>',
         "_rels/.rels": b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>',
-        "3D/3dmodel.model": model(),
+        "3D/3dmodel.model": model(count),
     }
     with target.open("xb") as handle, zipfile.ZipFile(handle, "w") as archive:
         for name, content in entries.items():
             info = zipfile.ZipInfo(name, (2000, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(info, content)
-    print(f"450000 triangles; sha256 {hashlib.sha256(target.read_bytes()).hexdigest()}; {target}")
+    print(f"{150000*count} triangles; sha256 {hashlib.sha256(target.read_bytes()).hexdigest()}; {target}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
-    write(parser.parse_args().output)
+    parser.add_argument("--objects",type=int,default=3)
+    args=parser.parse_args()
+    assert 1 <= args.objects <= 16
+    write(args.output,args.objects)

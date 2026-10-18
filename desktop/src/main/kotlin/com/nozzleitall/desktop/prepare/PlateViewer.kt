@@ -17,7 +17,13 @@ import kotlin.math.abs
 import kotlin.math.*
 
 /** Camera looking at the bed centre: yaw/pitch in degrees, distance in mm, and a pan offset in screen pixels. */
-class ViewCamera { var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(55f); var distance by mutableStateOf(600f); var pan by mutableStateOf(Offset.Zero) }
+class ViewCamera {
+    var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(55f)
+    var distance by mutableStateOf(600f); var pan by mutableStateOf(Offset.Zero)
+    /** Continuous orbit through both poles and underneath; bounded angles avoid precision loss after many turns. */
+    fun orbit(dx: Float, dy: Float) { yaw = (yaw - dx * 0.4f) % 360f; pitch = (pitch - dy * 0.3f) % 360f }
+    fun reset() { yaw = -35f; pitch = 55f; pan = Offset.Zero }
+}
 
 /** An object to draw. [paintColors] gives the colour of each painted filament number (index N for the file's filament N). */
 class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean,
@@ -253,7 +259,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 if (ev.type == PointerEventType.Move && ch.pressed && prev != null) {
                     val d = ch.position - prev
                     if (ev.buttons.isSecondaryPressed || ev.keyboardModifiers.isShiftPressed) camera.pan += d
-                    else if (!modifierClick) { camera.yaw -= d.x * 0.4f; camera.pitch = (camera.pitch - d.y * 0.3f).coerceIn(5f, 89f) }
+                    else if (!modifierClick) camera.orbit(d.x, d.y)
                 }
                 if (!ch.pressed && primaryPress) {
                     if (!moved) selectRef.value(clickId, modifierClick && pressCtrl, modifierClick && pressShift)

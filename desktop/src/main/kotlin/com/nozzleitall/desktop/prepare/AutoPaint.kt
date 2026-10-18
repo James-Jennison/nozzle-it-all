@@ -5,6 +5,7 @@ import com.nozzleitall.printer.ext.AutoPaintFormat.Provider
 import com.nozzleitall.project.Mesh
 import com.nozzleitall.project.Paint
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.File
 import java.net.URI
 import java.net.http.HttpClient
@@ -86,22 +87,35 @@ object AutoPaint {
     }
 
     /** The question, ready to send: the model written out for the engine, its parts, and the views the provider will see. */
-    class Prepared(val dir: File, val stl: File, val seg: AutoPaintFormat.Segmentation, val filaments: List<AutoPaintFormat.Filament>) {
+    class Prepared(val dir: File, val stl: File, val seg: AutoPaintFormat.Segmentation, val filaments: List<AutoPaintFormat.Filament>, val faceRegions: IntArray) {
         fun discard() { dir.deleteRecursively() }
     }
 
     /** Segments [mesh] and renders the views, without asking anyone: what [ask] will send. */
     fun prepare(mesh: Mesh, name: String, filaments: List<AutoPaintFormat.Filament>, hint: String, work: File): Prepared {
-        val dir = File(work, "autopaint").apply { deleteRecursively(); mkdirs() }
+        work.mkdirs()
+        val dir = Files.createTempDirectory(work.toPath(), "autopaint-").toFile()
         try {
             val stl = File(dir, "model.stl").apply { writeBytes(SliceEngine.stlBytes(mesh)) }
-            val seg = AutoPaintFormat.parseSegmentation(engineRun(AutoPaintFormat.segmentRequest(stl.absolutePath, dir.absolutePath, filaments, name, hint)))
-            return Prepared(dir, stl, seg, filaments)
+            val guidance = "Prefer a coherent, natural palette. Segment tints are identification labels, not suggested paint colours. " +
+                "Do not use every available filament merely because it is available. Use accent colours only when the views clearly support them; " +
+                "do not invent red eyes or decorative patches. A geometric segment may cross a semantic feature: when uncertain keep the dominant body colour. " +
+                "Keep matching features consistent across all views. The user's requested style takes precedence.\n" + hint
+            val seg = AutoPaintFormat.parseSegmentation(engineRun(AutoPaintFormat.segmentRequest(stl.absolutePath, dir.absolutePath, filaments, name, guidance, size = 768)))
+            // The existing engine assigns deterministic regions; an identity assignment exposes their per-face IDs without a new engine ABI.
+            val identity = JSONObject().put("assignments", JSONArray((0 until seg.segmentCount).map { JSONObject().put("segment", it).put("filament", it + 1) }))
+            val regions = AutoPaintFormat.parseAssignment(engineRun(AutoPaintFormat.assignRequest(stl.absolutePath, identity.toString(), seg.segmentCount))).faceFilaments
+            require(regions.size == mesh.triangleCount && regions.all { it in 1..seg.segmentCount }) { "The engine returned an incomplete region map." }
+            return Prepared(dir, stl, seg, filaments, IntArray(regions.size) { regions[it] - 1 })
         } catch (e: Exception) { dir.deleteRecursively(); throw e }
     }
 
     /** Sends [prepared] to [provider] and reads the answer: the 1-based slot for each face (0 = leave it). */
     fun ask(prepared: Prepared, provider: Provider): IntArray {
+        return askReview(prepared, provider).faces()
+    }
+
+    fun askReview(prepared: Prepared, provider: Provider): AutoPaintReview {
         val seg = prepared.seg
         val raw = when (provider) {
             is Provider.Command -> askCommand(provider.commandLine.replace("{dir}", prepared.dir.absolutePath), seg.commandPrompt)
@@ -113,7 +127,10 @@ object AutoPaint {
         val answer = engineRun(AutoPaintFormat.replyTextRequest(provider, raw)).getString("text")
         val result = AutoPaintFormat.parseAssignment(engineRun(AutoPaintFormat.assignRequest(prepared.stl.absolutePath, answer, prepared.filaments.maxOf { it.index })))
         if (result.paintedFaces == 0) throw AutoPaintError("The answer left every part unpainted.")
-        return result.faceFilaments
+        require(result.segmentToFilament.size == seg.segmentCount) { "The answer has the wrong number of regions." }
+        val allowed = prepared.filaments.map { it.index }.toSet() + 0
+        require(result.segmentToFilament.all { it in allowed }) { "The answer uses an unavailable filament." }
+        return AutoPaintReview(prepared.faceRegions, result.segmentToFilament)
     }
 
     /**

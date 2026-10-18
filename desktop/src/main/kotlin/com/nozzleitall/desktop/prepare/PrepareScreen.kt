@@ -26,6 +26,7 @@ import com.nozzleitall.desktop.Destination
 import com.nozzleitall.desktop.screens.*
 import com.nozzleitall.desktop.ui.*
 import com.nozzleitall.printer.*
+import com.nozzleitall.project.MeshIO
 import kotlinx.coroutines.launch
 import java.awt.FileDialog
 import java.awt.Frame
@@ -61,6 +62,7 @@ fun PrepareScreen(state: AppState) {
     val done = p.slice as? SliceState.Done
     // The tools need an object; settings pages from the printer and filament icons open the print settings drawer.
     LaunchedEffect(p.selectedIds) { if (p.selectedIds.size != 1 && (drawer == Drawer.CUT || drawer == Drawer.AI)) drawer = null }
+    LaunchedEffect(drawer, p.selected) { if (drawer != Drawer.AI || (p.aiItemId != null && p.aiItemId != p.selected)) p.aiDiscard() }
     LaunchedEffect(p.settingsScope) { if (p.settingsScope != com.nozzleitall.desktop.settings.Scope.PROCESS) drawer = Drawer.PROCESS }
     // A finished slice shows its preview and opens the Send step.
     LaunchedEffect(done) { if (done != null) { if (done.preview != null) p.showPreview = true; drawer = Drawer.SEND } else if (drawer == Drawer.SEND) { drawer = null; p.showPreview = false } }
@@ -79,6 +81,7 @@ fun PrepareScreen(state: AppState) {
         val slots = p.materials()
         val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
         val objects = onPlate.map { item ->
+            val aiMesh = p.aiPreviewMesh?.takeIf { drawer == Drawer.AI && item.id == p.aiItemId && !p.aiShowOriginal }
             // A slot is a loaded filament or a Full Spectrum mix (drawn in its blended colour).
             // While a non-colour paint tool is open on the selected object, that kind of paint is what the plate shows.
             val shown = p.paintKind?.takeIf { item.id == p.selected && it != PaintOps.Kind.COLOUR }
@@ -86,9 +89,10 @@ fun PrepareScreen(state: AppState) {
                 PaintOps.Kind.SUPPORT -> listOf(null, Color(0xFF3BA55D), Color(0xFFE5484D))
                 PaintOps.Kind.SEAM -> listOf(null, Color(0xFF3E7BFA), Color(0xFFF5A623))
                 PaintOps.Kind.FUZZY -> listOf(null, Color(0xFF9B59B6))
-                else -> if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
+                else -> if (aiMesh != null) List((MeshIO.paintedFilaments(aiMesh).maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(if (n == 0) item.slot else n)) }
+                    else if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
             }
-            PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id in p.selectedIds, paintColors,
+            PlateObject(item.id, item.name, aiMesh ?: item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id in p.selectedIds, paintColors,
                 when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 },
                 item.sx, item.sy, item.sz, item.parts.toList(), reach = item.reach, height = item.height)
         }
@@ -155,6 +159,7 @@ fun PrepareScreen(state: AppState) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
                     Spacer(Modifier.weight(1f))
+                    NzButton("Reset view", { camera.reset() }, kind = ButtonKind.QUIET, testTag = "plate-reset-view")
                     Txt("Drag: move or orbit · Shift: pan · Scroll: zoom", Nz.type.bodySmall, c.textMuted)
                 }
             }
@@ -699,7 +704,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         DrawerTitle("AI auto-paint", ::close)
         if (prepared == null) {
-            Txt("The engine splits the model into numbered parts and renders views of them. You see exactly what will be sent before anything is.", Nz.type.bodySmall, c.textMuted)
+            Txt("The engine finds geometric regions, not guaranteed semantic parts. Review the images before sending; inspect and correct the painted draft before applying.", Nz.type.bodySmall, c.textMuted)
             com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
                 com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.fillMaxWidth()) { update(s.copy(kind = it)) }
             if (s.kind == "command") {
@@ -712,7 +717,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
             com.nozzleitall.desktop.settings.DenseInput(hint, { hint = it }, "Hint", Modifier.fillMaxWidth(), placeholder = "Hint (optional), e.g. a goldfish, orange body, black eyes")
             NzButton("Show what will be sent", { p.aiPrepare(hint) }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && s.provider != null, testTag = "autopaint-run")
         } else {
-            Txt("These are the images that will be sent, with a text description of each part and your filament list.", Nz.type.bodySmall, c.textMuted)
+            Txt(if (answer == null) "These images, region descriptions, your hint and filament list will be sent." else "Draft preview only — your saved model is unchanged. Orbit the plate to inspect every side, including underneath.", Nz.type.bodySmall, c.textMuted)
             val images = remember(prepared) { prepared.seg.views.mapNotNull { v -> runCatching { v.name to org.jetbrains.skia.Image.makeFromEncoded(File(v.path).readBytes()).toComposeImageBitmap() }.getOrNull() } }
             images.chunked(3).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -728,11 +733,22 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
             Txt("${prepared.seg.segmentCount} parts · ${s.command.takeIf { s.kind == "command" } ?: s.baseUrl}", Nz.type.bodySmall, c.textMuted, maxLines = 1)
             if (answer == null) {
                 NzButton("Send these ${images.size} images", { p.aiSend() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-send")
-                NzButton("Back", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+                NzButton("Back", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
             } else {
-                Banner("The answer came back: ${answer.count { it > 0 }} of ${answer.size} faces will be painted.", BannerKind.SUCCESS)
-                NzButton("Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, testTag = "autopaint-apply")
+                Banner("${answer.faces().count { it > 0 }} of ${answer.faceRegions.size} faces assigned. Inspect the draft on the plate.", BannerKind.SUCCESS)
+                NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
+                NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
+                Txt("Optional, conservative tip smoothing; preserves small colour details and sharp creases. ${p.aiCleanedFaces} faces adjusted. It cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)
+                Txt("Correct regions (numbers match the images)", Nz.type.label)
+                NzButton("Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-apply")
                 NzButton("Discard", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+                val choices = listOf(com.nozzleitall.desktop.settings.Choice("0", "Keep original paint")) + prepared.filaments.map { f ->
+                    com.nozzleitall.desktop.settings.Choice(f.index.toString(), "Slot ${f.index} · ${f.colorHex}")
+                }
+                answer.slots.forEachIndexed { region, slot ->
+                    com.nozzleitall.desktop.settings.DenseSelect("Region $region", choices, slot.toString(), Modifier.fillMaxWidth()) { p.aiCorrect(region, it.toInt()) }
+                }
+                NzButton("Reset region corrections", { p.aiResetCorrections() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
             }
         }
     }

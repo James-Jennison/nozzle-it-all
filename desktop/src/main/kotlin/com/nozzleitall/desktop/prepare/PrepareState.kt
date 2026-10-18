@@ -826,39 +826,92 @@ class PrepareState(private val app: AppState) {
     /** Paints the selected object with the plate's slots as [hint] asks; the colours print in the same slot numbers they are offered under. */
     /** The reviewed flow: show what will be sent ([aiPrepare]), send it ([aiSend]), then keep ([aiApply]) or drop ([aiDiscard]) the answer. */
     var aiPrepared by mutableStateOf<AutoPaint.Prepared?>(null)
-    var aiAnswer by mutableStateOf<IntArray?>(null)
+    var aiAnswer by mutableStateOf<AutoPaintReview?>(null); private set
     var aiItemId by mutableStateOf<Int?>(null)
+    private var aiSource: PrepItem? = null
+    private var aiSourceSlots = emptyList<Int>()
+    private var aiSourceSlot = 1
+    var aiPreviewMesh by mutableStateOf<Mesh?>(null); private set
+    var aiShowOriginal by mutableStateOf(false)
+    var aiCleanBoundaries by mutableStateOf(false); private set
+    var aiCleanedFaces by mutableStateOf(0); private set
+    private var aiGeneration = 0
+
+    fun aiCorrect(region: Int, slot: Int) {
+        if (toolBusy != null || slot !in (aiPrepared?.filaments?.map { it.index }.orEmpty() + 0)) return
+        val answer = aiAnswer ?: return
+        if (region !in answer.slots.indices) return
+        aiAnswer = answer.corrected(region, slot); refreshAiPreview()
+    }
+    fun aiResetCorrections() { if (toolBusy == null) { aiAnswer = aiAnswer?.reset(); refreshAiPreview() } }
+    fun aiSetCleanup(enabled: Boolean) { if (toolBusy == null) { aiCleanBoundaries = enabled; refreshAiPreview() } }
+    private fun refreshAiPreview() {
+        val source = aiSource ?: return
+        val answer = aiAnswer ?: return
+        val raw = answer.faces()
+        val slots = if (aiCleanBoundaries) cleanPaintBoundaries(source.mesh, raw).also { cleaned ->
+            // Explicit owner corrections take precedence over automatic cleanup.
+            for (f in cleaned.indices) if (answer.slots[answer.faceRegions[f]] != answer.originalSlots[answer.faceRegions[f]]) cleaned[f] = raw[f]
+        } else raw
+        aiCleanedFaces = slots.indices.count { slots[it] != raw[it] }
+        aiPreviewMesh = AutoPaint.applied(AutoPaintReview.base(source.mesh, aiSourceSlots, aiSourceSlot), slots)
+        aiShowOriginal = false
+    }
 
     fun aiPrepare(hint: String) {
+        if (toolBusy != null || selectedIds.size != 1) return
         val item = items.firstOrNull { it.id == selected } ?: return
         val slots = allSlots()
         if (slots.size < 2) { notice = "AI auto-paint needs at least two filaments to choose between."; return }
         val filaments = slots.map { (id, label) -> com.nozzleitall.printer.ext.AutoPaintFormat.Filament(id, label, slotHex(id) ?: "#808080") }
         aiDiscard()
+        val generation = aiGeneration
+        val sourceSlots = item.paintSlots.toList()
+        val sourceSlot = item.slot
         runTool("Preparing the views") {
             val prepared = withContext(Dispatchers.IO) { AutoPaint.prepare(item.mesh, item.name, filaments, hint, plateWork()) }
-            aiPrepared = prepared; aiItemId = item.id
+            if (generation != aiGeneration) { prepared.discard(); return@runTool }
+            aiPrepared = prepared; aiItemId = item.id; aiSource = item; aiSourceSlots = sourceSlots; aiSourceSlot = sourceSlot
         }
     }
 
     fun aiSend() {
+        if (toolBusy != null) return
         val prepared = aiPrepared ?: return
         val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }
-        runTool("Waiting for the answer") { aiAnswer = withContext(Dispatchers.IO) { AutoPaint.ask(prepared, provider) } }
+        val generation = aiGeneration
+        runTool("Waiting for the answer") {
+            val answer = withContext(Dispatchers.IO) { AutoPaint.askReview(prepared, provider) }
+            if (generation == aiGeneration && aiPrepared === prepared) { aiAnswer = answer; refreshAiPreview() }
+        }
     }
 
     fun aiApply() {
+        if (toolBusy != null) return
         val prepared = aiPrepared ?: return
-        val answer = aiAnswer ?: return
+        val mesh = aiPreviewMesh ?: return
         val item = items.firstOrNull { it.id == aiItemId } ?: run { aiDiscard(); return }
-        val painted = withMesh(item, AutoPaint.applied(item.mesh, answer))
+        if (item.mesh !== aiSource?.mesh || item.paintSlots.toList() != aiSourceSlots || item.slot != aiSourceSlot) {
+            notice = "The object's paint or geometry changed. Prepare auto-paint again before applying."; aiDiscard(); return
+        }
+        val painted = withMesh(item, mesh)
         painted.paintSlots.clear(); painted.paintSlots.addAll(1..prepared.filaments.maxOf { it.index })
+        history.beginEdit()
         replace(item, painted); selected = painted.id
         changed()
+        history.endEdit()
         aiDiscard()
     }
 
-    fun aiDiscard() { aiPrepared?.discard(); aiPrepared = null; aiAnswer = null; aiItemId = null }
+    fun aiDiscard() {
+        aiGeneration++
+        // Do not remove views while a provider is still reading them; runTool completion owns that cleanup.
+        val old = aiPrepared
+        if (toolBusy == null) old?.discard()
+        else if (old != null) app.scope.launch { while (toolBusy != null) kotlinx.coroutines.delay(100); old.discard() }
+        aiPrepared = null; aiAnswer = null; aiItemId = null; aiSource = null; aiPreviewMesh = null
+        aiSourceSlots = emptyList(); aiCleanedFaces = 0; aiShowOriginal = false; aiCleanBoundaries = false
+    }
 
     fun autoPaintSelected(hint: String) {
         val item = items.firstOrNull { it.id == selected } ?: return

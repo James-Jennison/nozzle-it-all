@@ -184,9 +184,9 @@ internal class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Fl
     }
 
     /** A world-space direction in view space: x right, y down the screen, z toward the viewer. */
-    fun dir(x: Float, y: Float, z: Float, out: FloatArray) {
+    fun dir(x: Float, y: Float, z: Float, out: FloatArray, at: Int = 0) {
         val rx = x * cyw - y * syw; val ry = x * syw + y * cyw
-        out[0] = rx; out[1] = ry * cp - z * sp; out[2] = ry * sp + z * cp
+        out[at] = rx; out[at+1] = ry * cp - z * sp; out[at+2] = ry * sp + z * cp
     }
 }
 

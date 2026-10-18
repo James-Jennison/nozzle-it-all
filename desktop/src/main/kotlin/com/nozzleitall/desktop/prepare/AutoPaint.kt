@@ -53,36 +53,63 @@ object AutoPaint {
         val engine = SliceEngine.locateEngine() ?: throw AutoPaintError("The slicing engine isn't installed with this copy of Nozzle It All.")
         val req = File.createTempFile("nozzle-autopaint", ".json").apply { deleteOnExit(); writeText(request.toString()) }
         try {
-            val p = ProcessBuilder(engine.absolutePath, "--semantic-paint", req.absolutePath).redirectError(ProcessBuilder.Redirect.DISCARD).start()
-            val out = output(p, timeoutSeconds, "Preparing the model took too long.")
+            val process = start(ProcessBuilder(engine.absolutePath, "--semantic-paint", req.absolutePath).redirectError(ProcessBuilder.Redirect.DISCARD))
+            val out = output(process, timeoutSeconds, "Preparing the model took too long.")
             val json = runCatching { JSONObject(out) }.getOrElse { throw AutoPaintError("This engine doesn't have AI auto-paint yet.") }
             AutoPaintFormat.error(json)?.let { throw AutoPaintError(it) }
             return json
         } finally { req.delete() }
     }
 
+    private class OwnedProcess(val process: Process, val groupKill: File?)
+
+    /** Linux session ownership lets failure cleanup reach children even if their parent has already exited. */
+    private fun start(builder: ProcessBuilder): OwnedProcess {
+        val linux = System.getProperty("os.name").startsWith("Linux", ignoreCase = true)
+        val kill = if (linux) File("/bin/kill") else null
+        if (linux) {
+            val setsid = File("/usr/bin/setsid")
+            if (!setsid.canExecute() || kill?.canExecute() != true) throw AutoPaintError("AI auto-paint needs util-linux (setsid) and /bin/kill installed.")
+            builder.command(listOf(setsid.absolutePath) + builder.command())
+        }
+        return OwnedProcess(builder.start(), kill)
+    }
+
     /** Drain while waiting: reading to EOF first would make the advertised timeout ineffective for a hung provider. */
-    private fun output(p: Process, timeoutSeconds: Long, timeoutMessage: String): String {
+    private fun output(owned: OwnedProcess, timeoutSeconds: Long, timeoutMessage: String): String {
+        val p = owned.process
         var out = ""
         val reader = Thread { runCatching { out = p.inputStream.bufferedReader().readText() } }.apply { isDaemon = true; start() }
-        if (!p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+        fun killGroup() {
+            owned.groupKill?.let { kill -> runCatching { ProcessBuilder(kill.absolutePath, "-KILL", "--", "-${p.pid()}").redirectError(ProcessBuilder.Redirect.DISCARD).start().waitFor(2, TimeUnit.SECONDS) } }
+        }
+        fun terminate() {
+            // This negative PID names only the session created for this invocation, never the application's process group.
+            killGroup()
             p.descendants().forEach { it.destroyForcibly() }; p.destroyForcibly()
             reader.join(1000)
+            if (!reader.isAlive) runCatching { p.inputStream.close() }
+            runCatching { p.outputStream.close() }; runCatching { p.errorStream.close() }
+        }
+        if (!p.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            terminate()
             throw AutoPaintError(timeoutMessage)
         }
         reader.join(1000)
-        if (reader.isAlive) throw AutoPaintError("The command left its output stream open.")
+        if (reader.isAlive) { terminate(); throw AutoPaintError("The command left its output stream open.") }
+        killGroup() // A provider invocation does not own persistent background services, even when they close stdout.
         return out
     }
 
     /** Runs a command line through the shell with [prompt] on stdin; its stdout is the answer. */
     internal fun askCommand(commandLine: String, prompt: String, timeoutSeconds: Long = 300): String {
         val windows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
-        val p = ProcessBuilder(if (windows) listOf("cmd", "/c", commandLine) else listOf("sh", "-c", commandLine)).redirectErrorStream(false).start()
+        val process = start(ProcessBuilder(if (windows) listOf("cmd", "/c", commandLine) else listOf("sh", "-c", commandLine)).redirectErrorStream(false))
+        val p = process.process
         val errText = StringBuilder()
         val drain = Thread { runCatching { errText.append(p.errorStream.bufferedReader().readText()) } }.apply { isDaemon = true; start() }
         p.outputStream.use { it.write(prompt.toByteArray()) }
-        val out = output(p, timeoutSeconds, "The command took too long to answer.")
+        val out = output(process, timeoutSeconds, "The command took too long to answer.")
         drain.join(1000)
         if (p.exitValue() != 0) throw AutoPaintError("The command failed (exit ${p.exitValue()}): ${errText.toString().trim().lineSequence().lastOrNull().orEmpty()}")
         return out

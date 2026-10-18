@@ -36,6 +36,18 @@ class AutoPaintTest {
         catch (e: AutoPaint.AutoPaintError) { assertTrue(e.message!!.contains("too long")) }
         assertTrue((System.nanoTime() - start) / 1e9 < 5)
     }
+    @Test fun anExitedCommandCannotLeaveABackgroundChildInItsSession() {
+        assumeTrue(System.getProperty("os.name").startsWith("Linux"))
+        val pid = Files.createTempDirectory("ap-child").resolve("pid").toFile()
+        try { AutoPaint.askCommand("sleep 20 & echo \$! > '${pid.absolutePath}'; sleep 0.1", "", 3) }
+        catch (e: AutoPaint.AutoPaintError) { assertTrue(e.message!!.contains("output stream open")) }
+        val child = pid.readText().trim().toLong()
+        val end = System.nanoTime() + 2_000_000_000
+        fun running(): Boolean = ProcessHandle.of(child).map { it.isAlive }.orElse(false) &&
+            !runCatching { File("/proc/$child/status").readText().contains("State:\tZ") }.getOrDefault(false)
+        while (running() && System.nanoTime() < end) Thread.sleep(10)
+        assertFalse("provider child must no longer be running", running())
+    }
 
     @Test fun appliedPaintsOnlyTheFacesTheAnswerNamed() {
         val m = AutoPaint.applied(cube(), IntArray(12) { if (it < 4) 2 else 0 })
@@ -95,7 +107,7 @@ class AutoPaintTest {
         engineReady()
         val tmp = Files.createTempDirectory("ap-state").toFile()
         val app = AppState(AppPaths(File(tmp,"c"),File(tmp,"d"),File(tmp,"k")).ensure(),CoroutineScope(SupervisorJob()+Dispatchers.Default))
-        val p = app.prepare; val mesh = cube()
+        val p = app.prepare; val mesh = cube().withPaint(paint = Array(12) { Paint.whole(1) })
         suspend fun idle() { withTimeout(60000) { while (p.toolBusy != null) delay(20) } }
         try {
             withContext(Dispatchers.Main) {
@@ -107,6 +119,19 @@ class AutoPaintTest {
             withContext(Dispatchers.Main) { p.aiSend() }; idle()
             assertNotNull(p.aiPreviewMesh); assertSame(mesh,p.items.single().mesh); assertFalse(p.aiCleanBoundaries)
             assertFalse(p.history.canUndo)
+            // Deliberate fault injection in paint decoding; restore it immediately after the failed background rebuild.
+            val originalPaint = mesh.paint!![0]; mesh.paint!![0] = "invalid-paint"
+            withContext(Dispatchers.Main) { p.aiCorrect(0,2) }; idle()
+            assertNull(p.aiPreviewMesh); assertNotNull(p.notice)
+            mesh.paint!![0] = originalPaint
+            withContext(Dispatchers.Main) { p.aiApply() }
+            assertSame(mesh,p.items.single().mesh); assertFalse(p.history.canUndo)
+            withContext(Dispatchers.Main) { p.aiRetryPreview() }; idle(); assertNotNull(p.aiPreviewMesh)
+            mesh.paint!![0] = "invalid-paint"
+            withContext(Dispatchers.Main) { p.aiSetCleanup(true) }; idle(); assertNull(p.aiPreviewMesh)
+            mesh.paint!![0] = originalPaint
+            withContext(Dispatchers.Main) { p.aiApply() }; assertSame(mesh,p.items.single().mesh)
+            withContext(Dispatchers.Main) { p.aiRetryPreview() }; idle(); assertNotNull(p.aiPreviewMesh)
             withContext(Dispatchers.Main) { p.aiCorrect(0,2) }; idle()
             assertEquals(2,p.aiAnswer!!.slots[0]); assertSame(mesh,p.items.single().mesh)
             withContext(Dispatchers.Main) { p.aiApply() }

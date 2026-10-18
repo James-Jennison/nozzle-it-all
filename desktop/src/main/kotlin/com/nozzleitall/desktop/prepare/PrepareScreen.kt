@@ -738,7 +738,11 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
                 NzButton("Send these ${images.size} images", { p.aiSend() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-send")
                 NzButton("Back", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
             } else {
-                Banner("${answer.faces().count { it > 0 }} of ${answer.faceRegions.size} faces assigned. Inspect the draft on the plate.", BannerKind.SUCCESS)
+                if (p.aiPreviewMesh != null) Banner("${answer.faces().count { it > 0 }} of ${answer.faceRegions.size} faces assigned. Inspect the draft on the plate.", BannerKind.SUCCESS)
+                else {
+                    Banner(if (p.toolBusy != null) "Building the painted draft…" else "The painted draft could not be built. Nothing can be applied until Retry succeeds.", BannerKind.WARNING)
+                    NzButton("Retry draft preview", { p.aiRetryPreview() }, Modifier.fillMaxWidth(), enabled = p.toolBusy == null, kind = ButtonKind.SECONDARY)
+                }
                 NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
                 NzButton("Keep all original paint", { p.aiKeepOriginal() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
                 NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
@@ -759,7 +763,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
                 NzButton("Reset region corrections", { p.aiResetCorrections() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
                 val noChanges = answer.slots.all { it == 0 }
                 if (noChanges) Txt("No paint changes. Your original model will stay unchanged.", Nz.type.bodySmall, c.textMuted)
-                NzButton(if (noChanges) "Done — keep original" else "Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-apply")
+                NzButton(if (noChanges) "Done — keep original" else "Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && p.aiPreviewMesh != null, testTag = "autopaint-apply")
                 NzButton("Discard", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
             }
         }

@@ -856,7 +856,11 @@ class PrepareState(private val app: AppState) {
         refreshAiPreview()
     }
     fun aiSetCleanup(enabled: Boolean) { if (toolBusy == null) { aiCleanBoundaries = enabled; refreshAiPreview() } }
-    private fun refreshAiPreview() { runTool("Updating paint draft") { rebuildAiPreview() } }
+    fun aiRetryPreview() { if (toolBusy == null) refreshAiPreview() }
+    private fun refreshAiPreview() {
+        aiPreviewMesh = null; aiCleanedFaces = 0
+        runTool("Updating paint draft") { rebuildAiPreview() }
+    }
     private suspend fun rebuildAiPreview() {
         val source = aiSource ?: return
         val answer = aiAnswer ?: return
@@ -898,6 +902,7 @@ class PrepareState(private val app: AppState) {
         val prepared = aiPrepared ?: return
         val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }
         val generation = aiGeneration
+        aiPreviewMesh = null
         runTool("Waiting for the answer") {
             val answer = withContext(Dispatchers.IO) { AutoPaint.askReview(prepared, provider) }
             if (generation == aiGeneration && aiPrepared === prepared) { aiAnswer = answer; rebuildAiPreview() }

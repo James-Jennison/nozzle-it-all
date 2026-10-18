@@ -37,12 +37,24 @@ class LanScanTest {
     @Test fun onlyAddressesWithThePortOpenAreAskedWhatTheyAre() = runBlocking {
         val asked = CopyOnWriteArrayList<String>(); val found = CopyOnWriteArrayList<DiscoveredPrinter>(); val progress = CopyOnWriteArrayList<Int>()
         val hosts = (1..20).map { "10.0.0.$it" }
-        LanScan.scan(hosts, open = { it == "10.0.0.5" || it == "10.0.0.9" }, probe = { h ->
+        LanScan.scan(hosts, endpoint = { if (it == "10.0.0.5") it else if (it == "10.0.0.9") "http://$it/" else null }, probe = { h ->
             asked += h
             if (h == "10.0.0.5") listOf(DiscoveredPrinter("http://$h", "Snapmaker U1", PrinterFamily.PAXX_U1, "paxx", "x", ConnectionRoute.LAN)) else emptyList()
         }, onFound = { found += it }, onProgress = { n, _ -> progress += n })
-        assertEquals(setOf("10.0.0.5", "10.0.0.9"), asked.toSet())
+        assertEquals(setOf("10.0.0.5", "http://10.0.0.9/"), asked.toSet())
         assertEquals(listOf("Snapmaker U1"), found.map { it.model })
         assertEquals(20, progress.size); assertEquals(20, progress.max())
+    }
+
+    private fun info(pid: Int, host: String = "lava") = """{"result": {"state": "ready", "hostname": "$host", "process_id": $pid, "software_version": "1.6.0", "config_file": "/home/lava/printer_data/config/printer.cfg"}}"""
+
+    @Test fun theSamePrinterOnTwoAddressesHasOneFingerprint() {
+        assertEquals(LanScan.fingerprintOf(info(1235)), LanScan.fingerprintOf(info(1235)))
+        assertNotEquals(LanScan.fingerprintOf(info(1235)), LanScan.fingerprintOf(info(77)))
+        assertNotEquals(LanScan.fingerprintOf(info(1235)), LanScan.fingerprintOf(info(1235, host = "other")))
+    }
+
+    @Test fun somethingThatIsNotAPrinterReplyHasNoFingerprint() {
+        assertNull(LanScan.fingerprintOf("<html>router</html>")); assertNull(LanScan.fingerprintOf("""{"result": {}}"""))
     }
 }

@@ -72,8 +72,14 @@ fun AddPrinterDialog(state: AppState, autoScan: Boolean = false, onDone: () -> U
         scanning = true; scanDone = false; nearby.clear(); scanned = null
         scope.launch {
             val have = fleet.printers.values.map { hostOf(it.config.identity.address) }.toSet()
-            LanScan.scan(LanScan.localHosts(), probe = { fleet.probe(it) }, onFound = { d -> if (hostOf(d.address) !in have && nearby.none { hostOf(it.address) == hostOf(d.address) }) nearby += d },
-                onProgress = { n, total -> scanned = n to total })
+            // What the saved printers are, so one that answers on another address (Wi-Fi and cable) isn't offered as new.
+            val saved = withContext(Dispatchers.IO) { fleet.printers.values.mapNotNull { LanScan.fingerprint(it.config.identity.address) }.toSet() }
+            val seen = mutableSetOf<String>()
+            LanScan.scan(LanScan.localHosts(), probe = { fleet.probe(it) }, onFound = { d ->
+                val host = hostOf(d.address)
+                val print = LanScan.fingerprint(d.address)
+                if (host !in have && nearby.none { hostOf(it.address) == host } && (print == null || (print !in saved && seen.add(print)))) nearby += d
+            }, onProgress = { n, total -> scanned = n to total })
             scanning = false; scanDone = true
         }
     }

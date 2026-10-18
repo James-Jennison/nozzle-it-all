@@ -164,7 +164,19 @@ struct Renderer {
     }
 };
 Renderer& get(jlong handle){if(!handle)throw std::runtime_error("Viewport closed");return *reinterpret_cast<Renderer*>(handle);}
-void error(JNIEnv* e){if(e->ExceptionCheck())return;try{throw;}catch(const std::exception& x){e->ThrowNew(e->FindClass("java/lang/IllegalStateException"),x.what());}catch(...){e->ThrowNew(e->FindClass("java/lang/IllegalStateException"),"Viewport native failure");}}
+void error(JNIEnv* e){
+    if(e->ExceptionCheck())return;
+    const char* message="Viewport native failure";
+    try{throw;}catch(const std::exception& x){
+        // Keep x alive until ThrowNew has copied its message.
+        jclass type=e->FindClass("java/lang/IllegalStateException");
+        if(type){e->ThrowNew(type,x.what());e->DeleteLocalRef(type);}
+        return;
+    }catch(...){}
+    jclass type=e->FindClass("java/lang/IllegalStateException");
+    if(type){e->ThrowNew(type,message);e->DeleteLocalRef(type);}
+    // FindClass failure already supplies a pending JVM exception. Preserve it.
+}
 std::vector<float> floats(JNIEnv* e,jfloatArray a){if(!a)throw std::runtime_error("Missing viewport data");std::vector<float> v(e->GetArrayLength(a));e->GetFloatArrayRegion(a,0,v.size(),v.data());if(e->ExceptionCheck())throw std::runtime_error("Viewport array read failed");return v;}
 }
 extern "C" {

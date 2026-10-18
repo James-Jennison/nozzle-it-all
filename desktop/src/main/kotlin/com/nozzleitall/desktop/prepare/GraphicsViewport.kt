@@ -11,7 +11,9 @@ import kotlin.math.*
 import org.jetbrains.skia.*
 
 /** Optional, packaged Linux graphics bridge; no downloaded/extracted native code.
- * A mismatched library is never loaded into the rendering path. Other platforms
+ * Source checking calls only the loaded library's identity function; JNI cannot
+ * unload a mismatch. Packaged libraries are trusted install artifacts, not an
+ * untrusted-code sandbox. No renderer function is called on mismatch. Other platforms
  * and machines without EGL retain the tested software renderer, not a blank view.
  */
 internal object NativeViewport {

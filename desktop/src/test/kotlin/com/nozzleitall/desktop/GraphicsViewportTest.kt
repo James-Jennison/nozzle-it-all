@@ -72,6 +72,15 @@ class GraphicsViewportTest {
         } finally { gpu.close() }
     }
 
+    @Test fun rejectedNativeInputThrowsAndContextRecovers() {
+        graphics().use { gpu->
+            val req=request(listOf(item(1,triangle(),Color.Red)))
+            try { gpu.render(req.copy(width=16385),{});fail("oversized native framebuffer") }
+            catch(_:IllegalStateException) {}
+            gpu.render(req,{}).use { assertTrue(pixels(it).any { p->p ushr 24==255 }) }
+        }
+    }
+
     @Test fun frameCompositeRetainsBedAndFallbackRemainsAvailable() {
         val req=request(listOf(item(1,triangle(),Color.Red)))
         FrameRasterizer(useGraphics=false).use { it.render(req,{}).use { assertEquals(320,it.width) } }

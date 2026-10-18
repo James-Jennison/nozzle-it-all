@@ -15,6 +15,20 @@ import kotlin.math.*
 import kotlin.random.Random
 
 class ViewportRasterTest {
+    @Test fun timingUsesNearestRankP95ForTheActualSampleCount() {
+        val samples=LongArray(30){if(it==29)100 else 10}.sortedArray()
+        assertEquals(28,viewportP95Index(samples.size));assertEquals(10L,samples[viewportP95Index(samples.size)])
+        assertEquals(0,viewportP95Index(1));assertEquals(94,viewportP95Index(100))
+    }
+    @Test fun coverageAtAreaThresholdAndLargeGuardMatchesFrozenOracle() {
+        for(area in listOf(0f,0.5e-8f,1e-8f,1.5e-8f,1e-7f))for(sign in listOf(-1f,1f)) {
+            val a=DepthSurface(64f,48f);val b=ReferenceDepthSurface(64f,48f)
+            val p=floatArrayOf(0f,0f,0f,1f,0f,0f,1f,area*sign,0f);val colors=IntArray(3){0xffaabbcc.toInt()}
+            a.triangle(p,0,colors,0,100f);b.triangle(p,0,colors,0,100f);assertArrayEquals(b.pixels,a.pixels)
+            val long=floatArrayOf(-100000f,-100000f,0f,100000f,100000f,0f,100000f,100000.01f*sign,0f)
+            a.clear();b.clear();a.triangle(long,0,colors,0,100f);b.triangle(long,0,colors,0,100f);assertArrayEquals(b.pixels,a.pixels)
+        }
+    }
     @Test fun shadowScratchReusesLargestBufferAcrossMoreThanFourMeshSizes() {
         val scratch=ShadowScratch();val largest=scratch.get(120_000)
         repeat(3) { for(count in listOf(3,300,900,6000,12000,60000,120000))assertSame(largest,scratch.get(count)) }

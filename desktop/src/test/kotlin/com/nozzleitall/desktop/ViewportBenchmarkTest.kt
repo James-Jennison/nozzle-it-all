@@ -72,6 +72,22 @@ class ViewportBenchmarkTest {
         }
     }
 
+    /** Same-input cold control for the creased case; original is quadratic.
+     * Separate method timeout allows its measured multi-minute reference cost. */
+    @Test(timeout = 600000) fun pairedCreasedFanPreparation() {
+        enabled();val mesh=fan(150_000,true)
+        for(reference in listOf(true,false))measure("paired-creased-fan-corner-normals",JSONObject().put("renderer",if(reference)"frozen-reference" else "optimized").put("triangles",150000),warm=0,samples=1) {
+            val normals=if(reference)referenceCornerNormals(mesh) else cornerNormals(mesh)
+            check(normals.size==1_350_000 && normals.all { it.isFinite() })
+        }
+        for(creased in listOf(false,true)) {
+            val m=fan(150_000,creased)
+            measure("warmed-fan-corner-normals",JSONObject().put("creased",creased).put("triangles",150000),warm=3,samples=5) {
+                check(cornerNormals(m).all { it.isFinite() })
+            }
+        }
+    }
+
     @Test fun releasedMeshesAreNotRetainedByDisplayCache() {
         enabled()
         val mesh=torus();val refs=ArrayList<java.lang.ref.WeakReference<Mesh>>()

@@ -79,27 +79,44 @@ object AutoPaint {
         return res.body()
     }
 
+    /** The question, ready to send: the model written out for the engine, its parts, and the views the provider will see. */
+    class Prepared(val dir: File, val stl: File, val seg: AutoPaintFormat.Segmentation, val filaments: List<AutoPaintFormat.Filament>) {
+        fun discard() { dir.deleteRecursively() }
+    }
+
+    /** Segments [mesh] and renders the views, without asking anyone: what [ask] will send. */
+    fun prepare(mesh: Mesh, name: String, filaments: List<AutoPaintFormat.Filament>, hint: String, work: File): Prepared {
+        val dir = File(work, "autopaint").apply { deleteRecursively(); mkdirs() }
+        try {
+            val stl = File(dir, "model.stl").apply { writeBytes(SliceEngine.stlBytes(mesh)) }
+            val seg = AutoPaintFormat.parseSegmentation(engineRun(AutoPaintFormat.segmentRequest(stl.absolutePath, dir.absolutePath, filaments, name, hint)))
+            return Prepared(dir, stl, seg, filaments)
+        } catch (e: Exception) { dir.deleteRecursively(); throw e }
+    }
+
+    /** Sends [prepared] to [provider] and reads the answer: the 1-based slot for each face (0 = leave it). */
+    fun ask(prepared: Prepared, provider: Provider): IntArray {
+        val seg = prepared.seg
+        val raw = when (provider) {
+            is Provider.Command -> askCommand(provider.commandLine, seg.commandPrompt)
+            is Provider.OpenAiCompatible -> {
+                val body = engineRun(AutoPaintFormat.openAiRequest(provider.model, seg.prompt, seg.views.map { it.path })).getString("body")
+                askServer(provider, body)
+            }
+        }
+        val answer = engineRun(AutoPaintFormat.replyTextRequest(provider, raw)).getString("text")
+        val result = AutoPaintFormat.parseAssignment(engineRun(AutoPaintFormat.assignRequest(prepared.stl.absolutePath, answer, prepared.filaments.maxOf { it.index })))
+        if (result.paintedFaces == 0) throw AutoPaintError("The answer left every part unpainted.")
+        return result.faceFilaments
+    }
+
     /**
      * Paints [mesh] (an object called [name]) with the slots in [filaments]: the engine builds the question, [provider] answers it, and
      * the engine reads the answer into per-face slots. Faces the model left alone keep whatever paint they had.
      */
     fun paint(mesh: Mesh, name: String, filaments: List<AutoPaintFormat.Filament>, hint: String, provider: Provider, work: File): Mesh {
-        val dir = File(work, "autopaint").apply { deleteRecursively(); mkdirs() }
-        try {
-            val stl = File(dir, "model.stl").apply { writeBytes(SliceEngine.stlBytes(mesh)) }
-            val seg = AutoPaintFormat.parseSegmentation(engineRun(AutoPaintFormat.segmentRequest(stl.absolutePath, dir.absolutePath, filaments, name, hint)))
-            val raw = when (provider) {
-                is Provider.Command -> askCommand(provider.commandLine, seg.commandPrompt)
-                is Provider.OpenAiCompatible -> {
-                    val body = engineRun(AutoPaintFormat.openAiRequest(provider.model, seg.prompt, seg.views.map { it.path })).getString("body")
-                    askServer(provider, body)
-                }
-            }
-            val answer = engineRun(AutoPaintFormat.replyTextRequest(provider, raw)).getString("text")
-            val result = AutoPaintFormat.parseAssignment(engineRun(AutoPaintFormat.assignRequest(stl.absolutePath, answer, filaments.maxOf { it.index })))
-            if (result.paintedFaces == 0) throw AutoPaintError("The answer left every part unpainted.")
-            return applied(mesh, result.faceFilaments)
-        } finally { dir.deleteRecursively() }
+        val prepared = prepare(mesh, name, filaments, hint, work)
+        try { return applied(mesh, ask(prepared, provider)) } finally { prepared.discard() }
     }
 
     /** [mesh] with each face in [faceSlots] (1-based slot, 0 = leave) painted that slot; the mesh's other paint stays. */

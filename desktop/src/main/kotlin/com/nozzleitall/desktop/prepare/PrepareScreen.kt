@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.nozzleitall.design.NozzleTokens
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
@@ -515,28 +516,58 @@ private fun PaintPanel(p: PrepareState) {
     }
 }
 
-/** AI auto-paint: how to ask (any command that reads stdin, or an OpenAI-compatible server), an optional hint, and Paint. */
+/**
+ * AI auto-paint, in the steps Orca's dialog has: choose how to ask and add a hint, look at exactly the views that will be sent,
+ * send them, then keep or drop what comes back. Nothing leaves the computer until Send.
+ */
 @Composable
 private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
     val c = Nz.colors
     var s by remember { mutableStateOf(p.autoPaintSettings) }
     var hint by remember { mutableStateOf("") }
     fun update(n: AutoPaint.Settings) { s = n; p.saveAutoPaintSettings(n) }
+    val prepared = p.aiPrepared
+    val answer = p.aiAnswer
+    fun close() { p.aiDiscard(); onDone() }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        DrawerTitle("AI auto-paint", onDone)
-        Txt("The engine splits the model into numbered parts and shows them, with your filaments, to the model you choose. Nothing is sent until you press Paint.",
-            Nz.type.bodySmall, c.textMuted)
-        com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
-            com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.fillMaxWidth()) { update(s.copy(kind = it)) }
-        if (s.kind == "command") {
-            com.nozzleitall.desktop.settings.DenseInput(s.command, { update(s.copy(command = it)) }, "Command (reads the question on stdin)", Modifier.fillMaxWidth(), placeholder = "claude -p")
+        DrawerTitle("AI auto-paint", ::close)
+        if (prepared == null) {
+            Txt("The engine splits the model into numbered parts and renders views of them. You see exactly what will be sent before anything is.", Nz.type.bodySmall, c.textMuted)
+            com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
+                com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.fillMaxWidth()) { update(s.copy(kind = it)) }
+            if (s.kind == "command") {
+                com.nozzleitall.desktop.settings.DenseInput(s.command, { update(s.copy(command = it)) }, "Command (reads the question on stdin)", Modifier.fillMaxWidth(), placeholder = "claude -p")
+            } else {
+                com.nozzleitall.desktop.settings.DenseInput(s.baseUrl, { update(s.copy(baseUrl = it)) }, "Server address", Modifier.fillMaxWidth(), placeholder = "http://localhost:11434/v1")
+                com.nozzleitall.desktop.settings.DenseInput(s.model, { update(s.copy(model = it)) }, "Model (must accept images)", Modifier.fillMaxWidth())
+                com.nozzleitall.desktop.settings.DenseInput(s.apiKey, { update(s.copy(apiKey = it)) }, "API key (blank for a local server)", Modifier.fillMaxWidth())
+            }
+            com.nozzleitall.desktop.settings.DenseInput(hint, { hint = it }, "Hint", Modifier.fillMaxWidth(), placeholder = "Hint (optional), e.g. a goldfish, orange body, black eyes")
+            NzButton("Show what will be sent", { p.aiPrepare(hint) }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && s.provider != null, testTag = "autopaint-run")
         } else {
-            com.nozzleitall.desktop.settings.DenseInput(s.baseUrl, { update(s.copy(baseUrl = it)) }, "Server address", Modifier.fillMaxWidth(), placeholder = "http://localhost:11434/v1")
-            com.nozzleitall.desktop.settings.DenseInput(s.model, { update(s.copy(model = it)) }, "Model (must accept images)", Modifier.fillMaxWidth())
-            com.nozzleitall.desktop.settings.DenseInput(s.apiKey, { update(s.copy(apiKey = it)) }, "API key (blank for a local server)", Modifier.fillMaxWidth())
+            Txt("These are the images that will be sent, with a text description of each part and your filament list.", Nz.type.bodySmall, c.textMuted)
+            val images = remember(prepared) { prepared.seg.views.mapNotNull { v -> runCatching { v.name to org.jetbrains.skia.Image.makeFromEncoded(File(v.path).readBytes()).toComposeImageBitmap() }.getOrNull() } }
+            images.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { (name, bmp) ->
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            androidx.compose.foundation.Image(bmp, name, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(6.dp)))
+                            Txt(name, Nz.type.bodySmall, c.textMuted)
+                        }
+                    }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Txt("${prepared.seg.segmentCount} parts · ${s.command.takeIf { s.kind == "command" } ?: s.baseUrl}", Nz.type.bodySmall, c.textMuted, maxLines = 1)
+            if (answer == null) {
+                NzButton("Send these ${images.size} images", { p.aiSend() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-send")
+                NzButton("Back", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+            } else {
+                Banner("The answer came back: ${answer.count { it > 0 }} of ${answer.size} faces will be painted.", BannerKind.SUCCESS)
+                NzButton("Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, testTag = "autopaint-apply")
+                NzButton("Discard", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+            }
         }
-        com.nozzleitall.desktop.settings.DenseInput(hint, { hint = it }, "What should it look like? (optional)", Modifier.fillMaxWidth())
-        NzButton("Paint", { p.autoPaintSelected(hint); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && s.provider != null, testTag = "autopaint-run")
     }
 }
 

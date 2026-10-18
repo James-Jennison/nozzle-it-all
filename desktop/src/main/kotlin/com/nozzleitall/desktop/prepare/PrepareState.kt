@@ -722,6 +722,42 @@ class PrepareState(private val app: AppState) {
     fun saveAutoPaintSettings(s: AutoPaint.Settings) { autoPaintSettings = s; AutoPaint.save(app.paths.config.resolve("auto-paint.json"), s) }
 
     /** Paints the selected object with the plate's slots as [hint] asks; the colours print in the same slot numbers they are offered under. */
+    /** The reviewed flow: show what will be sent ([aiPrepare]), send it ([aiSend]), then keep ([aiApply]) or drop ([aiDiscard]) the answer. */
+    var aiPrepared by mutableStateOf<AutoPaint.Prepared?>(null)
+    var aiAnswer by mutableStateOf<IntArray?>(null)
+    var aiItemId by mutableStateOf<Int?>(null)
+
+    fun aiPrepare(hint: String) {
+        val item = items.firstOrNull { it.id == selected } ?: return
+        val slots = allSlots()
+        if (slots.size < 2) { notice = "AI auto-paint needs at least two filaments to choose between."; return }
+        val filaments = slots.map { (id, label) -> com.nozzleitall.printer.ext.AutoPaintFormat.Filament(id, label, slotHex(id) ?: "#808080") }
+        aiDiscard()
+        runTool("Preparing the views") {
+            val prepared = withContext(Dispatchers.IO) { AutoPaint.prepare(item.mesh, item.name, filaments, hint, plateWork()) }
+            aiPrepared = prepared; aiItemId = item.id
+        }
+    }
+
+    fun aiSend() {
+        val prepared = aiPrepared ?: return
+        val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }
+        runTool("Waiting for the answer") { aiAnswer = withContext(Dispatchers.IO) { AutoPaint.ask(prepared, provider) } }
+    }
+
+    fun aiApply() {
+        val prepared = aiPrepared ?: return
+        val answer = aiAnswer ?: return
+        val item = items.firstOrNull { it.id == aiItemId } ?: run { aiDiscard(); return }
+        val painted = withMesh(item, AutoPaint.applied(item.mesh, answer))
+        painted.paintSlots.clear(); painted.paintSlots.addAll(1..prepared.filaments.maxOf { it.index })
+        replace(item, painted); selected = painted.id
+        changed()
+        aiDiscard()
+    }
+
+    fun aiDiscard() { aiPrepared?.discard(); aiPrepared = null; aiAnswer = null; aiItemId = null }
+
     fun autoPaintSelected(hint: String) {
         val item = items.firstOrNull { it.id == selected } ?: return
         val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }

@@ -356,7 +356,7 @@ private fun hitTest(tap: Offset, objects: List<PlateObject>, cam: ViewCamera, w:
         proj.p(o.x, o.y, 0f, tmp, 0); hypot(tmp[0] - tap.x, tmp[1] - tap.y) < 90f }?.id
 }
 
-private fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, line: Color) {
+internal fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, line: Color) {
     val a = FloatArray(12)
     proj.p(0f, 0f, 0f, a, 0); proj.p(w, 0f, 0f, a, 3); proj.p(w, d, 0f, a, 6); proj.p(0f, d, 0f, a, 9)
     val path = Path().apply { moveTo(a[0], a[1]); lineTo(a[3], a[4]); lineTo(a[6], a[7]); lineTo(a[9], a[10]); close() }
@@ -375,7 +375,7 @@ private fun displayBase(c: Color): Color {
 }
 
 /** A soft shadow straight down onto the bed, drawn as one translucent layer so overlaps don't darken. */
-private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh) {
+internal fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh) {
     val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris
     val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2
     val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
@@ -398,7 +398,7 @@ private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh
     }
 }
 
-private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh, surface: DepthSurface) {
+internal fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh, surface: DepthSurface) {
     val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris; val normals = d.normals
     val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val zBase = if (o.ez >= 0f) b[2] else b[5]
     val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()

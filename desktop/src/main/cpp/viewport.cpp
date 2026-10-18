@@ -86,22 +86,36 @@ struct Renderer {
     EGLDisplay display=EGL_NO_DISPLAY;EGLSurface surface=EGL_NO_SURFACE;EGLContext context=EGL_NO_CONTEXT;
     GLuint geometry=0,quad=0,quadVao=0,fbo=0,texture=0,depthStencil=0;
     int width=0,height=0;bool current=false;
+    EGLenum previousApi=EGL_OPENGL_ES_API;
     std::unordered_map<GLuint,Mesh> meshes;std::vector<uint8_t> pixels;
     std::string name;
-    void bind(){if(!eglBindAPI(EGL_OPENGL_ES_API)||!eglMakeCurrent(display,surface,surface,context))throw std::runtime_error("Viewport context unavailable");current=true;}
-    void unbind(){if(current){eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);current=false;}}
+    void bind(){
+        if(current)return;
+        if(eglGetCurrentContext()!=EGL_NO_CONTEXT)throw std::runtime_error("Foreign EGL context on viewport worker");
+        previousApi=eglQueryAPI();
+        if(!eglBindAPI(EGL_OPENGL_ES_API))throw std::runtime_error("Viewport API unavailable");
+        if(eglGetCurrentContext()!=EGL_NO_CONTEXT||!eglMakeCurrent(display,surface,surface,context)) {
+            eglBindAPI(previousApi);throw std::runtime_error("Viewport context unavailable");
+        }
+        current=true;
+    }
+    void unbind(){if(current){eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);current=false;eglBindAPI(previousApi);}}
     void init() {
         auto platform=reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"));
         display=platform?platform(EGL_PLATFORM_SURFACELESS_MESA,EGL_DEFAULT_DISPLAY,nullptr):EGL_NO_DISPLAY;
         EGLint major=0,minor=0;
         if(display==EGL_NO_DISPLAY||!eglInitialize(display,&major,&minor))throw std::runtime_error("Offscreen EGL unavailable");
-        if(!eglBindAPI(EGL_OPENGL_ES_API))throw std::runtime_error("OpenGL ES unavailable");
+        // Context creation selects an API too; preserve thread-local caller state.
+        const EGLenum callerApi=eglQueryAPI();
         const EGLint configAttrs[]={EGL_SURFACE_TYPE,EGL_PBUFFER_BIT,EGL_RENDERABLE_TYPE,EGL_OPENGL_ES3_BIT_KHR,
             EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,8,EGL_NONE};
         EGLConfig config=nullptr;EGLint count=0;
         if(!eglChooseConfig(display,configAttrs,&config,1,&count)||count!=1)throw std::runtime_error("Viewport EGL configuration unavailable");
         const EGLint size[]={EGL_WIDTH,1,EGL_HEIGHT,1,EGL_NONE},attrs[]={EGL_CONTEXT_CLIENT_VERSION,3,EGL_NONE};
-        surface=eglCreatePbufferSurface(display,config,size);context=eglCreateContext(display,config,EGL_NO_CONTEXT,attrs);
+        surface=eglCreatePbufferSurface(display,config,size);
+        if(!eglBindAPI(EGL_OPENGL_ES_API))throw std::runtime_error("OpenGL ES unavailable");
+        context=eglCreateContext(display,config,EGL_NO_CONTEXT,attrs);
+        eglBindAPI(callerApi);
         if(surface==EGL_NO_SURFACE||context==EGL_NO_CONTEXT)throw std::runtime_error("Viewport EGL context creation failed");
         bind();const char* renderer=reinterpret_cast<const char*>(glGetString(GL_RENDERER));name=renderer?renderer:"unknown";
         geometry=program(vertex,fragment);quad=program(quadVertex,quadFragment);glGenVertexArrays(1,&quadVao);
@@ -124,8 +138,9 @@ struct Renderer {
         pixels.resize(size_t(w)*h*4);width=w;height=h;
     }
     ~Renderer(){
-        if(context!=EGL_NO_CONTEXT&&surface!=EGL_NO_SURFACE&&eglBindAPI(EGL_OPENGL_ES_API)&&eglMakeCurrent(display,surface,surface,context)) {
-            current=true;
+        bool bound=false;
+        if(context!=EGL_NO_CONTEXT&&surface!=EGL_NO_SURFACE)try{bind();bound=true;}catch(...){}
+        if(bound) {
             for(auto& entry:meshes){glDeleteBuffers(1,&entry.second.vbo);glDeleteVertexArrays(1,&entry.second.vao);}
             if(geometry)glDeleteProgram(geometry);if(quad)glDeleteProgram(quad);if(quadVao)glDeleteVertexArrays(1,&quadVao);
             if(fbo)glDeleteFramebuffers(1,&fbo);if(texture)glDeleteTextures(1,&texture);if(depthStencil)glDeleteRenderbuffers(1,&depthStencil);
@@ -134,7 +149,6 @@ struct Renderer {
         if(context!=EGL_NO_CONTEXT)eglDestroyContext(display,context);
         if(surface!=EGL_NO_SURFACE)eglDestroySurface(display,surface);
         // EGLDisplay is process/vendor shared. Do NOT eglTerminate another owner's display.
-        eglReleaseThread();
     }
 };
 Renderer& get(jlong handle){if(!handle)throw std::runtime_error("Viewport closed");return *reinterpret_cast<Renderer*>(handle);}

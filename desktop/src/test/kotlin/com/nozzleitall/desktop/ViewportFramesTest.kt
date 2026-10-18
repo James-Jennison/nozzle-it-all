@@ -177,8 +177,8 @@ class ViewportFramesTest {
             val screen=FloatArray(count*9) { i->if(i%3==2)(random.nextInt(3)-1)*5f else random.nextFloat()*240-80 }
             val colors=IntArray(count*3) { random.nextInt() or 0xff000000.toInt() }
             repeat(16) { i->val at=i*9;screen[at]=-100f;screen[at+1]=-100f;screen[at+3]=200f;screen[at+4]=200f;screen[at+6]=200f;screen[at+7]=200f+i*.0001f }
-            for(i in 0 until count)expected.triangle(screen,i*9,colors,i*3,20f)
             val proj=Projector(width.toFloat(),height.toFloat(),request().camera.copy(distance=20f/1.8f),128f,128f)
+            for(i in 0 until count)expected.triangle(screen,i*9,colors,i*3,proj.eye)
             actual.bands.draw(proj,d,screen,colors,actual,{})
             assertArrayEquals("bands ${width}x$height",expected.pixels,actual.pixels)
             assertTrue(actual.bands.indexCapacity<=16L*count)

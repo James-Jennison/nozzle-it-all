@@ -1,5 +1,15 @@
 # Handover to Codex (written 2026-10-18)
 
+## Current Codex acceptance update (2026-10-18)
+
+Installed Linux application source is `6bf84dfeaf1dfb89f43c5be4ab594dd1edce4d4a`; later handover commits are documentation-only. Multi-select/Select All is complete, independently closed and included. Auto-paint draft comparison/correction/keep/reset, full pointer orbit underneath, and false triangle-shading/visibility fixes are implemented and installed. Provider diagnostics/HTTPS guards, stale-source rejection, and viewport buffer reuse are included.
+
+All builds/tests/packages ran on `gthost-build01`. Latest full desktop/verifyPaxxBaseline:179 tests,148 passed,31 conditional skips,zero failures; focused native38/38 PASS. Exact-source CI39158132395 SUCCESS. Installed revision/package/jar hashes and isolated running-app saved-project geometry/paint/Apply/Undo/Redo acceptance PASS. The owner's normal window was not restarted; an already-running owner process may still contain older code.
+
+Owner's current reviewer choice is the **Synthetic council**, using the existing `council`/`reviewer` integration and configured task seats, not Agent Canvas or Together. Do not edit shared routes or inspect credentials. Current change `nia-synthetic-final-6bf84dfe`, evidence `evidence-cycle-4cf2e0a4359d`, closure `closure-b0a4df01eb39`: **READY_WITH_RESIDUAL_RISK** (LOW unbenchmarked worst-case rendering performance), not plain READY. All current required reviewer cycles completed; Codex dispositions retain rejected findings and reviewer dissent rather than implying unanimity.
+
+Evidence folder: `/home/jjennison/.local/state/nozzle-it-all/acceptance/20261018-synthetic-final-6bf84dfe`. See `docs/handover/NIA_REVIEW_FOLLOWUPS.md` for optional tracked work and the work log below for complete provenance. No external semantic AI paint-quality claim, Windows acceptance, printer command, PR merge or release was made. Owner still decides merges.
+
 You are taking over Nozzle It All (NIA) Desktop work from Claude. This file is the starting point. The full step-by-step history is in
 `docs/handover/NIA_WORK_LOG.md` (every step, with what was and was not verified) and the earlier gap check against Orca 2.5.0 is in
 `docs/handover/NIA_GAP_REPORT.md`. Read the last 40 lines of the work log first.

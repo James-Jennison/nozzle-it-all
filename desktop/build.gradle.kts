@@ -34,6 +34,12 @@ dependencies {
 
 // One source for printer profiles: the flattened OrcaSlicer profiles Android already bundles (scripts/flatten_orca_profile.py).
 tasks.named<ProcessResources>("processResources") {
+ // Package acceptance can identify the actual source revision inside the installed jar.
+ val revision = providers.exec { commandLine("git", "-C", rootProject.projectDir.absolutePath, "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() }
+ inputs.property("sourceRevision", revision)
+ doLast {
+  destinationDir.resolve("nozzle-source-revision.txt").writeText(revision.get() + "\n")
+ }
  from(rootProject.file("app/src/main/assets/slicer_profiles")) { into("profiles"); exclude("PROVENANCE.md") }
  // Profiles the desktop engine (Snapmaker Orca base) can't slice yet; the catalog leaves them out.
  from(rootProject.file("engine/profiles/unsupported-profiles.json")) { into("profiles") }

@@ -20,13 +20,19 @@ class PlateHistory(private val p: PrepareState) {
         val sx: Float, val sy: Float, val sz: Float, val parts: List<ProjectManifest.ObjectPart>, val ranges: List<ProjectManifest.HeightRange>,
         val layerProfile: List<Double>, val ownFilament: Int?, val instanceOf: Int?,
     )
-    private class Snapshot(val items: List<ItemRecord>, val overrides: Map<String, String>, val plateNames: List<String>, val currentPlate: Int, val selected: Int?, val nextId: Int)
+    private class Snapshot(val items: List<ItemRecord>, val overrides: Map<String, String>, val plateNames: List<String>, val currentPlate: Int, var selected: Int?, val nextId: Int, var selectedIds: Set<Int>)
 
     private val undoStack = ArrayDeque<Snapshot>()
     private val redoStack = ArrayDeque<Snapshot>()
     private var current: Snapshot? = null
     private var lastRecorded = 0L
     private var restoring = false
+    private var editing = false
+    private var editRecorded = false
+    fun selectionChanged() { if (!restoring && !editing) current?.takeIf { it.currentPlate == p.currentPlate }?.let { it.selected = p.selected; it.selectedIds = p.selectedIds.toSet() } }
+    /** A complete gesture/action is one undo step, regardless of its duration. */
+    fun beginEdit() { if (!editing) { current = capture(); editing = true; editRecorded = false } }
+    fun endEdit() { editing = false; editRecorded = false; lastRecorded = 0L }
     /** Edits closer together than this are one step. */
     var mergeWithinMillis = 400L
 
@@ -36,7 +42,7 @@ class PlateHistory(private val p: PrepareState) {
     private fun capture() = Snapshot(
         p.items.map { i -> ItemRecord(i.id, i.name, i.mesh, i.x, i.y, i.rotZ, i.scale, i.slot, i.paintSlots.toList(), i.sources, i.settings.toMap(), i.plate, i.sx, i.sy, i.sz,
             i.parts.toList(), i.ranges.toList(), i.layerProfile.toList(), i.ownFilament, i.instanceOf) },
-        p.overrides.toMap(), p.plateNames.toList(), p.currentPlate, p.selected, p.nextItemId)
+        p.overrides.toMap(), p.plateNames.toList(), p.currentPlate, p.selected, p.nextItemId, p.selectedIds.toSet())
 
     /** The plate as it is now is the first step's starting point: a new or opened project has nothing to undo. */
     fun reset() { undoStack.clear(); redoStack.clear(); current = capture(); sync() }
@@ -45,9 +51,10 @@ class PlateHistory(private val p: PrepareState) {
     fun recordChange(now: Long = System.currentTimeMillis()) {
         if (restoring) return
         val before = current
-        if (before != null && now - lastRecorded > mergeWithinMillis) {
+        if (before != null && (if (editing) !editRecorded else now - lastRecorded > mergeWithinMillis)) {
             undoStack.addLast(before); while (undoStack.size > LIMIT) undoStack.removeFirst()
             redoStack.clear()
+            if (editing) editRecorded = true
         }
         current = capture(); lastRecorded = now; sync()
     }
@@ -63,7 +70,7 @@ class PlateHistory(private val p: PrepareState) {
                     it.sx = r.sx; it.sy = r.sy; it.sz = r.sz; it.parts.addAll(r.parts); it.ranges.addAll(r.ranges); it.layerProfile.addAll(r.layerProfile)
                     it.ownFilament = r.ownFilament; it.instanceOf = r.instanceOf
                 }
-            }, s.overrides, s.plateNames, s.currentPlate, s.selected, s.nextId)
+            }, s.overrides, s.plateNames, s.currentPlate, s.selected, s.nextId, s.selectedIds)
             current = s; lastRecorded = 0L
         } finally { restoring = false }
         sync()

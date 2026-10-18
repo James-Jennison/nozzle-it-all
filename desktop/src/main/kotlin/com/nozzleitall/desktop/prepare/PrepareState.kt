@@ -118,7 +118,43 @@ sealed class SliceState {
 /** Everything the Prepare workflow edits. Saved as a canonical 3MF + manifest, so Android and the Web App open it. */
 class PrepareState(private val app: AppState) {
     val items = mutableStateListOf<PrepItem>()
-    var selected by mutableStateOf<Int?>(null)
+    var selectedIds by mutableStateOf<Set<Int>>(emptySet()); private set
+    private var primarySelection by mutableStateOf<Int?>(null)
+    /** Primary object for single-object tools; assigning it replaces the selection. */
+    var selected: Int?
+        get() = primarySelection
+        set(value) { setSelection(value?.let { setOf(it) }.orEmpty(), value) }
+    private var selectionAnchor: Int? = null
+
+    private fun setSelection(ids: Set<Int>, primary: Int? = ids.lastOrNull()) {
+        selectedIds = ids.intersect(plateItems().map { it.id }.toSet())
+        primarySelection = primary?.takeIf { it in selectedIds } ?: selectedIds.lastOrNull()
+        selectionAnchor = primarySelection
+        if (selectedIds.size != 1) stopPainting()
+        history.selectionChanged()
+    }
+    fun selectedItems() = plateItems().filter { it.id in selectedIds }
+    fun selectAll() = setSelection(plateItems().map { it.id }.toSet(), selected)
+    fun deselect() = setSelection(emptySet())
+    /** Ctrl toggles; Shift selects a range in list order, or adds an object on the plate. */
+    fun selectObject(id: Int?, toggle: Boolean = false, range: Boolean = false, listRange: Boolean = false) {
+        if (id == null) { if (!toggle && !range) deselect(); return }
+        val order = plateItems().map { it.id }
+        if (id !in order) return
+        val anchor = selectionAnchor
+        val ids = when {
+            range && listRange && anchor in order -> {
+                val a = order.indexOf(anchor); val b = order.indexOf(id)
+                val span = order.subList(minOf(a, b), maxOf(a, b) + 1).toSet()
+                if (toggle) selectedIds + span else span
+            }
+            range -> selectedIds + id
+            toggle -> if (id in selectedIds) selectedIds - id else selectedIds + id
+            else -> setOf(id)
+        }
+        setSelection(ids, id)
+        if (range) selectionAnchor = anchor ?: id
+    }
     var file by mutableStateOf<File?>(null)
     /** The plate's camera, here (not in the screen) so the View menu can set it. */
     val camera = ViewCamera()
@@ -189,11 +225,11 @@ class PrepareState(private val app: AppState) {
     private var nextId = 1
     internal val nextItemId get() = nextId
     /** Puts the plates back as [history] kept them. */
-    internal fun restorePlate(restored: List<PrepItem>, restoredOverrides: Map<String, String>, names: List<String>, current: Int, select: Int?, next: Int) {
+    internal fun restorePlate(restored: List<PrepItem>, restoredOverrides: Map<String, String>, names: List<String>, current: Int, select: Int?, next: Int, selection: Set<Int> = select?.let { setOf(it) }.orEmpty()) {
         items.clear(); items.addAll(restored)
         overrides.clear(); overrides.putAll(restoredOverrides)
         plateNames.clear(); plateNames.addAll(names); currentPlate = current.coerceIn(0, plateNames.lastIndex)
-        selected = select?.takeIf { id -> items.any { it.id == id } }
+        setSelection(selection, select)
         nextId = next
         paintHistory.clear()
         syncInstances(); dirtyFlag = true; invalidateSlice(); refreshRules()
@@ -609,9 +645,41 @@ class PrepareState(private val app: AppState) {
         item.paintSlots[n - 1] = slot; changed()
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> nextId = maxOf(nextId, (items.maxOfOrNull { it.id } ?: 0) + 1); items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate).also { it.copyShapeFrom(s) }; changed(); arrange() } }
-    fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
+    fun duplicateSelected() {
+        val targets = selectedItems().ifEmpty { return }
+        history.beginEdit()
+        try {
+            nextId = maxOf(nextId, (items.maxOfOrNull { it.id } ?: 0) + 1)
+            val copies = targets.map { s -> PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate).also { it.copyShapeFrom(s); it.ownFilament = s.ownFilament } }
+            items.addAll(copies); setSelection(copies.map { it.id }.toSet()); changed()
+        } finally { history.endEdit() }
+    }
+    fun removeSelected() {
+        if (selectedIds.isEmpty()) return
+        history.beginEdit()
+        try { items.removeAll { it.id in selectedIds }; deselect(); changed() } finally { history.endEdit() }
+    }
     fun changed() { syncInstances(); dirty = true; invalidateSlice(); refreshRules() }
+
+    private var selectionTransform: SelectionTransforms? = null
+    fun beginSelectionTransform(id: Int) {
+        if (id !in selectedIds) selectObject(id)
+        history.beginEdit()
+        selectionTransform = SelectionTransforms(selectedItems(), id)
+    }
+    fun endSelectionTransform() { selectionTransform = null; history.endEdit() }
+    fun moveSelection(id: Int, x: Float, y: Float) {
+        val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
+        transform.move(x, y); changed()
+    }
+    fun turnSelection(id: Int, angle: Float) {
+        val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
+        transform.turn(angle); changed()
+    }
+    fun resizeSelection(id: Int, scale: Float) {
+        val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
+        transform.resize(scale); changed()
+    }
 
     /**
      * Orca's instances: another copy of the same object. It shares the object's mesh, filament, settings, parts, height ranges, layer
@@ -619,6 +687,7 @@ class PrepareState(private val app: AppState) {
      * object is gone becomes an object in its own right.
      */
     fun addInstance() {
+        if (selectedIds.size != 1) return
         val s = items.firstOrNull { it.id == selected } ?: return
         val root = s.instanceOf ?: s.id
         nextId = maxOf(nextId, (items.maxOfOrNull { it.id } ?: 0) + 1)
@@ -868,7 +937,7 @@ class PrepareState(private val app: AppState) {
 
     /** Orca's Auto orient for the selected object, or every object when none is selected. */
     fun orient() {
-        val targets = plateItems().filter { selected == null || it.id == selected }.ifEmpty { return }
+        val targets = plateItems().filter { selectedIds.isEmpty() || it.id in selectedIds }.ifEmpty { return }
         runTool("Auto orient") {
             targets.forEach { item ->
                 val mesh = withContext(Dispatchers.IO) { PlateOps.orient(item.mesh, plateWork()) }
@@ -880,6 +949,7 @@ class PrepareState(private val app: AppState) {
 
     /** Orca's Split to objects: each separate part of the selected object becomes its own object, where it was. */
     fun splitSelected() {
+        if (selectedIds.size != 1) return
         val item = items.firstOrNull { it.id == selected } ?: return
         runTool("Split") {
             val parts = withContext(Dispatchers.Default) { PlateOps.split(item.mesh) }
@@ -900,6 +970,7 @@ class PrepareState(private val app: AppState) {
      * bed, then the plate is arranged. Painted colours don't carry over to the halves.
      */
     fun cutSelected(heightMm: Float) {
+        if (selectedIds.size != 1) return
         val item = items.firstOrNull { it.id == selected } ?: return
         if (heightMm <= 0f || heightMm >= item.height) { notice = "Cut between the object's base and its top (0-${"%.1f".format(item.height)} mm)."; return }
         runTool("Cut") {

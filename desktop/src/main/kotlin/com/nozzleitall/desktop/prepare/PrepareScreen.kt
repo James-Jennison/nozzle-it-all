@@ -3,7 +3,7 @@ package com.nozzleitall.desktop.prepare
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,7 +55,7 @@ fun PrepareScreen(state: AppState) {
     fun toggle(d: Drawer) { drawer = if (drawer == d) null else d }
     val done = p.slice as? SliceState.Done
     // The tools need an object; settings pages from the printer and filament icons open the print settings drawer.
-    LaunchedEffect(p.selected) { if (p.selected == null && (drawer == Drawer.CUT || drawer == Drawer.AI)) drawer = null }
+    LaunchedEffect(p.selectedIds) { if (p.selectedIds.size != 1 && (drawer == Drawer.CUT || drawer == Drawer.AI)) drawer = null }
     LaunchedEffect(p.settingsScope) { if (p.settingsScope != com.nozzleitall.desktop.settings.Scope.PROCESS) drawer = Drawer.PROCESS }
     // A finished slice shows its preview and opens the Send step.
     LaunchedEffect(done) { if (done != null) { if (done.preview != null) p.showPreview = true; drawer = Drawer.SEND } else if (drawer == Drawer.SEND) { drawer = null; p.showPreview = false } }
@@ -83,7 +83,7 @@ fun PrepareScreen(state: AppState) {
                 PaintOps.Kind.FUZZY -> listOf(null, Color(0xFF9B59B6))
                 else -> if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
             }
-            PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors,
+            PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id in p.selectedIds, paintColors,
                 when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 },
                 item.sx, item.sy, item.sz, item.parts.toList(), reach = item.reach, height = item.height)
         }
@@ -104,10 +104,9 @@ fun PrepareScreen(state: AppState) {
                 preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors,
                 previewView = p.previewView ?: if ((done?.preview?.toolsUsed?.size ?: 0) > 1) PreviewView.TOOL else PreviewView.LINE_TYPE,
                 paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
-                onSelect = { focus.clearFocus(); p.selected = it }, accent = c.accent,
-                onMove = { id, x, y -> p.items.firstOrNull { it.id == id }?.let { it.x = x; it.y = y; p.changed() } },
-                onTurn = { id, deg -> p.items.firstOrNull { it.id == id }?.let { it.rotZ = deg; p.changed() } },
-                onResize = { id, sc -> p.items.firstOrNull { it.id == id }?.let { it.scale = sc; p.changed() } })
+                onSelection = { id, ctrl, shift -> focus.clearFocus(); p.selectObject(id, ctrl, shift) }, accent = c.accent,
+                onMove = p::moveSelection, onTurn = p::turnSelection, onResize = p::resizeSelection,
+                onTransformStart = p::beginSelectionTransform, onTransformEnd = p::endSelectionTransform)
             // Top left: the plate tools.
             if (!p.showPreview && onPlate.isNotEmpty()) Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
                 Floating { PlateToolbar(p, sel, drawer) { toggle(it) } }
@@ -483,6 +482,7 @@ private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzle
 }
 
 @Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun StepObjects(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
@@ -495,11 +495,19 @@ private fun StepObjects(state: AppState) {
             if (onPlate.size > 1) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() }
         }
         if (onPlate.isEmpty()) { Txt("Nothing on this plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Txt("Select all", Nz.type.label, c.accent, modifier = Modifier.clickable { p.selectAll() }.padding(4.dp))
+            if (p.selectedIds.isNotEmpty()) Txt("Deselect", Nz.type.label, c.accent, modifier = Modifier.clickable { p.deselect() }.padding(4.dp))
+        }
+        Txt("Ctrl-click to toggle · Shift-click for a range", Nz.type.bodySmall, c.textMuted)
         val slots = p.materials()
         onPlate.forEach { item ->
-            val sel = item.id == p.selected
+            val sel = item.id in p.selectedIds
+            var ctrl by remember(item.id) { mutableStateOf(false) }
+            var shift by remember(item.id) { mutableStateOf(false) }
             Row(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else Color.Transparent)
-                .selectable(sel, role = Role.Button) { p.selected = if (sel) null else item.id }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                .onPointerEvent(PointerEventType.Press) { e -> ctrl = e.keyboardModifiers.isCtrlPressed; shift = e.keyboardModifiers.isShiftPressed }
+                .selectable(sel, role = Role.Button) { p.selectObject(item.id, ctrl, shift, listRange = true); ctrl = false; shift = false }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(parseHex(p.slotHex(item.slot)) ?: c.accent))
                 Txt(item.name, Nz.type.bodySmall, if (sel) c.accent else c.text, modifier = Modifier.weight(1f), maxLines = 1)
@@ -507,7 +515,22 @@ private fun StepObjects(state: AppState) {
             }
         }
         val s = onPlate.firstOrNull { it.id == p.selected }
-        if (s != null) {
+        if (s != null && p.selectedIds.size > 1) {
+            var groupTurn by remember(p.selectedIds) { mutableStateOf(0f) }
+            var groupScale by remember(p.selectedIds) { mutableStateOf(100f) }
+            Txt("${p.selectedIds.size} objects selected", Nz.type.label, c.accent)
+            Txt("Move, turn and scale together around the selection centre. Select one object for paint, cut and individual settings.", Nz.type.bodySmall, c.textMuted)
+            ObjectRow("Move (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                ObjectNumber("X", s.x) { p.moveSelection(s.id, it, s.y) }; ObjectNumber("Y", s.y) { p.moveSelection(s.id, s.x, it) }
+            } }
+            ObjectRow("Turn together") { ObjectNumber("°", groupTurn) { p.turnSelection(s.id, it - groupTurn); groupTurn = it } }
+            ObjectRow("Scale together") { ObjectNumber("%", groupScale) { if (it > 0f) { p.resizeSelection(s.id, it / groupScale); groupScale = it } } }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clickable { p.duplicateSelected() }.padding(4.dp))
+                Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clickable { p.removeSelected() }.padding(4.dp))
+            }
+        }
+        if (s != null && p.selectedIds.size == 1) {
             if (s.painted.isNotEmpty()) Txt("This object's colours are painted: choose what each prints as under Filament in the bar above.", Nz.type.bodySmall, c.textMuted)
             else ObjectRow("Material") {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -584,14 +607,15 @@ private fun ObjectInfo(s: PrepItem) {
 @Composable
 private fun PlateToolbar(p: PrepareState, sel: PrepItem?, drawer: Drawer?, toggle: (Drawer) -> Unit) {
     val idle = p.toolBusy == null
+    val single = sel != null && p.selectedIds.size == 1
     NzButton("Arrange", { p.arrange() }, kind = ButtonKind.QUIET, icon = NzIcon.MOVE, enabled = idle, testTag = "plate-arrange")
     NzButton(if (sel == null) "Auto orient all" else "Auto orient", { p.orient() }, kind = ButtonKind.QUIET, enabled = idle, testTag = "plate-orient")
-    NzButton("Split", { p.splitSelected() }, kind = ButtonKind.QUIET, enabled = idle && sel != null, testTag = "plate-split")
-    NzButton("Cut", { toggle(Drawer.CUT) }, kind = if (drawer == Drawer.CUT) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && sel != null, testTag = "plate-cut")
+    NzButton("Split", { p.splitSelected() }, kind = ButtonKind.QUIET, enabled = idle && single, testTag = "plate-split")
+    NzButton("Cut", { toggle(Drawer.CUT) }, kind = if (drawer == Drawer.CUT) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && single, testTag = "plate-cut")
     NzButton("Paint", { if (p.paintKind == null) { p.paintKind = PaintOps.Kind.SUPPORT; p.paintState = 1 } else p.stopPainting() },
-        kind = if (p.paintKind != null) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && sel != null, testTag = "plate-paint")
+        kind = if (p.paintKind != null) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && single, testTag = "plate-paint")
     NzButton("AI auto-paint", { toggle(Drawer.AI) }, kind = if (drawer == Drawer.AI) ButtonKind.PRIMARY else ButtonKind.QUIET,
-        enabled = idle && sel != null && p.allSlots().size >= 2, testTag = "plate-autopaint")
+        enabled = idle && single && p.allSlots().size >= 2, testTag = "plate-autopaint")
     p.toolBusy?.let { Txt("$it…", Nz.type.bodySmall, Nz.colors.accent, modifier = Modifier.padding(horizontal = 8.dp)) }
 }
 

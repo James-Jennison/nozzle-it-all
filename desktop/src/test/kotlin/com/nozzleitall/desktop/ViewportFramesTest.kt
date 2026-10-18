@@ -16,6 +16,7 @@ import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
+import kotlin.random.Random
 
 class ViewportFramesTest {
     private fun request()=FrameRequest(FrameScene(emptyList(),256f,256f,Color.DarkGray,Color.Gray),CameraPose(-35f,55f,480f,Offset.Zero),320,240)
@@ -165,5 +166,39 @@ class ViewportFramesTest {
             rasterizer.render(first.copy(width=160,height=120),{}).use { assertEquals(160,it.width) }
             rasterizer.close();assertArrayEquals(actual,pixels(image))
         } finally { image.close();rasterizer.close() }
+    }
+
+    @Test fun disjointBandsMatchFrozenSerialCoverageDepthColorAndTies() {
+        val random=Random(8327);val count=240
+        val triangles=IntArray(count*3) { it };val mesh=Mesh(FloatArray(count*9),triangles)
+        val d=DisplayMesh(mesh,FloatArray(count*9),mesh.bounds())
+        for((width,height) in listOf(1 to 1,17 to 3,64 to 49)) {
+            val actual=DepthSurface(width.toFloat(),height.toFloat());val expected=ReferenceDepthSurface(width.toFloat(),height.toFloat())
+            val screen=FloatArray(count*9) { i->if(i%3==2)(random.nextInt(3)-1)*5f else random.nextFloat()*240-80 }
+            val colors=IntArray(count*3) { random.nextInt() or 0xff000000.toInt() }
+            repeat(16) { i->val at=i*9;screen[at]=-100f;screen[at+1]=-100f;screen[at+3]=200f;screen[at+4]=200f;screen[at+6]=200f;screen[at+7]=200f+i*.0001f }
+            for(i in 0 until count)expected.triangle(screen,i*9,colors,i*3,20f)
+            val proj=Projector(width.toFloat(),height.toFloat(),request().camera.copy(distance=20f/1.8f),128f,128f)
+            actual.bands.draw(proj,d,screen,colors,actual,{})
+            assertArrayEquals("bands ${width}x$height",expected.pixels,actual.pixels)
+            assertTrue(actual.bands.indexCapacity<=16L*count)
+        }
+    }
+
+    @Test(timeout=20000) fun rasterFailureJoinsEveryStartedWorkerBeforeReturningScratchOwnership() {
+        org.junit.Assume.assumeTrue(RasterWorkers.count>1)
+        val started=CountDownLatch(RasterWorkers.count-1);val release=CountDownLatch(1)
+        val finished=java.util.concurrent.atomic.AtomicInteger()
+        val owner=java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            val result=owner.submit<Boolean> {
+                try { RasterWorkers.run { worker->
+                    if(worker==0)throw IllegalArgumentException("fixture")
+                    started.countDown();check(release.await(10,TimeUnit.SECONDS));finished.incrementAndGet()
+                };false } catch(_:IllegalArgumentException) { true }
+            }
+            await(started);assertFalse(result.isDone)
+            release.countDown();assertTrue(result.get(10,TimeUnit.SECONDS));assertEquals(RasterWorkers.count-1,finished.get())
+        } finally { release.countDown();owner.shutdownNow() }
     }
 }

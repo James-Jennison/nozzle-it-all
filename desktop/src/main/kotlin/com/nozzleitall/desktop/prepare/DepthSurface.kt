@@ -13,10 +13,11 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
     val pixels = ByteArray(width*height*4) // BGRA, opaque where covered; transparent elsewhere.
     private val depths = FloatArray(width*height) { Float.POSITIVE_INFINITY }
     val objectScratch=ObjectRasterScratch()
+    val bands=RasterBands()
 
     fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY) }
 
-    fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float,check:()->Unit = {}) {
+    fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float,check:()->Unit = {},rowStart:Int=0,rowEnd:Int=height) {
         val ax = screen[at]*scale; val ay = screen[at+1]*scale
         val bx = screen[at+3]*scale; val by = screen[at+4]*scale
         val cx = screen[at+6]*scale; val cy = screen[at+7]*scale
@@ -37,7 +38,9 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
         // equations still decide every candidate pixel. A cancellation margin and
         // one-pixel pad retain edge coverage even for long, very thin triangles.
         val guard=0.000001+0.000001*(x1.toDouble()-x0+2)*(y1.toDouble()-y0+2)/abs(area)
-        for (y in y0..y1) {
+        // Keep FULL triangle bounds for span/guard math. Only iteration ownership
+        // is clipped, so banded and serial coverage/depth/color remain identical.
+        for (y in max(y0,rowStart)..min(y1,rowEnd-1)) {
             if(y and 31==0)check()
             var first=x0;var last=x1
             if(clipSpans) {

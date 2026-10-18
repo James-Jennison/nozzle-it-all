@@ -181,11 +181,5 @@ internal fun rasterObject(proj:Projector,o:PlateObject,d:DisplayMesh,surface:Dep
         // Commit only a fully computed set: cancelled/failed partial colors never hit.
         pose.shadingKey=shadingKey;s.shaded()
     }
-    for(tri in d.tris) {
-        if(tri and 1023==0)check()
-        for(k in 0..2) { val at=t[tri*3+k]*3;for(axis in 0..2)s.triangle[k*3+axis]=s.screen[at+axis] }
-        val sc=s.triangle
-        if(maxOf(sc[0],sc[3],sc[6]) < -1 || minOf(sc[0],sc[3],sc[6]) > proj.w+1 || maxOf(sc[1],sc[4],sc[7]) < -1 || minOf(sc[1],sc[4],sc[7]) > proj.h+1)continue
-        surface.triangle(s.triangle,0,pose.colors,tri*3,proj.eye,check)
-    }
+    surface.bands.draw(proj,d,s.screen,pose.colors,surface,check)
 }

@@ -187,6 +187,8 @@ JNIEXPORT jboolean JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_b
 JNIEXPORT jfloatArray JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_timings(JNIEnv* e,jobject,jlong h){try{auto& r=get(h);float v[2]={float(r.readMs),float(r.copyMs)};auto a=e->NewFloatArray(2);if(a)e->SetFloatArrayRegion(a,0,2,v);return a;}catch(...){error(e);return nullptr;}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_begin(JNIEnv* e,jobject,jlong h,jint w,jint height,jfloatArray camera){try{
     auto& r=get(h);auto c=floats(e,camera);if(c.size()!=10)throw std::runtime_error("Invalid viewport camera");
+    for(float value:c)if(!std::isfinite(value))throw std::runtime_error("Nonfinite viewport camera");
+    if(c[4]<=0||c[5]<=0)throw std::runtime_error("Invalid viewport camera distance");
     r.bind();r.resize(w,height);glBindFramebuffer(GL_FRAMEBUFFER,r.fbo);glViewport(0,0,w,height);
     glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);glDepthMask(GL_TRUE);glStencilMask(255);glDisable(GL_SCISSOR_TEST);
     glClearColor(0,0,0,0);glClearDepthf(1);glClearStencil(0);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);

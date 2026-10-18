@@ -77,6 +77,8 @@ class GraphicsViewportTest {
             val req=request(listOf(item(1,triangle(),Color.Red)))
             try { gpu.render(req.copy(width=16385),{});fail("oversized native framebuffer") }
             catch(_:IllegalStateException) {}
+            try { gpu.render(req.copy(camera=req.camera.copy(distance=Float.NaN)),{});fail("nonfinite camera") }
+            catch(_:IllegalStateException) {}
             gpu.render(req,{}).use { assertTrue(pixels(it).any { p->p ushr 24==255 }) }
         }
     }

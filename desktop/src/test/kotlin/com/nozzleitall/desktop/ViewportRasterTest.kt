@@ -19,6 +19,8 @@ class ViewportRasterTest {
         val samples=LongArray(30){if(it==29)100 else 10}.sortedArray()
         assertEquals(28,viewportP95Index(samples.size));assertEquals(10L,samples[viewportP95Index(samples.size)])
         assertEquals(0,viewportP95Index(1));assertEquals(94,viewportP95Index(100))
+        assertEquals(15.5,viewportMedian(LongArray(30){it+1L}),0.0)
+        assertEquals(2.0,viewportMedian(longArrayOf(1,2,3)),0.0)
     }
     @Test fun coverageAtAreaThresholdAndLargeGuardMatchesFrozenOracle() {
         for(area in listOf(0f,0.5e-8f,1e-8f,1.5e-8f,1e-7f))for(sign in listOf(-1f,1f)) {

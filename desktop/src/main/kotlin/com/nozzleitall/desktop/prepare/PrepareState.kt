@@ -399,7 +399,8 @@ class PrepareState(private val app: AppState) {
         val m = machineJson()
         if (PrinterSetup.supportsHighFlow(m)) {
             val n = PrinterSetup.nozzles(m).size
-            put("nozzle_volume_type", List(n) { nozzleFlows.getOrElse(it) { "standard" } }.joinToString(","))
+            // The engine names the flow types "Standard" and "High Flow"; the card keeps "standard" / "high_flow".
+            put("nozzle_volume_type", List(n) { if (nozzleFlows.getOrElse(it) { "standard" } == "high_flow") "High Flow" else "Standard" }.joinToString(","))
         }
     }
 
@@ -492,7 +493,7 @@ class PrepareState(private val app: AppState) {
             mixed.addAll(MixedFilamentFormat.rowsFromSettings(ov, p.manifest?.materials?.size ?: materials().size))
             ov["enable_mixed_color_sublayer"]?.let { mixSublayers = it == "1" }
             ov["curr_bed_type"]?.let { bedType = it }
-            ov["nozzle_volume_type"]?.let { v -> nozzleFlows.clear(); nozzleFlows.addAll(v.split(',').map { it.trim() }) }
+            ov["nozzle_volume_type"]?.let { v -> nozzleFlows.clear(); nozzleFlows.addAll(v.split(',').map { it.trim().lowercase().replace(' ', '_') }) }
             ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && k != "filament_colour" && k !in MixedFilamentFormat.SETTING_KEYS && k != "curr_bed_type" &&
                 k != "nozzle_volume_type" && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
         }

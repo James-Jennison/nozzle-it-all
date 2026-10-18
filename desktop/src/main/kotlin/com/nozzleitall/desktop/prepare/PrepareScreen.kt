@@ -26,7 +26,6 @@ import com.nozzleitall.desktop.Destination
 import com.nozzleitall.desktop.screens.*
 import com.nozzleitall.desktop.ui.*
 import com.nozzleitall.printer.*
-import com.nozzleitall.project.MeshIO
 import kotlinx.coroutines.launch
 import java.awt.FileDialog
 import java.awt.Frame
@@ -89,7 +88,7 @@ fun PrepareScreen(state: AppState) {
                 PaintOps.Kind.SUPPORT -> listOf(null, Color(0xFF3BA55D), Color(0xFFE5484D))
                 PaintOps.Kind.SEAM -> listOf(null, Color(0xFF3E7BFA), Color(0xFFF5A623))
                 PaintOps.Kind.FUZZY -> listOf(null, Color(0xFF9B59B6))
-                else -> if (aiMesh != null) List((MeshIO.paintedFilaments(aiMesh).maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(if (n == 0) item.slot else n)) }
+                else -> if (aiMesh != null) List(maxOf(p.aiPrepared?.filaments?.maxOfOrNull { it.index } ?: 0, item.paintSlots.maxOrNull() ?: 0, item.slot) + 1) { n -> parseHex(p.slotHex(if (n == 0) item.slot else n)) }
                     else if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
             }
             PlateObject(item.id, item.name, aiMesh ?: item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id in p.selectedIds, paintColors,

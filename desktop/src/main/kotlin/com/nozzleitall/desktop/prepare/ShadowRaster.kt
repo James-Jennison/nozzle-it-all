@@ -17,7 +17,7 @@ internal class ShadowScratch {
     }
 }
 
-internal fun DrawScope.rasterShadow(proj:Projector,o:PlateObject,d:DisplayMesh,scratch:ShadowScratch) {
+internal fun DrawScope.rasterShadow(proj:Projector,o:PlateObject,d:DisplayMesh,scratch:ShadowScratch,check:()->Unit = {}) {
     if(outsideViewport(proj,o,d.bounds,shadow=true))return
     val v=d.mesh.vertices;val t=d.mesh.triangles;val b=d.bounds
     val mx=(b[0]+b[3])/2;val my=(b[1]+b[4])/2
@@ -27,6 +27,7 @@ internal fun DrawScope.rasterShadow(proj:Projector,o:PlateObject,d:DisplayMesh,s
     var left=Float.POSITIVE_INFINITY;var top=Float.POSITIVE_INFINITY
     var right=Float.NEGATIVE_INFINITY;var bottom=Float.NEGATIVE_INFINITY
     while(k<d.tris.size) {
+        if(k and 1023==0)check()
         val tri=d.tris[k]
         for(c in 0..2) {
             val vi=t[tri*3+c]*3;val x=(v[vi]-mx)*o.ex;val y=(v[vi+1]-my)*o.ey

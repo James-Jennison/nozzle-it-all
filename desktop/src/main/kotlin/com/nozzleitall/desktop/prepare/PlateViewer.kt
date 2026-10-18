@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.nozzleitall.project.Mesh
@@ -35,7 +37,11 @@ class ViewCamera {
     /** Continuous orbit through both poles and underneath; bounded angles avoid precision loss after many turns. */
     fun orbit(dx: Float, dy: Float) { yaw = (yaw - dx * 0.4f) % 360f; pitch = (pitch - dy * 0.3f) % 360f }
     fun reset() { yaw = -35f; pitch = 55f; pan = Offset.Zero; distance = fittedDistance }
+    internal fun snapshot() = CameraPose(yaw, pitch, distance, pan)
 }
+
+/** Captured on Main: workers never read Compose camera state. */
+internal data class CameraPose(val yaw: Float, val pitch: Float, val distance: Float, val pan: Offset)
 
 /** An object to draw. [paintColors] gives the colour of each painted filament number (index N for the file's filament N). */
 class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean,
@@ -174,7 +180,9 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int, checkCancelled: () -> Unit = {},
     return best
 }
 
-internal class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Float, val cy: Float) {
+internal class Projector(val w: Float, val h: Float, cam: CameraPose, val cx: Float, val cy: Float) {
+    constructor(w: Float, h: Float, cam: ViewCamera, cx: Float, cy: Float): this(w,h,cam.snapshot(),cx,cy)
+    internal val orientation = cam.yaw to cam.pitch
     private val yaw = Math.toRadians(cam.yaw.toDouble()); private val pitch = Math.toRadians(cam.pitch.toDouble())
     private val cyw = cos(yaw).toFloat(); private val syw = sin(yaw).toFloat(); private val cp = cos(pitch).toFloat(); private val sp = sin(pitch).toFloat()
     private val scale = min(w, h) / cam.distance * 1.6f; private val pan = cam.pan
@@ -237,15 +245,40 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         if (System.getenv("NOZZLE_VIEWPORT_TIMING") == "1")
             while (loading && isActive) { delay(100); preparationDiagnostic("ui-heartbeat", keys.size) }
     }
-    val depthFrames = remember { DepthSurfaceCache() }
+    var dimensions by remember { mutableStateOf(IntSize.Zero) }
+    var rendered by remember { mutableStateOf<ViewportFrame?>(null) }
+    var renderFailed by remember { mutableStateOf<FrameRequest?>(null) }
+    var renderRetry by remember { mutableStateOf(0) }
+    val scope=rememberCoroutineScope()
+    val rasterizer=remember { FrameRasterizer() }
+    val pump=remember(scope,rasterizer) { LatestFramePump(scope,rasterizer::render,
+        publish={ ticket,image,cpu ->
+            val old=rendered
+            rendered=ViewportFrame(ticket,image,cpu);renderFailed=null
+            old?.close()
+        },failed={ renderFailed=it.request },dispose=rasterizer::close) }
+    DisposableEffect(pump) { onDispose { pump.close();rendered?.close();rendered=null } }
+    val request=FrameRequest(FrameScene(prepared,bedW,bedD,bedColor,lineColor),camera.snapshot(),dimensions.width,dimensions.height,renderRetry)
+    SideEffect {
+        if(preview==null && dimensions.width>0 && dimensions.height>0)pump.offer(request)
+        else { pump.invalidate();rendered?.close();rendered=null }
+    }
+    val shown=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) }
+    val shownRef=rememberUpdatedState(shown)
+    val rendering=prepared.isNotEmpty() && shown==null && renderFailed!=request
+    LaunchedEffect(preview!=null) {
+        if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1")
+            while(isActive) { delay(100);frameDiagnostic("ui-heartbeat") }
+    }
+    val presented=remember { longArrayOf(0L) }
     val frameTiming = remember { ViewportTiming() }
-    val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects); val preparedRef = rememberUpdatedState(prepared)
+    val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects)
     val selectRef = rememberUpdatedState<(Int?, Boolean, Boolean) -> Unit>({ id, ctrl, shift -> onSelection?.invoke(id, ctrl, shift) ?: onSelect(id) })
     val moveRef = rememberUpdatedState(onMove); val turnRef = rememberUpdatedState(onTurn); val resizeRef = rememberUpdatedState(onResize)
     val startRef = rememberUpdatedState(onTransformStart); val endRef = rememberUpdatedState(onTransformEnd)
     Box(modifier) {
-    Canvas(Modifier.matchParentSize().semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag an object to move it, drag empty space to orbit, scroll to zoom." }
-        .pointerInput(camera, preview != null) { awaitPointerEventScope {
+    Canvas(Modifier.matchParentSize().onSizeChanged { dimensions=it }.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag an object to move it, drag empty space to orbit, scroll to zoom." }
+        .pointerInput(camera, preview != null,bedW,bedD) { awaitPointerEventScope {
             // Left-drag orbits; right-drag or Shift+drag pans.
             var last: Offset? = null
             val strokes = ArrayList<PaintRay>()
@@ -262,17 +295,23 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 val painting = paintRef.value?.takeIf { !ev.buttons.isSecondaryPressed && !ev.keyboardModifiers.isShiftPressed && !ev.keyboardModifiers.isAltPressed }
                 if (painting != null && (ch.pressed || strokes.isNotEmpty())) {
                     // Painting: the left button lays a stroke on the selected object (Alt-drag orbits, Shift-drag pans).
-                    val target = preparedRef.value.firstOrNull { (o, _) -> o.id == painting.objectId }
+                    val frame=shownRef.value
+                    val target = frame?.ticket?.request?.scene?.prepared?.firstOrNull { (o, _) -> o.id == painting.objectId }
                     if (strokeMesh !== target?.first?.mesh || strokeInput !== painting) { strokes.clear(); strokeMesh = target?.first?.mesh; strokeInput = painting }
                     if (target != null && ch.pressed && (prev == null || (ch.position - prev).getDistance() >= 3f)) {
-                        screenRay(ch.position, size.width.toFloat(), size.height.toFloat(), camera, bedW, bedD, target.first, target.second, painting.radiusMm)?.let { strokes += it }
+                        screenRay(ch.position, size.width.toFloat(), size.height.toFloat(), frame!!.ticket.request.camera, bedW, bedD, target.first, target.second, painting.radiusMm)?.let { strokes += it }
                         last = ch.position
                     }
                     if (strokes.size >= 16 || (!ch.pressed && strokes.isNotEmpty())) { painting.onStrokes(strokes.toList()); strokes.clear() }
                     if (!ch.pressed) last = null
                     continue
                 }
-                val proj = Projector(size.width.toFloat(), size.height.toFloat(), camera, bedW / 2, bedD / 2)
+                val proj = shownRef.value?.ticket?.request?.projector()
+                    ?: Projector(size.width.toFloat(), size.height.toFloat(), camera, bedW / 2, bedD / 2)
+                if(grabObj!=null && objectsRef.value.firstOrNull { it.id==grabObj!!.id }?.mesh !== grabObj!!.mesh) {
+                    if(grabStarted)endRef.value()
+                    grab=null;grabObj=null;grabStarted=false;primaryPress=false
+                }
                 if (ch.pressed && prev != null && (ch.position - pressedAt).getDistance() > 4f) moved = true
                 if (grab != null) {
                     val o = grabObj!!
@@ -296,7 +335,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                     }
                     continue
                 }
-                if (ch.pressed && prev == null && paintRef.value == null && preview == null && ev.buttons.isPrimaryPressed) {
+                if (ch.pressed && prev == null && paintRef.value == null && preview == null && shownRef.value!=null && ev.buttons.isPrimaryPressed) {
                     pressedAt = ch.position; moved = false; primaryPress = true
                     val start = pickGrab(proj, objectsRef.value, ch.position)
                     clickId = start?.obj?.id
@@ -315,7 +354,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 if (ev.type == PointerEventType.Move && ch.pressed && prev != null) {
                     val d = ch.position - prev
                     if (ev.buttons.isSecondaryPressed || ev.keyboardModifiers.isShiftPressed) camera.pan += d
-                    else if (!modifierClick) { camera.orbit(d.x, d.y); preparationDiagnostic("orbit-input", objectsRef.value.size) }
+                    else if (!modifierClick) { camera.orbit(d.x, d.y); preparationDiagnostic("orbit-input", objectsRef.value.size);frameDiagnostic("orbit-input") }
                 }
                 if (!ch.pressed && primaryPress) {
                     if (!moved) selectRef.value(clickId, modifierClick && pressCtrl, modifierClick && pressShift)
@@ -324,24 +363,17 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
                 last = if (ch.pressed) ch.position else null
             } } finally { if (grabStarted) endRef.value() }
         } }
-        .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f); preparationDiagnostic("zoom-input", objectsRef.value.size) } }
+        .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f); preparationDiagnostic("zoom-input", objectsRef.value.size);frameDiagnostic("zoom-input") } }
         ) {
         val timingStart=frameTiming.start()
-        val proj = Projector(size.width, size.height, camera, bedW / 2, bedD / 2)
-        drawBed(proj, bedW, bedD, bedColor, lineColor)
+        val proj = shown?.ticket?.request?.projector() ?: Projector(size.width,size.height,camera,bedW/2,bedD/2)
+        if(preview!=null || shown==null)drawBed(proj,bedW,bedD,bedColor,lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
-        else {
-            prepared.forEach { (o, d) -> drawShadow(proj, o, d, depthFrames.shadows) }
-            if (prepared.isNotEmpty()) {
-                val surface = depthFrames.frame(size.width, size.height)
-                prepared.forEach { (o, d) -> drawObject(proj, o, d, surface) }
-                val info = org.jetbrains.skia.ImageInfo(surface.width, surface.height, org.jetbrains.skia.ColorType.BGRA_8888, org.jetbrains.skia.ColorAlphaType.PREMUL)
-                org.jetbrains.skia.Image.makeRaster(info, surface.pixels, surface.width*4).use { image ->
-                    drawIntoCanvas { it.nativeCanvas.drawImageRect(image, org.jetbrains.skia.Rect.makeWH(size.width,size.height)) }
-                }
-            }
+        else if(shown!=null && shown.ticket.request.width==size.width.toInt() && shown.ticket.request.height==size.height.toInt()) {
+            drawIntoCanvas { it.nativeCanvas.drawImage(shown.image,0f,0f) }
             prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
             if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
+            if(presented[0]!=shown.ticket.sequence) { presented[0]=shown.ticket.sequence;frameDiagnostic("presented",shown.ticket,shown.cpuNanos) }
         }
         frameTiming.finish(timingStart,size.width.toInt(),size.height.toInt(),objects.size)
     }
@@ -349,11 +381,14 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         if (loading) "Preparing viewport… You can keep working." else "Viewport preparation failed. Click to retry.",
         modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).then(
             if (!loading) Modifier.clickable { retry++ } else Modifier), style = TextStyle(color = accent))
+    else if(rendering || renderFailed==request) BasicText(
+        if(rendering) "Rendering viewport…" else "Viewport rendering failed. Click to retry.",
+        modifier=Modifier.align(Alignment.TopEnd).padding(12.dp).then(if(!rendering)Modifier.clickable { renderRetry++ } else Modifier),style=TextStyle(color=accent))
     }
 }
 
 /** The ray through [tap] in [o]'s mesh coordinates (inverse of how [drawObject] places the mesh), or null if the view is degenerate. */
-private fun screenRay(tap: Offset, w: Float, h: Float, cam: ViewCamera, bedW: Float, bedD: Float, o: PlateObject, d: DisplayMesh, radiusMm: Float): PaintRay? {
+private fun screenRay(tap: Offset, w: Float, h: Float, cam: CameraPose, bedW: Float, bedD: Float, o: PlateObject, d: DisplayMesh, radiusMm: Float): PaintRay? {
     val proj = Projector(w, h, cam, bedW / 2, bedD / 2)
     val near = DoubleArray(3); val far = DoubleArray(3)
     proj.unproject(tap.x, tap.y, proj.depthRange, near); proj.unproject(tap.x, tap.y, -proj.depthRange, far)

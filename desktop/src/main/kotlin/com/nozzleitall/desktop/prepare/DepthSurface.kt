@@ -14,9 +14,9 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
     private val depths = FloatArray(width*height) { Float.POSITIVE_INFINITY }
     val objectScratch=ObjectRasterScratch()
 
-    fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY);objectScratch.litMesh=null;objectScratch.litProjection=null }
+    fun clear() { pixels.fill(0); depths.fill(Float.POSITIVE_INFINITY) }
 
-    fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float) {
+    fun triangle(screen: FloatArray, at: Int, colors: IntArray, colorAt: Int, eye: Float,check:()->Unit = {}) {
         val ax = screen[at]*scale; val ay = screen[at+1]*scale
         val bx = screen[at+3]*scale; val by = screen[at+4]*scale
         val cx = screen[at+6]*scale; val cy = screen[at+7]*scale
@@ -38,6 +38,7 @@ internal class DepthSurface(viewWidth: Float, viewHeight: Float) {
         // one-pixel pad retain edge coverage even for long, very thin triangles.
         val guard=0.000001+0.000001*(x1.toDouble()-x0+2)*(y1.toDouble()-y0+2)/abs(area)
         for (y in y0..y1) {
+            if(y and 31==0)check()
             var first=x0;var last=x1
             if(clipSpans) {
                 val py=y+0.5f;val px0=x0+0.5f
@@ -90,6 +91,7 @@ internal class DepthSurfaceCache {
     private var surface: DepthSurface? = null
     private var width = -1f
     private var height = -1f
+    fun release() { surface=null;width=-1f;height=-1f }
     fun frame(viewWidth: Float, viewHeight: Float): DepthSurface {
         val current = surface?.takeIf { width == viewWidth && height == viewHeight }
         if (current != null) { current.clear(); return current }

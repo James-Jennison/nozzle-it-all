@@ -697,6 +697,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
     val c = Nz.colors
     var s by remember { mutableStateOf(p.autoPaintSettings) }
     var hint by remember { mutableStateOf("") }
+    var showReferenceViews by remember { mutableStateOf(false) }
     fun update(n: AutoPaint.Settings) { s = n; p.saveAutoPaintSettings(n) }
     val prepared = p.aiPrepared
     val answer = p.aiAnswer
@@ -705,6 +706,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
         DrawerTitle("AI auto-paint", ::close)
         if (prepared == null) {
             Txt("The engine finds geometric regions, not guaranteed semantic parts. Review the images before sending; inspect and correct the painted draft before applying.", Nz.type.bodySmall, c.textMuted)
+            if (p.selectedItems().singleOrNull()?.mesh?.isPainted == true) Banner("This model already has colour regions. AI can replace their intentional boundaries. Compare the original and use Keep original paint wherever needed.", BannerKind.WARNING)
             com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
                 com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.fillMaxWidth()) { update(s.copy(kind = it)) }
             if (s.kind == "command") {
@@ -719,7 +721,8 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
         } else {
             Txt(if (answer == null) "These images, region descriptions, your hint and filament list will be sent." else "Draft preview only — your saved model is unchanged. Orbit the plate to inspect every side, including underneath.", Nz.type.bodySmall, c.textMuted)
             val images = remember(prepared) { prepared.seg.views.mapNotNull { v -> runCatching { v.name to org.jetbrains.skia.Image.makeFromEncoded(File(v.path).readBytes()).toComposeImageBitmap() }.getOrNull() } }
-            images.chunked(3).forEach { row ->
+            if (answer != null) NzButton(if (showReferenceViews) "Hide numbered reference views" else "Show numbered reference views", { showReferenceViews = !showReferenceViews }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+            if (answer == null || showReferenceViews) images.chunked(3).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     row.forEach { (name, bmp) ->
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -737,6 +740,7 @@ private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
             } else {
                 Banner("${answer.faces().count { it > 0 }} of ${answer.faceRegions.size} faces assigned. Inspect the draft on the plate.", BannerKind.SUCCESS)
                 NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
+                NzButton("Keep all original paint", { p.aiKeepOriginal() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
                 NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY)
                 Txt("Optional, conservative tip smoothing; preserves small colour details and sharp creases. ${p.aiCleanedFaces} faces adjusted. It cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)
                 Txt("Correct regions (numbers match the images)", Nz.type.label)

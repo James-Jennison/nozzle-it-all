@@ -732,7 +732,11 @@ class PrepareState(private val app: AppState) {
         // On the UI thread: the plate's state changes there; the engine work inside runs on IO.
         app.scope.launch(Dispatchers.Main) {
             try { block() } catch (e: Exception) { notice = "$label didn't work: ${e.message ?: e.javaClass.simpleName}" }
-            finally { toolBusy = null }
+            finally {
+                toolBusy = null
+                val discarded = aiPendingDiscards.toList(); aiPendingDiscards.clear()
+                discarded.forEach { it.discard() }
+            }
         }
     }
 
@@ -837,6 +841,7 @@ class PrepareState(private val app: AppState) {
     var aiCleanBoundaries by mutableStateOf(false); private set
     var aiCleanedFaces by mutableStateOf(0); private set
     private var aiGeneration = 0
+    private val aiPendingDiscards = mutableListOf<AutoPaint.Prepared>()
 
     fun aiCorrect(region: Int, slot: Int) {
         if (toolBusy != null || slot !in (aiPrepared?.filaments?.map { it.index }.orEmpty() + 0)) return
@@ -845,6 +850,11 @@ class PrepareState(private val app: AppState) {
         aiAnswer = answer.corrected(region, slot); refreshAiPreview()
     }
     fun aiResetCorrections() { if (toolBusy == null) { aiAnswer = aiAnswer?.reset(); refreshAiPreview() } }
+    fun aiKeepOriginal() {
+        if (toolBusy != null) return
+        aiAnswer = aiAnswer?.let { AutoPaintReview(it.faceRegions, List(it.slots.size) { 0 }, it.originalSlots) }
+        refreshAiPreview()
+    }
     fun aiSetCleanup(enabled: Boolean) { if (toolBusy == null) { aiCleanBoundaries = enabled; refreshAiPreview() } }
     private fun refreshAiPreview() {
         val source = aiSource ?: return
@@ -894,6 +904,7 @@ class PrepareState(private val app: AppState) {
         if (selectedIds != setOfNotNull(aiItemId)) { aiDiscard(); return }
         val prepared = aiPrepared ?: return
         val mesh = aiPreviewMesh ?: return
+        if (aiAnswer?.slots?.all { it == 0 } == true) { aiDiscard(); return }
         val item = items.firstOrNull { it.id == aiItemId } ?: run { aiDiscard(); return }
         if (item.mesh !== aiSource?.mesh || item.paintSlots.toList() != aiSourceSlots || item.slot != aiSourceSlot) {
             notice = "The object's paint or geometry changed. Prepare auto-paint again before applying."; aiDiscard(); return
@@ -912,7 +923,7 @@ class PrepareState(private val app: AppState) {
         // Do not remove views while a provider is still reading them; runTool completion owns that cleanup.
         val old = aiPrepared
         if (toolBusy == null) old?.discard()
-        else if (old != null) app.scope.launch { while (toolBusy != null) kotlinx.coroutines.delay(100); old.discard() }
+        else if (old != null) aiPendingDiscards.add(old)
         aiPrepared = null; aiAnswer = null; aiItemId = null; aiSource = null; aiPreviewMesh = null
         aiSourceSlots = emptyList(); aiCleanedFaces = 0; aiShowOriginal = false; aiCleanBoundaries = false
     }

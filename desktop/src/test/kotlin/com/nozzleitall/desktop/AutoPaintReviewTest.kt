@@ -81,4 +81,12 @@ class AutoPaintReviewTest {
         val slots = IntArray(m.triangleCount) { if ((it/2)%20 < 10) 1 else 2 }; slots[(10*20+10)*2+1] = 1
         assertArrayEquals(cleanPaintBoundaries(m,slots), cleanPaintBoundaries(soup,slots))
     }
+    @Test fun cleanupNeverRetractsATipAcrossASharpCrease() {
+        val flat = grid(); val verts = flat.vertices.copyOf()
+        for (i in verts.indices step 3) if (verts[i] > 10f) verts[i+2] = (verts[i]-10f)*2f
+        val folded = Mesh(verts,flat.triangles)
+        val slots = IntArray(folded.triangleCount) { if ((it/2)%20 < 10) 1 else 2 }
+        val tip = (10*20+10)*2+1; slots[tip] = 1
+        assertEquals(1,cleanPaintBoundaries(folded,slots)[tip])
+    }
 }

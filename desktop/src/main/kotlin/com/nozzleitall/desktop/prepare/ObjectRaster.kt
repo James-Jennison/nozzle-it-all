@@ -125,10 +125,10 @@ internal fun rasterObject(proj:Projector,o:PlateObject,d:DisplayMesh,surface:Dep
             // The old Color(r,g,b).toArgb() always constructs opaque sRGB here.
             // Pack that exact 8-bit rounding directly instead of the general
             // wide-gamut Color constructor/conversion for every triangle corner.
-            val r=((red*l+.22f*spec+.10f*rim).coerceIn(0f,1f)*255f+.5f).toInt()
-            val g=((green*l+.22f*spec+.10f*rim).coerceIn(0f,1f)*255f+.5f).toInt()
-            val b=((blue*l+.22f*spec+.12f*rim).coerceIn(0f,1f)*255f+.5f).toInt()
-            s.colors[k]=0xff000000.toInt() or (r shl 16) or (g shl 8) or b
+            val r8=((red*l+.22f*spec+.10f*rim).coerceIn(0f,1f)*255f+.5f).toInt()
+            val g8=((green*l+.22f*spec+.10f*rim).coerceIn(0f,1f)*255f+.5f).toInt()
+            val b8=((blue*l+.22f*spec+.12f*rim).coerceIn(0f,1f)*255f+.5f).toInt()
+            s.colors[k]=0xff000000.toInt() or (r8 shl 16) or (g8 shl 8) or b8
         }
         surface.triangle(s.triangle,0,s.colors,0,proj.eye)
     }

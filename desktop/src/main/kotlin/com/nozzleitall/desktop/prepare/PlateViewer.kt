@@ -282,6 +282,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
         } }
         .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f) } }
         ) {
+        val timingStart=ViewportTiming.start()
         val proj = Projector(size.width, size.height, camera, bedW / 2, bedD / 2)
         drawBed(proj, bedW, bedD, bedColor, lineColor)
         if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
@@ -296,6 +297,7 @@ fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: Vi
             prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
             if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
         }
+        ViewportTiming.finish(timingStart,size.width.toInt(),size.height.toInt(),objects.size)
     }
 }
 

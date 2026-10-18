@@ -1,0 +1,24 @@
+package com.nozzleitall.desktop.prepare
+
+import org.json.JSONObject
+
+/** Explicit local diagnostic only. Never enabled by default, persisted or sent
+ * over the network; reports frame sizes/counts/times, not project/model content. */
+internal object ViewportTiming {
+    val enabled=System.getenv("NOZZLE_VIEWPORT_TIMING")=="1"
+    private val samples=LongArray(30)
+    private var count=0;private var width=0;private var height=0
+    fun start()=if(enabled)System.nanoTime() else 0L
+    fun finish(start:Long,w:Int,h:Int,objects:Int) {
+        if(start==0L)return
+        if(width!=w || height!=h) { count=0;width=w;height=h }
+        samples[count++]=System.nanoTime()-start
+        if(count==samples.size) {
+            val sorted=samples.sortedArray()
+            println("NIA_VIEWPORT_FRAME "+JSONObject().put("measurement","Canvas CPU pass, not display/compositor FPS")
+                .put("width",w).put("height",h).put("objects",objects).put("samples",count)
+                .put("median_ms",sorted[count/2]/1e6).put("p95_ms",sorted[28]/1e6).put("max_ms",sorted.last()/1e6))
+            count=0
+        }
+    }
+}

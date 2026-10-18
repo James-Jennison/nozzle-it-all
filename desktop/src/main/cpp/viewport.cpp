@@ -171,7 +171,7 @@ extern "C" {
 JNIEXPORT jstring JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_sourceRevision(JNIEnv* e,jobject){return e->NewStringUTF(NIA_SOURCE_REVISION);}
 JNIEXPORT jlong JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_create(JNIEnv* e,jobject){try{auto r=std::make_unique<Renderer>();r->init();return reinterpret_cast<jlong>(r.release());}catch(...){error(e);return 0;}}
 JNIEXPORT jstring JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_describe(JNIEnv* e,jobject,jlong h){try{return e->NewStringUTF(get(h).name.c_str());}catch(...){error(e);return nullptr;}}
-JNIEXPORT jboolean JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_bgra(JNIEnv* e,jobject,jlong h){try{return get(h).readFormat==0x80e1;}catch(...){error(e);return false;}}
+JNIEXPORT jboolean JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_bgra(JNIEnv* e,jobject,jlong h){try{get(h);return true;}catch(...){error(e);return false;}}
 JNIEXPORT jfloatArray JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_timings(JNIEnv* e,jobject,jlong h){try{auto& r=get(h);float v[2]={float(r.readMs),float(r.copyMs)};auto a=e->NewFloatArray(2);if(a)e->SetFloatArrayRegion(a,0,2,v);return a;}catch(...){error(e);return nullptr;}}
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_begin(JNIEnv* e,jobject,jlong h,jint w,jint height,jfloatArray camera){try{
     auto& r=get(h);auto c=floats(e,camera);if(c.size()!=10)throw std::runtime_error("Invalid viewport camera");
@@ -233,12 +233,18 @@ JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_draw(
 JNIEXPORT void JNICALL Java_com_nozzleitall_desktop_prepare_NativeViewport_read(JNIEnv* e,jobject,jlong h,jlong output,jint bytes){try{
     auto& r=get(h);if(!r.current||!output||bytes<0||int64_t(bytes)!=int64_t(r.width)*r.height*4)throw std::runtime_error("Invalid viewport readback");
     // Projection inversion gives Skia row order. Read into resident storage, then
-    // copy once into independently owned immutable image data, without swizzling.
+    // Convert once into Skia's native BGRA raster format. RGBA images force
+    // expensive format conversion on the CPU bed/presentation path.
     auto start=std::chrono::steady_clock::now();
     glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,r.width,r.height,r.readFormat,GL_UNSIGNED_BYTE,r.staging.data());
     auto read=std::chrono::steady_clock::now();
     if(glGetError()!=GL_NO_ERROR)throw std::runtime_error("Viewport readback failed");
-    std::memcpy(reinterpret_cast<void*>(output),r.staging.data(),bytes);
+    auto* dst=reinterpret_cast<uint32_t*>(output);
+    const auto* src=reinterpret_cast<const uint32_t*>(r.staging.data());
+    for(size_t i=0;i<size_t(bytes)/4;i++) {
+        const uint32_t p=src[i];
+        dst[i]=(p&0xff00ff00u)|((p&0xffu)<<16)|((p>>16)&0xffu);
+    }
     auto copy=std::chrono::steady_clock::now();
     r.readMs=std::chrono::duration<double,std::milli>(read-start).count();r.copyMs=std::chrono::duration<double,std::milli>(copy-read).count();
 }catch(...){error(e);}}

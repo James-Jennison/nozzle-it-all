@@ -120,7 +120,7 @@ internal class GraphicsViewport private constructor(private var handle:Long):Aut
                 NativeViewport.read(handle,data.writableData(),bytes);check()
                 if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1" && ++frames%30==0) {
                     val timing=NativeViewport.timings(handle)
-                    println("NIA_GRAPHICS_TIMING read_ms=${timing[0]} copy_ms=${timing[1]} uploads=$uploads format=rgba staging=true")
+                    println("NIA_GRAPHICS_TIMING read_ms=${timing[0]} copy_ms=${timing[1]} uploads=$uploads format=bgra staging=true")
                 }
                 if(bed) Pixmap.make(info,data,request.width*4).use { pixmap->
                     Surface.makeRasterDirect(pixmap).use { target->

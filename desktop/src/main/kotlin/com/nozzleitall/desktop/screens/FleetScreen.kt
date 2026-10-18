@@ -37,6 +37,7 @@ fun temp(t: Double?) = t?.let { "%.0f °C".format(it) } ?: "–"
 fun FleetScreen(state: AppState) {
     val fleet = state.fleet
     var adding by remember { mutableStateOf(false) }
+    var scanFirst by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SectionHeader("Printers", "Everything you print on, at a glance.") {
@@ -47,7 +48,10 @@ fun FleetScreen(state: AppState) {
             Card(Modifier.fillMaxWidth()) {
                 EmptyState(NzIcon.FLEET, "Add your first printer",
                     Glossary.explanations.getValue("first-printer")) {
-                    NzButton("Add printer", { adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.ADD)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NzButton("Find printers on my network", { scanFirst = true; adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.SEARCH, testTag = "find-printers")
+                        NzButton("Add by address", { scanFirst = false; adding = true }, kind = ButtonKind.SECONDARY, icon = NzIcon.ADD)
+                    }
                 }
             }
         } else {
@@ -58,7 +62,7 @@ fun FleetScreen(state: AppState) {
             }
         }
     }
-    if (adding) AddPrinterDialog(state) { adding = false }
+    if (adding) AddPrinterDialog(state, autoScan = scanFirst) { adding = false }
     editing?.let { id -> fleet.printers[id]?.let { EditPrinterDialog(state, it) { editing = null } } ?: run { editing = null } }
 }
 

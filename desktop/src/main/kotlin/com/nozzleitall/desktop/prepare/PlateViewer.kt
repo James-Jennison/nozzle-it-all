@@ -61,7 +61,7 @@ fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0): DisplayMesh =
     slots[kind] ?: run {
         val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint })
         val (m, kept) = simplifyWithStates(painted, states, budget)
-        DisplayMesh(m, vertexNormals(m, IntArray(m.triangleCount) { it }), mesh.bounds(), kept)
+        DisplayMesh(m, cornerNormals(m), mesh.bounds(), kept)
     }.also { slots[kind] = it }
 }
 
@@ -362,21 +362,6 @@ private fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, l
     while (g <= d) { proj.p(0f, g, 0f, t, 0); proj.p(w, g, 0f, t, 3); drawLine(line.copy(alpha = 0.5f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
 }
 
-/** Area-weighted vertex normals, so curved surfaces shade smoothly (sharp edges are kept per corner when drawing). */
-fun vertexNormals(mesh: Mesh, tris: IntArray): FloatArray {
-    val v = mesh.vertices; val t = mesh.triangles
-    val out = FloatArray(v.size)
-    for (tri in tris) {
-        val a = t[tri * 3] * 3; val b = t[tri * 3 + 1] * 3; val c = t[tri * 3 + 2] * 3
-        val ux = v[b] - v[a]; val uy = v[b + 1] - v[a + 1]; val uz = v[b + 2] - v[a + 2]
-        val wx = v[c] - v[a]; val wy = v[c + 1] - v[a + 1]; val wz = v[c + 2] - v[a + 2]
-        val nx = uy * wz - uz * wy; val ny = uz * wx - ux * wz; val nz = ux * wy - uy * wx
-        for (i in intArrayOf(a, b, c)) { out[i] += nx; out[i + 1] += ny; out[i + 2] += nz }
-    }
-    for (i in out.indices step 3) { val l = sqrt(out[i] * out[i] + out[i + 1] * out[i + 1] + out[i + 2] * out[i + 2]); if (l > 0) { out[i] /= l; out[i + 1] /= l; out[i + 2] /= l } }
-    return out
-}
-
 /** The display colour of a material: very dark ones are lifted just enough for their shape to show. */
 private fun displayBase(c: Color): Color {
     val lum = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
@@ -437,9 +422,9 @@ private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh
         // Two-sided: meshes with inconsistent winding still light from the side we see.
         val flip = if (fn[2] < 0f) -1f else 1f
         for (c in 0..2) {
-            val vi = t[tri * 3 + c] * 3
             // A normal follows the inverse of the size, so a stretched or mirrored object keeps lighting right.
-            var ax = normals[vi] / o.ex; var ay = normals[vi + 1] / o.ey; var az = normals[vi + 2] / o.ez
+            val ni = (tri * 3 + c) * 3
+            var ax = normals[ni] / o.ex; var ay = normals[ni + 1] / o.ey; var az = normals[ni + 2] / o.ez
             val nl = sqrt(ax * ax + ay * ay + az * az).takeIf { it > 0 } ?: 1f; ax /= nl; ay /= nl; az /= nl
             val rx = ax * cr - ay * sr; val ry = ax * sr + ay * cr
             proj.dir(rx, ry, az, vn)

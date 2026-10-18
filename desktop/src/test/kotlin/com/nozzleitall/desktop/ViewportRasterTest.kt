@@ -55,9 +55,10 @@ class ViewportRasterTest {
         }
     }
     @Test fun primitiveShadowBuffersMatchFrozenShadow() {
-        val mesh=torus();val d=displayMesh(mesh);val camera=ViewCamera().apply { fitBed(256f,256f) }
-        val proj=Projector(320f,240f,camera,128f,128f);val scratch=ShadowScratch()
-        fun image(reference:Boolean):IntArray {
+        val mesh=torus();val d=displayMesh(mesh);val scratch=ShadowScratch()
+        fun image(reference:Boolean,pitch:Float,pan:Offset):IntArray {
+            val camera=ViewCamera().apply { fitBed(256f,256f);this.pitch=pitch;this.pan=pan }
+            val proj=Projector(320f,240f,camera,128f,128f)
             val bitmap=ImageBitmap(320,240);val canvas=Canvas(bitmap)
             CanvasDrawScope().draw(Density(1f),LayoutDirection.Ltr,canvas,Size(320f,240f)) {
                 val o=PlateObject(1,"test",mesh,Color.Gray,128f,128f,27f,1f,false,sx=-1f)
@@ -65,7 +66,8 @@ class ViewportRasterTest {
             }
             return IntArray(320*240).also { bitmap.readPixels(it) }
         }
-        assertArrayEquals(image(true),image(false))
+        for(pitch in listOf(-90f,0f,55f,95f,180f,270f))for(pan in listOf(Offset.Zero,Offset(125f,75f),Offset(-125f,-75f)))
+            assertArrayEquals("shadow pitch$pitch/pan$pan",image(true,pitch,pan),image(false,pitch,pan))
     }
     @Test fun boundsRejectOffscreenObjectsButNeverRejectClampCrossingBox() {
         val mesh=torus();val b=mesh.bounds();val camera=ViewCamera().apply { distance=100f;pitch=0f;yaw=0f }

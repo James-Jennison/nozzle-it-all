@@ -41,7 +41,9 @@ object EnvironmentalProviders {
         ProviderDescriptor("bthome-v2", "BTHome v2 unencrypted (diagnostic)", true, true))
 }
 interface RadioSession : AutoCloseable { val adapterDescription: String get() = "BLE" }
-data class BleScanRequest(val discovery: Boolean, val selectedAddresses: Set<String> = emptySet())
+data class BleScanRequest(val discovery: Boolean, val selectedAddresses: Set<String> = emptySet(),
+    /** Nonblocking host-issued effect fence; drivers must recheck immediately before each owned OS acquisition. */
+    val isCurrent: () -> Boolean = { false })
 fun interface BleTransport {
     /** Called only inside an explicit foreground operation; owns only its own discovery reference. */
     fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession

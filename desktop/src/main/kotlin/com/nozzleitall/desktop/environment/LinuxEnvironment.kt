@@ -52,6 +52,7 @@ interface BluezEnvironmentalAdapter : DBusInterface {
 /** One private D-Bus connection, one owned discovery reference. Never powers, pairs, removes or unbinds. */
 class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTransport {
     override fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
+        check(request.isCurrent()) { "Obsolete BLE operation" }
         val closed = AtomicBoolean(false)
         val bus = DBusConnectionBuilder.forSystemBus().withShared(false)
             .withDisconnectCallback(object : org.freedesktop.dbus.connections.IDisconnectCallback {
@@ -64,15 +65,17 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
         }
         try {
             val manager = bus.getRemoteObject("org.bluez", "/", ObjectManager::class.java)
+            val bluezOwner = bus.getRemoteObject("org.freedesktop.DBus", "/org/freedesktop/DBus", org.freedesktop.dbus.interfaces.DBus::class.java).GetNameOwner("org.bluez")
             val adapters = manager.GetManagedObjects().entries.filter { it.value.containsKey("org.bluez.Adapter1") }.sortedBy { it.key.path }
             val path = (if (requestedAdapter == null) adapters.firstOrNull { it.value["org.bluez.Adapter1"]?.get("Powered")?.value == true }
                 else adapters.firstOrNull { it.key.path == requestedAdapter })?.key?.path
                 ?: error("Bluetooth adapter unavailable")
             adapter = bus.getRemoteObject("org.bluez", path, BluezEnvironmentalAdapter::class.java)
             // D-Bus daemon combines client filters. Host still admits only fresh authorized reports.
+            check(request.isCurrent()) { "Obsolete BLE operation" }
             adapter.SetDiscoveryFilter(mapOf("Transport" to Variant("le"), "DuplicateData" to Variant(true)))
             fun process(devicePath: String, changed: Map<String, Variant<*>>) {
-                if (closed.get() || !acquired.get()) return
+                if (closed.get() || !acquired.get() || !request.isCurrent()) return
                 if (!devicePath.startsWith("$path/dev_") || ("ManufacturerData" !in changed && "ServiceData" !in changed)) return
                 try {
                     val pathAddress = devicePath.substringAfterLast("/dev_").replace('_', ':')
@@ -107,15 +110,17 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
                 } catch (_: Exception) { /* Removed transient device or malformed property: no nearby-device logging. */ }
             }
             bus.addSigHandler(Properties.PropertiesChanged::class.java) { s ->
+                if (s.source != bluezOwner) return@addSigHandler
                 if ("Name" in s.propertiesChanged || "Name" in s.propertiesRemoved || "Address" in s.propertiesChanged) synchronized(metadata) { metadata.remove(s.path) }
                 if (s.interfaceName == "org.bluez.Adapter1" && s.path == path && s.propertiesChanged["Powered"]?.value == false) failure("Bluetooth off — stopped; no automatic restart")
                 if (s.interfaceName == "org.bluez.Device1") process(s.path, s.propertiesChanged)
             }
-            bus.addSigHandler(ObjectManager.InterfacesAdded::class.java) { s -> s.interfaces["org.bluez.Device1"]?.let { process(s.signalSource.path, it) } }
-            bus.addSigHandler(ObjectManager.InterfacesRemoved::class.java) { s -> synchronized(metadata) { metadata.remove(s.signalSource.path) } }
+            bus.addSigHandler(ObjectManager.InterfacesAdded::class.java) { s -> if (s.source == bluezOwner) s.interfaces["org.bluez.Device1"]?.let { process(s.signalSource.path, it) } }
+            bus.addSigHandler(ObjectManager.InterfacesRemoved::class.java) { s -> if (s.source == bluezOwner) synchronized(metadata) { metadata.remove(s.signalSource.path) } }
             bus.addSigHandler(org.freedesktop.dbus.interfaces.DBus.NameOwnerChanged::class.java) { s ->
-                if (s.name == "org.bluez" && s.oldOwner.isNotEmpty() && s.oldOwner != s.newOwner && !closed.get()) failure("BlueZ service changed — stopped; no automatic restart")
+                if (s.source == "org.freedesktop.DBus" && s.name == "org.bluez" && s.oldOwner.isNotEmpty() && s.oldOwner != s.newOwner && !closed.get()) failure("BlueZ service changed — stopped; no automatic restart")
             }
+            check(request.isCurrent()) { "Obsolete BLE operation" }
             adapter.StartDiscovery(); acquired.set(true)
             val ownedAdapter = adapter
             return object : RadioSession {

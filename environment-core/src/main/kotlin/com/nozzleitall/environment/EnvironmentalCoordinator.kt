@@ -85,7 +85,10 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         return@launch
                     }
                 }
-                val opened = transport().start(BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet()), { report ->
+                val request = BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet()) {
+                    job.isActive && !revocationRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
+                }
+                val opened = transport().start(request, { report ->
                     // OS scan callbacks may be Main: no locks, disk IO, parsing, or coroutine-per-report here.
                     if (!job.isActive || revocationRequested.get() || visibilityEpoch.get() != visibleEpoch) return@start
                     if (report.address.length !in 1..64 || (report.name?.length ?: 0) > 256) return@start

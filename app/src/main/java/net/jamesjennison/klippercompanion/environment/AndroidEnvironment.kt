@@ -33,14 +33,18 @@ class AndroidEnvironmentalStore(file: File) : SqlStore {
 class AndroidBleTransport(private val context: Context) : BleTransport {
     @SuppressLint("MissingPermission")
     override fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
+        check(request.isCurrent()) { "Obsolete BLE operation" }
+        val filters = if (request.discovery) null else request.selectedAddresses.map { ScanFilter.Builder().setDeviceAddress(it).build() }.also { require(it.isNotEmpty()) }
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: error("Bluetooth unavailable")
         check(adapter.isEnabled) { "Bluetooth off" }
         val scanner = adapter.bluetoothLeScanner ?: error("BLE scan unavailable")
         val closed = AtomicBoolean(false)
+        val failed = AtomicBoolean(false)
+        fun fail(reason: String) { if (failed.compareAndSet(false, true)) failure(reason) }
         val callback = object : ScanCallback() {
-            override fun onScanFailed(errorCode: Int) { failure("BLE unavailable — scan failed; press Start to retry") }
+            override fun onScanFailed(errorCode: Int) { fail("BLE unavailable — scan failed; press Start to retry") }
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                if (closed.get()) return
+                if (closed.get() || failed.get() || !request.isCurrent()) return
                 try {
                     val record = result.scanRecord ?: return
                     val manufacturer = record.manufacturerSpecificData
@@ -50,19 +54,27 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
                         (0 until manufacturer.size()).associate { manufacturer.keyAt(it) to manufacturer.valueAt(it).copyOf() },
                         record.serviceData.orEmpty().mapKeys { it.key.uuid.toString() }.mapValues { it.value.copyOf() },
                         System.currentTimeMillis(), System.nanoTime()))
-                } catch (_: SecurityException) { failure("BLE permission revoked — stopped") }
+                } catch (_: SecurityException) { fail("BLE permission revoked — stopped") }
             }
         }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
-                if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED && intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) != BluetoothAdapter.STATE_ON) failure("Bluetooth off — stopped; no automatic restart")
+                if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED && intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) != BluetoothAdapter.STATE_ON) fail("Bluetooth off — stopped; no automatic restart")
             }
         }
         // Protected platform action, sent by the Bluetooth UID rather than SYSTEM_UID.
-        androidx.core.content.ContextCompat.registerReceiver(context, receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
-        val filters = if (request.discovery) null else request.selectedAddresses.map { ScanFilter.Builder().setDeviceAddress(it).build() }.also { require(it.isNotEmpty()) }
-        try { scanner.startScan(filters, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).setReportDelay(0).build(), callback) }
-        catch (e: Exception) { context.unregisterReceiver(receiver); throw e }
+        var receiverRegistered = false
+        try {
+            check(request.isCurrent()) { "Obsolete BLE operation" }
+            androidx.core.content.ContextCompat.registerReceiver(context, receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
+            receiverRegistered = true
+            check(request.isCurrent() && !failed.get()) { "Obsolete BLE operation" }
+            scanner.startScan(filters, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).setReportDelay(0).build(), callback)
+        } catch (e: Exception) {
+            closed.set(true)
+            if (receiverRegistered) runCatching { context.unregisterReceiver(receiver) }
+            throw e
+        }
         return object : RadioSession {
             override val adapterDescription = "Android BLE"
             override fun close() {

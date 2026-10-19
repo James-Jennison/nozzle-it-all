@@ -58,6 +58,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         SectionHeader("Environment", v.state.dashboardStatus())
         v.nameDirectoryProblem?.let { Banner(it, BannerKind.WARNING) }
         error?.let { Banner(it, BannerKind.WARNING) }
+        v.dashboardNotice()?.let { Banner(it, BannerKind.WARNING) }
         if (historyMode) Banner("Viewing saved history. Return to live readings for current updates.", BannerKind.INFO)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")

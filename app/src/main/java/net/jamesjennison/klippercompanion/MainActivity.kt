@@ -274,6 +274,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     val hostView=LocalView.current
     var cameraVisible by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var environmentOrigin by rememberSaveable { mutableIntStateOf(0) }
     var detailAddress by rememberSaveable { mutableStateOf<String?>(null) }
     val overview = tab == 0 && detailAddress == null
     // WO-17 (Phase 1): the Files tab's "Projects" section - a saved multi-object build plate,
@@ -347,7 +348,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         }
     }
     BackHandler(tab == 0 && detailAddress != null) { detailAddress = null }
-    BackHandler(tab == 6) { tab = 0 }
+    BackHandler(tab == 6) { tab = environmentOrigin }
     fun openPrinter(selected: String) {
         if(state.busy) return
         detailAddress = selected
@@ -453,9 +454,14 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 CameraContent(state)
             }
         } else if (tab == 6) {
-            Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton({ tab = 0 }) { Text("Back to Home") }
-                net.jamesjennison.klippercompanion.environment.EnvironmentalPanel()
+            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton({ tab = environmentOrigin }, Modifier.semantics { contentDescription = "Back" }) { CompanionIcon(CompanionSymbol.PREV) }
+                    Text("Environment dashboard", style = MaterialTheme.typography.titleMedium)
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    net.jamesjennison.klippercompanion.environment.EnvironmentalPanel()
+                }
             }
         } else if (tab == 5) {
             Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = wideGutter - 16.dp)) {
@@ -479,7 +485,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             if((tab == 0 && !overview) || tab == 4) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
-            if(tab == 4) item { OutlinedButton({ tab = 6 }, modifier = Modifier.testTag("open-environment")) { Text("Environment dashboard") } }
+            if(tab == 4) item { OutlinedButton({ environmentOrigin = 4; tab = 6 }, modifier = Modifier.testTag("open-environment")) { Text("Environment dashboard") } }
             if(tab == 4) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -587,9 +593,9 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             } else when(tab) {
                 0 -> {
                     if(overview) {
-                        item { OutlinedButton({ tab = 6 }, modifier = Modifier.fillMaxWidth().testTag("open-environment")) { Text("Environment dashboard") } }
                         val tiles = state.connectedPrinterTiles()
                         item { Text("Connected printers", style = MaterialTheme.typography.titleLarge) }
+                        item { OutlinedButton({ environmentOrigin = 0; tab = 6 }, modifier = Modifier.fillMaxWidth().testTag("open-environment")) { Text("Environment dashboard") } }
                         if(tiles.isEmpty()) item {
                             Text("No printers connected. Saved printers reconnect while the app is open.")
                             OutlinedButton({ tab = 4 }) { Text("View saved printers") }

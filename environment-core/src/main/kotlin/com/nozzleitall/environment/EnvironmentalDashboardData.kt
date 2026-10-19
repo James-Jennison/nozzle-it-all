@@ -35,3 +35,10 @@ fun EnvironmentalState.dashboardStatus(): String = when (this) {
     EnvironmentalState.DISCOVERING -> "Finding sensors · monitoring has not started"
     EnvironmentalState.COLLECTING -> "Monitoring · receiving and recording readings"
 }
+
+/** Surface actionable failures without exposing adapter paths and diagnostic identifiers. */
+fun EnvironmentalView.dashboardNotice(): String? {
+    val message = status.substringBefore(" · ")
+    return message.takeIf { text -> listOf("unavailable", "failed", "denied", "incomplete", "recovery")
+        .any { text.contains(it, ignoreCase = true) } }
+}

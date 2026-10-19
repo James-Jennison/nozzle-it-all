@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
@@ -54,19 +55,23 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                 DryerDiagram(positions, data, reference, historyMode, selected, onSelect)
             }
             val summary: @Composable () -> Unit = {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
                         val stats = EnvironmentalGroupOverview.stats(group.bindings, data.readings, channel, reference)
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Label(if (channel == Channel.TEMPERATURE) "AVERAGE TEMPERATURE" else "AVERAGE HUMIDITY")
+                        Column(Modifier.widthIn(min = 230.dp).background(Color(0xFF192229), RoundedCornerShape(8.dp)).padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Label(if (channel == Channel.TEMPERATURE) "Average temperature" else "Average humidity", color = Color(0xFFAEBCC5))
                             Metric("${fmt(stats?.average)} ${channel.unit}", if (channel == Channel.TEMPERATURE) positionColors[0] else positionColors[1])
-                            Label("${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}  ·  Δ ${fmt(stats?.let { it.maximum - it.minimum })}  ·  ${stats?.count ?: 0}/4 positions")
+                            Label("Range  ${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}")
+                            Label("Spread  ${fmt(stats?.let { it.maximum - it.minimum })} ${channel.unit}   ·   ${stats?.count ?: 0}/4 positions", color = Color(0xFFAEBCC5))
                         }
                     }
+                  }
                     Box(Modifier.clickable(role = Role.Button) { showMethod = !showMethod }.padding(vertical = 8.dp)
                         .testTag("s4-calculation-details")
                         .semantics(mergeDescendants = true) { stateDescription = if (showMethod) "Expanded" else "Collapsed" }) {
-                        Label(if (showMethod) "Hide calculation details" else "How averages are calculated", title = true)
+                        Label(if (showMethod) "Hide calculation details" else "Calculation details", color = Color(0xFFAEBCC5))
                     }
                     if (showMethod) Label("Only readings received in the last 2 minutes contribute. Missing, older and future-dated readings are excluded. Positions follow sensor names. This is sampled air, not filament moisture; the illustration is not a heat map.")
                 }
@@ -135,19 +140,37 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
     Box(Modifier.fillMaxWidth().height(diagramHeight * fontScale).testTag("s4-dryer-illustration")) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height
-            drawRoundRect(Color(0xFF080D11), Offset(w * .02f, h * .03f), Size(w * .96f, h * .91f), CornerRadius(22.dp.toPx()))
-            drawRoundRect(Color(0xFF52616B), Offset(w * .03f, h * .04f), Size(w * .94f, h * .79f), CornerRadius(20.dp.toPx()), style = Stroke(3.dp.toPx()))
-            drawRoundRect(Color(0xFF24343B), Offset(w * .055f, h * .065f), Size(w * .89f, h * .74f), CornerRadius(16.dp.toPx()))
+            // Layered enclosure and smoked lid; neutral materials are not a heat map.
+            drawRoundRect(Color.Black.copy(alpha = .3f), Offset(w * .045f, h * .12f), Size(w * .91f, h * .82f), CornerRadius(18.dp.toPx()))
+            drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF394148), Color(0xFF11171C))),
+                Offset(w * .03f, h * .04f), Size(w * .94f, h * .85f), CornerRadius(16.dp.toPx()))
+            drawRoundRect(Color(0xFF647078).copy(alpha = .65f), Offset(w * .03f, h * .04f),
+                Size(w * .94f, h * .85f), CornerRadius(16.dp.toPx()), style = Stroke(1.dp.toPx()))
+            drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF26363F), Color(0xFF151F26))),
+                Offset(w * .045f, h * .065f), Size(w * .91f, h * .67f), CornerRadius(12.dp.toPx()))
             for (i in 0..3) {
-                val x = w * (.17f + i * .22f)
-                drawRoundRect(Color(0xFF1C2429), Offset(x - w * .075f, h * .30f), Size(w * .15f, h * .26f), CornerRadius(10.dp.toPx()))
-                for (j in 0..6) drawLine(Color(0xFF66717B), Offset(x - w * .055f + j * w * .018f, h * .32f),
-                    Offset(x - w * .055f + j * w * .018f, h * .54f), 2.dp.toPx())
-                drawOval(Color(0xFF909AA4), Offset(x - w * .078f, h * .30f), Size(w * .035f, h * .26f), style = Stroke(2.dp.toPx()))
-                drawOval(Color(0xFF909AA4), Offset(x + w * .043f, h * .30f), Size(w * .035f, h * .26f), style = Stroke(2.dp.toPx()))
+                val x = w * (.23f + i * .18f)
+                val left = x - w * .065f
+                val top = h * .22f
+                val spoolWidth = w * .13f
+                val spoolHeight = h * .38f
+                drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF6C7880), Color(0xFF303D46), Color(0xFF586570))),
+                    Offset(left, top), Size(spoolWidth, spoolHeight), CornerRadius(8.dp.toPx()))
+                for (j in 1..16) drawLine(Color(0xFF101A21).copy(alpha = .3f),
+                    Offset(left + spoolWidth * j / 17, top + 4.dp.toPx()),
+                    Offset(left + spoolWidth * j / 17, top + spoolHeight - 4.dp.toPx()), .6.dp.toPx())
+                for (edge in listOf(left, left + spoolWidth - w * .022f)) {
+                    drawOval(Brush.horizontalGradient(listOf(Color(0xFF9BA5AA), Color(0xFF3A464F))),
+                        Offset(edge, top - 3.dp.toPx()), Size(w * .022f, spoolHeight + 6.dp.toPx()))
+                    drawOval(Color(0xFF26323B), Offset(edge + w * .005f, top + h * .12f), Size(w * .012f, h * .14f))
+                }
             }
-            drawLine(Color(0xFF8298A3).copy(alpha = .4f), Offset(w * .08f, h * .27f), Offset(w * .92f, h * .27f), 2.dp.toPx())
-            drawRoundRect(Color(0xFF152B35), Offset(w * .38f, h * .845f), Size(w * .24f, h * .075f), CornerRadius(4.dp.toPx()))
+            drawRoundRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .075f), Color.Transparent)),
+                Offset(w * .05f, h * .07f), Size(w * .90f, h * .25f), CornerRadius(10.dp.toPx()))
+            drawLine(Color(0xFF7D8A92).copy(alpha = .4f), Offset(w * .055f, h * .74f), Offset(w * .945f, h * .74f), 1.dp.toPx())
+            drawRoundRect(Color(0xFF0A1116), Offset(w * .42f, h * .77f), Size(w * .16f, h * .085f), CornerRadius(4.dp.toPx()))
+            for (side in listOf(.09f, .67f)) drawRoundRect(Color(0xFF829777).copy(alpha = .55f),
+                Offset(w * side, h * .805f), Size(w * .24f, h * .012f), CornerRadius(1.dp.toPx()))
         }
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 26.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

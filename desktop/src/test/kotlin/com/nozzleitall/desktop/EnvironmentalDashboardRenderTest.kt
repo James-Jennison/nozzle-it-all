@@ -39,9 +39,9 @@ class EnvironmentalDashboardRenderTest {
         val image = javax.imageio.ImageIO.read(output)
         var shellPixels = 0
         for (y in 0 until image.height) for (x in 0 until image.width) {
-            if (image.getRGB(x, y) and 0xFFFFFF == 0x24343B) shellPixels++
+            if (image.getRGB(x, y) and 0xFFFFFF == 0x0A1116) shellPixels++
         }
-        assertTrue("Expanded placement retains the original dryer illustration", shellPixels > 10000)
+        assertTrue("Expanded placement retains the dryer control-panel silhouette", shellPixels > 300)
     }
     @Test fun s4PresentationLogicAndGeometryStayIdenticalAcrossPlatforms() {
         fun body(file: File): String {
@@ -89,8 +89,8 @@ class EnvironmentalDashboardRenderTest {
         // Default dryer plus four distinct named series. Not a semantics/click test.
         var shellPixels = 0
         for (y in 100 until 330) for (x in 40 until 900)
-            if (image.getRGB(x, y) and 0xFFFFFF == 0x24343B) shellPixels++
-        assertTrue("Default overview contains the compact dryer", shellPixels > 10000)
+            if (image.getRGB(x, y) and 0xFFFFFF == 0x0A1116) shellPixels++
+        assertTrue("Default overview contains the compact dryer control panel", shellPixels > 300)
         for (rgb in listOf(0xB59AFF, 0x35B9C5, 0xFFC66D, 0xFF91B5)) {
             var pixels = 0
             val expected = java.awt.Color(rgb)

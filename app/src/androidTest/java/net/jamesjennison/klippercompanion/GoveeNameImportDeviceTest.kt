@@ -96,19 +96,23 @@ class GoveeNameImportDeviceTest {
         assertTrue(store.devices.value.isEmpty())
         store.forget(); assertFalse(store.hasSavedKey())
     }
-    @Test fun failedCancellationRollbackRevokesSavedCredentialUse() = fixture { _, prefs ->
+    @Test fun failedCancellationRollbackRevokesSavedCredentialUse() {
+      for (failDuringEdit in listOf(false, true)) fixture { _, prefs ->
         assertTrue(prefs.edit().putString("api-key", "previous-synthetic-fixture").commit())
         lateinit var store: AndroidGoveeNames
         var commits = 0
+        var edits = 0
         val broken = object : android.content.SharedPreferences by prefs {
             override fun edit(): android.content.SharedPreferences.Editor {
+                edits++
+                if (failDuringEdit && edits == 2) throw IllegalStateException("synthetic edit failure")
                 val editor = prefs.edit()
                 return object : android.content.SharedPreferences.Editor by editor {
                     override fun putString(key: String?, value: String?): android.content.SharedPreferences.Editor { editor.putString(key, value); return this }
                     override fun remove(key: String?): android.content.SharedPreferences.Editor { editor.remove(key); return this }
                     override fun commit(): Boolean {
                         commits++
-                        return if (commits == 1) editor.commit().also { store.cancel() } else if (commits == 2) false else editor.commit()
+                        return if (commits == 1) editor.commit().also { store.cancel() } else if (!failDuringEdit && commits == 2) false else editor.commit()
                     }
                 }
             }
@@ -122,6 +126,7 @@ class GoveeNameImportDeviceTest {
         assertEquals(GoveeNameFailure.CLEANUP, assertThrows(GoveeNameException::class.java) { store.import(null, false, store.begin()) }.reason)
         assertEquals(1, fetched)
         store.forget(); assertFalse(prefs.contains("api-key"))
+      }
     }
     @Test fun queuedForgetCannotBeOvertakenOrAbandonedAndFailureRevokesSavedKey() = fixture { _, prefs ->
         assertTrue(prefs.edit().putString("api-key", "synthetic-old-key").commit())

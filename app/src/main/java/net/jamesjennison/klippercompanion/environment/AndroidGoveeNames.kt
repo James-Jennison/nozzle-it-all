@@ -50,9 +50,11 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
             } catch (e: Exception) {
                 // A cancellation racing a commit restores the previous credential, not merely its absence.
                 if (persist) {
-                    val restore = credentialStore.edit()
-                    if (previous == null) restore.remove("api-key") else restore.putString("api-key", previous)
-                    val restored = try { restore.commit() } catch (_: Exception) { false }
+                    val restored = try {
+                        val restore = credentialStore.edit()
+                        if (previous == null) restore.remove("api-key") else restore.putString("api-key", previous)
+                        restore.commit()
+                    } catch (_: Exception) { false }
                     if (!restored) {
                         savedKeyRevoked.set(true)
                         throw GoveeNameException(GoveeNameFailure.STORAGE).apply {

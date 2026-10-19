@@ -1,6 +1,7 @@
 package net.jamesjennison.klippercompanion
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -27,13 +28,12 @@ class GoveeNameImportDeviceTest {
         try { block(store, prefs) } finally { store.cancel(); assertTrue(context.deleteSharedPreferences(file)) }
     }
     @Test fun privateEntryDefaultsToNotRememberingAndImportsNames() = fixture { store, _ ->
-        compose.setContent { MaterialTheme { GoveeNameImport(store) } }
+        // Match the production panel's Column; sibling buttons must not overlap
+        // in the test host's root Box (a touch would otherwise hit Forget).
+        compose.setContent { MaterialTheme { Column { GoveeNameImport(store) } } }
         compose.onNodeWithText("Import names from Govee").performClick()
-        // Diagnose the empty synthetic dialog only; never inspect a real user's entry.
-        compose.waitForIdle()
-        assertTrue(compose.onRoot(useUnmergedTree = true).printToString(),
-            compose.onAllNodesWithTag("govee-private-key", useUnmergedTree = true).fetchSemanticsNodes().size == 1)
         compose.onNodeWithTag("govee-private-key", useUnmergedTree = true).performTextReplacement("fixture-not-a-real-key")
+        compose.onNode(isToggleable()).assertIsOff()
         compose.onNodeWithText("Import names", useUnmergedTree = true).performClick()
         compose.waitUntil(5000) { store.devices.value.isNotEmpty() }
         compose.runOnIdle { assertEquals("Office shelf", store.devices.value.single().name) }

@@ -55,7 +55,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                 val gapId = gapSession; gapSession = null
                 val drops = droppedReports.get() - gapDropBase
                 val gapFailed = gapId != null && drops > 0 && runCatching { history.recordGap(gapId, System.currentTimeMillis(), drops) }.isFailure
-                mutable.value = mutable.value.copy(state = gate.state, status = when {
+                mutable.value = mutable.value.copy(state = gate.state, dropped = droppedReports.get(), status = when {
                     gate.persistenceFailure -> "Persistence failed — stopped in memory, recovery required"
                     gapFailed -> "Stopped — final overflow count could not be persisted; history coverage incomplete"
                     else -> reason

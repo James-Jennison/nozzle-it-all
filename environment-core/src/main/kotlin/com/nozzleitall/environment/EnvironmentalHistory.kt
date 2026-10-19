@@ -67,6 +67,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         require(!b.archived && q.bindingRevision == b.revision && q.model == b.model && q.firmware == b.firmware)
         require(listOf(q.firmware, q.platform, q.radio, q.decoder).all { it.isNotBlank() && it.length <= 256 })
         require(q.firmware.lowercase() !in setOf("unknown", "unavailable", "unqualified", "unspecified"))
+        require(q.platform != "unqualified" && q.radio.lowercase() !in setOf("unknown", "unqualified", "unavailable"))
         require(q.scanMode == "active" && q.decoder == BleDecoders.VERSION && q.calibrationVersion >= 0)
         require(q.minC.isFinite() && q.maxC.isFinite() && q.minC <= q.maxC)
         require(q.cadenceMinMillis > 0 && q.cadenceMaxMillis >= q.cadenceMinMillis)

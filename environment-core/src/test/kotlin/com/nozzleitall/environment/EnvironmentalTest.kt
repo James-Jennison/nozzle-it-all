@@ -364,6 +364,8 @@ class EnvironmentalTest {
             assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "fixture-platform", now) }
             val changed = h.recordFirmware(b, "fixture-firmware2")
             assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(changed), "fixture-platform", now) }
+            val unknown = h.recordFirmware(changed, "unknown")
+            assertThrows(IllegalArgumentException::class.java) { h.recordQualification(humidity.copy(bindingRevision = unknown.revision, firmware = "unknown")) }
         }
     }
     @Test fun fullBudgetRollsBackAndRetentionReusesFreedPages() {

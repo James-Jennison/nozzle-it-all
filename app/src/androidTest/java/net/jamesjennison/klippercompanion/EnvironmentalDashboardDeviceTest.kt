@@ -18,6 +18,19 @@ import org.junit.Test
 
 class EnvironmentalDashboardDeviceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun explicitSavedHistoryCanRenderWhileMonitoringIsOff() {
+        val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
+        val sample = ChartSample("event", "b", 1000, "run", 0, mapOf(Channel.TEMPERATURE to 23.0), 1)
+        val state = mutableStateOf(EnvironmentalState.DISABLED)
+        val history = mutableStateOf(true)
+        compose.setContent { MaterialTheme { EnvironmentalDashboard(
+            EnvironmentalView(state.value, bindings = listOf(binding)), listOf(sample), historyMode = history.value) } }
+        compose.onNodeWithText("23.0°C").assertExists()
+        compose.runOnIdle { state.value = EnvironmentalState.DISABLED_RECOVERY }
+        compose.onNodeWithText("23.0°C").assertExists()
+        compose.runOnIdle { history.value = false }
+        compose.onNodeWithText("23.0°C").assertDoesNotExist()
+    }
     @Test fun lastReceptionAdvancesAndSurvivesStopWithoutCreatingCharts() {
         val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
         val state = mutableStateOf(EnvironmentalView(EnvironmentalState.DISCOVERING, bindings = listOf(binding),

@@ -34,10 +34,10 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     var memory by remember { mutableStateOf(EnvironmentalDashboardData()) }
     LaunchedEffect(view, history) { memory = memory.update(view, history) }
     val historical = remember(view.state, view.bindings, history) {
-        EnvironmentalDashboardData().update(EnvironmentalView(view.state, bindings = view.bindings), history)
+        EnvironmentalDashboardData().update(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = view.bindings), history)
     }
-    val data = if (view.state == EnvironmentalState.DISABLED || view.state == EnvironmentalState.DISABLED_RECOVERY) EnvironmentalDashboardData()
-        else if (historyMode) historical else memory
+    val data = if (historyMode) historical
+        else if (view.state == EnvironmentalState.DISABLED || view.state == EnvironmentalState.DISABLED_RECOVERY) EnvironmentalDashboardData() else memory
     val samples = data.samples
     val bindings = view.bindings.filterNot { it.archived }
     var selected by remember { mutableStateOf<String?>(null) }

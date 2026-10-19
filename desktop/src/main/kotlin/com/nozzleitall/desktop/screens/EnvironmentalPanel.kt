@@ -64,7 +64,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         SectionHeader("Environment", v.state.dashboardStatus())
         v.nameDirectoryProblem?.let { Banner(it, BannerKind.WARNING) }
         error?.let { Banner(it, BannerKind.WARNING) }
-        v.dashboardNotice()?.let { Banner(it, BannerKind.WARNING) }
+        v.dashboardNotice()?.let { Banner(it, BannerKind.INFO) }
         if (historyMode) Banner("Viewing saved history. Return to live readings for current updates.", BannerKind.INFO)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")
@@ -76,8 +76,8 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
                 NzButton("Stop / cancel", { stop() }, enabled = !stopping, testTag = "environment-stop")
             }
             NzButton(if (historyMode) "Return to live readings" else "Open local history", {
-                if (historyMode) historyMode = false else action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded; historyMode = true }
-            }, enabled = enabled && !busy && !stopping, testTag = "environment-history")
+                if (historyMode) historyMode = false else action { controller.savedBindings(); val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded; historyMode = true }
+            }, enabled = !busy && !stopping, testTag = "environment-history")
             if (historyMode) NzButton("Latest history", { action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded } }, enabled = !busy && !stopping)
             NzButton(if (setup) "Close setup" else "Setup & data", { setup = !setup })
         }

@@ -1,5 +1,25 @@
 # Govee foreground monitoring completion
 
+## Normal Android follow-up (2026-10-19)
+
+Owner subsequently requested normal-app installation. This follow-up is BLOCKED,
+not completed by isolated tests below. Freshly identified Razr normal package is
+Play-installed `com.nozzleitall.app`, version0.1.2/code275, appId10002, not debuggable.
+Public signer SHA256:
+`ce6bba61258a3e407a0fb27e5a03342d34b44cdd2bf910844af36169f449c3f3`;
+tested debug signer:
+`f04451d662216202d9626e4509642ea6a17af06d02a450331a22a43ce30a6644`.
+The documented upload signer differs as well. In-place update needs the existing
+Play signing identity, not merely the same application ID or higher version code.
+No install/uninstall/data clear, permission change, app stop, or private-data export
+performed. Version, update time and PID23745 unchanged. No credentials accessed.
+
+Missing input: current-source Play-signed update artifact; alternatively Owner
+authorization to prepare/distribute through the existing Play testing track.
+Normal-app Govee verification remains pending. Prior closure is not normal-app
+success. Public installed base APK SHA256:
+`a93bb04644a8a282a24faac0d4ecff467b719104a1930e6c0518022a174a6cec`.
+
 Owner request: finish the agreed opt-in Govee framework, local history and
 foreground Linux/Android collection, with build/test/Synthetic-review/install/live
 verification. No additional procurement or certification acceptance program.

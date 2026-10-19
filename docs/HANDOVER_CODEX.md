@@ -1,5 +1,25 @@
 # Handover to Codex (written 2026-10-18)
 
+## Normal Razr installation requested — signing boundary (2026-10-19)
+
+Owner requires Govee in normal `com.nozzleitall.app`, preserving data; the isolated
+acceptance variant does not satisfy this new request. Fresh ADB model check:
+motorola razr 2023. Normal app: Play-installed version0.1.2/code275.
+Public certificate SHA256:
+`ce6bba61258a3e407a0fb27e5a03342d34b44cdd2bf910844af36169f449c3f3`.
+Tested debug certificate SHA256:
+`f04451d662216202d9626e4509642ea6a17af06d02a450331a22a43ce30a6644`.
+They cannot update each other in place. The documented upload certificate also
+differs; an upload-key-signed APK is not a Play-signed update.
+
+BLOCKED: no matching Play-signed current-source update artifact available in this
+task. Play testing-track distribution needs Owner authorization beyond device-only
+installation. Do not uninstall, clear data, change signing identity, or substitute
+acceptance-app proof. No installation attempted; version/update time/UID/PID23745
+unchanged. No private app data or signing credentials accessed. Public APK evidence
+retained in private `20261019-normal-razr` directory. Normal-app Govee verification
+is NOT COMPLETE; prior Linux/isolated Android proof retains its original scope.
+
 ## Govee monitoring — implemented, installed and live-verified (2026-10-19)
 
 Installed executable source `c41680a18fcf90a9a9016f575157176d2a958337`.

@@ -19,17 +19,23 @@ separate Xvfb pointer/resize/SelectAll/save tests pass. Saved450k/1.2M/95934face
 Capybara canonical geometry/paint/placement remain unchanged. Rare70.4ms maxgap
 and slower4KsoftwareUI24–28fps remain disclosed, NOT a universal60Hz guarantee.
 
-Owner's explicit acceptance choice remains pending: actual accelerated desktop
-with4Ksoftware limitation disclosed, or require the original self-selected
-4Ksoftware30fps stress gate too. Installation approval is not that decision.
+Owner explicitly accepted actual accelerated desktop results with4Ksoftware
+limitation disclosed on2026-10-18: “accept, especially since you ran those tests
+on a lower GPU”.4Ksoftware24–28fps remains NOT_MET, but reaching30fps there is
+not required for this milestone. Observed viewport GPU RTX3050 is verified;
+no comparative performance claim about other GPUs follows from that comment.
 Current-source Synthetic reviews9004ec442e1b/f8b6c010a844/02722fdd3640 and
 installed-evidence reviewsfdfd83aa9a92/fd1d149126dd/8b3969d213b9 COMPLETE on
 the exact pinned models;31 immutable findings/separate dispositions retained.
-No new source defect demonstrated; criterion choice remains open. Both checks in
-evidence-cycle-e20f3c3eaedf PASS/intact; closure758ab9e29dbd is NOT_READY solely
-for that owner choice. Details in `docs/handover/NIA_SMOOTH_MOTION.md`.
-Do not claim the milestone READY before
-the acceptance choice resolves. Existing owner window was untouched and may
+No new source defect demonstrated; criterion choice is resolved by that reply.
+Both checks in evidence-cycle-e20f3c3eaedf PASS/intact; closure758ab9e29dbd was
+historically NOT_READY solely for the now-resolved choice. Owner-overlay
+evidence-cycle-dedc25824a36 replays original sealed validation unchanged and
+verifies the explicit decision; both checks PASS/intact. New closureb1cb56324ddc
+is READY_WITH_RESIDUAL_RISK, no blocking reasons. All31 findings dispositioned/
+resolved;6 current-source Synthetic cycles COMPLETE. See
+`docs/handover/NIA_SMOOTH_MOTION.md` for preserved limits and exact evidence.
+Existing owner window was untouched and may
 still hold older loaded code until relaunched. No merge/release/printer/device
 action. Later documentation commits do not change the executable source.
 

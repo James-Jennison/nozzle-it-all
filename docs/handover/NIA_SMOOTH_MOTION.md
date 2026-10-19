@@ -93,10 +93,14 @@ cursor-free stress setup was3.24/4.01 complete frames/s. No comparable old
 actual-desktop camera-probe baseline exists; do not infer its physical FPS.
 
 The owner supplied a qualitative smoothness requirement, not a numeric display
-target. An explicit choice is pending: accept actual accelerated desktop results
-with this4K software limitation disclosed, or require the4K software stress case
-also to reach30fps. No silent waiver or completed milestone is claimed while
-that decision remains pending.
+target. On2026-10-18 the owner explicitly accepted actual accelerated desktop
+results with this4K software limitation disclosed: “accept, especially since you
+ran those tests on a lower GPU”. The separate4Ksoftware30fps goal is not required
+for this milestone. Its measured result remains **NOT_MET**, not rewritten PASS.
+The observed viewport GPU was RTX3050; “lower GPU” is the owner's characterization,
+not a measured comparison or a claim about another GPU's performance. The exact
+reply, scope and historical manifest are in the separate `owner-acceptance.json`
+record; earlier sealed artifacts remain unchanged.
 
 ## Review, runtime invariants and evidence
 
@@ -106,7 +110,7 @@ Current-source Synthetic reviews completed independently on pinned
 `review-cycle-9004ec442e1b`, `review-cycle-f8b6c010a844`,
 `review-cycle-02722fdd3640`. Their17 findings have separate durable Codex
 dispositions; no reviewer agreement substitutes for tests. Three MEDIUM findings
-refer to the same pending owner acceptance choice. A claimed CPU-test portability
+referred to the same owner acceptance choice, now explicitly resolved. A claimed CPU-test portability
 defect was rejected with exact projected-bed geometry and forced-CPU1/1 proof;
 measurement-count/semantics clarifications were implemented in the harness.
 Installed-evidence closure reviews also completed on the same exact model pins:
@@ -116,8 +120,9 @@ finished normally. Their14 additional findings retain the criterion question,
 withdraw pending-installed-proof notices and confirm/document existing limits;
 no new source defect was demonstrated. All31 current-change findings have
 separate dispositions. The three original MEDIUM acceptance-choice findings
-remain unresolved; duplicate closure findings link to them rather than conceal
-the pending decision. No reviewer unanimity or milestone approval is inferred.
+receive appended resolved dispositions referencing the owner's acceptance;
+original findings and earlier pending dispositions remain immutable. No reviewer
+unanimity or independent approval of an owner requirements choice is inferred.
 
 Installed Xvfb pointer handler/dispatch checks completed40zoom+40orbit inputs
 per scene.450k p95 zoom/orbit3.60/29.52ms;1.2M3.73/28.84ms. Resize, SelectAll,
@@ -144,12 +149,34 @@ Sealed artifact manifest SHA256:
 Objective local validation and broker `evidence-cycle-e20f3c3eaedf` both PASS;
 both broker checks have intact locked log artifacts. Their PASS certifies the
 source/build/install/actual-desktop/invariant evidence, **not** a4Kstress waiver.
-Convergence `convergence-90fd123b83e9`; closure `closure-758ab9e29dbd` is
-**NOT_READY**, solely for the three original MEDIUM findings representing the
-same outstanding owner criterion decision. All6 required current-source review
+Historical convergence `convergence-90fd123b83e9`; closure `closure-758ab9e29dbd`
+was **NOT_READY**, solely for the three original MEDIUM findings representing the
+then-outstanding owner criterion decision. All6 required current-source review
 cycles are COMPLETE;31 findings have separate dispositions. Four residuals are
-recorded: the unaccepted4Kcriterion limitation and three disclosed lower-severity
-measurement/cache/engine boundaries. Nothing is silently converted to READY.
+recorded then: the unaccepted4Kcriterion limitation and three disclosed lower-severity
+measurement/cache/engine boundaries. Owner acceptance is appended separately;
+the historical record is not silently converted to READY.
+
+### Owner-accepted closure (2026-10-18)
+
+Explicit owner decision SHA256:
+`b8afa529c12bc690ac6b1f6edb21ca27067ed2cbd1e68216713b5f867f13811b`.
+The acceptance overlay replays `verify_acceptance.py` unchanged, verifies the
+original sealed manifest and the direct owner reply, and keeps the4Kstress result
+NOT_MET. Broker `evidence-cycle-dedc25824a36` has both required checks PASS/intact.
+Convergence `convergence-b7650a801137`; new closure `closure-b1cb56324ddc` is
+**READY_WITH_RESIDUAL_RISK**, with no blocking reasons. All31 immutable findings
+have separate resolved dispositions; all6 current-source Synthetic cycles remain
+COMPLETE. No source change or new model review was required for this owner-only
+acceptance choice, and no build/install/release was repeated.
+
+Five risk records represent four distinct retained boundaries: the historical
+pending4Kcriterion record plus appended owner-acceptedMEDIUM4Klimitation, and
+three LOW measurement/cache/engine limitations. `risk-234077551fe6` records the
+owner acceptance resolving historical `risk-ea5be298c2b3`; neither historical
+failure evidence nor prior NOT_READY closure was overwritten. The owner decision
+does not certify other GPUs, software4K30fps, locked60/VSYNC, Windows/Android or
+Wayland OS-input-driven motion. Existing owner window/profile remain untouched.
 
 Raw source-bound logs, reports, package, recordings, screenshots and saved-project
 comparisons are retained, including failed prototypes. The unchanged slicing

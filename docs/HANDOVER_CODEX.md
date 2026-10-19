@@ -1,5 +1,25 @@
 # Handover to Codex (written 2026-10-18)
 
+## Current H5179 detection fix — 0.1.21 candidate
+
+Owner authorizes narrow fix/build/tests/Synthetic/install/live verification, then
+question-card product wizard including future U1 and Centauri Carbon overlays.
+Read-only evidence: imported directory has9names including Centauri CarbonH5179;
+normal DB8bindings absentH5179. BlueZ full-address matched cached device advertises
+GV5179_7041 with manufacturer1 six-byte payload[1,1,4,59,200,100]. Initial model
+lookup requiredH5179 substring, making existing GV5179 decoding unreachable.
+ace66bf2 adds shared alias normalization and Linux metadata admission;6a9938e3
+corrects only test expected humidity44.0to44.8 (0x043bc8=277448). Initial failure
+archived h5179-initial-failure.xml, not rewritten. No data/radio-control changes.
+GTHost validation/package running. Synthetic0141760dfd8f running all3. Owner
+saved/closed desktop, no normal process observed. Fresh hash-only baseline
+desktop-environment-before-h5179.json created. No installation yet.
+After install owner must run Discover then explicitly Start; verify new uniquely
+named H5179 binding and fresh recorded readings while preserving old hashes.
+No native UI control available; do not bypass. Wizard follows verified fix.
+Rollback source is the prior two production hunks; no schema migration. Do not
+perform a package downgrade or delete the new binding without owner authority.
+
 ## Play heartbeat — 2026-10-19 15:31 PDT
 
 15:46PDT recheck: same verified Razr model,782/.17, Play installer and install

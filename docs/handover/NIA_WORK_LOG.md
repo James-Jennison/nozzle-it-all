@@ -657,3 +657,14 @@ and Start/Stop remain pending; monitoring automation remains active.
 15:46PDT heartbeat: read-only model/package recheck unchanged from15:31.
 Play installer confirmed; runtime/inventory proof still pending native phone UI.
 No device/data changes or repeated owner prompt. Questionnaire remains stopped.
+
+H5179 owner-authorized fix: cached imported Centauri CarbonH5179 matches BlueZ
+GV5179_7041, but decoder's initial H5179 substring rejects it. ace66bf2 normalizes
+exact GV5179_fourhex toH5179 in shared decoder/Linux metadata cache admission.
+Tests cover payload values, invalid aliases/length/battery, full-address name
+matching, coordinator auto-add without collection. Initial fixture expectation
+44.0waswrong; packed277448 means27.7C44.8%RH. Failure preserved;6a9938e3 corrects
+test only. Full GTHost rerun/package0.1.21 and Synthetic0141760dfd8f in progress.
+Owner confirmed closed; fresh baseline recorded, installation not yet performed.
+After verified fix, start requested question-card product wizard with future
+Snapmaker U1 and Centauri Carbon overlays included, not implemented prematurely.

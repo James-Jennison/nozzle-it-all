@@ -3,10 +3,11 @@ package com.nozzleitall.environment
 /** Bounded, pure diagnostic decoders. Protocol decode is NOT firmware/calibration/thermal qualification. */
 object BleDecoders {
     const val VERSION = "nia-ble-1"
+    private val models = arrayOf("H5100", "H5110", "H5074", "H5179")
     fun decode(a: Advertisement): Decoded? {
         if (a.manufacturer.size > 16 || a.services.size > 16) return null
         a.services.entries.firstOrNull { it.key.lowercase() == "0000fcd2-0000-1000-8000-00805f9b34fb" }?.let { return bthome(it.value) }
-        val model = listOf("H5100", "H5110", "H5074", "H5179").firstOrNull { a.name?.contains(it) == true } ?: return null
+        val model = models.firstOrNull { a.name?.contains(it) == true } ?: return null
         for ((company, bytes) in a.manufacturer) {
             if (company == 0x004c || bytes.size > 64) continue
             fun u(i: Int) = bytes[i].toInt() and 255
@@ -50,7 +51,7 @@ object BleDecoders {
                 else -> { if (raw == 0xffff) return null; Channel.BATTERY_VOLTAGE to raw / 1000.0 }
             }
             if (readings.containsKey(pair.first)) return null
-            if (pair.first in setOf(Channel.HUMIDITY, Channel.BATTERY_PERCENT) && pair.second !in 0.0..100.0) return null
+            if ((pair.first == Channel.HUMIDITY || pair.first == Channel.BATTERY_PERCENT) && pair.second !in 0.0..100.0) return null
             readings[pair.first] = Reading(pair.first, pair.second)
         }
         return readings.values.takeIf { it.isNotEmpty() }?.let { Decoded("bthome-v2", "BTHome v2", it.toList(), counter) }

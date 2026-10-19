@@ -18,9 +18,11 @@ class EnvironmentalGrant internal constructor(internal val issuer: Any, internal
 /** Single admission/commit lock: revocation cannot race a history transaction. No live grants survive boot. */
 class EnvironmentalGate(private val file: File, private val now: () -> Long = System::nanoTime) {
     private val issuer = Any()
-    private val session = newId()
+    val bootId = newId()
+    private val session = bootId
     private var epoch = 0L
     var incarnation: String = newId(); private set
+    var collectorId: String = newId(); private set
     var state: EnvironmentalState = EnvironmentalState.DISABLED; private set
     var persistenceFailure = false; private set
     init {
@@ -32,6 +34,7 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
             val control = JSONObject(body)
             require(control.getInt("version") == 1)
             incarnation = UUIDCheck(control.getString("incarnation"))
+            collectorId = UUIDCheck(control.getString("collector"))
             epoch = control.getLong("epoch"); require(epoch >= 0)
             state = when (control.getString("intent")) {
                 "enabled" -> EnvironmentalState.ENABLED_IDLE
@@ -73,7 +76,7 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
     @Synchronized fun deleteIntent() { epoch++; state = EnvironmentalState.DISABLED_RECOVERY; incarnation = newId(); persist("delete-pending") }
     @Synchronized fun finishDelete() { persist("disabled"); state = EnvironmentalState.DISABLED }
     private fun persist(intent: String) {
-        val body = JSONObject().put("version", 1).put("incarnation", incarnation).put("epoch", epoch).put("intent", intent).toString()
+        val body = JSONObject().put("version", 1).put("incarnation", incarnation).put("collector", collectorId).put("epoch", epoch).put("intent", intent).toString()
         file.parentFile.mkdirs()
         if (System.getProperty("os.name").orEmpty().contains("Linux", true)) Files.setPosixFilePermissions(file.parentFile.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"))
         val tmp = File.createTempFile(".control-", ".tmp", file.parentFile)

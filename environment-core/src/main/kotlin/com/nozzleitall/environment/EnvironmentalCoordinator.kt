@@ -25,7 +25,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     private val visibilityEpoch = AtomicLong()
     private val revocationRequested = AtomicBoolean(false)
     private val droppedReports = AtomicLong()
-    private val collector = newId()
+    private val collector get() = gate.collectorId
     private val sequence = AtomicLong()
     fun foreground(visible: Boolean) {
         foreground.set(visible)
@@ -119,7 +119,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                             val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: continue
                             val n = sequence.incrementAndGet()
                             val observation = Observation("$collector/$runId/$n", grant.incarnation, collector, runId, n, binding.id, binding.revision,
-                                report.observedAt, System.currentTimeMillis(), report.monotonicNanos, decoder = BleDecoders.VERSION, sourceCounter = decoded.counter, readings = decoded.readings.map { r -> calibration[binding.id]?.get(r.channel)?.let { r.copy(offset = it.offset, calibrationVersion = it.calibrationVersion) } ?: r }, droppedBefore = mutable.value.dropped)
+                                report.observedAt, System.currentTimeMillis(), report.monotonicNanos, decoder = BleDecoders.VERSION, sourceCounter = decoded.counter, readings = decoded.readings.map { r -> calibration[binding.id]?.get(r.channel)?.let { r.copy(offset = it.offset, calibrationVersion = it.calibrationVersion) } ?: r }, droppedBefore = mutable.value.dropped, bootId = gate.bootId)
                             admittedBindings += binding
                             observations += observation
                         }

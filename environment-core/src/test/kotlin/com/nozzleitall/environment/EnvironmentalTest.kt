@@ -205,4 +205,13 @@ class EnvironmentalTest {
         }
         c.close()
     }
+    @Test fun stableEncodingPreservesTypesAndEscapesAllControlCharacters() {
+        val text = "quote\" slash\\ newline\n tab\t" + (0..31).map { it.toChar() }.joinToString("") + " °C"
+        val observation = observation(text)
+        val encoded = ObservationEncoding.encode(observation)
+        val parsed = JSONObject(encoded)
+        assertEquals(text, parsed.getString("eventId")); assertTrue(parsed.isNull("measuredAt")); assertEquals(1L, parsed.getLong("sequence"))
+        assertEquals(23.0, parsed.getJSONArray("readings").getJSONObject(0).getDouble("raw"), 0.0)
+        assertEquals(encoded, ObservationEncoding.encode(observation.copy(receivedAt = 99)))
+    }
 }

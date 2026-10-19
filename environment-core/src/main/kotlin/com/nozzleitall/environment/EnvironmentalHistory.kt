@@ -101,13 +101,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         }
     }
     /** ReceivedAt intentionally excluded: a retry must not become a conflicting physical sample. */
-    fun immutable(o: Observation): String = JSONObject().put("eventId", o.eventId).put("incarnation", o.incarnation)
-        .put("collector", o.collectorId).put("session", o.sessionId).put("sequence", o.sequence)
-        .put("binding", o.bindingId).put("bindingRevision", o.bindingRevision).put("observedAt", o.observedAt)
-        .put("monotonicNanos", o.monotonicNanos).put("measuredAt", o.measuredAt ?: JSONObject.NULL)
-        .put("sourceCounter", o.sourceCounter ?: JSONObject.NULL).put("decoder", o.decoder)
-        .put("droppedBefore", o.droppedBefore)
-        .put("readings", JSONArray(o.readings.map { JSONObject().put("channel", it.channel.wire).put("raw", it.raw).put("offset", it.offset).put("calibrationVersion", it.calibrationVersion) })).toString()
+    fun immutable(o: Observation): String = ObservationEncoding.encode(o)
     @Synchronized fun append(o: Observation, currentIncarnation: String): String {
         return store().transaction { insert(o, currentIncarnation) }
     }

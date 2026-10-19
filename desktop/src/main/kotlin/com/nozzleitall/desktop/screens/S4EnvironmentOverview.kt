@@ -28,6 +28,7 @@ private val positionColors = listOf(Color(0xFFB59AFF), Color(0xFF35B9C5), Color(
 private fun fmt(v: Double?) = v?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "—"
 private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(t))
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun S4EnvironmentOverview(group: EnvironmentalSensorGroup,
     positions: Map<String, Binding>, data: EnvironmentalDashboardData, historyMode: Boolean,
     collecting: Boolean, selected: String?, onSelect: (Binding) -> Unit) {

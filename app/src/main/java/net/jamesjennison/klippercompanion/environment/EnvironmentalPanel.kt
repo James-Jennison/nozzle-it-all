@@ -97,10 +97,10 @@ import org.json.JSONObject
                 view.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate ->
                     key(candidate.address) {
                         val saved = view.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
-                        val name = if (saved != null) view.sensorLabels[saved.sensorId] ?: "${candidate.model} sensor" else candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                        val name = if (saved != null) view.sensorLabels[saved.sensorId] ?: candidate.defaultName else candidateNames[candidate.address] ?: candidate.defaultName
                         GoveeDiscoveryCard(candidate, view.discovery[candidate.address], name, saved != null, busy || stopping,
                             onNameChange = { candidateNames[candidate.address] = it.take(120) }, onAdd = {
-                            val selectedName = candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                            val selectedName = candidateNames[candidate.address] ?: candidate.defaultName
                             action { controller.save(candidate, selectedName) }
                         })
                     }

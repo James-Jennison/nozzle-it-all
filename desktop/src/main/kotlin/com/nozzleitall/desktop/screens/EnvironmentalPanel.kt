@@ -57,14 +57,14 @@ import org.json.JSONObject
         if (v.candidates.isNotEmpty()) {
             v.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate -> key(candidate.address) { Column {
                 val added = v.bindings.any { !it.archived && it.address.equals(candidate.address, true) }
-                val name = candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                val name = candidateNames[candidate.address] ?: candidate.defaultName
                 val reception = v.discovery[candidate.address]
                 Txt("${candidate.model} · ${candidate.address}", Nz.type.body)
                 Txt(reception?.readings?.takeIf { it.isNotEmpty() }?.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" } ?: "Readings unavailable", Nz.type.bodySmall)
-                Txt("Signal: ${reception?.rssiDbm?.let { "$it dBm" } ?: "unavailable"} · Last received: ${reception?.receivedAt?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "unavailable"}", Nz.type.bodySmall)
+                Txt("Signal: ${reception?.rssiDbm?.let { "$it dBm" } ?: "unavailable"} · Last radio reception: ${reception?.receivedAt?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "unavailable"}", Nz.type.bodySmall)
                 if (!added) Field("Name this sensor", name, { candidateNames[candidate.address] = it.take(120) })
                 NzButton(if (added) "Already added" else "Add sensor", {
-                    val selectedName = candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                    val selectedName = candidateNames[candidate.address] ?: candidate.defaultName
                     action { controller.save(candidate, selectedName) }
                 }, enabled = !busy && !stopping && !added && name.isNotBlank())
             } } }

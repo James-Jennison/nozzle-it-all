@@ -31,7 +31,7 @@ class GoveeDiscoveryCardDeviceTest {
         compose.onNodeWithTag("govee-add-two").performClick()
         compose.runOnIdle { assertEquals(listOf("one" to "Office shelf", "two" to "Garage shelf"), selected) }
         compose.onAllNodesWithText("Readings unavailable").assertCountEquals(2)
-        compose.onAllNodesWithText("Signal: unavailable · Last received: unavailable").assertCountEquals(2)
+        compose.onAllNodesWithText("Signal: unavailable · Last radio reception: unavailable").assertCountEquals(2)
         compose.onAllNodes(hasText("unqualified", substring = true)).assertCountEquals(0)
     }
     @Test fun addedSensorCannotBeAddedAgainAndActualReceptionIsShown() {

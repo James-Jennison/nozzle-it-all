@@ -273,7 +273,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                                 if (request.isCurrent() && gate.valid(grant) && (existing != null || current.candidates.size < 64)) {
                                     val admitted = existing ?: candidate
                                     current.copy(candidates = if (existing == null) current.candidates + candidate else current.candidates,
-                                        discovery = current.discovery + (admitted.address to DiscoveryReception(decoded.readings.toList(), report.observedAt, report.rssiDbm?.takeIf { it in -126..20 })))
+                                        // Android ScanResult.getRssi(): [-127,126]; null/127 are unavailable.
+                                        discovery = current.discovery + (admitted.address to DiscoveryReception(decoded.readings.toList(), report.observedAt, report.rssiDbm?.takeIf { it in -127..126 })))
                                 } else current
                             }
                         } else {
@@ -304,6 +305,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     @Synchronized fun save(candidate: Candidate, name: String) {
         check(gate.state == EnvironmentalState.DISCOVERING && mutable.value.candidates.contains(candidate))
+        check(history.bindings().none { !it.archived && it.address.equals(candidate.address, true) }) { "Sensor already added" }
         stop("Discovery stopped — saving selection")
         history.bind(candidate, name)
         savedBindings()

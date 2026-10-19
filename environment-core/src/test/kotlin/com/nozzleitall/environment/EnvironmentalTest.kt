@@ -17,7 +17,9 @@ class EnvironmentalTest {
         val h = history()
         val ready = CountDownLatch(1)
         lateinit var send: (Advertisement) -> Unit
-        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, callback, _ ->
+        lateinit var activeRequest: BleScanRequest
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { request, callback, _ ->
+            activeRequest = request
             send = callback; ready.countDown()
             object : RadioSession { override fun close() {} }
         } })
@@ -46,14 +48,31 @@ class EnvironmentalTest {
             }
             waitFor { c.view.value.candidates.size == 64 }
             assertEquals(64, c.view.value.discovery.size)
+            c.view.value.candidates.take(10).forEachIndexed { i, candidate -> send(report(candidate.address.uppercase(), 5000L + i, -40)) }
+            waitFor { c.view.value.discovery.values.count { it.receivedAt in 5000L..5009L } == 10 }
+            assertEquals(c.view.value.candidates.map { it.address }.toSet(), c.view.value.discovery.keys)
+            for ((i, rssi) in listOf(-128, -127, -126, 20, 126, 127).withIndex()) {
+                send(report("SENSOR-A", 6000L + i, rssi))
+                waitFor { c.view.value.discovery["sensor-a"]?.receivedAt == 6000L + i }
+                assertEquals(rssi.takeIf { it in -127..126 }, c.view.value.discovery.getValue("sensor-a").rssiDbm)
+            }
             assertEquals(0L, h.eventCount()) // Discovery previews are not persisted observations.
             c.save(selected, "Office thermometer") // A refreshed preview must not stale the selection.
             assertEquals("Office thermometer", c.view.value.sensorLabels.values.single())
             assertTrue(c.view.value.candidates.isEmpty())
             assertTrue(c.view.value.discovery.isEmpty())
-            send(report("late", 9000, -20)); Thread.sleep(30)
+            assertFalse(activeRequest.isCurrent())
+            send(report("late", 9000, -20)) // Synchronous ingress fence rejects before enqueue.
             assertTrue(c.view.value.discovery.isEmpty())
             assertEquals(0L, h.eventCount())
+            c.savedBindings()
+            assertEquals("Office thermometer", c.view.value.sensorLabels.values.single())
+            c.discover()
+            waitFor { c.view.value.status.contains(" · BLE") }
+            send(report("SENSOR-A", 10000, -50))
+            waitFor { c.view.value.candidates.isNotEmpty() }
+            assertThrows(IllegalStateException::class.java) { c.save(c.view.value.candidates.single(), "Duplicate") }
+            assertEquals(1, h.bindings().count { !it.archived })
         } finally { c.close() }
     }
 

@@ -47,7 +47,9 @@ data class Advertisement(val address: String, val name: String?, val manufacture
                          val services: Map<String, ByteArray>, val observedAt: Long, val monotonicNanos: Long,
                          val rssiDbm: Int? = null)
 data class Decoded(val protocol: String, val model: String, val readings: List<Reading>, val counter: Int? = null)
-data class Candidate(val address: String, val protocol: String, val model: String)
+data class Candidate(val address: String, val protocol: String, val model: String) {
+    val defaultName: String get() = "$model ${address.takeLast(5)}"
+}
 /** Transient discovery reception, not a measurement timestamp or persisted observation. */
 data class DiscoveryReception(val readings: List<Reading>, val receivedAt: Long, val rssiDbm: Int?)
 data class ProviderDescriptor(val id: String, val name: String, val activeScan: Boolean, val available: Boolean)

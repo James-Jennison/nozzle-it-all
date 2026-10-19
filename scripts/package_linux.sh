@@ -77,7 +77,8 @@ grep -qx 'StartupWMClass=nozzle-it-all' "$PKG/usr/share/applications/nozzle-it-a
 for size in 16 32 48 64 128 256 512; do
   test -s "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/nozzle-it-all.png"
 done
-fakeroot dpkg-deb --build "$PKG" "$OUT/$(basename "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb)" >/dev/null
+DESKTOP_DEB="$OUT/$(basename "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb)"
+fakeroot dpkg-deb --build "$PKG" "$DESKTOP_DEB" >/dev/null
 
 echo "== Stock U1 adapter"
 PKG="$STAGE/stock"
@@ -111,7 +112,7 @@ fakeroot dpkg-deb --build "$PKG" "$OUT/nozzle-stock-u1-adapter_${VERSION}-1_amd6
 
 
 echo "== Provenance"
-(cd "$OUT" && sha256sum -- *.deb > SHA256SUMS)
+(cd "$OUT" && sha256sum -- "$(basename "$DESKTOP_DEB")" "nozzle-stock-u1-adapter_${VERSION}-1_amd64.deb" > SHA256SUMS)
 {
   echo "Nozzle It All Linux packages $VERSION"
   echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -srm)"
@@ -122,7 +123,7 @@ echo "== Provenance"
   echo "stock adapter runtime modules: $MODULES"
   echo "slicing engine: $ENGINE sha256 $(sha256sum "$ENGINE" | cut -d' ' -f1)"
   [ -f "$ROOT/engine/native/PROVENANCE.txt" ] && sed 's/^/  /' "$ROOT/engine/native/PROVENANCE.txt"
-  echo "adapters in nozzle-it-all: $(dpkg-deb -c "$OUT"/nozzle-it-all_*_amd64.deb | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
+  echo "adapters in nozzle-it-all: $(dpkg-deb -c "$DESKTOP_DEB" | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
   echo; cat "$OUT/SHA256SUMS"
 } > "$OUT/PROVENANCE.txt"
 cat "$OUT/PROVENANCE.txt"

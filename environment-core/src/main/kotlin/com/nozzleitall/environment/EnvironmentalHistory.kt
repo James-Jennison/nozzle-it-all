@@ -141,7 +141,10 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         val versions = entities("calibration").filter { it.getString("binding") == binding.id }.groupBy { it.getString("channel") }.mapValues { it.value.maxBy { j -> j.getInt("version") } }
         return readings.map { r -> versions[r.channel.wire]?.let { r.copy(offset = it.getDouble("offset"), calibrationVersion = it.getInt("version")) } ?: r }
     }
-    @Synchronized fun archive(binding: Binding) = save("binding", binding.id, bindingJson(binding.copy(archived = true, revision = binding.revision + 1)))
+    @Synchronized fun archive(binding: Binding) {
+        require(bindings().any { it == binding && !it.archived }) { "Stale binding; no configuration resurrected" }
+        save("binding", binding.id, bindingJson(binding.copy(archived = true, revision = binding.revision + 1)))
+    }
     @Synchronized fun assign(sensorId: String, positionId: String, at: Long) {
         store().transaction { assignInside(sensorId, positionId, at) }
     }
@@ -209,12 +212,14 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
             store().execute("DELETE FROM gaps WHERE observed<?", now - days * 86_400_000L)
         }
     }
-    @Synchronized fun export(write: (String) -> Unit) {
+    @Synchronized fun export(authorize: () -> Unit = {}, write: (String) -> Unit) {
+        authorize()
         write(JSONObject().put("format", "nia-environment-history").put("version", 1).toString())
         write(JSONObject().put("knownDroppedReports", recordedDrops()).put("coverage", "Reception history only; physical measurement age and unobserved gaps unknown").toString())
-        for (kind in listOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration", "qualification")) entities(kind).forEach { write(JSONObject().put("kind", kind).put("entity", it).toString()) }
+        for (kind in listOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration", "qualification")) { authorize(); entities(kind).forEach { write(JSONObject().put("kind", kind).put("entity", it).toString()) } }
         var time = Long.MAX_VALUE; var id = "~"
         while (true) {
+            authorize()
             val page = page(time, id)
             if (page.isEmpty()) break
             page.forEach(write)

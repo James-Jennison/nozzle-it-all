@@ -95,6 +95,12 @@ class EnvironmentalTest {
         gate.begin(Purpose.DISCOVERY, emptyList(), 1_000_000_000)
         assertEquals(3, identifiers) // Process-session nonce is lazy until an actual operation.
     }
+    @Test fun oversizedControlIsPreservedWithoutInvokingEntropy() {
+        val path = file(); path.parentFile.mkdirs(); val original = "x".repeat(5000); path.writeText(original)
+        val gate = EnvironmentalGate(path, newIdentifier = { error("No entropy during recovery startup") })
+        assertEquals(EnvironmentalState.DISABLED_RECOVERY, gate.state)
+        assertEquals(original, path.readText())
+    }
     @Test fun grantRejectsOtherIssuerRevisionExpirationAndRevocation() {
         var now = 1L
         val g = EnvironmentalGate(file()) { now }; val other = EnvironmentalGate(file()) { now }
@@ -406,7 +412,67 @@ class EnvironmentalTest {
         assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
         c.enable(); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
     }
-    @Test fun foregroundLossDuringHistoryPreparationCannotProceedToRetentionOrRadio() {
+    @Test fun uiStopCancelsQueuedOlderStartWithoutWaitingForPersistenceMonitor() {
+        var opens = 0; var radios = 0; val path = file()
+        val c = EnvironmentalCoordinator(path, EnvironmentalHistory(SqlStoreFactory { opens++; error("No history admitted") }), { radios++; error("No radio admitted") })
+        c.foreground(true); c.enable(); val before = path.readText()
+        lateinit var work: Job; lateinit var cleanup: Job
+        synchronized(c) {
+            work = c.requestOperationAsync(Purpose.COLLECTION)
+            cleanup = c.requestStopAsync(disable = true)
+            assertEquals(before, path.readText()) // Main prelude did not persist under the externally held monitor.
+            assertThrows(IllegalStateException::class.java) { c.enable() }
+            assertThrows(IllegalStateException::class.java) { c.start() }
+        }
+        runBlocking { withTimeout(5000) { work.join(); cleanup.join() } }
+        assertEquals(0, opens); assertEquals(0, radios)
+        assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
+        c.close()
+    }
+    @Test fun recoveryDeniesEveryHistoryEntryWithoutOpeningStore() {
+        val path = file(); path.parentFile.mkdirs(); path.writeText("corrupt")
+        var opens = 0
+        val c = EnvironmentalCoordinator(path, EnvironmentalHistory(SqlStoreFactory { opens++; error("Recovery must not open history") }), { error("No radio") })
+        assertThrows(EnvironmentalRecoveryException::class.java) { c.loadHistory() }
+        assertThrows(EnvironmentalRecoveryException::class.java) { c.savedBindings() }
+        assertThrows(EnvironmentalRecoveryException::class.java) { c.metadata("sensor") }
+        assertThrows(EnvironmentalRecoveryException::class.java) { c.retention() }
+        assertThrows(EnvironmentalRecoveryException::class.java) { c.export {} }
+        assertEquals(0, opens); assertEquals("corrupt", path.readText()); c.close()
+    }
+    @Test fun ownedDeleteFencesHistoryAndEnableBeforeIoCanAcquireMonitor() {
+        val path = file(); val h = history()
+        val c = EnvironmentalCoordinator(path, h, { error("No radio") }); c.enable()
+        lateinit var cleanup: Job
+        synchronized(c) {
+            cleanup = c.requestDeleteAsync()
+            assertThrows(IllegalStateException::class.java) { c.enable() }
+            assertThrows(EnvironmentalRecoveryException::class.java) { c.loadHistory() }
+            assertThrows(EnvironmentalRecoveryException::class.java) { c.export {} }
+        }
+        runBlocking { withTimeout(5000) { cleanup.join() } }
+        assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
+        assertTrue(c.view.value.status.startsWith("Environmental data deleted"))
+        assertTrue(c.loadHistory().isEmpty()); c.enable(); c.close()
+    }
+    @Test fun foregroundReleaseKeepsTheSameCoordinatorReusableWithoutAutoRestart() {
+        val starts = java.util.concurrent.atomic.AtomicInteger(); val closes = java.util.concurrent.atomic.AtomicInteger()
+        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _, _ ->
+            val n = starts.incrementAndGet()
+            object : RadioSession { override val adapterDescription = "fixture-$n"; override fun close() { closes.incrementAndGet() } }
+        } })
+        fun waitUntil(test: () -> Boolean) { val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5); while (!test() && System.nanoTime() < deadline) Thread.sleep(1); assertTrue(test()) }
+        c.foreground(true); c.enable(); c.discover(); waitUntil { c.view.value.status.contains("fixture-1") }
+        val cleanup = c.releaseForegroundAsync()
+        runBlocking { withTimeout(5000) { cleanup?.join() } }
+        waitUntil { c.view.value.state == EnvironmentalState.ENABLED_IDLE }
+        assertEquals(1, closes.get()); c.foreground(true); Thread.sleep(100); assertEquals(1, starts.get())
+        c.discover(); waitUntil { c.view.value.status.contains("fixture-2") }
+        c.stop(); assertEquals(2, closes.get()); c.close()
+    }
+    @Test fun foregroundLossDuringHistoryPreparationCannotProceedToRetentionOrRadio() = checkHistoryPreparationCancellation(false)
+    @Test fun ordinaryUiStopDuringHistoryPreparationCannotProceedToRetentionOrRadio() = checkHistoryPreparationCancellation(true)
+    private fun checkHistoryPreparationCancellation(stop: Boolean) {
         val path = Files.createTempFile("nia-env-preparation", ".db").toFile()
         val hold = AtomicBoolean(false); val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val deletes = java.util.concurrent.atomic.AtomicInteger(); val radios = java.util.concurrent.atomic.AtomicInteger()
@@ -428,7 +494,9 @@ class EnvironmentalTest {
         val starter = Thread { try { c.start() } catch (t: Throwable) { failed.set(t) } }
         try {
             starter.start(); assertTrue(entered.await(5, TimeUnit.SECONDS))
-            c.foreground(false); release.countDown(); starter.join(5000)
+            val cleanup = if (stop) c.requestStopAsync() else { c.foreground(false); null }
+            release.countDown(); starter.join(5000)
+            runBlocking { withTimeout(5000) { cleanup?.join() } }
             assertFalse(starter.isAlive); assertTrue(failed.get() is IllegalStateException)
             assertEquals(0, deletes.get()); assertEquals(0, radios.get())
             assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
@@ -555,6 +623,14 @@ class EnvironmentalTest {
             h.retain(31 * 86400000L)
             assertEquals(0L, h.eventCount())
             assertEquals("inserted", h.append(observation("after-retention"), "inc"))
+        }
+    }
+    @Test fun staleArchiveCannotResurrectADeletedBinding() {
+        history().use { h ->
+            val old = h.bind(Candidate("fixture", "govee-ble", "H5100"), "fixture")
+            h.deleteAll()
+            assertThrows(IllegalArgumentException::class.java) { h.archive(old) }
+            assertTrue(h.bindings().isEmpty()); assertTrue(h.entities("sensor").isEmpty())
         }
     }
 }

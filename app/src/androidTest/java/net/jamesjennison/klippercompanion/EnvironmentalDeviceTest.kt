@@ -28,9 +28,14 @@ class EnvironmentalDeviceTest {
         assertFalse(File(context.filesDir, "environment/history.db").exists())
         compose.onNodeWithTag("environment-history").performScrollTo().performClick()
         compose.waitUntil(5000) { File(context.filesDir, "environment/history.db").exists() }
+        val monitor = (context.applicationContext as NozzleApp).environment
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("environment-discover").performScrollTo().assertExists()
+        assertSame(monitor, (context.applicationContext as NozzleApp).environment)
+        compose.onNodeWithText("Delete environmental data…").performScrollTo().performClick()
+        compose.onNodeWithText("Confirm delete / resume").performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-enable").fetchSemanticsNodes().isNotEmpty() }
     }
     @Test fun actualAndroidDatabaseTransactionsPagingAndDelete() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -73,6 +78,7 @@ class EnvironmentalDeviceTest {
         assertTrue(compose.onAllNodes(hasText("Android BLE · radio", substring = true)).fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("nav-4").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-discover").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("environment-discover").performScrollTo().assertExists()
         val history = EnvironmentalHistory(SqlStoreFactory { AndroidEnvironmentalStore(File(context.filesDir, "environment/history.db")) })
         history.use { h ->

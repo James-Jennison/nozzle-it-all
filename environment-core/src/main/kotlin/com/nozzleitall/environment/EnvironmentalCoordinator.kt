@@ -8,6 +8,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.update
 
 /** dropped: this coordinator's cumulative ingress-overflow count (including discovery).
@@ -23,8 +24,15 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     val view = mutable.asStateFlow()
     @Volatile private var operation: Job? = null
     @Volatile private var operationScope: CoroutineScope? = null
-    private class RunControl(val job: Job, val revoked: AtomicBoolean = AtomicBoolean(false))
+    private class PreparationControl(val serial: Long, val epoch: Long, val revoked: AtomicBoolean = AtomicBoolean(false)) {
+        @Volatile var worker: Job? = null
+    }
+    private class RunControl(val job: Job, val revoked: AtomicBoolean, val serial: Long, val epoch: Long)
+    private class StopRequest(val serial: Long, val disable: Boolean, val reason: String)
     @Volatile private var runControl: RunControl? = null
+    private val preparations = AtomicReference<PreparationControl?>()
+    private val commands = AtomicLong()
+    private val stoppedThrough = AtomicLong()
     private var session: RadioSession? = null
     private var gapSession: String? = null
     private var gapDropBase = 0L
@@ -32,39 +40,68 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     private val visibilityEpoch = AtomicLong()
     private val disableRequested = AtomicBoolean(false)
     private val disableInFlight = AtomicInteger()
+    private val deleteInFlight = AtomicInteger()
     private val droppedReports = AtomicLong()
     private val disposed = AtomicBoolean(false)
     private val collector get() = gate.collectorId
     private val sequence = AtomicLong()
     fun foreground(visible: Boolean) {
-        foreground.set(visible)
-        if (!visible) {
-            visibilityEpoch.incrementAndGet()
-            val current = runControl ?: return
+        if (visible) foreground.set(true) else loseForeground()
+    }
+    private fun loseForeground(): PreparationControl? {
+        foreground.set(false)
+        val epoch = visibilityEpoch.incrementAndGet()
+        val preparation = preparations.get()?.takeIf { it.epoch < epoch }
+        preparation?.revoked?.set(true)
+        preparation?.worker?.cancel()
+        if (preparation != null) preparations.compareAndSet(preparation, null)
+        val current = runControl?.takeIf { it.epoch < epoch }
+        if (current != null) {
             current.revoked.set(true)
             mutable.update { if (runControl === current) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — app not visible; cleanup pending") else it }
             operationScope?.launch { synchronized(this@EnvironmentalCoordinator) {
                 if (runControl === current) stop("Stopped — app not visible; press Start to resume")
             } }
+        } else if (preparation != null) mutable.update {
+            if (!foreground.get() && runControl == null) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Collection preparation revoked — no radio; press Start to retry") else it
         }
+        return preparation
     }
     @Synchronized fun enable() {
         check(!disposed.get() && operation == null)
+        check(preparations.get() == null) { "Preparation cleanup is pending" }
         check(disableInFlight.get() == 0) { "Disable cleanup is pending" }
         check(!disableRequested.get() || gate.state == EnvironmentalState.DISABLED)
         gate.enable(); if (disableInFlight.get() == 0) disableRequested.set(false)
         mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened")
     }
     fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
+        finishStop(prepareStop(reason, disable))
+    }
+    private fun prepareStop(reason: String, disable: Boolean): StopRequest {
         if (disable) disableInFlight.incrementAndGet()
+        val serial = commands.incrementAndGet()
+        stoppedThrough.updateAndGet { maxOf(it, serial) }
+        val target = runControl?.takeIf { it.serial < serial }
+        val preparation = preparations.get()?.takeIf { it.serial < serial }
+        if (disable) disableRequested.set(true) // Global Off intent supersedes every run; ordinary Stop owns only target.
+        target?.revoked?.set(true)
+        preparation?.revoked?.set(true)
+        // Main-safe prelude, before dispatcher scheduling or waiting for any persistence lock.
+        if (target != null || preparation != null) mutable.update {
+            if ((target != null && runControl === target) || (preparation != null && (preparations.get() === preparation || runControl?.revoked === preparation.revoked)))
+                it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") else it
+        }
+        preparation?.worker?.cancel()
+        if (preparation != null) preparations.compareAndSet(preparation, null)
+        return StopRequest(serial, disable, reason)
+    }
+    private fun finishStop(request: StopRequest) {
+        val disable = request.disable; val reason = request.reason
         try {
-            val target = runControl
-            if (disable) disableRequested.set(true) // Global Off intent supersedes every run; ordinary Stop owns only target.
-            target?.revoked?.set(true)
-            // Hide live readings immediately, before durable revocation/cancellation.
-            if (target != null) mutable.update { if (runControl === target) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") else it }
             synchronized(this) {
-                if (!disable && runControl !== target) return // This request never owns a newer Start.
+                if (!disable && ((runControl?.serial ?: Long.MIN_VALUE) > request.serial ||
+                    (runControl == null && (preparations.get()?.serial ?: Long.MIN_VALUE) > request.serial))) return // Never owns a younger gesture.
                 if (disable) disableRequested.set(true)
                 runControl?.revoked?.set(true)
                 try { gate.revoke(disable) }
@@ -83,30 +120,90 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             }
         } finally { if (disable) disableInFlight.decrementAndGet() }
     }
-    @Synchronized fun discover() = begin(Purpose.DISCOVERY, emptyList())
-    @Synchronized fun start() {
-        val preparationEpoch = visibilityEpoch.get()
-        fun current() = foreground.get() && visibilityEpoch.get() == preparationEpoch && disableInFlight.get() == 0 &&
-            !disableRequested.get() && !disposed.get() && gate.state == EnvironmentalState.ENABLED_IDLE
-        check(current())
-        val bindings = history.bindings().filterNot { it.archived }
-        check(current()) { "Collection preparation was revoked" }
-        require(bindings.isNotEmpty()) { "Save a sensor first" }
-        // Unknown firmware/envelopes permit unassigned diagnostic reception only, never dryer deployment.
-        val qualification = history.assignedQualificationRadios(bindings, platformIdentity, System.currentTimeMillis())
-        check(current()) { "Collection preparation was revoked" }
-        history.retain(System.currentTimeMillis(), limits.retentionDays)
-        begin(Purpose.COLLECTION, bindings, qualification)
+    /** Explicit UI gesture: immediate atomics on Main; finite owned cleanup survives composition cancellation. */
+    fun requestStopAsync(reason: String = "Stopped — no collection", disable: Boolean = false): Job {
+        val request = prepareStop(reason, disable)
+        val owner = SupervisorJob()
+        return CoroutineScope(owner + Dispatchers.IO).launch {
+            try { finishStop(request) }
+            catch (_: Exception) { synchronized(this@EnvironmentalCoordinator) {
+                if (gate.state == EnvironmentalState.DISABLED_RECOVERY && runControl == null)
+                    mutable.update { it.copy(status = "Stop requested — persistence/recovery unavailable; no collection") }
+            } }
+            finally { owner.cancel() }
+        }
     }
-    private fun begin(purpose: Purpose, bindings: List<Binding>, qualification: QualificationAdmission? = null) {
-        val visibleEpoch = visibilityEpoch.get()
-        check(foreground.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get())
+    /** A reusable app-owned coordinator releases a panel's resources without becoming permanently disposed. */
+    fun releaseForegroundAsync(): Job? {
+        val preparation = loseForeground()
+        val epoch = visibilityEpoch.get()
+        if (operation == null && !history.isOpen && preparation == null) return null
+        val owner = SupervisorJob()
+        return CoroutineScope(owner + Dispatchers.IO).launch {
+            try { synchronized(this@EnvironmentalCoordinator) {
+                if (!foreground.get() && visibilityEpoch.get() == epoch) {
+                    try { if (operation != null) stop("Stopped — app not visible; press Start to resume") }
+                    finally { history.close() }
+                }
+            } } catch (_: Exception) { /* Gate already closed; no hidden retry or provider restart. */ }
+            finally { owner.cancel() }
+        }
+    }
+    private fun preparationCurrent(p: PreparationControl) = preparations.get() === p && p.serial > stoppedThrough.get() && !p.revoked.get() && foreground.get() &&
+        visibilityEpoch.get() == p.epoch && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get()
+    private fun reservePreparation(): PreparationControl {
+        val p = PreparationControl(commands.incrementAndGet(), visibilityEpoch.get())
+        check(foreground.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get() && mutable.value.state == EnvironmentalState.ENABLED_IDLE)
+        check(preparations.compareAndSet(null, p)) { "Another preparation is pending" }
+        if (!preparationCurrent(p)) { preparations.compareAndSet(p, null); error("Preparation revoked") }
+        mutable.update { if (preparations.get() === p) it.copy(status = "Preparing — Stop / cancel remains available") else it }
+        return p
+    }
+    fun discover() = runSynchronousPreparation(Purpose.DISCOVERY)
+    fun start() = runSynchronousPreparation(Purpose.COLLECTION)
+    private fun runSynchronousPreparation(purpose: Purpose) {
+        val p = reservePreparation()
+        try { runPreparation(purpose, p) } finally { preparations.compareAndSet(p, null) }
+    }
+    /** Reserve gesture ownership on Main before scheduling any IO, so a later Stop cancels queued older work. */
+    fun requestOperationAsync(purpose: Purpose): Job {
+        val p = reservePreparation()
+        val owner = SupervisorJob()
+        val worker = CoroutineScope(owner + Dispatchers.IO).launch {
+            try { runPreparation(purpose, p) }
+            catch (_: CancellationException) { /* Revoked gesture; no automatic retry. */ }
+            catch (e: Exception) { synchronized(this@EnvironmentalCoordinator) {
+                if (preparations.get() === p && runControl == null) mutable.update { it.copy(state = gate.state,
+                    status = if (e is QualificationUnavailableException) e.message!! else "Preparation unavailable or cancelled — no automatic retry") }
+            } }
+        }
+        p.worker = worker
+        worker.invokeOnCompletion { preparations.compareAndSet(p, null); owner.cancel() }
+        if (p.revoked.get()) worker.cancel()
+        return worker
+    }
+    private fun runPreparation(purpose: Purpose, p: PreparationControl) = synchronized(this) {
+        check(preparationCurrent(p) && gate.state == EnvironmentalState.ENABLED_IDLE) { "Preparation revoked" }
+        if (purpose == Purpose.DISCOVERY) begin(purpose, emptyList(), p = p)
+        else {
+            val bindings = history.bindings().filterNot { it.archived }
+            check(preparationCurrent(p)) { "Collection preparation was revoked" }
+            require(bindings.isNotEmpty()) { "Save a sensor first" }
+            val qualification = history.assignedQualificationRadios(bindings, platformIdentity, System.currentTimeMillis())
+            check(preparationCurrent(p)) { "Collection preparation was revoked" }
+            history.retain(System.currentTimeMillis(), limits.retentionDays)
+            begin(purpose, bindings, qualification, p)
+        }
+    }
+    private fun begin(purpose: Purpose, bindings: List<Binding>, qualification: QualificationAdmission? = null, p: PreparationControl) {
+        val visibleEpoch = p.epoch
+        check(preparationCurrent(p))
         val durationMillis = if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1000L else
             minOf(86_400_000L, (qualification?.validUntil ?: Long.MAX_VALUE) - System.currentTimeMillis())
         require(durationMillis > 0) { "Physical qualification expired" }
         val grant = gate.begin(purpose, bindings, durationMillis * 1_000_000L)
         val job = SupervisorJob(); operation = job
-        val control = RunControl(job); runControl = control
+        val control = RunControl(job, p.revoked, p.serial, p.epoch); runControl = control
         val revocationRequested = control.revoked
         val scope = CoroutineScope(job + Dispatchers.IO)
         operationScope = scope
@@ -123,13 +220,13 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             try {
                 synchronized(this@EnvironmentalCoordinator) {
                     if (runControl !== control) return@launch
-                    if (!foreground.get() || disableInFlight.get() != 0 || disableRequested.get() || visibilityEpoch.get() != visibleEpoch || revocationRequested.get()) {
+                    if (control.serial <= stoppedThrough.get() || !foreground.get() || disableInFlight.get() != 0 || disableRequested.get() || visibilityEpoch.get() != visibleEpoch || revocationRequested.get()) {
                         stop("Stopped — app visibility changed during preparation")
                         return@launch
                     }
                 }
                 val request = BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet(), qualification?.radios?.singleOrNull()) {
-                    job.isActive && !revocationRequested.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
+                    job.isActive && control.serial > stoppedThrough.get() && !revocationRequested.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
                 }
                 val opened = transport().start(request, { report ->
                     // OS scan callbacks may be Main: no locks, disk IO, parsing, or coroutine-per-report here.
@@ -206,16 +303,27 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         history.bind(candidate, name)
         mutable.value = mutable.value.copy(bindings = history.bindings(), status = "Saved only — no collection")
     }
-    @Synchronized fun loadHistory(before: Long = Long.MAX_VALUE, id: String = "~") = history.page(before, id, limits.pageSize)
-    @Synchronized fun savedBindings(): List<Binding> = history.bindings().also { mutable.value = mutable.value.copy(bindings = it, recordedDrops = history.recordedDrops()) }
-    @Synchronized fun archive(binding: Binding) { stop(); history.archive(binding); savedBindings() }
-    fun export(write: (String) -> Unit) { history.export(write) }
-    @Synchronized fun retention() { history.retain(System.currentTimeMillis(), limits.retentionDays) }
-    @Synchronized fun metadata(kind: String) = history.entities(kind)
-    @Synchronized fun rename(binding: Binding, name: String) { history.renameSensor(binding.sensorId, name) }
-    @Synchronized fun assign(binding: Binding, positionId: String) { stop("Draft assignment saved — qualification required"); history.assign(binding.sensorId, positionId, System.currentTimeMillis()) }
-    @Synchronized fun reside(spoolId: String, positionId: String) { history.reside(spoolId, positionId, System.currentTimeMillis()) }
+    private fun historyAccess(): String {
+        if (deleteInFlight.get() != 0) throw EnvironmentalRecoveryException()
+        val identity = gate.historyIdentity()
+        if (deleteInFlight.get() != 0 || !gate.historyIdentityValid(identity)) throw EnvironmentalRecoveryException()
+        return identity
+    }
+    @Synchronized fun loadHistory(before: Long = Long.MAX_VALUE, id: String = "~"): List<String> { historyAccess(); return history.page(before, id, limits.pageSize) }
+    @Synchronized fun savedBindings(): List<Binding> { historyAccess(); return history.bindings().also { mutable.value = mutable.value.copy(bindings = it, recordedDrops = history.recordedDrops()) } }
+    @Synchronized fun archive(binding: Binding) { historyAccess(); stop(); history.archive(binding); savedBindings() }
+    fun export(write: (String) -> Unit) {
+        val identity = historyAccess()
+        fun authorize() { if (deleteInFlight.get() != 0 || !gate.historyIdentityValid(identity)) throw EnvironmentalRecoveryException() }
+        history.export(authorize = ::authorize) { line -> authorize(); write(line) }
+    }
+    @Synchronized fun retention() { historyAccess(); history.retain(System.currentTimeMillis(), limits.retentionDays) }
+    @Synchronized fun metadata(kind: String): List<org.json.JSONObject> { historyAccess(); return history.entities(kind) }
+    @Synchronized fun rename(binding: Binding, name: String) { historyAccess(); history.renameSensor(binding.sensorId, name) }
+    @Synchronized fun assign(binding: Binding, positionId: String) { historyAccess(); stop("Draft assignment saved — qualification required"); history.assign(binding.sensorId, positionId, System.currentTimeMillis()) }
+    @Synchronized fun reside(spoolId: String, positionId: String) { historyAccess(); history.reside(spoolId, positionId, System.currentTimeMillis()) }
     @Synchronized fun configureRoom(binding: Binding, equipmentName: String, positionName: String) {
+        historyAccess()
         stop("Stopped — editing draft assignment")
         val existingEquipment = history.entities("equipment").firstOrNull { it.getString("name") == equipmentName && it.optString("type") == "room" }
         val equipment = Equipment(id = existingEquipment?.getString("id") ?: newId(), name = equipmentName)
@@ -225,13 +333,28 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         mutable.value = mutable.value.copy(status = "Saved draft assignment — thermal qualification required before collection")
     }
     @Synchronized fun calibrate(binding: Binding, channel: Channel, offset: Double) {
+        historyAccess()
         stop("Stopped — editing calibration")
         history.calibrate(binding, channel, offset)
         mutable.value = mutable.value.copy(status = "Calibration saved — press Start for a new operation")
     }
     @Synchronized fun deleteAll() {
-        // Stop always closes the in-memory gate/cancels owned work, even if its persistence fails.
-        runCatching { stop(disable = true) }
+        deleteInFlight.incrementAndGet(); disableInFlight.incrementAndGet()
+        try { runCatching { stop(disable = true) }; deleteUnderMonitor() }
+        finally { deleteInFlight.decrementAndGet(); disableInFlight.decrementAndGet() }
+    }
+    /** Deletion belongs to the explicit gesture, not to a cancellable composition scope. */
+    fun requestDeleteAsync(): Job {
+        deleteInFlight.incrementAndGet(); disableInFlight.incrementAndGet()
+        val request = prepareStop("Deletion requested — cleanup pending", true)
+        val owner = SupervisorJob()
+        return CoroutineScope(owner + Dispatchers.IO).launch {
+            try { runCatching { finishStop(request) }; synchronized(this@EnvironmentalCoordinator) { deleteUnderMonitor() } }
+            catch (_: Exception) { /* Fixed-safe cleanup status is published by deleteUnderMonitor. */ }
+            finally { deleteInFlight.decrementAndGet(); disableInFlight.decrementAndGet(); owner.cancel() }
+        }
+    }
+    private fun deleteUnderMonitor() {
         try {
             // A thrown intent commit exits this try: no store purge is reached.
             gate.deleteIntent()
@@ -247,13 +370,14 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     /** Composition disposal is Main: close only owned resources on IO, never create a worker for untouched off/idle. */
     fun closeAsync() {
         disposed.set(true)
-        foreground(false)
-        if (operation == null && !history.isOpen) return
+        val preparation = loseForeground()
+        if (operation == null && !history.isOpen && preparation == null) return
         val cleanupOwner = SupervisorJob()
         CoroutineScope(cleanupOwner + Dispatchers.IO).launch { try { close() } finally { cleanupOwner.cancel() } }
     }
     @Synchronized override fun close() {
         disposed.set(true)
+        val p = preparations.getAndSet(null); p?.revoked?.set(true); p?.worker?.cancel()
         try { if (operation != null) stop() } finally { history.close() }
     }
 }

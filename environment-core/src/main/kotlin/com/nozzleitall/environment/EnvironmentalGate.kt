@@ -22,15 +22,21 @@ class EnvironmentalGate(private val file: File, private val newIdentifier: () ->
     val bootId: String by lazy { newIdentifier() }
     private val session get() = bootId
     private var epoch = 0L
-    var incarnation: String = ""; private set
+    @Volatile var incarnation: String = ""; private set
     var collectorId: String = ""; private set
-    var state: EnvironmentalState = EnvironmentalState.DISABLED; private set
+    @Volatile var state: EnvironmentalState = EnvironmentalState.DISABLED; private set
     var persistenceFailure = false; private set
     var deletePending = false; private set
     init {
         if (file.exists()) runCatching {
-            require(file.length() <= 4096)
-            val record = JSONObject(file.readText())
+            val bounded = ByteArray(4097)
+            val size = file.inputStream().use { input ->
+                var used = 0
+                while (used < bounded.size) { val n = input.read(bounded, used, bounded.size - used); if (n < 0) break; used += n }
+                used
+            }
+            require(size <= 4096)
+            val record = JSONObject(String(bounded, 0, size, Charsets.UTF_8))
             val body = record.getString("body")
             require(record.getString("sha256") == hash(body))
             val control = JSONObject(body)
@@ -48,6 +54,9 @@ class EnvironmentalGate(private val file: File, private val newIdentifier: () ->
         }.onFailure { state = EnvironmentalState.DISABLED_RECOVERY }
     }
     @Synchronized fun enable() { check(state != EnvironmentalState.DISABLED_RECOVERY); persist("enabled"); state = EnvironmentalState.ENABLED_IDLE }
+    @Synchronized fun historyIdentity(): String { if (state == EnvironmentalState.DISABLED_RECOVERY) throw EnvironmentalRecoveryException(); return incarnation }
+    // Called while the history mutex may be held: no gate lock, avoiding gate->history / history->gate inversion.
+    fun historyIdentityValid(identity: String): Boolean = state != EnvironmentalState.DISABLED_RECOVERY && incarnation == identity
     @Synchronized fun revoke(disable: Boolean = false) {
         check(state != EnvironmentalState.DISABLED_RECOVERY) { "Explicit environmental cleanup/recovery required; control preserved" }
         epoch++

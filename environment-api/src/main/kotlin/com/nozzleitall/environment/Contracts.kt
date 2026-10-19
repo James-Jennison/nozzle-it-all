@@ -27,6 +27,7 @@ data class CapabilityQualification(val id: String = newId(), val bindingId: Stri
     val verifiedAt: Long, val expiresAt: Long, val evidence: Map<String, String>, val archived: Boolean = false)
 data class QualificationAdmission(val radios: Set<String>, val validUntil: Long)
 class QualificationUnavailableException : IllegalStateException("Assigned deployment unavailable — position, firmware, platform or radio qualification missing/changed; owner-reviewed physical evidence required")
+class EnvironmentalRecoveryException : IllegalStateException("Environmental recovery required — only explicit Delete / resume cleanup is available")
 data class Position(val id: String = newId(), val equipmentId: String, val name: String,
                     val minC: Double? = null, val maxC: Double? = null)
 data class Placement(val id: String = newId(), val sensorId: String, val positionId: String,

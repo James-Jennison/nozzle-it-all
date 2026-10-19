@@ -30,14 +30,18 @@ class JdbcEnvironmentalStore(file: File) : SqlStore {
         val s = statements.getOrPut(sql) { connection.prepareStatement(sql) }
         s.clearParameters(); args.forEachIndexed { i, v -> s.setObject(i + 1, v) }; return s
     }
+    private fun discardFailed(sql: String, error: java.sql.SQLException) {
+        try { statements.remove(sql)?.close() } catch (cleanup: java.sql.SQLException) { error.addSuppressed(cleanup) }
+    }
     override fun execute(sql: String, vararg args: Any?) {
         if (sql == "VACUUM") { statements.values.forEach { it.close() }; statements.clear() }
         if (sql.startsWith("PRAGMA") || sql == "VACUUM") connection.prepareStatement(sql).use { s -> args.forEachIndexed { i, v -> s.setObject(i + 1, v) }; s.execute() }
-        else { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+        else try { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+        catch (e: java.sql.SQLException) { discardFailed(sql, e); throw e }
     }
-    override fun query(sql: String, vararg args: Any?): List<List<String?>> = statement(sql, args).executeQuery().use { r ->
-        buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) }
-    }
+    override fun query(sql: String, vararg args: Any?): List<List<String?>> = try {
+        statement(sql, args).executeQuery().use { r -> buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) } }
+    } catch (e: java.sql.SQLException) { discardFailed(sql, e); throw e }
     override fun <T> transaction(block: () -> T): T {
         connection.autoCommit = false
         var failed: Throwable? = null

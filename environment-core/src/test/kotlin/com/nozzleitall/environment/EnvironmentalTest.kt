@@ -18,7 +18,11 @@ class EnvironmentalTest {
             if (statements.size >= 32 && sql !in statements) { val first = statements.keys.first(); statements.remove(first)!!.close() }
             return statements.getOrPut(sql) { c.prepareStatement(sql) }.also { s -> s.clearParameters(); args.forEachIndexed { i, a -> s.setObject(i + 1, a) } }
         }
-        override fun execute(sql: String, vararg args: Any?) { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+        override fun execute(sql: String, vararg args: Any?) {
+            if (sql == "VACUUM") { statements.values.forEach { it.close() }; statements.clear() }
+            if (sql.startsWith("PRAGMA") || sql == "VACUUM") c.prepareStatement(sql).use { s -> args.forEachIndexed { i, a -> s.setObject(i + 1, a) }; s.execute() }
+            else { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+        }
         override fun query(sql: String, vararg args: Any?): List<List<String?>> = statement(sql, args).executeQuery().use { r -> buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) } }
         override fun <T> transaction(block: () -> T): T { c.autoCommit = false; try { val v = block(); c.commit(); return v } catch (e: Throwable) { c.rollback(); throw e } finally { c.autoCommit = true } }
         override fun close() { statements.values.forEach { it.close() }; c.close() }
@@ -169,18 +173,23 @@ class EnvironmentalTest {
             if (wait > 0) java.util.concurrent.locks.LockSupport.parkNanos(wait)
         }
         println("ENV_WARMUP reports_per_second=100 cpu_percent_one_core=${(os.processCpuTime - warmCpu) * 100.0 / (System.nanoTime() - warmStart)} includes_jit=true")
+        Thread.sleep(300)
+        val eventsBefore = h.eventCount()
         val droppedBefore = c.view.value.dropped
         val memoryBefore = rss(); val cpuBefore = os.processCpuTime; val start = System.nanoTime()
-        repeat(1000) { i ->
+        var peakMemory = memoryBefore
+        repeat(3000) { i ->
             report()
+            if (i % 100 == 0) peakMemory = maxOf(peakMemory, rss())
             val wait = start + (i + 1) * 10_000_000L - System.nanoTime()
             if (wait > 0) java.util.concurrent.locks.LockSupport.parkNanos(wait)
         }
         Thread.sleep(500)
         val elapsed = System.nanoTime() - start
         val cpuPercent = (os.processCpuTime - cpuBefore) * 100.0 / elapsed
-        val memoryIncrease = rss() - memoryBefore
+        val memoryIncrease = maxOf(peakMemory, rss()) - memoryBefore
         assertTrue(c.view.value.latest.isNotEmpty())
+        assertEquals(eventsBefore + 3000, h.eventCount())
         c.stop(); val latest = h.page().first(); report(); Thread.sleep(100)
         assertEquals(latest, h.page().first())
         println("ENV_BENCHMARK reports_per_second=100 cpu_percent_one_core=$cpuPercent rss_increase_bytes=$memoryIncrease dropped=${c.view.value.dropped - droppedBefore} physical_radio=false")

@@ -120,6 +120,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         }
     }
     @Synchronized fun recordedDrops(): Long = store().query("SELECT COALESCE(SUM(dropped),0) FROM gaps").first().first()!!.toLong()
+    @Synchronized fun eventCount(): Long = store().query("SELECT COUNT(*) FROM events").first().first()!!.toLong()
     private fun insert(o: Observation, currentIncarnation: String): String {
         require(o.incarnation == currentIncarnation)
         require(o.readings.size in 1..16)

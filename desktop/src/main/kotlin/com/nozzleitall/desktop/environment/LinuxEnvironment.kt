@@ -30,7 +30,11 @@ class JdbcEnvironmentalStore(file: File) : SqlStore {
         val s = statements.getOrPut(sql) { connection.prepareStatement(sql) }
         s.clearParameters(); args.forEachIndexed { i, v -> s.setObject(i + 1, v) }; return s
     }
-    override fun execute(sql: String, vararg args: Any?) { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+    override fun execute(sql: String, vararg args: Any?) {
+        if (sql == "VACUUM") { statements.values.forEach { it.close() }; statements.clear() }
+        if (sql.startsWith("PRAGMA") || sql == "VACUUM") connection.prepareStatement(sql).use { s -> args.forEachIndexed { i, v -> s.setObject(i + 1, v) }; s.execute() }
+        else { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+    }
     override fun query(sql: String, vararg args: Any?): List<List<String?>> = statement(sql, args).executeQuery().use { r ->
         buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) }
     }

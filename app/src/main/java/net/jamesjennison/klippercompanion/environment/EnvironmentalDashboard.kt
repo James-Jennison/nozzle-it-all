@@ -83,7 +83,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                             else Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.CenterStart) {
                                 DashboardText("No recorded temperature trend yet", MaterialTheme.typography.bodySmall, MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            DashboardText(reading?.let { "Received ${time(it.time)}" } ?: "Waiting for a reading", MaterialTheme.typography.bodySmall, MaterialTheme.colorScheme.onSurfaceVariant)
+                            DashboardText(reading?.let { "${if (historyMode) "Saved reception" else "Received"} ${time(it.time)}" } ?: if (historyMode) "No saved reading in this page" else "Waiting for a reading", MaterialTheme.typography.bodySmall, MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }

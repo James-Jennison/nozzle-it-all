@@ -85,7 +85,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         if (setup) Card(Modifier.fillMaxWidth()) {
         Txt("Govee names & discovery", Nz.type.title)
         Txt("Import names once. Discovery reuses them and adds uniquely matched sensors automatically.", Nz.type.bodySmall)
-        GoveeNameImport(directory)
+        if (enabled) GoveeNameImport(directory)
         if (enabled) NzButton("Disable monitoring", { stop(disable = true) }, enabled = !busy && !stopping)
         if (v.candidates.isNotEmpty()) {
             v.candidates.filter { it.protocol == "govee-ble" && v.bindings.none { b -> !b.archived && b.address.equals(it.address, true) } }.forEach { candidate -> key(candidate.address) { Column {

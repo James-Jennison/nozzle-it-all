@@ -22,7 +22,8 @@ class EnvironmentalDashboardDeviceTest {
         val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
         val state = mutableStateOf(EnvironmentalView(EnvironmentalState.DISCOVERING, bindings = listOf(binding),
             discovery = mapOf(binding.address to DiscoveryReception(listOf(Reading(Channel.TEMPERATURE, 24.0)), 1000, null))))
-        compose.setContent { MaterialTheme { EnvironmentalDashboard(state.value, emptyList()) } }
+        val history = mutableStateOf(false)
+        compose.setContent { MaterialTheme { EnvironmentalDashboard(state.value, emptyList(), historyMode = history.value) } }
         compose.onNodeWithText("24.0°C").assertExists()
         compose.runOnIdle {
             state.value = state.value.copy(discovery = mapOf(binding.address to
@@ -32,6 +33,12 @@ class EnvironmentalDashboardDeviceTest {
         compose.runOnIdle { state.value = state.value.copy(state = EnvironmentalState.ENABLED_IDLE, discovery = emptyMap()) }
         compose.onNodeWithText("25.0°C").assertExists()
         compose.onNodeWithTag("environment-trend-TEMPERATURE").assertDoesNotExist()
+        compose.runOnIdle { history.value = true }
+        compose.onNodeWithText("25.0°C").assertDoesNotExist()
+        compose.onNodeWithText("No saved reading in this page").assertExists()
+        compose.onNodeWithTag("environment-trend-TEMPERATURE").assertDoesNotExist()
+        compose.runOnIdle { history.value = false }
+        compose.onNodeWithText("25.0°C").assertExists()
     }
     @Test fun realSamplesRenderBothAccessibleChartsAndSensorName() {
         val binding = Binding(id = "fixture", sensorId = "sensor", address = "AA:BB:CC:DD:EE:FF", protocol = "govee-ble", model = "H5100")

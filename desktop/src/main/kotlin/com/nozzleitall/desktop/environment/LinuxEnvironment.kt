@@ -112,7 +112,7 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
                         val name = props["Name"]?.value as? String
                         if (address.length > 64 || (name?.length ?: 0) > 256) return
                         (address to name).also {
-                            if (!request.discovery || name?.let { n -> listOf("H5100", "H5110", "H5074", "H5179").any(n::contains) } == true || (changed["ServiceData"]?.value as? Map<*, *>)?.containsKey("0000fcd2-0000-1000-8000-00805f9b34fb") == true) synchronized(metadata) { metadata[devicePath] = it }
+                            if (!request.discovery || BleDecoders.goveeModel(name) != null || (changed["ServiceData"]?.value as? Map<*, *>)?.containsKey("0000fcd2-0000-1000-8000-00805f9b34fb") == true) synchronized(metadata) { metadata[devicePath] = it }
                         }
                     }
                     val address = info.first

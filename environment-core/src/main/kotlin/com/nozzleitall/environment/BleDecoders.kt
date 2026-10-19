@@ -4,10 +4,16 @@ package com.nozzleitall.environment
 object BleDecoders {
     const val VERSION = "nia-ble-1"
     private val models = arrayOf("H5100", "H5110", "H5074", "H5179")
+    /** Normalize the H5179's documented-in-capture GV5179 advertising alias. */
+    fun goveeModel(name: String?): String? = when {
+        name == null -> null
+        name.matches(Regex("GV5179_[0-9A-Fa-f]{4}")) -> "H5179"
+        else -> models.firstOrNull { name.contains(it) }
+    }
     fun decode(a: Advertisement): Decoded? {
         if (a.manufacturer.size > 16 || a.services.size > 16) return null
         a.services.entries.firstOrNull { it.key.lowercase() == "0000fcd2-0000-1000-8000-00805f9b34fb" }?.let { return bthome(it.value) }
-        val model = models.firstOrNull { a.name?.contains(it) == true } ?: return null
+        val model = goveeModel(a.name) ?: return null
         for ((company, bytes) in a.manufacturer) {
             if (company == 0x004c || bytes.size > 64) continue
             fun u(i: Int) = bytes[i].toInt() and 255

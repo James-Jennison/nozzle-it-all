@@ -13,6 +13,26 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun h5179AliasAutoAddsWithImportedNameWithoutStartingCollection() {
+        val h = history(); val ready = CountDownLatch(1)
+        lateinit var send: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, callback, _ ->
+            send = callback; ready.countDown(); object : RadioSession { override fun close() {} }
+        } }, goveeNames = { listOf(GoveeDeviceName("11:22:AA:BB:CC:DD:70:41", "H5179", "Centauri Carbon")) })
+        try {
+            c.foreground(true); c.enable(); c.discover(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+            send(Advertisement("AA:BB:CC:DD:70:41", "GV5179_7041",
+                mapOf(1 to byteArrayOf(1, 1, 4, 59, 200.toByte(), 100)), emptyMap(), 1000L, System.nanoTime()))
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (c.view.value.bindings.isEmpty() && System.nanoTime() < end) Thread.sleep(2)
+            val binding = c.view.value.bindings.single()
+            assertEquals("H5179", binding.model)
+            assertEquals("Centauri Carbon", c.view.value.sensorLabels[binding.sensorId])
+            assertEquals(1, h.bindings().size)
+            assertEquals(0L, h.eventCount())
+            assertEquals(EnvironmentalState.DISCOVERING, c.view.value.state)
+        } finally { c.close() }
+    }
     @Test fun autoAddHonorsCandidateCapAndNeverBindsUnadmittedReports() {
         val h = history(); val ready = CountDownLatch(1)
         lateinit var send: (Advertisement) -> Unit

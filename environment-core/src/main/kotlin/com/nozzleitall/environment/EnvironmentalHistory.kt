@@ -36,6 +36,9 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
     @Synchronized fun save(kind: String, id: String, value: JSONObject) {
         require(kind in setOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration"))
         require(value.toString().length <= 16384)
+        val bytes = value.toString().toByteArray().size
+        val existingBytes = store().query("SELECT COALESCE(SUM(length(CAST(json AS BLOB))),0) FROM entities WHERE kind=? AND id<>?", kind, id).first().first()!!.toLong()
+        require(existingBytes + bytes <= 262144) { "Environmental metadata budget reached; export/delete unused drafts explicitly" }
         store().execute("INSERT OR REPLACE INTO entities(kind,id,json) VALUES(?,?,?)", kind, id, value.toString())
     }
     @Synchronized fun bind(candidate: Candidate, name: String): Binding {

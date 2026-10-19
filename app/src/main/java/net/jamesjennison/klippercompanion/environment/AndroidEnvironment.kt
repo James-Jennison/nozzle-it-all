@@ -64,6 +64,7 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
         try { scanner.startScan(filters, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).setReportDelay(0).build(), callback) }
         catch (e: Exception) { context.unregisterReceiver(receiver); throw e }
         return object : RadioSession {
+            override val adapterDescription = "Android BLE"
             override fun close() {
                 if (!closed.compareAndSet(false, true)) return
                 try { scanner.stopScan(callback) } finally { context.unregisterReceiver(receiver) }

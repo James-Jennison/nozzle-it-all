@@ -14,19 +14,28 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class JdbcEnvironmentalStore(file: File) : SqlStore {
     private val connection: Connection
+    private val statements = object : LinkedHashMap<String, java.sql.PreparedStatement>(32, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, java.sql.PreparedStatement>): Boolean {
+            if (size <= 32) return false
+            eldest.value.close(); return true
+        }
+    }
     init {
         file.parentFile.mkdirs()
         java.nio.file.Files.setPosixFilePermissions(file.parentFile.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"))
         connection = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
         java.nio.file.Files.setPosixFilePermissions(file.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))
     }
-    override fun execute(sql: String, vararg args: Any?) { connection.prepareStatement(sql).use { s -> args.forEachIndexed { i, v -> s.setObject(i + 1, v) }; s.execute(); Unit } }
-    override fun query(sql: String, vararg args: Any?): List<List<String?>> = connection.prepareStatement(sql).use { s ->
-        args.forEachIndexed { i, v -> s.setObject(i + 1, v) }
-        s.executeQuery().use { r -> buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) } }
+    private fun statement(sql: String, args: Array<out Any?>): java.sql.PreparedStatement {
+        val s = statements.getOrPut(sql) { connection.prepareStatement(sql) }
+        s.clearParameters(); args.forEachIndexed { i, v -> s.setObject(i + 1, v) }; return s
+    }
+    override fun execute(sql: String, vararg args: Any?) { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+    override fun query(sql: String, vararg args: Any?): List<List<String?>> = statement(sql, args).executeQuery().use { r ->
+        buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) }
     }
     override fun <T> transaction(block: () -> T): T { connection.autoCommit = false; try { val result = block(); connection.commit(); return result } catch (e: Throwable) { connection.rollback(); throw e } finally { connection.autoCommit = true } }
-    override fun close() = connection.close()
+    override fun close() { statements.values.forEach { it.close() }; statements.clear(); connection.close() }
 }
 
 @DBusInterfaceName("org.bluez.Adapter1")
@@ -85,6 +94,7 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
             adapter.StartDiscovery(); acquired.set(true)
             val ownedAdapter = adapter
             return object : RadioSession {
+                override val adapterDescription = "BlueZ $path"
                 override fun close() {
                     if (!closed.compareAndSet(false, true)) return
                     try { if (acquired.compareAndSet(true, false)) ownedAdapter.StopDiscovery() }

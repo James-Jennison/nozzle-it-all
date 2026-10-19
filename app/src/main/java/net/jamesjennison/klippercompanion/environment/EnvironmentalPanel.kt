@@ -41,7 +41,7 @@ import org.json.JSONObject
     var offset by remember { mutableStateOf("0.0") }
     fun action(block: () -> Unit) { if (!busy) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
     fun start(kind: String) { action { if (kind == "discover") controller.discover() else controller.start() } }
-    val permissions = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    val permissions = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         val kind = pending; pending = null
         if (kind != null && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && permissions.all { results[it] == true || context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) start(kind)
@@ -68,7 +68,7 @@ import org.json.JSONObject
             Text("Environmental monitoring (optional)", style = MaterialTheme.typography.titleMedium)
             Text(view.status)
             EnvironmentalProviders.ble.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
-            Text("Nearby-device permissions cover scanning and Bluetooth radio-state metadata; no GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
+            Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }

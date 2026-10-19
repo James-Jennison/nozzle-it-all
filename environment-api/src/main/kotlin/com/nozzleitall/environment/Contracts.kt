@@ -40,7 +40,7 @@ object EnvironmentalProviders {
     val ble = listOf(ProviderDescriptor("govee-ble", "Govee BLE (diagnostic, firmware unqualified)", true, true),
         ProviderDescriptor("bthome-v2", "BTHome v2 unencrypted (diagnostic)", true, true))
 }
-interface RadioSession : AutoCloseable
+interface RadioSession : AutoCloseable { val adapterDescription: String get() = "BLE" }
 data class BleScanRequest(val discovery: Boolean, val selectedAddresses: Set<String> = emptySet())
 fun interface BleTransport {
     /** Called only inside an explicit foreground operation; owns only its own discovery reference. */

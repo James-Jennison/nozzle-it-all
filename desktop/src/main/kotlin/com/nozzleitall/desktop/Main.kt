@@ -54,7 +54,7 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
         File(paths.config, "environment/control.json"),
         com.nozzleitall.environment.EnvironmentalHistory(com.nozzleitall.environment.SqlStoreFactory {
             com.nozzleitall.desktop.environment.JdbcEnvironmentalStore(File(paths.data, "environment/history.db"))
-        }), { com.nozzleitall.desktop.environment.LinuxBleTransport() })
+        }), { com.nozzleitall.desktop.environment.LinuxBleTransport(System.getProperty("nozzle.environment.bluezAdapter")) })
     val fleet = Fleet(paths, scope, log = { System.err.println(it) })
     val library = ProjectLibrary(paths)
     val prepare = PrepareState(this)

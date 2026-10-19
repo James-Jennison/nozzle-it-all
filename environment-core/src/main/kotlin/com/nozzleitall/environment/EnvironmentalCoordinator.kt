@@ -65,7 +65,6 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     private fun begin(purpose: Purpose, bindings: List<Binding>) {
         val visibleEpoch = visibilityEpoch.get()
         check(foreground.get() && !disposed.get())
-        require(bindings.size <= 64) { "At most 64 active environmental bindings per foreground session" }
         val grant = gate.begin(purpose, bindings, if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1_000_000_000L else 86_400_000_000_000)
         val job = SupervisorJob(); operation = job
         val scope = CoroutineScope(job + Dispatchers.IO)
@@ -97,13 +96,16 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop(failure) }
                 } })
                 synchronized(this@EnvironmentalCoordinator) {
-                    if (gate.valid(grant) && visibilityEpoch.get() == visibleEpoch && !revocationRequested.get()) session = opened
+                    if (gate.valid(grant) && visibilityEpoch.get() == visibleEpoch && !revocationRequested.get()) {
+                        session = opened
+                        mutable.value = mutable.value.copy(status = mutable.value.status + " · " + opened.adapterDescription)
+                    }
                     else { opened.close(); if (operation === job) stop("Stopped — obsolete radio preparation") }
                 }
                 for (first in queue) {
                     if (revocationRequested.get() || !gate.valid(grant)) continue
-                    // At most 25ms coalescing, 32 events/transaction: bounded disk/CPU cost, no sample dedup by value.
-                    if (purpose == Purpose.COLLECTION) delay(25)
+                    // At most 100ms coalescing, 32 events/transaction: bounded disk/CPU cost, no sample dedup by value.
+                    if (purpose == Purpose.COLLECTION) delay(100)
                     val reports = mutableListOf(first)
                     repeat(31) { queue.tryReceive().getOrNull()?.let { reports += it } }
                     val decodedReports = reports.mapNotNull { report -> BleDecoders.decode(report)?.let { report to it } }

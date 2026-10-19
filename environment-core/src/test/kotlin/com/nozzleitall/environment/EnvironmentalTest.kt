@@ -13,10 +13,15 @@ class EnvironmentalTest {
     private fun file() = Files.createTempDirectory("nia-env-test").resolve("environment/control.json").toFile()
     private class Sql(file: File) : SqlStore {
         val c = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
-        override fun execute(sql: String, vararg args: Any?) { c.prepareStatement(sql).use { s -> args.forEachIndexed { i, a -> s.setObject(i + 1, a) }; s.execute(); Unit } }
-        override fun query(sql: String, vararg args: Any?): List<List<String?>> = c.prepareStatement(sql).use { s -> args.forEachIndexed { i, a -> s.setObject(i + 1, a) }; s.executeQuery().use { r -> buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) } } }
+        private val statements = linkedMapOf<String, java.sql.PreparedStatement>()
+        private fun statement(sql: String, args: Array<out Any?>): java.sql.PreparedStatement {
+            if (statements.size >= 32 && sql !in statements) { val first = statements.keys.first(); statements.remove(first)!!.close() }
+            return statements.getOrPut(sql) { c.prepareStatement(sql) }.also { s -> s.clearParameters(); args.forEachIndexed { i, a -> s.setObject(i + 1, a) } }
+        }
+        override fun execute(sql: String, vararg args: Any?) { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
+        override fun query(sql: String, vararg args: Any?): List<List<String?>> = statement(sql, args).executeQuery().use { r -> buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) } }
         override fun <T> transaction(block: () -> T): T { c.autoCommit = false; try { val v = block(); c.commit(); return v } catch (e: Throwable) { c.rollback(); throw e } finally { c.autoCommit = true } }
-        override fun close() = c.close()
+        override fun close() { statements.values.forEach { it.close() }; c.close() }
     }
     private fun history() = EnvironmentalHistory(SqlStoreFactory { Sql(Files.createTempFile("nia-env-history", ".db").toFile()) })
     private fun observation(id: String = "one", incarnation: String = "inc", at: Long = 1000L) = Observation(id, incarnation, "collector", "session", 1, "binding", 1, at, at + 1, 1, decoder = BleDecoders.VERSION, readings = listOf(Reading(Channel.TEMPERATURE, 23.0)))

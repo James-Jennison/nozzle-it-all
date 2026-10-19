@@ -13,12 +13,14 @@ class DesktopGoveeNames(private val cache: GoveeNameCache? = null,
     val devices = names.asStateFlow()
     private val storageLock = Any()
     private var loaded = false
+    private var loadFailed = false
     private var pendingForgets = 0
     fun cachedDevices(): List<GoveeDeviceName> = synchronized(storageLock) {
+        if (loadFailed) throw GoveeNameException(GoveeNameFailure.DIRECTORY)
         if (!loaded) {
             val request = epoch.get()
-            val restored = cache?.read().orEmpty()
-            synchronized(this) { if (epoch.get() == request) { names.value = restored; loaded = true } }
+            val restored = try { cache?.read().orEmpty() } catch (e: GoveeNameException) { loaded = true; loadFailed = true; throw e }
+            synchronized(this) { if (epoch.get() == request && pendingForgets == 0) { names.value = restored; loaded = true } }
         }
         names.value
     }
@@ -29,7 +31,10 @@ class DesktopGoveeNames(private val cache: GoveeNameCache? = null,
     @Synchronized fun cancel() { epoch.incrementAndGet() }
     fun forget() {
         synchronized(this) { cancel(); names.value = emptyList(); pendingForgets++ }
-        try { synchronized(storageLock) { cache?.write(emptyList()); loaded = true } }
+        try { synchronized(storageLock) {
+            loaded = true; loadFailed = true // Failed removal cannot silently resurrect the disk directory.
+            cache?.write(emptyList()); loadFailed = false
+        } }
         finally { synchronized(this) { pendingForgets-- } }
     }
     fun import(key: String, request: Long): Int {
@@ -39,7 +44,7 @@ class DesktopGoveeNames(private val cache: GoveeNameCache? = null,
             if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
             fun publish(move: () -> Unit) = synchronized(this) {
                 if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
-                move(); names.value = result; loaded = true
+                move(); names.value = result; loaded = true; loadFailed = false
             }
             if (cache == null) publish {} else cache.write(result, ::publish)
         }

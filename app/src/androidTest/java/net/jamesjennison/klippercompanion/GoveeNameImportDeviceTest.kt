@@ -14,6 +14,34 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class GoveeNameImportDeviceTest {
+    @Test fun damagedDirectoryDoesNotPreventForgetFromRemovingSavedCredential() = fixture { _, prefs ->
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = java.io.File(context.cacheDir, "govee-failed-directory-${java.util.UUID.randomUUID()}")
+        val target = java.io.File(directory, "names.json")
+        check(target.mkdirs()) // A directory cannot be atomically replaced by a regular file.
+        val sentinel = java.io.File(target, "fixture").apply { writeText("fixture") }
+        try {
+            assertTrue(prefs.edit().putString("api-key", "fixture-not-a-real-key").commit())
+            val store = AndroidGoveeNames({ prefs }, GoveeNameCache(target)) { _, _ -> error("Forget must not fetch") }
+            assertThrows(GoveeNameException::class.java) { store.forget() }
+            assertFalse(prefs.contains("api-key")); assertFalse(store.hasSavedKey())
+            assertTrue(store.devices.value.isEmpty())
+        } finally { sentinel.delete(); target.delete(); directory.delete() }
+    }
+    @Test fun failedCacheReadIsNotRetriedUntilExplicitImport() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        check(context.packageName.endsWith(".environment"))
+        val file = java.io.File(context.cacheDir, "govee-failed-read-${java.util.UUID.randomUUID()}.json")
+        try {
+            file.writeText("corrupt")
+            val store = AndroidGoveeNames({ error("Names-only restoration must not open credentials") }, GoveeNameCache(file)) { _, _ -> listOf(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5100", "Explicit refresh")) }
+            assertThrows(GoveeNameException::class.java) { store.cachedDevices() }
+            GoveeNameCache(file).write(emptyList())
+            assertThrows(GoveeNameException::class.java) { store.cachedDevices() }
+            store.import("fixture-not-a-real-key", false, store.begin())
+            assertEquals("Explicit refresh", store.cachedDevices().single().name)
+        } finally { file.delete() }
+    }
     @Test fun discoveryRestoresNamesAfterProcessRecreationWithoutOpeningCredentialsOrNetwork() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         check(context.packageName.endsWith(".environment"))

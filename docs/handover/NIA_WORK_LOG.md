@@ -4,6 +4,20 @@ Newest entries at the bottom. Times are PDT.
 
 ## Automatic discovery follow-up (2026-10-19, in progress)
 
+Source66f1e101 full GTHost SUCCESS4m7s/132tasks46executed86cached;
+1308tests1298PASS10skips0fail/errors. 100Hz core fixture4.3606256%onecore,
+RSS+9748480bytes/drop0 (not GUI/physical-radio proof). Initial fetch used a missing
+remote alias and failed before build; explicit canonical repository fetch succeeded.
+Synthetic0e8afaac621d rejected unsupported phase before model execution; corrected
+296715cbdc9f systems/adversarial COMPLETE, frontend transport FAILED/no substitution.
+Confirmed/narrowed cache-error degradation, sticky failed reads/forget and pending
+desktop Forget publication race corrected with deterministic tests. Other claimed
+interleavings are excluded by the actual enclosing storage/coordinator locks;
+retain raw dissent and obtain targeted clarification, not reviewer-vote acceptance.
+New source also attempts credential removal even if independent cache cleanup fails,
+and memoizes matching per directory/candidate to bound repeated advertisement work.
+Later-source build/device/review/package/installation remain pending, not inherited.
+
 Owner approved automatically adding all uniquely matched nearby Govee sensors,
 explicit monitoring only, existing data preservation and full desktop/Play/normal
 Razr delivery. Source adds IO-only atomic names-only directory persistence, cache

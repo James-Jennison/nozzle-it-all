@@ -17,7 +17,7 @@ data class EnvironmentalView(val state: EnvironmentalState, val status: String =
     val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0, val recordedDrops: Long = 0,
     val roomLabels: Map<String, Pair<String, String>> = emptyMap(),
     val discovery: Map<String, DiscoveryReception> = emptyMap(), val sensorLabels: Map<String, String> = emptyMap(),
-    val chartSamples: List<ChartSample> = emptyList())
+    val chartSamples: List<ChartSample> = emptyList(), val nameDirectoryProblem: String? = null)
 
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
@@ -193,7 +193,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         // filter must not erase the saved-device list used to label incoming cards.
         val saved = savedBindings().filterNot { it.archived }
         check(preparationCurrent(p)) { "Preparation revoked while restoring sensor names" }
-        if (purpose == Purpose.DISCOVERY) goveeNames() // Restore names on IO before opening radio; no cloud request.
+        if (purpose == Purpose.DISCOVERY) discoveryNames() // Restore on IO; directory failure never blocks the radio.
         check(preparationCurrent(p)) { "Preparation revoked while restoring Govee directory" }
         if (purpose == Purpose.DISCOVERY) begin(purpose, emptyList(), p = p)
         else {
@@ -205,6 +205,13 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             history.retain(System.currentTimeMillis(), limits.retentionDays)
             begin(purpose, bindings, qualification, p)
         }
+    }
+    private fun discoveryNames(): List<GoveeDeviceName> = try {
+        goveeNames().also { mutable.update { it.copy(nameDirectoryProblem = null) } }
+    } catch (e: GoveeNameException) {
+        if (e.reason != GoveeNameFailure.DIRECTORY) throw e
+        mutable.update { it.copy(nameDirectoryProblem = "Saved Govee names unavailable — discovery continues without auto-add. Refresh names explicitly; existing sensors and history are unchanged.") }
+        emptyList()
     }
     private fun begin(purpose: Purpose, bindings: List<Binding>, qualification: QualificationAdmission? = null, p: PreparationControl) {
         val visibleEpoch = p.epoch
@@ -222,6 +229,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val queue = Queue<Advertisement>(limits.queueCapacity)
         val runId = newId()
         val runDroppedStart = droppedReports.get()
+        var examinedDirectory: List<GoveeDeviceName>? = null
+        val examinedCandidates = mutableSetOf<Candidate>()
         gapSession = if (purpose == Purpose.COLLECTION) runId else null
         gapDropBase = runDroppedStart
         val calibration = bindings.associate { it.id to history.calibrated(it, listOf(Reading(Channel.TEMPERATURE, 0.0), Reading(Channel.HUMIDITY, 0.0), Reading(Channel.BATTERY_PERCENT, 0.0), Reading(Channel.BATTERY_VOLTAGE, 0.0))).associateBy { r -> r.channel } }
@@ -289,9 +298,12 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                             }
                             // Discovery admits metadata only. It never starts collection or
                             // records observations, and keeps scanning for all remaining sensors.
-                            if (request.isCurrent() && mutable.value.candidates.contains(candidate) &&
+                            if (request.isCurrent() && mutable.value.candidates.any { it.address.equals(candidate.address, true) && it.model == candidate.model && it.protocol == candidate.protocol } &&
                                 mutable.value.bindings.none { it.address.equals(candidate.address, true) }) {
-                                val matched = goveeNames().singleOrNull { it.matches(candidate) }
+                                val directory = discoveryNames()
+                                if (directory !== examinedDirectory) { examinedCandidates.clear(); examinedDirectory = directory }
+                                val matched = if (examinedCandidates.add(candidate.copy(address = candidate.address.uppercase())))
+                                    directory.singleOrNull { it.matches(candidate) } else null
                                 if (matched != null && request.isCurrent() && gate.valid(grant)) {
                                     history.bind(candidate, matched.name)
                                     savedBindings()

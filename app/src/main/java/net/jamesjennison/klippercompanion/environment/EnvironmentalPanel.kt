@@ -86,6 +86,7 @@ import org.json.JSONObject
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Environmental monitoring (optional)", style = MaterialTheme.typography.titleMedium)
             Text(view.status)
+            view.nameDirectoryProblem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Readings stay local; physical measurement age unknown. Optional name import is the only Govee cloud request. No pairing, Govee unbinding or background monitoring. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)

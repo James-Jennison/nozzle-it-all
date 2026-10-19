@@ -44,6 +44,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
     Card(Modifier.fillMaxWidth()) {
         Txt("Environmental monitoring (optional)", Nz.type.title)
         Txt(v.status, Nz.type.body)
+        v.nameDirectoryProblem?.let { Banner(it, BannerKind.WARNING) }
         EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Optional name import is the only Govee cloud request; no cloud readings, pairing, background service or equipment control.", Nz.type.bodySmall)
         GoveeNameImport(directory)

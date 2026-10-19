@@ -13,6 +13,27 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun corruptNameDirectoryDoesNotPreventDiscoveryOrStartMonitoring() {
+        val h = history()
+        val ready = CountDownLatch(1)
+        lateinit var send: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, callback, _ ->
+            send = callback; ready.countDown(); object : RadioSession { override fun close() {} }
+        } }, goveeNames = { throw GoveeNameException(GoveeNameFailure.DIRECTORY) })
+        try {
+            c.foreground(true); c.enable(); c.discover()
+            assertTrue(ready.await(5, TimeUnit.SECONDS))
+            send(Advertisement("AA:BB:CC:DD:EE:FF", "Govee_H5100",
+                mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), 2000, System.nanoTime()))
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (c.view.value.candidates.isEmpty() && System.nanoTime() < end) Thread.sleep(2)
+            assertEquals(1, c.view.value.candidates.size)
+            assertEquals(EnvironmentalState.DISCOVERING, c.view.value.state)
+            assertTrue(c.view.value.nameDirectoryProblem!!.contains("discovery continues"))
+            assertTrue(c.view.value.bindings.isEmpty()); assertEquals(0L, h.eventCount())
+            c.stop(); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+        } finally { c.close() }
+    }
     @Test fun discoveryAddsAllUniqueMatchesWithoutCollectingOrChangingExistingData() {
         val h = history()
         val existing = h.bind(Candidate("AA:BB:CC:DD:EE:01", "govee-ble", "H5100"), "My custom shelf")
@@ -50,6 +71,8 @@ class EnvironmentalTest {
             assertTrue(c.view.value.latest.isEmpty()); assertTrue(c.view.value.chartSamples.isEmpty())
             assertEquals(original, h.page().single())
             assertEquals("My custom shelf", c.view.value.sensorLabels[existing.sensorId])
+            assertEquals(existing, c.view.value.bindings.single { it.address == existing.address })
+            assertFalse(c.view.value.bindings.any { it.address.endsWith(":05") })
             assertTrue(c.view.value.bindings.single { it.id == archived.id }.archived)
             assertEquals(setOf("My custom shelf", "Archived shelf", "Front left", "Rear right"), c.view.value.sensorLabels.values.toSet())
             repeat(8) { send(report("03")); send(report("04")) }

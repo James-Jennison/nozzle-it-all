@@ -20,8 +20,7 @@ import org.json.JSONObject
     var name by remember { mutableStateOf("Environmental sensor") }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var confirmDelete by remember { mutableStateOf(false) }
-    var equipmentName by remember { mutableStateOf("Room") }
-    var positionName by remember { mutableStateOf("Shelf") }
+    val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
     fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: QualificationUnavailableException) { error = e.message } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
     fun start(purpose: Purpose) {
@@ -82,19 +81,20 @@ import org.json.JSONObject
         }
         if (confirmDelete) {
             Txt("Delete only environmental configuration/history? External exports remain. Cleanup failures require explicit retry.", Nz.type.body)
-            Row { NzButton("Confirm delete / resume", { stopping = true; rows = emptyList(); name = "Environmental sensor"; equipmentName = "Room"; positionName = "Shelf"; offset = "0.0"
+            Row { NzButton("Confirm delete / resume", { stopping = true; rows = emptyList(); name = "Environmental sensor"; roomDrafts.clear(); offset = "0.0"
                 val cleanup = controller.requestDeleteAsync()
                 scope.launch { try { cleanup.join(); confirmDelete = controller.view.value.state != EnvironmentalState.DISABLED } finally { stopping = false } }
             }, enabled = !busy && !stopping); NzButton("Keep data", { confirmDelete = false }) }
         }
         if (v.bindings.any { !it.archived }) {
-            Field("Room label", equipmentName, { equipmentName = it.take(120) })
-            Field("Position label", positionName, { positionName = it.take(120) })
             Field("Relative humidity calibration offset (%RH)", offset, { offset = it.take(12) })
         }
         v.bindings.filterNot { it.archived }.forEach { binding -> Column {
+            val (equipmentName, positionName) = roomDrafts[binding.id] ?: ("Room" to "Shelf")
             Txt("${binding.model} — firmware/calibration/operating envelope unqualified", Nz.type.bodySmall)
             Txt("${binding.address} · ${binding.protocol} — verify the physical identity before saving assignments", Nz.type.bodySmall)
+            Field("Room label", equipmentName, { roomDrafts[binding.id] = it.take(120) to positionName })
+            Field("Position label", positionName, { roomDrafts[binding.id] = equipmentName to it.take(120) })
             NzButton("Save room assignment", { action { controller.configureRoom(binding, equipmentName, positionName) } }, enabled = !busy && !stopping && equipmentName.isNotBlank() && positionName.isNotBlank())
             Txt("Room assignments do not block monitoring or certify sensor operating limits.", Nz.type.bodySmall)
             NzButton("Save RH calibration", { action { controller.calibrate(binding, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true)

@@ -616,10 +616,14 @@ class EnvironmentalTest {
             h.assign(b.sensorId, shelf.id, 1)
             assertEquals(QualificationAdmission(emptySet(), Long.MAX_VALUE), h.assignedQualificationRadios(listOf(b), "any-platform", 2))
             h.savePosition(shelf.copy(minC = 10.0))
-            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
+            assertThrows(QualificationUnavailableException::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
+            h.savePosition(shelf.copy(maxC = 40.0))
+            assertThrows(QualificationUnavailableException::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
             h.savePosition(shelf)
             h.saveEquipment(room.copy(type = "dryer"))
-            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
+            assertThrows(QualificationUnavailableException::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
+            h.save("position", shelf.id, h.entities("position").single().put("equipmentId", "missing"))
+            assertThrows(QualificationUnavailableException::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
         }
     }
     @Test fun editingRoomLabelDoesNotEraseAnExistingOperatingEnvelope() {
@@ -635,6 +639,12 @@ class EnvironmentalTest {
             assertEquals(10.0, saved.getDouble("minC"), 0.0)
             assertEquals(40.0, saved.getDouble("maxC"), 0.0)
             assertThrows(Exception::class.java) { c.start() }
+            c.configureRoom(b, "Renamed Room", "Renamed Shelf")
+            val active = h.entities("placement").single { it.isNull("until") }
+            val renamed = h.entities("position").single { it.getString("id") == active.getString("positionId") }
+            assertEquals(10.0, renamed.getDouble("minC"), 0.0)
+            assertEquals(40.0, renamed.getDouble("maxC"), 0.0)
+            assertThrows(QualificationUnavailableException::class.java) { c.start() }
         } finally { c.close() }
     }
     @Test fun capabilityQualificationRequiresExactCurrentEvidenceAndNeverPromotesUnknownFirmware() {

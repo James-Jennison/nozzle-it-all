@@ -34,8 +34,7 @@ import org.json.JSONObject
     var name by remember { mutableStateOf("Environmental sensor") }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var deleting by remember { mutableStateOf(false) }
-    var equipment by remember { mutableStateOf("Room") }
-    var position by remember { mutableStateOf("Shelf") }
+    val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
     fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: QualificationUnavailableException) { problem = e.message } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
     fun start(kind: String) {
@@ -112,17 +111,18 @@ import org.json.JSONObject
             OutlinedButton({ deleting = true }, enabled = !busy && !stopping) { Text("Delete environmental data…") }
             if (deleting) {
                 Text("Delete only environmental history and settings? External exports remain. Failed cleanup requires explicit resume.")
-                Button({ pending = null; stopping = true; rows = emptyList(); name = "Environmental sensor"; equipment = "Room"; position = "Shelf"; offset = "0.0"
+                Button({ pending = null; stopping = true; rows = emptyList(); name = "Environmental sensor"; roomDrafts.clear(); offset = "0.0"
                     val cleanup = controller.requestDeleteAsync()
                     scope.launch { try { cleanup.join(); deleting = controller.view.value.state != EnvironmentalState.DISABLED } finally { stopping = false } }
                 }, enabled = !busy && !stopping) { Text("Confirm delete / resume") }
                 TextButton({ deleting = false }) { Text("Keep data") }
             }
             view.bindings.filterNot { it.archived }.forEach { b ->
+                val (equipment, position) = roomDrafts[b.id] ?: ("Room" to "Shelf")
                 Text("${b.model} — diagnostic, unqualified")
                 Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(equipment, { equipment = it.take(120) }, label = { Text("Room label") })
-                OutlinedTextField(position, { position = it.take(120) }, label = { Text("Position label") })
+                OutlinedTextField(equipment, { roomDrafts[b.id] = it.take(120) to position }, label = { Text("Room label") })
+                OutlinedTextField(position, { roomDrafts[b.id] = equipment to it.take(120) }, label = { Text("Position label") })
                 TextButton({ action { controller.configureRoom(b, equipment, position) } }, enabled = !busy && !stopping && equipment.isNotBlank() && position.isNotBlank()) { Text("Save room assignment") }
                 Text("Room assignments do not block monitoring or certify sensor operating limits.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(offset, { offset = it.take(12) }, label = { Text("Humidity calibration offset (%RH)") })

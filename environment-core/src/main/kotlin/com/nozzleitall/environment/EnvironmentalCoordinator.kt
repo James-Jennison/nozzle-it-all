@@ -325,12 +325,18 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     @Synchronized fun configureRoom(binding: Binding, equipmentName: String, positionName: String) {
         historyAccess()
         stop("Stopped — editing room assignment")
+        val activePlacement = history.entities("placement").firstOrNull { it.getString("sensorId") == binding.sensorId && it.isNull("until") }
+        val previousPosition = activePlacement?.let { placement -> history.entities("position").single { it.getString("id") == placement.getString("positionId") } }
+        previousPosition?.let { previous ->
+            val previousEquipment = history.entities("equipment").single { it.getString("id") == previous.getString("equipmentId") }
+            if (previousEquipment.getString("type") != "room") throw QualificationUnavailableException()
+        }
         val existingEquipment = history.entities("equipment").firstOrNull { it.getString("name") == equipmentName && it.optString("type") == "room" }
         val equipment = Equipment(id = existingEquipment?.getString("id") ?: newId(), name = equipmentName)
         val existingPosition = history.entities("position").firstOrNull { it.getString("equipmentId") == equipment.id && it.getString("name") == positionName }
         val position = Position(id = existingPosition?.getString("id") ?: newId(), equipmentId = equipment.id, name = positionName,
-            minC = existingPosition?.takeUnless { it.isNull("minC") }?.getDouble("minC"),
-            maxC = existingPosition?.takeUnless { it.isNull("maxC") }?.getDouble("maxC"))
+            minC = existingPosition?.takeUnless { it.isNull("minC") }?.getDouble("minC") ?: previousPosition?.takeUnless { it.isNull("minC") }?.getDouble("minC"),
+            maxC = existingPosition?.takeUnless { it.isNull("maxC") }?.getDouble("maxC") ?: previousPosition?.takeUnless { it.isNull("maxC") }?.getDouble("maxC"))
         history.configureDraft(binding, equipment, position, System.currentTimeMillis())
         mutable.value = mutable.value.copy(status = "Room assignment saved — press Start to monitor; observations do not certify operating limits")
     }

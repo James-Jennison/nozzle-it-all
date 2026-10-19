@@ -75,6 +75,11 @@ class EnvironmentalDeviceTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-start").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("Save room assignment")[0].performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodes(hasText("Room assignment saved", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        val monitor = (context.applicationContext as NozzleApp).environment
+        val placement = monitor.metadata("placement").single { it.isNull("until") }
+        val position = monitor.metadata("position").single { it.getString("id") == placement.getString("positionId") }
+        assertTrue(position.isNull("minC") && position.isNull("maxC"))
+        assertEquals("room", monitor.metadata("equipment").single { it.getString("id") == position.getString("equipmentId") }.getString("type"))
         compose.onNodeWithTag("environment-start").performScrollTo().performClick()
         compose.waitUntil(45000) { compose.onAllNodes(hasText("Reception ", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         assertTrue(compose.onAllNodes(hasText("Android BLE · radio", substring = true)).fetchSemanticsNodes().isNotEmpty())

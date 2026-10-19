@@ -87,11 +87,14 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
     @Synchronized fun assignedQualificationRadios(bindings: List<Binding>, platform: String, now: Long): QualificationAdmission {
         val radios = mutableSetOf<String>()
         var validUntil = Long.MAX_VALUE
-        for (b in bindings) for (placement in entities("placement").filter { it.getString("sensorId") == b.sensorId && it.isNull("until") }) {
-            val p = entities("position").single { it.getString("id") == placement.getString("positionId") }
-            val equipment = entities("equipment").single { it.getString("id") == p.getString("equipmentId") }
+        val placements = entities("placement").filter { it.isNull("until") }.groupBy { it.getString("sensorId") }
+        val positions = entities("position").associateBy { it.getString("id") }
+        val equipmentById = entities("equipment").associateBy { it.getString("id") }
+        for (b in bindings) for (placement in placements[b.sensorId].orEmpty()) {
+            val p = positions[placement.getString("positionId")] ?: throw QualificationUnavailableException()
+            val equipment = equipmentById[p.getString("equipmentId")] ?: throw QualificationUnavailableException()
             if (equipment.getString("type") == "room" && p.isNull("minC") && p.isNull("maxC")) continue
-            require(!p.isNull("minC") && !p.isNull("maxC")) { "Assigned position needs a demonstrated operating envelope" }
+            if (p.isNull("minC") || p.isNull("maxC")) throw QualificationUnavailableException()
             for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
                 val calibration = calibrated(b, listOf(Reading(channel, 0.0))).single().calibrationVersion
                 val q = entities("qualification").firstOrNull { q ->

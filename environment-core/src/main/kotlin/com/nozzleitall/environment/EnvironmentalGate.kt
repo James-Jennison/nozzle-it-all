@@ -16,13 +16,14 @@ class EnvironmentalGrant internal constructor(internal val issuer: Any, internal
     internal val bindings: Map<String, Long>, val incarnation: String)
 
 /** Single admission/commit lock: revocation cannot race a history transaction. No live grants survive boot. */
-class EnvironmentalGate(private val file: File, private val now: () -> Long = System::nanoTime) {
+class EnvironmentalGate(private val file: File, private val newIdentifier: () -> String = ::newId,
+    private val now: () -> Long = System::nanoTime) {
     private val issuer = Any()
-    val bootId = newId()
-    private val session = bootId
+    val bootId: String by lazy { newIdentifier() }
+    private val session get() = bootId
     private var epoch = 0L
-    var incarnation: String = newId(); private set
-    var collectorId: String = newId(); private set
+    var incarnation: String = ""; private set
+    var collectorId: String = ""; private set
     var state: EnvironmentalState = EnvironmentalState.DISABLED; private set
     var persistenceFailure = false; private set
     var deletePending = false; private set
@@ -78,11 +79,14 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
     }
     @Synchronized fun deleteIntent() {
         if (deletePending) return // Explicit resume uses the already committed intent/incarnation.
-        epoch++; state = EnvironmentalState.DISABLED_RECOVERY; incarnation = newId()
+        epoch++; state = EnvironmentalState.DISABLED_RECOVERY; incarnation = newIdentifier()
         persist("delete-pending"); deletePending = true
     }
     @Synchronized fun finishDelete() { persist("disabled"); deletePending = false; state = EnvironmentalState.DISABLED }
     private fun persist(intent: String) {
+        // Identifier/entropy providers are not touched by disabled startup or descriptor construction.
+        if (incarnation.isEmpty()) incarnation = newIdentifier()
+        if (collectorId.isEmpty()) collectorId = newIdentifier()
         val body = JSONObject().put("version", 1).put("incarnation", incarnation).put("collector", collectorId).put("epoch", epoch).put("intent", intent).toString()
         file.parentFile.mkdirs()
         if (System.getProperty("os.name").orEmpty().contains("Linux", true)) Files.setPosixFilePermissions(file.parentFile.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"))

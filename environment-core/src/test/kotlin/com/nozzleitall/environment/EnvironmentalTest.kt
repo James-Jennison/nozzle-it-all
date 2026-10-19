@@ -60,6 +60,17 @@ class EnvironmentalTest {
         assertThrows(IllegalStateException::class.java) { g.enable() }
         assertEquals("bad", p.readText())
     }
+    @Test fun disabledStartupDoesNotInvokeIdentifierOrEntropyProvider() {
+        var identifiers = 0
+        val path = file()
+        val gate = EnvironmentalGate(path, newIdentifier = { identifiers++; newId() })
+        assertEquals(EnvironmentalState.DISABLED, gate.state); assertEquals(0, identifiers)
+        gate.enable(); assertEquals(2, identifiers) // Only identifiers required by the explicit control write.
+        val restored = EnvironmentalGate(path, newIdentifier = { error("Idle restore must not invoke entropy") })
+        assertEquals(EnvironmentalState.ENABLED_IDLE, restored.state)
+        gate.begin(Purpose.DISCOVERY, emptyList(), 1_000_000_000)
+        assertEquals(3, identifiers) // Process-session nonce is lazy until an actual operation.
+    }
     @Test fun grantRejectsOtherIssuerRevisionExpirationAndRevocation() {
         var now = 1L
         val g = EnvironmentalGate(file()) { now }; val other = EnvironmentalGate(file()) { now }

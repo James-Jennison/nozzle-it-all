@@ -39,7 +39,10 @@ import kotlinx.coroutines.*
         state = rememberDialogState(width = 560.dp, height = 360.dp), resizable = false) {
         DisposableEffect(window) {
             val listener = object : java.awt.event.WindowAdapter() {
-                override fun windowLostFocus(e: java.awt.event.WindowEvent) { cancel() }
+                override fun windowLostFocus(e: java.awt.event.WindowEvent) {
+                    // IME/context-menu child windows are still private dialog interaction.
+                    if (generateSequence(e.oppositeWindow) { it.owner }.none { it == window }) cancel()
+                }
                 override fun windowClosing(e: java.awt.event.WindowEvent) { cancel() }
                 override fun windowClosed(e: java.awt.event.WindowEvent) { cancel() }
             }

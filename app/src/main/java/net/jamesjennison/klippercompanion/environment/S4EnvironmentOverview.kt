@@ -80,7 +80,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                         }
                     }
                   }
-                    Box(Modifier.clickable(role = Role.Button) { showMethod = !showMethod }.padding(vertical = 4.dp)
+                    Box(Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) { showMethod = !showMethod }.padding(vertical = 4.dp)
                         .testTag("s4-calculation-details")
                         .semantics(mergeDescendants = true) { stateDescription = if (showMethod) "Expanded" else "Collapsed" }) {
                         Label(if (showMethod) "Hide calculation details" else "Calculation details", color = Color(0xFFAEBCC5))

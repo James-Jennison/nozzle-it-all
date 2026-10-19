@@ -25,6 +25,7 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
     var collectorId: String = newId(); private set
     var state: EnvironmentalState = EnvironmentalState.DISABLED; private set
     var persistenceFailure = false; private set
+    var deletePending = false; private set
     init {
         if (file.exists()) runCatching {
             require(file.length() <= 4096)
@@ -36,7 +37,9 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
             incarnation = UUIDCheck(control.getString("incarnation"))
             collectorId = UUIDCheck(control.getString("collector"))
             epoch = control.getLong("epoch"); require(epoch >= 0)
-            state = when (control.getString("intent")) {
+            val intent = control.getString("intent")
+            deletePending = intent == "delete-pending"
+            state = when (intent) {
                 "enabled" -> EnvironmentalState.ENABLED_IDLE
                 "disabled" -> EnvironmentalState.DISABLED
                 else -> EnvironmentalState.DISABLED_RECOVERY
@@ -45,8 +48,8 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
     }
     @Synchronized fun enable() { check(state != EnvironmentalState.DISABLED_RECOVERY); persist("enabled"); state = EnvironmentalState.ENABLED_IDLE }
     @Synchronized fun revoke(disable: Boolean = false) {
-        epoch++
         check(state != EnvironmentalState.DISABLED_RECOVERY) { "Explicit environmental cleanup/recovery required; control preserved" }
+        epoch++
         state = if (disable) EnvironmentalState.DISABLED else if (state == EnvironmentalState.DISABLED) state else EnvironmentalState.ENABLED_IDLE
         try { persist(if (state == EnvironmentalState.ENABLED_IDLE) "enabled" else "disabled") }
         catch (e: Exception) { persistenceFailure = true; state = EnvironmentalState.DISABLED_RECOVERY; throw e }
@@ -73,8 +76,12 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
         check(grant.purpose == Purpose.COLLECTION && bindings.all { valid(grant, it) }) { "Stale or unauthorized environmental batch" }
         return block()
     }
-    @Synchronized fun deleteIntent() { epoch++; state = EnvironmentalState.DISABLED_RECOVERY; incarnation = newId(); persist("delete-pending") }
-    @Synchronized fun finishDelete() { persist("disabled"); state = EnvironmentalState.DISABLED }
+    @Synchronized fun deleteIntent() {
+        if (deletePending) return // Explicit resume uses the already committed intent/incarnation.
+        epoch++; state = EnvironmentalState.DISABLED_RECOVERY; incarnation = newId()
+        persist("delete-pending"); deletePending = true
+    }
+    @Synchronized fun finishDelete() { persist("disabled"); deletePending = false; state = EnvironmentalState.DISABLED }
     private fun persist(intent: String) {
         val body = JSONObject().put("version", 1).put("incarnation", incarnation).put("collector", collectorId).put("epoch", epoch).put("intent", intent).toString()
         file.parentFile.mkdirs()

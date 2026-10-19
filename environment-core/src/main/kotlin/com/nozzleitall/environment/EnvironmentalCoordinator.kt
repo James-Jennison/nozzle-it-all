@@ -34,22 +34,24 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             revocationRequested.set(true)
             visibilityEpoch.incrementAndGet()
             val current = operation ?: return
-            mutable.update { it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stopped — app not visible; press Start to resume") }
+            mutable.update { it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — app not visible; cleanup pending") }
             operationScope?.launch { synchronized(this@EnvironmentalCoordinator) {
                 if (operation === current) stop("Stopped — app not visible; press Start to resume")
             } }
         }
     }
     @Synchronized fun enable() { check(!disposed.get()); gate.enable(); mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened") }
-    @Synchronized fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
+    fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
         revocationRequested.set(true)
         // Hide live readings immediately, before durable revocation/cancellation.
-        mutable.value = mutable.value.copy(latest = emptyMap(), candidates = emptyList(), status = reason)
+        mutable.update { it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") }
+        synchronized(this) {
         try { gate.revoke(disable) }
         finally {
             operation?.cancel(); operation = null; operationScope = null
             runCatching { session?.close() }; session = null
             mutable.value = mutable.value.copy(state = gate.state, status = if (gate.persistenceFailure) "Persistence failed — stopped in memory, recovery required" else reason)
+        }
         }
     }
     @Synchronized fun discover() = begin(Purpose.DISCOVERY, emptyList())
@@ -133,7 +135,9 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         }
                         if (observations.isNotEmpty()) {
                             gate.commitBatch(grant, admittedBindings) { history.appendBatch(observations, gate.incarnation) }
-                            mutable.value = mutable.value.copy(latest = mutable.value.latest + observations.associateBy { it.bindingId })
+                            if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch && gate.valid(grant)) {
+                                mutable.value = mutable.value.copy(latest = mutable.value.latest + observations.associateBy { it.bindingId })
+                            }
                         }
                     }
                 }

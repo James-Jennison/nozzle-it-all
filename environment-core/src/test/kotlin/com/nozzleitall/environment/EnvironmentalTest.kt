@@ -8,6 +8,9 @@ import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collect
+import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
     private fun file() = Files.createTempDirectory("nia-env-test").resolve("environment/control.json").toFile()
@@ -71,6 +74,20 @@ class EnvironmentalTest {
     @Test fun rebootNeverRestoresCollection() {
         val p = file(); val g = EnvironmentalGate(p); g.enable(); g.begin(Purpose.DISCOVERY, emptyList(), 1000000)
         assertEquals(EnvironmentalState.ENABLED_IDLE, EnvironmentalGate(p).state)
+    }
+    @Test fun deleteResumePreservesRecordedIntentAcrossRestart() {
+        val path = file(); val first = EnvironmentalGate(path)
+        first.enable(); first.deleteIntent()
+        val recorded = path.readText(); val incarnation = first.incarnation
+        val resumed = EnvironmentalGate(path)
+        assertTrue(resumed.deletePending)
+        assertThrows(IllegalStateException::class.java) { resumed.revoke() }
+        resumed.deleteIntent()
+        assertEquals(incarnation, resumed.incarnation)
+        assertEquals(recorded, path.readText())
+        resumed.finishDelete()
+        assertFalse(resumed.deletePending)
+        assertEquals(EnvironmentalState.DISABLED, EnvironmentalGate(path).state)
     }
     @Test fun retryAndConflictAreDifferent() {
         history().use { h ->
@@ -268,6 +285,39 @@ class EnvironmentalTest {
         assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
         assertTrue(c.view.value.status.contains("dependency missing"))
         c.close()
+    }
+    @Test fun foregroundLossDuringCommittedBatchCannotRepublishLiveReadings() {
+        val path = Files.createTempFile("nia-env-held-commit", ".db").toFile()
+        val hold = AtomicBoolean(false); val revoked = AtomicBoolean(false); val badPublication = AtomicBoolean(false)
+        val entered = CountDownLatch(1); val release = CountDownLatch(1); val ready = CountDownLatch(1)
+        val h = EnvironmentalHistory(SqlStoreFactory {
+            val sql = Sql(path)
+            object : SqlStore by sql {
+                override fun <T> transaction(block: () -> T): T {
+                    val result = sql.transaction(block)
+                    if (hold.getAndSet(false)) { entered.countDown(); check(release.await(5, TimeUnit.SECONDS)) }
+                    return result
+                }
+            }
+        })
+        h.bind(Candidate("test", "bthome-v2", "BTHome v2"), "fixture")
+        lateinit var send: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, report, _ -> send = report; ready.countDown(); object : RadioSession { override fun close() {} } } })
+        val observer = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        observer.launch { c.view.collect { if (revoked.get() && it.latest.isNotEmpty()) badPublication.set(true) } }
+        try {
+            c.foreground(true); c.enable(); c.start(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+            hold.set(true)
+            send(Advertisement("test", null, emptyMap(), mapOf("0000fcd2-0000-1000-8000-00805f9b34fb" to byteArrayOf(0x40, 2, 0x34, 0x09)), System.currentTimeMillis(), System.nanoTime()))
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            revoked.set(true); c.foreground(false)
+            assertTrue(c.view.value.latest.isEmpty())
+            release.countDown()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (c.view.value.state != EnvironmentalState.ENABLED_IDLE && System.nanoTime() < deadline) Thread.sleep(10)
+            assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+            assertFalse("An in-flight commit republished a reading after visibility revocation", badPublication.get())
+        } finally { release.countDown(); observer.cancel(); c.close() }
     }
     @Test fun fullBudgetRollsBackAndRetentionReusesFreedPages() {
         val path = Files.createTempFile("nia-env-full", ".db").toFile()

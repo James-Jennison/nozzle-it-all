@@ -13,6 +13,23 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun slowNameRestoreDoesNotHoldCoordinatorMonitorAndStoppedPreparationCannotStartRadio() = runBlocking {
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val radios = java.util.concurrent.atomic.AtomicInteger()
+        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _, _ ->
+            radios.incrementAndGet(); object : RadioSession { override fun close() {} }
+        } }, restoreGoveeNames = { entered.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS)) })
+        try {
+            c.foreground(true); c.enable()
+            val preparing = c.requestOperationAsync(Purpose.DISCOVERY)
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            withTimeout(1000) { c.requestStopAsync().join() }
+            assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+            release.countDown(); withTimeout(5000) { preparing.join() }
+            assertEquals(0, radios.get())
+            assertTrue(c.view.value.candidates.isEmpty())
+        } finally { release.countDown(); c.close() }
+    }
     @Test fun corruptNameDirectoryDoesNotPreventDiscoveryOrStartMonitoring() {
         val h = history()
         val ready = CountDownLatch(1)

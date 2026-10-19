@@ -14,6 +14,23 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class GoveeNameImportDeviceTest {
+    @Test fun pendingForgetDoesNotRepublishOldDirectoryBeforeCleanupGetsStorageLock() = fixture { _, prefs ->
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = java.io.File(context.cacheDir, "govee-pending-forget-${java.util.UUID.randomUUID()}.json")
+        try {
+            GoveeNameCache(file).write(listOf(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5100", "Old fixture")))
+            val store = AndroidGoveeNames({ prefs }, GoveeNameCache(file)) { _, _ -> error("No network") }
+            val mutex = store.javaClass.getDeclaredField("storageLock").apply { isAccessible = true }.get(store)
+            val work = synchronized(mutex) {
+                val pending = store.requestForgetAsync()
+                assertTrue(store.cachedDevices().isEmpty())
+                assertEquals(GoveeNameFailure.CLEANUP, assertThrows(GoveeNameException::class.java) { store.begin() }.reason)
+                pending
+            }
+            kotlinx.coroutines.runBlocking { work.await() }
+            assertTrue(store.cachedDevices().isEmpty()); assertTrue(GoveeNameCache(file).read().isEmpty())
+        } finally { file.delete() }
+    }
     @Test fun damagedDirectoryDoesNotPreventForgetFromRemovingSavedCredential() = fixture { _, prefs ->
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = java.io.File(context.cacheDir, "govee-failed-directory-${java.util.UUID.randomUUID()}")
@@ -23,9 +40,12 @@ class GoveeNameImportDeviceTest {
         try {
             assertTrue(prefs.edit().putString("api-key", "fixture-not-a-real-key").commit())
             val store = AndroidGoveeNames({ prefs }, GoveeNameCache(target)) { _, _ -> error("Forget must not fetch") }
-            assertThrows(GoveeNameException::class.java) { store.forget() }
+            assertEquals(GoveeNameFailure.DIRECTORY, assertThrows(GoveeNameException::class.java) { store.forget() }.reason)
             assertFalse(prefs.contains("api-key")); assertFalse(store.hasSavedKey())
             assertTrue(store.devices.value.isEmpty())
+            sentinel.delete(); target.delete()
+            store.forget() // Explicit retry after repairing storage needs no key/network.
+            assertTrue(store.cachedDevices().isEmpty())
         } finally { sentinel.delete(); target.delete(); directory.delete() }
     }
     @Test fun failedCacheReadIsNotRetriedUntilExplicitImport() {

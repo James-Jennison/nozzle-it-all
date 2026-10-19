@@ -59,7 +59,8 @@ class AppState(val paths: AppPaths, val scope: CoroutineScope) {
             com.nozzleitall.desktop.environment.JdbcEnvironmentalStore(File(paths.data, "environment/history.db"))
         }), { com.nozzleitall.desktop.environment.LinuxBleTransport(System.getProperty("nozzle.environment.bluezAdapter")) },
         platformIdentity = "linux/${System.getProperty("os.version")}/${System.getProperty("os.arch")}",
-        goveeNames = goveeNames::cachedDevices)
+        goveeNames = goveeNames::currentDevices,
+        restoreGoveeNames = { goveeNames.cachedDevices(); Unit })
     val fleet = Fleet(paths, scope, log = { System.err.println(it) })
     val library = ProjectLibrary(paths)
     val prepare = PrepareState(this)

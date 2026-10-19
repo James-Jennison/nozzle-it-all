@@ -20,10 +20,15 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
     private val names = MutableStateFlow<List<GoveeDeviceName>>(emptyList())
     val devices = names.asStateFlow()
     private var loaded = false
-    private var loadFailed = false
+    @Volatile private var loadFailed = false
+    /** Lock-free snapshot for radio processing; never opens disk/credentials/network. */
+    fun currentDevices(): List<GoveeDeviceName> {
+        if (loadFailed) throw GoveeNameException(GoveeNameFailure.DIRECTORY)
+        return names.value
+    }
     fun cachedDevices(): List<GoveeDeviceName> = synchronized(storageLock) {
         if (loadFailed) throw GoveeNameException(GoveeNameFailure.DIRECTORY)
-        if (!loaded && !savedKeyRevoked.get()) {
+        if (!loaded) {
             val request = epoch.get()
             val restored = try { cache?.read().orEmpty() } catch (e: GoveeNameException) { loaded = true; loadFailed = true; throw e }
             synchronized(this) { if (epoch.get() == request && pendingForgets == 0) { names.value = restored; loaded = true } }
@@ -56,7 +61,7 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
                 if (persist && !credentialStore.edit().putString("api-key", selected).commit()) throw GoveeNameException(GoveeNameFailure.STORAGE)
                 // Contents are staged/fsynced on IO before the short atomic rename/publication lock.
                 fun publish(move: () -> Unit) = synchronized(this) {
-                    if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
+                    if (epoch.get() != request || pendingForgets != 0) throw GoveeNameException(GoveeNameFailure.CANCELLED)
                     move(); names.value = result; loaded = true; loadFailed = false
                     if (persist) savedKeyRevoked.set(false)
                 }
@@ -87,16 +92,15 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
         cancel(); names.value = emptyList(); savedKeyRevoked.set(true); pendingForgets++; cleanup.value = true
         return cleanupScope.async(start = CoroutineStart.ATOMIC) {
             try { synchronized(storageLock) {
-                try {
                     loaded = true; loadFailed = true
                     // Try BOTH independent removals. A damaged directory must never
                     // prevent the requested credential removal from being attempted.
                     val directoryFailure = try { cache?.write(emptyList()); loadFailed = false; null }
                         catch (e: GoveeNameException) { e }
-                    if (!credentialStore.edit().remove("api-key").commit()) throw GoveeNameException(GoveeNameFailure.STORAGE)
+                    val credentialRemoved = try { credentialStore.edit().remove("api-key").commit() } catch (_: Exception) { false }
+                    savedKeyRevoked.set(!credentialRemoved)
+                    if (!credentialRemoved) throw GoveeNameException(GoveeNameFailure.STORAGE)
                     if (directoryFailure != null) throw directoryFailure
-                    savedKeyRevoked.set(false)
-                } catch (_: Exception) { savedKeyRevoked.set(true); throw GoveeNameException(GoveeNameFailure.STORAGE) }
             } }
             finally { synchronized(this) { pendingForgets--; cleanup.value = pendingForgets != 0 } }
         }

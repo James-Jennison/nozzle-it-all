@@ -22,7 +22,8 @@ data class EnvironmentalView(val state: EnvironmentalState, val status: String =
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
     private val limits: EnvironmentalLimits = EnvironmentalLimits(), private val platformIdentity: String = "unqualified",
-    private val goveeNames: () -> List<GoveeDeviceName> = { emptyList() }) : AutoCloseable {
+    private val goveeNames: () -> List<GoveeDeviceName> = { emptyList() },
+    private val restoreGoveeNames: () -> Unit = {}) : AutoCloseable {
     val gate = EnvironmentalGate(control)
     private val mutable = MutableStateFlow(EnvironmentalView(gate.state, if (gate.state == EnvironmentalState.ENABLED_IDLE) "Enabled, idle — press Discover or Start" else if (gate.state == EnvironmentalState.DISABLED_RECOVERY) "Recovery required — control record preserved; Delete / resume cleanup explicitly" else "Disabled — no collection"))
     val view = mutable.asStateFlow()
@@ -187,13 +188,22 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         if (p.revoked.get()) worker.cancel()
         return worker
     }
-    private fun runPreparation(purpose: Purpose, p: PreparationControl) = synchronized(this) {
+    private fun runPreparation(purpose: Purpose, p: PreparationControl) {
+        // Restore on the existing owned IO worker, outside the coordinator monitor.
+        // Stop/visibility revoke the reservation immediately, even on slow storage.
+        if (purpose == Purpose.DISCOVERY) {
+            check(preparationCurrent(p)) { "Preparation revoked" }
+            try { restoreGoveeNames() }
+            catch (e: GoveeNameException) { if (e.reason != GoveeNameFailure.DIRECTORY) throw e }
+            check(preparationCurrent(p)) { "Preparation revoked while restoring Govee directory" }
+        }
+        synchronized(this) {
         check(preparationCurrent(p) && gate.state == EnvironmentalState.ENABLED_IDLE) { "Preparation revoked" }
         // Restore persisted identities/labels for BOTH modes. Discovery's empty radio
         // filter must not erase the saved-device list used to label incoming cards.
         val saved = savedBindings().filterNot { it.archived }
         check(preparationCurrent(p)) { "Preparation revoked while restoring sensor names" }
-        if (purpose == Purpose.DISCOVERY) discoveryNames() // Restore on IO; directory failure never blocks the radio.
+        if (purpose == Purpose.DISCOVERY) discoveryNames() // Memory-only snapshot; directory failure never blocks the radio.
         check(preparationCurrent(p)) { "Preparation revoked while restoring Govee directory" }
         if (purpose == Purpose.DISCOVERY) begin(purpose, emptyList(), p = p)
         else {
@@ -204,6 +214,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             check(preparationCurrent(p)) { "Collection preparation was revoked" }
             history.retain(System.currentTimeMillis(), limits.retentionDays)
             begin(purpose, bindings, qualification, p)
+        }
         }
     }
     private fun discoveryNames(): List<GoveeDeviceName> = try {

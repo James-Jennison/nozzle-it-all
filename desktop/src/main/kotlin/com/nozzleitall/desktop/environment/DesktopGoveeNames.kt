@@ -4,6 +4,7 @@ import com.nozzleitall.environment.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.*
 
 /** Persist names, not keys. No startup IO, requests or equipment control. */
 class DesktopGoveeNames(private val cache: GoveeNameCache? = null,
@@ -13,7 +14,13 @@ class DesktopGoveeNames(private val cache: GoveeNameCache? = null,
     val devices = names.asStateFlow()
     private val storageLock = Any()
     private var loaded = false
-    private var loadFailed = false
+    @Volatile private var loadFailed = false
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    /** Lock-free snapshot for radio processing; never opens disk or network. */
+    fun currentDevices(): List<GoveeDeviceName> {
+        if (loadFailed) throw GoveeNameException(GoveeNameFailure.DIRECTORY)
+        return names.value
+    }
     private var pendingForgets = 0
     fun cachedDevices(): List<GoveeDeviceName> = synchronized(storageLock) {
         if (loadFailed) throw GoveeNameException(GoveeNameFailure.DIRECTORY)
@@ -29,8 +36,14 @@ class DesktopGoveeNames(private val cache: GoveeNameCache? = null,
         return epoch.incrementAndGet()
     }
     @Synchronized fun cancel() { epoch.incrementAndGet() }
-    fun forget() {
-        synchronized(this) { cancel(); names.value = emptyList(); pendingForgets++ }
+    @Synchronized private fun reserveForget() { cancel(); names.value = emptyList(); pendingForgets++ }
+    fun forget() { reserveForget(); finishForget() }
+    @OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
+    fun requestForgetAsync(): Deferred<Unit> {
+        reserveForget()
+        return cleanupScope.async(start = CoroutineStart.ATOMIC) { finishForget() }
+    }
+    private fun finishForget() {
         try { synchronized(storageLock) {
             loaded = true; loadFailed = true // Failed removal cannot silently resurrect the disk directory.
             cache?.write(emptyList()); loadFailed = false
@@ -43,7 +56,7 @@ class DesktopGoveeNames(private val cache: GoveeNameCache? = null,
         synchronized(storageLock) {
             if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
             fun publish(move: () -> Unit) = synchronized(this) {
-                if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
+                if (epoch.get() != request || pendingForgets != 0) throw GoveeNameException(GoveeNameFailure.CANCELLED)
                 move(); names.value = result; loaded = true; loadFailed = false
             }
             if (cache == null) publish {} else cache.write(result, ::publish)

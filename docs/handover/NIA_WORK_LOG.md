@@ -4,6 +4,20 @@ Newest entries at the bottom. Times are PDT.
 
 ## Automatic discovery follow-up (2026-10-19, in progress)
 
+Exact4efd GTHost full SUCCESS3m55s/132tasks35executed97cached,1312results with
+0failure/error (counts sealed in retained tar). Actual authorized Razr4efd14fixtures:
+12PASS/2cache-write failures; original failure evidence retained. Initial runner
+name was wrong and failed before tests; corrected to existing NozzleTestRunner.
+No normal-app installation/reset. v0.1.11/code764 candidate was created in parallel
+but its owned CI39309404085 canceled after the device failure; tag retained, not
+delivered. Replace FileStore mount-metadata probe with per-file POSIX attribute view.
+Latest source also moves cache restoration outside coordinator monitor, exposes
+lock-free radio snapshots, adds slow-restore Stop/stale-preparation test, makes
+desktop Forget finite app-owned cleanup with cancelled-handle fixture, independently
+awaits delete completion, separates Android DIRECTORY vs credential STORAGE outcomes,
+and verifies repaired Forget clears failure without a network import. Synthetic
+5f563c18d940 all3COMPLETE; raw findings retained and dispositions/closure pending.
+
 Source66f1e101 full GTHost SUCCESS4m7s/132tasks46executed86cached;
 1308tests1298PASS10skips0fail/errors. 100Hz core fixture4.3606256%onecore,
 RSS+9748480bytes/drop0 (not GUI/physical-radio proof). Initial fetch used a missing

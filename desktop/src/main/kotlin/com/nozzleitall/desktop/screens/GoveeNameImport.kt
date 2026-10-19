@@ -38,7 +38,8 @@ import kotlinx.coroutines.*
     DisposableEffect(store) { onDispose { store.cancel(); entryText = "" } }
     NzButton("Import names from Govee", { dialog = true }, enabled = !busy)
     NzButton("Forget imported Govee names", { cancel(); busy = true
-        scope.launch { try { withContext(Dispatchers.IO) { store.forget() }; message = "Imported directory forgotten. Added sensors and history are unchanged." }
+        val cleanup = store.requestForgetAsync()
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { try { withContext(NonCancellable) { cleanup.await() }; message = "Imported directory forgotten. Added sensors and history are unchanged." }
             catch (e: GoveeNameException) { message = e.reason.description } finally { busy = false } }
     }, enabled = !busy)
     Txt("Names are saved locally and reused for discovery, including after restarting NIA. No key or cloud request is needed to discover again.", Nz.type.bodySmall)

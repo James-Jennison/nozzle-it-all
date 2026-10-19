@@ -39,8 +39,10 @@ class GoveeNameCache(private val file: File) {
             check(file.parentFile.isDirectory || file.parentFile.mkdirs())
             temporary = File.createTempFile(".govee-names-", ".tmp", file.parentFile)
             // Do not change permissions on an existing parent shared with other app data.
-            if (Files.getFileStore(temporary.toPath()).supportsFileAttributeView("posix"))
-                Files.setPosixFilePermissions(temporary.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))
+            // Attribute views operate on this app-owned file. Do not enumerate
+            // mount/FileStore metadata: Android can deny that unrelated probe.
+            Files.getFileAttributeView(temporary.toPath(), java.nio.file.attribute.PosixFileAttributeView::class.java)
+                ?.setPermissions(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))
             FileOutputStream(temporary).use { it.write(text.toByteArray(Charsets.UTF_8)); it.fd.sync() }
             val staged = temporary.toPath()
             commit { Files.move(staged, file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING) }

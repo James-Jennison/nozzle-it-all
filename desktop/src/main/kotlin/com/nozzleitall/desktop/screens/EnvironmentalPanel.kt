@@ -9,6 +9,8 @@ import com.nozzleitall.environment.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CoroutineStart
 import org.json.JSONObject
 import com.nozzleitall.desktop.environment.DesktopGoveeNames
 
@@ -104,10 +106,14 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         }
         if (confirmDelete) {
             Txt("Delete only environmental configuration/history? External exports remain. Cleanup failures require explicit retry.", Nz.type.body)
-            Row { NzButton("Confirm delete / resume", { directory.cancel(); choosing = null; stopping = true; rows = emptyList(); chartHistory = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
+            Row { NzButton("Confirm delete / resume", { choosing = null; stopping = true; rows = emptyList(); chartHistory = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
+                val forget = directory.requestForgetAsync()
                 val cleanup = controller.requestDeleteAsync()
-                scope.launch { try { withContext(Dispatchers.IO) { directory.forget() }; cleanup.join(); confirmDelete = controller.view.value.state != EnvironmentalState.DISABLED }
-                    catch (e: GoveeNameException) { error = e.reason.description } finally { stopping = false } }
+                scope.launch(start = CoroutineStart.UNDISPATCHED) { try {
+                    try { withContext(NonCancellable) { forget.await() } }
+                    catch (e: GoveeNameException) { error = e.reason.description }
+                    cleanup.join(); confirmDelete = controller.view.value.state != EnvironmentalState.DISABLED
+                } finally { stopping = false } }
             }, enabled = !busy && !stopping); NzButton("Keep data", { confirmDelete = false }) }
         }
         if (v.bindings.any { !it.archived }) {

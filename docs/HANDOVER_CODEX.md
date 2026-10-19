@@ -2,6 +2,16 @@
 
 ## Owner-approved automatic discovery follow-up (2026-10-19, in progress)
 
+Superseding correction pending build: first exact66 full PASS1308tests and exact4efd
+full PASS1312tests, but actual Razr4efd14fixtures had2cache-write failures/12PASS.
+Do not deliver4efd/v0.1.11; owned CI39309404085 canceled, immutable tag retained.
+Correct the Android-incompatible mount/FileStore probe using file attribute views.
+Also separate memory-only radio snapshots from explicit IO cache restoration outside
+the coordinator monitor, preserve Stop during slow restoration, make desktop Forget
+an owned finite cleanup, independently await delete outcomes, and report DIRECTORY
+versus credential STORAGE failures correctly. New exact builds/device/review must
+validate these changes, not inherit older PASS. Normal phone still Play275 untouched.
+
 Owner requests adding ALL uniquely matched nearby Govee sensors during discovery,
 retaining explicit Start monitoring, preserving existing data, and completing
 desktop/Play Alpha/normal Razr delivery. Repeated key entry for discovery is not

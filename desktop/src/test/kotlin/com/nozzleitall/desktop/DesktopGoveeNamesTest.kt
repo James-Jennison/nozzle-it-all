@@ -6,6 +6,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DesktopGoveeNamesTest {
+    @Test fun noCacheForgetRemainsUsableAndRequestedCleanupSurvivesCancelledHandle() {
+        val noCache = DesktopGoveeNames()
+        noCache.forget(); assertTrue(noCache.cachedDevices().isEmpty())
+        val file = java.nio.file.Files.createTempDirectory("nia-owned-forget").resolve("directory.json").toFile()
+        GoveeNameCache(file).write(listOf(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5100", "Old name")))
+        val store = DesktopGoveeNames(GoveeNameCache(file))
+        val work = store.requestForgetAsync(); work.cancel()
+        kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeout(5000) { work.join() } }
+        assertTrue(GoveeNameCache(file).read().isEmpty())
+        assertTrue(store.currentDevices().isEmpty())
+    }
     @Test fun failedForgetCannotSilentlyReloadThePreservedDiskDirectory() {
         val parent = java.nio.file.Files.createTempDirectory("nia-forget-failure").toFile()
         val file = java.io.File(parent, "names.json")

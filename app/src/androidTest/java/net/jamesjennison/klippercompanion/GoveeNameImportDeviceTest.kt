@@ -29,7 +29,11 @@ class GoveeNameImportDeviceTest {
     @Test fun privateEntryDefaultsToNotRememberingAndImportsNames() = fixture { store, _ ->
         compose.setContent { MaterialTheme { GoveeNameImport(store) } }
         compose.onNodeWithText("Import names from Govee").performClick()
-        compose.onNodeWithTag("govee-private-key").performTextReplacement("fixture-not-a-real-key")
+        // Diagnose the empty synthetic dialog only; never inspect a real user's entry.
+        compose.waitForIdle()
+        assertTrue(compose.onRoot(useUnmergedTree = true).printToString(),
+            compose.onAllNodesWithTag("govee-private-key", useUnmergedTree = true).fetchSemanticsNodes().size == 1)
+        compose.onNodeWithTag("govee-private-key", useUnmergedTree = true).performTextReplacement("fixture-not-a-real-key")
         compose.onNodeWithText("Import names", useUnmergedTree = true).performClick()
         compose.waitUntil(5000) { store.devices.value.isNotEmpty() }
         compose.runOnIdle { assertEquals("Office shelf", store.devices.value.single().name) }

@@ -347,6 +347,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         }
     }
     BackHandler(tab == 0 && detailAddress != null) { detailAddress = null }
+    BackHandler(tab == 6) { tab = 0 }
     fun openPrinter(selected: String) {
         if(state.busy) return
         detailAddress = selected

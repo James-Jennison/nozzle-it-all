@@ -41,6 +41,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     val groups = remember(view.bindings, view.sensorLabels) { environmentalSensorGroups(view.bindings, view.sensorLabels) }
     val bindings = groups.flatMap { it.bindings }
     var selected by remember { mutableStateOf<String?>(null) }
+    var expandedTrends by remember { mutableStateOf(false) }
     val target = bindings.firstOrNull { it.id == selected } ?: bindings.firstOrNull()
     val temperature = Nz.colors.accent
     val humidity = Color(0xFF35B9C5)
@@ -103,9 +104,12 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                     Txt("${view.sensorLabels[binding.sensorId] ?: binding.model} · trends", Nz.type.title)
                     Txt(if (historyMode) "Saved history" else if (view.state == EnvironmentalState.COLLECTING) "Recording until Stop or app exit" else "Start monitoring to record new chart data", Nz.type.bodySmall)
                 }
-                NzButton("Sensor details", { onDetails(binding) })
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NzButton(if (expandedTrends) "Hide sensor charts" else "Show sensor charts", { expandedTrends = !expandedTrends })
+                    NzButton("Sensor details", { onDetails(binding) })
+                }
             }
-            BoxWithConstraints {
+            if (expandedTrends) BoxWithConstraints {
                 if (maxWidth >= 650.dp) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     Column(Modifier.weight(1f)) { EnvironmentalTrend(samples, binding.id, Channel.TEMPERATURE, temperature) }
                     Column(Modifier.weight(1f)) { EnvironmentalTrend(samples, binding.id, Channel.HUMIDITY, humidity) }

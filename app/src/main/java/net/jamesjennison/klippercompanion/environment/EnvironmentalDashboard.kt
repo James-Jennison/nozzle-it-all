@@ -34,7 +34,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
         if (bindings.isEmpty()) Text("Discover and add sensors, or open local history to restore saved sensors.")
         bindings.forEach { binding ->
             val name = view.sensorLabels[binding.sensorId] ?: binding.model
-            val latest = if (historyMode) samples.lastOrNull { it.binding == binding.id }
+            val latest = if (historyMode) EnvironmentalCharts.latest(samples, binding.id)
                 else view.latest[binding.id]?.let(EnvironmentalCharts::sample)
             val reception = if (historyMode) null else view.discovery[binding.address]
             val values = reception?.readings?.associate { it.channel to it.value } ?: latest?.values.orEmpty()

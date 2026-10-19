@@ -10,6 +10,8 @@ class ChartHistoryException : IllegalStateException("Local history cannot be plo
 
 object EnvironmentalCharts {
     const val MAX_SAMPLES = 500
+    fun latest(samples: List<ChartSample>, binding: String): ChartSample? = samples.asSequence()
+        .filter { it.binding == binding }.maxWithOrNull(compareBy<ChartSample> { it.time }.thenBy { it.sequence })
     fun sample(o: Observation) = ChartSample(o.eventId, o.bindingId, o.receivedAt, o.sessionId,
         o.droppedBefore, o.readings.filter { it.value.isFinite() }.associate { it.channel to it.value }, o.sequence)
 

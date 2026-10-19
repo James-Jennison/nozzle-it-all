@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EnvironmentalChartsTest {
+    @Test fun historyHeadlineUsesNewestReceptionRegardlessOfPageOrdering() {
+        val rows = listOf(sample(5), sample(4), sample(3))
+        assertEquals("id5", EnvironmentalCharts.latest(rows, "sensor")!!.id)
+        assertEquals("id5", EnvironmentalCharts.latest(rows.reversed(), "sensor")!!.id)
+        assertNull(EnvironmentalCharts.latest(rows, "missing"))
+    }
     private fun sample(i: Int, time: Long = i * 1000L, session: String = "one", dropped: Long = 0) =
         ChartSample("id$i", "sensor", time, session, dropped, mapOf(Channel.TEMPERATURE to i.toDouble()), i.toLong())
     @Test fun boundedMergeDeduplicatesAndOrdersByReceptionTime() {

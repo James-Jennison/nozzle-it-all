@@ -16,6 +16,44 @@ import javax.swing.SwingUtilities
 
 /** Offscreen software-rendered fixture, not installed-app/GPU/physical-radio proof. */
 class EnvironmentalDashboardRenderTest {
+    @Test fun packagedArtworkDecodesAndMatchesAndroid() {
+        val bytes = javaClass.classLoader.getResourceAsStream("environment/s4-dryer.png")!!.use { it.readBytes() }
+        assertArrayEquals(bytes, File("../app/src/main/res/drawable-nodpi/s4_dryer.png").readBytes())
+        val image = javax.imageio.ImageIO.read(bytes.inputStream())
+        assertEquals(1402, image.width); assertEquals(1122, image.height)
+        assertTrue(image.colorModel.hasAlpha())
+        assertEquals(image.width.toFloat() / image.height, com.nozzleitall.desktop.screens.s4ArtworkAspect, .0001f)
+    }
+    @Test fun anchorGeometryTracksFittedArtworkAtEveryLayoutBranch() {
+        for (width in listOf(320f, 480f, 640f)) for (scale in listOf(1f, 1.3f, 2f)) {
+            val height = (if (width >= 480 && scale <= 1.2f) 260f else 350f) * scale
+            val rect = com.nozzleitall.desktop.screens.s4ArtworkRect(width, height, 48f, 4f)
+            assertEquals(com.nozzleitall.desktop.screens.s4ArtworkAspect, rect.width / rect.height, .0001f)
+            assertTrue(rect.left >= 48f - .001f && rect.top >= 4f - .001f)
+            com.nozzleitall.desktop.screens.s4ArtworkAnchors.forEach {
+                assertTrue(rect.contains(androidx.compose.ui.geometry.Offset(rect.left + it.x * rect.width, rect.top + it.y * rect.height)))
+            }
+        }
+    }
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    @Test fun narrowLightLargeTextPlacementRenders() {
+        val output = File("build/reports/dashboard-narrow-light.png")
+        SwingUtilities.invokeAndWait {
+            val scene = ImageComposeScene(width = 440, height = 1600) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f, 1.5f)) {
+                    NozzleTheme("light") {
+                        com.nozzleitall.desktop.screens.S4EnvironmentOverview(EnvironmentalSensorGroup("S4", emptyList()),
+                            emptyMap(), EnvironmentalDashboardData(), false, false, null) {}
+                    }
+                }
+            }
+            try {
+                scene.render().close()
+                scene.render(1_000_000_000L).use { it.encodeToData()!!.use { data -> output.parentFile.mkdirs(); output.writeBytes(data.bytes) } }
+            } finally { scene.close() }
+        }
+        assertTrue(output.length() > 1000)
+    }
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
     @Test fun expandedPlacementStillRendersTheDryer() {
         val bindings = EnvironmentalGroupOverview.corners.mapIndexed { i, _ -> Binding("b$i", "s$i", "fixture-$i", "govee-ble", "H5100") }
@@ -40,9 +78,9 @@ class EnvironmentalDashboardRenderTest {
         var shellPixels = 0
         for (y in 0 until image.height) for (x in 0 until image.width) {
             val c = java.awt.Color(image.getRGB(x, y))
-            if (c.red in 70..220 && kotlin.math.abs(c.red - c.green) < 5 && kotlin.math.abs(c.green - c.blue) < 5) shellPixels++
+            if (c.green > 140 && c.green - c.red > 70 && c.green - c.blue > 50) shellPixels++
         }
-        assertTrue("Expanded placement renders the neutral product artwork", shellPixels > 1000)
+        assertTrue("Official-reference green branding is painted (not gray UI chrome)", shellPixels > 40)
     }
     @Test fun s4PresentationLogicAndGeometryStayIdenticalAcrossPlatforms() {
         fun body(file: File): String {
@@ -91,9 +129,9 @@ class EnvironmentalDashboardRenderTest {
         var shellPixels = 0
         for (y in 100 until 380) for (x in 180 until 760) {
             val c = java.awt.Color(image.getRGB(x, y))
-            if (c.red in 70..220 && kotlin.math.abs(c.red - c.green) < 5 && kotlin.math.abs(c.green - c.blue) < 5) shellPixels++
+            if (c.green > 140 && c.green - c.red > 70 && c.green - c.blue > 50) shellPixels++
         }
-        assertTrue("Default overview renders neutral product artwork", shellPixels > 1000)
+        assertTrue("Default overview paints distinctive green branding", shellPixels > 40)
         for (rgb in listOf(0xB59AFF, 0x35B9C5, 0xFFC66D, 0xFF91B5)) {
             var pixels = 0
             val expected = java.awt.Color(rgb)

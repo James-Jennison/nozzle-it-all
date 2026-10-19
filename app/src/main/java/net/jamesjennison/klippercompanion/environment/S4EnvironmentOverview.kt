@@ -27,6 +27,18 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 internal val positionColors = listOf(Color(0xFFB59AFF), Color(0xFF35B9C5), Color(0xFFFFC66D), Color(0xFFFF91B5))
+internal const val s4ArtworkAspect = 1402f / 1122f
+// Matches ContentScale.Fit inside the same padded rectangle, including letterboxing.
+internal fun s4ArtworkRect(width: Float, height: Float, horizontalPadding: Float, verticalPadding: Float): Rect {
+    val availableWidth = (width - 2 * horizontalPadding).coerceAtLeast(0f)
+    val availableHeight = (height - 2 * verticalPadding).coerceAtLeast(0f)
+    val fittedWidth = minOf(availableWidth, availableHeight * s4ArtworkAspect)
+    val fittedHeight = fittedWidth / s4ArtworkAspect
+    return Rect((width - fittedWidth) / 2, (height - fittedHeight) / 2,
+        (width + fittedWidth) / 2, (height + fittedHeight) / 2)
+}
+// Named corner locations on the elevated-front reference, not measured probe coordinates.
+internal val s4ArtworkAnchors = listOf(Offset(.15f, .14f), Offset(.85f, .14f), Offset(.08f, .83f), Offset(.92f, .83f))
 private fun fmt(v: Double?) = v?.let { String.format(Locale.getDefault(), "%.1f", it) } ?: "—"
 private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(t))
 
@@ -63,7 +75,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                             verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Label(if (channel == Channel.TEMPERATURE) "Average temperature" else "Average humidity", color = Color(0xFFAEBCC5))
                             Metric("${fmt(stats?.average)} ${channel.unit}", if (channel == Channel.TEMPERATURE) positionColors[0] else positionColors[1])
-                            Label("Range  ${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}")
+                            Label("Range  ${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}", color = Color.White)
                             Label("Spread  ${fmt(stats?.let { it.maximum - it.minimum })} ${channel.unit}   ·   ${stats?.count ?: 0}/4 positions", color = Color(0xFFAEBCC5))
                         }
                     }
@@ -133,16 +145,16 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 
 @Composable private fun DryerDiagram(positions: Map<String, Binding>, data: EnvironmentalDashboardData,
     reference: Long, historyMode: Boolean, selected: String?, onSelect: (Binding) -> Unit) {
-    // Original scalable cutaway illustration: long S4 shell, clear lid, four reel bays and front control panel.
+    // Official-reference illustration; telemetry stays native, selectable and independent.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val diagramHeight = if (maxWidth >= 480.dp && fontScale <= 1.2f) 260.dp else 350.dp
     Box(Modifier.widthIn(max = 640.dp).fillMaxWidth().height(diagramHeight * fontScale).align(Alignment.Center).testTag("s4-dryer-illustration")) {
         DryerArtwork(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 4.dp))
         Canvas(Modifier.fillMaxSize()) {
-            val anchors = listOf(Offset(.35f, .28f), Offset(.65f, .28f), Offset(.30f, .65f), Offset(.70f, .65f))
-            anchors.forEachIndexed { i, anchor ->
-                val p = Offset(anchor.x * size.width, anchor.y * size.height)
+            val fitted = s4ArtworkRect(size.width, size.height, 48.dp.toPx(), 4.dp.toPx())
+            s4ArtworkAnchors.forEachIndexed { i, anchor ->
+                val p = Offset(fitted.left + anchor.x * fitted.width, fitted.top + anchor.y * fitted.height)
                 val edge = Offset((if (i % 2 == 0) .19f else .81f) * size.width, (if (i < 2) .18f else .70f) * size.height)
                 drawLine(positionColors[i].copy(alpha = .65f), edge, p, 1.dp.toPx())
                 drawCircle(positionColors[i], 3.dp.toPx(), p)

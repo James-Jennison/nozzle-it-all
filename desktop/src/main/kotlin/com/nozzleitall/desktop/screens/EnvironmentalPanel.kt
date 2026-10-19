@@ -34,10 +34,12 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
     var setup by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf<String?>(null) }
     fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: ChartHistoryException) { error = e.message } catch (e: QualificationUnavailableException) { error = e.message } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
+    // Synchronous button callback only. The request must remain outside launch:
+    // a synchronous failure owns busy; otherwise the launched join owns its reset.
     fun start(purpose: Purpose) {
         if (!busy && !stopping) { busy = true; error = null
             try { val work = controller.requestOperationAsync(purpose); scope.launch { try { work.join() } finally { busy = false } } }
-            catch (_: kotlinx.coroutines.CancellationException) { busy = false }
+            catch (_: kotlinx.coroutines.CancellationException) { busy = false; error = "Preparation cancelled — retry explicitly" }
             catch (_: Exception) { busy = false; error = "Preparation unavailable or cancelled — retry explicitly" }
         }
     }

@@ -107,8 +107,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                 }
                 for (first in queue) {
                     if (revocationRequested.get() || !gate.valid(grant)) continue
-                    // At most 100ms coalescing, 32 events/transaction: bounded disk/CPU cost, no sample dedup by value.
-                    if (purpose == Purpose.COLLECTION) delay(100)
+                    // At most 200ms coalescing, 32 events/transaction: bounded disk/CPU cost, no sample dedup by value.
+                    if (purpose == Purpose.COLLECTION) delay(200)
                     val reports = mutableListOf(first)
                     repeat(31) { queue.tryReceive().getOrNull()?.let { reports += it } }
                     val decodedReports = reports.mapNotNull { report -> BleDecoders.decode(report)?.let { report to it } }

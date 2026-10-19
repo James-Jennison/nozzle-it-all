@@ -24,7 +24,13 @@ class EnvironmentalTest {
             else { val s = statement(sql, args); if (s.execute()) s.resultSet?.close() }
         }
         override fun query(sql: String, vararg args: Any?): List<List<String?>> = statement(sql, args).executeQuery().use { r -> buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) } }
-        override fun <T> transaction(block: () -> T): T { c.autoCommit = false; try { val v = block(); c.commit(); return v } catch (e: Throwable) { c.rollback(); throw e } finally { c.autoCommit = true } }
+        override fun <T> transaction(block: () -> T): T {
+            c.autoCommit = false
+            var failed: Throwable? = null
+            try { val v = block(); c.commit(); return v }
+            catch (e: Throwable) { failed = e; try { c.rollback() } catch (cleanup: Throwable) { e.addSuppressed(cleanup) }; throw e }
+            finally { try { c.autoCommit = true } catch (cleanup: Throwable) { if (failed != null) failed.addSuppressed(cleanup) else throw cleanup } }
+        }
         override fun close() { statements.values.forEach { it.close() }; c.close() }
     }
     private fun history() = EnvironmentalHistory(SqlStoreFactory { Sql(Files.createTempFile("nia-env-history", ".db").toFile()) })

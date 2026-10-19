@@ -38,7 +38,19 @@ class JdbcEnvironmentalStore(file: File) : SqlStore {
     override fun query(sql: String, vararg args: Any?): List<List<String?>> = statement(sql, args).executeQuery().use { r ->
         buildList { while (r.next()) add((1..r.metaData.columnCount).map { r.getString(it) }) }
     }
-    override fun <T> transaction(block: () -> T): T { connection.autoCommit = false; try { val result = block(); connection.commit(); return result } catch (e: Throwable) { connection.rollback(); throw e } finally { connection.autoCommit = true } }
+    override fun <T> transaction(block: () -> T): T {
+        connection.autoCommit = false
+        var failed: Throwable? = null
+        try { val result = block(); connection.commit(); return result }
+        catch (e: Throwable) {
+            failed = e
+            // SQLITE_FULL can roll back automatically. Preserve the original failure if rollback then has no transaction.
+            try { connection.rollback() } catch (cleanup: Throwable) { e.addSuppressed(cleanup) }
+            throw e
+        } finally {
+            try { connection.autoCommit = true } catch (cleanup: Throwable) { if (failed != null) failed.addSuppressed(cleanup) else throw cleanup }
+        }
+    }
     override fun close() { statements.values.forEach { it.close() }; statements.clear(); connection.close() }
 }
 

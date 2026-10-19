@@ -2,6 +2,22 @@
 
 Newest entries at the bottom. Times are PDT.
 
+## Owner follow-up: retained names and visual dashboard (2026-10-19)
+
+Owner requires visual environmental data rather than text-only rows. Add actual
+temperature/humidity sensor cards and local-history time-series charts to both
+platforms; no fabricated data, hidden collection, new protocols or new hardware
+gates. Combine with pending normal Play update rather than promote an intermediate
+candidate missing the requested UI. Desktop940 installed/result screenshot proves
+two correct persisted friendly labels and proper dock icon; it is not final visuals.
+Owner also reports inconsistent retained names. Source inspection found discovery
+begin overwrote view.bindings with its deliberately empty radio filter and fresh
+operation start did not restore persisted sensorLabels. Fixed by refreshing saved
+metadata in explicit operation preparation and retaining saved bindings during
+discovery. Desktop imported-name directory hoisted to AppState, memory-only/no
+key storage or startup IO, so leaving Settings no longer discards it. Added both-
+mode fresh-projection/rescan regression; pending build/review. No labels overwritten.
+
 ## Active 2026-10-19 name-matching correction
 
 Owner confirmed Govee Home exposes no MAC in Device Properties; Razr screenshot
@@ -16,6 +32,58 @@ vendor guarantee. No two-byte suffix guessing. Malformed/mixed separators and
 ambiguous matches are rejected. Desktop discovery now leads with the resolved
 friendly name and preserves saved labels. Full cloud IDs replace misleading
 truncated picker IDs. Build/review/install/actual-account validation pending.
+
+Source1ee19132 GTHost full validation SUCCESS3m50s/132tasks46executed86up-to-date;
+core name tests6PASS. Source5981c6b1 adds real Compose discovery-card and desktop
+directory tests for two same-model full addresses sharing the short suffix.
+598 full validation SUCCESS3m6s/132tasks28executed104up-to-date; integrated Linux
+0.1.7 packaging running. Immutable v0.1.7/code752 CI39295775782 on GTHost running;
+only owned superseded feature CI39295384307/39295562863 canceled. Normal Razr
+remains Play275/appId10002/firstInstallTime unchanged; isolated .environment
+APK SHA9dd139c098180e43b36c50fe3d4ca18f98a5da38df0d91f6811d5f343adc8b6a
+and testAPK48a102fc8123e678b0338c5a19fb1ae9c1682fc5749bd8b5c74559a684ad3445
+installed on freshly verified motorola razr2023, targeted10fixtures running.
+Synthetic initial de63b5572247 all3COMPLETE,21immutable findings/separate
+dispositions. Clarification39803dab25bd all3COMPLETE; frontend no findings.
+Adversarial62c99b35783b COMPLETE explicitly withdraws two HIGH lock/Deferred
+claims and MEDIUM stale-publication premise after actual monitor/exception trace.
+No runtime/account naming or completed Play/desktop update claim yet.
+598 actual Razr instrumentation finished OK10tests15.201s. Fresh hash-only normal
+profile inventory before-matching equals prior before-v2: two printer identities
+and one project, no reset/export/private DB access. Sourcea5d05c65 changes only
+Linux packaging since598: current-version exact Compose path, nonempty/version
+assertions, exact artifact manifest/adapter listing with pipefail visibility.
+Earlier598 packaging emitted nonfatal multi-Deb provenance-list error; raw log
+retained and actual598 binary identity independently verified, not installed.
+f3 package completed with correct adapter list/two hashes and was preserved before
+regeneration. Firsta5 desktop suite failed1/239 (9skips) at unchanged native AFC
+slicing fixture: missing Voronoi vertex. Original XML/reports/log archived; no
+assertion or engine changes. Same-source/same-engine bounded full retry running.
+v0.1.7 CI build-and-test SUCCESS; release AAB build running. Package review
+9bbc3a4ffdac all3COMPLETE; exact-version remediation a5 targetedbc22e7a02e62 pending.
+Later checkpoint: a5 same-source retry desktopSUCCESS43s,239results230PASS9skip;
+raw first native AFC failure retained.940 matching tests/baselineSUCCESS14s and
+integratedpackageSUCCESS with explicit manifest scope/input digest. Synthetic
+package98a50941e4ef all3COMPLETE and frontendb6e094b4fd8e no current defect; actual
+post-build metadata/all6real jars verified independently. Owner approved desktop
+authentication; dpkg install940 over0.1.6 exited0, all218installedpayloadhashes
+match SHA c2eff2259c149270ec64853ebefa2c3f940460d8fa9cffe22f8749ec079b7c42.
+Owner reopened verified /opt executable at10:59:41 after install10:59:26. Awaiting
+private re-import/discovery screenshot, no post-fix account matching claim yet.
+v0.1.7 CI39295775782 completedSUCCESS, AABSHA c68d91aa374fb42fa16e24687730831629acaf6695ef598d244b03cee80b2763
+download/SHA manifest passed. Local gh2.46 lacks attestation subcommand (failure
+retained); GitHub API provenance record subject/source598/tagv0.1.7/run39295775782
+matches artifact. No claim of local cryptographic signature verification.
+752AAB uploaded only to Alpha draft. Preview warning + actual aapt2 proved legacy
+BLE permissions implied mandatory Bluetooth/location despite opt-in framework.
+Sourcebdd3bffd marks those optional, no new permission/runtime/schema behavior.
+v0.1.8/code756 successor tag created, CI39298641476running; feature-only duplicates
+39297606017/39298646517 canceled to prioritize ownedrelease. Targeted manifest test
+and debugbuildSUCCESS41s. Actual new debugbadging requires only existing faketouch/
+WiFi; Bluetooth/classic/BLE/location optional. ManifestSynthetic5061d57c6d97pending.
+Normal Play275/data unchanged; before-matching list matches original2printers+
+1project. New Govee Home screenshot on freshly verified Razr shows friendly names
+but no ID proof; readings are NOT used to infer identity. No key screenshot/read.
 
 Implementation authorization on 2026-10-18: owner approved environmental B–D and
 numeric budgets; reviewed proposal remains unchanged. Separate lazy JVM API/core,

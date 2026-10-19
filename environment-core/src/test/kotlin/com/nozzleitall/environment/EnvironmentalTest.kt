@@ -13,6 +13,31 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun bothOperationModesRestorePersistedNamesWithoutOpeningHistoryFirst() {
+        for (purpose in Purpose.entries) {
+            val h = history()
+            val binding = h.bind(Candidate("AA:BB:CC:DD:EE:FF", "govee-ble", "H5110"), "Saved room name")
+            val ready = CountDownLatch(1)
+            var scanning: BleScanRequest? = null
+            val c = EnvironmentalCoordinator(file(), h, { BleTransport { request, _, _ ->
+                scanning = request; ready.countDown(); object : RadioSession { override fun close() {} }
+            } })
+            try {
+                c.foreground(true); c.enable()
+                assertTrue(c.view.value.sensorLabels.isEmpty()) // Fresh app projection, persisted row already exists.
+                if (purpose == Purpose.DISCOVERY) c.discover() else c.start()
+                assertTrue(ready.await(5, TimeUnit.SECONDS))
+                assertEquals(binding, c.view.value.bindings.single())
+                assertEquals("Saved room name", c.view.value.sensorLabels[binding.sensorId])
+                assertEquals(purpose == Purpose.DISCOVERY, scanning!!.discovery)
+                c.stop(); c.discover()
+                assertEquals(binding, c.view.value.bindings.single())
+                assertEquals("Saved room name", c.view.value.sensorLabels[binding.sensorId])
+                assertEquals(1, h.bindings().size)
+                assertEquals(0L, h.eventCount())
+            } finally { c.close() }
+        }
+    }
     @Test fun existingGoveeHistoryRestoresNamesAndExplicitRenamePreservesObservations() {
         val path = Files.createTempFile("nia-govee-names-history", ".db").toFile()
         val binding: Binding

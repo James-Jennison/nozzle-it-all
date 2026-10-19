@@ -1,6 +1,65 @@
 # Handover to Codex (written 2026-10-18)
 
-## Current authorized follow-up: normal Razr + Govee Home names (2026-10-19)
+## Active correction: automatic Govee names, desktop + normal Razr (2026-10-19)
+
+Owner requires automatic correct Govee Home names, not identification of MACs that
+Govee Home does not expose. Shared matcher now accepts six-byte IDs or eight-byte
+Govee IDs with two prefix bytes followed by the complete six-byte BLE address.
+All 48 address bits, exact model and a unique directory match are required. No
+short-suffix guessing. Saved custom labels/manual drafts remain unchanged. Desktop
+cards lead with friendly names; optional pickers no longer truncate cloud IDs.
+
+App code source5981c6b1; exact GTHost full validation SUCCESS3m6s, reports1288 total,
+1278passed/10conditional skips/0fail. Prior1ee SUCCESS3m50s/core name tests6PASS.
+Actual Razr targeted instrumentation598 OK10tests15.201s, including auto-naming
+two same-model sensors sharing short suffix, credential lifecycle and generated
+Room7→9 preservation fixture. Cached/reused results are not all re-executed.
+
+Linux0.1.7 source940d6bbc installed via Owner-approved desktop dpkg exit0. DebSHA
+c2eff2259c149270ec64853ebefa2c3f940460d8fa9cffe22f8749ec079b7c42;
+mainjarSHA2b7468c80f4651443b171ea1daf59eb513d570891053e4290bfea2dade7dd5a4.
+All218installed payload hashes, all6real adapter jars, launcher/eight icons and
+post-build Package/Version/Architecture verified. Owner reopened process2900338
+at10:59:41 after installation10:59:26; executable /opt/nozzle-it-all/bin/nozzle-it-all.
+Actual post-fix account import/discovery is awaiting Owner private entry/result,
+not claimed complete. Do not inspect/screenshot an open key dialog.
+
+Packaging940 differs from598 only in package_linux.sh: exact intended-version
+Compose input, version/nonempty checks, exact current2output manifest, explicit
+manifest scope, input digest and visible adapter pipeline failures. Original598
+nonfatal provenance glob error retained. f3/a5/940 artifacts preserved, no cleanup.
+Firsta5 desktop test239 had1unchanged native AFC missingVoronoi failure; raw report
+retained. Same-source/same-engine retry SUCCESS43s/230PASS9skip0fail, packagePASS.
+940 targeted name tests/baseline SUCCESS14s, integratedpackagePASS. No native
+assertions/engine changed. Original failure not rewritten PASS.
+
+Androidv0.1.7 immutable598/code752 CI39295775782 SUCCESS, AABSHA
+c68d91aa374fb42fa16e24687730831629acaf6695ef598d244b03cee80b2763 uploaded ONLY
+to existing Alpha draft4, not rolled out. Play preview revealed legacy permission
+implied mandatory Bluetooth/location filters (2phones/4tablets lost). New source
+bdd3bffd explicitly makes both optional, matching opt-in framework; no runtime,
+permissions/schema/storage change. v0.1.8 immutablebdd/code756 CI39298641476 is
+the replacement candidate. Targeted manifest test/debug build GTHostSUCCESS41s;
+Corrected debug APK badging shows only pre-existing faketouch/WiFi mandatory;
+Bluetooth/classic/BLE/location are explicitly optional. Confirm release badging
+and Play preview after the replacement AAB finishes.
+Do not publish752 instead of corrected756. Preserve tags; no GitHub draft publish.
+
+Normal Razr com.nozzleitall.app remains Play275/appId10002. Fresh before-matching
+hash-only inventory exactly matches before-v2:2printers/1project. No uninstall,
+data reset or private DB export. Existing Play signer boundary remains; only
+Play-generated matching-signer update may replace normal app. Other devices
+untouched. No actual-account/normal-app monitoring or completed Play update claim.
+
+Synthetic naming cycles de63b5572247/39803dab25bd and targeted62c99b35783b/
+3f7219234cd7 COMPLETE. Incorrect lock/Deferred/Main-thread premises explicitly
+withdrawn/resolved after actual source supplied; original evidence retained with
+separate dispositions. Packaging9bbc3a4ffdac/bc22e7a02e62/98a50941e4ef COMPLETE;
+frontendb6e094b4fd8e explicitly no current shipped defect given independent real
+payload/metadata checks. Optional future inventory/publisher changes are not new
+Owner gates. New Android manifest review5061d57c6d97 pending. No whole-task closure.
+
+## Earlier private-import baseline (historical; superseded above)
 
 The Owner has authorized the existing Play Closed testing–Alpha track update,
 then explicitly authorized read-only Govee Home name import with private key entry

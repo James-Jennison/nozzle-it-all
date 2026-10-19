@@ -50,6 +50,8 @@ enum class Destination(val label: String, val icon: NzIcon, val key: Key, val in
 }
 
 class AppState(val paths: AppPaths, val scope: CoroutineScope) {
+    // Session-memory names survive panel navigation; no key, disk IO or startup request.
+    val goveeNames = com.nozzleitall.desktop.environment.DesktopGoveeNames()
     val environment = com.nozzleitall.environment.EnvironmentalCoordinator(
         File(paths.config, "environment/control.json"),
         com.nozzleitall.environment.EnvironmentalHistory(com.nozzleitall.environment.SqlStoreFactory {

@@ -12,10 +12,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import com.nozzleitall.desktop.environment.DesktopGoveeNames
 
-@Composable fun EnvironmentalPanel(controller: EnvironmentalCoordinator) {
+@Composable fun EnvironmentalPanel(controller: EnvironmentalCoordinator, directory: DesktopGoveeNames) {
     val v by controller.view.collectAsState()
     val scope = rememberCoroutineScope()
-    val directory = remember(controller) { DesktopGoveeNames() }
     val importedNames by directory.devices.collectAsState()
     var choosing by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }

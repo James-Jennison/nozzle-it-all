@@ -186,9 +186,13 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     private fun runPreparation(purpose: Purpose, p: PreparationControl) = synchronized(this) {
         check(preparationCurrent(p) && gate.state == EnvironmentalState.ENABLED_IDLE) { "Preparation revoked" }
+        // Restore persisted identities/labels for BOTH modes. Discovery's empty radio
+        // filter must not erase the saved-device list used to label incoming cards.
+        val saved = savedBindings().filterNot { it.archived }
+        check(preparationCurrent(p)) { "Preparation revoked while restoring sensor names" }
         if (purpose == Purpose.DISCOVERY) begin(purpose, emptyList(), p = p)
         else {
-            val bindings = history.bindings().filterNot { it.archived }
+            val bindings = saved
             check(preparationCurrent(p)) { "Collection preparation was revoked" }
             require(bindings.isNotEmpty()) { "Save a sensor first" }
             val qualification = history.assignedQualificationRadios(bindings, platformIdentity, System.currentTimeMillis())
@@ -216,7 +220,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         gapSession = if (purpose == Purpose.COLLECTION) runId else null
         gapDropBase = runDroppedStart
         val calibration = bindings.associate { it.id to history.calibrated(it, listOf(Reading(Channel.TEMPERATURE, 0.0), Reading(Channel.HUMIDITY, 0.0), Reading(Channel.BATTERY_PERCENT, 0.0), Reading(Channel.BATTERY_VOLTAGE, 0.0))).associateBy { r -> r.channel } }
-        mutable.value = mutable.value.copy(state = gate.state, candidates = emptyList(), discovery = emptyMap(), bindings = bindings,
+        mutable.value = mutable.value.copy(state = gate.state, candidates = emptyList(), discovery = emptyMap(),
+            bindings = if (purpose == Purpose.DISCOVERY) mutable.value.bindings else bindings,
             status = if (purpose == Purpose.DISCOVERY) "Discovering for ${limits.discoverySeconds} seconds — active BLE scan, radio impact; diagnostic only" else "Collecting diagnostic receptions — measurement age unknown; active BLE scan")
         scope.launch {
             try {

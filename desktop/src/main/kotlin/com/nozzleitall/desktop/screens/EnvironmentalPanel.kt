@@ -60,12 +60,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
             catch (_: Exception) { error = "Saved readings could not be loaded. Use Open local history to retry." }
         } else { chartHistory = emptyList(); rows = emptyList(); historyMode = false }
     }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SectionHeader("Environment", v.state.dashboardStatus())
-        v.nameDirectoryProblem?.let { Banner(it, BannerKind.WARNING) }
-        error?.let { Banner(it, BannerKind.WARNING) }
-        v.dashboardNotice()?.let { Banner(it, BannerKind.INFO) }
-        if (historyMode) Banner("Viewing saved history. Return to live readings for current updates.", BannerKind.INFO)
+    val controls: @Composable () -> Unit = {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")
             if (v.state == EnvironmentalState.ENABLED_IDLE) {
@@ -73,14 +68,26 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
                 NzButton("Start monitoring", { historyMode = false; start(Purpose.COLLECTION) }, kind = ButtonKind.PRIMARY, enabled = !busy && !stopping, testTag = "environment-start")
             }
             if (v.state == EnvironmentalState.DISCOVERING || v.state == EnvironmentalState.COLLECTING || busy || stopping) {
-                NzButton("Stop / cancel", { stop() }, enabled = !stopping, testTag = "environment-stop")
+                NzButton(if (v.state == EnvironmentalState.COLLECTING) "Stop monitoring" else "Cancel", { stop() }, enabled = !stopping, testTag = "environment-stop")
             }
-            NzButton(if (historyMode) "Return to live readings" else "Open local history", {
+            NzButton(if (historyMode) "Live readings" else "History", {
                 if (historyMode) historyMode = false else action { controller.savedBindings(); val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded; historyMode = true }
             }, enabled = !busy && !stopping, testTag = "environment-history")
             if (historyMode) NzButton("Latest history", { action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded } }, enabled = !busy && !stopping)
-            NzButton(if (setup) "Close setup" else "Setup & data", { setup = !setup })
+            NzButton(if (setup) "Close setup" else "Setup", { setup = !setup })
         }
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth >= 900.dp) SectionHeader("Environment", v.state.dashboardStatus()) { controls() }
+            else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionHeader("Environment", v.state.dashboardStatus()); controls()
+            }
+        }
+        v.nameDirectoryProblem?.let { Banner(it, BannerKind.WARNING) }
+        error?.let { Banner(it, BannerKind.WARNING) }
+        v.dashboardNotice()?.let { Banner(it, BannerKind.INFO) }
+        if (historyMode) Banner("Viewing saved history. Return to live readings for current updates.", BannerKind.INFO)
         EnvironmentalDashboard(v, chartHistory, historyMode, onDetails = { details = if (details == it.id) null else it.id })
         if (setup) Card(Modifier.fillMaxWidth()) {
         Txt("Govee names & discovery", Nz.type.title)

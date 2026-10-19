@@ -43,7 +43,8 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     var selected by remember { mutableStateOf<String?>(null) }
     var expandedChoice by remember { mutableStateOf<Boolean?>(null) }
     val expandedTrends = expandedChoice ?: groups.none { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
-    val target = bindings.firstOrNull { it.id == selected } ?: bindings.firstOrNull()
+    val hasOverview = groups.any { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
+    val target = bindings.firstOrNull { it.id == selected } ?: if (hasOverview) null else bindings.firstOrNull()
     val temperature = Nz.colors.accent
     val humidity = Color(0xFF35B9C5)
     Column(Modifier.fillMaxWidth().testTag("environment-dashboard"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -56,25 +57,27 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             val columns = (maxWidth.value / 270f).toInt().coerceIn(1, 4)
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 groups.forEach { group ->
-                group.title?.let { Txt(it, Nz.type.title, modifier = Modifier.semantics { heading() }) }
                 val positions = EnvironmentalGroupOverview.s4Positions(group, view.sensorLabels)
-                if (positions != null) S4EnvironmentOverview(group, positions, data, historyMode,
-                    view.state == EnvironmentalState.COLLECTING, target?.id) { selected = it.id }
-                else group.bindings.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (positions != null) Card(Modifier.fillMaxWidth()) {
+                    Txt("SUNLU ${group.title ?: "S4"}", Nz.type.title, modifier = Modifier.semantics { heading() })
+                    S4EnvironmentOverview(group, positions, data, historyMode,
+                        view.state == EnvironmentalState.COLLECTING, target?.id) { selected = it.id; expandedChoice = true }
+                } else {
+                group.title?.let { Txt(it, Nz.type.label, Nz.colors.textMuted, modifier = Modifier.semantics { heading() }) }
+                group.bindings.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     row.forEach { binding -> key(binding.id) {
                         val name = view.sensorLabels[binding.sensorId] ?: binding.model
                         val reading = data.readings[binding.id]
                         Card(Modifier.weight(1f).testTag("environment-sensor-card")
                             .border(if (target?.id == binding.id) 2.dp else 0.dp, if (target?.id == binding.id) temperature else Color.Transparent, RoundedCornerShape(16.dp))
-                            .selectable(target?.id == binding.id, role = Role.Tab) { selected = binding.id }
+                            .selectable(target?.id == binding.id, role = Role.Tab) { selected = binding.id; expandedChoice = true }
                             .semantics { stateDescription = if (target?.id == binding.id) "Charts shown" else "Show charts" }) {
                             Txt(name, Nz.type.title, maxLines = 2)
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column {
                                     Txt("${number(reading?.values?.get(Channel.TEMPERATURE))}°C", Nz.type.metric.copy(fontSize = 30.sp), temperature)
-                                    Txt("Temperature", Nz.type.bodySmall, Nz.colors.textMuted)
                                 }
-                                Box(Modifier.size(76.dp), contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
                                     val rh = reading?.values?.get(Channel.HUMIDITY)
                                     Canvas(Modifier.fillMaxSize()) {
                                         drawArc(humidity.copy(alpha = .16f), 0f, 360f, false, style = Stroke(5.dp.toPx()))
@@ -87,15 +90,16 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                                 }
                             }
                             val series = EnvironmentalCharts.series(samples, binding.id, Channel.TEMPERATURE)
-                            if (series != null) TrendCanvas(series, temperature, Modifier.fillMaxWidth().height(32.dp))
-                            else Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.CenterStart) {
-                                Txt("No recorded temperature trend yet", Nz.type.bodySmall, Nz.colors.textMuted)
+                            if (series != null) TrendCanvas(series, temperature, Modifier.fillMaxWidth().height(24.dp))
+                            else Box(Modifier.fillMaxWidth().height(24.dp), contentAlignment = Alignment.CenterStart) {
+                                Txt("Waiting for trend data", Nz.type.bodySmall, Nz.colors.textMuted)
                             }
                             Txt(reading?.let { "${if (historyMode) "Saved reception" else "Received"} ${time(it.time)}" } ?: if (historyMode) "No saved reading in this page" else "Waiting for a reading", Nz.type.bodySmall, Nz.colors.textMuted)
                         }
                     } }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 } }
+                }
                 }
             }
         }

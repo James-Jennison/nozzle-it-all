@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nozzleitall.environment.*
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -40,32 +41,37 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
     // Refresh on receptions as well as the timer: a new reception must not look future-dated for 15s.
     val liveReference = remember(now, data.readings) { System.currentTimeMillis() }
     val reference = if (historyMode) savedReference ?: 0L else liveReference
-    Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    var showMethod by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Label(if (historyMode) savedReference?.let { "Saved history · summary at ${stamp(it)}" } ?: "Saved history · no saved group readings"
-            else if (collecting) "Live receptions · sensor positions viewed from the front" else "Monitoring stopped · last received readings")
+            else if (collecting) "Live · viewed from the front" else "Stopped · last received readings")
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val diagram: @Composable () -> Unit = {
                 DryerDiagram(positions, data, reference, historyMode, selected, onSelect)
             }
             val summary: @Composable () -> Unit = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Label("Group conditions", title = true)
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
                         val stats = EnvironmentalGroupOverview.stats(group.bindings, data.readings, channel, reference)
-                        Label(if (channel == Channel.TEMPERATURE) "Temperature (°C)" else "Humidity (%RH)", title = true)
-                        Label("Average  ${fmt(stats?.average)} ${channel.unit}", title = true)
-                        Label("Range  ${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}")
-                        Label("Spread  ${fmt(stats?.let { it.maximum - it.minimum })} ${channel.unit} · ${stats?.count ?: 0}/4 positions")
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Label(if (channel == Channel.TEMPERATURE) "AVERAGE TEMPERATURE" else "AVERAGE HUMIDITY")
+                            Metric("${fmt(stats?.average)} ${channel.unit}", if (channel == Channel.TEMPERATURE) positionColors[0] else positionColors[1])
+                            Label("${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}  ·  Δ ${fmt(stats?.let { it.maximum - it.minimum })}  ·  ${stats?.count ?: 0}/4 sensors")
+                        }
                     }
-                    Label("Last 2 min only · excludes missing/future readings · sampled air, not filament moisture")
+                    Box(Modifier.clickable(role = Role.Button) { showMethod = !showMethod }.padding(vertical = 8.dp)
+                        .semantics { stateDescription = if (showMethod) "Expanded" else "Collapsed" }) {
+                        Label(if (showMethod) "Hide calculation details" else "How averages are calculated", title = true)
+                    }
+                    if (showMethod) Label("Only readings received in the last 2 minutes contribute. Missing, older and future-dated readings are excluded. Positions follow sensor names. This is sampled air, not filament moisture; the illustration is not a heat map.")
                 }
             }
-            if (maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Box(Modifier.weight(1.4f)) { diagram() }
+            if (maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1.6f)) { diagram() }
                 Box(Modifier.weight(1f)) { summary() }
             } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { diagram(); summary() }
         }
-        Label("Group trends · recorded receptions", title = true)
+        Label("Recorded trends", title = true)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             EnvironmentalGroupOverview.corners.forEachIndexed { i, corner ->
                 positions[corner]?.let { Label("● $corner", color = positionColors[i]) }
@@ -142,15 +148,15 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
         }
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 26.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                PositionLabel("Back Left", positions, data, reference, historyMode, 0, selected, onSelect, Modifier.weight(1f))
+                PositionLabel("Back Left", positions, data, reference, historyMode, 0, selected, onSelect, Modifier.weight(1f, fill = false).widthIn(max = 220.dp))
                 Spacer(Modifier.width(12.dp))
-                PositionLabel("Back Right", positions, data, reference, historyMode, 1, selected, onSelect, Modifier.weight(1f))
+                PositionLabel("Back Right", positions, data, reference, historyMode, 1, selected, onSelect, Modifier.weight(1f, fill = false).widthIn(max = 220.dp))
             }
             Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    PositionLabel("Front Left", positions, data, reference, historyMode, 2, selected, onSelect, Modifier.weight(1f))
+                    PositionLabel("Front Left", positions, data, reference, historyMode, 2, selected, onSelect, Modifier.weight(1f, fill = false).widthIn(max = 220.dp))
                     Spacer(Modifier.width(12.dp))
-                    PositionLabel("Front Right", positions, data, reference, historyMode, 3, selected, onSelect, Modifier.weight(1f))
+                    PositionLabel("Front Right", positions, data, reference, historyMode, 3, selected, onSelect, Modifier.weight(1f, fill = false).widthIn(max = 220.dp))
                 }
                 Spacer(Modifier.height(22.dp))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Label("S4  ·  FRONT", color = Color(0xFFDAEEF5)) }
@@ -182,7 +188,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
         .semantics(mergeDescendants = true) { stateDescription = if (binding == null) "No assigned sensor" else if (binding.id == selected) "Charts shown" else "Show charts" }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Label("● $corner", color = positionColors[index], title = true)
-            Label(status, color = Color(0xFFB7C5CC))
+            if (status != "Recent reception" && status != "Saved reception") Label(status, color = Color(0xFFB7C5CC))
         }
         Label("${fmt(reading?.values?.get(Channel.TEMPERATURE))}°C  ·  ${fmt(reading?.values?.get(Channel.HUMIDITY))}%RH", color = Color.White)
     }
@@ -190,5 +196,9 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 
 @Composable private fun Label(text: String, title: Boolean = false, color: Color = LocalContentColor.current) {
     Text(text, style = if (title) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodySmall, color = color)
+}
+
+@Composable private fun Metric(text: String, color: Color) {
+    Text(text, style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp), color = color)
 }
 

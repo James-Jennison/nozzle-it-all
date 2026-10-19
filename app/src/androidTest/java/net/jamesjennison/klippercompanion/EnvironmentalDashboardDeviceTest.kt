@@ -33,11 +33,24 @@ class EnvironmentalDashboardDeviceTest {
         compose.onNodeWithText("Average  41.5 °C").assertExists()
         compose.onNodeWithText("Range  40.0 – 43.0 °C").assertExists()
         compose.onNodeWithTag("s4-group-trend-TEMPERATURE").performScrollTo().assertIsDisplayed()
+        val plotted = compose.onNodeWithTag("s4-group-trend-TEMPERATURE").captureToImage().asAndroidBitmap()
+        val colors = listOf(0xFFB59AFF.toInt(), 0xFF35B9C5.toInt(), 0xFFFFC66D.toInt(), 0xFFFF91B5.toInt())
+        colors.forEach { color ->
+            var pixels = 0
+            for (y in 0 until plotted.height) for (x in 0 until plotted.width) {
+                val p = plotted.getPixel(x, y)
+                if (kotlin.math.abs(android.graphics.Color.red(p) - android.graphics.Color.red(color)) < 10 &&
+                    kotlin.math.abs(android.graphics.Color.green(p) - android.graphics.Color.green(color)) < 10 &&
+                    kotlin.math.abs(android.graphics.Color.blue(p) - android.graphics.Color.blue(color)) < 10) pixels++
+            }
+            org.junit.Assert.assertTrue("Each actual trend stroke renders inside tagged Canvas", pixels > plotted.width)
+        }
         compose.onNode(hasContentDescription("S4 TEMPERATURE trends: 4 sensors", substring = true)).assertExists()
         compose.onNodeWithTag("s4-group-trend-HUMIDITY").performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("s4-dryer-illustration").performScrollTo()
         val output = java.io.File(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "s4-synthetic.png")
         output.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        org.junit.Assert.assertTrue("Diagnostic screenshot retained for visual inspection", output.length() > 1000)
     }
     @Test fun obviousNamedGroupHasHeadingAndOrderedCards() {
         val names = listOf("S4 Back Left", "Printing Room", "S4 Front Right", "S4 Back Right", "S4 Front Left")
@@ -57,7 +70,34 @@ class EnvironmentalDashboardDeviceTest {
         compose.onNodeWithText("S4 Front Left · trends").assertExists()
         compose.onNodeWithTag("s4-dryer-illustration").assertExists()
         compose.onNodeWithTag("s4-position-Back-Right").performClick()
+        compose.onNodeWithTag("s4-position-Back-Right").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Charts shown"))
         compose.onNodeWithText("S4 Back Right · trends").assertExists()
+    }
+    @Test fun unmappableS4KeepsAllCardsAndEmptyHistoryHasNoEpochDate() {
+        val names = mutableStateOf(listOf("S4 Front Left", "S4 Top"))
+        val bindings = (0..1).map { Binding("b$it", "s$it", "a$it", "govee-ble", "H5100") }
+        compose.setContent { MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+            EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = bindings,
+                sensorLabels = bindings.mapIndexed { i, b -> b.sensorId to names.value[i] }.toMap()), emptyList(), historyMode = true)
+        } } }
+        compose.onNodeWithTag("s4-dryer-illustration").assertDoesNotExist()
+        compose.onAllNodesWithTag("environment-sensor-card").assertCountEquals(2)
+        compose.runOnIdle { names.value = listOf("S4 Front Left", "S4 Back Right") }
+        compose.onNodeWithText("Saved history · no saved group readings").assertExists()
+        compose.onAllNodesWithText("Not assigned").assertCountEquals(2)
+    }
+    @Test fun newReceptionContributesImmediatelyWithoutWaitingForClockTick() {
+        val bindings = (0..1).map { Binding("b$it", "s$it", "a$it", "govee-ble", "H5100") }
+        val view = mutableStateOf(EnvironmentalView(EnvironmentalState.DISCOVERING, bindings = bindings,
+            sensorLabels = mapOf("s0" to "S4 Front Left", "s1" to "S4 Back Right")))
+        compose.setContent { MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+            EnvironmentalDashboard(view.value, emptyList())
+        } } }
+        compose.runOnIdle { view.value = view.value.copy(discovery = mapOf("a0" to DiscoveryReception(
+            listOf(Reading(Channel.TEMPERATURE, 41.0)), System.currentTimeMillis(), null))) }
+        compose.onNodeWithText("Average  41.0 °C").assertExists()
+        compose.onNodeWithText("Future timestamp").assertDoesNotExist()
     }
     @Test fun explicitSavedHistoryCanRenderWhileMonitoringIsOff() {
         val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")

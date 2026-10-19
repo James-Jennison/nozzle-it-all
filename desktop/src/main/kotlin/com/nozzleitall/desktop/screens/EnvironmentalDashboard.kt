@@ -57,7 +57,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                 group.title?.let { Txt(it, Nz.type.title, modifier = Modifier.semantics { heading() }) }
                 val positions = EnvironmentalGroupOverview.s4Positions(group, view.sensorLabels)
                 if (positions != null) S4EnvironmentOverview(group, positions, data, historyMode,
-                    view.state == EnvironmentalState.COLLECTING) { selected = it.id }
+                    view.state == EnvironmentalState.COLLECTING, target?.id) { selected = it.id }
                 else group.bindings.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     row.forEach { binding -> key(binding.id) {
                         val name = view.sensorLabels[binding.sensorId] ?: binding.model

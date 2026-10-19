@@ -4,6 +4,19 @@ Newest entries at the bottom. Times are PDT.
 
 ## Visual dashboard correction (2026-10-19, active)
 
+Owner approved recognizable S4 illustration with corner readings and group means,
+ranges and trends. Source4871529a adds original scalable four-reel cutaway on both
+platforms, front/back labels, clickable corners, per-channel recent coverage and
+shared-axis recorded overlays preserving gaps. Missing/stale/future/nonfinite
+values excluded from summaries; history explicitly anchored to saved page. No data,
+radio, credentials or assignment changes. GTHost validation running; Synthetic
+7656127a1698 submitted once to same three configured Synthetic reviewers. Prior
+grouping a385 full SUCCESS4m1s; its CI39319181316 canceled as superseded before
+delivery, tag retained. Desktop.15 still installed; normal Razr275 still intact.
+Reference for illustration shape: official SUNLU S4 product page (four-spool long
+enclosure), https://www.sunlu.com/products/297. Original Canvas artwork, no copied
+product photograph, no inferred heatmap or filament-moisture claims.
+
 Owner supplied actualdesktop0.1.15 screenshot:8correctly named sensors receiving,
 gauges/sparklines and selectedaxisplots. Read-only DB confirms29events/16entities
 withbaselineunchanged. Owner asks groupingobviousdevices. a3855a15/v.16/code779

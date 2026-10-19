@@ -31,11 +31,11 @@ object EnvironmentalGroupOverview {
         if (series.isEmpty()) return emptyMap()
         val low = series.values.minOf { it.low }; val high = series.values.maxOf { it.high }
         val start = series.values.minOf { it.start }; val end = series.values.maxOf { it.end }
-        return series.mapValues { (_, s) -> EnvironmentalCharts.Series(s.points.map { p ->
-            val time = s.start.toDouble() + p.x * (s.end.toDouble() - s.start.toDouble())
-            val value = s.high - p.y * (s.high - s.low)
-            EnvironmentalCharts.Point(if (start == end) .5f else ((time - start) / (end.toDouble() - start)).toFloat(),
-                ((high - value) / (high - low)).toFloat(), p.connect)
+        return series.mapValues { (binding, s) ->
+            val rows = samples.filter { it.binding == binding && it.values[channel]?.isFinite() == true }.sortedBy { it.time }
+            EnvironmentalCharts.Series(rows.zip(s.points).map { (row, p) ->
+            EnvironmentalCharts.Point(if (start == end) .5f else ((row.time.toDouble() - start) / (end.toDouble() - start)).toFloat(),
+                ((high - row.values.getValue(channel)) / (high - low)).toFloat(), p.connect)
         }, low, high, start, end) }
     }
 }

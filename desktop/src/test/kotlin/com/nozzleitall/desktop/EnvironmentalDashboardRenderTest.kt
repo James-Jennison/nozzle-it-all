@@ -16,6 +16,11 @@ import javax.swing.SwingUtilities
 
 /** Offscreen software-rendered fixture, not installed-app/GPU/physical-radio proof. */
 class EnvironmentalDashboardRenderTest {
+    @Test fun s4PresentationLogicAndGeometryStayIdenticalAcrossPlatforms() {
+        fun body(file: File) = file.readText().substringAfter("private val positionColors").substringBefore("@Composable private fun Label")
+        assertEquals(body(File("src/main/kotlin/com/nozzleitall/desktop/screens/S4EnvironmentOverview.kt")),
+            body(File("../app/src/main/java/net/jamesjennison/klippercompanion/environment/S4EnvironmentOverview.kt")))
+    }
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
     @Test fun eightSensorsRenderAsCompactDesktopGrid() {
         val bindings = (1..8).map { Binding("b$it", "s$it", "AA:BB:CC:DD:EE:0$it", "govee-ble", "H5100") }
@@ -42,6 +47,11 @@ class EnvironmentalDashboardRenderTest {
             } finally { scene.close() }
         }
         val image = javax.imageio.ImageIO.read(output)
+        var shellPixels = 0
+        for (y in 100 until 450) for (x in 24 until 850) {
+            if (image.getRGB(x, y) and 0xFFFFFF == 0x24343B) shellPixels++
+        }
+        assertTrue("Original S4 shell actually rendered", shellPixels > 10000)
         // Original S4 illustration and four distinct trace/position colors must actually render.
         for (rgb in listOf(0xB59AFF, 0x35B9C5, 0xFFC66D, 0xFF91B5)) {
             var pixels = 0

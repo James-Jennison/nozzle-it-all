@@ -41,5 +41,10 @@ class EnvironmentalGroupOverviewTest {
         assertFalse(r.getValue("b1").points.last().connect)
         assertTrue(r.getValue("b0").points.first().y > r.getValue("b1").points.first().y)
         assertTrue(EnvironmentalGroupOverview.trends(samples, bindings, Channel.HUMIDITY).isEmpty())
+        val equal = EnvironmentalGroupOverview.trends(listOf(s("a", "b0", 1000, 40.0, 1),
+            s("b", "b1", 3000, 40.0, 1)), bindings, Channel.TEMPERATURE)
+        assertEquals(0f, equal.getValue("b0").points.single().x, 0f)
+        assertEquals(1f, equal.getValue("b1").points.single().x, 0f)
+        assertEquals(.5f, equal.getValue("b0").points.single().y, .0001f)
     }
 }

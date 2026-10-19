@@ -2,6 +2,7 @@ package net.jamesjennison.klippercompanion.environment
 import androidx.compose.material3.*
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,6 +14,7 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import com.nozzleitall.environment.*
@@ -28,20 +30,22 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 
 @Composable internal fun S4EnvironmentOverview(group: EnvironmentalSensorGroup,
     positions: Map<String, Binding>, data: EnvironmentalDashboardData, historyMode: Boolean,
-    collecting: Boolean, onSelect: (Binding) -> Unit) {
+    collecting: Boolean, selected: String?, onSelect: (Binding) -> Unit) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(historyMode) {
         while (!historyMode) { now = System.currentTimeMillis(); delay(15_000) }
     }
-    val reference = if (historyMode) data.samples.filter { s -> group.bindings.any { it.id == s.binding } }
-        .maxOfOrNull { it.time } ?: 0L else now
+    val savedReference = data.samples.filter { s -> group.bindings.any { it.id == s.binding } }.maxOfOrNull { it.time }
+    // Refresh on receptions as well as the timer: a new reception must not look future-dated for 15s.
+    val liveReference = remember(now, data.readings) { System.currentTimeMillis() }
+    val reference = if (historyMode) savedReference ?: 0L else liveReference
     Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Label("SUNLU S4 · environment", title = true)
-        Label(if (historyMode) "Saved history · summary at ${stamp(reference)}"
+        Label(if (historyMode) savedReference?.let { "Saved history · summary at ${stamp(it)}" } ?: "Saved history · no saved group readings"
             else if (collecting) "Live receptions · sensor positions viewed from the front" else "Monitoring stopped · last received readings")
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val diagram: @Composable () -> Unit = {
-                DryerDiagram(positions, data, reference, historyMode, onSelect)
+                DryerDiagram(positions, data, reference, historyMode, selected, onSelect)
             }
             val summary: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -77,7 +81,10 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                         Label(fmt(axis.high)); Label(fmt((axis.high + axis.low) / 2)); Label(fmt(axis.low))
                     }
                     Canvas(Modifier.weight(1f).height(150.dp).testTag("s4-group-trend-" + channel.name)
-                        .semantics { contentDescription = "S4 ${channel.name} trends: ${series.size} sensors; shared range ${fmt(axis.low)} to ${fmt(axis.high)} ${channel.unit}; ${stamp(axis.start)} to ${stamp(axis.end)}" }) {
+                        .semantics { contentDescription = "S4 ${channel.name} trends: ${series.size} sensors; shared range ${fmt(axis.low)} to ${fmt(axis.high)} ${channel.unit}; ${stamp(axis.start)} to ${stamp(axis.end)}. " +
+                            EnvironmentalGroupOverview.corners.mapIndexedNotNull { i, corner -> positions[corner]?.id?.let(series::get)?.let { s ->
+                                "$corner (${listOf("purple", "teal", "amber", "pink")[i]}): ${s.points.size} samples"
+                            } }.joinToString("; ") }) {
                         val pad = 5.dp.toPx(); val w = (size.width - 2 * pad).coerceAtLeast(1f); val h = size.height - 2 * pad
                         for (i in 0..4) drawLine(Color.Gray.copy(alpha = .25f), Offset(pad, pad + h * i / 4), Offset(pad + w, pad + h * i / 4))
                         EnvironmentalGroupOverview.corners.forEachIndexed { index, corner ->
@@ -100,9 +107,9 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 }
 
 @Composable private fun DryerDiagram(positions: Map<String, Binding>, data: EnvironmentalDashboardData,
-    reference: Long, historyMode: Boolean, onSelect: (Binding) -> Unit) {
+    reference: Long, historyMode: Boolean, selected: String?, onSelect: (Binding) -> Unit) {
     // Original scalable cutaway illustration: long S4 shell, clear lid, four reel bays and front control panel.
-    Box(Modifier.fillMaxWidth().height(350.dp).testTag("s4-dryer-illustration")) {
+    Box(Modifier.fillMaxWidth().height(350.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)).testTag("s4-dryer-illustration")) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height
             drawRoundRect(Color(0xFF080D11), Offset(w * .02f, h * .03f), Size(w * .96f, h * .91f), CornerRadius(22.dp.toPx()))
@@ -121,15 +128,15 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
         }
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 26.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                PositionLabel("Back Left", positions, data, reference, historyMode, 0, onSelect, Modifier.weight(1f))
+                PositionLabel("Back Left", positions, data, reference, historyMode, 0, selected, onSelect, Modifier.weight(1f))
                 Spacer(Modifier.width(12.dp))
-                PositionLabel("Back Right", positions, data, reference, historyMode, 1, onSelect, Modifier.weight(1f))
+                PositionLabel("Back Right", positions, data, reference, historyMode, 1, selected, onSelect, Modifier.weight(1f))
             }
             Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    PositionLabel("Front Left", positions, data, reference, historyMode, 2, onSelect, Modifier.weight(1f))
+                    PositionLabel("Front Left", positions, data, reference, historyMode, 2, selected, onSelect, Modifier.weight(1f))
                     Spacer(Modifier.width(12.dp))
-                    PositionLabel("Front Right", positions, data, reference, historyMode, 3, onSelect, Modifier.weight(1f))
+                    PositionLabel("Front Right", positions, data, reference, historyMode, 3, selected, onSelect, Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(22.dp))
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Label("S4  ·  FRONT", color = Color(0xFFDAEEF5)) }
@@ -139,21 +146,23 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 }
 
 @Composable private fun PositionLabel(corner: String, positions: Map<String, Binding>, data: EnvironmentalDashboardData,
-    reference: Long, historyMode: Boolean, index: Int, onSelect: (Binding) -> Unit, modifier: Modifier) {
+    reference: Long, historyMode: Boolean, index: Int, selected: String?, onSelect: (Binding) -> Unit, modifier: Modifier) {
     val binding = positions[corner]
     val reading = binding?.let { data.readings[it.id] }
     val status = when {
         binding == null -> "Not assigned"
         reading == null -> "No reception"
-        reading.time > reference -> "Time mismatch"
+        reading.time > reference -> "Future timestamp"
         !EnvironmentalGroupOverview.recent(reading, reference) -> "Older than 2 min"
         historyMode -> "Saved reception"
         else -> "Recent reception"
     }
     Column(modifier.background(Color(0xEE111B22), RoundedCornerShape(8.dp))
+        .border(if (binding != null && binding.id == selected) 2.dp else 0.dp,
+            if (binding != null && binding.id == selected) positionColors[index] else Color.Transparent, RoundedCornerShape(8.dp))
         .clickable(enabled = binding != null, role = Role.Button) { binding?.let(onSelect) }
         .padding(8.dp).testTag("s4-position-" + corner.replace(" ", "-"))
-        .semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        .semantics(mergeDescendants = true) { stateDescription = if (binding == null) "No assigned sensor" else if (binding.id == selected) "Charts shown" else "Show charts" }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Label("● $corner", color = positionColors[index], title = true)
         Label("${fmt(reading?.values?.get(Channel.TEMPERATURE))}°C  ·  ${fmt(reading?.values?.get(Channel.HUMIDITY))}%RH", color = Color.White)
         Label(status, color = Color(0xFFB7C5CC))

@@ -110,7 +110,7 @@ compose.desktop {
    copyright = "Copyright 2026 Nozzle It All contributors. AGPL-3.0-or-later."
    licenseFile.set(rootProject.file("LICENSE"))
    // Only what the app uses, so the bundled runtime stays small.
-   modules("java.desktop", "java.logging", "java.net.http", "java.xml", "jdk.unsupported", "java.naming", "java.sql")
+   modules("java.desktop", "java.logging", "java.net.http", "java.xml", "jdk.unsupported", "java.naming", "java.sql", "jdk.security.auth")
    linux {
     packageName = "nozzle-it-all"
     debMaintainer = "support@nozzleitall.com"

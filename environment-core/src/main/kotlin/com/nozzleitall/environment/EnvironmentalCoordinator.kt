@@ -138,6 +138,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     }
                 }
             } catch (e: CancellationException) { throw e }
+            catch (e: LinkageError) { synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop("Environmental provider unavailable — installation dependency missing; no automatic retry") } }
             catch (e: Exception) { synchronized(this@EnvironmentalCoordinator) { if (gate.valid(grant)) stop("Environmental operation unavailable — radio, permission or storage failure; no automatic retry") } }
             finally { queue.close() }
         }

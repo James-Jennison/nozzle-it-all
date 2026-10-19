@@ -248,4 +248,29 @@ class EnvironmentalTest {
             assertEquals(31L, JSONObject(output[1]).getLong("knownDroppedReports"))
         }
     }
+    @Test fun missingPlatformDependencyStopsInsteadOfLeavingDiscoveryActive() {
+        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _, _ -> throw NoClassDefFoundError("fixture dependency") } })
+        c.foreground(true); c.enable(); c.discover()
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (c.view.value.state != EnvironmentalState.ENABLED_IDLE && System.nanoTime() < deadline) Thread.sleep(10)
+        assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+        assertTrue(c.view.value.status.contains("dependency missing"))
+        c.close()
+    }
+    @Test fun fullBudgetRollsBackAndRetentionReusesFreedPages() {
+        val path = Files.createTempFile("nia-env-full", ".db").toFile()
+        EnvironmentalHistory(SqlStoreFactory { Sql(path) }, EnvironmentalLimits(historyBytes = 1024 * 1024)).use { h ->
+            var full = false
+            for (i in 0 until 3000) {
+                try { h.append(observation("full-$i"), "inc") }
+                catch (e: java.sql.SQLException) { assertEquals(13, e.errorCode); full = true; break }
+            }
+            assertTrue("fixture must reach SQLITE_FULL", full)
+            assertTrue(path.length() <= 1024 * 1024)
+            assertTrue(h.eventCount() > 0)
+            h.retain(31 * 86400000L)
+            assertEquals(0L, h.eventCount())
+            assertEquals("inserted", h.append(observation("after-retention"), "inc"))
+        }
+    }
 }

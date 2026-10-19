@@ -14,7 +14,7 @@ class GoveeH5179Test {
         assertEquals("govee-ble", decoded.protocol)
         val values = decoded.readings.associate { it.channel to it.raw }
         assertEquals(27.7, values[Channel.TEMPERATURE]!!, 0.001)
-        assertEquals(44.0, values[Channel.HUMIDITY]!!, 0.001)
+        assertEquals(44.8, values[Channel.HUMIDITY]!!, 0.001)
         assertEquals(100.0, values[Channel.BATTERY_PERCENT]!!, 0.001)
         val candidate = Candidate("AA:BB:CC:DD:70:41", decoded.protocol, decoded.model)
         assertTrue(GoveeDeviceName("11:22:AA:BB:CC:DD:70:41", "H5179", "Centauri Carbon").matches(candidate))

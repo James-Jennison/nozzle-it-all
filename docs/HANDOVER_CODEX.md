@@ -1,6 +1,39 @@
 # Handover to Codex (written 2026-10-18)
 
-## Current dense-rendering update (2026-10-18)
+## Current smooth-motion installation (2026-10-18)
+
+Installed executable source is `9f068d34c862c1ec0f7255371f1d68e44d22ddf8`.
+Full-detail EGL/GLES3 rendering, immutable BGRA images and a bounded worker/Main
+latest-image pipeline replace the dense CPU bottleneck where graphics are
+available. All compilation/tests/packages ran on GTHost. Full235/195pass/40skip,
+native-enabled235/226pass/9skip, GPU10/10, frame ownership18/18, forcedCPU1/1
+and exact CI39177291985 PASS. Installed source/jar/native/engine/package hashes
+match; desktop-authenticated dpkg exited0. Current compiled GPU10/10 also passed
+against installed NVIDIA native/jar on the workstation (no local compilation).
+
+Fresh installed actual-desktop450k/1.2M orbit/zoom sustained57–59 complete frames
+and cursor-free visible pixel updates/sec; p95 complete gaps17.8–19.8ms. Actual
+viewport1488x896, accelerated UI/native NVIDIA, not4K. Camera-state motion probe
+is explicitly double-opt-in, not Wayland OS pointer injection or scanout proof;
+separate Xvfb pointer/resize/SelectAll/save tests pass. Saved450k/1.2M/95934face
+Capybara canonical geometry/paint/placement remain unchanged. Rare70.4ms maxgap
+and slower4KsoftwareUI24–28fps remain disclosed, NOT a universal60Hz guarantee.
+
+Owner's explicit acceptance choice remains pending: actual accelerated desktop
+with4Ksoftware limitation disclosed, or require the original self-selected
+4Ksoftware30fps stress gate too. Installation approval is not that decision.
+Current-source Synthetic reviews9004ec442e1b/f8b6c010a844/02722fdd3640 and
+installed-evidence reviewsfdfd83aa9a92/fd1d149126dd/8b3969d213b9 COMPLETE on
+the exact pinned models;31 immutable findings/separate dispositions retained.
+No new source defect demonstrated; criterion choice remains open. Both checks in
+evidence-cycle-e20f3c3eaedf PASS/intact; closure758ab9e29dbd is NOT_READY solely
+for that owner choice. Details in `docs/handover/NIA_SMOOTH_MOTION.md`.
+Do not claim the milestone READY before
+the acceptance choice resolves. Existing owner window was untouched and may
+still hold older loaded code until relaunched. No merge/release/printer/device
+action. Later documentation commits do not change the executable source.
+
+## Previous dense-rendering update (historical, 2026-10-18)
 
 Installed executable source is `a6fc8c438991bb3b2d88c2c2b696131fb0473142`.
 Full-quality frame composition now runs off Main with conflated camera requests,

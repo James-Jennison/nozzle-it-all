@@ -131,7 +131,7 @@ class EnvironmentalTest {
             val original = EnvironmentalGate(control); original.enable()
             EnvironmentalHistory(SqlStoreFactory { Sql(database) }).use { it.append(observation(incarnation = original.incarnation), original.incarnation) }
             val child = ProcessBuilder(File(System.getProperty("java.home"), "bin/java").absolutePath,
-                "-cp", System.getProperty("nia.environment.testClasspath"), EnvironmentalTest::class.java.name, root.absolutePath, phase)
+                "-Djava.io.tmpdir=${System.getProperty("java.io.tmpdir")}", "-cp", System.getProperty("nia.environment.testClasspath"), EnvironmentalTest::class.java.name, root.absolutePath, phase)
                 .directory(root).redirectErrorStream(true).start()
             val finished = child.waitFor(15, TimeUnit.SECONDS)
             if (!finished) child.destroyForcibly().waitFor(5, TimeUnit.SECONDS)

@@ -1,6 +1,22 @@
 # NIA work log (2026-10-17, evening)
 
 Newest entries at the bottom. Times are PDT.
+
+## Active 2026-10-19 name-matching correction
+
+Owner confirmed Govee Home exposes no MAC in Device Properties; Razr screenshot
+captured on the freshly identified motorola razr2023, with Govee settings focused.
+No private key dialog captured. Asking Owner to compare inaccessible addresses
+was not a viable workflow. Shared matcher now accepts Govee's two-byte prefix +
+complete six-byte BLE address, with exact model and unique-match guards. Primary
+implementation reference: homebridge-plugins/homebridge-govee
+lib/utils/device-context.js, providedBle = device.device.substring(6), when no
+explicit parsed.address exists. This is implementation evidence, not a universal
+vendor guarantee. No two-byte suffix guessing. Malformed/mixed separators and
+ambiguous matches are rejected. Desktop discovery now leads with the resolved
+friendly name and preserves saved labels. Full cloud IDs replace misleading
+truncated picker IDs. Build/review/install/actual-account validation pending.
+
 Implementation authorization on 2026-10-18: owner approved environmental B–D and
 numeric budgets; reviewed proposal remains unchanged. Separate lazy JVM API/core,
 gate/control/history and foreground Linux/Android BLE adapters under development.

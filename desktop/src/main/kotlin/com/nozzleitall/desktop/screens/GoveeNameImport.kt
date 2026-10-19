@@ -15,10 +15,10 @@ import com.nozzleitall.environment.*
 import kotlinx.coroutines.*
 
 @Composable internal fun GoveeNameChoices(model: String, names: List<GoveeDeviceName>, dismiss: () -> Unit, choose: (GoveeDeviceName) -> Unit) {
-    Txt("Choose this physical sensor's name. Cloud IDs are not assumed to be BLE addresses; only NIA's label changes.", Nz.type.bodySmall)
+    Txt("Matching devices are named automatically. This optional override changes only NIA's label; do not guess an unresolved device from its ID.", Nz.type.bodySmall)
     LazyColumn(Modifier.heightIn(max = 240.dp)) {
         items(names.filter { it.model == model }, key = { it.model + ":" + it.device }) { entry ->
-            NzButton("${entry.name} · ${entry.model} · ID …${entry.device.takeLast(5)}", { choose(entry) })
+            NzButton("${entry.name} · ${entry.model} · ID ${entry.device}", { choose(entry) })
         }
     }
     NzButton("Cancel name selection", dismiss)

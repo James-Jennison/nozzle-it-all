@@ -57,9 +57,23 @@ class GoveeNamesTest {
     @Test fun onlyExactModelAndFullMacCanAutomaticallyAssignName() {
         val candidate = Candidate("aa:bb:cc:dd:ee:ff", "govee-ble", "H5100")
         assertTrue(GoveeNameApi.parse(valid).single().matches(candidate))
-        assertFalse(GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5100", "Wrong extended ID").matches(candidate))
+        assertTrue(GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5100", "Extended ID").matches(candidate))
         assertFalse(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5110", "Different model").matches(candidate))
         assertFalse(GoveeDeviceName("opaque-cloud-id", "H5100", "Choose explicitly").matches(candidate))
+    }
+    @Test fun extendedCloudIdentityRequiresEveryAddressByteAndUniqueModelMatch() {
+        val candidate = Candidate("aa:bb:cc:dd:ee:ff", "govee-ble", "H5110")
+        for (id in listOf("11:22:AA:BB:CC:DD:EE:FF", "1122aabbccddeeff", "11-22-AA-BB-CC-DD-EE-FF", "AA-BB-CC-DD-EE-FF")) {
+            assertTrue(id, GoveeDeviceName(id, "H5110", "Room A").matches(candidate))
+        }
+        for (id in listOf("11:22:AB:BB:CC:DD:EE:FF", "EE:FF", "11:22:33:AA:BB:CC:DD:EE:FF", "11:22:AA-BB:CC:DD:EE:FF", "opaque-eeff", " 11:22:AA:BB:CC:DD:EE:FF")) {
+            assertFalse(id, GoveeDeviceName(id, "H5110", "Wrong").matches(candidate))
+        }
+        val name = GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5110", "Room A")
+        assertFalse(name.matches(candidate.copy(protocol = "other")))
+        assertFalse(name.matches(candidate.copy(address = "11:22:AA:BB:CC:DD:EE:FF")))
+        assertNull(listOf(name, name.copy(device = "33:44:AA:BB:CC:DD:EE:FF", name = "Room B")).singleOrNull { it.matches(candidate) })
+        assertEquals("Room A", listOf(name, name.copy(model = "H5100")).singleOrNull { it.matches(candidate) }?.name)
     }
     @Test fun deadlineDisconnectsEvenWhileWaitingForResponseHeaders() {
         val closed = java.util.concurrent.CountDownLatch(1)

@@ -20,13 +20,23 @@ the in-place update; this record does not yet claim that check passed.
 
 ## Implementation and security
 
-Current candidate: `90053bde7099d014bbbe6b0b7bfe30dd5cd71c56`.
+Current release candidate: `c6a30477fcb330260e0e789ff4d9158fc6d33bd2`.
 Owner additionally requested desktop parity and a proper dock icon. Desktop now
 has session-only password entry and explicit imported-name selection/rename using
 the shared read-only client; no key persistence or screenshot-protection claim.
 Installed raw jpackage Deb lacks standard launcher/themed icons. Corrected path is
 scripts/package_linux.sh, now validating shell syntax/refresh hooks/WM class/icons
-before producing the integrated Deb; installation/runtime confirmation pending.
+before producing the integrated Deb. CurrentC6 package installed0.1.6 through
+desktop authentication; all218 payload hashes/source/jar match. Actual reopened
+UI, icon appearance and private account import await Owner input; not completed.
+
+CurrentC6 DebSHA2956e8c3054529b749b5cb73214e9df9870243876d4fdc9be45fb1cfe82f6045,
+jarSHAa78c6a34e3a870584f3f5a516a37720981048f38ed9a9cb6d9a663d608ac6878.
+Launcher/eight icons/WM class/dependencies/reachable cache hooks/shell syntax and
+desktop-file-validate checked. Owner saved/closed old window before install;
+dpkg-V clean. No profile reset/copy or optional Stock adapter installation.
+Packager now explicitly uses Compose nozzleDesktopVersion0.1.6 consistently;
+the earlier39f script heading0.1.0 was not the actual Deb version0.1.6.
 
 Explicit, fixed GET to Govee's
 [device-list API](https://developer.govee.com/reference/get-you-devices), which
@@ -75,6 +85,39 @@ claimed to have deleted a key. Typed errors retain only sanitized typed causes.
   function despite its source and compiled class being present. Current12c is
   explicitly building nonincrementally without deleting/resetting any build tree.
   No success claim until that command completes.
+- Later source12c full SUCCESS4m37s; cc48 SUCCESS3m21s;900 SUCCESS2m57s;
+  2e SUCCESS3m19s;8f SUCCESS2m51s. These results retain their actual source scope.
+  Archived8f XML:52core,240domain,238desktop(9conditional skips),756Android
+  (1conditional skip):1286results/1276PASS/10skips/0fail. Cached tasks explicitly
+  retained, not all tests claimed re-executed.
+- 2e Razr fixtures7/8PASS8.573s. Private-entry test failed: diagnostic3f proves
+  its root Box overlapped Import and Forget, so touch activated Forget. Current39f
+  fixture uses Column matching production and checks Remember OFF;8PASS9.249s.
+  Failed selector/tag and diagnostic artifacts retained, never reported as PASS.
+- f115 full GTHostSUCCESS2m55s/132tasks40executed92up-to-date.9devicefixtures
+  PASS10.506s: successful remember/reuse/Forget, rollback editor-creation exception
+  AND commit-false no-reuse, commit-race previous-key restore, blocked-fetch cancel,
+  cancelled owned cleanup handle, discovery UI and actual generated Room fixture.
+  Code/test input trees identical f115→C6 except package_linux.sh. ExactC6 desktop
+  testSUCCESS1m9s/42tasks19executed23up-to-date; integrated packageSUCCESS.
+- Synthetic39f5f053372432c all3COMPLETE20findings; real rollback editor-throw
+  gap fixed and tested, other claims resolved/rejected separately with source
+  evidence. CurrentC6f516d71983e3 all3COMPLETE14findings separately dispositioned;
+  no open sourceBLOCKER/HIGH. Optional LOW notes are not new acceptance gates.
+  Full acceptance remains open for actual normal app/account and installed UI.
+- Immutablev0.1.6 sourceC6/versionCode750 tag pushed. Exact-source GTHost release
+  CI39292419016 running; no artifact/release-success claim yet. Superseded owned
+  v0.1.5 pipeline cancelled before release, never uploaded to Play. Alpha draft
+  still noAAB; normal Razr untouched0.1.2/code275. Private entry must be Owner-only.
+- Initial3f desktop test/package command FAILED before compile because missing
+  ANDROID_HOME. Current39f explicitly exports /opt/android-sdk for full validation
+  and integrated packaging. No package/install success inferred from prior builds.
+- Synthetic0d3 all3COMPLETE18findings and5bba all3COMPLETE20findings separately
+  recorded/dispositioned; evidence gaps remain unresolved until actual completion.
+  Frontend5bba required one durable retry after provider rejection; no substitution.
+  Current39f targeted5f053372432c pending. Claims contradicted by lock scopes,
+  shared monitor/epoch checks, built-in LazyColumn semantics or existing target
+  MIME definitions are retained/rejected with concrete source/target evidence.
 - Initial Synthetic names cyclec73b5c5b36d4 all3COMPLETE. Remediation7df247d37457
   systemsCOMPLETE; frontend/adversarialFAILED before inference due Synthetic queue
   budget. Failures retained; no paid fallback/model substitution. Current-source

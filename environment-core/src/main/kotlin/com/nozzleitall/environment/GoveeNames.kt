@@ -5,13 +5,24 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 data class GoveeDeviceName(val device: String, val model: String, val name: String) {
-    /** Never infer a BLE MAC from a suffix of an eight-byte/opaque cloud identifier. */
+    /** Govee's eight-byte ID prefixes the complete six-byte BLE address with two bytes.
+     * Compare all 48 address bits, never the advertised name's two-byte suffix.
+     * Callers must also require a unique directory match before applying a name.
+     */
     fun matches(candidate: Candidate): Boolean = candidate.protocol == "govee-ble" && model == candidate.model &&
-        mac(device)?.let { it == mac(candidate.address) } == true
+        address(device, cloud = true)?.let { it == address(candidate.address, cloud = false) } == true
 
     companion object {
-        private fun mac(value: String): String? = value.replace(":", "").replace("-", "")
-            .takeIf { it.length == 12 && it.all { c -> c in "0123456789abcdefABCDEF" } }?.uppercase()
+        private fun address(value: String, cloud: Boolean): String? {
+            val lengths = if (cloud) setOf(6, 8) else setOf(6)
+            val compact = when {
+                value.matches(Regex("[0-9a-fA-F]+")) && value.length / 2 in lengths && value.length % 2 == 0 -> value
+                lengths.any { count -> value.matches(Regex("[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){${count - 1}}")) } -> value.replace(":", "")
+                lengths.any { count -> value.matches(Regex("[0-9a-fA-F]{2}(-[0-9a-fA-F]{2}){${count - 1}}")) } -> value.replace("-", "")
+                else -> return null
+            }
+            return compact.takeLast(12).uppercase()
+        }
     }
 }
 

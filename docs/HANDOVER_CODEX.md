@@ -8,11 +8,15 @@ inside NIA. The Owner has obtained a key; Codex has not received or handled it.
 The prior signing-boundary approval request below is historical and superseded.
 Normal-app installation and actual-account name import are not complete yet.
 
-Current candidate source `90053bde7099d014bbbe6b0b7bfe30dd5cd71c56` adds fixed-GET
+Current release candidate source `c6a30477fcb330260e0e789ff4d9158fc6d33bd2` adds fixed-GET
 Govee device-list import, protected non-saveable/password key dialog with autofill
 opt-out, optional dedicated encrypted credential file, and no control requests.
-Only full six-byte MAC+model matches auto-name; opaque/eight-byte cloud IDs require
-explicit user selection, never guessed suffix matching. Existing saved labels are
+Current follow-up fixes the overly restrictive identifier matcher: six-byte IDs
+and Govee eight-byte IDs containing a two-byte prefix plus the complete six-byte
+BLE address can auto-name with model equality and a unique directory match.
+Never match only the two-byte advertised suffix. Opaque/ambiguous IDs remain
+unresolved, not an instruction for the Owner to identify an unavailable MAC.
+Existing saved labels are
 not overwritten automatically. Imported names stay in process memory; added labels
 persist locally. No real key in tests, logs, evidence, exports or reviewer packages.
 Synthetic key fixtures cover cancellation/Forget/commit rollback. Android cleanup
@@ -24,11 +28,41 @@ Installed Linux currently lacks standard launcher/themed icons: the raw jpackage
 Deb was installed, bypassing scripts/package_linux.sh integration. The integrated
 packager now validates maintainer-script syntax, refresh hooks, launcher WM class
 and icon payloads before producing its Deb. Installation remains pending.
-Current GTHost full validation and Synthetic review-cycle-5bba7833d3dd run in the
-visible task; no current-source success or installation inferred yet. Prior cc48
+Linux0.1.6 currentC6 installed successfully through desktop-authenticated dpkg;
+all218 payload SHA256 values match the tested Deb. DebSHA
+2956e8c3054529b749b5cb73214e9df9870243876d4fdc9be45fb1cfe82f6045;
+main jarSHAa78c6a34e3a870584f3f5a516a37720981048f38ed9a9cb6d9a663d608ac6878,
+embedded sourceC6. Standard launcher/eight themed icons, WM class, cache hooks,
+runtime dependencies and desktop-file-validate verified. Owner saved/closed prior
+window; actual reopened UI/icon/account import is pending Owner private entry.
+No key has been received/handled. Do not screenshot/read an open key dialog.
+Current Synthetic targeted review-cycle-f516d71983e3 all3COMPLETE,14immutable
+findings/separate dispositions, no open source BLOCKER/HIGH. Runtime evidence
+remains pending; not whole-task acceptance. Earlier39f/5bba all3COMPLETE with durable separate
+dispositions. Prior8f full SUCCESS2m51s/132tasks28executed104up-to-date, 2e full
+SUCCESS3m19s/132tasks27executed105up-to-date,900 full SUCCESS2m57s. Prior cc48
 full build SUCCESS3m21s/132tasks29executed103up-to-date. Prior12c device fixtures
 6/7PASS, one key-field selector failure retained and corrected to a stable testTag;
 current tests add failed rollback/deletion and cancelled-cleanup-handle coverage.
+2e Razr fixtures7/8PASS; stable tag did not fix the private-dialog fixture because
+the root host Box overlaid Import/Forget buttons and its touch hit Forget. Empty
+synthetic-entry semantics dump proves this. Source39f wraps fixture in Column,
+matching production, and asserts Remember is OFF:39f8/8PASS9.249s. Sourcef115
+wraps whole rollback editor construction/mutation/commit so any failure revokes
+saved-key reuse. f115fullGTHostSUCCESS2m55s/132tasks40executed92up-to-date;
+9devicefixturesPASS10.506s includes remember/reuse/Forget, both rollback editor
+throw/commit false, blocked-fetch cancel, commit race restore, cancelled cleanup
+handle, discovery UI and generated Room migration. Production/test source trees
+byte-identical f115→C6 except packaging script; C6 exact desktop testSUCCESS1m9s,
+42tasks19executed23up-to-date and integrated packageSUCCESS. No real key read.
+Initial3f desktop command FAILED before compilation because ANDROID_HOME was
+omitted; current command explicitly sets /opt/android-sdk for all packaging calls.
+v0.1.5 source2e tag is immutable, its superseded owned CI cancelled before release;
+not uploaded to Play. v0.1.6 sourceC6/versionCode750 tagged/pushed; GTHost CI
+39292419016 building, not yet release-success. Alpha draft remains unuploaded;
+normal Razr package still0.1.2/code275; no normal-app update/actual-account lookup
+claimed. Owner approved existing track. Pending desktop private-entry question
+and exact installer session12333 already finished exit0; do not reinstall blindly.
 
 Normal package remains Play0.1.2/code275; hash-only pre-update list baseline has
 two saved printer entries and one saved project. No uninstall/reset/private-data

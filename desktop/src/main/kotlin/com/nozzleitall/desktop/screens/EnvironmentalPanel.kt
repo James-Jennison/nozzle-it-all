@@ -46,7 +46,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Optional name import is the only Govee cloud request; no cloud readings, pairing, background service or equipment control.", Nz.type.bodySmall)
         GoveeNameImport(directory)
-        Txt("Name each sensor using its received values and signal to help identify it. Physical measurement age is unknown; monitoring does not control equipment.", Nz.type.bodySmall)
+        Txt("Imported Govee names fill matching sensors automatically. Physical measurement age is unknown; monitoring does not control equipment.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")
@@ -61,10 +61,13 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         }
         if (v.candidates.isNotEmpty()) {
             v.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate -> key(candidate.address) { Column {
-                val added = v.bindings.any { !it.archived && it.address.equals(candidate.address, true) }
-                val name = candidateNames[candidate.address] ?: importedNames.singleOrNull { it.matches(candidate) }?.name ?: candidate.defaultName
+                val saved = v.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
+                val added = saved != null
+                val name = if (saved != null) v.sensorLabels[saved.sensorId] ?: candidate.defaultName
+                    else candidateNames[candidate.address] ?: importedNames.singleOrNull { it.matches(candidate) }?.name ?: candidate.defaultName
                 val reception = v.discovery[candidate.address]
-                Txt("${candidate.model} · ${candidate.address}", Nz.type.body)
+                Txt(name, Nz.type.body)
+                Txt("${candidate.model} · ${candidate.address}", Nz.type.bodySmall)
                 Txt(reception?.readings?.takeIf { it.isNotEmpty() }?.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" } ?: "Readings unavailable", Nz.type.bodySmall)
                 Txt("Signal: ${reception?.rssiDbm?.let { "$it dBm" } ?: "unavailable"} · Last radio reception: ${reception?.receivedAt?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "unavailable"}", Nz.type.bodySmall)
                 if (!added) Field("Name this sensor", name, { candidateNames[candidate.address] = it.take(120) })

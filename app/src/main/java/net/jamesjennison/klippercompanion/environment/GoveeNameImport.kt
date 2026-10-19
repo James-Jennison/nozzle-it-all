@@ -78,7 +78,7 @@ import kotlinx.coroutines.*
                     val count = withContext(Dispatchers.IO) { store.import(entered, persist, request) }
                     dialog = false
                     if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                        message = "Imported $count Govee names. Exact model/address matches fill new sensors; otherwise choose the matching Govee name explicitly. Existing sensor names are not overwritten."
+                        message = "Imported $count Govee names. Matching devices are named automatically. Existing sensor names are not overwritten."
                     }
                 } catch (_: CancellationException) { cancel(); message = GoveeNameFailure.CANCELLED.description }
                 catch (e: GoveeNameException) { message = e.reason.description; dialog = false }
@@ -92,10 +92,10 @@ import kotlinx.coroutines.*
 @Composable internal fun GoveeNamePicker(model: String, names: List<GoveeDeviceName>, onDismiss: () -> Unit, onChoose: (GoveeDeviceName) -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Choose Govee name for $model") },
         text = { Column {
-            Text("Select the name of this physical sensor. Cloud device IDs are not assumed to be Bluetooth addresses. This changes only NIA's label.")
+            Text("Matching devices are named automatically. This optional override changes only NIA's label; do not guess an unresolved device from its ID.")
             LazyColumn(Modifier.heightIn(max = 300.dp)) {
                 items(names.filter { it.model == model }, key = { it.model + ":" + it.device }) { device ->
-                    TextButton({ onChoose(device) }) { Text("${device.name} · ${device.model} · ID …${device.device.takeLast(5)}") }
+                    TextButton({ onChoose(device) }) { Text("${device.name} · ${device.model} · ID ${device.device}") }
                 }
             }
         } }, confirmButton = { TextButton(onDismiss) { Text("Cancel") } })

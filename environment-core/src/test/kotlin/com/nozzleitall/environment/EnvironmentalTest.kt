@@ -600,6 +600,8 @@ class EnvironmentalTest {
             assertEquals(23.5, c.view.value.latest.values.single().readings.first { it.channel == Channel.TEMPERATURE }.value, 0.001)
             assertTrue(h.entities("qualification").isEmpty())
             c.foreground(false); c.foreground(true)
+            val stopDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while ((!closed.get() || c.view.value.state != EnvironmentalState.ENABLED_IDLE) && System.nanoTime() < stopDeadline) Thread.sleep(10)
             assertTrue(closed.get()); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
             report(Advertisement("room-sensor", "Govee_H5100", mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), System.currentTimeMillis(), System.nanoTime()))
             Thread.sleep(250)

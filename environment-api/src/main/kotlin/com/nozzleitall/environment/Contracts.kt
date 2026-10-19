@@ -15,6 +15,13 @@ data class Sensor(val id: String = newId(), val name: String)
 data class Binding(val id: String = newId(), val sensorId: String, val address: String, val protocol: String,
                    val model: String, val firmware: String? = null, val revision: Long = 1, val archived: Boolean = false)
 data class Equipment(val id: String = newId(), val name: String, val type: String = "room")
+/** Evidence-backed, per-channel declaration. Storing this never certifies a whole device. */
+data class CapabilityQualification(val id: String = newId(), val bindingId: String, val bindingRevision: Long,
+    val model: String, val firmware: String, val platform: String, val radio: String,
+    val decoder: String, val scanMode: String, val channel: Channel, val calibrationVersion: Int,
+    val minC: Double, val maxC: Double, val cadenceMinMillis: Long, val cadenceMaxMillis: Long,
+    val verifiedAt: Long, val expiresAt: Long, val evidence: Map<String, String>, val archived: Boolean = false)
+data class QualificationAdmission(val radios: Set<String>, val validUntil: Long)
 data class Position(val id: String = newId(), val equipmentId: String, val name: String,
                     val minC: Double? = null, val maxC: Double? = null)
 data class Placement(val id: String = newId(), val sensorId: String, val positionId: String,
@@ -42,6 +49,7 @@ object EnvironmentalProviders {
 }
 interface RadioSession : AutoCloseable { val adapterDescription: String get() = "BLE" }
 data class BleScanRequest(val discovery: Boolean, val selectedAddresses: Set<String> = emptySet(),
+    val requiredAdapterDescription: String? = null,
     /** Nonblocking host-issued effect fence; drivers must recheck immediately before each owned OS acquisition. */
     val isCurrent: () -> Boolean = { false })
 fun interface BleTransport {

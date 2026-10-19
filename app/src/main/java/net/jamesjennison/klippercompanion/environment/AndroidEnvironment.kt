@@ -34,6 +34,7 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
     @SuppressLint("MissingPermission")
     override fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
         check(request.isCurrent()) { "Obsolete BLE operation" }
+        require(request.requiredAdapterDescription == null || request.requiredAdapterDescription == "Android BLE") { "Adapter not qualified for this assignment" }
         val filters = if (request.discovery) null else request.selectedAddresses.map { ScanFilter.Builder().setDeviceAddress(it).build() }.also { require(it.isNotEmpty()) }
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: error("Bluetooth unavailable")
         check(adapter.isEnabled) { "Bluetooth off" }

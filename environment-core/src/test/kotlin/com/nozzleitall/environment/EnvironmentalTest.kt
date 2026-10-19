@@ -319,6 +319,53 @@ class EnvironmentalTest {
             assertFalse("An in-flight commit republished a reading after visibility revocation", badPublication.get())
         } finally { release.countDown(); observer.cancel(); c.close() }
     }
+    @Test fun overflowWithoutAnotherValidObservationIsPersistedOnStop() {
+        val path = Files.createTempFile("nia-env-tail-gap", ".db").toFile()
+        val h = EnvironmentalHistory(SqlStoreFactory { Sql(path) })
+        h.bind(Candidate("test", "bthome-v2", "BTHome v2"), "fixture")
+        val ready = CountDownLatch(1)
+        lateinit var send: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, report, _ -> send = report; ready.countDown(); object : RadioSession { override fun close() {} } } })
+        c.foreground(true); c.enable(); c.start(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+        synchronized(c) {
+            repeat(1000) { send(Advertisement("test", null, emptyMap(), emptyMap(), 1000, 1)) }
+            c.stop()
+        }
+        assertEquals(0L, h.eventCount())
+        val dropped = h.recordedDrops(); assertTrue(dropped > 0)
+        c.close()
+        EnvironmentalHistory(SqlStoreFactory { Sql(path) }).use { assertEquals(dropped, it.recordedDrops()) }
+    }
+    @Test fun capabilityQualificationRequiresExactCurrentEvidenceAndNeverPromotesUnknownFirmware() {
+        history().use { h ->
+            val b = h.recordFirmware(h.bind(Candidate("test", "govee-ble", "H5100"), "fixture"), "fixture-firmware1")
+            val equipment = Equipment(name = "fixture"); h.saveEquipment(equipment)
+            val p = Position(equipmentId = equipment.id, name = "fixture", minC = 10.0, maxC = 40.0); h.savePosition(p)
+            h.assign(b.sensorId, p.id, 1)
+            val now = 1000L
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "fixture-platform", now) }
+            fun q(channel: Channel) = CapabilityQualification(bindingId = b.id, bindingRevision = b.revision, model = b.model,
+                firmware = b.firmware!!, platform = "fixture-platform", radio = "fixture-radio", decoder = BleDecoders.VERSION,
+                scanMode = "active", channel = channel, calibrationVersion = 0, minC = 0.0, maxC = 50.0,
+                cadenceMinMillis = 1000, cadenceMaxMillis = 10000, verifiedAt = 500, expiresAt = 2000,
+                evidence = listOf("identity", "firmware", "thermal", "calibration", "cadence", "coexistence", "ownerApproval").associateWith { "TEST FIXTURE ONLY: $it" })
+            h.recordQualification(q(Channel.TEMPERATURE))
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "fixture-platform", now) }
+            val humidity = q(Channel.HUMIDITY); h.recordQualification(humidity)
+            assertEquals(QualificationAdmission(setOf("fixture-radio"), 2000), h.assignedQualificationRadios(listOf(b), "fixture-platform", now))
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "different-platform", now) }
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "fixture-platform", 2000) }
+            assertThrows(IllegalArgumentException::class.java) { h.recordQualification(humidity.copy(evidence = emptyMap())) }
+            h.calibrate(b, Channel.HUMIDITY, 1.0)
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "fixture-platform", now) }
+            h.recordQualification(humidity.copy(calibrationVersion = 1))
+            assertEquals(setOf("fixture-radio"), h.assignedQualificationRadios(listOf(b), "fixture-platform", now).radios)
+            h.recordQualification(humidity.copy(calibrationVersion = 1, archived = true))
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "fixture-platform", now) }
+            val changed = h.recordFirmware(b, "fixture-firmware2")
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(changed), "fixture-platform", now) }
+        }
+    }
     @Test fun fullBudgetRollsBackAndRetentionReusesFreedPages() {
         val path = Files.createTempFile("nia-env-full", ".db").toFile()
         EnvironmentalHistory(SqlStoreFactory { Sql(path) }, EnvironmentalLimits(historyBytes = 1024 * 1024)).use { h ->

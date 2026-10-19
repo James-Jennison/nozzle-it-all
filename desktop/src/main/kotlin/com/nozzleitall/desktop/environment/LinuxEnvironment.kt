@@ -85,6 +85,7 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
             val path = (if (requestedAdapter == null) adapters.firstOrNull { it.value["org.bluez.Adapter1"]?.get("Powered")?.value == true }
                 else adapters.firstOrNull { it.key.path == requestedAdapter })?.key?.path
                 ?: error("Bluetooth adapter unavailable")
+            require(request.requiredAdapterDescription == null || request.requiredAdapterDescription == "BlueZ $path") { "Adapter not qualified for this assignment" }
             adapter = bus.getRemoteObject("org.bluez", path, BluezEnvironmentalAdapter::class.java)
             // D-Bus daemon combines client filters. Host still admits only fresh authorized reports.
             check(request.isCurrent()) { "Obsolete BLE operation" }

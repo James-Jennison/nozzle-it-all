@@ -27,7 +27,7 @@ import org.json.JSONObject
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val controller = remember { EnvironmentalCoordinator(File(context.filesDir, "environment/control.json"),
         EnvironmentalHistory(SqlStoreFactory { AndroidEnvironmentalStore(File(context.filesDir, "environment/history.db")) }),
-        { AndroidBleTransport(context.applicationContext) }) }
+        { AndroidBleTransport(context.applicationContext) }, platformIdentity = "android/${Build.MODEL}/${Build.FINGERPRINT}") }
     val view by controller.view.collectAsState()
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }

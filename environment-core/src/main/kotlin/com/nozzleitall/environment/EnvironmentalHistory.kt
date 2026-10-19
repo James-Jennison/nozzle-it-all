@@ -34,7 +34,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
     }
     @Synchronized fun entities(kind: String): List<JSONObject> = store().query("SELECT json FROM entities WHERE kind=? ORDER BY id", kind).map { JSONObject(it[0]!!) }
     @Synchronized fun save(kind: String, id: String, value: JSONObject) {
-        require(kind in setOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration"))
+        require(kind in setOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration", "qualification"))
         require(value.toString().length <= 16384)
         val bytes = value.toString().toByteArray().size
         val existingBytes = store().query("SELECT COALESCE(SUM(length(CAST(json AS BLOB))),0) FROM entities WHERE kind=? AND id<>?", kind, id).first().first()!!.toLong()
@@ -56,6 +56,53 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         require(name.isNotBlank() && name.length <= 120)
         require(entities("sensor").any { it.getString("id") == id })
         save("sensor", id, JSONObject().put("id", id).put("name", name))
+    }
+    @Synchronized fun recordFirmware(binding: Binding, firmware: String): Binding {
+        require(firmware.isNotBlank() && firmware.length <= 120)
+        require(bindings().any { it == binding && !it.archived })
+        return binding.copy(firmware = firmware, revision = binding.revision + 1).also { save("binding", it.id, bindingJson(it)) }
+    }
+    @Synchronized fun recordQualification(q: CapabilityQualification) {
+        val b = bindings().single { it.id == q.bindingId }
+        require(!b.archived && q.bindingRevision == b.revision && q.model == b.model && q.firmware == b.firmware)
+        require(listOf(q.firmware, q.platform, q.radio, q.decoder).all { it.isNotBlank() && it.length <= 256 })
+        require(q.firmware.lowercase() !in setOf("unknown", "unavailable", "unqualified", "unspecified"))
+        require(q.scanMode == "active" && q.decoder == BleDecoders.VERSION && q.calibrationVersion >= 0)
+        require(q.minC.isFinite() && q.maxC.isFinite() && q.minC <= q.maxC)
+        require(q.cadenceMinMillis > 0 && q.cadenceMaxMillis >= q.cadenceMinMillis)
+        require(q.verifiedAt > 0 && q.expiresAt > q.verifiedAt)
+        // References to owner-reviewed physical artifacts, never a boolean self-certification or a fixture badge.
+        require(q.evidence.keys.containsAll(setOf("identity", "firmware", "thermal", "calibration", "cadence", "coexistence", "ownerApproval")))
+        require(q.evidence.size <= 16 && q.evidence.all { (k, v) -> k.length <= 80 && v.isNotBlank() && v.length <= 512 })
+        save("qualification", q.id, JSONObject().put("id", q.id).put("bindingId", q.bindingId).put("bindingRevision", q.bindingRevision)
+            .put("model", q.model).put("firmware", q.firmware).put("platform", q.platform).put("radio", q.radio)
+            .put("decoder", q.decoder).put("scanMode", q.scanMode).put("channel", q.channel.wire).put("calibrationVersion", q.calibrationVersion)
+            .put("minC", q.minC).put("maxC", q.maxC).put("cadenceMinMillis", q.cadenceMinMillis).put("cadenceMaxMillis", q.cadenceMaxMillis)
+            .put("verifiedAt", q.verifiedAt).put("expiresAt", q.expiresAt).put("evidence", JSONObject(q.evidence)).put("archived", q.archived))
+    }
+    /** Empty for unassigned diagnostics; throws for any assigned capability lacking exact current evidence. */
+    @Synchronized fun assignedQualificationRadios(bindings: List<Binding>, platform: String, now: Long): QualificationAdmission {
+        val radios = mutableSetOf<String>()
+        var validUntil = Long.MAX_VALUE
+        for (b in bindings) for (placement in entities("placement").filter { it.getString("sensorId") == b.sensorId && it.isNull("until") }) {
+            val p = entities("position").single { it.getString("id") == placement.getString("positionId") }
+            require(!p.isNull("minC") && !p.isNull("maxC")) { "Assigned position needs a demonstrated operating envelope" }
+            for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
+                val calibration = calibrated(b, listOf(Reading(channel, 0.0))).single().calibrationVersion
+                val q = entities("qualification").firstOrNull { q ->
+                    !q.optBoolean("archived") && q.getString("bindingId") == b.id && q.getLong("bindingRevision") == b.revision &&
+                        b.firmware != null && q.getString("model") == b.model && q.getString("firmware") == b.firmware &&
+                        q.getString("platform") == platform && q.getString("decoder") == BleDecoders.VERSION && q.getString("scanMode") == "active" &&
+                        q.getString("channel") == channel.wire && q.getInt("calibrationVersion") == calibration &&
+                        q.getLong("verifiedAt") <= now && now < q.getLong("expiresAt") &&
+                        q.getDouble("minC") <= p.getDouble("minC") && q.getDouble("maxC") >= p.getDouble("maxC")
+                } ?: error("Assigned sensors require current channel-specific physical qualification")
+                radios += q.getString("radio")
+                validUntil = minOf(validUntil, q.getLong("expiresAt"))
+            }
+        }
+        require(radios.size <= 1) { "Assigned capabilities require the same explicitly qualified adapter" }
+        return QualificationAdmission(radios, validUntil)
     }
     @Synchronized fun saveEquipment(value: Equipment) {
         require(value.name.isNotBlank() && value.name.length <= 120 && value.type.length <= 80)
@@ -127,6 +174,10 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         }
     }
     @Synchronized fun recordedDrops(): Long = store().query("SELECT COALESCE(SUM(dropped),0) FROM gaps").first().first()!!.toLong()
+    @Synchronized fun recordGap(sessionId: String, observedAt: Long, dropped: Long) {
+        require(dropped > 0)
+        store().transaction { store().execute("INSERT OR REPLACE INTO gaps(id,observed,dropped) VALUES(?,?,?)", sessionId, observedAt, dropped) }
+    }
     @Synchronized fun eventCount(): Long = store().query("SELECT COUNT(*) FROM events").first().first()!!.toLong()
     private fun insert(o: Observation, currentIncarnation: String): String {
         require(o.incarnation == currentIncarnation)
@@ -156,7 +207,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
     @Synchronized fun export(write: (String) -> Unit) {
         write(JSONObject().put("format", "nia-environment-history").put("version", 1).toString())
         write(JSONObject().put("knownDroppedReports", recordedDrops()).put("coverage", "Reception history only; physical measurement age and unobserved gaps unknown").toString())
-        for (kind in listOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration")) entities(kind).forEach { write(JSONObject().put("kind", kind).put("entity", it).toString()) }
+        for (kind in listOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration", "qualification")) entities(kind).forEach { write(JSONObject().put("kind", kind).put("entity", it).toString()) }
         var time = Long.MAX_VALUE; var id = "~"
         while (true) {
             val page = page(time, id)

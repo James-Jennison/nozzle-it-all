@@ -14,13 +14,15 @@ data class EnvironmentalView(val state: EnvironmentalState, val status: String =
 
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
-    private val limits: EnvironmentalLimits = EnvironmentalLimits()) : AutoCloseable {
+    private val limits: EnvironmentalLimits = EnvironmentalLimits(), private val platformIdentity: String = "unqualified") : AutoCloseable {
     val gate = EnvironmentalGate(control)
     private val mutable = MutableStateFlow(EnvironmentalView(gate.state, if (gate.state == EnvironmentalState.ENABLED_IDLE) "Enabled, idle — press Discover or Start" else if (gate.state == EnvironmentalState.DISABLED_RECOVERY) "Recovery required — control record preserved; Delete / resume cleanup explicitly" else "Disabled — no collection"))
     val view = mutable.asStateFlow()
     @Volatile private var operation: Job? = null
     @Volatile private var operationScope: CoroutineScope? = null
     private var session: RadioSession? = null
+    private var gapSession: String? = null
+    private var gapDropBase = 0L
     private val foreground = AtomicBoolean(false)
     private val visibilityEpoch = AtomicLong()
     private val revocationRequested = AtomicBoolean(false)
@@ -46,12 +48,19 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         // Hide live readings immediately, before durable revocation/cancellation.
         mutable.update { it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") }
         synchronized(this) {
-        try { gate.revoke(disable) }
-        finally {
-            operation?.cancel(); operation = null; operationScope = null
-            runCatching { session?.close() }; session = null
-            mutable.value = mutable.value.copy(state = gate.state, status = if (gate.persistenceFailure) "Persistence failed — stopped in memory, recovery required" else reason)
-        }
+            try { gate.revoke(disable) }
+            finally {
+                operation?.cancel(); operation = null; operationScope = null
+                runCatching { session?.close() }; session = null
+                val gapId = gapSession; gapSession = null
+                val drops = droppedReports.get() - gapDropBase
+                val gapFailed = gapId != null && drops > 0 && runCatching { history.recordGap(gapId, System.currentTimeMillis(), drops) }.isFailure
+                mutable.value = mutable.value.copy(state = gate.state, status = when {
+                    gate.persistenceFailure -> "Persistence failed — stopped in memory, recovery required"
+                    gapFailed -> "Stopped — final overflow count could not be persisted; history coverage incomplete"
+                    else -> reason
+                })
+            }
         }
     }
     @Synchronized fun discover() = begin(Purpose.DISCOVERY, emptyList())
@@ -60,14 +69,17 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val bindings = history.bindings().filterNot { it.archived }
         require(bindings.isNotEmpty()) { "Save a sensor first" }
         // Unknown firmware/envelopes permit unassigned diagnostic reception only, never dryer deployment.
-        require(history.entities("placement").none { it.isNull("until") && bindings.any { b -> b.sensorId == it.getString("sensorId") } }) { "Assigned sensors require a qualified thermal/firmware record before collection" }
+        val qualification = history.assignedQualificationRadios(bindings, platformIdentity, System.currentTimeMillis())
         history.retain(System.currentTimeMillis(), limits.retentionDays)
-        begin(Purpose.COLLECTION, bindings)
+        begin(Purpose.COLLECTION, bindings, qualification)
     }
-    private fun begin(purpose: Purpose, bindings: List<Binding>) {
+    private fun begin(purpose: Purpose, bindings: List<Binding>, qualification: QualificationAdmission? = null) {
         val visibleEpoch = visibilityEpoch.get()
         check(foreground.get() && !disposed.get())
-        val grant = gate.begin(purpose, bindings, if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1_000_000_000L else 86_400_000_000_000)
+        val durationMillis = if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1000L else
+            minOf(86_400_000L, (qualification?.validUntil ?: Long.MAX_VALUE) - System.currentTimeMillis())
+        require(durationMillis > 0) { "Physical qualification expired" }
+        val grant = gate.begin(purpose, bindings, durationMillis * 1_000_000L)
         val job = SupervisorJob(); operation = job
         val scope = CoroutineScope(job + Dispatchers.IO)
         operationScope = scope
@@ -76,6 +88,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val queue = Queue<Advertisement>(limits.queueCapacity)
         val runId = newId()
         val runDroppedStart = droppedReports.get()
+        gapSession = if (purpose == Purpose.COLLECTION) runId else null
+        gapDropBase = runDroppedStart
         val calibration = bindings.associate { it.id to history.calibrated(it, listOf(Reading(Channel.TEMPERATURE, 0.0), Reading(Channel.HUMIDITY, 0.0), Reading(Channel.BATTERY_PERCENT, 0.0), Reading(Channel.BATTERY_VOLTAGE, 0.0))).associateBy { r -> r.channel } }
         mutable.value = mutable.value.copy(state = gate.state, candidates = emptyList(), bindings = bindings,
             status = if (purpose == Purpose.DISCOVERY) "Discovering for ${limits.discoverySeconds} seconds — active BLE scan, radio impact; diagnostic only" else "Collecting diagnostic receptions — measurement age unknown; active BLE scan")
@@ -87,7 +101,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         return@launch
                     }
                 }
-                val request = BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet()) {
+                val request = BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet(), qualification?.radios?.singleOrNull()) {
                     job.isActive && !revocationRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
                 }
                 val opened = transport().start(request, { report ->
@@ -100,6 +114,10 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                 }, { failure -> if (failureQueued.compareAndSet(false, true)) scope.launch {
                     synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop(failure) }
                 } })
+                if (qualification?.radios?.isNotEmpty() == true && opened.adapterDescription !in qualification.radios) {
+                    runCatching { opened.close() }
+                    error("Physical qualification adapter changed")
+                }
                 synchronized(this@EnvironmentalCoordinator) {
                     if (gate.valid(grant) && visibilityEpoch.get() == visibleEpoch && !revocationRequested.get()) {
                         session = opened
@@ -146,7 +164,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             catch (e: Exception) { synchronized(this@EnvironmentalCoordinator) { if (gate.valid(grant)) stop("Environmental operation unavailable — radio, permission or storage failure; no automatic retry") } }
             finally { queue.close() }
         }
-        scope.launch { delay(if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1000L else 86_400_000); synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop("Time limit reached — press Discover / Start for a new operation") } }
+        scope.launch { delay(durationMillis); synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop("Time limit reached — press Discover / Start for a new operation") } }
     }
     @Synchronized fun save(candidate: Candidate, name: String) {
         check(gate.state == EnvironmentalState.DISCOVERING && mutable.value.candidates.contains(candidate))

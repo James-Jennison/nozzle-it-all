@@ -1,5 +1,39 @@
 # Handover to Codex (written 2026-10-18)
 
+## Current delivery checkpoint — visual Environment screen (2026-10-19)
+
+This section supersedes the older checkpoints below. Owner rejected the long
+text/form dashboard and requires the already-authorized visual experience and
+desktop/Play Alpha/normal Razr delivery, not a new proposal or expanded scope.
+Application source c248ecb113feb889b5c50c5c7662ab25acb225aa, immutable candidate
+v0.1.14/code774: dedicated desktop rail screen and Android Home/Settings entry,
+compact responsive tiles with temperature/humidity gauges and real sparklines,
+selected-sensor axis-labelled charts, collapsed setup and selected sensor details.
+Explicit Start remains required; discovery does not create history samples.
+Saved names-only cache/unique matching/automatic addition and existing data stay
+intact. Saved-history mode clearly labels saved reception or no reading in page;
+live display retains timestamped receptions across Stop while screen is present.
+
+GTHost full validation ea3c837e passed in4m7s/132tasks; c248 exact validation is
+running, not yet claimed passed. Inspected8-sensor1500px render is synthetic,
+not actual-account proof. Synthetic current cycle9df65a68f2d6 is pending; prior
+f1df6db932c1 systems provider failure is retained, not substituted or approved.
+Prior substantive findings have separate durable dispositions; unresolved current
+validation and phone visual checks remain. No reviewer agreement replaces tests.
+
+Installed desktop remains0.1.12; owner has been asked to save/close it before
+install. Normal authorized Razr ZY22HXCVPM (motorola razr2023) remains Play275,
+UID10002, with2printers/1project inventory unchanged. Only the scoped verification
+helper was updated; no normal app uninstall/reset/re-signing. Normal update must
+use Play-generated signer ce6bba61258a3e407a0fb27e5a03342d34b44cdd2bf910844af36169f449c3f3.
+Existing Alpha draft4 still has752 and must be replaced, not rolled out as-is.
+v0.1.13/sourceea3 release CI39315587814 canceled as superseded; preserve its tag.
+Finish exact package/device tests, Synthetic review/remediation, integrated Linux
+install, existing Alpha release and matching normal Razr update/data verification.
+Private key entry stays in NIA; never inspect/capture an open key dialog. No new
+protocol/hardware qualification, production track, GitHub draft publication, or
+unrelated owner-file changes are authorized.
+
 ## Owner-approved automatic discovery follow-up (2026-10-19, in progress)
 
 Superseding correction pending build: first exact66 full PASS1308tests and exact4efd

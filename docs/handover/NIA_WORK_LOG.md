@@ -4,6 +4,18 @@ Newest entries at the bottom. Times are PDT.
 
 ## Visual dashboard correction (2026-10-19, active)
 
+Current application c248ecb1/v0.1.14/code774: dedicated visual screen, compact
+4-column desktop/1-column phone layout, actual trend charts, collapsed setup.
+Full GTHost ea3 validation passed4m7s; exact c248 build/tests running. Reviewed
+saved-history empty-state and desktop opt-in consistency corrected with regression
+coverage. f1df6db932c1 systems failure retained; new exact9df65a68f2d6 pending.
+Source proposals about nonexistent Column shadowing, random per-binding map order,
+and missing selected state rejected with actual code evidence, not majority vote.
+Normal Razr still Play275; only scoped verification helper updated in place.
+Desktop0.1.12 running, close request pending. Existing Alpha draft752 unchanged.
+Tagv.13/sourceea3 and owned superseded PR CI canceled; immutable tags retained.
+Current candidate tagCI39316590782 queued on GTHost. No current delivery claim.
+
 Owner rejected the installed0.1.12 settings-form presentation. Correcting within
 the existing visual monitoring scope: dedicated desktop Environment destination,
 Android Environment screen reached from Home and Settings, responsive sensor

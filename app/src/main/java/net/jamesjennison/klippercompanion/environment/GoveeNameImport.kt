@@ -7,6 +7,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -42,14 +43,21 @@ import kotlinx.coroutines.*
     message?.let { Text(it) }
     TextButton({
         busy = true; cancel()
-        scope.launch { try { withContext(Dispatchers.IO) { store.forget() }; saved = false; message = "Saved Govee key and imported name list forgotten. Added sensor names/history are unchanged." }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { try { withContext(NonCancellable + Dispatchers.IO) { store.forget() }; saved = false; message = "Saved Govee key and imported name list forgotten. Added sensor names/history are unchanged." }
             catch (_: Exception) { message = "Could not forget saved key; retry explicitly." }
             finally { busy = false } }
     }, enabled = !busy) { Text("Forget Govee key and imported names") }
     if (dialog) AlertDialog(onDismissRequest = { if (!busy) cancel() },
         properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn),
         title = { Text("Read-only Govee name import") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        text = {
+            val privateView = LocalView.current
+            DisposableEffect(privateView) {
+                val previous = privateView.importantForAutofill
+                privateView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                onDispose { privateView.importantForAutofill = previous }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Your key is sent only to Govee's official device-list API. Enter it here, never in chat. Some sensors may not appear in the API.")
             OutlinedTextField(key, { key = it.take(256) }, label = { Text("Govee API key") }, enabled = !busy,
                 visualTransformation = PasswordVisualTransformation(), singleLine = true,

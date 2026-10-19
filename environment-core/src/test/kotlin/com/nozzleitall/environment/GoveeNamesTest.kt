@@ -46,7 +46,7 @@ class GoveeNamesTest {
     }
     @Test fun rejectInjectionOversizeMalformedAndConflictingIdentities() {
         assertThrows(GoveeNameException::class.java) { GoveeNameApi { error("No connection allowed") }.fetch("fixture\r\ninjection") }
-        for (body in listOf("not json", """{"code":401,"data":[]}""", valid.replace("Office shelf", ""), valid.replace("Office shelf", "x".repeat(121)), " ".repeat(GoveeNameApi.MAX_BYTES + 1),
+        for (body in listOf("not json", """{"code":401,"data":[]}""", "[".repeat(33) + "]".repeat(33), valid.replace("Office shelf", ""), valid.replace("Office shelf", "x".repeat(121)), " ".repeat(GoveeNameApi.MAX_BYTES + 1),
             """{"code":200,"data":[{"sku":"H5100","device":"one","deviceName":"A"},{"sku":"H5100","device":"one","deviceName":"B"}]}""")) {
             assertThrows(GoveeNameException::class.java) { GoveeNameApi.parse(body) }
         }

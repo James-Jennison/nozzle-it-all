@@ -78,6 +78,19 @@ class GoveeNameApi internal constructor(private val connect: (URL) -> HttpsURLCo
         fun parse(text: String): List<GoveeDeviceName> {
             try {
                 require(text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES)
+                // Bound JSON object allocation and nesting before org.json parses capabilities.
+                var quoted = false; var escaped = false; var depth = 0; var structure = 0
+                for (c in text) {
+                    if (quoted) {
+                        if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == '"') quoted = false
+                    } else when (c) {
+                        '"' -> quoted = true
+                        '{', '[' -> { depth++; structure++; require(depth <= 32 && structure <= 20_000) }
+                        '}', ']' -> { depth--; require(depth >= 0) }
+                        ',', ':' -> { structure++; require(structure <= 20_000) }
+                    }
+                }
+                require(!quoted && depth == 0)
                 val root = JSONObject(text)
                 require(root.getInt("code") == 200)
                 val rows = root.getJSONArray("data"); require(rows.length() <= 1000)

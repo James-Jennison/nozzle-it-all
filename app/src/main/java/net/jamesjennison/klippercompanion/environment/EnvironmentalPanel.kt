@@ -17,6 +17,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.nozzleitall.environment.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -126,9 +128,12 @@ import org.json.JSONObject
                 Button({ pending = null; stopping = true; rows = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
                     goveeNames.cancel()
                     val cleanup = controller.requestDeleteAsync()
-                    scope.launch { try { cleanup.join(); deleting = controller.view.value.state != EnvironmentalState.DISABLED
-                        if (!deleting) withContext(Dispatchers.IO) { goveeNames.forget() }
-                    } catch (_: Exception) { problem = "Govee key cleanup unavailable. Enable the panel and use Forget Govee key to retry; no automatic retry." }
+                    scope.launch(start = CoroutineStart.UNDISPATCHED) { try {
+                        // Secret cleanup is independent of history cleanup outcome and survives navigation.
+                        try { withContext(NonCancellable + Dispatchers.IO) { goveeNames.forget() } }
+                        catch (_: Exception) { problem = "Govee key cleanup unavailable. Enable the panel and use Forget Govee key to retry; no automatic retry." }
+                        cleanup.join(); deleting = controller.view.value.state != EnvironmentalState.DISABLED
+                    } catch (_: Exception) { problem = "Environmental cleanup incomplete; retry deletion explicitly." }
                     finally { stopping = false } }
                 }, enabled = !busy && !stopping) { Text("Confirm delete / resume") }
                 TextButton({ deleting = false }) { Text("Keep data") }

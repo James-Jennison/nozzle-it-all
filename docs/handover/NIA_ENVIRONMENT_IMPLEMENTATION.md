@@ -1,5 +1,15 @@
 # Environmental monitoring B–D implementation
 
+Current Govee follow-up: executable source
+`c41680a18fcf90a9a9016f575157176d2a958337` is installed and live-verified on Linux
+and in the isolated Razr acceptance variant. Ordinary room assignments no longer
+require certification to collect observations. Exact GTHost build/tests, Synthetic
+reviews, installation and runtime loop completed; evidence749c3e1987df PASS/intact,
+closureac38f3d70b5e READY_WITH_RESIDUAL_RISK/no blockers. See
+`NIA_GOVEE_COMPLETION.md` for current source-bound proof and the normal Android
+profile preservation boundary. Baseline details below describe the earlier9b6
+implementation and records-only scope correction, not the later room-label fixes.
+
 Owner approved B–D implementation on 2026-10-18 against architecture SHA256
 `dfbdd62225e24e89e850fa7326f8a877993e4ec0edba3b08a09760742fa5700d`.
 The historical sealed preapproval request is preserved. E–G, background services,
@@ -10,7 +20,7 @@ foreground collection, 256 queued reports, 500-row pages, 30-day / 100 MiB histo
 CPU below 5% of one core at 100 reports/sec, incremental bounded memory below
 32 MiB. Battery measured where possible, no battery-life guarantee.
 
-## Verified implementation and requested validation
+## Verified baseline implementation and requested validation (historical)
 
 Functional source `9b6e152a49aa49562857fc69d8481319e9bdb941` implements lazy
 opt-in control, separate bounded environmental SQLite history, and scan-only

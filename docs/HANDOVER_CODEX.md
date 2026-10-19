@@ -1,6 +1,43 @@
 # Handover to Codex (written 2026-10-18)
 
-## Environmental B–D — requested implementation/verification completed
+## Govee monitoring — implemented, installed and live-verified (2026-10-19)
+
+Installed executable source `c41680a18fcf90a9a9016f575157176d2a958337`.
+Ordinary room assignments no longer block observation collection behind
+certification. Existing target limits/history are preserved; per-sensor labels
+restore correctly, and Save captures the latest typed value at the gesture.
+Govee-only discovery presentation, explicit Start, foreground stop/no-auto-resume,
+bounded local history/export/delete and consent/privacy boundaries are retained.
+
+Exact GTHost build/package succeeded in 3m 7s: 1,278 results, 1,268 passed,
+10 conditional skips, zero failures. Unchanged inputs use Gradle cache explicitly;
+core45/45 and the100Hz fixture's
+4.22949%onecore/RSS+19,935,232bytes/drop0 are reused from the identical core/API
+input tree. Desktop237/domain240/Android756 results are sealed, not all claimed
+re-executed. All208 installed Linux payload hashes match the tested Deb.
+Installed-path H5100 assigned-room collection17actualevents; immediate-type/save,
+blank no-overwrite, restored labels, visibility stop/restore/countstable17,
+UIexport27lines/all17IDs and own-test-data UIdelete0events/entities PASS.
+Export and DB backup retained. Fresh Off/EnableIdle created no history database.
+
+Verified motorola razr2023/API36: isolated `.environment` acceptance APK installed
+and digest/source matched. Current UI+SQLite2tests PASS6.483s; actual H5100
+room-assigned radio1test PASS9.784s/1event; navigation stops/noauto-resume.
+Normal Android app/profile/PID23745 unchanged; other devices/printers untouched.
+Only owned acceptance processes were stopped. No normal-profile reset or release.
+
+Current Synthetic bb345a447690 all3 exact configured seats COMPLETE; clarification
+524c5b75f239 COMPLETE explicitly withdraws the HIGH default-overwrite premise.
+12current immutable findings separately dispositioned, no acceptedHIGH risk.
+28sealed artifacts, manifest3c6c3ee28e3c0e4f63165d4235bde72bd0cc761c1e9e2fd8f15fb2426399ffc3.
+Evidence749c3e1987df bothPASS/intact; closureac38f3d70b5e = READY_WITH_RESIDUAL_RISK,
+no blocking reasons. Three LOW limits concern frame-level feedback, fixture-only
+resource measurements and a retained prior flaky native AFC test; not new gates.
+See `handover/NIA_GOVEE_COMPLETION.md` for hashes, preserved failures and limits.
+Source c416 is pushed; exact-source CI39247812266 SUCCESS on verified gthost-build01.
+Manual-only Device Farm/release jobs skipped as intended, no release or merge.
+
+## Environmental B–D baseline (historical; current Govee follow-up above)
 
 Owner scope correction on2026-10-19: use `handover/NIA_ENVIRONMENT_ACCEPTANCE_SCOPE.json`
 for current acceptance, not additional qualification conditions introduced in the proposal.

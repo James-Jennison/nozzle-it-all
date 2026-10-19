@@ -49,7 +49,7 @@ elif sys.argv[1] == 'submit':
     # Require explicit source-bound evidence; never replay an old checkpoint as current proof.
     package['evidence'] = current_evidence
     package['implementation_details'] = 'Current source and supplied source-bound evidence are authoritative; historical checkpoint prose is not runtime proof.'
-    package['review_questions'] = 'Review current source for lifecycle, privacy, storage, platform and resource defects against the approved B-D requirements. Distinguish unfulfilled physical qualification from source defects. No model substitution, requirement changes or E-G expansion.'
+    package['review_questions'] = 'Review current source for lifecycle, privacy, storage, platform and resource defects against the owner-directed scope. Untested capabilities remain limitations, not added hardware, procurement or certification completion gates. Do not add unrequested providers or feature work. No model substitution, requirement changes or E-G expansion.'
     print(json.dumps(call({'operation': 'control_submit', 'change_id': change, 'package': package,
                           'reviewers': ['council-synthetic-systems', 'council-synthetic-frontend', 'council-synthetic-adversarial']})))
 elif sys.argv[1] == 'status':

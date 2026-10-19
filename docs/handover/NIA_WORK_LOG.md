@@ -639,3 +639,10 @@ motorola razr2023 verified read-only. Package782/.17 still installer null and
 lastUpdate13:58:03, original installSep26 unchanged. No device/release/data changes.
 Native phone UI unavailable; owner must perform genuine Play update and openNIA.
 Recorded observation play-heartbeat-20261019T2216.json in evidence ledger.
+
+Owner confirmed saved/closed desktop. Verified no normal NIA process; reverified
+exact50a artifact and created fresh hash-only baseline16entities/3967events.
+pkexec dpkg session52054 completed exit0 (.19 to .20), no new auth prompt needed.
+All218 installed files match package, source identity/adapters/icons verified;
+all16entities/3967events unchanged. No data reset. Native desktop UI unavailable;
+owner reopen/Start required for actual .20 live visual and history verification.

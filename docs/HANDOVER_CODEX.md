@@ -13,8 +13,13 @@ No release/device/data mutations. Monitor remains active for update/live checks.
 
 ## Current tightening candidate — 0.1.20 / 50a1d26a
 
-READY TO INSTALL, awaiting owner to save/close running normal NIA (PID3248368 at
-last check). Do not terminate it or install over it. New package not installed.
+INSTALLED: owner confirmed saved/closed; no running normal NIA process verified.
+dpkg session52054 exited0 upgrading .19 to .20. All218 installed payload files
+match exact50a package; source identity, six adapters and launcher/icons verified.
+Fresh hash baseline desktop-environment-before-tight-50a.json preserves all16
+entities and3967events after installation. Native desktop UI control unavailable;
+owner must reopen normal NIA and explicitly Start monitoring for live visual/
+history/Stop verification. Installation is complete; live .20 proof remains pending.
 Final source50a1d26aee644675e5be6b8599de9018ce37e61b; package SHA256
 f27a6ca38a760a08de7732451c22611ad8526e9f6417e661d7c62a81e7698d78 at
 /home/jjennison/.local/state/nozzle-it-all/acceptance/20261019-normal-razr/nozzle-it-all_0.1.20_50a1d26a_amd64.deb.

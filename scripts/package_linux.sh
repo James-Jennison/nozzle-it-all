@@ -31,7 +31,10 @@ STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 # does nothing on current Ubuntu, and names it "nozzle-it-all" with no StartupWMClass, so docks show a generic icon.
 # Ship a proper launcher and themed icons in the standard places instead; the app names its window class to match.
 PKG="$STAGE/desktop"
-dpkg-deb -R "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb "$PKG"
+SOURCE_DESKTOP_DEB="$ROOT/desktop/build/compose/binaries/main/deb/nozzle-it-all_${VERSION}_amd64.deb"
+[ -s "$SOURCE_DESKTOP_DEB" ] || { echo "missing intended Compose package: $SOURCE_DESKTOP_DEB" >&2; exit 1; }
+[ "$(dpkg-deb -f "$SOURCE_DESKTOP_DEB" Version)" = "$VERSION" ] || { echo "Compose package version mismatch" >&2; exit 1; }
+dpkg-deb -R "$SOURCE_DESKTOP_DEB" "$PKG"
 install -Dm644 "$ROOT/desktop/packaging/linux/nozzle-it-all.desktop" "$PKG/usr/share/applications/nozzle-it-all.desktop"
 install -Dm644 "$ROOT/THIRD_PARTY_NOTICES.md" "$PKG/usr/share/doc/nozzle-it-all/THIRD_PARTY_NOTICES.md"
 # The optional viewport bridge statically links the pinned builder's GCC runtime.
@@ -77,8 +80,9 @@ grep -qx 'StartupWMClass=nozzle-it-all' "$PKG/usr/share/applications/nozzle-it-a
 for size in 16 32 48 64 128 256 512; do
   test -s "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/nozzle-it-all.png"
 done
-DESKTOP_DEB="$OUT/$(basename "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb)"
+DESKTOP_DEB="$OUT/$(basename "$SOURCE_DESKTOP_DEB")"
 fakeroot dpkg-deb --build "$PKG" "$DESKTOP_DEB" >/dev/null
+[ -s "$DESKTOP_DEB" ]
 
 echo "== Stock U1 adapter"
 PKG="$STAGE/stock"
@@ -112,6 +116,7 @@ fakeroot dpkg-deb --build "$PKG" "$OUT/nozzle-stock-u1-adapter_${VERSION}-1_amd6
 
 
 echo "== Provenance"
+ADAPTERS="$(dpkg-deb -c "$DESKTOP_DEB" | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
 (cd "$OUT" && sha256sum -- "$(basename "$DESKTOP_DEB")" "nozzle-stock-u1-adapter_${VERSION}-1_amd64.deb" > SHA256SUMS)
 {
   echo "Nozzle It All Linux packages $VERSION"
@@ -123,7 +128,7 @@ echo "== Provenance"
   echo "stock adapter runtime modules: $MODULES"
   echo "slicing engine: $ENGINE sha256 $(sha256sum "$ENGINE" | cut -d' ' -f1)"
   [ -f "$ROOT/engine/native/PROVENANCE.txt" ] && sed 's/^/  /' "$ROOT/engine/native/PROVENANCE.txt"
-  echo "adapters in nozzle-it-all: $(dpkg-deb -c "$DESKTOP_DEB" | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
+  echo "adapters in nozzle-it-all: $ADAPTERS"
   echo; cat "$OUT/SHA256SUMS"
 } > "$OUT/PROVENANCE.txt"
 cat "$OUT/PROVENANCE.txt"

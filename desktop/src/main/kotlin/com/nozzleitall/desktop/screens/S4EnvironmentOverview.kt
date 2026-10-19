@@ -32,7 +32,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun S4EnvironmentOverview(group: EnvironmentalSensorGroup,
     positions: Map<String, Binding>, data: EnvironmentalDashboardData, historyMode: Boolean,
-    collecting: Boolean, selected: String?, showDiagram: Boolean = true, onSelect: (Binding) -> Unit) {
+    collecting: Boolean, selected: String?, showDiagram: Boolean = true, placementOnly: Boolean = false, onSelect: (Binding) -> Unit) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(historyMode) {
         while (!historyMode) { now = System.currentTimeMillis(); delay(15_000) }
@@ -41,6 +41,10 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
     // Refresh on receptions as well as the timer: a new reception must not look future-dated for 15s.
     val liveReference = remember(now, data.readings) { System.currentTimeMillis() }
     val reference = if (historyMode) savedReference ?: 0L else liveReference
+    if (placementOnly) {
+        DryerDiagram(positions, data, reference, historyMode, selected, onSelect)
+        return
+    }
     var showMethod by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Label(if (historyMode) savedReference?.let { "Saved history · summary at ${stamp(it)}" } ?: "Saved history · no saved group readings"

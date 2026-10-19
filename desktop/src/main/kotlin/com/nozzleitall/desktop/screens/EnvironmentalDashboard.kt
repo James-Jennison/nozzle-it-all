@@ -43,7 +43,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     val bindings = groups.flatMap { it.bindings }
     var selected by remember { mutableStateOf<String?>(null) }
     var expandedChoice by remember { mutableStateOf<Boolean?>(null) }
-    var showDryer by remember { mutableStateOf(false) }
+    var showDryer by remember { mutableStateOf(true) }
     val expandedTrends = expandedChoice ?: groups.none { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
     val hasOverview = groups.any { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
     val target = bindings.firstOrNull { it.id == selected } ?: if (hasOverview) null else bindings.firstOrNull()
@@ -55,7 +55,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             Txt("Your environment, at a glance", Nz.type.title)
             Txt("Discover sensors to see their temperature and humidity here. Import Govee names once to add matching sensors automatically.")
         }
-        val renderGroup: @Composable (EnvironmentalSensorGroup) -> Unit = { group ->
+        val renderGroup: @Composable (EnvironmentalSensorGroup, Boolean) -> Unit = { group, inlinePlacement ->
             val positions = EnvironmentalGroupOverview.s4Positions(group, view.sensorLabels)
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -67,7 +67,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                     selected = it.id; expandedChoice = true
                 }
                 if (positions != null) S4EnvironmentOverview(group, positions, data, historyMode,
-                    view.state == EnvironmentalState.COLLECTING, target?.id, showDiagram = showDryer) {
+                    view.state == EnvironmentalState.COLLECTING, target?.id, showDiagram = showDryer && inlinePlacement) {
                     selected = it.id; expandedChoice = true
                 }
             }
@@ -76,13 +76,21 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             val primary = groups.firstOrNull { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
             if (maxWidth >= 1200.dp && primary != null && groups.size > 1) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1.6f)) { renderGroup(primary) }
+                    Column(Modifier.weight(1.6f)) { renderGroup(primary, false) }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        groups.filter { it != primary }.forEach { renderGroup(it) }
+                        if (showDryer) Card(Modifier.fillMaxWidth()) {
+                            Txt("S4 sensor placement", Nz.type.title)
+                            Txt("Viewed from the front", Nz.type.bodySmall, Nz.colors.textMuted)
+                            S4EnvironmentOverview(primary, EnvironmentalGroupOverview.s4Positions(primary, view.sensorLabels)!!,
+                                data, historyMode, view.state == EnvironmentalState.COLLECTING, target?.id, placementOnly = true) {
+                                selected = it.id; expandedChoice = true
+                            }
+                        }
+                        groups.filter { it != primary }.forEach { renderGroup(it, true) }
                     }
                 }
             } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                groups.forEach { renderGroup(it) }
+                groups.forEach { renderGroup(it, true) }
             }
         }
         target?.let { binding -> Card(Modifier.fillMaxWidth()) {

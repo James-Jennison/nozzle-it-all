@@ -44,6 +44,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     private fun begin(purpose: Purpose, bindings: List<Binding>) {
         check(foreground)
+        require(bindings.size <= 64) { "At most 64 active environmental bindings per foreground session" }
         val grant = gate.begin(purpose, bindings, if (purpose == Purpose.DISCOVERY) 45_000_000_000 else 86_400_000_000_000)
         val job = SupervisorJob(); operation = job
         val scope = CoroutineScope(job + Dispatchers.IO)
@@ -97,7 +98,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     @Synchronized fun loadHistory(before: Long = Long.MAX_VALUE, id: String = "~") = history.page(before, id)
     @Synchronized fun savedBindings(): List<Binding> = history.bindings().also { mutable.value = mutable.value.copy(bindings = it) }
     @Synchronized fun archive(binding: Binding) { stop(); history.archive(binding); savedBindings() }
-    @Synchronized fun export(write: (String) -> Unit) { history.export(write) }
+    fun export(write: (String) -> Unit) { history.export(write) }
     @Synchronized fun retention() { history.retain(System.currentTimeMillis()) }
     @Synchronized fun configureRoom(binding: Binding, equipmentName: String, positionName: String) {
         stop("Saved draft assignment — thermal qualification required before collection")

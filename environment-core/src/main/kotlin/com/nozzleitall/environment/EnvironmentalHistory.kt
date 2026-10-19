@@ -14,7 +14,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable
             require(version in 0..1) { "Unsupported environmental history schema; preserved without migration" }
             if (version == 0) sql.transaction {
                 sql.execute("CREATE TABLE entities(kind TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(kind,id))")
-                sql.execute("CREATE TABLE events(id TEXT PRIMARY KEY, binding TEXT NOT NULL, observed INTEGER NOT NULL, immutable TEXT NOT NULL)")
+                sql.execute("CREATE TABLE events(id TEXT PRIMARY KEY, binding TEXT NOT NULL, observed INTEGER NOT NULL, received INTEGER NOT NULL, immutable TEXT NOT NULL)")
                 sql.execute("CREATE INDEX events_time ON events(observed,id)")
                 sql.execute("CREATE INDEX events_binding ON events(binding,observed,id)")
                 sql.execute("CREATE TABLE conflicts(id TEXT PRIMARY KEY, observed INTEGER NOT NULL, reason TEXT NOT NULL)")
@@ -22,6 +22,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable
             }
             // Bound allocation including free pages. No WAL or unbounded sidecar.
             sql.execute("PRAGMA journal_mode=DELETE")
+            sql.execute("PRAGMA secure_delete=ON")
             val pageSize = sql.query("PRAGMA page_size").first().first()!!.toLong()
             sql.execute("PRAGMA max_page_count=${104857600L / pageSize}")
             db = sql
@@ -114,13 +115,13 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable
             when {
                 existing == payload -> "duplicate"
                 existing != null -> { store().execute("INSERT OR IGNORE INTO conflicts(id,observed,reason) VALUES(?,?,?)", o.eventId, o.observedAt, "Conflicting immutable event; quarantined"); "conflict" }
-                else -> { store().execute("INSERT INTO events(id,binding,observed,immutable) VALUES(?,?,?,?)", o.eventId, o.bindingId, o.observedAt, payload); "inserted" }
+                else -> { store().execute("INSERT INTO events(id,binding,observed,received,immutable) VALUES(?,?,?,?,?)", o.eventId, o.bindingId, o.observedAt, o.receivedAt, payload); "inserted" }
             }
         }
     }
     @Synchronized fun page(before: Long = Long.MAX_VALUE, beforeId: String = "~", limit: Int = 500): List<String> {
         require(limit in 1..500)
-        return store().query("SELECT immutable FROM events WHERE observed<? OR (observed=? AND id<?) ORDER BY observed DESC,id DESC LIMIT ?", before, before, beforeId, limit).map { it[0]!! }
+        return store().query("SELECT immutable,received FROM events WHERE observed<? OR (observed=? AND id<?) ORDER BY observed DESC,id DESC LIMIT ?", before, before, beforeId, limit).map { JSONObject(it[0]!!).put("receivedAt", it[1]!!.toLong()).toString() }
     }
     @Synchronized fun retain(now: Long, days: Int = 30) {
         require(days in 1..3650)

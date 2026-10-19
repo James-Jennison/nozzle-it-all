@@ -93,7 +93,7 @@ class EnvironmentalTest {
     @Test fun exportAndDeleteAreExplicitAndIncarnationFenced() {
         history().use { h ->
             h.append(observation(), "inc"); val exported = mutableListOf<String>(); h.export { exported += it }
-            assertEquals(2, exported.size); assertFalse(exported.last().contains("receivedAt"))
+            assertEquals(2, exported.size); assertEquals(1001L, JSONObject(exported.last()).getLong("receivedAt"))
             h.deleteAll(); assertTrue(h.page().isEmpty())
         }
         val g = EnvironmentalGate(file()); val old = g.incarnation; g.deleteIntent(); assertNotEquals(old, g.incarnation); g.finishDelete(); assertEquals(EnvironmentalState.DISABLED, g.state)

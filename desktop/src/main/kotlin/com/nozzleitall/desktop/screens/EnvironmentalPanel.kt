@@ -19,6 +19,9 @@ import org.json.JSONObject
     var name by remember { mutableStateOf("Environmental sensor") }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var equipmentName by remember { mutableStateOf("Room") }
+    var positionName by remember { mutableStateOf("Shelf") }
+    var offset by remember { mutableStateOf("0.0") }
     fun action(block: () -> Unit) { if (!busy) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
     Card(Modifier.fillMaxWidth()) {
         Txt("Environmental monitoring (optional)", Nz.type.title)
@@ -39,7 +42,7 @@ import org.json.JSONObject
         if (v.candidates.isNotEmpty()) {
             Field("Sensor label", name, { name = it.take(120) })
             v.candidates.forEachIndexed { i, candidate -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Txt("${candidate.model} · candidate ${i + 1} · unqualified", Nz.type.body)
+                Txt("${candidate.model} · ${candidate.address} · candidate ${i + 1} · unqualified", Nz.type.body)
                 NzButton("Save only", { action { controller.save(candidate, name) } }, enabled = !busy && name.isNotBlank())
             } }
         }
@@ -65,8 +68,17 @@ import org.json.JSONObject
             Txt("Delete only environmental configuration/history? External exports remain. Cleanup failures require explicit retry.", Nz.type.body)
             Row { NzButton("Confirm delete / resume", { action { controller.deleteAll(); rows = emptyList(); confirmDelete = false } }, enabled = !busy); NzButton("Keep data", { confirmDelete = false }) }
         }
-        v.bindings.filterNot { it.archived }.forEach { binding -> Row {
-            Txt("${binding.model} — firmware/calibration/operating envelope unqualified", Nz.type.bodySmall, modifier = Modifier.weight(1f))
+        if (v.bindings.any { !it.archived }) {
+            Field("Equipment label (draft)", equipmentName, { equipmentName = it.take(120) })
+            Field("Position label (draft)", positionName, { positionName = it.take(120) })
+            Field("Relative humidity calibration offset (%RH)", offset, { offset = it.take(12) })
+        }
+        v.bindings.filterNot { it.archived }.forEach { binding -> Column {
+            Txt("${binding.model} — firmware/calibration/operating envelope unqualified", Nz.type.bodySmall)
+            Txt("${binding.address} · ${binding.protocol} — verify the physical identity before saving assignments", Nz.type.bodySmall)
+            NzButton("Save draft assignment only", { action { controller.configureRoom(binding, equipmentName, positionName) } }, enabled = !busy && equipmentName.isNotBlank() && positionName.isNotBlank())
+            Txt("Assignments without proven thermal/firmware qualification block diagnostic Start. No qualified deployment claim.", Nz.type.bodySmall)
+            NzButton("Save RH calibration", { action { controller.calibrate(binding, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && offset.toDoubleOrNull()?.isFinite() == true)
             NzButton("Archive binding", { action { controller.archive(binding) } }, enabled = !busy)
         } }
         rows.take(500).forEach { raw ->

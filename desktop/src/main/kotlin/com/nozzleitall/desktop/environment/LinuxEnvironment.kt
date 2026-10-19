@@ -14,7 +14,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class JdbcEnvironmentalStore(file: File) : SqlStore {
     private val connection: Connection
-    init { file.parentFile.mkdirs(); connection = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}") }
+    init {
+        file.parentFile.mkdirs()
+        java.nio.file.Files.setPosixFilePermissions(file.parentFile.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"))
+        connection = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
+        java.nio.file.Files.setPosixFilePermissions(file.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))
+    }
     override fun execute(sql: String, vararg args: Any?) { connection.prepareStatement(sql).use { s -> args.forEachIndexed { i, v -> s.setObject(i + 1, v) }; s.execute(); Unit } }
     override fun query(sql: String, vararg args: Any?): List<List<String?>> = connection.prepareStatement(sql).use { s ->
         args.forEachIndexed { i, v -> s.setObject(i + 1, v) }
@@ -69,7 +74,10 @@ class LinuxBleTransport : BleTransport {
                     report(Advertisement(address, name, manufacturer, services, System.currentTimeMillis(), System.nanoTime()))
                 } catch (_: Exception) { /* Removed transient device or malformed property: no nearby-device logging. */ }
             }
-            bus.addSigHandler(Properties.PropertiesChanged::class.java) { s -> if (s.interfaceName == "org.bluez.Device1") process(s.path, s.propertiesChanged) }
+            bus.addSigHandler(Properties.PropertiesChanged::class.java) { s ->
+                if (s.interfaceName == "org.bluez.Adapter1" && s.path == path && s.propertiesChanged["Powered"]?.value == false) failure("Bluetooth off — stopped; no automatic restart")
+                if (s.interfaceName == "org.bluez.Device1") process(s.path, s.propertiesChanged)
+            }
             bus.addSigHandler(ObjectManager.InterfacesAdded::class.java) { s -> s.interfaces["org.bluez.Device1"]?.let { process(s.signalSource.path, it) } }
             adapter.StartDiscovery(); acquired.set(true)
             val ownedAdapter = adapter

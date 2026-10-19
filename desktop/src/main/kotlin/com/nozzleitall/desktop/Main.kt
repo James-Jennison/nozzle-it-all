@@ -116,6 +116,8 @@ private fun runApp(open: List<File>) = application {
         window.minimumSize = java.awt.Dimension(960, 640)
         DisposableEffect(window) {
             val listener = object : java.awt.event.WindowAdapter() {
+                override fun windowDeactivated(e: java.awt.event.WindowEvent) { state.environment.foreground(false) }
+                override fun windowActivated(e: java.awt.event.WindowEvent) { state.environment.foreground(true) }
                 override fun windowIconified(e: java.awt.event.WindowEvent) { state.environment.foreground(false) }
                 override fun windowDeiconified(e: java.awt.event.WindowEvent) { state.environment.foreground(true) }
                 override fun windowClosed(e: java.awt.event.WindowEvent) { state.environment.foreground(false) }

@@ -36,6 +36,9 @@ import org.json.JSONObject
     var name by remember { mutableStateOf("Environmental sensor") }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var deleting by remember { mutableStateOf(false) }
+    var equipment by remember { mutableStateOf("Room") }
+    var position by remember { mutableStateOf("Shelf") }
+    var offset by remember { mutableStateOf("0.0") }
     fun action(block: () -> Unit) { if (!busy) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
     fun start(kind: String) { action { if (kind == "discover") controller.discover() else controller.start() } }
     val permissions = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -78,7 +81,7 @@ import org.json.JSONObject
             if (view.candidates.isNotEmpty()) {
                 OutlinedTextField(name, { name = it.take(120) }, label = { Text("Sensor label") })
                 view.candidates.forEachIndexed { i, candidate ->
-                    Text("${candidate.model} · candidate ${i + 1} · firmware/calibration/thermal limits unqualified")
+                    Text("${candidate.model} · ${candidate.address} · candidate ${i + 1} · firmware/calibration/thermal limits unqualified")
                     OutlinedButton({ action { controller.save(candidate, name) } }, enabled = !busy && name.isNotBlank()) { Text("Save only") }
                 }
             }
@@ -98,6 +101,13 @@ import org.json.JSONObject
             }
             view.bindings.filterNot { it.archived }.forEach { b ->
                 Text("${b.model} — diagnostic, unqualified")
+                Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(equipment, { equipment = it.take(120) }, label = { Text("Equipment label (draft)") })
+                OutlinedTextField(position, { position = it.take(120) }, label = { Text("Position label (draft)") })
+                TextButton({ action { controller.configureRoom(b, equipment, position) } }, enabled = !busy && equipment.isNotBlank() && position.isNotBlank()) { Text("Save draft assignment only") }
+                Text("Unqualified assignments block Start; thermal/firmware evidence required for deployment.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(offset, { offset = it.take(12) }, label = { Text("Humidity calibration offset (%RH)") })
+                TextButton({ action { controller.calibrate(b, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && offset.toDoubleOrNull()?.isFinite() == true) { Text("Save RH calibration") }
                 TextButton({ action { controller.archive(b) } }, enabled = !busy) { Text("Archive binding") }
             }
             rows.forEach { raw -> val j = JSONObject(raw); Text("${java.time.Instant.ofEpochMilli(j.getLong("observedAt"))} · ${j.getJSONArray("readings")} · age unknown", style = MaterialTheme.typography.bodySmall) }

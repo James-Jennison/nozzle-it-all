@@ -70,6 +70,7 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
     private fun persist(intent: String) {
         val body = JSONObject().put("version", 1).put("incarnation", incarnation).put("epoch", epoch).put("intent", intent).toString()
         file.parentFile.mkdirs()
+        if (System.getProperty("os.name").orEmpty().contains("Linux", true)) Files.setPosixFilePermissions(file.parentFile.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"))
         val tmp = File.createTempFile(".control-", ".tmp", file.parentFile)
         try {
             FileOutputStream(tmp).use { it.write(JSONObject().put("body", body).put("sha256", hash(body)).toString().toByteArray()); it.fd.sync() }

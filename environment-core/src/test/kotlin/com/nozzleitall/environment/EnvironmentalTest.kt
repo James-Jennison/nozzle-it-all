@@ -648,6 +648,13 @@ class EnvironmentalTest {
             assertEquals(10.0, renamed.getDouble("minC"), 0.0)
             assertEquals(40.0, renamed.getDouble("maxC"), 0.0)
             assertThrows(QualificationUnavailableException::class.java) { c.start() }
+            val partial = Position(equipmentId = renamed.getString("equipmentId"), name = "Partial", maxC = 30.0)
+            h.savePosition(partial)
+            c.configureRoom(b, "Renamed Room", "Partial")
+            val target = h.entities("position").single { it.getString("id") == partial.id }
+            assertTrue(target.isNull("minC"))
+            assertEquals(30.0, target.getDouble("maxC"), 0.0)
+            assertThrows(QualificationUnavailableException::class.java) { c.start() }
         } finally { c.close() }
     }
     @Test fun roomSaveCannotReclassifyNonRoomEquipmentOrDuplicateItsName() {
@@ -663,6 +670,10 @@ class EnvironmentalTest {
             assertThrows(QualificationUnavailableException::class.java) { c.configureRoom(b, "Another room", "Shelf") }
             assertEquals(1, h.entities("equipment").size)
             assertEquals(p.id, h.entities("placement").single().getString("positionId"))
+            val placement = h.entities("placement").single()
+            h.save("placement", placement.getString("id"), placement.put("positionId", "missing"))
+            assertThrows(QualificationUnavailableException::class.java) { c.configureRoom(b, "Another room", "Shelf") }
+            assertEquals(1, h.entities("equipment").size)
         } finally { c.close() }
     }
     @Test fun capabilityQualificationRequiresExactCurrentEvidenceAndNeverPromotesUnknownFirmware() {

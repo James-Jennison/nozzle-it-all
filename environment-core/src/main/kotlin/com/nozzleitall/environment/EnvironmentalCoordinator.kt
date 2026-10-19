@@ -133,7 +133,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                 }
                 val opened = transport().start(request, { report ->
                     // OS scan callbacks may be Main: no locks, disk IO, parsing, or coroutine-per-report here.
-                    if (!job.isActive || revocationRequested.get() || visibilityEpoch.get() != visibleEpoch) return@start
+                    if (!request.isCurrent()) return@start
                     if (report.address.length !in 1..64 || (report.name?.length ?: 0) > 256) return@start
                     if (report.manufacturer.size > 16 || report.services.size > 16 || report.manufacturer.values.any { it.size > 512 } || report.services.values.any { it.size > 512 }) return@start
                     if (purpose == Purpose.COLLECTION && bindings.none { it.address.equals(report.address, true) }) return@start
@@ -146,23 +146,23 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     throw QualificationUnavailableException()
                 }
                 synchronized(this@EnvironmentalCoordinator) {
-                    if (gate.valid(grant) && visibilityEpoch.get() == visibleEpoch && !revocationRequested.get()) {
+                    if (request.isCurrent() && gate.valid(grant)) {
                         session = opened
                         mutable.value = mutable.value.copy(status = mutable.value.status + " · " + opened.adapterDescription)
                     }
                     else { opened.close(); if (runControl === control) stop("Stopped — obsolete radio preparation") }
                 }
                 for (first in queue) {
-                    if (revocationRequested.get() || !gate.valid(grant)) continue
+                    if (!request.isCurrent() || !gate.valid(grant)) continue
                     // At most 200ms coalescing, 32 events/transaction: bounded disk/CPU cost, no sample dedup by value.
                     if (purpose == Purpose.COLLECTION) delay(200)
                     val reports = mutableListOf(first)
                     repeat(31) { queue.tryReceive().getOrNull()?.let { reports += it } }
                     val decodedReports = reports.mapNotNull { report -> BleDecoders.decode(report)?.let { report to it } }
                     synchronized(this@EnvironmentalCoordinator) {
-                        if (revocationRequested.get() || !gate.valid(grant)) return@synchronized
+                        if (!request.isCurrent() || !gate.valid(grant)) return@synchronized
                         if (droppedReports.get() != mutable.value.dropped) mutable.update { current ->
-                            if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch) current.copy(dropped = droppedReports.get(), status = "Queue overflow — reception gap, diagnostic history incomplete") else current
+                            if (request.isCurrent()) current.copy(dropped = droppedReports.get(), status = "Queue overflow — reception gap, diagnostic history incomplete") else current
                         }
                         val observations = mutableListOf<Observation>()
                         val admittedBindings = mutableListOf<Binding>()
@@ -170,7 +170,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         if (purpose == Purpose.DISCOVERY) {
                             val candidate = Candidate(report.address, decoded.protocol, decoded.model)
                             mutable.update { current ->
-                                if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch && gate.valid(grant) &&
+                                if (request.isCurrent() && gate.valid(grant) &&
                                     current.candidates.none { it.address == candidate.address } && current.candidates.size < 64)
                                     current.copy(candidates = current.candidates + candidate) else current
                             }
@@ -186,7 +186,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         if (observations.isNotEmpty()) {
                             gate.commitBatch(grant, admittedBindings) { history.appendBatch(observations, gate.incarnation) }
                             mutable.update { current ->
-                                if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch && gate.valid(grant))
+                                if (request.isCurrent() && gate.valid(grant))
                                     current.copy(latest = current.latest + observations.associateBy { it.bindingId }) else current
                             }
                         }
@@ -237,6 +237,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             gate.deleteIntent()
             history.deleteAll()
             gate.finishDelete()
+            droppedReports.set(0); gapDropBase = 0; sequence.set(0)
             mutable.value = EnvironmentalView(gate.state, "Environmental data deleted; external exports are not removed")
         } catch (e: Exception) {
             mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), candidates = emptyList(), status = "Cleanup incomplete — explicitly resume deletion; no collection")

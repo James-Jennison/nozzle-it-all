@@ -432,8 +432,17 @@ class EnvironmentalTest {
         val dropped = h.recordedDrops(); assertTrue(dropped > 0)
         assertEquals(c.view.value.dropped, dropped)
         Sql(path).use { assertEquals("1", it.query("SELECT COUNT(*) FROM gaps").single().single()) }
-        c.close()
         EnvironmentalHistory(SqlStoreFactory { Sql(path) }).use { assertEquals(dropped, it.recordedDrops()) }
+        c.deleteAll(); assertEquals(0L, c.view.value.dropped)
+        c.enable(); c.discover()
+        val readyDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (!c.view.value.status.contains(" · BLE") && System.nanoTime() < readyDeadline) Thread.sleep(1)
+        assertTrue(c.view.value.status.contains(" · BLE"))
+        send(Advertisement("test", null, emptyMap(), emptyMap(), 1000, 1))
+        Thread.sleep(200)
+        assertEquals("Deleted overflow counters must not reappear on the next report", 0L, c.view.value.dropped)
+        c.stop(); c.close()
+        EnvironmentalHistory(SqlStoreFactory { Sql(path) }).use { assertEquals(0L, it.recordedDrops()) }
     }
     @Test fun capabilityQualificationRequiresExactCurrentEvidenceAndNeverPromotesUnknownFirmware() {
         history().use { h ->

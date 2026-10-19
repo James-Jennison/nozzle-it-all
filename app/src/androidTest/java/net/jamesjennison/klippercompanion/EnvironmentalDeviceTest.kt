@@ -73,6 +73,8 @@ class EnvironmentalDeviceTest {
         compose.waitUntil(44000) { compose.onAllNodesWithText("Save only").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("Save only")[0].performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-start").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("Save room assignment")[0].performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodes(hasText("Room assignment saved", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("environment-start").performScrollTo().performClick()
         compose.waitUntil(45000) { compose.onAllNodes(hasText("Reception ", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         assertTrue(compose.onAllNodes(hasText("Android BLE · radio", substring = true)).fetchSemanticsNodes().isNotEmpty())

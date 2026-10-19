@@ -41,13 +41,13 @@ import org.json.JSONObject
         Txt(v.status, Nz.type.body)
         EnvironmentalProviders.ble.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Active BLE scanning uses radio/battery. No pairing, Govee unbinding, cloud, background service or equipment control.", Nz.type.bodySmall)
-        Txt("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided. OS/user/device/radio identity changes require requalification; generic radio IDs are not migrated.", Nz.type.bodySmall)
+        Txt("Room labels organize observations without certification. Measurement age and operating limits are not certified; monitoring does not control equipment or establish dryer safety.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")
             if (v.state == EnvironmentalState.ENABLED_IDLE) {
                 NzButton("Discover sensors", { start(Purpose.DISCOVERY) }, enabled = !busy && !stopping, testTag = "environment-discover")
-                NzButton("Start diagnostics", { start(Purpose.COLLECTION) }, enabled = !busy && !stopping, testTag = "environment-start")
+                NzButton("Start monitoring", { start(Purpose.COLLECTION) }, enabled = !busy && !stopping, testTag = "environment-start")
             }
             if (v.state != EnvironmentalState.DISABLED) {
                 NzButton("Stop / cancel", { stop() }, enabled = !stopping, testTag = "environment-stop")
@@ -88,15 +88,15 @@ import org.json.JSONObject
             }, enabled = !busy && !stopping); NzButton("Keep data", { confirmDelete = false }) }
         }
         if (v.bindings.any { !it.archived }) {
-            Field("Equipment label (draft)", equipmentName, { equipmentName = it.take(120) })
-            Field("Position label (draft)", positionName, { positionName = it.take(120) })
+            Field("Room label", equipmentName, { equipmentName = it.take(120) })
+            Field("Position label", positionName, { positionName = it.take(120) })
             Field("Relative humidity calibration offset (%RH)", offset, { offset = it.take(12) })
         }
         v.bindings.filterNot { it.archived }.forEach { binding -> Column {
             Txt("${binding.model} — firmware/calibration/operating envelope unqualified", Nz.type.bodySmall)
             Txt("${binding.address} · ${binding.protocol} — verify the physical identity before saving assignments", Nz.type.bodySmall)
-            NzButton("Save draft assignment only", { action { controller.configureRoom(binding, equipmentName, positionName) } }, enabled = !busy && !stopping && equipmentName.isNotBlank() && positionName.isNotBlank())
-            Txt("Assignments without proven thermal/firmware qualification block diagnostic Start. No qualified deployment claim.", Nz.type.bodySmall)
+            NzButton("Save room assignment", { action { controller.configureRoom(binding, equipmentName, positionName) } }, enabled = !busy && !stopping && equipmentName.isNotBlank() && positionName.isNotBlank())
+            Txt("Room assignments do not block monitoring or certify sensor operating limits.", Nz.type.bodySmall)
             NzButton("Save RH calibration", { action { controller.calibrate(binding, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true)
             NzButton("Archive binding", { action { controller.archive(binding) } }, enabled = !busy && !stopping)
         } }

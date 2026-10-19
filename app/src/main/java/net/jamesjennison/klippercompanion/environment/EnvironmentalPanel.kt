@@ -82,12 +82,12 @@ import org.json.JSONObject
             EnvironmentalProviders.ble.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
-            Text("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided. OS/user/device/radio identity changes require requalification; generic radio IDs are not migrated.", style = MaterialTheme.typography.bodySmall)
+            Text("Room labels organize observations without certification. Measurement age and operating limits are not certified; monitoring does not control equipment or establish dryer safety.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
             if (view.state == EnvironmentalState.ENABLED_IDLE) {
                 OutlinedButton({ authorize("discover") }, enabled = !busy && !stopping && pending == null, modifier = Modifier.testTag("environment-discover")) { Text("Discover sensors (45 seconds)") }
-                OutlinedButton({ authorize("collect") }, enabled = !busy && !stopping && pending == null, modifier = Modifier.testTag("environment-start")) { Text("Start diagnostics") }
+                OutlinedButton({ authorize("collect") }, enabled = !busy && !stopping && pending == null, modifier = Modifier.testTag("environment-start")) { Text("Start monitoring") }
             }
             if (view.state != EnvironmentalState.DISABLED || pending != null) {
                 OutlinedButton({ stop() }, enabled = !stopping, modifier = Modifier.testTag("environment-stop")) { Text("Stop / cancel") }
@@ -121,10 +121,10 @@ import org.json.JSONObject
             view.bindings.filterNot { it.archived }.forEach { b ->
                 Text("${b.model} — diagnostic, unqualified")
                 Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(equipment, { equipment = it.take(120) }, label = { Text("Equipment label (draft)") })
-                OutlinedTextField(position, { position = it.take(120) }, label = { Text("Position label (draft)") })
-                TextButton({ action { controller.configureRoom(b, equipment, position) } }, enabled = !busy && !stopping && equipment.isNotBlank() && position.isNotBlank()) { Text("Save draft assignment only") }
-                Text("Unqualified assignments block Start; thermal/firmware evidence required for deployment.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(equipment, { equipment = it.take(120) }, label = { Text("Room label") })
+                OutlinedTextField(position, { position = it.take(120) }, label = { Text("Position label") })
+                TextButton({ action { controller.configureRoom(b, equipment, position) } }, enabled = !busy && !stopping && equipment.isNotBlank() && position.isNotBlank()) { Text("Save room assignment") }
+                Text("Room assignments do not block monitoring or certify sensor operating limits.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(offset, { offset = it.take(12) }, label = { Text("Humidity calibration offset (%RH)") })
                 TextButton({ action { controller.calibrate(b, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true) { Text("Save RH calibration") }
                 TextButton({ action { controller.archive(b) } }, enabled = !busy && !stopping) { Text("Archive binding") }

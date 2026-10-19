@@ -81,12 +81,16 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
             .put("minC", q.minC).put("maxC", q.maxC).put("cadenceMinMillis", q.cadenceMinMillis).put("cadenceMaxMillis", q.cadenceMaxMillis).put("cadenceMonitoring", "declared-only")
             .put("verifiedAt", q.verifiedAt).put("expiresAt", q.expiresAt).put("evidence", JSONObject(q.evidence)).put("archived", q.archived))
     }
-    /** Empty for unassigned diagnostics; throws for any assigned capability lacking exact current evidence. */
+    /** Ordinary room labels do not certify a deployment or require certification to collect observations.
+     * Explicit operating envelopes and non-room equipment retain qualified-deployment admission.
+     */
     @Synchronized fun assignedQualificationRadios(bindings: List<Binding>, platform: String, now: Long): QualificationAdmission {
         val radios = mutableSetOf<String>()
         var validUntil = Long.MAX_VALUE
         for (b in bindings) for (placement in entities("placement").filter { it.getString("sensorId") == b.sensorId && it.isNull("until") }) {
             val p = entities("position").single { it.getString("id") == placement.getString("positionId") }
+            val equipment = entities("equipment").single { it.getString("id") == p.getString("equipmentId") }
+            if (equipment.getString("type") == "room" && p.isNull("minC") && p.isNull("maxC")) continue
             require(!p.isNull("minC") && !p.isNull("maxC")) { "Assigned position needs a demonstrated operating envelope" }
             for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
                 val calibration = calibrated(b, listOf(Reading(channel, 0.0))).single().calibrationVersion

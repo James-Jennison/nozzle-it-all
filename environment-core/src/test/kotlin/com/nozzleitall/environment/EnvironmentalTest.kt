@@ -577,6 +577,49 @@ class EnvironmentalTest {
         c.stop(); c.close()
         EnvironmentalHistory(SqlStoreFactory { Sql(path) }).use { assertEquals(0L, it.recordedDrops()) }
     }
+    @Test fun goveeRoomAssignmentCanCollectWithoutCertificationAndStopsWithoutAutoResume() {
+        val h = history()
+        val binding = h.bind(Candidate("room-sensor", "govee-ble", "H5100"), "Room sensor")
+        val ready = CountDownLatch(1)
+        lateinit var report: (Advertisement) -> Unit
+        val closed = AtomicBoolean(false)
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { request, callback, _ ->
+            assertNull(request.requiredAdapterDescription)
+            report = callback; ready.countDown()
+            object : RadioSession { override fun close() { closed.set(true) } }
+        } })
+        try {
+            c.foreground(true); c.enable()
+            c.configureRoom(binding, "Office", "Shelf")
+            assertTrue(c.view.value.status.startsWith("Room assignment saved"))
+            c.start(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+            report(Advertisement("room-sensor", "Govee_H5100", mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), System.currentTimeMillis(), System.nanoTime()))
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (h.eventCount() == 0L && System.nanoTime() < deadline) Thread.sleep(10)
+            assertEquals(1L, h.eventCount())
+            assertEquals(23.5, c.view.value.latest.values.single().readings.first { it.channel == Channel.TEMPERATURE }.value, 0.001)
+            assertTrue(h.entities("qualification").isEmpty())
+            c.foreground(false); c.foreground(true)
+            assertTrue(closed.get()); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+            report(Advertisement("room-sensor", "Govee_H5100", mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), System.currentTimeMillis(), System.nanoTime()))
+            Thread.sleep(250)
+            assertEquals(1L, h.eventCount())
+        } finally { c.close() }
+    }
+    @Test fun ordinaryRoomLabelsDoNotWaiveExplicitEnvelopeOrEquipmentGuards() {
+        history().use { h ->
+            val b = h.bind(Candidate("room-sensor", "govee-ble", "H5110"), "Room")
+            val room = Equipment(name = "Room"); h.saveEquipment(room)
+            val shelf = Position(equipmentId = room.id, name = "Shelf"); h.savePosition(shelf)
+            h.assign(b.sensorId, shelf.id, 1)
+            assertEquals(QualificationAdmission(emptySet(), Long.MAX_VALUE), h.assignedQualificationRadios(listOf(b), "any-platform", 2))
+            h.savePosition(shelf.copy(minC = 10.0))
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
+            h.savePosition(shelf)
+            h.saveEquipment(room.copy(type = "dryer"))
+            assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
+        }
+    }
     @Test fun capabilityQualificationRequiresExactCurrentEvidenceAndNeverPromotesUnknownFirmware() {
         history().use { h ->
             val b = h.recordFirmware(h.bind(Candidate("test", "govee-ble", "H5100"), "fixture"), "fixture-firmware1")

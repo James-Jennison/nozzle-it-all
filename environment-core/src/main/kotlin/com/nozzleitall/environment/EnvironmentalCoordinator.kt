@@ -320,7 +320,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     @Synchronized fun retention() { historyAccess(); history.retain(System.currentTimeMillis(), limits.retentionDays) }
     @Synchronized fun metadata(kind: String): List<org.json.JSONObject> { historyAccess(); return history.entities(kind) }
     @Synchronized fun rename(binding: Binding, name: String) { historyAccess(); history.renameSensor(binding.sensorId, name) }
-    @Synchronized fun assign(binding: Binding, positionId: String) { historyAccess(); stop("Draft assignment saved — qualification required"); history.assign(binding.sensorId, positionId, System.currentTimeMillis()) }
+    @Synchronized fun assign(binding: Binding, positionId: String) { historyAccess(); stop("Assignment saved — press Start; declared operating limits remain guarded"); history.assign(binding.sensorId, positionId, System.currentTimeMillis()) }
     @Synchronized fun reside(spoolId: String, positionId: String) { historyAccess(); history.reside(spoolId, positionId, System.currentTimeMillis()) }
     @Synchronized fun configureRoom(binding: Binding, equipmentName: String, positionName: String) {
         historyAccess()
@@ -331,6 +331,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             val previousEquipment = history.entities("equipment").single { it.getString("id") == previous.getString("equipmentId") }
             if (previousEquipment.getString("type") != "room") throw QualificationUnavailableException()
         }
+        if (history.entities("equipment").any { it.getString("name") == equipmentName && it.optString("type") != "room" }) throw QualificationUnavailableException()
         val existingEquipment = history.entities("equipment").firstOrNull { it.getString("name") == equipmentName && it.optString("type") == "room" }
         val equipment = Equipment(id = existingEquipment?.getString("id") ?: newId(), name = equipmentName)
         val existingPosition = history.entities("position").firstOrNull { it.getString("equipmentId") == equipment.id && it.getString("name") == positionName }

@@ -647,6 +647,21 @@ class EnvironmentalTest {
             assertThrows(QualificationUnavailableException::class.java) { c.start() }
         } finally { c.close() }
     }
+    @Test fun roomSaveCannotReclassifyNonRoomEquipmentOrDuplicateItsName() {
+        val h = history()
+        val b = h.bind(Candidate("govee", "govee-ble", "H5110"), "Room")
+        val dryer = Equipment(name = "Existing equipment", type = "dryer"); h.saveEquipment(dryer)
+        val p = Position(equipmentId = dryer.id, name = "Rack"); h.savePosition(p)
+        val c = EnvironmentalCoordinator(file(), h, { error("No radio while saving") })
+        try {
+            c.foreground(true); c.enable()
+            assertThrows(QualificationUnavailableException::class.java) { c.configureRoom(b, dryer.name, "Rack") }
+            h.assign(b.sensorId, p.id, 1)
+            assertThrows(QualificationUnavailableException::class.java) { c.configureRoom(b, "Another room", "Shelf") }
+            assertEquals(1, h.entities("equipment").size)
+            assertEquals(p.id, h.entities("placement").single().getString("positionId"))
+        } finally { c.close() }
+    }
     @Test fun capabilityQualificationRequiresExactCurrentEvidenceAndNeverPromotesUnknownFirmware() {
         history().use { h ->
             val b = h.recordFirmware(h.bind(Candidate("test", "govee-ble", "H5100"), "fixture"), "fixture-firmware1")

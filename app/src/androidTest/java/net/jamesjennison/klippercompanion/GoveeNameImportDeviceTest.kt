@@ -14,6 +14,18 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class GoveeNameImportDeviceTest {
+    @Test fun discoveryRestoresNamesAfterProcessRecreationWithoutOpeningCredentialsOrNetwork() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        check(context.packageName.endsWith(".environment"))
+        val file = java.io.File(context.cacheDir, "govee-directory-fixture-${java.util.UUID.randomUUID()}.json")
+        try {
+            GoveeNameCache(file).write(listOf(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5100", "Saved fixture shelf")))
+            val store = AndroidGoveeNames({ error("Discovery must not open credential storage") }, GoveeNameCache(file)) { _, _ -> error("Discovery must not use the network") }
+            assertTrue(store.devices.value.isEmpty())
+            assertEquals("Saved fixture shelf", store.cachedDevices().single().name)
+            assertEquals("Saved fixture shelf", store.devices.value.single().name)
+        } finally { file.delete() }
+    }
     private fun AndroidGoveeNames.forget() { kotlinx.coroutines.runBlocking { requestForgetAsync().await() } }
     @get:Rule val compose = createComposeRule()
     private fun fixture(block: (AndroidGoveeNames, android.content.SharedPreferences) -> Unit) {

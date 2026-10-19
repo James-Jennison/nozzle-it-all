@@ -12,7 +12,8 @@ class NozzleApp : Application() {
             com.nozzleitall.environment.EnvironmentalHistory(com.nozzleitall.environment.SqlStoreFactory {
                 net.jamesjennison.klippercompanion.environment.AndroidEnvironmentalStore(java.io.File(filesDir, "environment/history.db"))
             }), { net.jamesjennison.klippercompanion.environment.AndroidBleTransport(applicationContext) },
-            platformIdentity = "android/${android.os.Build.MODEL}/${android.os.Build.FINGERPRINT}")
+            platformIdentity = "android/${android.os.Build.MODEL}/${android.os.Build.FINGERPRINT}",
+            goveeNames = goveeNames::cachedDevices)
     }
     override fun onCreate() { super.onCreate(); installBambuPins(this); UsbSerialDeviceManager.install(this) }
 }

@@ -1,34 +1,88 @@
 # Handover to Codex (written 2026-10-18)
 
+## Owner-approved automatic discovery follow-up (2026-10-19, in progress)
+
+Owner requests adding ALL uniquely matched nearby Govee sensors during discovery,
+retaining explicit Start monitoring, preserving existing data, and completing
+desktop/Play Alpha/normal Razr delivery. Repeated key entry for discovery is not
+acceptable. New implementation saves a bounded, atomic local names-only directory
+(no key) across restarts; discovery has no cloud/key IO. Existing custom names,
+archived bindings and observations are preserved. Android's optional encrypted
+key remains separate for explicit refresh. Not yet built/reviewed/installed.
+Prior v0.1.10 GTHost release CI39303151914 finished SUCCESS and AAB/APK checksum,
+source302/code762 verified; it is now superseded by this approved follow-up.
+Play draft has not rolled out. Prior provenance lookup inadvertently printed a
+temporary signed artifact URL; no credential store was opened. Never print signed
+URLs or complete API responses; whitelist non-sensitive provenance fields only.
+
+
 ## Active correction: automatic Govee names, desktop + normal Razr (2026-10-19)
 
-CURRENT OWNER SCOPE: retained automatic names AND visual environmental data on
-desktop/Android. First integrated source24fb5a36 GTHost full SUCCESS3m54s,
+Current application source: `30229c8655f37c0194bb8f7f7fc2f6ba2617ce12`, immutable
+`v0.1.10`, Android versionCode762. No later application changes. Owner scope is
+correct retained Govee names AND actual visual sensor data on desktop/Android,
+then desktop/Play Alpha/normal Razr delivery with existing data preserved.
 
-Latest tested source dce52f36: full GTHostSUCCESS3m2s/132tasks26executed106cached;
-targeted core+desktop software-renderSUCCESS1m11s. Charts9PASS/coordinator48PASS,
-100Hz4.06555%onecore/RSS+5332992bytes/drop0. Actual900x1000 synthetic render
-inspected: friendly sensor card and both trend lines. This is not installed-app
-or physical-radio proof. New correction (this commit) accepts initial documented
-unmarkedv0 history alongside encoding1, validates cursor fields before publication,
-and tightens Android stroke pixels to exact theme-primary color/vertical extent.
-No DB mutation. Earliest18833767/pre8e1e writer lacked marker, confirmed from Git.
-Synthetic6a37dff8d867 all3COMPLETE; current corrections need targeted closure.
-v0.1.9 immutable dce tag CI canceled before any Play upload as superseded; do not
-retag or promote it. Desktop remains940/normalAndroid275, Owner saved/closed desktop.
-Final combined replacement build/Play candidate/runtime evidence pending.
-132tasks48executed84up-to-date. Its100Hz fixture4.32784%onecore/RSS+10809344bytes,
-drop0, not physical-radio/GUI/battery proof. Follow-up source (this commit) fixes
-cumulative-drop chart continuity and configurable page button, separates live
-from historical charts, embeds plots in the selected card, and adds actual Android
-Compose chart tests. H5100 eight-byte ID is reverse(first6bytes), unlike H5110's
-last6bytes; full48bits/model/unique guard retained, unknown8byte layouts rejected.
-Synthetic initial74f9516b7751 all3COMPLETE,17immutable findings/separate durable
-dispositions. Desktop-memory-key and history-sequence concerns contradicted by
-actual store/encoder sources; include those sources in targeted closure review.
-Current follow-up not yet validated/installed. Desktop still940; normal Razr275
-with data untouched. v0.1.8 owned CI canceled as superseded; do not promote752/756
-or claim dashboard/normal-app acceptance. Final combined Play candidate pending.
+H5100 eight-byte cloud IDs encode reverse(first6bytes), unlike H5110's last6bytes.
+All48bits/model/unique match required, no suffix guessing. Saved metadata restores
+inside explicit IO preparation; discovery no longer drops saved binding/name
+projection. Desktop memory-only name directory survives Settings navigation.
+Private key entry stays inside NIA; never inspect/screenshot an open key dialog.
+Charts show real reception timestamps/calibrated values, bounded500 live samples
+and explicit history-page mode, selected-card temperature/humidity plots, honest
+gaps/empty states and focusable summaries. Documented original unmarkedv0 and
+current encoding1 history parse without DB mutation; unknown formats fail visibly.
+
+Exact GTHost full SUCCESS3m59s/132tasks45executed87up-to-date:1303results,
+1293PASS/10conditional skips/0fail/errors (core66/domain240/desktop240/app757).
+100Hz core fixture4.0327584%onecore/RSS+9859072bytes/drop0; not physical-radio/GUI
+resource or battery proof. Actual authorized Razr exact30211fixturesPASS16.638s,
+including strict chart-stroke pixels; physical Govee plotted-reception/foreground
+stop1PASS10.829s. Prior leftover-own-fixture failure retained, then own fixture
+reversibly renamed and retry passed; normal profile untouched. Desktop900x1000
+and Android1080x1775 synthetic renders inspected; not actual-account screenshots.
+
+Linux0.1.10 installed through Owner-approved dpkg exit0. All218installed payload
+hashes/source302, all6real adapters, launcher/eight icons and dpkg-V verified.
+DebSHA23faebea3884fbdadfb1a0f3ff5657f8a7f51e6501bed2aca86eacb226ced12b;
+mainjarSHA460dcfba354c1016a4f8d5fa668c608cf4efac1771d06833db6f0efbf198e3a4.
+Owner asked to reopen/import privately and share closed-dialog chart/name result;
+current installed running-UI/account proof remains pending, not claimed complete.
+
+Normal Razr remains Play275/appId10002/firstInstallTime2026-09-26 05:41:54. Fresh
+hash-only before-dashboard inventory still2printers/1project, identical to earlier
+baseline. No uninstall/reset/private-data export. `v0.1.10` CI39303151914 on GTHost:
+build-and-testPASS (unit/lint/native), release APK/AAB/SBOM still building. Not yet
+uploaded/rolled out. Existing Alpha draft4 still752; never promote old752/756 or
+supersededv.9. v.8/v.9 tags retained, owned superseded CI canceled, no tag rewrite.
+Only Play-generated matching-signer update may replace normal app. Verify signer
+ce6bba61258a3e407a0fb27e5a03342d34b44cdd2bf910844af36169f449c3f3 first.
+
+Synthetic current1c0f0ece5be9 all3COMPLETE after one retained frontend-capacity
+failure/retry. Clarification4647a4400342 COMPLETE explicitly withdraws CRITICAL
+cursor and HIGH missing-legacy/accessibility premises against actual full source.
+All raw findings retained with separate Codex dispositions; no consensus as proof.
+New speculative local-DB continuity/tamper HIGH rejected: immutable insert-only
+events and existing session/sequence/drop/gap tests already implement requested
+non-connection behavior; no promised tamper-proof DB or new schema/security gate.
+Mistral escalation request rejected by broker routing, no Mistral model invoked
+or route/configuration changed. No accepted critical/high risk. Whole delivery
+is still pending actual desktop UI, Play update and normal-app/account checks.
+
+Private evidence: ~/.local/state/nozzle-it-all/acceptance/20261019-normal-razr.
+Source manifest c9e07137951f28c771f2ae17fd99a747642ad0243e85ada7eb93f156f49fef09
+seals13artifacts. Source-only evidence b736e85466ca bothPASS/intact, verifier rejects
+wrong manifest hash; expressly NOT installation/runtime acceptance. Final delivery
+profile/evidence must add actual installed/runtime/Play/normal preservation proof.
+
+Next: finish exact CI release, verify artifacts/attestation/release feature filters,
+replace old Alpha draft with762, verify Play preview, send existing testing release
+through its normal workflow. Obtain Play-generated APK and matching signer, update
+normal Razr in place, compare fresh inventory/UID/firstInstallTime, then private
+owner import and actual names/charts/foreground behavior. No production track or
+GitHub draft publication, signing bypass, added protocol or hardware program.
+
+### Historical checkpoints (superseded by current state above)
 
 Owner requires automatic correct Govee Home names, not identification of MACs that
 Govee Home does not expose. Shared matcher now accepts six-byte IDs or eight-byte

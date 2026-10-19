@@ -47,7 +47,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Optional name import is the only Govee cloud request; no cloud readings, pairing, background service or equipment control.", Nz.type.bodySmall)
         GoveeNameImport(directory)
-        Txt("Imported Govee names fill matching sensors automatically. Physical measurement age is unknown; monitoring does not control equipment.", Nz.type.bodySmall)
+        Txt("Discovery automatically adds uniquely matched Govee sensors with their saved Govee names. Existing sensors and custom names are preserved. Monitoring starts only with Start monitoring.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")
@@ -103,9 +103,10 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         }
         if (confirmDelete) {
             Txt("Delete only environmental configuration/history? External exports remain. Cleanup failures require explicit retry.", Nz.type.body)
-            Row { NzButton("Confirm delete / resume", { directory.forget(); choosing = null; stopping = true; rows = emptyList(); chartHistory = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
+            Row { NzButton("Confirm delete / resume", { directory.cancel(); choosing = null; stopping = true; rows = emptyList(); chartHistory = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
                 val cleanup = controller.requestDeleteAsync()
-                scope.launch { try { cleanup.join(); confirmDelete = controller.view.value.state != EnvironmentalState.DISABLED } finally { stopping = false } }
+                scope.launch { try { withContext(Dispatchers.IO) { directory.forget() }; cleanup.join(); confirmDelete = controller.view.value.state != EnvironmentalState.DISABLED }
+                    catch (e: GoveeNameException) { error = e.reason.description } finally { stopping = false } }
             }, enabled = !busy && !stopping); NzButton("Keep data", { confirmDelete = false }) }
         }
         if (v.bindings.any { !it.archived }) {

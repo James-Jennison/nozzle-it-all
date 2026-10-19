@@ -2,7 +2,55 @@
 
 Newest entries at the bottom. Times are PDT.
 
+## Automatic discovery follow-up (2026-10-19, in progress)
+
+Owner approved automatically adding all uniquely matched nearby Govee sensors,
+explicit monitoring only, existing data preservation and full desktop/Play/normal
+Razr delivery. Source adds IO-only atomic names-only directory persistence, cache
+restoration without credential/network access, and metadata-only auto-add during
+discovery without stopping the scan. Existing/custom/archived bindings untouched;
+no discovery observations or implicit monitoring. Added restart/forget/cancel/
+corrupt-cache and multi-sensor/mismatch/ambiguity/preservation fixtures. Not yet
+built/reviewed/installed. Five unrelated Owner files preserved. Prior final tag CI
+39303151914 SUCCESS; release762 checksums/source and optional feature filters pass,
+but not delivered because this approved source follow-up supersedes that candidate.
+Temporary signed attestation download URL accidentally appeared in prior output;
+no real key/store was read. Subsequent provenance checks must print whitelist-only
+non-sensitive fields, never signed URLs/full API response. No credential handling.
+
 ## Owner follow-up: retained names and visual dashboard (2026-10-19)
+
+Current302 complete GTHost full SUCCESS3m59s/132tasks45executed87cached;
+1303results1293PASS10conditional skips0fail/errors. Core66/domain240/desktop240/
+Android757, actual current11RazrfixturesPASS16.638s (strict primary-color and
+vertical-extent chart test included) and physicalGovee plotted-reception/foreground
+stop1PASS10.829s. Own prior acceptance data preserved by explicit verified rename;
+first dce failure/shell-quoting error retained, not a source regression or PASS.
+Normal app remains275; fresh before-dashboard hashes exactly match original
+2printers/1project, no private-data export/reset. APKsource302 found in actualDEX,
+APKSHAcb7caeb13381179fb3eb90c031aab1b8636dcb505e92910a2ee34dc9182ccb7b.
+
+Owner approved desktop prompt: dpkg exit0, Linux0.1.10 source302 installed, all218
+payload SHA256match, all6adapterjars/launcher8icons/dpkg-Vclean. DebSHA23faebea3884fbdadfb1a0f3ff5657f8a7f51e6501bed2aca86eacb226ced12b,
+mainjarSHA460dcfba354c1016a4f8d5fa668c608cf4efac1771d06833db6f0efbf198e3a4.
+Owner asked to reopen/import privately then share names/charts with key dialog
+closed. Actual installed runningUI/account result pending. No screenshot/input
+of private key. Playv0.1.10/code762 immutable302 CI39303151914: unit/lint/native
+build-and-testPASS; signedreleaseAPK/AAB/SBOMstillbuilding, no Play upload/rollout.
+
+Synthetic1c0f0ece5be9 all3COMPLETE after retained frontend subscription-capacity
+failure and bounded same-seat retry. Source critical/HIGH false premises retained
+as separate evidence-backed rejected dispositions; clarification4647a4400342 now
+explicitly withdraws timestamp/legacy and resolves full chart semantics. New
+continuity/tamper HIGH rejected against immutable insert-only stream and existing
+session/sequence/drop/gap tests; no independent tamperproof DB was promised or
+added as scope/gate. Governance Mistral request failed broker explicit-routing
+validation, no model invoked/route changed/substituted.72dashboard findings across
+source cycles plus5clarification findings retained so far, separate dispositions;
+manifest5061d57c6d97 thirteen findings now recorded, finalrelease/Playfilterproof
+stillpending. Source-only manifest13artifacts SHA c9e07137951f28c771f2ae17fd99a747642ad0243e85ada7eb93f156f49fef09,
+verifierPASS and wronghashnegativeFAIL as expected; evidenceb736e85466ca bothPASS/
+integritytrue explicitly NOT install/runtime acceptance. No whole-task closure.
 
 Exactdce GTHost full SUCCESS3m2s/132tasks26executed106cached; targeted core+desktop
 renderSUCCESS1m11s. Charts9PASS/coordinator48PASS/renderer1PASS0.822s;

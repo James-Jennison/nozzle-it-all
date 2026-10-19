@@ -10,13 +10,24 @@ import kotlinx.coroutines.*
 
 /** No startup IO. Key is never part of observable state, logs, exports or saved UI state. */
 class AndroidGoveeNames internal constructor(private val credentials: () -> android.content.SharedPreferences,
+    private val cache: GoveeNameCache? = null,
     private val fetch: (String, () -> Boolean) -> List<GoveeDeviceName>) {
-    constructor(context: Context) : this({ CredentialStore.open(context, "govee-name-credentials") }, { key, current -> GoveeNameApi().fetch(key, current) })
+    constructor(context: Context) : this({ CredentialStore.open(context, "govee-name-credentials") },
+        GoveeNameCache(java.io.File(context.filesDir, "environment/govee-names.json")), { key, current -> GoveeNameApi().fetch(key, current) })
     private val epoch = AtomicLong()
     private val storageLock = Any()
     private val credentialStore by lazy { credentials() }
     private val names = MutableStateFlow<List<GoveeDeviceName>>(emptyList())
     val devices = names.asStateFlow()
+    private var loaded = false
+    fun cachedDevices(): List<GoveeDeviceName> = synchronized(storageLock) {
+        if (!loaded && !savedKeyRevoked.get()) {
+            val request = epoch.get()
+            val restored = cache?.read().orEmpty()
+            synchronized(this) { if (epoch.get() == request && pendingForgets == 0) { names.value = restored; loaded = true } }
+        }
+        names.value
+    }
     private var pendingForgets = 0
     private val cleanup = MutableStateFlow(false)
     val forgetting = cleanup.asStateFlow()
@@ -42,11 +53,13 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
             try {
                 if (persist && !credentialStore.edit().putString("api-key", selected).commit()) throw GoveeNameException(GoveeNameFailure.STORAGE)
                 // Only publication takes the short Main-visible lock, never disk IO.
-                synchronized(this) {
+                // File contents are staged/fsynced on IO before this short atomic rename.
+                fun publish(move: () -> Unit) = synchronized(this) {
                     if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
-                    names.value = result
+                    move(); names.value = result; loaded = true
                     if (persist) savedKeyRevoked.set(false)
                 }
+                if (cache == null) publish {} else cache.write(result, ::publish)
             } catch (e: Exception) {
                 // A cancellation racing a commit restores the previous credential, not merely its absence.
                 if (persist) {
@@ -74,6 +87,7 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
         return cleanupScope.async(start = CoroutineStart.ATOMIC) {
             try { synchronized(storageLock) {
                 try {
+                    cache?.write(emptyList()); loaded = true
                     if (!credentialStore.edit().remove("api-key").commit()) throw GoveeNameException(GoveeNameFailure.STORAGE)
                     savedKeyRevoked.set(false)
                 } catch (_: Exception) { savedKeyRevoked.set(true); throw GoveeNameException(GoveeNameFailure.STORAGE) }

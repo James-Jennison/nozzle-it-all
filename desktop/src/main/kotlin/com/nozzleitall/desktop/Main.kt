@@ -50,14 +50,16 @@ enum class Destination(val label: String, val icon: NzIcon, val key: Key, val in
 }
 
 class AppState(val paths: AppPaths, val scope: CoroutineScope) {
-    // Session-memory names survive panel navigation; no key, disk IO or startup request.
-    val goveeNames = com.nozzleitall.desktop.environment.DesktopGoveeNames()
+    // Lazy IO on explicit discovery/panel entry; locally saved names, never keys.
+    val goveeNames = com.nozzleitall.desktop.environment.DesktopGoveeNames(
+        com.nozzleitall.environment.GoveeNameCache(File(paths.config, "environment/govee-names.json")))
     val environment = com.nozzleitall.environment.EnvironmentalCoordinator(
         File(paths.config, "environment/control.json"),
         com.nozzleitall.environment.EnvironmentalHistory(com.nozzleitall.environment.SqlStoreFactory {
             com.nozzleitall.desktop.environment.JdbcEnvironmentalStore(File(paths.data, "environment/history.db"))
         }), { com.nozzleitall.desktop.environment.LinuxBleTransport(System.getProperty("nozzle.environment.bluezAdapter")) },
-        platformIdentity = "linux/${System.getProperty("os.version")}/${System.getProperty("os.arch")}")
+        platformIdentity = "linux/${System.getProperty("os.version")}/${System.getProperty("os.arch")}",
+        goveeNames = goveeNames::cachedDevices)
     val fleet = Fleet(paths, scope, log = { System.err.println(it) })
     val library = ProjectLibrary(paths)
     val prepare = PrepareState(this)

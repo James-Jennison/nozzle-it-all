@@ -13,6 +13,54 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun discoveryAddsAllUniqueMatchesWithoutCollectingOrChangingExistingData() {
+        val h = history()
+        val existing = h.bind(Candidate("AA:BB:CC:DD:EE:01", "govee-ble", "H5100"), "My custom shelf")
+        val archived = h.bind(Candidate("AA:BB:CC:DD:EE:02", "govee-ble", "H5100"), "Archived shelf")
+        h.archive(archived)
+        h.append(Observation("preserved-event", "fixture-inc", "fixture-collector", "fixture-session", 1,
+            existing.id, 1, 1000, 1001, 1, decoder = BleDecoders.VERSION,
+            readings = listOf(Reading(Channel.TEMPERATURE, 22.0))), "fixture-inc")
+        val original = h.page().single()
+        val names = listOf(
+            GoveeDeviceName("AA:BB:CC:DD:EE:01", "H5100", "Cloud rename must not overwrite"),
+            GoveeDeviceName("AA:BB:CC:DD:EE:02", "H5100", "Do not resurrect archive"),
+            GoveeDeviceName("03:EE:DD:CC:BB:AA:11:22", "H5100", "Front left"),
+            GoveeDeviceName("04:EE:DD:CC:BB:AA:33:44", "H5100", "Rear right"),
+            GoveeDeviceName("AA:BB:CC:DD:EE:05", "H5100", "Ambiguous A"),
+            GoveeDeviceName("05:EE:DD:CC:BB:AA:55:66", "H5100", "Ambiguous B"),
+            GoveeDeviceName("AA:BB:CC:DD:EE:06", "H5110", "Wrong model"))
+        val ready = CountDownLatch(1)
+        lateinit var send: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, callback, _ ->
+            send = callback; ready.countDown(); object : RadioSession { override fun close() {} }
+        } }, goveeNames = { names })
+        fun report(suffix: String) = Advertisement("AA:BB:CC:DD:EE:$suffix", "Govee_H5100",
+            mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), 2000, System.nanoTime())
+        fun await(condition: () -> Boolean) {
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (!condition() && System.nanoTime() < end) Thread.sleep(2)
+            assertTrue(condition())
+        }
+        try {
+            c.foreground(true); c.enable(); c.discover(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+            for (suffix in listOf("01", "02", "03", "04", "05", "06", "07")) send(report(suffix))
+            await { c.view.value.candidates.size == 7 && c.view.value.bindings.size == 4 }
+            assertEquals(EnvironmentalState.DISCOVERING, c.view.value.state)
+            assertTrue(c.view.value.latest.isEmpty()); assertTrue(c.view.value.chartSamples.isEmpty())
+            assertEquals(original, h.page().single())
+            assertEquals("My custom shelf", c.view.value.sensorLabels[existing.sensorId])
+            assertTrue(c.view.value.bindings.single { it.id == archived.id }.archived)
+            assertEquals(setOf("My custom shelf", "Archived shelf", "Front left", "Rear right"), c.view.value.sensorLabels.values.toSet())
+            repeat(8) { send(report("03")); send(report("04")) }
+            c.stop(); send(report("07"))
+            assertEquals(4, h.bindings().size)
+            assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+            assertEquals(original, h.page().single())
+            c.start() // Only this explicit gesture starts collection.
+            assertEquals(EnvironmentalState.COLLECTING, c.view.value.state)
+        } finally { c.close() }
+    }
     @Test fun bothOperationModesRestorePersistedNamesWithoutOpeningHistoryFirst() {
         for (purpose in Purpose.entries) {
             val h = history()

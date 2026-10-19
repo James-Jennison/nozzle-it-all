@@ -21,7 +21,8 @@ data class EnvironmentalView(val state: EnvironmentalState, val status: String =
 
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
-    private val limits: EnvironmentalLimits = EnvironmentalLimits(), private val platformIdentity: String = "unqualified") : AutoCloseable {
+    private val limits: EnvironmentalLimits = EnvironmentalLimits(), private val platformIdentity: String = "unqualified",
+    private val goveeNames: () -> List<GoveeDeviceName> = { emptyList() }) : AutoCloseable {
     val gate = EnvironmentalGate(control)
     private val mutable = MutableStateFlow(EnvironmentalView(gate.state, if (gate.state == EnvironmentalState.ENABLED_IDLE) "Enabled, idle — press Discover or Start" else if (gate.state == EnvironmentalState.DISABLED_RECOVERY) "Recovery required — control record preserved; Delete / resume cleanup explicitly" else "Disabled — no collection"))
     val view = mutable.asStateFlow()
@@ -192,6 +193,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         // filter must not erase the saved-device list used to label incoming cards.
         val saved = savedBindings().filterNot { it.archived }
         check(preparationCurrent(p)) { "Preparation revoked while restoring sensor names" }
+        if (purpose == Purpose.DISCOVERY) goveeNames() // Restore names on IO before opening radio; no cloud request.
+        check(preparationCurrent(p)) { "Preparation revoked while restoring Govee directory" }
         if (purpose == Purpose.DISCOVERY) begin(purpose, emptyList(), p = p)
         else {
             val bindings = saved
@@ -283,6 +286,16 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                                         // Android ScanResult.getRssi(): [-127,126]; null/127 are unavailable.
                                         discovery = current.discovery + (admitted.address to DiscoveryReception(decoded.readings.toList(), report.observedAt, report.rssiDbm?.takeIf { it in -127..126 })))
                                 } else current
+                            }
+                            // Discovery admits metadata only. It never starts collection or
+                            // records observations, and keeps scanning for all remaining sensors.
+                            if (request.isCurrent() && mutable.value.candidates.contains(candidate) &&
+                                mutable.value.bindings.none { it.address.equals(candidate.address, true) }) {
+                                val matched = goveeNames().singleOrNull { it.matches(candidate) }
+                                if (matched != null && request.isCurrent() && gate.valid(grant)) {
+                                    history.bind(candidate, matched.name)
+                                    savedBindings()
+                                }
                             }
                         } else {
                             val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: continue

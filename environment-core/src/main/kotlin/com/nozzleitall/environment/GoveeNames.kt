@@ -37,6 +37,7 @@ enum class GoveeNameFailure(val description: String) {
     RESPONSE("Govee returned an unsupported or oversized response. No names changed."),
     NETWORK("Govee name import failed. Check the connection and retry explicitly."),
     STORAGE("Saved-key update or cleanup failed. Use Forget Govee key and retry explicitly."),
+    DIRECTORY("Govee name directory could not be saved or loaded. Existing sensor data is unchanged; retry name import explicitly."),
     CLEANUP("Govee key cleanup is running; retry after it finishes."),
     CANCELLED("Name import cancelled; no results applied.")
 }

@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DesktopGoveeNamesTest {
+    @Test fun newProcessRestoresDirectoryWithoutKeyOrNetworkAndForgetPersists() {
+        val file = java.nio.file.Files.createTempDirectory("nia-desktop-names").resolve("directory.json").toFile()
+        val first = DesktopGoveeNames(GoveeNameCache(file)) { _, _ -> listOf(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5100", "Shelf")) }
+        first.import("synthetic-fixture", first.begin())
+        val restarted = DesktopGoveeNames(GoveeNameCache(file)) { _, _ -> error("Discovery must not request cloud names") }
+        assertTrue(restarted.devices.value.isEmpty()) // No startup IO.
+        assertEquals("Shelf", restarted.cachedDevices().single().name)
+        restarted.forget()
+        assertTrue(DesktopGoveeNames(GoveeNameCache(file)).cachedDevices().isEmpty())
+    }
     @Test fun importedExtendedIdentitiesResolveFullAddressesWithoutManualSelection() {
         val directory = DesktopGoveeNames { _, _ -> listOf(
             GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5110", "Front left"),

@@ -89,7 +89,7 @@ import org.json.JSONObject
             EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Readings stay local; physical measurement age unknown. Optional name import is the only Govee cloud request. No pairing, Govee unbinding or background monitoring. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
-            Text("Name each sensor using its received values and signal to help identify it. Physical measurement age is unknown; monitoring does not control equipment.", style = MaterialTheme.typography.bodySmall)
+            Text("Discovery automatically adds uniquely matched Govee sensors with their saved Govee names. Existing sensors and custom names are preserved. Monitoring starts only with Start monitoring.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state != EnvironmentalState.DISABLED && view.state != EnvironmentalState.DISABLED_RECOVERY) GoveeNameImport(goveeNames)
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }

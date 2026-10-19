@@ -341,6 +341,34 @@ class EnvironmentalTest {
         assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
         c.enable(); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
     }
+    @Test fun foregroundLossDuringHistoryPreparationCannotProceedToRetentionOrRadio() {
+        val path = Files.createTempFile("nia-env-preparation", ".db").toFile()
+        val hold = AtomicBoolean(false); val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val deletes = java.util.concurrent.atomic.AtomicInteger(); val radios = java.util.concurrent.atomic.AtomicInteger()
+        val h = EnvironmentalHistory(SqlStoreFactory {
+            val sql = Sql(path)
+            object : SqlStore by sql {
+                override fun query(statement: String, vararg args: Any?): List<List<String?>> {
+                    val result = sql.query(statement, *args)
+                    if (args.firstOrNull() == "binding" && hold.getAndSet(false)) { entered.countDown(); check(release.await(5, TimeUnit.SECONDS)) }
+                    return result
+                }
+                override fun execute(statement: String, vararg args: Any?) { if (statement.startsWith("DELETE FROM")) deletes.incrementAndGet(); sql.execute(statement, *args) }
+            }
+        })
+        h.bind(Candidate("test", "bthome-v2", "BTHome v2"), "fixture")
+        val c = EnvironmentalCoordinator(file(), h, { radios.incrementAndGet(); error("No radio authorized") })
+        c.foreground(true); c.enable(); hold.set(true)
+        val failed = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val starter = Thread { try { c.start() } catch (t: Throwable) { failed.set(t) } }
+        try {
+            starter.start(); assertTrue(entered.await(5, TimeUnit.SECONDS))
+            c.foreground(false); release.countDown(); starter.join(5000)
+            assertFalse(starter.isAlive); assertTrue(failed.get() is IllegalStateException)
+            assertEquals(0, deletes.get()); assertEquals(0, radios.get())
+            assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+        } finally { release.countDown(); starter.join(5000); c.close() }
+    }
     @Test fun missingPlatformDependencyStopsInsteadOfLeavingDiscoveryActive() {
         val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _, _ -> throw NoClassDefFoundError("fixture dependency") } })
         c.foreground(true); c.enable(); c.discover()

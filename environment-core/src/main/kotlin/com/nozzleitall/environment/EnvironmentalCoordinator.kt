@@ -85,11 +85,16 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     @Synchronized fun discover() = begin(Purpose.DISCOVERY, emptyList())
     @Synchronized fun start() {
-        check(foreground.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get() && gate.state == EnvironmentalState.ENABLED_IDLE)
+        val preparationEpoch = visibilityEpoch.get()
+        fun current() = foreground.get() && visibilityEpoch.get() == preparationEpoch && disableInFlight.get() == 0 &&
+            !disableRequested.get() && !disposed.get() && gate.state == EnvironmentalState.ENABLED_IDLE
+        check(current())
         val bindings = history.bindings().filterNot { it.archived }
+        check(current()) { "Collection preparation was revoked" }
         require(bindings.isNotEmpty()) { "Save a sensor first" }
         // Unknown firmware/envelopes permit unassigned diagnostic reception only, never dryer deployment.
         val qualification = history.assignedQualificationRadios(bindings, platformIdentity, System.currentTimeMillis())
+        check(current()) { "Collection preparation was revoked" }
         history.retain(System.currentTimeMillis(), limits.retentionDays)
         begin(Purpose.COLLECTION, bindings, qualification)
     }

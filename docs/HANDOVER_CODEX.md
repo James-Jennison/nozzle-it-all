@@ -1,6 +1,44 @@
 # Handover to Codex (written 2026-10-18)
 
+## Owner followup — desktop app switching and compact layout
+
+Owner explicitly selected desktop-only continued monitoring on app switch.
+New pending source makes the open desktop app (including minimized state) the
+collection lifetime; explicit Start still required, Stop/quit still stop, no
+auto-start on activation. Android foreground lifecycle unchanged. Compact shared
+S4 layout reduces diagram350→240dp, horizontal wrapping legend, wide-screen
+temperature/humidity charts side by side110dp, tighter whitespace/copy. Existing
+Play782 review and data-preserving normal-Razr followup remain separate; do not
+silently replace or cancel that pending release. New source needs build/review/
+desktop install and runtime verification before claiming fixed.
+
 ## S4 delivery checkpoint — 2026-10-19 (supersedes older checkpoints)
+
+Owner screenshots at14:01 now provide actual desktop S4 UI evidence: four named
+corner readings, selected Front Left, group mean/range/spread and3/4 coverage,
+four colored temperature/humidity traces and four other named sensors. Back Left
+is explicitly older than2min and excluded; displayed39.7C/23.2%RH means agree with
+the other three readings. Sparse clusters span13:22–14:01; screenshots alone do
+not prove continuous collection during that interval. Later screenshot's selected
+chart says Start monitoring; no simultaneous top status is visible, so no proven
+contradictory state (foreground loss can stop monitoring). Do not infer acceptance
+of visual design from screenshots alone. Desktop records preserved; normal Razr
+runtime remains blocked by Play availability as documented below.
+Owner-authorized recurring followup created ACTIVE, every15min in this chat:
+finish-nia-play-and-razr-verification. Quiet on unchanged review; continue real
+Store-mediated update/data/live verification once available, no bypass/reset.
+
+Runtime correction after owner report: normal782 is installed but NOT usable yet.
+The downloaded Play-signed APK contains com.pairip.licensecheck.LicenseActivity
+and CHECK_LICENSE. Its actual installer is null, initiator com.android.shell;
+matching signing certificate alone does not satisfy Play's runtime installer check.
+Owner sees a request to update through Play; actual foreground is Play Store.
+Console refreshed: Alpha782 still Changes in review/quick checks pending, hence
+the version is not yet available through normal Play distribution. Do not describe
+this as a locked-phone problem or ask the owner repeatedly to reopen NIA.
+Do not spoof installer, disable protection, downgrade, uninstall or clear data.
+Google review/availability and an actual Store-mediated update are the remaining
+delivery dependency. Official behavior: support.google.com/googleplay/android-developer/answer/10183279.
 
 Application source `26031922c552896f7853eeba5a6328ce900c7d33`, tag
 `v0.1.17`, Android code782. Owner-approved desktop installation is verified:

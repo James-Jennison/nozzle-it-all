@@ -101,7 +101,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Txt("${view.sensorLabels[binding.sensorId] ?: binding.model} · trends", Nz.type.title)
-                    Txt(if (historyMode) "Saved history" else if (view.state == EnvironmentalState.COLLECTING) "Recording while this app is visible" else "Start monitoring to record new chart data", Nz.type.bodySmall)
+                    Txt(if (historyMode) "Saved history" else if (view.state == EnvironmentalState.COLLECTING) "Recording until Stop or app exit" else "Start monitoring to record new chart data", Nz.type.bodySmall)
                 }
                 NzButton("Sensor details", { onDetails(binding) })
             }

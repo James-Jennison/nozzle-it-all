@@ -159,7 +159,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
             NzButton("Archive binding", { action { controller.archive(binding) } }, enabled = !busy && !stopping)
         } }
         if (setup) {
-            Txt("Monitoring runs while NIA is visible. Times show reception, not when the sensor measured. Charts show up to 500 samples; lines break at known gaps.", Nz.type.bodySmall)
+            Txt("Started monitoring continues when switching apps or minimizing NIA, until Stop or app exit. Times show reception, not when the sensor measured. Charts show up to 500 samples; lines break at known gaps.", Nz.type.bodySmall)
             Txt(v.status, Nz.type.bodySmall)
         }
         if (historyMode && rows.size == controller.historyPageSize) NzButton("Older ${controller.historyPageSize}", { val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping)

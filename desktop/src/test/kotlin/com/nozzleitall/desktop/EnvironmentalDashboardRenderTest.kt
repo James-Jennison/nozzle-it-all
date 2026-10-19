@@ -21,6 +21,13 @@ class EnvironmentalDashboardRenderTest {
         assertEquals(body(File("src/main/kotlin/com/nozzleitall/desktop/screens/S4EnvironmentOverview.kt")),
             body(File("../app/src/main/java/net/jamesjennison/klippercompanion/environment/S4EnvironmentOverview.kt")))
     }
+    @Test fun desktopMonitoringCopyDescribesAppLifetime() {
+        val panel = File("src/main/kotlin/com/nozzleitall/desktop/screens/EnvironmentalPanel.kt").readText()
+        assertTrue(panel.contains("continues when switching apps or minimizing"))
+        val wiring = File("src/main/kotlin/com/nozzleitall/desktop/Main.kt").readText()
+        assertTrue(wiring.contains("DesktopMonitoringWindowListener(state.environment::foreground)"))
+        assertTrue(wiring.contains("onDispose { window.removeWindowListener(listener); state.environment.foreground(false) }"))
+    }
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
     @Test fun eightSensorsRenderAsCompactDesktopGrid() {
         val bindings = (1..8).map { Binding("b$it", "s$it", "AA:BB:CC:DD:EE:0$it", "govee-ble", "H5100") }

@@ -39,8 +39,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
     // Refresh on receptions as well as the timer: a new reception must not look future-dated for 15s.
     val liveReference = remember(now, data.readings) { System.currentTimeMillis() }
     val reference = if (historyMode) savedReference ?: 0L else liveReference
-    Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Label("SUNLU S4 · environment", title = true)
+    Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Label(if (historyMode) savedReference?.let { "Saved history · summary at ${stamp(it)}" } ?: "Saved history · no saved group readings"
             else if (collecting) "Live receptions · sensor positions viewed from the front" else "Monitoring stopped · last received readings")
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -48,7 +47,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                 DryerDiagram(positions, data, reference, historyMode, selected, onSelect)
             }
             val summary: @Composable () -> Unit = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Label("Group conditions", title = true)
                     for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
                         val stats = EnvironmentalGroupOverview.stats(group.bindings, data.readings, channel, reference)
@@ -57,8 +56,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                         Label("Range  ${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}")
                         Label("Spread  ${fmt(stats?.let { it.maximum - it.minimum })} ${channel.unit} · ${stats?.count ?: 0}/4 positions")
                     }
-                    Label("Only receptions within 2 minutes of ${if (historyMode) "the page's last group reading" else "now"} contribute. Missing, older and future-dated readings are excluded.")
-                    Label("Positions follow assigned sensor names; schematic, not a heat map. Readings describe sampled air, not filament moisture.")
+                    Label("Recent readings only · named positions · sampled air, not filament moisture")
                 }
             }
             if (maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -67,20 +65,23 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
             } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { diagram(); summary() }
         }
         Label("Group trends · recorded receptions", title = true)
-        EnvironmentalGroupOverview.corners.forEachIndexed { i, corner ->
-            positions[corner]?.let { Label("● $corner", color = positionColors[i]) }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            EnvironmentalGroupOverview.corners.forEachIndexed { i, corner ->
+                positions[corner]?.let { Label("● $corner", color = positionColors[i]) }
+            }
         }
-        for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
+        val chart: @Composable (Channel) -> Unit = { channel ->
+          Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             val series = EnvironmentalGroupOverview.trends(data.samples, group.bindings, channel)
             Label(if (channel == Channel.TEMPERATURE) "Temperature (°C)" else "Humidity (%RH)", title = true)
             val axis = series.values.firstOrNull()
             if (axis == null) Label("No recorded readings yet")
             else {
                 Row(Modifier.fillMaxWidth()) {
-                    Column(Modifier.height(150.dp).width(50.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.height(110.dp).width(50.dp), verticalArrangement = Arrangement.SpaceBetween) {
                         Label(fmt(axis.high)); Label(fmt((axis.high + axis.low) / 2)); Label(fmt(axis.low))
                     }
-                    Canvas(Modifier.weight(1f).height(150.dp).testTag("s4-group-trend-" + channel.name)
+                    Canvas(Modifier.weight(1f).height(110.dp).testTag("s4-group-trend-" + channel.name)
                         .semantics { contentDescription = "S4 ${channel.name} trends: ${series.size} sensors; shared range ${fmt(axis.low)} to ${fmt(axis.high)} ${channel.unit}; ${stamp(axis.start)} to ${stamp(axis.end)}. " +
                             EnvironmentalGroupOverview.corners.mapIndexedNotNull { i, corner -> positions[corner]?.id?.let(series::get)?.let { s ->
                                 "$corner (${listOf("purple", "teal", "amber", "pink")[i]}): ${s.points.size} samples"
@@ -102,6 +103,15 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                     Label(stamp(axis.start)); if (axis.end != axis.start) Label(stamp(axis.end))
                 }
             }
+          }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Box(Modifier.weight(1f)) { chart(Channel.TEMPERATURE) }
+                Box(Modifier.weight(1f)) { chart(Channel.HUMIDITY) }
+            } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                chart(Channel.TEMPERATURE); chart(Channel.HUMIDITY)
+            }
         }
     }
 }
@@ -109,7 +119,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 @Composable private fun DryerDiagram(positions: Map<String, Binding>, data: EnvironmentalDashboardData,
     reference: Long, historyMode: Boolean, selected: String?, onSelect: (Binding) -> Unit) {
     // Original scalable cutaway illustration: long S4 shell, clear lid, four reel bays and front control panel.
-    Box(Modifier.fillMaxWidth().height(350.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)).testTag("s4-dryer-illustration")) {
+    Box(Modifier.fillMaxWidth().height(240.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)).testTag("s4-dryer-illustration")) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height
             drawRoundRect(Color(0xFF080D11), Offset(w * .02f, h * .03f), Size(w * .96f, h * .91f), CornerRadius(22.dp.toPx()))

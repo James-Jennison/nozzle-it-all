@@ -18,8 +18,10 @@ while [ $# -gt 0 ]; do
 done
 [ -x "$ENGINE" ] || { echo "slicing engine not found at $ENGINE (build it with engine/native/scripts/build_engine_fork.sh)" >&2; exit 1; }
 mkdir -p "$OUT"
-VERSION="$(cd "$ROOT" && "${GRADLE[@]}" -q :desktop:properties --property version 2>/dev/null | awk '/^version:/{print $2}')"
-[ -n "$VERSION" ] && [ "$VERSION" != "unspecified" ] || VERSION="0.1.0"
+# Compose's package version is nozzleDesktopVersion, not Gradle project.version.
+# Pass it explicitly so both package metadata and provenance use one identity.
+VERSION="${ORG_GRADLE_PROJECT_nozzleDesktopVersion:-0.1.0}"
+GRADLE+=("-PnozzleDesktopVersion=$VERSION")
 
 echo "== Desktop ($VERSION)"
 (cd "$ROOT" && "${GRADLE[@]}" -q :desktop:packageDeb :stock-u1-adapter:installDist -PnozzleEngine="$ENGINE")
@@ -43,6 +45,9 @@ rm -f "$PKG/opt/nozzle-it-all/lib/nozzle-it-all-nozzle-it-all.desktop"
 sed -i '/xdg-desktop-menu/d' "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/prerm"
 # ffmpeg plays printer cameras' H.264 streams at full frame rate (MJPEG from camera-streamer tops out near 4 fps).
 sed -i 's/^Depends: /Depends: ffmpeg, util-linux, procps, libegl1, libgles2, /' "$PKG/DEBIAN/control"
+for dependency in ffmpeg util-linux procps libegl1 libgles2; do
+  grep -Eq "^Depends: .*(^|[ ,])${dependency}([ ,(]|$)" "$PKG/DEBIAN/control"
+done
 cat > "$STAGE/refresh" <<'EOF'
 if [ "$1" = configure ] || [ "$1" = remove ]; then
   command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true

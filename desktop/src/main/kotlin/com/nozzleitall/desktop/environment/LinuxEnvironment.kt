@@ -46,6 +46,9 @@ class JdbcEnvironmentalStore(file: File) : SqlStore {
             failed = e
             // SQLITE_FULL can roll back automatically. Preserve the original failure if rollback then has no transaction.
             try { connection.rollback() } catch (cleanup: Throwable) { e.addSuppressed(cleanup) }
+            // SQLite may invalidate the prepared VM on a failed step (notably SQLITE_FULL).
+            statements.values.forEach { s -> try { s.close() } catch (cleanup: Throwable) { e.addSuppressed(cleanup) } }
+            statements.clear()
             throw e
         } finally {
             try { connection.autoCommit = true } catch (cleanup: Throwable) { if (failed != null) failed.addSuppressed(cleanup) else throw cleanup }

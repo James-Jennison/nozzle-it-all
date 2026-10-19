@@ -28,7 +28,13 @@ class EnvironmentalTest {
             c.autoCommit = false
             var failed: Throwable? = null
             try { val v = block(); c.commit(); return v }
-            catch (e: Throwable) { failed = e; try { c.rollback() } catch (cleanup: Throwable) { e.addSuppressed(cleanup) }; throw e }
+            catch (e: Throwable) {
+                failed = e
+                try { c.rollback() } catch (cleanup: Throwable) { e.addSuppressed(cleanup) }
+                statements.values.forEach { s -> try { s.close() } catch (cleanup: Throwable) { e.addSuppressed(cleanup) } }
+                statements.clear()
+                throw e
+            }
             finally { try { c.autoCommit = true } catch (cleanup: Throwable) { if (failed != null) failed.addSuppressed(cleanup) else throw cleanup } }
         }
         override fun close() { statements.values.forEach { it.close() }; c.close() }

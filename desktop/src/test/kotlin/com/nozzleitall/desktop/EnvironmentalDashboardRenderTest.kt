@@ -42,14 +42,16 @@ class EnvironmentalDashboardRenderTest {
             } finally { scene.close() }
         }
         val image = javax.imageio.ImageIO.read(output)
-        // Every desktop column must contain an actual cyan humidity gauge, not empty whitespace.
-        for (column in 0..3) {
+        // Original S4 illustration and four distinct trace/position colors must actually render.
+        for (rgb in listOf(0xB59AFF, 0x35B9C5, 0xFFC66D, 0xFF91B5)) {
             var pixels = 0
-            for (y in 40 until 450) for (x in (24 + column * 363) until minOf(1476, 24 + (column + 1) * 363)) {
+            val expected = java.awt.Color(rgb)
+            for (y in 40 until 950) for (x in 24 until 1476) {
                 val c = java.awt.Color(image.getRGB(x, y))
-                if (c.green > c.red + 50 && c.blue > c.red + 50) pixels++
+                if (kotlin.math.abs(c.red - expected.red) < 10 && kotlin.math.abs(c.green - expected.green) < 10 &&
+                    kotlin.math.abs(c.blue - expected.blue) < 10) pixels++
             }
-            assertTrue("Humidity gauges visible in column $column", pixels > 100)
+            assertTrue("S4 position and trend color $rgb visible", pixels > 100)
         }
     }
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)

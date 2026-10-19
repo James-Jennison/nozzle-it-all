@@ -1,5 +1,21 @@
 # Handover to Codex (written 2026-10-18)
 
+## Owner-approved S4 spatial overview (2026-10-19, implementation in progress)
+
+Owner explicitly requested recognizable S4 illustration, readings at named actual
+corner positions, group averages/ranges/trends. Original scalable Compose cutaway
+uses four reel bays and front control panel, with Back corners above Front corners.
+No estimated heatmap, device controls, name/storage/radio changes. Only unambiguous
+S4 corner labels map; duplicates/other positions retain ordinary cards. Summary
+excludes nonfinite, future and receptions over120s; saved page uses its last group
+reception as reference and is labelled historical. Shared-axis traces retain gaps.
+New source not yet validated/installed; .15 remains latest installed desktop.
+Grouping-only a385 GTHost full build passed4m1s; Synthetic b6d8 completed. Mixed-case
+heading refinement included; family-token merging rejected (distinct full prefixes
+must stay separate); render smoke test is complemented by shared helper and device
+semantics tests. Previous .16 release is superseded by this newly approved scope.
+Original Play Alpha/normal Razr delivery remains pending; no normal app reset.
+
 ## Current delivery checkpoint — visual Environment screen (2026-10-19)
 
 Owner follow-up: group obvious devices (actual0.1.15 screenshot shows all8named

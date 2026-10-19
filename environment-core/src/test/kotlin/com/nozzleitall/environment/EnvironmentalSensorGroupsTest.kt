@@ -28,6 +28,7 @@ class EnvironmentalSensorGroupsTest {
         val names = mapOf("a" to "S4 Front Left", "b" to "s4  BACK  RIGHT", "c" to "S40 Front Right", "d" to "S4 Back Left")
         val result = environmentalSensorGroups(names.keys.map(::binding).map { if (it.id == "d") it.copy(archived = true) else it }, names)
         assertEquals(listOf("a", "b"), result.first().bindings.map { it.id })
+        assertEquals("S4", result.first().title)
         assertEquals(listOf("c"), result.last().bindings.map { it.id })
         assertTrue(environmentalSensorGroups(emptyList(), names).isEmpty())
     }

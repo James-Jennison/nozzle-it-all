@@ -22,7 +22,7 @@ fun environmentalSensorGroups(bindings: List<Binding>, labels: Map<String, Strin
     val candidates = entries.filter { it.prefix != null }.groupBy { it.prefix!!.lowercase(Locale.ROOT) }
     val grouped = candidates.filterValues { rows -> rows.map { it.position }.distinct().size >= 2 }
     val result = grouped.toSortedMap().values.map { rows ->
-        EnvironmentalSensorGroup(rows.sortedWith(comparator).first().prefix,
+        EnvironmentalSensorGroup(rows.mapNotNull { it.prefix }.minOrNull(),
             rows.sortedWith(compareBy<Entry> { it.position }.then(comparator)).map { it.binding })
     }
     val remaining = entries.filter { it.prefix?.lowercase(Locale.ROOT) !in grouped }.sortedWith(comparator)

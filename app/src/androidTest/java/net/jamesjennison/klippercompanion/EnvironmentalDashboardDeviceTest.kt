@@ -18,6 +18,27 @@ import org.junit.Test
 
 class EnvironmentalDashboardDeviceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun s4IllustrationSummarizesRealReadingsAndDrawsSharedTrends() {
+        val names = EnvironmentalGroupOverview.corners.map { "S4 $it" }
+        val bindings = names.indices.map { Binding("b$it", "s$it", "address$it", "govee-ble", "H5100") }
+        val samples = bindings.flatMapIndexed { index, b -> (0..2).map { i ->
+            ChartSample("${b.id}-$i", b.id, 1000L + i * 1000, "r", 0,
+                mapOf(Channel.TEMPERATURE to 40.0 + index, Channel.HUMIDITY to 20.0 + index), i.toLong())
+        } }
+        compose.setContent { MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+            EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = bindings,
+                sensorLabels = bindings.mapIndexed { i, b -> b.sensorId to names[i] }.toMap()), samples, historyMode = true)
+        } } }
+        compose.onNodeWithTag("s4-dryer-illustration").assertIsDisplayed()
+        compose.onNodeWithText("Average  41.5 °C").assertExists()
+        compose.onNodeWithText("Range  40.0 – 43.0 °C").assertExists()
+        compose.onNodeWithTag("s4-group-trend-TEMPERATURE").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasContentDescription("S4 TEMPERATURE trends: 4 sensors", substring = true)).assertExists()
+        compose.onNodeWithTag("s4-group-trend-HUMIDITY").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("s4-dryer-illustration").performScrollTo()
+        val output = java.io.File(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "s4-synthetic.png")
+        output.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
     @Test fun obviousNamedGroupHasHeadingAndOrderedCards() {
         val names = listOf("S4 Back Left", "Printing Room", "S4 Front Right", "S4 Back Right", "S4 Front Left")
         val bindings = names.indices.map { Binding("b$it", "s$it", "address$it", "govee-ble", "H5100") }
@@ -28,12 +49,15 @@ class EnvironmentalDashboardDeviceTest {
         compose.onNodeWithText("S4", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Other sensors", useUnmergedTree = true).assertExists()
         val cards = compose.onAllNodesWithTag("environment-sensor-card").fetchSemanticsNodes()
-        val expected = listOf("S4 Front Left", "S4 Front Right", "S4 Back Left", "S4 Back Right", "Printing Room")
+        val expected = listOf("Printing Room")
         org.junit.Assert.assertEquals(expected.size, cards.size)
         cards.zip(expected).forEach { (node, name) ->
             org.junit.Assert.assertTrue(node.config[androidx.compose.ui.semantics.SemanticsProperties.Text].any { it.text == name })
         }
         compose.onNodeWithText("S4 Front Left · trends").assertExists()
+        compose.onNodeWithTag("s4-dryer-illustration").assertExists()
+        compose.onNodeWithTag("s4-position-Back-Right").performClick()
+        compose.onNodeWithText("S4 Back Right · trends").assertExists()
     }
     @Test fun explicitSavedHistoryCanRenderWhileMonitoringIsOff() {
         val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")

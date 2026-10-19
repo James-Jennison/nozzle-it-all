@@ -2,6 +2,14 @@
 
 ## Official-reference compact S4 candidate — supersedes earlier .19 candidates
 
+INSTALLED: owner approved desktop authentication; dpkg session61701 exit0 upgraded
+0.1.18 to0.1.19. All218 installed payload files match exact5ace artifact, source
+identity and six adapters/launcher/eight icons verified. All16existing entities
+and1980events match baseline hashes. No normal NIA process yet at verification.
+Requested owner open normal app, Start monitoring, select S4 corner, leave running
+about1minute and share screenshot. Native desktop UI control unavailable. Actual
+live0.1.19 UI/history/Stop check remains pending, not completed by build/tests.
+
 Final package built from5ace3575196ae67e0a298ddab6ee42089d708cce is verified:
 nozzle-it-all_0.1.19_5ace3575_amd64.deb SHA256
 b6e9fe1ae5820ed084075ca9ab9e3e84d8acbd3ec4e4a21fefe3a75610b289b0.
@@ -19,8 +27,8 @@ Its null-message exception claim is impossible for final no-argument fixed-messa
 exception. Existing coordinator/decoder behavior was not expanded for speculative
 findings. Evidence76643ce1ba1b twoPASS/intact, candidate evidence only.
 
-Installation started via pkexec dpkg, session61701, awaiting owner desktop auth.
-Do not claim installed yet. No conflicting process;16entities/1980events still
+Historical installation request: pkexec dpkg session61701 awaited desktop auth;
+now completed as recorded above. No conflicting process;16entities/1980events still
 match baseline immediately before installation. After auth verify all payloads
 and baseline, then ask owner to open normal NIA and Start/select corners/Stop
 for actual live UI/history verification. Native desktop UI control unavailable.

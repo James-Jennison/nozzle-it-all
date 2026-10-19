@@ -604,3 +604,8 @@ No successful build, install, qualification, or milestone completion claimed yet
 - Preinstall normaldesktop closed;16entities/1980eventhashes preserved. pkexec
   dpkg session61701 started for exact5ace0.1.19, requested desktopauthentication.
   Installedpayload,postinstalldata and actualliveUI checks remain pending.
+- Owner approved auth; session61701 dpkg exit0 upgraded .18→.19. Verified218
+  installedfiles match exact5acepackage,6adapters,launcher/8icons,embeddedrevision.
+  All16entities/1980events preserved by hash. No runningnormalNIA process yet.
+  Requested owner open/Start/selectcorner/leave1minute/screenshot. NativeUIcontrol
+  unavailable; actual live and Stop evidence remains pending, not inferred.

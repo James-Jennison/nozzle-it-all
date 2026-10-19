@@ -41,7 +41,9 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     val groups = remember(view.bindings, view.sensorLabels) { environmentalSensorGroups(view.bindings, view.sensorLabels) }
     val bindings = groups.flatMap { it.bindings }
     var selected by remember { mutableStateOf<String?>(null) }
-    var expandedTrends by remember { mutableStateOf(false) }
+    var expandedTrends by remember(groups) {
+        mutableStateOf(groups.none { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null })
+    }
     val target = bindings.firstOrNull { it.id == selected } ?: bindings.firstOrNull()
     val temperature = Nz.colors.accent
     val humidity = Color(0xFF35B9C5)

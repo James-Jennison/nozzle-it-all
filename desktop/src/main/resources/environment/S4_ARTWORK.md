@@ -6,7 +6,12 @@ Live labels, values, selection and trends are Compose UI, never baked into it.
 
 Reference page: https://store.sunlu.com/collections/new-collection/products/sunlu-filadryer-s4
 Reference photo: https://store.sunlu.com/cdn/shop/files/S4_869ac763-3bd2-4172-90c9-3ee575eb60a5.jpg?v=1786734140
-Retrieved and visually inspected 2026-10-19.
+Retrieved and manually visually inspected by Codex 2026-10-19; visual resemblance
+is manual assessment, not a machine-verified identity claim.
+Reference SHA256: 340717e1f38ecd9211d974ab8e0842e1695956464bc5c2c38074e355dc4be794
+The product depiction identifies the monitored equipment; it does not imply
+SUNLU endorsement. The source photo itself is not bundled. No claim is made that
+public availability grants a redistribution license to the source photograph.
 
 Built-in image-generation tool; no external credentials used. Final prompt:
 Refine the elevated-front illustration to match the official S4: rectangular dark

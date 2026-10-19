@@ -146,6 +146,9 @@ val verifyPaxxBaseline = tasks.register("verifyPaxxBaseline") {
 tasks.named("check") { dependsOn(verifyPaxxBaseline) }
 
 tasks.withType<Test>().configureEach {
+ // Source/resource parity tests intentionally resolve paths from the desktop module.
+ // Keep this invariant independent of the directory used to invoke Gradle.
+ workingDir(project.projectDir)
  dependsOn(buildViewport)
  systemProperty("nozzle.viewport.library",viewportLibrary.get().asFile.absolutePath)
  // Room for real-world models (a million-triangle painted 3MF needs more than the 512 MB default).

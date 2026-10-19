@@ -93,7 +93,7 @@ class EnvironmentalTest {
     @Test fun exportAndDeleteAreExplicitAndIncarnationFenced() {
         history().use { h ->
             h.append(observation(), "inc"); val exported = mutableListOf<String>(); h.export { exported += it }
-            assertEquals(2, exported.size); assertEquals(1001L, JSONObject(exported.last()).getLong("receivedAt"))
+            assertEquals(3, exported.size); assertEquals(1001L, JSONObject(exported.last()).getLong("receivedAt"))
             h.deleteAll(); assertTrue(h.page().isEmpty())
         }
         val g = EnvironmentalGate(file()); val old = g.incarnation; g.deleteIntent(); assertNotEquals(old, g.incarnation); g.finishDelete(); assertEquals(EnvironmentalState.DISABLED, g.state)
@@ -116,7 +116,7 @@ class EnvironmentalTest {
     }
     @Test fun delayedTransportCannotSurviveForegroundStop() {
         val entered = CountDownLatch(1); val release = CountDownLatch(1); val closed = CountDownLatch(1)
-        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _ -> entered.countDown(); release.await(5, TimeUnit.SECONDS); object : RadioSession { override fun close() { closed.countDown() } } } })
+        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _, _ -> entered.countDown(); release.await(5, TimeUnit.SECONDS); object : RadioSession { override fun close() { closed.countDown() } } } })
         c.foreground(true); c.enable(); c.discover(); assertTrue(entered.await(5, TimeUnit.SECONDS)); c.foreground(false); release.countDown()
         assertTrue(closed.await(5, TimeUnit.SECONDS))
         val deadline = System.nanoTime() + 5_000_000_000L
@@ -147,7 +147,7 @@ class EnvironmentalTest {
         h.bind(Candidate("test", "bthome-v2", "BTHome v2"), "fixture sensor")
         val started = CountDownLatch(1)
         lateinit var send: (Advertisement) -> Unit
-        val c = EnvironmentalCoordinator(file(), h, { BleTransport { report, _ -> send = report; started.countDown(); object : RadioSession { override fun close() {} } } })
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, report, _ -> send = report; started.countDown(); object : RadioSession { override fun close() {} } } })
         c.foreground(true); c.enable(); c.start(); assertTrue(started.await(5, TimeUnit.SECONDS))
         val payload = byteArrayOf(0x40, 0, 1, 2, 0x2e, 0xfb.toByte(), 3, 0xd2.toByte(), 4)
         fun report() = send(Advertisement("test", null, emptyMap(), mapOf("0000fcd2-0000-1000-8000-00805f9b34fb" to payload), System.currentTimeMillis(), System.nanoTime()))
@@ -155,6 +155,15 @@ class EnvironmentalTest {
         Thread.sleep(1000)
         val os = java.lang.management.ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean
         fun rss() = File("/proc/self/status").readLines().first { it.startsWith("VmRSS:") }.trim().split(Regex("\\s+"))[1].toLong() * 1024
+        // Separately report a fixed 15s JIT stabilization phase at the same 100Hz rate;
+        // do not mislabel cold/JIT process CPU as steady application-thread CPU.
+        val warmCpu = os.processCpuTime; val warmStart = System.nanoTime()
+        repeat(1500) { i ->
+            report()
+            val wait = warmStart + (i + 1) * 10_000_000L - System.nanoTime()
+            if (wait > 0) java.util.concurrent.locks.LockSupport.parkNanos(wait)
+        }
+        println("ENV_WARMUP reports_per_second=100 cpu_percent_one_core=${(os.processCpuTime - warmCpu) * 100.0 / (System.nanoTime() - warmStart)} includes_jit=true")
         val droppedBefore = c.view.value.dropped
         val memoryBefore = rss(); val cpuBefore = os.processCpuTime; val start = System.nanoTime()
         repeat(1000) { i ->
@@ -196,7 +205,7 @@ class EnvironmentalTest {
         val ready = CountDownLatch(1)
         lateinit var failure: (String) -> Unit
         lateinit var report: (Advertisement) -> Unit
-        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { r, f -> report = r; failure = f; ready.countDown(); object : RadioSession { override fun close() {} } } })
+        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, r, f -> report = r; failure = f; ready.countDown(); object : RadioSession { override fun close() {} } } })
         c.foreground(true); c.enable(); c.discover(); assertTrue(ready.await(5, TimeUnit.SECONDS))
         synchronized(c) {
             val finished = CountDownLatch(1)
@@ -213,5 +222,16 @@ class EnvironmentalTest {
         assertEquals(text, parsed.getString("eventId")); assertTrue(parsed.isNull("measuredAt")); assertEquals(1L, parsed.getLong("sequence"))
         assertEquals(23.0, parsed.getJSONArray("readings").getJSONObject(0).getDouble("raw"), 0.0)
         assertEquals(encoded, ObservationEncoding.encode(observation.copy(receivedAt = 99)))
+    }
+    @Test fun batchGapCountsSurviveRestartAndExport() {
+        val path = Files.createTempFile("nia-env-gaps", ".db").toFile()
+        val h = EnvironmentalHistory(SqlStoreFactory { Sql(path) })
+        h.appendBatch(listOf(observation().copy(droppedBefore = 31)), "inc")
+        h.close()
+        EnvironmentalHistory(SqlStoreFactory { Sql(path) }).use { reopened ->
+            assertEquals(31L, reopened.recordedDrops())
+            val output = mutableListOf<String>(); reopened.export { output += it }
+            assertEquals(31L, JSONObject(output[1]).getLong("knownDroppedReports"))
+        }
     }
 }

@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.bluetooth.le.ScanFilter
 import android.content.Context
 import android.content.BroadcastReceiver
 import android.content.Intent
@@ -31,7 +32,7 @@ class AndroidEnvironmentalStore(file: File) : SqlStore {
 
 class AndroidBleTransport(private val context: Context) : BleTransport {
     @SuppressLint("MissingPermission")
-    override fun start(report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
+    override fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: error("Bluetooth unavailable")
         check(adapter.isEnabled) { "Bluetooth off" }
         val scanner = adapter.bluetoothLeScanner ?: error("BLE scan unavailable")
@@ -59,7 +60,8 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
         }
         // Protected platform action, sent by the Bluetooth UID rather than SYSTEM_UID.
         androidx.core.content.ContextCompat.registerReceiver(context, receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
-        try { scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).setReportDelay(0).build(), callback) }
+        val filters = if (request.discovery) null else request.selectedAddresses.map { ScanFilter.Builder().setDeviceAddress(it).build() }.also { require(it.isNotEmpty()) }
+        try { scanner.startScan(filters, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).setReportDelay(0).build(), callback) }
         catch (e: Exception) { context.unregisterReceiver(receiver); throw e }
         return object : RadioSession {
             override fun close() {

@@ -61,12 +61,14 @@ import org.json.JSONObject
             if (event == Lifecycle.Event.ON_STOP) { pending = null; controller.foreground(false) }
         }
         lifecycle.addObserver(observer)
-        onDispose { pending = null; lifecycle.removeObserver(observer); controller.close() }
+        onDispose { pending = null; lifecycle.removeObserver(observer); controller.closeAsync() }
     }
     Card(Modifier.fillMaxWidth().testTag("environment-panel")) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Environmental monitoring (optional)", style = MaterialTheme.typography.titleMedium)
             Text(view.status)
+            EnvironmentalProviders.ble.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
+            Text("Nearby-device permissions cover scanning and Bluetooth radio-state metadata; no GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
@@ -90,6 +92,7 @@ import org.json.JSONObject
                 Text("Reception ${java.time.Instant.ofEpochMilli(o.observedAt)} — measurement age unknown", style = MaterialTheme.typography.bodySmall)
             }
             if (view.dropped > 0) Text("${view.dropped} reports dropped — coverage incomplete", color = MaterialTheme.colorScheme.error)
+            if (view.recordedDrops > 0) Text("History records ${view.recordedDrops} dropped reports; other gaps unknown", color = MaterialTheme.colorScheme.error)
             OutlinedButton({ action { rows = controller.loadHistory(); controller.savedBindings() } }, enabled = !busy, modifier = Modifier.testTag("environment-history")) { Text("Open local history") }
             OutlinedButton({ action { controller.retention() } }, enabled = !busy) { Text("Apply 30-day retention") }
             OutlinedButton({ export.launch("environment-history.ndjson") }, enabled = !busy) { Text("Export history") }

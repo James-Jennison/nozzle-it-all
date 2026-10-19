@@ -26,6 +26,7 @@ import org.json.JSONObject
     Card(Modifier.fillMaxWidth()) {
         Txt("Environmental monitoring (optional)", Nz.type.title)
         Txt(v.status, Nz.type.body)
+        EnvironmentalProviders.ble.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Active BLE scanning uses radio/battery. No pairing, Govee unbinding, cloud, background service or equipment control.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -51,6 +52,7 @@ import org.json.JSONObject
             Txt("Reception ${java.time.Instant.ofEpochMilli(observation.observedAt)} — physical measurement age unknown; decoder ${observation.decoder}", Nz.type.bodySmall)
         }
         if (v.dropped > 0) Banner("${v.dropped} reports dropped — coverage incomplete", BannerKind.WARNING)
+        if (v.recordedDrops > 0) Banner("History records ${v.recordedDrops} dropped reports; other unobserved gaps remain unknown", BannerKind.WARNING)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NzButton("Open local history", { action { rows = controller.loadHistory(); controller.savedBindings() } }, enabled = !busy, testTag = "environment-history")
             NzButton("Apply 30-day retention", { action { controller.retention() } }, enabled = !busy)

@@ -5,7 +5,8 @@ import org.json.JSONObject
 
 /** Own lazy database, never the project DB. All access is serialized by the coordinator. */
 class EnvironmentalHistory(private val factory: SqlStoreFactory, private val limits: EnvironmentalLimits = EnvironmentalLimits()) : AutoCloseable {
-    private var db: SqlStore? = null
+    @Volatile private var db: SqlStore? = null
+    val isOpen get() = db != null
     private fun store(): SqlStore {
         db?.let { return it }
         val sql = factory.open()
@@ -18,6 +19,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
                 sql.execute("CREATE INDEX events_time ON events(observed,id)")
                 sql.execute("CREATE INDEX events_binding ON events(binding,observed,id)")
                 sql.execute("CREATE TABLE conflicts(id TEXT PRIMARY KEY, observed INTEGER NOT NULL, reason TEXT NOT NULL)")
+                sql.execute("CREATE TABLE gaps(id TEXT PRIMARY KEY, observed INTEGER NOT NULL, dropped INTEGER NOT NULL)")
                 sql.execute("PRAGMA user_version=1")
             }
             // Bound allocation including free pages. No WAL or unbounded sidecar.
@@ -107,8 +109,14 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
     }
     @Synchronized fun appendBatch(observations: List<Observation>, currentIncarnation: String): List<String> {
         require(observations.size in 1..32)
-        return store().transaction { observations.map { insert(it, currentIncarnation) } }
+        return store().transaction {
+            val results = observations.map { insert(it, currentIncarnation) }
+            val last = observations.last()
+            if (last.droppedBefore > 0) store().execute("INSERT OR REPLACE INTO gaps(id,observed,dropped) VALUES(?,?,?)", last.sessionId, last.observedAt, last.droppedBefore)
+            results
+        }
     }
+    @Synchronized fun recordedDrops(): Long = store().query("SELECT COALESCE(SUM(dropped),0) FROM gaps").first().first()!!.toLong()
     private fun insert(o: Observation, currentIncarnation: String): String {
         require(o.incarnation == currentIncarnation)
         require(o.readings.size in 1..16)
@@ -131,10 +139,12 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         store().transaction {
             store().execute("DELETE FROM events WHERE observed<?", now - days * 86_400_000L)
             store().execute("DELETE FROM conflicts WHERE observed<?", now - days * 86_400_000L)
+            store().execute("DELETE FROM gaps WHERE observed<?", now - days * 86_400_000L)
         }
     }
     @Synchronized fun export(write: (String) -> Unit) {
         write(JSONObject().put("format", "nia-environment-history").put("version", 1).toString())
+        write(JSONObject().put("knownDroppedReports", recordedDrops()).put("coverage", "Reception history only; physical measurement age and unobserved gaps unknown").toString())
         for (kind in listOf("sensor", "binding", "equipment", "position", "placement", "residence", "calibration")) entities(kind).forEach { write(JSONObject().put("kind", kind).put("entity", it).toString()) }
         var time = Long.MAX_VALUE; var id = "~"
         while (true) {
@@ -145,7 +155,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         }
     }
     @Synchronized fun deleteAll() {
-        store().transaction { store().execute("DELETE FROM events"); store().execute("DELETE FROM entities"); store().execute("DELETE FROM conflicts") }
+        store().transaction { store().execute("DELETE FROM events"); store().execute("DELETE FROM entities"); store().execute("DELETE FROM conflicts"); store().execute("DELETE FROM gaps") }
         store().execute("VACUUM")
         close()
     }

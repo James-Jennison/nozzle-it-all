@@ -41,9 +41,10 @@ object EnvironmentalProviders {
         ProviderDescriptor("bthome-v2", "BTHome v2 unencrypted (diagnostic)", true, true))
 }
 interface RadioSession : AutoCloseable
+data class BleScanRequest(val discovery: Boolean, val selectedAddresses: Set<String> = emptySet())
 fun interface BleTransport {
     /** Called only inside an explicit foreground operation; owns only its own discovery reference. */
-    fun start(report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession
+    fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession
 }
 interface SqlStore : AutoCloseable {
     fun execute(sql: String, vararg args: Any?)

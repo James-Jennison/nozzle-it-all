@@ -38,6 +38,11 @@ class EnvironmentalDeviceTest {
         assertEquals("inserted", h.append(o, "inc"))
         assertEquals("duplicate", h.append(o.copy(receivedAt = 2000), "inc"))
         assertEquals(1, h.page().size)
+        val recent = o.copy(eventId = "recent", observedAt = 1734567890123L, receivedAt = 1734567890124L)
+        h.append(recent, "inc")
+        h.retain(1734567890124L, days = 1)
+        assertEquals(1, h.page().size)
+        assertTrue(h.page().single().contains("1734567890123"))
         h.deleteAll(); assertTrue(h.page().isEmpty()); h.close()
         // Only this test-owned environmental fixture, not any owner data.
         assertTrue(context.deleteDatabase(path.absolutePath))

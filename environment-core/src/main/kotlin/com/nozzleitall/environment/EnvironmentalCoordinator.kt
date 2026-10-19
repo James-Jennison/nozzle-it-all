@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.update
 
 data class EnvironmentalView(val state: EnvironmentalState, val status: String = "Disabled — no collection", val candidates: List<Candidate> = emptyList(),
-    val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0)
+    val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0, val recordedDrops: Long = 0)
 
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
@@ -25,6 +25,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     private val visibilityEpoch = AtomicLong()
     private val revocationRequested = AtomicBoolean(false)
     private val droppedReports = AtomicLong()
+    private val disposed = AtomicBoolean(false)
     private val collector get() = gate.collectorId
     private val sequence = AtomicLong()
     fun foreground(visible: Boolean) {
@@ -39,7 +40,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             } }
         }
     }
-    @Synchronized fun enable() { gate.enable(); mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened") }
+    @Synchronized fun enable() { check(!disposed.get()); gate.enable(); mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened") }
     @Synchronized fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
         revocationRequested.set(true)
         // Hide live readings immediately, before durable revocation/cancellation.
@@ -63,7 +64,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     private fun begin(purpose: Purpose, bindings: List<Binding>) {
         val visibleEpoch = visibilityEpoch.get()
-        check(foreground.get())
+        check(foreground.get() && !disposed.get())
         require(bindings.size <= 64) { "At most 64 active environmental bindings per foreground session" }
         val grant = gate.begin(purpose, bindings, if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1_000_000_000L else 86_400_000_000_000)
         val job = SupervisorJob(); operation = job
@@ -73,6 +74,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val failureQueued = AtomicBoolean(false)
         val queue = Queue<Advertisement>(limits.queueCapacity)
         val runId = newId()
+        val runDroppedStart = droppedReports.get()
         val calibration = bindings.associate { it.id to history.calibrated(it, listOf(Reading(Channel.TEMPERATURE, 0.0), Reading(Channel.HUMIDITY, 0.0), Reading(Channel.BATTERY_PERCENT, 0.0), Reading(Channel.BATTERY_VOLTAGE, 0.0))).associateBy { r -> r.channel } }
         mutable.value = mutable.value.copy(state = gate.state, candidates = emptyList(), bindings = bindings,
             status = if (purpose == Purpose.DISCOVERY) "Discovering for ${limits.discoverySeconds} seconds — active BLE scan, radio impact; diagnostic only" else "Collecting diagnostic receptions — measurement age unknown; active BLE scan")
@@ -84,7 +86,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         return@launch
                     }
                 }
-                val opened = transport().start({ report ->
+                val opened = transport().start(BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet()), { report ->
                     // OS scan callbacks may be Main: no locks, disk IO, parsing, or coroutine-per-report here.
                     if (!job.isActive || revocationRequested.get() || visibilityEpoch.get() != visibleEpoch) return@start
                     if (report.address.length !in 1..64 || (report.name?.length ?: 0) > 256) return@start
@@ -119,7 +121,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                             val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: continue
                             val n = sequence.incrementAndGet()
                             val observation = Observation("$collector/$runId/$n", grant.incarnation, collector, runId, n, binding.id, binding.revision,
-                                report.observedAt, System.currentTimeMillis(), report.monotonicNanos, decoder = BleDecoders.VERSION, sourceCounter = decoded.counter, readings = decoded.readings.map { r -> calibration[binding.id]?.get(r.channel)?.let { r.copy(offset = it.offset, calibrationVersion = it.calibrationVersion) } ?: r }, droppedBefore = mutable.value.dropped, bootId = gate.bootId)
+                                report.observedAt, System.currentTimeMillis(), report.monotonicNanos, decoder = BleDecoders.VERSION, sourceCounter = decoded.counter, readings = decoded.readings.map { r -> calibration[binding.id]?.get(r.channel)?.let { r.copy(offset = it.offset, calibrationVersion = it.calibrationVersion) } ?: r }, droppedBefore = mutable.value.dropped - runDroppedStart, bootId = gate.bootId)
                             admittedBindings += binding
                             observations += observation
                         }
@@ -143,7 +145,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         mutable.value = mutable.value.copy(bindings = history.bindings())
     }
     @Synchronized fun loadHistory(before: Long = Long.MAX_VALUE, id: String = "~") = history.page(before, id, limits.pageSize)
-    @Synchronized fun savedBindings(): List<Binding> = history.bindings().also { mutable.value = mutable.value.copy(bindings = it) }
+    @Synchronized fun savedBindings(): List<Binding> = history.bindings().also { mutable.value = mutable.value.copy(bindings = it, recordedDrops = history.recordedDrops()) }
     @Synchronized fun archive(binding: Binding) { stop(); history.archive(binding); savedBindings() }
     fun export(write: (String) -> Unit) { history.export(write) }
     @Synchronized fun retention() { history.retain(System.currentTimeMillis(), limits.retentionDays) }
@@ -153,8 +155,10 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     @Synchronized fun reside(spoolId: String, positionId: String) { history.reside(spoolId, positionId, System.currentTimeMillis()) }
     @Synchronized fun configureRoom(binding: Binding, equipmentName: String, positionName: String) {
         stop("Saved draft assignment — thermal qualification required before collection")
-        val equipment = Equipment(name = equipmentName)
-        val position = Position(equipmentId = equipment.id, name = positionName)
+        val existingEquipment = history.entities("equipment").firstOrNull { it.getString("name") == equipmentName && it.optString("type") == "room" }
+        val equipment = Equipment(id = existingEquipment?.getString("id") ?: newId(), name = equipmentName)
+        val existingPosition = history.entities("position").firstOrNull { it.getString("equipmentId") == equipment.id && it.getString("name") == positionName }
+        val position = Position(id = existingPosition?.getString("id") ?: newId(), equipmentId = equipment.id, name = positionName)
         history.saveEquipment(equipment); history.savePosition(position)
         history.assign(binding.sensorId, position.id, System.currentTimeMillis())
     }
@@ -176,5 +180,16 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             throw e
         }
     }
-    @Synchronized override fun close() { if (operation != null) stop(); history.close() }
+    /** Composition disposal is Main: close only owned resources on IO, never create a worker for untouched off/idle. */
+    fun closeAsync() {
+        disposed.set(true)
+        foreground(false)
+        if (operation == null && !history.isOpen) return
+        val cleanupOwner = SupervisorJob()
+        CoroutineScope(cleanupOwner + Dispatchers.IO).launch { try { close() } finally { cleanupOwner.cancel() } }
+    }
+    @Synchronized override fun close() {
+        disposed.set(true)
+        try { if (operation != null) stop() } finally { history.close() }
+    }
 }

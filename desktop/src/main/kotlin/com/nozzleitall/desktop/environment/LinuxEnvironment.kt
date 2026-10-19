@@ -37,15 +37,17 @@ interface BluezEnvironmentalAdapter : DBusInterface {
 }
 
 /** One private D-Bus connection, one owned discovery reference. Never powers, pairs, removes or unbinds. */
-class LinuxBleTransport : BleTransport {
-    override fun start(report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
+class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTransport {
+    override fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
         val bus = DBusConnectionBuilder.forSystemBus().build()
         val acquired = AtomicBoolean(false)
         var adapter: BluezEnvironmentalAdapter? = null
         val closed = AtomicBoolean(false)
         try {
             val manager = bus.getRemoteObject("org.bluez", "/", ObjectManager::class.java)
-            val path = manager.GetManagedObjects().entries.firstOrNull { it.value.containsKey("org.bluez.Adapter1") }?.key?.path
+            val adapters = manager.GetManagedObjects().entries.filter { it.value.containsKey("org.bluez.Adapter1") }.sortedBy { it.key.path }
+            val path = (if (requestedAdapter == null) adapters.firstOrNull { it.value["org.bluez.Adapter1"]?.get("Powered")?.value == true }
+                else adapters.firstOrNull { it.key.path == requestedAdapter })?.key?.path
                 ?: error("Bluetooth adapter unavailable")
             adapter = bus.getRemoteObject("org.bluez", path, BluezEnvironmentalAdapter::class.java)
             // D-Bus daemon combines client filters. Host still admits only fresh authorized reports.
@@ -56,6 +58,7 @@ class LinuxBleTransport : BleTransport {
                 try {
                     val props = bus.getRemoteObject("org.bluez", devicePath, Properties::class.java).GetAll("org.bluez.Device1")
                     val address = props["Address"]?.value as? String ?: return
+                    if (!request.discovery && request.selectedAddresses.none { it.equals(address, true) }) return
                     val name = props["Name"]?.value as? String
                     fun bytes(value: Any?): ByteArray? = when (value) {
                         is ByteArray -> value.takeIf { it.size <= 512 }?.copyOf()

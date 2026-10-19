@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -17,6 +18,21 @@ import org.junit.Test
 
 class EnvironmentalDashboardDeviceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun lastReceptionAdvancesAndSurvivesStopWithoutCreatingCharts() {
+        val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
+        val state = mutableStateOf(EnvironmentalView(EnvironmentalState.DISCOVERING, bindings = listOf(binding),
+            discovery = mapOf(binding.address to DiscoveryReception(listOf(Reading(Channel.TEMPERATURE, 24.0)), 1000, null))))
+        compose.setContent { MaterialTheme { EnvironmentalDashboard(state.value, emptyList()) } }
+        compose.onNodeWithText("24.0°C").assertExists()
+        compose.runOnIdle {
+            state.value = state.value.copy(discovery = mapOf(binding.address to
+                DiscoveryReception(listOf(Reading(Channel.TEMPERATURE, 25.0)), 2000, null)))
+        }
+        compose.onNodeWithText("25.0°C").assertExists()
+        compose.runOnIdle { state.value = state.value.copy(state = EnvironmentalState.ENABLED_IDLE, discovery = emptyMap()) }
+        compose.onNodeWithText("25.0°C").assertExists()
+        compose.onNodeWithTag("environment-trend-TEMPERATURE").assertDoesNotExist()
+    }
     @Test fun realSamplesRenderBothAccessibleChartsAndSensorName() {
         val binding = Binding(id = "fixture", sensorId = "sensor", address = "AA:BB:CC:DD:EE:FF", protocol = "govee-ble", model = "H5100")
         val samples = (0..2).map { i -> ChartSample("id$i", binding.id, 1000L + i * 1000, "session", 0,

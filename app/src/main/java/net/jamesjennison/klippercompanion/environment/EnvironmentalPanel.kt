@@ -98,6 +98,7 @@ import org.json.JSONObject
             Text(view.state.dashboardStatus(), style = MaterialTheme.typography.bodyMedium)
             view.nameDirectoryProblem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (historyMode) Text("Viewing saved history. Return to live readings for current updates.", color = MaterialTheme.colorScheme.primary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
             if (view.state == EnvironmentalState.ENABLED_IDLE) {

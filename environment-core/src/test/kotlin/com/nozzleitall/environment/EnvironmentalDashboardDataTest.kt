@@ -22,6 +22,8 @@ class EnvironmentalDashboardDataTest {
             binding.address to DiscoveryReception(listOf(Reading(Channel.TEMPERATURE, 25.0)), 200, null)))
         val data = EnvironmentalDashboardData().update(live, listOf(old))
         assertEquals(25.0, data.readings.getValue("b").values.getValue(Channel.TEMPERATURE), 0.0)
+        assertEquals(data, data.update(live, listOf(old)))
+        assertEquals(200L, data.update(view(EnvironmentalState.ENABLED_IDLE), listOf(old)).readings.getValue("b").time)
         val restarted = EnvironmentalDashboardData().update(view(EnvironmentalState.ENABLED_IDLE), listOf(old))
         assertEquals(100L, restarted.readings.getValue("b").time)
         assertEquals(listOf(old), restarted.samples)

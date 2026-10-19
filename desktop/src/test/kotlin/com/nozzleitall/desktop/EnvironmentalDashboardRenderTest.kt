@@ -108,19 +108,21 @@ class EnvironmentalDashboardRenderTest {
         assertTrue(wiring.contains("DesktopMonitoringWindowListener(state.environment::foreground)"))
         assertTrue(wiring.contains("onDispose { window.removeWindowListener(listener); state.environment.foreground(false) }"))
     }
+    @Test fun eightSensorsRenderWithDefaultDryerAndNamedSeries() = renderEightSensors(1500)
+    @Test fun wideOverviewKeepsMetricsBesideDryer() = renderEightSensors(1920)
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-    @Test fun eightSensorsRenderWithDefaultDryerAndNamedSeries() {
+    private fun renderEightSensors(width: Int) {
         val bindings = (1..8).map { Binding("b$it", "s$it", "AA:BB:CC:DD:EE:0$it", "govee-ble", "H5100") }
         val samples = bindings.flatMapIndexed { index, b -> (0..15).map { i ->
             ChartSample("${b.id}-$i", b.id, 1_792_418_400_000L + i * 60_000, "session", 0,
                 mapOf(Channel.TEMPERATURE to 23.0 + index + kotlin.math.sin(i / 3.0),
                     Channel.HUMIDITY to 40.0 + index + kotlin.math.cos(i / 3.0)), i.toLong())
         } }
-        val output = File("build/reports/dashboard-eight-sensors.png")
+        val output = File("build/reports/dashboard-eight-sensors" + (if (width == 1500) "" else "-wide") + ".png")
         val names = listOf("S4 Back Left", "Snapmaker U1", "Printing Room", "S4 Back Right",
             "S4 Front Right", "Filament Closet", "S4 Front Left", "Sunlu S2")
         SwingUtilities.invokeAndWait {
-            val scene = ImageComposeScene(width = 1500, height = 1000) {
+            val scene = ImageComposeScene(width = width, height = 1000) {
                 NozzleTheme("dark") { Column(Modifier.fillMaxSize().background(Color(0xFF101418)).padding(24.dp)) {
                     EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = bindings,
                         sensorLabels = bindings.mapIndexed { i, b -> b.sensorId to names[i] }.toMap()), samples, historyMode = true)

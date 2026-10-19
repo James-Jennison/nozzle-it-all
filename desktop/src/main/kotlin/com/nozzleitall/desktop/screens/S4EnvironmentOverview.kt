@@ -59,7 +59,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
         return
     }
     var showMethod by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth().testTag("s4-environment-overview"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Label(if (historyMode) savedReference?.let { "Saved history · summary at ${stamp(it)}" } ?: "Saved history · no saved group readings"
             else if (collecting) "Live · viewed from the front" else "Stopped · last received readings")
         BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -68,11 +68,11 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
             }
             val summary: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                  FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                  FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
                         val stats = EnvironmentalGroupOverview.stats(group.bindings, data.readings, channel, reference)
-                        Column(Modifier.widthIn(min = 230.dp).background(Color(0xFF192229), RoundedCornerShape(8.dp)).padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(Modifier.widthIn(min = 230.dp).background(Color(0xFF192229), RoundedCornerShape(8.dp)).padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Label(if (channel == Channel.TEMPERATURE) "Average temperature" else "Average humidity", color = Color(0xFFAEBCC5))
                             Metric("${fmt(stats?.average)} ${channel.unit}", if (channel == Channel.TEMPERATURE) positionColors[0] else positionColors[1])
                             Label("Range  ${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}", color = Color.White)
@@ -80,7 +80,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                         }
                     }
                   }
-                    Box(Modifier.clickable(role = Role.Button) { showMethod = !showMethod }.padding(vertical = 8.dp)
+                    Box(Modifier.clickable(role = Role.Button) { showMethod = !showMethod }.padding(vertical = 4.dp)
                         .testTag("s4-calculation-details")
                         .semantics(mergeDescendants = true) { stateDescription = if (showMethod) "Expanded" else "Collapsed" }) {
                         Label(if (showMethod) "Hide calculation details" else "Calculation details", color = Color(0xFFAEBCC5))
@@ -88,7 +88,12 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                     if (showMethod) Label("Only readings received in the last 2 minutes contribute. Missing, older and future-dated readings are excluded. Positions follow sensor names. This is sampled air, not filament moisture; the illustration is not a heat map.")
                 }
             }
-            if (showDiagram) Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { diagram(); summary() }
+            if (showDiagram && maxWidth >= 900.dp && LocalDensity.current.fontScale <= 1.2f) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { diagram() }
+                    Box(Modifier.width(250.dp)) { summary() }
+                }
+            } else if (showDiagram) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { diagram(); summary() }
             else summary()
         }
         Label("Recorded trends", title = true)
@@ -213,7 +218,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 }
 
 @Composable private fun Metric(text: String, color: Color) {
-    Txt(text, Nz.type.metric.copy(fontSize = 32.sp), color)
+    Txt(text, Nz.type.metric.copy(fontSize = 28.sp), color)
 }
 
 @Composable private fun DryerArtwork(modifier: Modifier) {

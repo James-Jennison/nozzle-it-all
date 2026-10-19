@@ -23,6 +23,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
     val candidateNames = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(v.candidates) { candidateNames.keys.retainAll(v.candidates.map { it.address }.toSet()) }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
+    var chartHistory by remember { mutableStateOf<List<ChartSample>>(emptyList()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
@@ -58,6 +59,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
                 NzButton("Disable", { stop(disable = true) }, enabled = !stopping)
             }
         }
+        EnvironmentalDashboard(v, chartHistory)
         if (v.candidates.isNotEmpty()) {
             v.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate -> key(candidate.address) { Column {
                 val saved = v.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
@@ -82,14 +84,10 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
                 }
             } } }
         }
-        v.latest.values.forEach { observation ->
-            Txt(observation.readings.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" }, Nz.type.metricSmall)
-            Txt("Reception ${java.time.Instant.ofEpochMilli(observation.observedAt)} — physical measurement age unknown; decoder ${observation.decoder}", Nz.type.bodySmall)
-        }
         if (v.dropped > 0) Banner("Queue overflow counter for this monitor: ${v.dropped} — coverage incomplete", BannerKind.WARNING)
         if (v.recordedDrops > 0) Banner("History records ${v.recordedDrops} dropped reports; other unobserved gaps remain unknown", BannerKind.WARNING)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NzButton("Open local history", { action { rows = controller.loadHistory(); controller.savedBindings() } }, enabled = !busy && !stopping, testTag = "environment-history")
+            NzButton("Open local history", { action { val loaded = controller.loadHistory(); val parsed = EnvironmentalCharts.history(loaded); controller.savedBindings(); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping, testTag = "environment-history")
             NzButton("Apply 30-day retention", { action { controller.retention() } }, enabled = !busy && !stopping)
             NzButton("Export history…", {
                 val chooser = javax.swing.JFileChooser()
@@ -103,7 +101,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         }
         if (confirmDelete) {
             Txt("Delete only environmental configuration/history? External exports remain. Cleanup failures require explicit retry.", Nz.type.body)
-            Row { NzButton("Confirm delete / resume", { directory.forget(); choosing = null; stopping = true; rows = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
+            Row { NzButton("Confirm delete / resume", { directory.forget(); choosing = null; stopping = true; rows = emptyList(); chartHistory = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
                 val cleanup = controller.requestDeleteAsync()
                 scope.launch { try { cleanup.join(); confirmDelete = controller.view.value.state != EnvironmentalState.DISABLED } finally { stopping = false } }
             }, enabled = !busy && !stopping); NzButton("Keep data", { confirmDelete = false }) }
@@ -131,10 +129,6 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
             NzButton("Save RH calibration", { action { controller.calibrate(binding, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true)
             NzButton("Archive binding", { action { controller.archive(binding) } }, enabled = !busy && !stopping)
         } }
-        rows.take(500).forEach { raw ->
-            val j = JSONObject(raw)
-            Txt("${java.time.Instant.ofEpochMilli(j.getLong("observedAt"))} · ${j.getJSONArray("readings")} · measurement age unknown", Nz.type.bodySmall)
-        }
-        if (rows.size == 500) NzButton("Older 500", { val last = JSONObject(rows.last()); action { rows = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")) } }, enabled = !busy && !stopping)
+        if (rows.size == 500) NzButton("Older 500", { val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping)
     }
 }

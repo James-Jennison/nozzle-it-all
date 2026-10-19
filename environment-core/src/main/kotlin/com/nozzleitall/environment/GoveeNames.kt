@@ -5,15 +5,16 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 data class GoveeDeviceName(val device: String, val model: String, val name: String) {
-    /** Govee's eight-byte ID prefixes the complete six-byte BLE address with two bytes.
+    /** H5100's eight-byte cloud ID is six little-endian address bytes + two extra
+     * bytes; other supported IDs prefix the complete address with two bytes.
      * Compare all 48 address bits, never the advertised name's two-byte suffix.
      * Callers must also require a unique directory match before applying a name.
      */
     fun matches(candidate: Candidate): Boolean = candidate.protocol == "govee-ble" && model == candidate.model &&
-        address(device, cloud = true)?.let { it == address(candidate.address, cloud = false) } == true
+        address(device, cloud = true, model = model)?.let { it == address(candidate.address, cloud = false) } == true
 
     companion object {
-        private fun address(value: String, cloud: Boolean): String? {
+        private fun address(value: String, cloud: Boolean, model: String? = null): String? {
             val lengths = if (cloud) setOf(6, 8) else setOf(6)
             val compact = when {
                 value.matches(Regex("[0-9a-fA-F]+")) && value.length / 2 in lengths && value.length % 2 == 0 -> value
@@ -21,7 +22,9 @@ data class GoveeDeviceName(val device: String, val model: String, val name: Stri
                 lengths.any { count -> value.matches(Regex("[0-9a-fA-F]{2}(-[0-9a-fA-F]{2}){${count - 1}}")) } -> value.replace("-", "")
                 else -> return null
             }
-            return compact.takeLast(12).uppercase()
+            return if (cloud && compact.length == 16 && model == "H5100")
+                compact.take(12).chunked(2).reversed().joinToString("").uppercase()
+            else compact.takeLast(12).uppercase()
         }
     }
 }

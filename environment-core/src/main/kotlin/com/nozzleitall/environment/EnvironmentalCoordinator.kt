@@ -16,7 +16,8 @@ import kotlinx.coroutines.flow.update
 data class EnvironmentalView(val state: EnvironmentalState, val status: String = "Disabled — no collection", val candidates: List<Candidate> = emptyList(),
     val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0, val recordedDrops: Long = 0,
     val roomLabels: Map<String, Pair<String, String>> = emptyMap(),
-    val discovery: Map<String, DiscoveryReception> = emptyMap(), val sensorLabels: Map<String, String> = emptyMap())
+    val discovery: Map<String, DiscoveryReception> = emptyMap(), val sensorLabels: Map<String, String> = emptyMap(),
+    val chartSamples: List<ChartSample> = emptyList())
 
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
@@ -60,12 +61,12 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val current = runControl?.takeIf { it.epoch < epoch }
         if (current != null) {
             current.revoked.set(true)
-            mutable.update { if (runControl === current) it.copy(latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Stop requested — app not visible; cleanup pending") else it }
+            mutable.update { if (runControl === current) it.copy(latest = emptyMap(), chartSamples = emptyList(), candidates = emptyList(), discovery = emptyMap(), status = "Stop requested — app not visible; cleanup pending") else it }
             operationScope?.launch { synchronized(this@EnvironmentalCoordinator) {
                 if (runControl === current) stop("Stopped — app not visible; press Start to resume")
             } }
         } else if (preparation != null) mutable.update {
-            if (!foreground.get() && runControl == null) it.copy(latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Collection preparation revoked — no radio; press Start to retry") else it
+            if (!foreground.get() && runControl == null) it.copy(latest = emptyMap(), chartSamples = emptyList(), candidates = emptyList(), discovery = emptyMap(), status = "Collection preparation revoked — no radio; press Start to retry") else it
         }
         return preparation
     }
@@ -92,7 +93,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         // Main-safe prelude, before dispatcher scheduling or waiting for any persistence lock.
         if (target != null || preparation != null) mutable.update {
             if ((target != null && runControl === target) || (preparation != null && (preparations.get() === preparation || runControl?.revoked === preparation.revoked)))
-                it.copy(latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Stop requested — cleanup pending") else it
+                it.copy(latest = emptyMap(), chartSamples = emptyList(), candidates = emptyList(), discovery = emptyMap(), status = "Stop requested — cleanup pending") else it
         }
         preparation?.worker?.cancel()
         if (preparation != null) preparations.compareAndSet(preparation, null)
@@ -113,7 +114,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     val gapId = gapSession; gapSession = null
                     val drops = droppedReports.get() - gapDropBase
                     val gapFailed = gapId != null && drops > 0 && runCatching { history.recordGap(gapId, System.currentTimeMillis(), drops) }.isFailure
-                    mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), dropped = droppedReports.get(), status = when {
+                    mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), chartSamples = emptyList(), candidates = emptyList(), discovery = emptyMap(), dropped = droppedReports.get(), status = when {
                         gate.persistenceFailure -> "Persistence failed — stopped in memory, recovery required"
                         gapFailed -> "Stopped — final overflow count could not be persisted; history coverage incomplete"
                         else -> reason
@@ -295,7 +296,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                             gate.commitBatch(grant, admittedBindings) { history.appendBatch(observations, gate.incarnation) }
                             mutable.update { current ->
                                 if (request.isCurrent() && gate.valid(grant))
-                                    current.copy(latest = current.latest + observations.associateBy { it.bindingId }) else current
+                                    current.copy(latest = current.latest + observations.associateBy { it.bindingId },
+                                        chartSamples = (current.chartSamples + observations.map(EnvironmentalCharts::sample)).takeLast(EnvironmentalCharts.MAX_SAMPLES)) else current
                             }
                         }
                     }
@@ -412,7 +414,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             droppedReports.set(0); gapDropBase = 0; sequence.set(0)
             mutable.value = EnvironmentalView(gate.state, "Environmental data deleted; external exports are not removed")
         } catch (e: Exception) {
-            mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Cleanup incomplete — explicitly resume deletion; no collection")
+            mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), chartSamples = emptyList(), candidates = emptyList(), discovery = emptyMap(), status = "Cleanup incomplete — explicitly resume deletion; no collection")
             throw e
         }
     }

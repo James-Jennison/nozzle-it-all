@@ -57,9 +57,24 @@ class GoveeNamesTest {
     @Test fun onlyExactModelAndFullMacCanAutomaticallyAssignName() {
         val candidate = Candidate("aa:bb:cc:dd:ee:ff", "govee-ble", "H5100")
         assertTrue(GoveeNameApi.parse(valid).single().matches(candidate))
-        assertTrue(GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5100", "Extended ID").matches(candidate))
+        assertTrue(GoveeDeviceName("FF:EE:DD:CC:BB:AA:11:22", "H5100", "Extended ID").matches(candidate))
         assertFalse(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5110", "Different model").matches(candidate))
         assertFalse(GoveeDeviceName("opaque-cloud-id", "H5100", "Choose explicitly").matches(candidate))
+    }
+    @Test fun h5100UsesFullLittleEndianAddressNotH5110PrefixEncoding() {
+        val candidate = Candidate("AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
+        for (id in listOf("FF:EE:DD:CC:BB:AA:11:22", "ffeeddccbbaa1122", "FF-EE-DD-CC-BB-AA-11-22")) {
+            assertTrue(id, GoveeDeviceName(id, "H5100", "Front left").matches(candidate))
+        }
+        assertFalse(GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5100", "Wrong layout").matches(candidate))
+        assertFalse(GoveeDeviceName("FF:EE:DD:CC:BB:AB:11:22", "H5100", "One byte different").matches(candidate))
+        assertFalse(GoveeDeviceName("FF:EE:DD:CC:BB:AA:11:22", "H5110", "Wrong model").matches(candidate))
+        assertTrue(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5100", "Direct MAC").matches(candidate))
+        val entries = listOf(GoveeDeviceName("FF:EE:DD:CC:BB:AA:11:22", "H5100", "Front left"),
+            GoveeDeviceName("FF:EE:DD:CC:BB:AB:33:44", "H5100", "Rear right"))
+        assertEquals("Front left", entries.singleOrNull { it.matches(candidate) }?.name)
+        assertEquals("Rear right", entries.singleOrNull { it.matches(candidate.copy(address = "AB:BB:CC:DD:EE:FF")) }?.name)
+        assertNull((entries + entries.first().copy(device = "FF:EE:DD:CC:BB:AA:55:66", name = "Conflict")).singleOrNull { it.matches(candidate) })
     }
     @Test fun extendedCloudIdentityRequiresEveryAddressByteAndUniqueModelMatch() {
         val candidate = Candidate("aa:bb:cc:dd:ee:ff", "govee-ble", "H5110")

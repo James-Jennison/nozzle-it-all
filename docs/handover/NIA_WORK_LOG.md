@@ -4,6 +4,17 @@ Newest entries at the bottom. Times are PDT.
 
 ## Owner follow-up: retained names and visual dashboard (2026-10-19)
 
+Implementation checkpoint: H5100 eight-byte cloud IDs use their first six bytes
+in reverse order; H5110 uses the last six bytes. Owner screenshot and primary
+govee2mqtt issue308 independently demonstrate this difference. Matching remains
+full48bits/model/unique, never suffix guessing. Added synthetic regressions.
+Added bounded500 reception samples and platform-native sensor cards/time-series
+plots with real timestamps, calibrated values, session/drop/long-gap breaks,
+accessible summaries and honest empty states. History parsing stays on IO.
+Stop/visibility/deletion clear live plot buffers. No cloud readings or startup IO.
+Current source is not yet built/reviewed/installed. Prior6e test command omitted
+ANDROID_HOME and failed configuration before compilation; failure retained.
+
 Owner requires visual environmental data rather than text-only rows. Add actual
 temperature/humidity sensor cards and local-history time-series charts to both
 platforms; no fabricated data, hidden collection, new protocols or new hardware

@@ -1,53 +1,114 @@
 package com.nozzleitall.desktop.prepare
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.nozzleitall.project.Mesh
+import kotlin.math.abs
 import kotlin.math.*
 
 /** Camera looking at the bed centre: yaw/pitch in degrees, distance in mm, and a pan offset in screen pixels. */
-class ViewCamera { var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(55f); var distance by mutableStateOf(600f); var pan by mutableStateOf(Offset.Zero) }
+class ViewCamera {
+    var yaw by mutableStateOf(-35f); var pitch by mutableStateOf(55f)
+    var distance by mutableStateOf(600f); var pan by mutableStateOf(Offset.Zero)
+    private var fittedDistance = 600f
+    fun fitBed(width: Float, depth: Float) { fittedDistance = (maxOf(width, depth) * 1.9f).coerceIn(200f, 1500f); distance = fittedDistance }
+    /** Continuous orbit through both poles and underneath; bounded angles avoid precision loss after many turns. */
+    fun orbit(dx: Float, dy: Float) { yaw = (yaw - dx * 0.4f) % 360f; pitch = (pitch - dy * 0.3f) % 360f }
+    fun reset() { yaw = -35f; pitch = 55f; pan = Offset.Zero; distance = fittedDistance }
+    internal fun snapshot() = CameraPose(yaw, pitch, distance, pan)
+}
+
+/** Captured on Main: workers never read Compose camera state. */
+internal data class CameraPose(val yaw: Float, val pitch: Float, val distance: Float, val pan: Offset)
 
 /** An object to draw. [paintColors] gives the colour of each painted filament number (index N for the file's filament N). */
 class PlateObject(val id: Int, val name: String, val mesh: Mesh, val color: Color, val x: Float, val y: Float, val rotZ: Float, val scale: Float, val selected: Boolean,
-                  val paintColors: List<Color?> = emptyList())
+                  val paintColors: List<Color?> = emptyList(), val paintKind: Int = 0,
+                  /** Per-axis size on top of [scale]; a negative one mirrors that axis. */
+                  val sx: Float = 1f, val sy: Float = 1f, val sz: Float = 1f,
+                  /** Extra volumes (negative volumes, modifiers, support blockers / enforcers, parts), drawn as outlines. */
+                  val parts: List<com.nozzleitall.project.ProjectManifest.ObjectPart> = emptyList(), val selectedPart: Int = -1,
+                  /** How far the footprint reaches from (x, y): min x, max x, min y, max y. Empty = no direct handling. */
+                  val reach: FloatArray = FloatArray(0), /** Height of the object in mm, so a press on its upper part counts as on it. */ val height: Float = 0f) {
+    val ex get() = scale * sx; val ey get() = scale * sy; val ez get() = scale * sz
+}
+
+/** A ray in an object's own mesh coordinates (where the engine paints), with the brush radius there. */
+class PaintRay(val origin: DoubleArray, val dir: DoubleArray, val radius: Double)
+
+/** Painting on the plate: strokes on object [objectId] with a brush of [radiusMm] are handed to [onStrokes] in batches. */
+class PaintInput(val objectId: Int, val radiusMm: Float, val onStrokes: (List<PaintRay>) -> Unit)
 
 /**
  * A mesh ready to draw: possibly simplified, with smooth normals, and the original's bounds (so placement never shifts).
  * [states] is each triangle's painted filament (0 = the object's own), when the model is painted.
  */
-class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray, val states: IntArray? = null) { val tris = IntArray(mesh.triangleCount) { it } }
+class DisplayMesh(val mesh: Mesh, val normals: FloatArray, val bounds: FloatArray, val states: IntArray? = null) {
+    val tris = IntArray(mesh.triangleCount) { it }
+    internal val lightingGroups by lazy { LightingGroups(this) }
+}
 
-private val displayCache = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Mesh, DisplayMesh>())
+// Values must also be weak: DisplayMesh can contain the key Mesh itself.
+// A strong value would keep a WeakHashMap key alive forever across imports/Undo.
+private val displayCache = java.util.WeakHashMap<Mesh, MutableMap<Long,java.lang.ref.WeakReference<DisplayMesh>>>()
 
-/** The display version of [mesh], computed once per mesh. Slicing always uses the full mesh. */
-fun displayMesh(mesh: Mesh, budget: Int = 150_000): DisplayMesh = displayCache.getOrPut(mesh) {
-    val (painted, states) = expandPaint(mesh)
-    val (m, kept) = simplifyWithStates(painted, states, budget)
-    DisplayMesh(m, vertexNormals(m, IntArray(m.triangleCount) { it }), mesh.bounds(), kept)
+/**
+ * The display version of [mesh], computed once per mesh and kind. Slicing always uses the full mesh. [kind] picks which paint shows:
+ * 0 colour, 1 support, 2 seam, 3 fuzzy skin (the state numbers of the others index [PlateObject.paintColors]).
+ */
+fun displayMesh(mesh: Mesh, budget: Int = 150_000, kind: Int = 0, checkCancelled: () -> Unit = {}): DisplayMesh {
+    checkCancelled()
+    val key=(budget.toLong() shl 32) or (kind.toLong() and 0xffffffffL)
+    synchronized(displayCache) { displayCache[mesh]?.get(key)?.get()?.let { return it } }
+    // Never hold the process-wide map monitor during expansion/simplification.
+    // Racing misses may compute twice, but publish/return one still-live result.
+    val (painted, states) = expandPaint(mesh, when (kind) { 1 -> mesh.supportPaint; 2 -> mesh.seamPaint; 3 -> mesh.fuzzyPaint; else -> mesh.paint }, checkCancelled)
+    checkCancelled()
+    val (m, kept) = simplifyWithStates(painted, states, budget, checkCancelled)
+    val computed=DisplayMesh(m, cornerNormals(m, checkCancelled), mesh.bounds(), kept)
+    checkCancelled()
+    return synchronized(displayCache) {
+        val slots=displayCache.getOrPut(mesh) { object:LinkedHashMap<Long,java.lang.ref.WeakReference<DisplayMesh>>(8,.75f,true) {
+            override fun removeEldestEntry(eldest:MutableMap.MutableEntry<Long,java.lang.ref.WeakReference<DisplayMesh>>?)=size>8
+        } }
+        slots[key]?.get() ?: computed.also { slots[key]=java.lang.ref.WeakReference(it) }
+    }
 }
 
 /**
  * The mesh with each painted triangle replaced by its painted pieces (as the engine subdivides it), and each triangle's
  * filament. Unpainted meshes come back unchanged with no states.
  */
-fun expandPaint(mesh: Mesh): Pair<Mesh, IntArray?> {
-    val paint = mesh.paint ?: return mesh to null
+fun expandPaint(mesh: Mesh, kindPaint: Array<String?>? = mesh.paint, checkCancelled: () -> Unit = {}): Pair<Mesh, IntArray?> {
+    val paint = kindPaint ?: return mesh to null
     val v = mesh.vertices; val t = mesh.triangles
     val verts = PaintVerts(v.size + 1024); verts.addAll(v)
     val tris = PaintInts(t.size + 1024); val states = PaintInts(t.size / 3 + 1024)
     fun corner(i: Int) = floatArrayOf(v[i * 3], v[i * 3 + 1], v[i * 3 + 2])
     for (k in 0 until mesh.triangleCount) {
+        if (k and 1023 == 0) checkCancelled()
         val s = paint[k]
         val node = s?.let { runCatching { com.nozzleitall.project.Paint.decode(it) }.getOrNull() }
         if (node == null || node is com.nozzleitall.project.Paint.Node.Leaf) {
@@ -55,6 +116,7 @@ fun expandPaint(mesh: Mesh): Pair<Mesh, IntArray?> {
             continue
         }
         com.nozzleitall.project.Paint.leaves(node, corner(t[k * 3]), corner(t[k * 3 + 1]), corner(t[k * 3 + 2])) { a, b, c, state ->
+            checkCancelled()
             for (p in arrayOf(a, b, c)) { tris.add(verts.size / 3); verts.add(p[0]); verts.add(p[1]); verts.add(p[2]) }
             states.add(state)
         }
@@ -71,10 +133,10 @@ private class PaintInts(cap: Int) { var a = IntArray(cap); var size = 0
     fun toArray() = a.copyOf(size) }
 
 /** [simplifyForDisplay], keeping each surviving triangle's state. */
-fun simplifyWithStates(mesh: Mesh, states: IntArray?, budget: Int): Pair<Mesh, IntArray?> {
-    if (states == null) return simplifyForDisplay(mesh, budget) to null
+fun simplifyWithStates(mesh: Mesh, states: IntArray?, budget: Int, checkCancelled: () -> Unit = {}): Pair<Mesh, IntArray?> {
+    if (states == null) return simplifyForDisplay(mesh, budget, checkCancelled = checkCancelled) to null
     val kept = IntArray(mesh.triangleCount); var n = 0
-    val m = simplifyForDisplay(mesh, budget) { k -> kept[n++] = states[k] }
+    val m = simplifyForDisplay(mesh, budget, checkCancelled) { k -> kept[n++] = states[k] }
     return if (m === mesh) mesh to states else m to kept.copyOf(m.triangleCount)
 }
 
@@ -83,7 +145,7 @@ fun simplifyWithStates(mesh: Mesh, states: IntArray?, budget: Int): Pair<Mesh, I
  * dropped. The shell stays closed (unlike skipping triangles, which leaves holes), just with less detail. The cell size
  * shrinks until the result fits [budget] triangles.
  */
-fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): Mesh {
+fun simplifyForDisplay(mesh: Mesh, budget: Int, checkCancelled: () -> Unit = {}, keep: ((Int) -> Unit)? = null): Mesh {
     if (mesh.triangleCount <= budget) return mesh
     val v = mesh.vertices; val t = mesh.triangles
     val b = mesh.bounds()
@@ -91,11 +153,13 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): 
     var resolution = 512
     var best: Mesh = mesh
     repeat(8) {
+        checkCancelled()
         val cell = extent / resolution
         val index = HashMap<Long, Int>(mesh.vertexCount / 2)
         val sums = ArrayList<Float>(); val counts = ArrayList<Int>()
         val remap = IntArray(mesh.vertexCount)
         for (i in 0 until mesh.vertexCount) {
+            if (i and 1023 == 0) checkCancelled()
             val ix = ((v[i * 3] - b[0]) / cell).toLong(); val iy = ((v[i * 3 + 1] - b[1]) / cell).toLong(); val iz = ((v[i * 3 + 2] - b[2]) / cell).toLong()
             val key = (ix shl 42) or (iy shl 21) or iz
             val id = index.getOrPut(key) { sums.add(0f); sums.add(0f); sums.add(0f); counts.add(0); counts.size - 1 }
@@ -104,6 +168,7 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): 
         }
         val tris = ArrayList<Int>(t.size); val survivors = ArrayList<Int>()
         for (k in 0 until mesh.triangleCount) {
+            if (k and 1023 == 0) checkCancelled()
             val a = remap[t[k * 3]]; val bb = remap[t[k * 3 + 1]]; val c = remap[t[k * 3 + 2]]
             if (a != bb && bb != c && a != c) { tris += a; tris += bb; tris += c; survivors += k }
         }
@@ -115,12 +180,14 @@ fun simplifyForDisplay(mesh: Mesh, budget: Int, keep: ((Int) -> Unit)? = null): 
     return best
 }
 
-private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Float, val cy: Float) {
+internal class Projector(val w: Float, val h: Float, cam: CameraPose, val cx: Float, val cy: Float) {
+    constructor(w: Float, h: Float, cam: ViewCamera, cx: Float, cy: Float): this(w,h,cam.snapshot(),cx,cy)
+    internal val orientation = cam.yaw to cam.pitch
     private val yaw = Math.toRadians(cam.yaw.toDouble()); private val pitch = Math.toRadians(cam.pitch.toDouble())
     private val cyw = cos(yaw).toFloat(); private val syw = sin(yaw).toFloat(); private val cp = cos(pitch).toFloat(); private val sp = sin(pitch).toFloat()
     private val scale = min(w, h) / cam.distance * 1.6f; private val pan = cam.pan
     // A gentle perspective: the eye sits well back from the scene, so near parts are only slightly larger.
-    private val eye = cam.distance * 1.8f
+    internal val eye = cam.distance * 1.8f
     /** Returns screen x, y and a depth (larger = farther). */
     fun p(x: Float, y: Float, z: Float, out: FloatArray, o: Int) {
         val dx = x - cx; val dy = y - cy
@@ -129,44 +196,274 @@ private class Projector(val w: Float, val h: Float, cam: ViewCamera, val cx: Flo
         val f = eye / (eye - toward.coerceAtMost(eye * 0.8f))
         out[o] = w / 2 + rx * scale * f + pan.x; out[o + 1] = h / 2 + sy * scale * f + pan.y; out[o + 2] = -toward
     }
+    /** The world point on the line of sight through screen point ([sx], [sy]) at view depth [toward] (larger = nearer the viewer). */
+    fun unproject(sx: Float, sy: Float, toward: Float, out: DoubleArray) {
+        val f = eye / (eye - toward.coerceAtMost(eye * 0.8f))
+        val rx = (sx - w / 2 - pan.x) / (scale * f); val syy = (sy - h / 2 - pan.y) / (scale * f)
+        val ry = cp * syy + sp * toward; val z = -sp * syy + cp * toward
+        out[0] = (cx + rx * cyw + ry * syw).toDouble(); out[1] = (cy - rx * syw + ry * cyw).toDouble(); out[2] = z.toDouble()
+    }
+    val depthRange get() = eye * 0.5f
+    /** Where the line of sight through screen point ([sx], [sy]) meets the bed (z = 0), or null if it runs parallel to it. */
+    fun bedPoint(sx: Float, sy: Float, z: Float = 0f): Offset? {
+        val a = DoubleArray(3); val b = DoubleArray(3)
+        unproject(sx, sy, depthRange, a); unproject(sx, sy, -depthRange, b)
+        val dz = a[2] - b[2]; if (abs(dz) < 1e-9) return null
+        val t = (a[2] - z) / dz
+        return Offset((a[0] + t * (b[0] - a[0])).toFloat(), (a[1] + t * (b[1] - a[1])).toFloat())
+    }
+
     /** A world-space direction in view space: x right, y down the screen, z toward the viewer. */
-    fun dir(x: Float, y: Float, z: Float, out: FloatArray) {
+    fun dir(x: Float, y: Float, z: Float, out: FloatArray, at: Int = 0) {
         val rx = x * cyw - y * syw; val ry = x * syw + y * cyw
-        out[0] = rx; out[1] = ry * cp - z * sp; out[2] = ry * sp + z * cp
+        out[at] = rx; out[at+1] = ry * cp - z * sp; out[at+2] = ry * sp + z * cp
     }
 }
 
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun PlateViewer(bedW: Float, bedD: Float, objects: List<PlateObject>, camera: ViewCamera, bedColor: Color, lineColor: Color, modifier: Modifier = Modifier,
-                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), onSelect: (Int?) -> Unit = {}) {
-    val prepared = remember(objects) { objects.map { o -> o to displayMesh(o.mesh) } }
-    Canvas(modifier.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag to orbit, scroll to zoom." }
-        .pointerInput(camera) { awaitPointerEventScope {
+                preview: GcodePreview? = null, previewLayer: Int = 0, toolColors: List<Color> = emptyList(), previewView: PreviewView = PreviewView.TOOL, paint: PaintInput? = null, onSelect: (Int?) -> Unit = {},
+                accent: Color = Color(0xFF3E7BFA), onMove: (Int, Float, Float) -> Unit = { _, _, _ -> }, onTurn: (Int, Float) -> Unit = { _, _ -> }, onResize: (Int, Float) -> Unit = { _, _ -> },
+                onSelection: ((Int?, Boolean, Boolean) -> Unit)? = null, onTransformStart: (Int) -> Unit = {}, onTransformEnd: () -> Unit = {}, backgroundColor:Color=Color.Transparent) {
+    val keys = if (preview == null) displayKeys(objects) else emptyList()
+    var completed by remember { mutableStateOf<PreparedDisplays?>(null) }
+    var failedKeys by remember { mutableStateOf<List<DisplayKey>?>(null) }
+    var retry by remember { mutableStateOf(0) }
+    LaunchedEffect(keys, retry) {
+        failedKeys = null
+        completed = null
+        try {
+            completed = prepareDisplays(keys)
+            preparationDiagnostic("published", keys.size)
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { failedKeys = keys; preparationDiagnostic("failed", keys.size) }
+    }
+    val prepared = if (preview == null) completed?.bind(objects).orEmpty() else emptyList()
+    val loading = keys.isNotEmpty() && completed?.keys != keys && failedKeys != keys
+    LaunchedEffect(loading) {
+        if (System.getenv("NOZZLE_VIEWPORT_TIMING") == "1")
+            while (loading && isActive) { delay(100); preparationDiagnostic("ui-heartbeat", keys.size) }
+    }
+    var dimensions by remember { mutableStateOf(IntSize.Zero) }
+    var rendered by remember { mutableStateOf<ViewportFrame?>(null) }
+    var renderFailed by remember { mutableStateOf<FrameRequest?>(null) }
+    var renderRetry by remember { mutableStateOf(0) }
+    val scope=rememberCoroutineScope()
+    // Composite the existing viewport background into graphics frames so the
+    // UI can copy an opaque image instead of blending every full-screen pixel.
+    val rasterizer=remember { FrameRasterizer() }
+    val pump=remember(scope,rasterizer) { LatestFramePump(scope,rasterizer::render,
+        publish={ ticket,image,cpu ->
+            val old=rendered
+            rendered=ViewportFrame(ticket,image,cpu);renderFailed=null
+            old?.close()
+        },failed={ renderFailed=it.request },dispose=rasterizer::close) }
+    DisposableEffect(pump) { onDispose { pump.close();rendered?.close();rendered=null } }
+    val request=FrameRequest(FrameScene(prepared,bedW,bedD,bedColor,lineColor,backgroundColor),camera.snapshot(),dimensions.width,dimensions.height,renderRetry)
+    SideEffect {
+        if(rendered?.ticket?.request?.sameSource(request)==false) {
+            rendered?.close();rendered=null
+        }
+        if(preview==null && dimensions.width>0 && dimensions.height>0)pump.offer(request)
+        else { pump.invalidate();rendered?.close();rendered=null }
+    }
+    val shown=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) }
+    val requestRef=rememberUpdatedState(request)
+    val motionProbe=remember { System.getenv("NOZZLE_VIEWPORT_TIMING")=="1" && System.getenv("NOZZLE_VIEWPORT_MOTION_PROBE")=="1" }
+    LaunchedEffect(motionProbe,completed,dimensions,preview!=null) {
+        if(motionProbe && preview==null && prepared.isNotEmpty() && dimensions.width>0 && dimensions.height>0) {
+            delay(2000) // Window resize/preparation restarts this opt-in probe.
+            viewportMotionProbe(camera) { event,mode,time->
+                println("NIA_MOTION_PROBE event=$event mode=$mode time_ns=$time steps=360 width=${dimensions.width} height=${dimensions.height} objects=${objects.size}")
+            }
+        }
+    }
+    val rendering=prepared.isNotEmpty() && shown==null && renderFailed!=request
+    LaunchedEffect(preview!=null) {
+        if(System.getenv("NOZZLE_VIEWPORT_TIMING")=="1")
+            while(isActive) { delay(100);frameDiagnostic("ui-heartbeat") }
+    }
+    val presented=remember { longArrayOf(0L) }
+    val frameTiming = remember { ViewportTiming() }
+    val paintRef = rememberUpdatedState(paint); val objectsRef = rememberUpdatedState(objects)
+    val selectRef = rememberUpdatedState<(Int?, Boolean, Boolean) -> Unit>({ id, ctrl, shift -> onSelection?.invoke(id, ctrl, shift) ?: onSelect(id) })
+    val moveRef = rememberUpdatedState(onMove); val turnRef = rememberUpdatedState(onTurn); val resizeRef = rememberUpdatedState(onResize)
+    val startRef = rememberUpdatedState(onTransformStart); val endRef = rememberUpdatedState(onTransformEnd)
+    Box(modifier) {
+    Canvas(Modifier.matchParentSize().onSizeChanged { dimensions=it }.semantics { contentDescription = if (preview != null) "Layer preview, layer ${previewLayer + 1} of ${preview.layers.size}" else "Build plate with ${objects.size} objects. Drag an object to move it, drag empty space to orbit, scroll to zoom." }
+        .pointerInput(camera, preview != null,bedW,bedD,dimensions) { awaitPointerEventScope {
             // Left-drag orbits; right-drag or Shift+drag pans.
             var last: Offset? = null
-            while (true) {
+            val strokes = ArrayList<PaintRay>()
+            var strokeMesh: Mesh? = null; var strokeInput: PaintInput? = null
+            // Direct handling: a press on an object moves it, on the turn knob turns it, on the corner knob resizes it.
+            var grab: Grab? = null; var grabObj: PlateObject? = null; var grabFrom = Offset.Zero; var grabZ = 0f
+            var pressedAt = Offset.Zero; var moved = false; var clickId: Int? = null; var primaryPress = false
+            var modifierClick = false; var pressCtrl = false; var pressShift = false
+            var grabStarted = false
+            try { while (true) {
                 val ev = awaitPointerEvent()
                 val ch = ev.changes.firstOrNull() ?: continue
                 val prev = last
+                // Read the live state, not a composition-captured image which
+                // might already have been replaced/closed before recomposition.
+                val frame=rendered?.takeIf { it.ticket.request.sameSource(requestRef.value) && it.ticket.request.width==size.width && it.ticket.request.height==size.height }
+                val painting = paintRef.value?.takeIf { !ev.buttons.isSecondaryPressed && !ev.keyboardModifiers.isShiftPressed && !ev.keyboardModifiers.isAltPressed }
+                if (painting != null && (ch.pressed || strokes.isNotEmpty())) {
+                    // Painting: the left button lays a stroke on the selected object (Alt-drag orbits, Shift-drag pans).
+                    val target = frame?.ticket?.request?.scene?.prepared?.firstOrNull { (o, _) -> o.id == painting.objectId }
+                    if (strokeMesh !== target?.first?.mesh || strokeInput !== painting) { strokes.clear(); strokeMesh = target?.first?.mesh; strokeInput = painting }
+                    if (target != null && ch.pressed && (prev == null || (ch.position - prev).getDistance() >= 3f)) {
+                        screenRay(ch.position, size.width.toFloat(), size.height.toFloat(), frame!!.ticket.request.camera, bedW, bedD, target.first, target.second, painting.radiusMm)?.let { strokes += it }
+                        last = ch.position
+                    }
+                    if (strokes.size >= 16 || (!ch.pressed && strokes.isNotEmpty())) { painting.onStrokes(strokes.toList()); strokes.clear() }
+                    if (!ch.pressed) last = null
+                    continue
+                }
+                val proj = frame?.ticket?.request?.projector()
+                    ?: Projector(size.width.toFloat(), size.height.toFloat(), camera, bedW / 2, bedD / 2)
+                if(grabObj!=null && objectsRef.value.firstOrNull { it.id==grabObj!!.id }?.mesh !== grabObj!!.mesh) {
+                    if(grabStarted)endRef.value()
+                    grab=null;grabObj=null;grabStarted=false;primaryPress=false
+                }
+                if (ch.pressed && prev != null && (ch.position - pressedAt).getDistance() > 4f) moved = true
+                if (grab != null) {
+                    val o = grabObj!!
+                    if (!ch.pressed) {
+                        if (grabStarted) endRef.value()
+                        if (!moved && grab == Grab.MOVE) selectRef.value(clickId, false, false)
+                        grab = null; grabObj = null; last = null; primaryPress = false; grabStarted = false; continue
+                    }
+                    val at = proj.bedPoint(ch.position.x, ch.position.y, grabZ)
+                    if (at != null && moved && ev.type == PointerEventType.Move) {
+                        if (!grabStarted) {
+                            if (!o.selected) selectRef.value(o.id, false, false)
+                            startRef.value(o.id); grabStarted = true
+                        }
+                        when (grab) {
+                        Grab.MOVE -> moveRef.value(o.id, o.x + (at.x - grabFrom.x), o.y + (at.y - grabFrom.y))
+                        Grab.ROTATE -> turnRef.value(o.id, PlateHandles.rotationAfterDrag(o.rotZ, o.x, o.y, grabFrom.x, grabFrom.y, at.x, at.y, if (ev.keyboardModifiers.isCtrlPressed) 15f else 0f))
+                        Grab.SCALE -> resizeRef.value(o.id, PlateHandles.scaleAfterDrag(o.scale, o.x, o.y, grabFrom.x, grabFrom.y, at.x, at.y))
+                        null -> {}
+                        }
+                    }
+                    continue
+                }
+                if (ch.pressed && prev == null && paintRef.value == null && preview == null && frame!=null && ev.buttons.isPrimaryPressed) {
+                    pressedAt = ch.position; moved = false; primaryPress = true
+                    val start = pickGrab(proj, objectsRef.value, ch.position)
+                    clickId = start?.obj?.id
+                    pressCtrl = ev.keyboardModifiers.isCtrlPressed; pressShift = ev.keyboardModifiers.isShiftPressed
+                    modifierClick = pressShift || (pressCtrl && start?.grab != Grab.ROTATE)
+                    if (modifierClick) {
+                        // Resolve click vs pan/cancel before changing selection. Shared knobs aren't object bodies.
+                        clickId = start?.takeIf { it.grab == Grab.MOVE }?.obj?.id
+                        last = ch.position; continue
+                    }
+                    if (start != null) {
+                        grab = start.grab; grabObj = start.obj; grabFrom = start.from; grabZ = start.z; last = ch.position
+                        continue
+                    }
+                }
                 if (ev.type == PointerEventType.Move && ch.pressed && prev != null) {
                     val d = ch.position - prev
                     if (ev.buttons.isSecondaryPressed || ev.keyboardModifiers.isShiftPressed) camera.pan += d
-                    else { camera.yaw -= d.x * 0.4f; camera.pitch = (camera.pitch - d.y * 0.3f).coerceIn(5f, 89f) }
+                    else if (!modifierClick) { camera.orbit(d.x, d.y); preparationDiagnostic("orbit-input", objectsRef.value.size);frameDiagnostic("orbit-input") }
+                }
+                if (!ch.pressed && primaryPress) {
+                    if (!moved) selectRef.value(clickId, modifierClick && pressCtrl, modifierClick && pressShift)
+                    primaryPress = false; modifierClick = false
                 }
                 last = if (ch.pressed) ch.position else null
-            }
+            } } finally { if (grabStarted) endRef.value() }
         } }
-        .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f) } }
-        .pointerInput(objects) { detectTapGestures { tap -> onSelect(hitTest(tap, objects, camera, size.width.toFloat(), size.height.toFloat(), bedW, bedD)) } }) {
-        val proj = Projector(size.width, size.height, camera, bedW / 2, bedD / 2)
-        drawBed(proj, bedW, bedD, bedColor, lineColor)
-        if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor)
-        else {
-            prepared.forEach { (o, d) -> drawShadow(proj, o, d) }
-            prepared.forEach { (o, d) -> drawObject(proj, o, d) }
+        .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { camera.distance = (camera.distance * (1 + it.scrollDelta.y * 0.1f)).coerceIn(80f, 2500f); preparationDiagnostic("zoom-input", objectsRef.value.size);frameDiagnostic("zoom-input") } }
+        ) {
+        val timingStart=frameTiming.start()
+        // Publication closes the former image on Main. Always fetch current
+        // state here: a pending recomposition may still hold an older draw lambda.
+        val frame=rendered?.takeIf { preview==null && it.ticket.request.sameSource(request) && it.ticket.request.width==size.width.toInt() && it.ticket.request.height==size.height.toInt() }
+        val proj = frame?.ticket?.request?.projector() ?: Projector(size.width,size.height,camera,bedW/2,bedD/2)
+        if(preview!=null || frame==null)drawBed(proj,bedW,bedD,bedColor,lineColor)
+        if (preview != null) drawPreview(proj, preview, previewLayer, toolColors, lineColor, previewView)
+        else if(frame!=null) {
+            drawIntoCanvas { it.nativeCanvas.drawImage(frame.image,0f,0f) }
+            prepared.forEach { (o, d) -> if (o.parts.isNotEmpty()) drawParts(proj, o, d) }
+            if (paint == null) selectionHandle(objects)?.let { drawHandles(proj, it, accent) }
+            if(presented[0]!=frame.ticket.sequence) { presented[0]=frame.ticket.sequence;frameDiagnostic("presented",frame.ticket,frame.renderNanos) }
         }
+        frameTiming.finish(timingStart,size.width.toInt(),size.height.toInt(),objects.size)
     }
+    if (loading || failedKeys == keys && keys.isNotEmpty()) BasicText(
+        if (loading) "Preparing viewport… You can keep working." else "Viewport preparation failed. Click to retry.",
+        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).then(
+            if (!loading) Modifier.clickable { retry++ } else Modifier), style = TextStyle(color = accent))
+    else if(rendering || renderFailed==request) BasicText(
+        if(rendering) "Rendering viewport…" else "Viewport rendering failed. Click to retry.",
+        modifier=Modifier.align(Alignment.TopEnd).padding(12.dp).then(if(!rendering)Modifier.clickable { renderRetry++ } else Modifier),style=TextStyle(color=accent))
+    }
+}
+
+/** The ray through [tap] in [o]'s mesh coordinates (inverse of how [drawObject] places the mesh), or null if the view is degenerate. */
+private fun screenRay(tap: Offset, w: Float, h: Float, cam: CameraPose, bedW: Float, bedD: Float, o: PlateObject, d: DisplayMesh, radiusMm: Float): PaintRay? {
+    val proj = Projector(w, h, cam, bedW / 2, bedD / 2)
+    val near = DoubleArray(3); val far = DoubleArray(3)
+    proj.unproject(tap.x, tap.y, proj.depthRange, near); proj.unproject(tap.x, tap.y, -proj.depthRange, far)
+    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val minZ = b[2]
+    val cr = cos(Math.toRadians(o.rotZ.toDouble())); val sr = sin(Math.toRadians(o.rotZ.toDouble()))
+    val kx = o.ex.toDouble(); val ky = o.ey.toDouble(); val kz = o.ez.toDouble(); val zBase = if (kz >= 0) b[2].toDouble() else b[5].toDouble()
+    fun point(p: DoubleArray): DoubleArray { val x = p[0] - o.x; val y = p[1] - o.y; return doubleArrayOf(mx + (x * cr + y * sr) / kx, my + (-x * sr + y * cr) / ky, zBase + p[2] / kz) }
+    val a = point(near); val c = point(far)
+    val dir = doubleArrayOf(c[0] - a[0], c[1] - a[1], c[2] - a[2]); val len = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2])
+    if (len < 1e-9) return null
+    for (i in 0..2) dir[i] /= len
+    return PaintRay(a, dir, (radiusMm / abs(o.scale)).toDouble())
+}
+
+private class Pick(val grab: Grab, val obj: PlateObject, val from: Offset, val z: Float)
+
+/** What a press at [at] grabs: a knob of the selected object first, then whatever object the line of sight passes through (seen from above or from the side). */
+private fun pickGrab(proj: Projector, objects: List<PlateObject>, at: Offset): Pick? {
+    val tmp = FloatArray(3)
+    fun near(x: Float, y: Float) = run { proj.p(x, y, 0f, tmp, 0); hypot(tmp[0] - at.x, tmp[1] - at.y) < 14f }
+    selectionHandle(objects)?.let { o ->
+        val bed = proj.bedPoint(at.x, at.y) ?: return@let
+        val (rx, ry) = PlateHandles.rotateKnob(o.reach, o.x, o.y, o.rotZ); if (near(rx, ry)) return Pick(Grab.ROTATE, o, bed, 0f)
+        val (sx, sy) = PlateHandles.scaleKnob(o.reach, o.x, o.y); if (near(sx, sy)) return Pick(Grab.SCALE, o, bed, 0f)
+    }
+    var best: Pick? = null; var bestDist = Float.MAX_VALUE
+    for (o in objects) for (k in 0..4) {
+        val z = o.height * k / 4f
+        val p = proj.bedPoint(at.x, at.y, z) ?: continue
+        if (PlateHandles.footprintHit(o.reach, o.x, o.y, p.x, p.y)) { val d = hypot(o.x - p.x, o.y - p.y); if (d < bestDist) { bestDist = d; best = Pick(Grab.MOVE, o, p, z) }; break }
+    }
+    return best
+}
+
+/** One set of handles around the selection, with a shared centre for rotation and scale. */
+private fun selectionHandle(objects: List<PlateObject>): PlateObject? {
+    val selected = objects.filter { it.selected && it.reach.size == 4 }
+    val first = selected.firstOrNull() ?: return null
+    if (selected.size == 1) return first
+    val x = selected.map { it.x }.average().toFloat(); val y = selected.map { it.y }.average().toFloat()
+    val reach = floatArrayOf(selected.minOf { it.x + it.reach[0] } - x, selected.maxOf { it.x + it.reach[1] } - x,
+        selected.minOf { it.y + it.reach[2] } - y, selected.maxOf { it.y + it.reach[3] } - y)
+    return PlateObject(first.id, "Selection", first.mesh, first.color, x, y, 0f, 1f, true, reach = reach)
+}
+
+/** The selected object's footprint, the ring with its turn knob, and the corner resize knob. */
+private fun DrawScope.drawHandles(proj: Projector, o: PlateObject, accent: Color) {
+    val t = FloatArray(3)
+    fun pt(x: Float, y: Float): Offset { proj.p(x, y, 0.2f, t, 0); return Offset(t[0], t[1]) }
+    val box = listOf(pt(o.x + o.reach[0], o.y + o.reach[2]), pt(o.x + o.reach[1], o.y + o.reach[2]), pt(o.x + o.reach[1], o.y + o.reach[3]), pt(o.x + o.reach[0], o.y + o.reach[3]))
+    for (i in 0..3) drawLine(accent.copy(alpha = 0.55f), box[i], box[(i + 1) % 4], 1.2f)
+    val r = PlateHandles.ringRadius(o.reach)
+    var prev = pt(o.x + r, o.y)
+    for (i in 1..64) { val a = i * 2 * PI / 64; val p = pt(o.x + r * cos(a).toFloat(), o.y + r * sin(a).toFloat()); drawLine(accent.copy(alpha = 0.7f), prev, p, 1.6f); prev = p }
+    val (rx, ry) = PlateHandles.rotateKnob(o.reach, o.x, o.y, o.rotZ); pt(rx, ry).let { drawCircle(Color.White, 8f, it); drawCircle(accent, 6f, it) }
+    val (sx, sy) = PlateHandles.scaleKnob(o.reach, o.x, o.y); pt(sx, sy).let { drawRect(Color.White, it - Offset(8f, 8f), androidx.compose.ui.geometry.Size(16f, 16f)); drawRect(accent, it - Offset(6f, 6f), androidx.compose.ui.geometry.Size(12f, 12f)) }
 }
 
 private fun hitTest(tap: Offset, objects: List<PlateObject>, cam: ViewCamera, w: Float, h: Float, bedW: Float, bedD: Float): Int? {
@@ -175,31 +472,29 @@ private fun hitTest(tap: Offset, objects: List<PlateObject>, cam: ViewCamera, w:
         proj.p(o.x, o.y, 0f, tmp, 0); hypot(tmp[0] - tap.x, tmp[1] - tap.y) < 90f }?.id
 }
 
-private fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, line: Color) {
+internal fun DrawScope.drawBed(proj: Projector, w: Float, d: Float, bed: Color, line: Color,behind:Boolean=false) {
     val a = FloatArray(12)
     proj.p(0f, 0f, 0f, a, 0); proj.p(w, 0f, 0f, a, 3); proj.p(w, d, 0f, a, 6); proj.p(0f, d, 0f, a, 9)
     val path = Path().apply { moveTo(a[0], a[1]); lineTo(a[3], a[4]); lineTo(a[6], a[7]); lineTo(a[9], a[10]); close() }
-    drawPath(path, bed); drawPath(path, line, style = Stroke(1.5f))
+    if(behind) {
+        // Reverse compositing order into fresh GPU readback storage: lines first,
+        // then opaque bed underneath, all DST_OVER. Existing model/shadow pixels
+        // stay in front, without allocating a second full-viewport image/layer.
+        val t=FloatArray(6)
+        var g=0f
+        while(g<=w) { proj.p(g,0f,0f,t,0);proj.p(g,d,0f,t,3);drawLine(line.copy(alpha=.5f),Offset(t[0],t[1]),Offset(t[3],t[4]),1f,blendMode=BlendMode.DstOver);g+=25f }
+        g=0f
+        while(g<=d) { proj.p(0f,g,0f,t,0);proj.p(w,g,0f,t,3);drawLine(line.copy(alpha=.5f),Offset(t[0],t[1]),Offset(t[3],t[4]),1f,blendMode=BlendMode.DstOver);g+=25f }
+        drawPath(path,line,style=Stroke(2f),blendMode=BlendMode.DstOver)
+        drawPath(path,bed,blendMode=BlendMode.DstOver)
+        return
+    }
+    drawPath(path, bed); drawPath(path, line, style = Stroke(2f))
     val t = FloatArray(6)
     var g = 0f
-    while (g <= w) { proj.p(g, 0f, 0f, t, 0); proj.p(g, d, 0f, t, 3); drawLine(line.copy(alpha = 0.35f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
+    while (g <= w) { proj.p(g, 0f, 0f, t, 0); proj.p(g, d, 0f, t, 3); drawLine(line.copy(alpha = 0.5f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
     g = 0f
-    while (g <= d) { proj.p(0f, g, 0f, t, 0); proj.p(w, g, 0f, t, 3); drawLine(line.copy(alpha = 0.35f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
-}
-
-/** Area-weighted vertex normals, so curved surfaces shade smoothly (sharp edges are kept per corner when drawing). */
-fun vertexNormals(mesh: Mesh, tris: IntArray): FloatArray {
-    val v = mesh.vertices; val t = mesh.triangles
-    val out = FloatArray(v.size)
-    for (tri in tris) {
-        val a = t[tri * 3] * 3; val b = t[tri * 3 + 1] * 3; val c = t[tri * 3 + 2] * 3
-        val ux = v[b] - v[a]; val uy = v[b + 1] - v[a + 1]; val uz = v[b + 2] - v[a + 2]
-        val wx = v[c] - v[a]; val wy = v[c + 1] - v[a + 1]; val wz = v[c + 2] - v[a + 2]
-        val nx = uy * wz - uz * wy; val ny = uz * wx - ux * wz; val nz = ux * wy - uy * wx
-        for (i in intArrayOf(a, b, c)) { out[i] += nx; out[i + 1] += ny; out[i + 2] += nz }
-    }
-    for (i in out.indices step 3) { val l = sqrt(out[i] * out[i] + out[i + 1] * out[i + 1] + out[i + 2] * out[i + 2]); if (l > 0) { out[i] /= l; out[i + 1] /= l; out[i + 2] /= l } }
-    return out
+    while (g <= d) { proj.p(0f, g, 0f, t, 0); proj.p(w, g, 0f, t, 3); drawLine(line.copy(alpha = 0.5f), Offset(t[0], t[1]), Offset(t[3], t[4]), 1f); g += 25f }
 }
 
 /** The display colour of a material: very dark ones are lifted just enough for their shape to show. */
@@ -209,103 +504,58 @@ private fun displayBase(c: Color): Color {
 }
 
 /** A soft shadow straight down onto the bed, drawn as one translucent layer so overlaps don't darken. */
-private fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh) {
-    val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris
-    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2
-    val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
-    val step = max(1, tris.size / 20_000); val tmp = FloatArray(3)
-    val positions = ArrayList<Offset>(tris.size / step * 3 + 3)
-    var k = 0
-    while (k < tris.size) {
-        val tri = tris[k]
-        for (c in 0..2) {
-            val vi = t[tri * 3 + c] * 3
-            val lx = (v[vi] - mx) * o.scale; val ly = (v[vi + 1] - my) * o.scale
-            proj.p(o.x + lx * cr - ly * sr, o.y + lx * sr + ly * cr, 0f, tmp, 0); positions += Offset(tmp[0], tmp[1])
-        }
-        k += step
-    }
-    drawIntoCanvas { canvas ->
-        canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), Paint().apply { alpha = 0.28f })
-        canvas.drawVertices(Vertices(VertexMode.Triangles, positions, positions, List(positions.size) { Color.Black }, emptyList()), BlendMode.Dst, Paint())
-        canvas.restore()
-    }
-}
+internal fun DrawScope.drawShadow(proj: Projector, o: PlateObject, d: DisplayMesh, scratch: ShadowScratch) = rasterShadow(proj,o,d,scratch)
 
-private fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh) {
-    val v = d.mesh.vertices; val t = d.mesh.triangles; val tris = d.tris; val normals = d.normals
-    val b = d.bounds; val mx = (b[0] + b[3]) / 2; val my = (b[1] + b[4]) / 2; val minZ = b[2]
+internal fun DrawScope.drawObject(proj: Projector, o: PlateObject, d: DisplayMesh, surface: DepthSurface) = rasterObject(proj,o,d,surface)
+
+/**
+ * An object's extra volumes as outlines of their boxes (a cylinder or sphere shows its bounding box): red for a negative volume,
+ * green and orange for support enforcers and blockers, blue for modifiers, the part colour for added parts. Part coordinates are
+ * relative to the centre of the mesh's bounding box and scale, mirror and turn with the object.
+ */
+private fun DrawScope.drawParts(proj: Projector, o: PlateObject, d: DisplayMesh) {
+    val b = d.bounds
+    val half = abs((b[5] - b[2]) * o.ez) / 2f
     val cr = cos(Math.toRadians(o.rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(o.rotZ.toDouble())).toFloat()
-    val n = tris.size
-    val screen = FloatArray(n * 9); val depth = FloatArray(n); val cornerColor = IntArray(n * 3)
-    // Lights live in view space so a model reads the same from any angle: a key light from the upper left, a softer fill
-    // from the right, a highlight, and a rim on silhouettes that separates the model from the background.
-    val key = norm(-0.45f, -0.60f, 0.66f); val fill = norm(0.70f, 0.05f, 0.45f)
-    val half = norm(key[0], key[1], key[2] + 1f)
-    fun shade(c: Color) = displayBase(if (o.selected) lerpColor(c, Color.White, 0.18f) else c)
-    val own = shade(o.color)
-    val palette = o.paintColors.map { it?.let(::shade) ?: own }
-    val states = d.states
-    val fn = FloatArray(3); val vn = FloatArray(3); val w = FloatArray(9)
-    for ((k, tri) in tris.withIndex()) {
-        val base = states?.get(tri)?.let { s -> if (s == 0) own else palette.getOrNull(s) ?: own } ?: own
-        for (c in 0..2) {
-            val vi = t[tri * 3 + c] * 3
-            val lx = (v[vi] - mx) * o.scale; val ly = (v[vi + 1] - my) * o.scale; val lz = (v[vi + 2] - minZ) * o.scale
-            w[c * 3] = o.x + lx * cr - ly * sr; w[c * 3 + 1] = o.y + lx * sr + ly * cr; w[c * 3 + 2] = lz
-            proj.p(w[c * 3], w[c * 3 + 1], w[c * 3 + 2], screen, k * 9 + c * 3)
-        }
-        val ux = w[3] - w[0]; val uy = w[4] - w[1]; val uz = w[5] - w[2]; val qx = w[6] - w[0]; val qy = w[7] - w[1]; val qz = w[8] - w[2]
-        var nx = uy * qz - uz * qy; var ny = uz * qx - ux * qz; var nz = ux * qy - uy * qx
-        val len = sqrt(nx * nx + ny * ny + nz * nz).takeIf { it > 0 } ?: 1f; nx /= len; ny /= len; nz /= len
-        proj.dir(nx, ny, nz, fn)
-        // Two-sided: meshes with inconsistent winding still light from the side we see.
-        val flip = if (fn[2] < 0f) -1f else 1f
-        for (c in 0..2) {
-            val vi = t[tri * 3 + c] * 3
-            val ax = normals[vi]; val ay = normals[vi + 1]
-            val rx = ax * cr - ay * sr; val ry = ax * sr + ay * cr
-            proj.dir(rx, ry, normals[vi + 2], vn)
-            // Smooth where the surface is curved; keep the face normal at sharp edges (over about 40 degrees).
-            val dot = (vn[0] * fn[0] + vn[1] * fn[1] + vn[2] * fn[2])
-            val sx: Float; val sy: Float; val sz: Float
-            if (dot * dot > 0.58f && dot > 0) { sx = vn[0] * flip; sy = vn[1] * flip; sz = vn[2] * flip } else { sx = fn[0] * flip; sy = fn[1] * flip; sz = fn[2] * flip }
-            val diffuse = max(0f, sx * key[0] + sy * key[1] + sz * key[2])
-            val soft = max(0f, sx * fill[0] + sy * fill[1] + sz * fill[2])
-            val spec = max(0f, sx * half[0] + sy * half[1] + sz * half[2]).let { s -> s * s * s * s * s * s * s * s * s * s * s * s * s * s * s * s }
-            val rim = (1f - max(0f, sz)).let { r -> r * r * r }
-            val light = 0.30f + 0.62f * diffuse + 0.20f * soft
-            val red = (base.red * light + 0.22f * spec + 0.10f * rim).coerceIn(0f, 1f)
-            val green = (base.green * light + 0.22f * spec + 0.10f * rim).coerceIn(0f, 1f)
-            val blue = (base.blue * light + 0.22f * spec + 0.12f * rim).coerceIn(0f, 1f)
-            cornerColor[k * 3 + c] = Color(red, green, blue).toArgbInt()
-        }
-        depth[k] = (screen[k * 9 + 2] + screen[k * 9 + 5] + screen[k * 9 + 8]) / 3
+    val tmp = FloatArray(3)
+    fun world(px: Float, py: Float, pz: Float): Offset {
+        val lx = px * o.ex; val ly = py * o.ey
+        proj.p(o.x + lx * cr - ly * sr, o.y + lx * sr + ly * cr, pz * o.ez + half, tmp, 0)
+        return Offset(tmp[0], tmp[1])
     }
-    val order = (0 until n).sortedByDescending { depth[it] }
-    val positions = ArrayList<Offset>(n * 3); val colors = ArrayList<Color>(n * 3)
-    for (k in order) for (i in 0..2) { positions += Offset(screen[k * 9 + i * 3], screen[k * 9 + i * 3 + 1]); colors += Color(cornerColor[k * 3 + i]) }
-    // Dst keeps the vertex colours as they are; SrcOver would blend them with the paint's default black.
-    drawIntoCanvas { it.drawVertices(Vertices(VertexMode.Triangles, positions, positions, colors, emptyList()), BlendMode.Dst, Paint()) }
+    o.parts.forEachIndexed { i, part ->
+        val colour = when (part.kind) { "negative" -> Color(0xFFE5484D); "enforcer" -> Color(0xFF3BA55D); "blocker" -> Color(0xFFF5A623); "modifier" -> Color(0xFF3E7BFA); else -> Color(0xFF9B59B6) }
+        val cx = part.center[0].toFloat(); val cy = part.center[1].toFloat(); val cz = part.center[2].toFloat()
+        val hx = part.size[0].toFloat() / 2; val hy = part.size[1].toFloat() / 2; val hz = part.size[2].toFloat() / 2
+        val pts = Array(8) { k -> world(cx + (if (k and 1 == 0) -hx else hx), cy + (if (k and 2 == 0) -hy else hy), cz + (if (k and 4 == 0) -hz else hz)) }
+        val width = if (i == o.selectedPart) 2.6f else 1.4f
+        for ((a, e) in listOf(0 to 1, 2 to 3, 4 to 5, 6 to 7, 0 to 2, 1 to 3, 4 to 6, 5 to 7, 0 to 4, 1 to 5, 2 to 6, 3 to 7))
+            drawLine(colour, pts[a], pts[e], width)
+    }
 }
 
 private fun norm(x: Float, y: Float, z: Float): FloatArray { val l = sqrt(x * x + y * y + z * z); return floatArrayOf(x / l, y / l, z / l) }
 private fun Color.toArgbInt(): Int = toArgb()
 
-private fun DrawScope.drawPreview(proj: Projector, preview: GcodePreview, layer: Int, toolColors: List<Color>, line: Color) {
+private fun DrawScope.drawPreview(proj: Projector, preview: GcodePreview, layer: Int, toolColors: List<Color>, line: Color, view: PreviewView) {
     val a = FloatArray(6)
     val upTo = layer.coerceIn(0, preview.layers.size - 1)
-    // Earlier layers faintly, the current layer fully, so the shape and the current path both read.
-    val start = max(0, upTo - 60)
+    val (lo, hi) = preview.speedRange
+    // Earlier layers dimmer, the current layer fully, so the shape and the current path both read.
+    val start = max(0, upTo - 80)
     for (li in start..upTo) {
         val l = preview.layers[li]; val current = li == upTo
-        val stride = if (current) 1 else max(1, l.count / 3000)
+        val stride = if (current) 1 else max(1, l.count / 2500)
         var i = 0
         while (i < l.count) {
             val s = l.segments
             proj.p(s[i * 4], s[i * 4 + 1], l.z, a, 0); proj.p(s[i * 4 + 2], s[i * 4 + 3], l.z, a, 3)
-            val col = toolColors.getOrElse(l.tools[i].toInt()) { line }
-            drawLine(if (current) col else col.copy(alpha = 0.25f), Offset(a[0], a[1]), Offset(a[3], a[4]), if (current) 1.6f else 1f)
+            val col = when (view) {
+                PreviewView.TOOL -> toolColors.getOrElse(l.tools[i].toInt()) { line }
+                PreviewView.LINE_TYPE -> Color(GcodePreview.FEATURES.getOrNull(l.kinds[i].toInt())?.second ?: 0xFF8C8C8C)
+                PreviewView.SPEED -> Color(GcodePreview.speedColour(if (hi > lo) (l.speeds[i] - lo) / (hi - lo) else 0.5f))
+            }
+            drawLine(if (current) col else col.copy(alpha = 0.5f), Offset(a[0], a[1]), Offset(a[3], a[4]), if (current) 1.8f else 1.2f)
             i += stride
         }
     }

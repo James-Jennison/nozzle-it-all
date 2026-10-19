@@ -32,7 +32,7 @@ class TestModeDeviceTest {
         compose.onNodeWithTag("test-mode-banner").assertIsDisplayed()
         click("target-0") // SimulatedPrinter.Preset.PAXX_U1 is first when no printer is saved
         await("target-firmware")
-        compose.onNodeWithTag("target-firmware").assertTextContains("paxx-extended", substring = true)
+        compose.onNodeWithTag("target-firmware").assertTextContains("PAXX extended", substring = true)
         awaitEnabled("to-suites"); click("to-suites")
         click("suite-paxx-u1")
         await("start-run")

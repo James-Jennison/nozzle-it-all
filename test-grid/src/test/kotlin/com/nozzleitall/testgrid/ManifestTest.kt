@@ -89,10 +89,18 @@ class ManifestTest {
         assertTrue(parseProblem(blank).contains("params.process must name a print profile"))
     }
 
-    @Test fun theU1AndCanvasSuitesHaveTheColorReferenceTests() {
-        listOf("paxx-u1", "cosmos-centauri-carbon").forEach { id ->
-            val s = SuiteCatalog.bundled(id)!!
-            assertTrue(id, s.tests.map { it.id }.containsAll(listOf("color-reference-slice", "color-reference-print")))
+    @Test fun theU1SuiteHasTheColorReferenceTests() {
+        val s = SuiteCatalog.bundled("paxx-u1")!!
+        assertTrue(s.tests.map { it.id }.containsAll(listOf("color-reference-slice", "color-reference-print")))
+    }
+
+    /** Owner rule 2026-10-01: Nozzle offers no color mixing on CANVAS (ProfileFeatures.CANVAS_PROFILES), so nothing tests it there. */
+    @Test fun noCanvasSuiteTestsColorMixing() {
+        val canvas = SuiteCatalog.bundled().filter { s -> s.tests.any { "canvas" in it.requiredHardware } }
+        assertEquals(setOf("cosmos-centauri-carbon", "elegoo-centauri-carbon-stock", "opencentauri-patched"), canvas.map { it.id }.toSet())
+        canvas.forEach { s ->
+            assertTrue(s.id, s.tests.none { it.id in setOf("mix-slice", "mix-print", "color-reference-slice", "color-reference-print") })
+            assertTrue(s.id, s.tests.none { t -> t.steps.any { it.params.has("colourMix") || it.params.has("colourMixes") } })
         }
     }
 
@@ -106,7 +114,7 @@ class ManifestTest {
     }
 
     @Test fun everyMultiToolSuiteHasTheColourMixingTests() {
-        SuiteCatalog.bundled().filter { s -> s.tests.any { it.id == "multi-slice" } }.forEach { s ->
+        SuiteCatalog.bundled().filter { s -> s.tests.any { it.id == "multi-slice" && "canvas" !in it.requiredHardware } }.forEach { s ->
             assertTrue(s.id, s.tests.map { it.id }.containsAll(listOf("mix-slice", "mix-print")))
         }
     }

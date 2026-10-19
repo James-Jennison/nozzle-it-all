@@ -31,7 +31,8 @@ Setup:
 3. The suite checks that the Elegoo stock-firmware profile is refused for this printer and that files containing
    M729 or M8213 are refused by the upload path before anything is sent. It never sends such a file.
 
-Order: as for the U1. The slicing test is level 1 here: slicing a COSMOS profile first reads the live firmware.
+Order: as for the U1, without the colour-mix swatch (Nozzle offers no color mixing on CANVAS). The slicing test is
+level 1 here: slicing a COSMOS profile first reads the live firmware.
 
 ## After each run
 

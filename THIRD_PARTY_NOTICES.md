@@ -1,5 +1,17 @@
 # Third-Party Notices
 
+## Optional environmental monitoring
+
+The diagnostic Govee decoder was independently implemented against the format
+documented by Bluetooth-Devices/govee-ble (Apache-2.0, Copyright 2022 J. Nick Koston;
+its parser also attributes the packed-value algorithm to Ernst79/bleparser under
+MIT). No Python source is bundled. BTHome v2 follows https://bthome.io/format/;
+encrypted frames are not supported. Protocol decoding is not device qualification.
+
+Desktop optionally loads dbus-java 5.1.1 (MIT; Copyright 2005–2006 Matthew Johnson,
+2017–2021 David M.) and sqlite-jdbc 3.49.1.0 (Apache-2.0 / BSD-2-Clause components).
+Their upstream license notices remain in the distributed dependency JARs.
+
 Nozzle It All incorporates components ported from other open-source projects,
 licensed separately from this app's own code. This file satisfies attribution
 requirements for those components and is updated as further components are
@@ -230,6 +242,17 @@ own mirror of their upstream sources, all SIL Open Font License 1.1:
 Full OFL 1.1 license text for all three is combined at `third_party_licenses/OFL.txt`
 (kept out of `res/font/`, which Android's resource compiler restricts to font
 files only).
+
+## Linux desktop viewport graphics bridge
+
+The optional full-detail viewport backend uses the system EGL and OpenGL ES3
+implementations through their standard interfaces; graphics-driver binaries are
+not copied into the application. Those providers retain their own licenses.
+The application-owned JNI bridge is AGPL-3.0-or-later like the desktop source.
+Its Linux build statically links GCC libstdc++/libgcc runtime components under
+their applicable GPL licenses with the GCC Runtime Library Exception. The tested
+builder's complete supplied licensing/copyright text is installed with the Linux
+package at `/usr/share/doc/nozzle-it-all/GCC-runtime-copyright` alongside this file.
 
 ## Planned future incorporation
 

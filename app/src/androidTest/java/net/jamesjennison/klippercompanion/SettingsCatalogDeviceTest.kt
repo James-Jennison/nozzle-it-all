@@ -29,6 +29,8 @@ class SettingsCatalogDeviceTest {
         is SettingType.Percent -> listOf("10%")
         SettingType.Toggle -> listOf("0", "1")
         is SettingType.Choice -> t.options.map { it.second }
+        is SettingType.FloatOrPercent -> listOf("0.5", "120%")
+        SettingType.Text -> listOf("x")
     }
     @Test fun everyCatalogKeyIsAcceptedByTheRealEngine() {
         val failures = mutableListOf<String>()
@@ -36,6 +38,16 @@ class SettingsCatalogDeviceTest {
             try { slice(mapOf(d.key to v)) } catch (e: Exception) { failures += "${d.key}=$v: ${e.message}" }
         }
         assertTrue("engine rejected catalog values:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+    // Every other single-valued process setting the engine lists, set to the engine's own default for it: the key is recognised and
+    // the value parses (a rejected key or value fails the slice).
+    @Test fun everyEngineSettingOnTheListIsAcceptedByTheRealEngine() {
+        val failures = mutableListOf<String>()
+        for (d in EngineSettings.all) {
+            val v = EngineSettings.defaults[d.key] ?: continue
+            try { slice(mapOf(d.key to v)) } catch (e: Exception) { failures += "${d.key}=$v: ${e.message}" }
+        }
+        assertTrue("engine rejected its own defaults:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
     @Test fun overridesChangeTheGcodeTheyClaimTo() {
         assertTrue(slice(mapOf("wall_loops" to "1")).lines().count { it.trim() == ";TYPE:Inner wall" } < slice(mapOf("wall_loops" to "4")).lines().count { it.trim() == ";TYPE:Inner wall" })

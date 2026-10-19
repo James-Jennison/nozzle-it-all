@@ -13,7 +13,7 @@ object OpenSourceNotice {
     const val ENGINE_NAME = "nozzle-engine"
     const val ENGINE_SOURCE_URL = "https://github.com/James-Jennison/nozzle-engine"
     /** Must equal `base.commit` in engine/fork/ENGINE_PIN.json (a unit test enforces it). */
-    const val ENGINE_COMMIT = "7734a0c557cb63594c913a271c4907e7b4c9bee1"
+    const val ENGINE_COMMIT = "9cc8f78391800bd99d2a8c0cea80c784ced40fee"
     const val ENGINE_PIN_URL = "$APP_SOURCE_URL/blob/main/engine/fork/ENGINE_PIN.json"
     const val ENGINE_COMMIT_URL = "$ENGINE_SOURCE_URL/tree/$ENGINE_COMMIT"
     /** Every change made to the slicer since OrcaSlicer, one commit each. */
@@ -31,6 +31,6 @@ object OpenSourceNotice {
     val statement: String =
         "Nozzle It All is free software under the $APP_LICENSE, and comes with no warranty. You may get, study, change and share " +
         "its complete source code, including the on-device slicer, at the addresses below. On-device slicing is $ENGINE_NAME " +
-        "(also AGPL-3.0), commit ${ENGINE_COMMIT.take(12)}: OrcaSlicer's engine by way of Snapmaker Orca, with our changes to run " +
+        "(also AGPL-3.0), commit ${ENGINE_COMMIT.take(12)}: OrcaSlicer 2.5.0's engine with features from Snapmaker Orca, with our changes to run " +
         "it headless on Android, in the browser and on the desktop."
 }

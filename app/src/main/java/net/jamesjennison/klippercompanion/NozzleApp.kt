@@ -5,6 +5,17 @@ import android.content.Context
 
 /** Installs the persistent Bambu certificate pin store for every entry point (activity, monitor service, widget). */
 class NozzleApp : Application() {
+    val goveeNames by lazy { net.jamesjennison.klippercompanion.environment.AndroidGoveeNames(applicationContext) }
+    // One authority per app process. Lazy: no environmental startup, provider, history or permission side effects.
+    val environment by lazy {
+        com.nozzleitall.environment.EnvironmentalCoordinator(java.io.File(filesDir, "environment/control.json"),
+            com.nozzleitall.environment.EnvironmentalHistory(com.nozzleitall.environment.SqlStoreFactory {
+                net.jamesjennison.klippercompanion.environment.AndroidEnvironmentalStore(java.io.File(filesDir, "environment/history.db"))
+            }), { net.jamesjennison.klippercompanion.environment.AndroidBleTransport(applicationContext) },
+            platformIdentity = "android/${android.os.Build.MODEL}/${android.os.Build.FINGERPRINT}",
+            goveeNames = goveeNames::currentDevices,
+            restoreGoveeNames = { goveeNames.cachedDevices(); Unit })
+    }
     override fun onCreate() { super.onCreate(); installBambuPins(this); UsbSerialDeviceManager.install(this) }
 }
 

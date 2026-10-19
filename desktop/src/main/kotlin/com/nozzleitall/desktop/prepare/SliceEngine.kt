@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -29,8 +30,6 @@ data class SliceRequest(
     val applyPreset: Boolean = true,
     /** The user's own flushing-volume matrix over every material slot (row = from), or null to work it out from the colours. */
     val flushMatrix: List<Int>? = null,
-    /** PrusaSlicer ColorMix virtual extruders (its sidecar JSON), or null. */
-    val virtualExtruders: String? = null,
 )
 
 data class SliceStats(val layers: Int?, val seconds: Double?, val grams: Double?, val metres: Double?, val toolChanges: Int)
@@ -136,16 +135,7 @@ class SliceEngine(private val binary: File, private val workDir: File) {
         }.getOrDefault(270.0 to 270.0)
 
         /** A binary STL of the object's own (untransformed) mesh, as the Web App's writeStl(). */
-        fun stlBytes(mesh: Mesh): ByteArray {
-            val n = mesh.triangleCount
-            val b = java.nio.ByteBuffer.allocate(84 + n * 50).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            b.position(80); b.putInt(n)
-            for (i in 0 until n) {
-                b.position(84 + i * 50 + 12)
-                for (c in 0..2) { val vi = mesh.triangles[i * 3 + c] * 3; for (a in 0..2) b.putFloat(mesh.vertices[vi + a]) }
-            }
-            return b.array()
-        }
+        fun stlBytes(mesh: Mesh): ByteArray = com.nozzleitall.project.MeshIO.stlBytes(mesh)
 
         /**
          * The engine request, in the Web App's format and with its choices (web/src/app/state.ts slice()): the three profile
@@ -157,11 +147,11 @@ class SliceEngine(private val binary: File, private val workDir: File) {
             val entries = req.project.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
             val objectSlots = entries.mapValues { it.value.materialSlot ?: 1 }
             // Painted objects print their colours in the slots chosen for them; the highest slot in use sets the tool count.
-            val paint = req.project.objects.associate { o -> o.id to (if (o.mesh.isPainted) paintInSlots(o.mesh, entries[o.id]?.paintSlots.orEmpty(), objectSlots[o.id] ?: 1) else null) }
+            val paint = req.project.objects.associate { o -> o.id to (if (o.mesh.hasAnyPaint) paintInSlots(o.mesh, entries[o.id]?.paintSlots.orEmpty(), objectSlots[o.id] ?: 1) else null) }
             val usedSlots = req.project.objects.maxOfOrNull { o -> maxOf(objectSlots[o.id] ?: 1, paint[o.id]?.second ?: 1) } ?: 1
             val materials = req.materials.sortedBy { it.slot }.ifEmpty { listOf(ProjectManifest.MaterialSlot(1, "PLA", colorHex = "#FFFFFF")) }
-            // Full Spectrum mixes name physical slots by number, so with any mixes every loaded slot is passed to the engine.
-            val mixing = !req.extraOverrides[FullSpectrum.DEFINITIONS_KEY].isNullOrBlank() || req.virtualExtruders != null
+            // A mixed filament names loaded filaments by number, so with any mixed filament every loaded slot is passed to the engine.
+            val mixing = req.extraOverrides["filament_is_mixed"]?.split(',')?.any { it.trim() == "1" } == true
             val slots = if (mixing) materials else materials.take(maxOf(usedSlots, 1))
             // Each slot slices with its own filament profile when it has one (one combined per-slot filament file, as a
             // slicer combines its filament presets); otherwise the printer profile's own filament.
@@ -185,8 +175,6 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
                 lines += "set\t$k\t$v"
             }
-            // PrusaSlicer ColorMix: the virtual extruders, in PrusaSlicer's own file format, for the engine to print.
-            req.virtualExtruders?.let { json -> lines += "virtual_extruders\t" + File(job, "virtual_extruders.json").apply { writeText(json) }.absolutePath }
             val (bedW, bedD) = bedOf(File(req.profileDir, "machine.json").readText())
             req.project.objects.forEachIndexed { i, o ->
                 // A painted object goes as a 3MF, which the engine's own importer reads paint from; others as STL.
@@ -195,10 +183,23 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                 val m = o.placement.m
                 val scale = Math.hypot(m[0], m[1]).takeIf { it > 0 } ?: 1.0
                 val rot = Math.toDegrees(Math.atan2(m[1], m[0]))
+                // The other axes relative to X: Y's length (negative when the turn is left-handed, a mirror) and Z's length and sign.
+                val yLen = Math.hypot(m[3], m[4]).takeIf { it > 0 } ?: scale
+                val relY = (if (m[0] * m[4] - m[1] * m[3] < 0) -yLen else yLen) / scale
+                val relZ = (m[8].takeIf { it != 0.0 } ?: scale) / scale
                 val b = o.mesh.bounds(); val cx = (b[0] + b[3]) / 2.0; val cy = (b[1] + b[4]) / 2.0
                 val x = cx * m[0] + cy * m[3] + m[9]; val y = cx * m[1] + cy * m[4] + m[10]
                 val tool = if (slots.size > 1) objectSlots[o.id] ?: 1 else 0
                 lines += "object\t${stl.absolutePath}\t${x - bedW / 2}\t${y - bedD / 2}\t$rot\t$scale\t$tool"
+                if (abs(relY) != 1.0 || abs(relZ) != 1.0 || relY < 0 || relZ < 0)
+                    lines += "object_scale\t${i + 1}\t1\t${abs(relY)}\t${abs(relZ)}\t${(if (relY < 0) "y" else "") + (if (relZ < 0) "z" else "")}"
+                entries[o.id]?.let { e ->
+                    e.parts.forEach { lines += "object_part\t${i + 1}\t${it.spec()}" }
+                    e.heightRanges.forEach { r -> r.settings.toSortedMap().forEach { (k, v) ->
+                        require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
+                        lines += "object_range\t${i + 1}\t${r.from}\t${r.to}\t$k\t$v" } }
+                    if (e.layerProfile.size >= 4) lines += "object_layers\t${i + 1}\t${e.layerProfile.joinToString(",")}"
+                }
                 // The object's own settings (Orca's per-object settings), after the whole-plate ones.
                 entries[o.id]?.settings?.toSortedMap()?.forEach { (k, v) ->
                     require(!Regex("[\t\n\r]").containsMatchIn(k + v)) { "Settings may not contain tabs or line breaks." }
@@ -220,7 +221,7 @@ class SliceEngine(private val binary: File, private val workDir: File) {
                     runCatching { Paint.remap(s) { n -> if (n == 0) 0 else (paintSlots.getOrNull(n - 1) ?: objectSlot).also { highest = maxOf(highest, it) } } }.getOrNull()
                 } }
             }
-            return Mesh(mesh.vertices, mesh.triangles, out) to highest
+            return mesh.withPaint(paint = out) to highest   // support, seam and fuzzy-skin paint are not tied to filament slots
         }
 
         fun parseStats(gcode: File): SliceStats {

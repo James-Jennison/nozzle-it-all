@@ -22,8 +22,7 @@ val materialFinishes = listOf("Basic", "Matte", "Silk", "SnapSpeed", "Support", 
 @Composable
 fun MaterialsScreen(state: AppState) {
     Column(Modifier.fillMaxSize().padding(28.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        SectionHeader("Materials & Toolheads", "What's loaded in each toolhead or material slot, as the printer reports it.")
-        val entry = PrinterPicker(state) ?: run { NoPrinterYet(state, "what's loaded in each toolhead"); return@Column }
+        val entry = PrinterHeader(state, com.nozzleitall.desktop.Destination.MATERIALS, "What's loaded in each toolhead or material slot, as the printer reports it.") ?: run { NoPrinterYet(state, "what's loaded in each toolhead"); return@Column }
         val status = entry.status.value
         val caps = entry.capabilities.value
         val flow = rememberActionFlow(entry)

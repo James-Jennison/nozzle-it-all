@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI's Android engine root (.github/workflows/ci.yml): the runner has orcaslicer-android-engine's NDK prefix but not its
 # source archives. So this fetches the GMP archive (hash-checked against engine/fork/android/DEPENDENCIES.json) into a
-# cache that survives runs, then runs prepare_engine_root.sh, which fetches the pinned nozzle-engine commit into the cache.
+# cache that survives runs (the engine root is keyed by the dependency prefix, so a different prefix never reuses a tree linked to another one), then runs prepare_engine_root.sh, which fetches the pinned nozzle-engine commit into the cache.
 #   ci_engine_root.sh <cache dir> <android deps prefix>     prints the engine root on its last line
 set -euo pipefail
 NOZZLE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -30,6 +30,6 @@ if ! command -v m4 >/dev/null; then
   export PATH="$CACHE/tools/bin:$PATH"
 fi
 
-NOZZLE_ENGINE_CHECKOUT=/nonexistent NOZZLE_ENGINE_CACHE="$CACHE/nozzle-engine-src" NOZZLE_ANDROID_FORK_ROOT="$CACHE/android-root-fork" \
+NOZZLE_ENGINE_CHECKOUT=/nonexistent NOZZLE_ENGINE_CACHE="$CACHE/nozzle-engine-src" NOZZLE_ANDROID_FORK_ROOT="$CACHE/android-root-fork-$(printf %s "$DEPS" | sha256sum | cut -c1-8)" \
   ANDROID_DEPS_PREFIX="$DEPS" GMP_ARCHIVE="$GMP" ANDROID_NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}/ndk/29.0.14206865}" \
   bash "$NOZZLE_ROOT/engine/fork/android/prepare_engine_root.sh" | tail -1

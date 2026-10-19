@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop
 
+import com.nozzleitall.project.MeshIO
 import com.nozzleitall.desktop.prepare.*
 import com.nozzleitall.project.Mesh
 import org.junit.Assert.*

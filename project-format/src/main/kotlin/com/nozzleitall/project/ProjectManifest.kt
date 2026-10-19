@@ -45,7 +45,22 @@ data class ProjectManifest(
      * [settings] are the object's own print settings (engine keys to serialized values), as Orca's object list sets them.
      */
     data class ObjectEntry(val objectId: Int, val name: String = "", val materialSlot: Int? = null, val unknown: JSONObject = JSONObject(), val paintSlots: List<Int> = emptyList(),
-                           val settings: Map<String, String> = emptyMap())
+                           val settings: Map<String, String> = emptyMap(), val parts: List<ObjectPart> = emptyList(), val heightRanges: List<HeightRange> = emptyList(),
+                           val layerProfile: List<Double> = emptyList(),
+                           /** Orca's instances: this object is another instance of object [instanceOf], sharing its mesh, settings, parts, ranges, layer profile and paint; only its place, turn and size are its own. */
+                           val instanceOf: Int? = null)
+    /**
+     * An extra volume on an object, as Orca's object list adds them: [kind] "negative" (cuts material away), "modifier" (applies [settings]
+     * inside it), "blocker" / "enforcer" (support) or "part" (adds material), a primitive [shape] ("box", "cylinder", "sphere") of [size]
+     * (x, y, z, mm) centred on [center] (x, y, z) in the object's own mesh coordinates, so it stays put when the object moves or turns.
+     */
+    data class ObjectPart(val kind: String, val shape: String, val center: List<Double>, val size: List<Double>, val settings: Map<String, String> = emptyMap()) {
+        /** The engine's volume spec (nozzle/bridge/android/slic3r_engine.cpp apply_volume_specs). */
+        fun spec(): String = "$kind:$shape:${center.joinToString(",")}:${size.joinToString(",")}" +
+            (if (settings.isNotEmpty() && (kind == "modifier" || kind == "part")) ":" + settings.toSortedMap().entries.joinToString("|") { "${it.key}=${it.value}" } else "")
+    }
+    /** Orca's height range modifier: [settings] for the layers from [from] to [to] mm up the object. */
+    data class HeightRange(val from: Double, val to: Double, val settings: Map<String, String>)
     /**
      * [slot] is 1-based. [toolhead] is the 0-based physical toolhead it is loaded in, when known. [filamentProfile] names
      * the filament profile this slot slices with (an id in the printer's filament library), or null for the printer
@@ -92,9 +107,17 @@ data class ProjectManifest(
             }
             val plates = o.optJSONArray("plates")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { p ->
                 PlateEntry(p.optInt("index"), p.optString("name"), p.optJSONArray("objects")?.let { oa -> (0 until oa.length()).mapNotNull { oa.optJSONObject(it) }.map { e ->
-                    ObjectEntry(e.optInt("objectId"), e.optString("name"), e.intOrNull("materialSlot"), e.rest("objectId", "name", "materialSlot", "paintSlots", "settings"),
+                    ObjectEntry(e.optInt("objectId"), e.optString("name"), e.intOrNull("materialSlot"), e.rest("objectId", "name", "materialSlot", "paintSlots", "settings", "parts", "heightRanges", "layerProfile", "instanceOf"),
                         e.optJSONArray("paintSlots")?.let { ps -> (0 until ps.length()).map { ps.optInt(it, 1).coerceAtLeast(1) } } ?: emptyList(),
-                        e.optJSONObject("settings")?.let { st -> st.keySet().filter { st.opt(it) is String }.associateWith { st.getString(it) } } ?: emptyMap()) } } ?: emptyList(),
+                        e.optJSONObject("settings")?.let { st -> st.keySet().filter { st.opt(it) is String }.associateWith { st.getString(it) } } ?: emptyMap(),
+                        e.optJSONArray("parts")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.mapNotNull { q ->
+                            val center = q.optJSONArray("center")?.let { v -> (0 until v.length()).map { v.optDouble(it) } }
+                            val size = q.optJSONArray("size")?.let { v -> (0 until v.length()).map { v.optDouble(it) } }
+                            if (center?.size == 3 && size?.size == 3 && q.optString("kind").isNotEmpty()) ObjectPart(q.optString("kind"), q.optString("shape", "box"), center, size, q.optJSONObject("settings")?.let { st -> st.keySet().filter { st.opt(it) is String }.associateWith { st.getString(it) } } ?: emptyMap()) else null } } ?: emptyList(),
+                        e.optJSONArray("heightRanges")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { q ->
+                            HeightRange(q.optDouble("from"), q.optDouble("to"), q.optJSONObject("settings")?.let { st -> st.keySet().filter { st.opt(it) is String }.associateWith { st.getString(it) } } ?: emptyMap()) } } ?: emptyList(),
+                        e.optJSONArray("layerProfile")?.let { a -> (0 until a.length()).map { a.optDouble(it) } } ?: emptyList(),
+                        e.intOrNull("instanceOf")) } } ?: emptyList(),
                     p.rest("index", "name", "objects")) } } ?: emptyList()
             val materials = o.optJSONArray("materials")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }.map { m ->
                 MaterialSlot(m.optInt("slot"), m.strOrNull("type"), m.strOrNull("vendor"), m.strOrNull("subType"), m.strOrNull("colorHex"), m.intOrNull("toolhead"),
@@ -122,7 +145,11 @@ data class ProjectManifest(
             .apply { if (p.nozzleDiameters.isNotEmpty()) put("nozzleDiameters", JSONArray(p.nozzleDiameters)) }, p.unknown)) }
         o.put("plates", JSONArray(plates.map { p -> merge(JSONObject().put("index", p.index).put("name", p.name)
             .put("objects", JSONArray(p.objects.map { e -> merge(JSONObject().put("objectId", e.objectId).put("name", e.name).putOpt("materialSlot", e.materialSlot)
-                .apply { if (e.paintSlots.isNotEmpty()) put("paintSlots", JSONArray(e.paintSlots)); if (e.settings.isNotEmpty()) put("settings", JSONObject(e.settings.toSortedMap())) }, e.unknown) })), p.unknown) }))
+                .apply { if (e.paintSlots.isNotEmpty()) put("paintSlots", JSONArray(e.paintSlots)); if (e.settings.isNotEmpty()) put("settings", JSONObject(e.settings.toSortedMap()))
+                    if (e.parts.isNotEmpty()) put("parts", JSONArray(e.parts.map { q -> JSONObject().put("kind", q.kind).put("shape", q.shape).put("center", JSONArray(q.center)).put("size", JSONArray(q.size))
+                        .apply { if (q.settings.isNotEmpty()) put("settings", JSONObject(q.settings.toSortedMap())) } }))
+                    if (e.heightRanges.isNotEmpty()) put("heightRanges", JSONArray(e.heightRanges.map { q -> JSONObject().put("from", q.from).put("to", q.to).put("settings", JSONObject(q.settings.toSortedMap())) }))
+                    if (e.layerProfile.isNotEmpty()) put("layerProfile", JSONArray(e.layerProfile)); e.instanceOf?.let { put("instanceOf", it) } }, e.unknown) })), p.unknown) }))
         o.put("materials", JSONArray(materials.map { m -> merge(JSONObject().put("slot", m.slot).putOpt("type", m.type).putOpt("vendor", m.vendor)
             .putOpt("subType", m.subType).putOpt("colorHex", m.colorHex).putOpt("toolhead", m.toolhead).putOpt("filamentProfile", m.filamentProfile), m.unknown) }))
         o.put("settings", merge(JSONObject().putOpt("preset", settings.preset).put("overrides", JSONObject(settings.overrides)), settings.unknown))

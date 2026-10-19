@@ -1,55 +1,46 @@
 package net.jamesjennison.klippercompanion
 
-import com.nozzleitall.printer.ext.FullSpectrumFormat
-import com.nozzleitall.printer.ext.PrusaColorMixFormat
+import com.nozzleitall.printer.ext.MixedFilamentFormat
+import com.nozzleitall.printer.ext.MixedFilamentFormat.Match
+import com.nozzleitall.printer.ext.MixedFilamentFormat.Row
+import org.json.JSONArray
 import org.json.JSONObject
 import org.orcaslicer.engine.NativeEngine
 
 /**
- * Android's own transport for Snapmaker Full Spectrum and PrusaSlicer ColorMix: the exact same request/response JSON
- * Desktop's FullSpectrum.kt/PrusaColorMix.kt build and parse (com.nozzleitall.printer.ext.FullSpectrumFormat /
- * PrusaColorMixFormat, :printer-api) but sent to the engine through the in-process `nativeFullSpectrum`/`nativeColorMix`
- * JNI calls instead of Desktop's own subprocess - no separate parsing logic, so the two platforms can never drift on
- * what the engine actually accepts. Whichever screen offers colour mixing (SliceAndPrintPanel/ProjectEditorScreen)
- * and AndroidTestSlicer's own slice option both go through these two objects.
+ * Android's own transport for mixed filaments (OrcaSlicer 2.5.0's): the exact same request/response JSON Desktop's
+ * MixedFilament.kt builds and parses ([MixedFilamentFormat], :printer-api), sent to the engine through the in-process
+ * `nativeMixedFilament` JNI call instead of Desktop's subprocess - no separate parsing logic, so the two platforms can
+ * never drift on what the engine accepts.
  */
 class ColourMixEngineError(message: String) : Exception(message)
 
-object AndroidFullSpectrum {
+object AndroidMixedFilament {
     private fun run(request: JSONObject): JSONObject {
-        val out = NativeEngine.nativeFullSpectrum(request.toString())
-        val json = runCatching { JSONObject(out) }.getOrElse { throw ColourMixEngineError("This engine doesn't support Full Spectrum yet.") }
-        FullSpectrumFormat.errorOf(json)?.let { throw ColourMixEngineError(it) }
+        val out = NativeEngine.nativeMixedFilament(request.toString())
+        val json = runCatching { JSONObject(out) }.getOrElse { throw ColourMixEngineError("This engine doesn't support mixed filaments.") }
+        MixedFilamentFormat.errorOf(json)?.let { throw ColourMixEngineError(it) }
         return json
     }
 
-    fun display(physical: List<String>, definitions: String): FullSpectrumFormat.Mixes =
-        FullSpectrumFormat.parseMixes(run(FullSpectrumFormat.baseRequest("display", physical, definitions)))
+    /** The rows with their slot numbers, blended colours and problems for the loaded filaments [physical] (colour to type). */
+    fun display(physical: List<Pair<String, String?>>, rows: List<Row>): List<Row> =
+        MixedFilamentFormat.parseRows(run(MixedFilamentFormat.request("display", physical, rows)))
 
-    /** [a] and [b] are physical filament ids, 1-based (Tool 1 is 1), as Snapmaker's MixedFilamentManager numbers them. */
-    fun add(physical: List<String>, definitions: String, a: Int, b: Int, mixBPercent: Int): FullSpectrumFormat.Mixes =
-        FullSpectrumFormat.parseMixes(run(FullSpectrumFormat.baseRequest("add", physical, definitions).put("a", a).put("b", b).put("mix_b_percent", mixBPercent)))
-
-    fun remove(physical: List<String>, definitions: String, id: Int): FullSpectrumFormat.Mixes =
-        FullSpectrumFormat.parseMixes(run(FullSpectrumFormat.baseRequest("remove", physical, definitions).put("id", id)))
-}
-
-object AndroidColorMix {
-    private fun run(request: JSONObject): JSONObject {
-        val out = NativeEngine.nativeColorMix(request.toString())
-        val json = runCatching { JSONObject(out) }.getOrElse { throw ColourMixEngineError("This engine doesn't support Prusa colour mixing yet.") }
-        PrusaColorMixFormat.errorOf(json)?.let { throw ColourMixEngineError(it) }
-        return json
+    /** [rows] with [row] added; null when that fixed blend is already there. */
+    fun add(physical: List<Pair<String, String?>>, rows: List<Row>, row: Row): List<Row>? {
+        val o = run(MixedFilamentFormat.request("add", physical, rows).put("components", JSONArray(row.components)).put("weights", JSONArray(row.weights))
+            .put("gradient", row.toJson().getJSONObject("gradient")))
+        return if (o.optBoolean("added")) MixedFilamentFormat.parseRows(o) else null
     }
 
-    /** The virtual extruders as the engine keeps them for [physical] (invalid ones dropped), with colours and cycles. */
-    fun normalize(physical: List<Pair<String, String?>>, virtual: List<PrusaColorMixFormat.Virtual>): List<PrusaColorMixFormat.Virtual> {
-        val o = run(JSONObject().put("op", "normalize").put("physical", PrusaColorMixFormat.physicalJson(physical))
-            .put("virtual", org.json.JSONArray(virtual.map { it.toJson() })))
-        return PrusaColorMixFormat.parseVirtualList(o)
-    }
+    fun remove(physical: List<Pair<String, String?>>, rows: List<Row>, index: Int): List<Row> =
+        MixedFilamentFormat.parseRows(run(MixedFilamentFormat.request("remove", physical, rows).put("index", index)))
 
-    /** The id PrusaSlicer's "Add blend" gives the next virtual extruder. */
-    fun nextId(physicalCount: Int, virtual: List<PrusaColorMixFormat.Virtual>): Int =
-        run(JSONObject().put("op", "next_id").put("physical_count", physicalCount).put("virtual", org.json.JSONArray(virtual.map { it.toJson() }))).getInt("id")
+    fun match(physical: List<Pair<String, String?>>, target: String, mode: String = "materials", material: String = ""): Match =
+        MixedFilamentFormat.parseMatch(run(MixedFilamentFormat.request("match", physical).put("target", target).put("mode", mode).put("material", material)))
+
+    /** The per-filament settings that make a slice use [rows]; passed as the slice's overrides. */
+    fun sliceOverrides(physical: List<Pair<String, String?>>, rows: List<Row>, sublayer: Boolean = true): Map<String, String> =
+        MixedFilamentFormat.parseOverrides(run(MixedFilamentFormat.request("slice_overrides", physical, rows).put("sublayer", sublayer)))
 }

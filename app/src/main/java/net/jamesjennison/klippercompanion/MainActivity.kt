@@ -274,6 +274,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
     val hostView=LocalView.current
     var cameraVisible by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var environmentOrigin by rememberSaveable { mutableIntStateOf(0) }
     var detailAddress by rememberSaveable { mutableStateOf<String?>(null) }
     val overview = tab == 0 && detailAddress == null
     // WO-17 (Phase 1): the Files tab's "Projects" section - a saved multi-object build plate,
@@ -347,6 +348,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         }
     }
     BackHandler(tab == 0 && detailAddress != null) { detailAddress = null }
+    BackHandler(tab == 6) { tab = environmentOrigin }
     fun openPrinter(selected: String) {
         if(state.busy) return
         detailAddress = selected
@@ -429,12 +431,21 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 // Settings is shown last, but each tab keeps its own index (and nav-N test tag).
                 listOf(Triple(0, "Home", CompanionSymbol.DASHBOARD), Triple(1, "Control", CompanionSymbol.CONTROL), Triple(2, "Files", CompanionSymbol.FILES),
                     Triple(3, "Prepare", CompanionSymbol.SLICE), Triple(5, "Discover", CompanionSymbol.DISCOVER), Triple(4, "Settings", CompanionSymbol.SETTINGS)).forEach { (index, title, symbol) ->
-                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = { Text(title) })
+                    val selectedTab = if (tab == 6) environmentOrigin else tab
+                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = selectedTab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(selectedTab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = {
+                        // One line, at most 1.2x text: six tabs in a narrow window at a large text size used to wrap a letter per line and leave the screen no height.
+                        val d = androidx.compose.ui.platform.LocalDensity.current
+                        CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, minOf(d.fontScale, 1.2f))) {
+                            Text(title, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                    })
                 }
             }
         }) { padding ->
         // On a tablet or unfolded screen the single column would stretch edge to edge; keep it a readable width, centred.
-        val wideGutter = (((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - MAX_CONTENT_WIDTH_DP).coerceAtLeast(0)) / 2 + 16).dp
+        // The gutter follows the width this screen actually has (a split-screen or freeform window is narrower than the display).
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wideGutter = (((maxWidth.value.toInt() - MAX_CONTENT_WIDTH_DP).coerceAtLeast(0)) / 2 + 16).dp
         if (expandedCamera) {
             Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.Center) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -442,6 +453,16 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     IconButton({ expandedCamera = false }, Modifier.testTag("close-camera").semantics { contentDescription = "Close full screen camera" }) { CompanionIcon(CompanionSymbol.CLOSE) }
                 }
                 CameraContent(state)
+            }
+        } else if (tab == 6) {
+            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton({ tab = environmentOrigin }, Modifier.semantics { contentDescription = "Back" }) { CompanionIcon(CompanionSymbol.PREV) }
+                    Text("Environment dashboard", style = MaterialTheme.typography.titleMedium)
+                }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    net.jamesjennison.klippercompanion.environment.EnvironmentalPanel()
+                }
             }
         } else if (tab == 5) {
             Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = wideGutter - 16.dp)) {
@@ -465,6 +486,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             if((tab == 0 && !overview) || tab == 4) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
+            if(tab == 4) item { OutlinedButton({ environmentOrigin = 4; tab = 6 }, modifier = Modifier.testTag("open-environment")) { Text("Environment dashboard") } }
             if(tab == 4) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -574,6 +596,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                     if(overview) {
                         val tiles = state.connectedPrinterTiles()
                         item { Text("Connected printers", style = MaterialTheme.typography.titleLarge) }
+                        item { OutlinedButton({ environmentOrigin = 0; tab = 6 }, modifier = Modifier.fillMaxWidth().testTag("open-environment")) { Text("Environment dashboard") } }
                         if(tiles.isEmpty()) item {
                             Text("No printers connected. Saved printers reconnect while the app is open.")
                             OutlinedButton({ tab = 4 }) { Text("View saved printers") }
@@ -932,7 +955,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
         }
-    }
+            }
+}
     // A Bambu printer has no local workspace worth importing into and no Moonraker to upload to;
     // a share aimed at one is a print request instead. A model file (STL/3MF/OBJ, WO-13) is a
     // slice-and-print request regardless of printer kind (Bambu included, though that path
@@ -965,7 +989,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
         } else CalibrationSpec(calibrationKind)
         AlertDialog(onDismissRequest = { calibrationDialog = false }, title = { Text("Calibration print") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Scrolls, so the dialog stays a fixed size when the keyboard takes most of a short window and the range message appears.
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         CalibrationKind.entries.forEach { k -> FilterChip(calibrationKind == k, { calibrationKind = k }, label = { Text(k.label) }, modifier = Modifier.testTag("calibration-kind-${k.code}")) }
                     }

@@ -15,9 +15,19 @@ import javax.xml.parsers.DocumentBuilderFactory
 /**
  * A triangle mesh in millimetres: [vertices] is x,y,z triples, [triangles] is vertex-index triples. [paint], when present,
  * has one entry per triangle: null for unpainted, otherwise its colour paint in the engine's encoding (see [Paint]).
+ * [supportPaint], [seamPaint] and [fuzzyPaint] are Orca's other painting kinds (`paint_supports`, `paint_seam`,
+ * `paint_fuzzy_skin`) in the same per-triangle string form: enforcers are state 1, blockers state 2 (fuzzy skin: state 1).
  */
-class Mesh(val vertices: FloatArray, val triangles: IntArray, val paint: Array<String?>? = null) {
+class Mesh(val vertices: FloatArray, val triangles: IntArray, val paint: Array<String?>? = null,
+           val supportPaint: Array<String?>? = null, val seamPaint: Array<String?>? = null, val fuzzyPaint: Array<String?>? = null) {
     val isPainted get() = paint?.any { it != null } == true
+    /** Whether any kind of paint is on the mesh. */
+    val hasAnyPaint get() = isPainted || listOf(supportPaint, seamPaint, fuzzyPaint).any { a -> a?.any { it != null } == true }
+    /** This mesh with the given kinds of paint replaced (null entries mean none); geometry and the other kinds are kept. */
+    fun withPaint(paint: Array<String?>? = this.paint, supportPaint: Array<String?>? = this.supportPaint,
+                  seamPaint: Array<String?>? = this.seamPaint, fuzzyPaint: Array<String?>? = this.fuzzyPaint) =
+        Mesh(vertices, triangles, paint.takeIf { a -> a?.any { it != null } == true }, supportPaint.takeIf { a -> a?.any { it != null } == true },
+            seamPaint.takeIf { a -> a?.any { it != null } == true }, fuzzyPaint.takeIf { a -> a?.any { it != null } == true })
     val vertexCount get() = vertices.size / 3
     val triangleCount get() = triangles.size / 3
     fun bounds(): FloatArray {
@@ -109,7 +119,12 @@ object ThreeMf {
     private val owned = setOf("[Content_Types].xml", "_rels/.rels", MODEL_PATH, ProjectManifest.ARCHIVE_PATH)
     /** Per-part settings from other slicers. Their part filaments are folded into the paint on read, so they're not kept. */
     private val partSettings = setOf("Metadata/model_settings.config", "Metadata/Slic3r_PE_model.config")
+    /** Longest paint string accepted for one triangle. Orca's brush strokes subdivide a triangle deeply, so real files carry strings of several thousand characters. */
+    private const val MAX_PAINT_CHARS = 65536
     const val PAINT_ATTR = "paint_color"
+    const val SUPPORT_PAINT_ATTR = "paint_supports"
+    const val SEAM_PAINT_ATTR = "paint_seam"
+    const val FUZZY_PAINT_ATTR = "paint_fuzzy_skin"
     private const val PRUSA_PAINT_ATTR = "slic3rpe:mmu_segmentation"
 
     fun validEntryName(name: String): Boolean =
@@ -205,7 +220,7 @@ object ThreeMf {
             val doc = if (path == root) rootDoc else parseXml(entries[path] ?: throw ProjectFormatException("The 3MF refers to a missing part ($path)."))
             resources(doc).associateBy { it.getAttribute("id").toIntOrNull() ?: throw ProjectFormatException("A 3MF object has no valid id.") }
         }
-        fun flatten(path: String, id: Int, t: Transform, depth: Int, vs: MutableList<Float>, ts: MutableList<Int>, ps: MutableList<String?>, part: (Int) -> Int?) {
+        fun flatten(path: String, id: Int, t: Transform, depth: Int, vs: MutableList<Float>, ts: MutableList<Int>, ps: MutableList<String?>, part: (Int) -> Int?, extra: List<MutableList<String?>>) {
             if (depth > 16) throw ProjectFormatException("The 3MF nests components too deeply.")
             val obj = objectsIn(path)[id] ?: throw ProjectFormatException("The 3MF refers to a missing object ($id).")
             child(obj, "mesh")?.let { mesh ->
@@ -219,8 +234,12 @@ object ThreeMf {
                     if (a !in 0 until count || b !in 0 until count || c !in 0 until count) throw ProjectFormatException("A 3MF mesh refers to a vertex that doesn't exist.")
                     ts += base + a; ts += base + b; ts += base + c
                     val painted = tri.getAttribute(PAINT_ATTR).ifEmpty { tri.getAttribute(PRUSA_PAINT_ATTR) }.trim().ifEmpty { null }
-                    ps += painted?.takeIf { it.length <= 4096 && runCatching { Paint.decode(it) }.isSuccess }
+                    ps += painted?.takeIf { it.length <= MAX_PAINT_CHARS && runCatching { Paint.decode(it) }.isSuccess }
                     part(ps.size - 1)?.let { f -> ps[ps.size - 1] = ps.last()?.let { p -> Paint.remap(p) { if (it == 0) f else it } } ?: Paint.whole(f) }
+                    // Orca's other kinds of paint: carried through as the engine wrote them (checked only for shape).
+                    listOf(SUPPORT_PAINT_ATTR, SEAM_PAINT_ATTR, FUZZY_PAINT_ATTR).forEachIndexed { k, attr ->
+                        extra[k] += tri.getAttribute(attr).trim().takeIf { it.isNotEmpty() && it.length <= MAX_PAINT_CHARS && it.all { c -> c in '0'..'9' || c in 'A'..'F' } }
+                    }
                     if (++triangles > limits.maxTriangles) throw ProjectFormatException("The project has more triangles than Nozzle It All can open.")
                 } }
             }
@@ -230,7 +249,7 @@ object ThreeMf {
                 val cid = c.getAttribute("objectid").toInt()
                 // A top-level component is a part; its filament applies to everything under it.
                 val sub = if (depth == 0) parts.partFilament(id, cid)?.let { f -> { _: Int -> f } } ?: part else part
-                flatten(subPath, cid, Transform.parse(c.getAttribute("transform")).then(t), depth + 1, vs, ts, ps, sub)
+                flatten(subPath, cid, Transform.parse(c.getAttribute("transform")).then(t), depth + 1, vs, ts, ps, sub, extra)
             } }
         }
         val build = child(rootDoc.documentElement, "build") ?: throw ProjectFormatException("The 3MF has no build plate contents.")
@@ -238,15 +257,17 @@ object ThreeMf {
             val id = item.getAttribute("objectid").toIntOrNull() ?: throw ProjectFormatException("A 3MF build item has no object.")
             val path = item.getAttributeNS(PROD_NS, "path").ifBlank { item.getAttribute("p:path") }.removePrefix("/").ifBlank { root }
             val vs = ArrayList<Float>(); val ts = ArrayList<Int>(); val ps = ArrayList<String?>()
+            val extra = List(3) { ArrayList<String?>() }
             val own = parts.objectFilament(id)
             // Parts whose filament differs from the object's are painted that filament; the object's own is the default.
             val byRange = parts.rangeFilament(id)
-            flatten(path, id, Transform(), 0, vs, ts, ps) { tri -> byRange(tri)?.takeIf { it != (own ?: 1) } }
+            flatten(path, id, Transform(), 0, vs, ts, ps, { tri -> byRange(tri)?.takeIf { it != (own ?: 1) } }, extra)
             val plain = Paint.whole(own ?: 1)
             for (i in ps.indices) if (ps[i] == plain) ps[i] = null
             val name = parts.name(id) ?: objectsIn(path)[id]?.getAttribute("name")?.ifBlank { null } ?: "Object ${index + 1}"
             val paint = if (ps.any { it != null }) ps.toTypedArray() else null
-            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray(), paint), Transform.parse(item.getAttribute("transform")), own, parts.settings(id), parts.plate(id))
+            val kinds = extra.map { l -> if (l.any { it != null }) l.toTypedArray() else null }
+            ModelObject(id, name, Mesh(vs.toFloatArray(), ts.toIntArray(), paint, kinds[0], kinds[1], kinds[2]), Transform.parse(item.getAttribute("transform")), own, parts.settings(id), parts.plate(id))
         }
         var manifest: ProjectManifest? = null
         var problem: String? = null
@@ -300,6 +321,9 @@ object ThreeMf {
                 for (i in t.indices step 3) {
                     sb.append("     <triangle v1=\"${t[i]}\" v2=\"${t[i + 1]}\" v3=\"${t[i + 2]}\"")
                     paint?.getOrNull(i / 3)?.let { sb.append(" $PAINT_ATTR=\"").append(it).append('"') }
+                    o.mesh.supportPaint?.getOrNull(i / 3)?.let { sb.append(" $SUPPORT_PAINT_ATTR=\"").append(it).append('"') }
+                    o.mesh.seamPaint?.getOrNull(i / 3)?.let { sb.append(" $SEAM_PAINT_ATTR=\"").append(it).append('"') }
+                    o.mesh.fuzzyPaint?.getOrNull(i / 3)?.let { sb.append(" $FUZZY_PAINT_ATTR=\"").append(it).append('"') }
                     sb.append("/>\n")
                 }
                 sb.append("    </triangles>\n   </mesh>\n  </object>\n")
@@ -459,11 +483,15 @@ object ThreeMf {
         val f = DocumentBuilderFactory.newInstance()
         f.isNamespaceAware = true
         // Untrusted input: no DTDs, no external entities, no XInclude.
-        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        f.setFeature("http://xml.org/sax/features/external-general-entities", false)
-        f.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-        f.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, ""); f.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
-        f.isXIncludeAware = false; f.isExpandEntityReferences = false
+        // Android's parser has none of these Xerces switches, so each is tried on its own; without the DOCTYPE switch the DOCTYPE is refused here
+        // (entities can only be declared in one), which closes the same door.
+        fun tryIt(block: () -> Unit) = runCatching(block).isSuccess
+        val noDoctype = tryIt { f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
+        tryIt { f.setFeature("http://xml.org/sax/features/external-general-entities", false) }
+        tryIt { f.setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
+        tryIt { f.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, ""); f.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "") }
+        tryIt { f.isXIncludeAware = false }; tryIt { f.isExpandEntityReferences = false }
+        if (!noDoctype && String(bytes, Charsets.ISO_8859_1).contains("<!DOCTYPE", ignoreCase = true)) throw ProjectFormatException("Part of the 3MF is not valid XML.")
         return try { f.newDocumentBuilder().parse(ByteArrayInputStream(bytes)) } catch (e: Exception) { throw ProjectFormatException("Part of the 3MF is not valid XML.") }
     }
     private fun resources(doc: org.w3c.dom.Document): List<Element> = child(doc.documentElement, "resources")?.let { children(it, "object") } ?: emptyList()

@@ -1,7 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
-import com.nozzleitall.printer.ext.PrusaColorMixFormat
-import com.nozzleitall.printer.ext.FullSpectrumFormat
+import com.nozzleitall.printer.ext.MixedFilamentFormat
 import net.jamesjennison.klippercompanion.FlushVolumes
 import androidx.compose.runtime.*
 import com.nozzleitall.desktop.AppState
@@ -26,6 +25,22 @@ private const val FLUSH_KEY = "flush_volumes_matrix"
 class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, rotZ: Float = 0f, scale: Float = 1f, slot: Int = 1,
                paintSlots: List<Int> = emptyList(), val sources: List<SourceFilament> = emptyList(), settings: Map<String, String> = emptyMap(),
                plate: Int = 0) {
+    /** Per-axis size on top of [scale] (Orca's unlocked scale fields); a negative one mirrors that axis. */
+    var sx by mutableStateOf(1f); var sy by mutableStateOf(1f); var sz by mutableStateOf(1f)
+    /** Extra volumes: negative volumes, modifiers, support blockers / enforcers, parts (coordinates from the mesh's bounding-box centre). */
+    val parts = androidx.compose.runtime.mutableStateListOf<ProjectManifest.ObjectPart>()
+    /** Height range modifiers: settings for layers between two heights. */
+    val ranges = androidx.compose.runtime.mutableStateListOf<ProjectManifest.HeightRange>()
+    /** A variable layer height profile, z / height pairs; empty = the process's layer height. */
+    val layerProfile = androidx.compose.runtime.mutableStateListOf<Double>()
+    val ex get() = scale * sx; val ey get() = scale * sy; val ez get() = scale * sz
+    /** Takes [from]'s size, mirroring, parts, height ranges and layer profile (a copy or a re-meshed object keeps them). */
+    fun copyShapeFrom(from: PrepItem) {
+        sx = from.sx; sy = from.sy; sz = from.sz
+        parts.clear(); parts.addAll(from.parts); ranges.clear(); ranges.addAll(from.ranges); layerProfile.clear(); layerProfile.addAll(from.layerProfile)
+    }
+    /** Whether the object has a variable layer height, by profile or by height ranges (the mixed sub-layer warning's question). */
+    val hasVariableLayer get() = layerProfile.size > 4 || ranges.isNotEmpty()
     /** The plate it's on (0-based); x and y are on that plate. */
     var plate by mutableStateOf(plate)
     /** The object's own print settings (Orca's per-object settings), engine keys to serialized values. */
@@ -35,6 +50,8 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     val paintSlots = androidx.compose.runtime.mutableStateListOf<Int>().apply { addAll(paintSlots) }
     /** The file's filament for unpainted areas, when the file said (a model from another slicer). */
     var ownFilament: Int? = null
+    /** The object this is an instance of (Orca's instances), or null for an object in its own right. */
+    var instanceOf by mutableStateOf<Int?>(null)
     /** The file's filament numbers this model's paint uses, in order. */
     val painted: List<Int> by lazy { MeshIO.paintedFilaments(mesh) }
     /** The slot the file's filament [n] prints with. */
@@ -44,15 +61,15 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     private val outline: FloatArray by lazy { hull2d(mesh.vertices, (bounds[0] + bounds[3]) / 2, (bounds[1] + bounds[4]) / 2) }
     /** How far the object reaches from (x, y) at its current turn and scale: min x, max x, min y, max y. */
     val reach: FloatArray get() {
-        val c = cos(Math.toRadians(rotZ.toDouble())).toFloat() * scale; val s = sin(Math.toRadians(rotZ.toDouble())).toFloat() * scale
+        val cr = cos(Math.toRadians(rotZ.toDouble())).toFloat(); val sr = sin(Math.toRadians(rotZ.toDouble())).toFloat()
         val r = floatArrayOf(Float.MAX_VALUE, -Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE)
-        for (i in outline.indices step 2) { val px = outline[i] * c - outline[i + 1] * s; val py = outline[i] * s + outline[i + 1] * c
+        for (i in outline.indices step 2) { val ox = outline[i] * ex; val oy = outline[i + 1] * ey; val px = ox * cr - oy * sr; val py = ox * sr + oy * cr
             r[0] = min(r[0], px); r[1] = max(r[1], px); r[2] = min(r[2], py); r[3] = max(r[3], py) }
         return r
     }
     val footprintW get() = reach.let { it[1] - it[0] }
     val footprintD get() = reach.let { it[3] - it[2] }
-    val height get() = (bounds[5] - bounds[2]) * scale
+    val height get() = (bounds[5] - bounds[2]) * kotlin.math.abs(ez)
 
     /** The mesh's volume in mm³ before scaling (signed tetrahedra; a closed mesh's is exact). */
     val rawVolume: Double by lazy {
@@ -63,7 +80,7 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
         }
         kotlin.math.abs(sum / 6.0)
     }
-    val volume get() = rawVolume * scale * scale * scale
+    val volume get() = rawVolume * kotlin.math.abs(ex * ey * ez)
 
     /** Edges used by only one triangle (vertices at the same place counted as one): 0 for a closed, printable surface. */
     val openEdges: Int by lazy {
@@ -82,9 +99,11 @@ class PrepItem(val id: Int, name: String, val mesh: Mesh, x: Float, y: Float, ro
     /** Placement as a 3MF transform: centre the mesh on its own footprint, drop it onto the bed, rotate about Z, scale, move. */
     fun placement(): Transform {
         val mx = (bounds[0] + bounds[3]) / 2.0; val my = (bounds[1] + bounds[4]) / 2.0; val mz = bounds[2].toDouble()
-        val c = cos(Math.toRadians(rotZ.toDouble())) * scale; val s = sin(Math.toRadians(rotZ.toDouble())) * scale
-        val tx = -(mx * c - my * s) + x; val ty = -(mx * s + my * c) + y; val tz = -mz * scale
-        return Transform(doubleArrayOf(c, s, 0.0, -s, c, 0.0, 0.0, 0.0, scale.toDouble(), tx, ty, tz))
+        val cr = cos(Math.toRadians(rotZ.toDouble())); val sr = sin(Math.toRadians(rotZ.toDouble()))
+        val kx = ex.toDouble(); val ky = ey.toDouble(); val kz = ez.toDouble()
+        val tx = -(mx * kx * cr - my * ky * sr) + x; val ty = -(mx * kx * sr + my * ky * cr) + y
+        val tz = -(if (kz >= 0) mz else bounds[5].toDouble()) * kz   // a mirrored height sits on its other end
+        return Transform(doubleArrayOf(cr * kx, sr * kx, 0.0, -sr * ky, cr * ky, 0.0, 0.0, 0.0, kz, tx, ty, tz))
     }
 }
 
@@ -99,11 +118,55 @@ sealed class SliceState {
 /** Everything the Prepare workflow edits. Saved as a canonical 3MF + manifest, so Android and the Web App open it. */
 class PrepareState(private val app: AppState) {
     val items = mutableStateListOf<PrepItem>()
-    var selected by mutableStateOf<Int?>(null)
+    var selectedIds by mutableStateOf<Set<Int>>(emptySet()); private set
+    private var primarySelection by mutableStateOf<Int?>(null)
+    /** Primary object for single-object tools; assigning it replaces the selection. */
+    var selected: Int?
+        get() = primarySelection
+        set(value) { setSelection(value?.let { setOf(it) }.orEmpty(), value) }
+    private var selectionAnchor: Int? = null
+
+    private fun setSelection(ids: Set<Int>, primary: Int? = ids.lastOrNull()) {
+        selectedIds = ids.intersect(plateItems().map { it.id }.toSet())
+        primarySelection = primary?.takeIf { it in selectedIds } ?: selectedIds.lastOrNull()
+        selectionAnchor = primarySelection
+        if (selectedIds.size != 1) stopPainting()
+        if (aiItemId != null && (selectedIds.size != 1 || selected != aiItemId)) aiDiscard()
+        history.selectionChanged()
+    }
+    fun selectedItems() = plateItems().filter { it.id in selectedIds }
+    fun selectAll() = setSelection(plateItems().map { it.id }.toSet(), selected)
+    fun deselect() = setSelection(emptySet())
+    /** Ctrl toggles; Shift selects a range in list order, or adds an object on the plate. */
+    fun selectObject(id: Int?, toggle: Boolean = false, range: Boolean = false, listRange: Boolean = false) {
+        if (id == null) { if (!toggle && !range) deselect(); return }
+        val order = plateItems().map { it.id }
+        if (id !in order) return
+        val anchor = selectionAnchor
+        val ids = when {
+            range && listRange && anchor in order -> {
+                val a = order.indexOf(anchor); val b = order.indexOf(id)
+                val span = order.subList(minOf(a, b), maxOf(a, b) + 1).toSet()
+                if (toggle) selectedIds + span else span
+            }
+            range -> selectedIds + id
+            toggle -> if (id in selectedIds) selectedIds - id else selectedIds + id
+            else -> setOf(id)
+        }
+        setSelection(ids, id)
+        selectionAnchor = if (range) anchor ?: id else id
+    }
     var file by mutableStateOf<File?>(null)
+    /** The plate's camera, here (not in the screen) so the View menu can set it. */
+    val camera = ViewCamera()
     var manifest by mutableStateOf<ProjectManifest?>(null)
     var name by mutableStateOf("Untitled project")
-    var dirty by mutableStateOf(false)
+    private var dirtyFlag by mutableStateOf(false)
+    /** Setting it true is what every edit does: that also records the change for Undo ([history]). */
+    var dirty: Boolean
+        get() = dirtyFlag
+        set(v) { dirtyFlag = v; if (v) history.recordChange() }
+    val history = PlateHistory(this)
     var passthrough: Map<String, ByteArray> = emptyMap()
     var metadata: Map<String, String> = emptyMap()
     var printerId by mutableStateOf<String?>(null)
@@ -114,6 +177,8 @@ class PrepareState(private val app: AppState) {
     var infill by mutableStateOf(15)
     /** Settings changed in All settings, in the engine's serialized form; applied after the preset and quick controls. */
     val overrides = androidx.compose.runtime.mutableStateMapOf<String, String>()
+    /** Set while the plate holds a calibration print (see [startCalibration]): the G-code gets its height-dependent step after slicing. */
+    var calibration by mutableStateOf<net.jamesjennison.klippercompanion.CalibrationSpec?>(null)
     /** Which settings the panel shows: the print (process), a material, or the printer. */
     var settingsScope by mutableStateOf(com.nozzleitall.desktop.settings.Scope.PROCESS)
     /** Everything (on) or only the essential settings (off). */
@@ -147,6 +212,8 @@ class PrepareState(private val app: AppState) {
     var slice by mutableStateOf<SliceState>(SliceState.Idle)
     var previewLayer by mutableStateOf(0)
     var showPreview by mutableStateOf(false)
+    /** How the preview is coloured; null picks from the print (filaments if it uses several, else line types). */
+    var previewView by mutableStateOf<PreviewView?>(null)
     var notice by mutableStateOf<String?>(null)
     var uploadProgress by mutableStateOf<Float?>(null)
     /** Material slots when no printer reports its toolheads (1-based). */
@@ -157,6 +224,17 @@ class PrepareState(private val app: AppState) {
         ProjectManifest.MaterialSlot(7, "PLA", colorHex = "#FFB300"), ProjectManifest.MaterialSlot(8, "PLA", colorHex = "#8D6E63"))
     private var engine: SliceEngine? = null
     private var nextId = 1
+    internal val nextItemId get() = nextId
+    /** Puts the plates back as [history] kept them. */
+    internal fun restorePlate(restored: List<PrepItem>, restoredOverrides: Map<String, String>, names: List<String>, current: Int, select: Int?, next: Int, selection: Set<Int> = select?.let { setOf(it) }.orEmpty()) {
+        items.clear(); items.addAll(restored)
+        overrides.clear(); overrides.putAll(restoredOverrides)
+        plateNames.clear(); plateNames.addAll(names); currentPlate = current.coerceIn(0, plateNames.lastIndex)
+        setSelection(selection, select)
+        nextId = next
+        paintHistory.clear()
+        syncInstances(); dirtyFlag = true; invalidateSlice(); refreshRules()
+    }
 
     val profile: PrinterProfileInfo? get() = ProfileCatalog.byId(profileId)
     /** The chosen profile's printable area. */
@@ -165,6 +243,7 @@ class PrepareState(private val app: AppState) {
     // --- Plates (Orca's plate list): names in order, the one shown, and the objects on it.
     val plateNames = androidx.compose.runtime.mutableStateListOf("Plate 1")
     var currentPlate by mutableStateOf(0)
+    init { history.reset() }   // after the fields it records
     fun plateItems(plate: Int = currentPlate): List<PrepItem> = items.filter { it.plate == plate }
 
     /** Shows plate [i]; a slice result belongs to the plate it was made for. */
@@ -232,6 +311,29 @@ class PrepareState(private val app: AppState) {
         changed()
     }
 
+    /**
+     * Sync filament from the printer: what each toolhead reports loaded (material, vendor, colour) is copied into the project's own
+     * slots, so it stays when the printer is later off. Returns a sentence saying what happened.
+     */
+    fun syncFromPrinter(): String {
+        val entry = printer() ?: return "Choose a printer first (Setup > Printer)."
+        val name = entry.config.identity.displayName
+        val heads = entry.status.value.toolheads
+        if (heads.isEmpty()) return "$name doesn't report loaded filament, so there is nothing to sync. Set the slots by hand."
+        var synced = 0
+        heads.forEach { t ->
+            val m = t.material ?: return@forEach
+            val i = manualSlots.indexOfFirst { it.slot == t.index + 1 }
+            if (i >= 0) {
+                manualSlots[i] = manualSlots[i].copy(type = m.type ?: manualSlots[i].type, vendor = m.vendor ?: manualSlots[i].vendor,
+                    subType = m.subType ?: manualSlots[i].subType, colorHex = m.colorHex ?: manualSlots[i].colorHex)
+                synced++
+            }
+        }
+        if (synced > 0) changed()
+        return if (synced == 0) "$name reports every slot empty. Load filament, or set the slots by hand." else "Synced $synced of ${heads.size} slots from $name."
+    }
+
     /** Materials in slot order: the printer's loaded toolheads when it reports them, otherwise the manual slots. */
     fun materials(): List<ProjectManifest.MaterialSlot> {
         val heads = printer()?.status?.value?.toolheads.orEmpty()
@@ -289,39 +391,54 @@ class PrepareState(private val app: AppState) {
         overrides["flush_multiplier"] = "%.2f".format(java.util.Locale.ROOT, v.coerceIn(FlushVolumes.MIN_MULTIPLIER, FlushVolumes.MAX_MULTIPLIER)); changed()
     }
 
-    // --- Colour mixing (Snapmaker Full Spectrum). The mixes are Snapmaker's own mixed_filament_definitions string; the
-    // engine (Snapmaker Orca's MixedFilamentManager) turns it into rows with virtual slot numbers after the physical ones.
-    var mixDefinitions by mutableStateOf("")
-    val mixes = mutableStateListOf<FullSpectrumFormat.Mix>()
+    // --- Colour mixing: OrcaSlicer 2.5.0's mixed filaments. Each row is a filament slot after the loaded ones, made of loaded
+    // filaments in set proportions (optionally a gradient up the object); the engine (Orca's own code) blends its colour and
+    // resolves it when slicing. They are saved with the project as the same filament_mixed_* settings Orca writes.
+    val mixed = mutableStateListOf<MixedFilamentFormat.Row>()
     var mixProblem by mutableStateOf<String?>(null)
+    /** Whether mixed filaments split each layer into sub-layers (Orca's default) rather than alternating whole layers. */
+    var mixSublayers by mutableStateOf(true)
+    /** The slice settings for [mixed] as the engine last worked them out, kept so saving the project needs no engine call. */
+    private var mixedSettings: Map<String, String> = emptyMap()
 
-    // --- PrusaSlicer ColorMix (virtual extruders), for multi-slot printers without Full Spectrum. Stored as PrusaSlicer's
-    // own 3MF sidecar, so a project opens in PrusaSlicer with the same virtual extruders and paint.
-    val colorMix = mutableStateListOf<PrusaColorMixFormat.Virtual>()
+    /** The slot number of mixed row [index]: after the loaded filaments. */
+    fun mixedSlot(index: Int): Int = materials().size + index + 1
 
-    fun setColorMix(list: List<PrusaColorMixFormat.Virtual>) { colorMix.clear(); colorMix.addAll(list.sortedBy { it.id }) }
+    /** The mixed rows this printer prints: none where it offers no mixing (CANVAS, a single-slot printer). */
+    fun offeredMixed(): List<MixedFilamentFormat.Row> = if (MixedFilamentFormat.FEATURE in features()) mixed.toList() else emptyList()
 
-    /** Re-reads the virtual extruders through PrusaSlicer's own normalising for the current slots (colours, cycles). */
-    fun refreshColorMix(scope: kotlinx.coroutines.CoroutineScope) {
-        if (colorMix.isEmpty()) return
-        val physical = materials().map { (it.colorHex ?: "#FFFFFF") to it.type }; val list = colorMix.toList()
-        scope.launch { runCatching { withContext(Dispatchers.IO) { PrusaColorMix.normalize(physical, list) } }
-            .onSuccess { setColorMix(it) }.onFailure { mixProblem = it.message } }
+    private fun typedPhysical() = materials().map { (it.colorHex ?: "#FFFFFF") to it.type }
+
+    /** Re-reads the rows through the engine for the current loaded filaments (colours, problems) and refreshes the saved settings. */
+    fun refreshMixes(scope: kotlinx.coroutines.CoroutineScope) {
+        if (mixed.isEmpty()) { mixedSettings = emptyMap(); return }
+        val physical = typedPhysical(); val rows = mixed.toList(); val sublayer = mixSublayers
+        scope.launch { runCatching { withContext(Dispatchers.IO) { MixedFilament.display(physical, rows) to runCatching { MixedFilament.sliceOverrides(physical, rows, sublayer) }.getOrDefault(emptyMap()) } }
+            .onSuccess { (display, settings) -> if (display != mixed.toList()) { mixed.clear(); mixed.addAll(display) }; mixedSettings = settings; mixProblem = null }
+            .onFailure { mixProblem = it.message } }
     }
 
-    /** Adds or replaces a virtual extruder, then re-reads the list through PrusaSlicer's normalising. */
-    fun saveVirtualExtruder(v: PrusaColorMixFormat.Virtual, scope: kotlinx.coroutines.CoroutineScope) {
-        setColorMix(colorMix.filter { it.id != v.id } + v); changed(); refreshColorMix(scope)
+    private fun edit(scope: kotlinx.coroutines.CoroutineScope, op: (List<Pair<String, String?>>, List<MixedFilamentFormat.Row>) -> List<MixedFilamentFormat.Row>?) {
+        val physical = typedPhysical(); val rows = mixed.toList()
+        scope.launch { runCatching { withContext(Dispatchers.IO) { op(physical, rows) } }
+            .onSuccess { result -> if (result == null) mixProblem = "That mix is already in the list." else { mixed.clear(); mixed.addAll(result); mixProblem = null; changed(); refreshMixes(scope) } }
+            .onFailure { mixProblem = it.message } }
     }
 
-    /** Removes a virtual extruder; objects and painted areas on it go back to the default extruder, as in PrusaSlicer. */
-    fun removeVirtualExtruder(id: Int) {
-        setColorMix(colorMix.filter { it.id != id })
+    fun addMixed(row: MixedFilamentFormat.Row, scope: kotlinx.coroutines.CoroutineScope) = edit(scope) { phys, rows -> MixedFilament.add(phys, rows, row) }
+    fun updateMixed(index: Int, row: MixedFilamentFormat.Row, scope: kotlinx.coroutines.CoroutineScope) = edit(scope) { phys, rows -> MixedFilament.update(phys, rows, index, row) }
+
+    /** Removes mixed row [index]; objects and painted areas on it go back to the default slot, and later mixes move down one slot. */
+    fun removeMixed(index: Int, scope: kotlinx.coroutines.CoroutineScope) {
+        val gone = mixedSlot(index)
+        edit(scope) { phys, rows -> MixedFilament.remove(phys, rows, index) }
         items.forEach { item ->
-            if (item.slot == id) item.slot = 1
-            for (i in item.paintSlots.indices) if (item.paintSlots[i] == id) item.paintSlots[i] = item.slot
+            if (item.slot == gone) item.slot = 1 else if (item.slot > gone) item.slot--
+            for (i in item.paintSlots.indices) {
+                val s = item.paintSlots[i]
+                item.paintSlots[i] = if (s == gone) item.slot else if (s > gone) s - 1 else s
+            }
         }
-        changed()
     }
 
     // --- Printer card: bed type and each nozzle's flow (Snapmaker Orca's rules, PrinterSetup).
@@ -344,90 +461,65 @@ class PrepareState(private val app: AppState) {
         val m = machineJson()
         if (PrinterSetup.supportsHighFlow(m)) {
             val n = PrinterSetup.nozzles(m).size
-            put("nozzle_volume_type", List(n) { nozzleFlows.getOrElse(it) { "standard" } }.joinToString(","))
+            // The engine names the flow types "Standard" and "High Flow"; the card keeps "standard" / "high_flow".
+            put("nozzle_volume_type", List(n) { if (nozzleFlows.getOrElse(it) { "standard" } == "high_flow") "High Flow" else "Standard" }.joinToString(","))
         }
     }
 
     /** Colour-mixing features on offer: the connected printer's own report, else what the chosen profile offers. */
-    fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions?.let { com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(it, materials().size) }
-        ?: profile?.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools) } ?: emptySet()
+    fun features(): Set<String> = printer()?.capabilities?.value?.vendorExtensions?.let { com.nozzleitall.printer.ext.ProfileFeatures.ofPrinter(it, materials().size, profile?.id) }
+        ?: profile?.let { com.nozzleitall.printer.ext.ProfileFeatures.of(it.familyHint, it.tools, it.id) } ?: emptySet()
 
     fun physicalColours(): List<String> = materials().map { it.colorHex ?: "#FFFFFF" }
 
-    /** The colour of slot [id]: a loaded filament, or a mix's (or virtual extruder's) blended display colour. */
-    fun slotHex(id: Int): String? = materials().firstOrNull { it.slot == id }?.colorHex ?: mixes.firstOrNull { it.id == id }?.displayHex
-        ?: colorMix.firstOrNull { it.id == id }?.let { it.colorOverride ?: it.effectiveHex }
+    /** The colour of slot [id]: a loaded filament, or a mixed filament's blended colour. */
+    fun slotHex(id: Int): String? = materials().firstOrNull { it.slot == id }?.colorHex ?: mixed.getOrNull(id - materials().size - 1)?.hex
 
-    /** Every slot a model can print with: the loaded filaments, then the mixes. */
+    /** Every slot a model can print with: the loaded filaments, then the mixed filaments. */
     fun allSlots(): List<Pair<Int, String>> = materials().map { it.slot to listOfNotNull(it.vendor, it.type).joinToString(" ").ifBlank { "Filament" } } +
-        mixes.filter { it.enabled }.map { it.id to it.label } + colorMix.map { it.id to "[V] Extruder ${it.id}" }
-
-    private fun setMixes(m: FullSpectrumFormat.Mixes) { mixDefinitions = m.definitions; mixes.clear(); mixes.addAll(m.rows); mixProblem = null }
-
-    /** Re-reads the mixes for the current slots (their colours and numbers follow the loaded filaments). */
-    fun refreshMixes(scope: kotlinx.coroutines.CoroutineScope) {
-        val defs = mixDefinitions; val physical = physicalColours()
-        if (defs.isBlank()) { mixes.clear(); return }
-        scope.launch { runCatching { withContext(Dispatchers.IO) { FullSpectrum.display(physical, defs) } }
-            .onSuccess { setMixes(it) }.onFailure { mixProblem = it.message } }
-    }
-
-    fun editMixes(scope: kotlinx.coroutines.CoroutineScope, op: (List<String>, String) -> FullSpectrumFormat.Mixes) {
-        val defs = mixDefinitions; val physical = physicalColours()
-        scope.launch { runCatching { withContext(Dispatchers.IO) { op(physical, defs) } }
-            .onSuccess { setMixes(it); followRemap(it.remap); changed() }.onFailure { mixProblem = it.message } }
-    }
-
-    /**
-     * Every model follows Snapmaker's renumbering after mixes are deleted: a colour on a mix that moved follows it; one
-     * on a deleted mix (mapped to 0) goes back to the object's own slot, and an object on a deleted mix to slot 1.
-     */
-    fun followRemap(remap: Map<Int, Int>) {
-        if (remap.isEmpty()) return
-        items.forEach { item ->
-            item.slot = remap[item.slot]?.let { if (it == 0) 1 else it } ?: item.slot
-            for (i in item.paintSlots.indices) remap[item.paintSlots[i]]?.let { item.paintSlots[i] = if (it == 0) item.slot else it }
-        }
-    }
+        offeredMixed().mapIndexed { i, r -> mixedSlot(i) to "Mix ${r.label}" }
 
     /** The slots the project uses: every object's own slot and every slot its colours print in. */
     fun usedSlots(): Set<Int> = items.flatMapTo(HashSet()) { item -> listOf(item.slot) + item.painted.map { item.slotFor(it) } }
 
-    /** Applies a Color Mixing Match to [item]: its colours print in the matched slots or new mixes. */
-    fun applyMatch(item: PrepItem, result: FullSpectrumFormat.MatchResult, scope: kotlinx.coroutines.CoroutineScope) {
-        mixDefinitions = result.definitions
-        // Auto mode matched against Snapmaker's recommended filaments: with no printer reporting what's loaded, the slots
-        // become those filaments (as Snapmaker Orca's apply step sets them); a connected printer's slots are what's loaded.
-        result.palette.forEach { (slot, hex) ->
-            // Each palette slot slices with its Full Spectrum family's filament profile for this printer
-            // (find_selectable_full_spectrum_family_preset: the family's profile by match name).
-            val family = result.families[slot]
-            val entry = family?.let { f -> filamentLibrary().firstOrNull { it.family.equals(f, true) } }
-            if (printer()?.status?.value?.toolheads.isNullOrEmpty()) {
-                val i = manualSlots.indexOfFirst { it.slot == slot }
-                if (i >= 0) manualSlots[i] = manualSlots[i].copy(type = entry?.type ?: "PLA", vendor = entry?.vendor?.takeIf { it.isNotBlank() },
-                    colorHex = hex, filamentProfile = entry?.id ?: manualSlots[i].filamentProfile)
-            } else entry?.let { headProfiles[slot] = it.id }
-        }
-        result.results.forEach { m -> m.sourceIds.forEach { n ->
-            if (n == item.ownFilament) item.slot = m.slot
-            if (n >= 1) { while (item.paintSlots.size < n) item.paintSlots.add(item.slot); item.paintSlots[n - 1] = m.slot }
-        } }
-        // Snapmaker Orca then deletes mixes the project no longer uses (cleanup_unused_filaments_after_batch_match).
-        val physical = physicalColours(); val defs = mixDefinitions; val used = usedSlots()
-        changed()
+    /**
+     * Matches each of [item]'s file colours to the closest loaded filament or a new mix of loaded filaments (the engine's
+     * recipe search), adds the mixes and sets the slots. Returns the number of mixes added.
+     */
+    fun matchWithMixing(item: PrepItem, targets: List<Pair<String, List<Int>>>, scope: kotlinx.coroutines.CoroutineScope) {
+        val physical = typedPhysical()
         scope.launch {
-            runCatching { withContext(Dispatchers.IO) { FullSpectrum.cleanup(physical, defs, used) } }
-                .onSuccess { setMixes(it); followRemap(it.remap) }.onFailure { mixProblem = it.message; refreshMixes(scope) }
+            runCatching { withContext(Dispatchers.IO) {
+                var rows = mixed.toList()
+                val slotFor = HashMap<String, Int>()
+                for ((hex, _) in targets) {
+                    val m = MixedFilament.match(physical, hex)
+                    val single = m.parts.singleOrNull()
+                    if (single != null || m.row == null) { slotFor[hex] = m.parts.firstOrNull()?.filament ?: 1; continue }
+                    val row = m.row!!
+                    // The engine says an identical fixed blend is already there by returning nothing; reuse that row.
+                    val existing = rows.indexOfFirst { !it.gradient.enabled && it.components == row.components && it.weights == row.weights }
+                    if (existing < 0) rows = MixedFilament.add(physical, rows, row) ?: rows
+                    slotFor[hex] = physical.size + (if (existing >= 0) existing else rows.size - 1) + 1
+                }
+                rows to slotFor
+            } }.onSuccess { (rows, slotFor) ->
+                mixed.clear(); mixed.addAll(rows)
+                targets.forEach { (hex, ids) -> val slot = slotFor[hex] ?: return@forEach
+                    ids.forEach { n -> if (n == item.ownFilament) item.slot = slot
+                        if (n >= 1) { while (item.paintSlots.size < n) item.paintSlots.add(item.slot); item.paintSlots[n - 1] = slot } } }
+                mixProblem = null; changed(); refreshMixes(scope)
+            }.onFailure { mixProblem = it.message }
         }
     }
 
     fun newProject() {
         bedType = null; nozzleFlows.clear(); nozzle = null; processId = null
-        overrides.clear(); mixDefinitions = ""; mixes.clear(); mixProblem = null; headProfiles.clear(); colorMix.clear()
+        overrides.clear(); mixed.clear(); mixedSettings = emptyMap(); mixSublayers = true; mixProblem = null; headProfiles.clear()
         items.clear(); selected = null; file = null; manifest = null; name = "Untitled project"; dirty = false; passthrough = emptyMap(); metadata = emptyMap()
         plateNames.clear(); plateNames += "Plate 1"; currentPlate = 0
-        slice = SliceState.Idle; showPreview = false; nextId = 1
+        slice = SliceState.Idle; showPreview = false; nextId = 1; calibration = null
+        history.reset()
     }
 
     fun open(f: File) {
@@ -435,8 +527,6 @@ class PrepareState(private val app: AppState) {
         newProject()
         file = f; manifest = p.manifest; name = p.manifest?.name ?: p.metadata["Title"] ?: f.nameWithoutExtension
         passthrough = p.passthrough; metadata = p.metadata
-        // PrusaSlicer's virtual extruders, when the project has them (its own sidecar, kept as it is).
-        p.passthrough[PrusaColorMix.SIDECAR]?.let { PrusaColorMix.readSidecar(it) }?.let { (_, list) -> setColorMix(list) }
         val entries = p.manifest?.plates?.flatMap { it.objects }?.associateBy { it.objectId } ?: emptyMap()
         // Plates: Nozzle's own from the manifest, another slicer's from its plate list. Objects are stored where that
         // slicer puts its plates side by side (Plates.origin), so each is brought back onto its own plate.
@@ -453,6 +543,7 @@ class PrepareState(private val app: AppState) {
             val local = if (ox == 0.0 && oy == 0.0) o else o.copy(placement = Transform(o.placement.m.copyOf().also { it[9] -= ox; it[10] -= oy }))
             addFromPlacement(local, entries[o.id]?.materialSlot ?: 1, entries[o.id]?.paintSlots.orEmpty(), p.filaments,
                 ObjectSettings.usable(entries[o.id]?.settings?.takeIf { it.isNotEmpty() } ?: o.settings), plate)
+            entries[o.id]?.let { e -> items.lastOrNull()?.let { it.parts.addAll(e.parts); it.ranges.addAll(e.heightRanges); it.layerProfile.addAll(e.layerProfile); it.instanceOf = e.instanceOf } }
         }
         p.manifest?.settings?.preset?.let { key ->
             if (key.startsWith("process:")) processId = key.removePrefix("process:")
@@ -461,10 +552,11 @@ class PrepareState(private val app: AppState) {
         p.manifest?.settings?.overrides?.let { ov ->
             ov["sparse_infill_density"]?.removeSuffix("%")?.toIntOrNull()?.let { infill = it }; ov["enable_support"]?.let { supports = it == "1" }
             // Everything else the project changed (from any platform) shows up in All settings.
-            ov[FullSpectrum.DEFINITIONS_KEY]?.let { mixDefinitions = it }
+            mixed.addAll(MixedFilamentFormat.rowsFromSettings(ov, p.manifest?.materials?.size ?: materials().size))
+            ov["enable_mixed_color_sublayer"]?.let { mixSublayers = it == "1" }
             ov["curr_bed_type"]?.let { bedType = it }
-            ov["nozzle_volume_type"]?.let { v -> nozzleFlows.clear(); nozzleFlows.addAll(v.split(',').map { it.trim() }) }
-            ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && k != FullSpectrum.DEFINITIONS_KEY && k != "curr_bed_type" &&
+            ov["nozzle_volume_type"]?.let { v -> nozzleFlows.clear(); nozzleFlows.addAll(v.split(',').map { it.trim().lowercase().replace(' ', '_') }) }
+            ov.filter { (k, v) -> k != "sparse_infill_density" && k != "enable_support" && k != "filament_colour" && k !in MixedFilamentFormat.SETTING_KEYS && k != "curr_bed_type" &&
                 k != "nozzle_volume_type" && preset.overrides[k] != v }.forEach { (k, v) -> overrides[k] = v }
         }
         p.manifest?.printer?.profileId?.takeIf { ProfileCatalog.byId(it) != null }?.let { profileId = it }
@@ -478,6 +570,7 @@ class PrepareState(private val app: AppState) {
         p.manifest?.printer?.printerId?.takeIf { it in app.fleet.printers }?.let { printerId = it }
         notice = p.manifestProblem
         dirty = false
+        history.reset()
     }
 
     /** Reverses [PrepItem.placement] for a mesh loaded from a 3MF: recovers bed position, Z rotation and uniform scale. */
@@ -485,28 +578,44 @@ class PrepareState(private val app: AppState) {
         val m = o.placement.m
         val scale = sqrt(m[0] * m[0] + m[1] * m[1]).toFloat().takeIf { it > 0 } ?: 1f
         val rot = Math.toDegrees(atan2(m[1], m[0])).toFloat()
+        // The other axes relative to the first: Y's length and handedness (a left-handed turn mirrors Y), Z's length and sign.
+        val yLen = sqrt(m[3] * m[3] + m[4] * m[4]).toFloat().takeIf { it > 0 } ?: scale
+        val mirrorY = m[0] * m[4] - m[1] * m[3] < 0
+        val relY = (if (mirrorY) -yLen else yLen) / scale; val relZ = (m[8].toFloat().takeIf { it != 0f } ?: scale) / scale
         val b = o.mesh.bounds(); val cx = (b[0] + b[3]) / 2.0; val cy = (b[1] + b[4]) / 2.0
         val p = o.placement.apply(cx, cy, 0.0)
         val item = PrepItem(o.id, o.name, o.mesh, p[0].toFloat(), p[1].toFloat(), rot, scale, slot, paintSlots, sources, settings, plate)
+        item.sy = relY; item.sz = relZ
         // A painted model from another slicer (or saved before colours were mapped) gets its colours matched to the slots.
         if (item.painted.isNotEmpty() && item.paintSlots.size < item.painted.max()) matchColours(item, o.filament)
         items += item
         nextId = maxOf(nextId, o.id + 1)
     }
 
+    /** A new project holding the calibration model for [spec] on the plate, with the settings the test needs. */
+    fun startCalibration(spec: net.jamesjennison.klippercompanion.CalibrationSpec) {
+        newProject()
+        val tri = net.jamesjennison.klippercompanion.Calibration.mesh(spec)
+        // The calibration models list every triangle's corners; weld equal corners so the mesh is closed, as a loaded file is.
+        val index = HashMap<Triple<Float, Float, Float>, Int>(); val verts = ArrayList<Float>(); val tris = IntArray(tri.v.size / 3)
+        for (i in tris.indices) {
+            val key = Triple(tri.v[i * 3], tri.v[i * 3 + 1], tri.v[i * 3 + 2])
+            tris[i] = index.getOrPut(key) { verts += key.first; verts += key.second; verts += key.third; index.size }
+        }
+        val mesh = Mesh(verts.toFloatArray(), tris)
+        val (bw, bd) = bed
+        name = spec.kind.label
+        items += PrepItem(nextId++, spec.kind.label, mesh, bw / 2, bd / 2, plate = currentPlate)
+        overrides.putAll(net.jamesjennison.klippercompanion.Calibration.overrides(spec))
+        calibration = spec
+        dirty = true; invalidateSlice()
+    }
+
     fun importModel(f: File) {
         val loaded = MeshIO.load(f)
         val (bw, bd) = bed
         val item = PrepItem(nextId++, f.nameWithoutExtension, loaded.mesh, bw / 2, bd / 2, sources = loaded.filaments, plate = currentPlate)
-        // A PrusaSlicer file's virtual extruders come with it (into an empty list; the first file's win), their ids moved
-        // clear of this printer's extruders by PrusaSlicer's own import remap; the paint follows.
-        var virtualRemap = emptyMap<Int, Int>()
-        if (loaded.colorMix.isNotEmpty() && colorMix.isEmpty()) {
-            val remapped = loaded.colorMixSidecar?.let { runCatching { PrusaColorMix.remapImport(materials().size, it) }.getOrNull() }
-            setColorMix(remapped?.first ?: loaded.colorMix); virtualRemap = remapped?.second.orEmpty()
-        }
         if (item.painted.isNotEmpty() || loaded.filament != null) matchColours(item, loaded.filament)
-        virtualRemap.forEach { (old, new) -> if (old in 1..item.paintSlots.size) item.paintSlots[old - 1] = new }
         items += item
         dirty = true; invalidateSlice(); arrange()
         if (name == "Untitled project") name = f.nameWithoutExtension
@@ -527,8 +636,7 @@ class PrepareState(private val app: AppState) {
     private fun filamentCount(item: PrepItem) = maxOf(item.painted.maxOrNull() ?: 0, item.ownFilament ?: 0, item.sources.size)
     private fun assign(item: PrepItem, slots: List<Int>) {
         item.paintSlots.clear()
-        // A virtual extruder in the file prints as that virtual extruder (PrusaSlicer paints with its id).
-        item.paintSlots.addAll(slots.mapIndexed { i, s -> if (colorMix.any { it.id == i + 1 }) i + 1 else s })
+        item.paintSlots.addAll(slots)
         item.ownFilament?.let { f -> slots.getOrNull(f - 1)?.let { item.slot = it } }
     }
 
@@ -538,9 +646,77 @@ class PrepareState(private val app: AppState) {
         item.paintSlots[n - 1] = slot; changed()
     }
 
-    fun duplicateSelected() { items.firstOrNull { it.id == selected }?.let { s -> items += PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate); changed(); arrange() } }
-    fun removeSelected() { items.removeAll { it.id == selected }; selected = null; changed() }
-    fun changed() { dirty = true; invalidateSlice() }
+    fun duplicateSelected() {
+        val targets = selectedItems().ifEmpty { return }
+        history.beginEdit()
+        try {
+            nextId = maxOf(nextId, (items.maxOfOrNull { it.id } ?: 0) + 1)
+            val copies = targets.map { s -> PrepItem(nextId++, s.name + " copy", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate).also { it.copyShapeFrom(s); it.ownFilament = s.ownFilament } }
+            items.addAll(copies); setSelection(copies.map { it.id }.toSet()); changed()
+        } finally { history.endEdit() }
+    }
+    fun removeSelected() {
+        if (selectedIds.isEmpty()) return
+        history.beginEdit()
+        try { items.removeAll { it.id in selectedIds }; deselect(); changed() } finally { history.endEdit() }
+    }
+    fun changed() { syncInstances(); dirty = true; invalidateSlice(); refreshRules() }
+
+    private var selectionTransform: SelectionTransforms? = null
+    fun editSelection(action: () -> Unit) {
+        history.beginEdit()
+        try { action() } finally { history.endEdit() }
+    }
+    fun beginSelectionTransform(id: Int) {
+        if (id !in selectedIds) selectObject(id)
+        if (id !in selectedIds) return
+        history.beginEdit()
+        selectionTransform = SelectionTransforms(selectedItems(), id)
+    }
+    fun endSelectionTransform() { selectionTransform = null; history.endEdit() }
+    fun moveSelection(id: Int, x: Float, y: Float) {
+        if (id !in selectedIds) return
+        val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
+        transform.move(x, y); changed()
+    }
+    fun turnSelection(id: Int, angle: Float) {
+        if (id !in selectedIds) return
+        val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
+        transform.turn(angle); changed()
+    }
+    fun resizeSelection(id: Int, scale: Float) {
+        if (id !in selectedIds) return
+        val transform = selectionTransform ?: SelectionTransforms(selectedItems(), id)
+        transform.resize(scale); changed()
+    }
+
+    /**
+     * Orca's instances: another copy of the same object. It shares the object's mesh, filament, settings, parts, height ranges, layer
+     * profile and paint, so a change to the object reaches every instance; its place, turn and size are its own. An instance whose
+     * object is gone becomes an object in its own right.
+     */
+    fun addInstance() {
+        if (selectedIds.size != 1) return
+        val s = items.firstOrNull { it.id == selected } ?: return
+        val root = s.instanceOf ?: s.id
+        nextId = maxOf(nextId, (items.maxOfOrNull { it.id } ?: 0) + 1)
+        items += PrepItem(nextId++, s.name.removeSuffix(" (instance)") + " (instance)", s.mesh, s.x + 10, s.y + 10, s.rotZ, s.scale, s.slot, s.paintSlots.toList(), s.sources, s.settings.toMap(), s.plate)
+            .also { it.copyShapeFrom(s); it.instanceOf = root; it.ownFilament = s.ownFilament }
+        changed(); arrange()
+    }
+    fun syncInstances() {
+        val byId = items.associateBy { it.id }
+        items.forEach { i ->
+            val root = i.instanceOf ?: return@forEach
+            val src = byId[root]?.takeIf { it !== i } ?: run { i.instanceOf = null; return@forEach }
+            if (i.slot != src.slot) i.slot = src.slot
+            if (i.paintSlots.toList() != src.paintSlots.toList()) { i.paintSlots.clear(); i.paintSlots.addAll(src.paintSlots) }
+            if (i.settings.toMap() != src.settings.toMap()) { i.settings.clear(); i.settings.putAll(src.settings) }
+            if (i.parts.toList() != src.parts.toList()) { i.parts.clear(); i.parts.addAll(src.parts) }
+            if (i.ranges.toList() != src.ranges.toList()) { i.ranges.clear(); i.ranges.addAll(src.ranges) }
+            if (i.layerProfile.toList() != src.layerProfile.toList()) { i.layerProfile.clear(); i.layerProfile.addAll(src.layerProfile) }
+        }
+    }
     private fun invalidateSlice() { if (slice !is SliceState.Running) { slice = SliceState.Idle; showPreview = false } }
 
     /** Shelf packing by footprint, largest first, with a 6 mm gap, centred on the bed. Objects that can't fit are reported. */
@@ -556,13 +732,17 @@ class PrepareState(private val app: AppState) {
         // On the UI thread: the plate's state changes there; the engine work inside runs on IO.
         app.scope.launch(Dispatchers.Main) {
             try { block() } catch (e: Exception) { notice = "$label didn't work: ${e.message ?: e.javaClass.simpleName}" }
-            finally { toolBusy = null }
+            finally {
+                toolBusy = null
+                val discarded = aiPendingDiscards.toList(); aiPendingDiscards.clear()
+                discarded.forEach { it.discard() }
+            }
         }
     }
 
     /** The same object with a new mesh (its turn, size, slot, colours and settings kept). */
     private fun withMesh(old: PrepItem, mesh: Mesh, id: Int = old.id, name: String = old.name, x: Float = old.x, y: Float = old.y) =
-        PrepItem(id, name, mesh, x, y, old.rotZ, old.scale, old.slot, old.paintSlots.toList(), old.sources, old.settings.toMap(), old.plate).also { it.ownFilament = old.ownFilament }
+        PrepItem(id, name, mesh, x, y, old.rotZ, old.scale, old.slot, old.paintSlots.toList(), old.sources, old.settings.toMap(), old.plate).also { it.ownFilament = old.ownFilament; it.copyShapeFrom(old) }
 
     private fun replace(old: PrepItem, vararg new: PrepItem) {
         val i = items.indexOfFirst { it.id == old.id }.takeIf { it >= 0 } ?: return
@@ -581,7 +761,7 @@ class PrepareState(private val app: AppState) {
             val dir = profileDir()
             val placed = withContext(Dispatchers.IO) {
                 PlateOps.arrange(listOf("machine.json", "process.json", "filament.json").map { File(dir, it) },
-                    (printerOverrides() + overrides.toMap() - FLUSH_KEY).filterKeys { it != FullSpectrum.DEFINITIONS_KEY }, snapshot, bw, bd, work = plateWork())
+                    (printerOverrides() + overrides.toMap() - FLUSH_KEY), snapshot, bw, bd, work = plateWork())
             }
             // What doesn't fit goes onto new plates after the last, as Orca's arrange fills further plates.
             val firstNew = plateNames.size
@@ -598,9 +778,259 @@ class PrepareState(private val app: AppState) {
             changed()
     }
 
+    // --- Object tools beyond the plate ops: parts, height ranges, variable layer height, size and mirror (the engine takes them as slice request lines).
+    /** Adds an extra volume to [item], centred on its bounding box (coordinates are from that centre) at a quarter of its largest side. */
+    fun addPart(item: PrepItem, kind: String, shape: String) {
+        val b = item.bounds; val side = maxOf(b[3] - b[0], b[4] - b[1], b[5] - b[2]) / 4.0
+        item.parts += ProjectManifest.ObjectPart(kind, shape, listOf(0.0, 0.0, 0.0), listOf(side, side, side)); changed()
+    }
+    fun updatePart(item: PrepItem, index: Int, part: ProjectManifest.ObjectPart) { if (index in item.parts.indices) { item.parts[index] = part; changed() } }
+    fun removePart(item: PrepItem, index: Int) { if (index in item.parts.indices) { item.parts.removeAt(index); changed() } }
+    /** Adds a height range from 20% to 40% of the object's height that prints with a finer layer, the setting Orca's range starts with. */
+    fun addRange(item: PrepItem) {
+        val h = item.height.toDouble()
+        item.ranges += ProjectManifest.HeightRange(Math.round(h * 20) / 100.0, Math.round(h * 40) / 100.0, mapOf("layer_height" to (overrides["layer_height"] ?: preset.overrides["layer_height"] ?: "0.2")))
+        changed()
+    }
+    fun updateRange(item: PrepItem, index: Int, range: ProjectManifest.HeightRange) { if (index in item.ranges.indices) { item.ranges[index] = range; changed() } }
+    fun removeRange(item: PrepItem, index: Int) { if (index in item.ranges.indices) { item.ranges.removeAt(index); changed() } }
+    fun clearLayerProfile(item: PrepItem) { item.layerProfile.clear(); changed() }
+    /** Orca's adaptive layer height for [item] (finer where the surface is shallow), at [quality] 0..1, from the engine. */
+    fun adaptiveLayers(item: PrepItem, quality: Double) = runTool("Adaptive layers") {
+        val dir = profileDir()
+        val profile = withContext(Dispatchers.IO) {
+            PlateOps.adaptiveLayers(listOf("machine.json", "process.json", "filament.json").map { File(dir, it) }, printerOverrides() + overrides.toMap() - FLUSH_KEY, item.mesh,
+                Triple(kotlin.math.abs(item.ex.toDouble()), kotlin.math.abs(item.ey.toDouble()), kotlin.math.abs(item.ez.toDouble())), quality, plateWork())
+        }
+        item.layerProfile.clear(); item.layerProfile.addAll(profile); changed()
+    }
+
+    // --- Orca's settings rules (OptionRules): greyed-out and hidden settings, the Setting Overrides page, the IDEX layout choices and the checks.
+    var rules by mutableStateOf<OptionRules.Result?>(null)
+    var ruleChecks by mutableStateOf<OptionRules.Result?>(null)
+    private var rulesJob: kotlinx.coroutines.Job? = null
+    /** Asks the engine for the rules of the current configuration (off the UI thread; a newer change supersedes an older answer). */
+    fun refreshRules() {
+        rulesJob?.cancel()
+        val dir = runCatching { profileDir() }.getOrNull() ?: return
+        val files = listOf("machine.json", "filament.json", "process.json").map { File(dir, it) }
+        val settings = printerOverrides() + overrides.toMap() - FLUSH_KEY
+        val variable = items.any { it.hasVariableLayer }
+        val filaments = maxOf(1, allSlots().size)
+        rulesJob = app.scope.launch(Dispatchers.IO) {
+            val states = runCatching { OptionRules.states(files, settings, filamentCount = filaments, printerName = profileId) }.getOrNull()
+            val checks = runCatching { OptionRules.checks(files, settings, variable, filaments, profileId) }.getOrNull()
+            withContext(Dispatchers.Main) { rules = states; ruleChecks = checks }
+        }
+    }
+
+    // --- AI auto-paint (AutoPaint): the engine segments the model; the user's own provider says which slot goes where.
+    var autoPaintSettings by mutableStateOf(AutoPaint.load(app.paths.config.resolve("auto-paint.json")))
+    fun saveAutoPaintSettings(s: AutoPaint.Settings) { autoPaintSettings = s; AutoPaint.save(app.paths.config.resolve("auto-paint.json"), s) }
+
+    /** Paints the selected object with the plate's slots as [hint] asks; the colours print in the same slot numbers they are offered under. */
+    /** The reviewed flow: show what will be sent ([aiPrepare]), send it ([aiSend]), then keep ([aiApply]) or drop ([aiDiscard]) the answer. */
+    var aiPrepared by mutableStateOf<AutoPaint.Prepared?>(null)
+    var aiAnswer by mutableStateOf<AutoPaintReview?>(null); private set
+    var aiItemId by mutableStateOf<Int?>(null)
+    private var aiSource: PrepItem? = null
+    private var aiSourceSlots = emptyList<Int>()
+    private var aiSourceSlot = 1
+    var aiPreviewMesh by mutableStateOf<Mesh?>(null); private set
+    var aiShowOriginal by mutableStateOf(false)
+    var aiCleanBoundaries by mutableStateOf(false); private set
+    var aiCleanedFaces by mutableStateOf(0); private set
+    private var aiGeneration = 0
+    private val aiPendingDiscards = mutableListOf<AutoPaint.Prepared>()
+
+    fun aiCorrect(region: Int, slot: Int) {
+        if (toolBusy != null || slot !in (aiPrepared?.filaments?.map { it.index }.orEmpty() + 0)) return
+        val answer = aiAnswer ?: return
+        if (region !in answer.slots.indices) return
+        aiAnswer = answer.corrected(region, slot); refreshAiPreview()
+    }
+    fun aiResetCorrections() { if (toolBusy == null) { aiAnswer = aiAnswer?.reset(); refreshAiPreview() } }
+    fun aiKeepOriginal() {
+        if (toolBusy != null) return
+        aiAnswer = aiAnswer?.let { AutoPaintReview(it.faceRegions, List(it.slots.size) { 0 }, it.originalSlots) }
+        refreshAiPreview()
+    }
+    fun aiSetCleanup(enabled: Boolean) { if (toolBusy == null) { aiCleanBoundaries = enabled; refreshAiPreview() } }
+    fun aiRetryPreview() { if (toolBusy == null) refreshAiPreview() }
+    private fun refreshAiPreview() {
+        aiPreviewMesh = null; aiCleanedFaces = 0; aiShowOriginal = false
+        runTool("Updating paint draft") { rebuildAiPreview() }
+    }
+    private suspend fun rebuildAiPreview() {
+        val source = aiSource ?: return
+        val answer = aiAnswer ?: return
+        val generation = aiGeneration; val mapping = aiSourceSlots; val baseSlot = aiSourceSlot; val cleanup = aiCleanBoundaries
+        val (mesh, count) = withContext(Dispatchers.IO) {
+            val raw = answer.faces()
+            val slots = if (cleanup) cleanPaintBoundaries(source.mesh, raw).also { cleaned ->
+                // Explicit owner corrections take precedence over automatic cleanup.
+                for (f in cleaned.indices) if (answer.slots[answer.faceRegions[f]] != answer.originalSlots[answer.faceRegions[f]]) cleaned[f] = raw[f]
+            } else raw
+            AutoPaint.applied(AutoPaintReview.base(source.mesh, mapping, baseSlot), slots) to slots.indices.count { slots[it] != raw[it] }
+        }
+        if (generation != aiGeneration || aiAnswer !== answer) return
+        aiCleanedFaces = count; aiPreviewMesh = mesh
+        aiShowOriginal = false
+    }
+
+    fun aiPrepare(hint: String) {
+        if (toolBusy != null || selectedIds.size != 1) return
+        val item = items.firstOrNull { it.id == selected } ?: return
+        val slots = allSlots()
+        if (slots.size < 2) { notice = "AI auto-paint needs at least two filaments to choose between."; return }
+        val filaments = slots.map { (id, label) -> com.nozzleitall.printer.ext.AutoPaintFormat.Filament(id, label, slotHex(id) ?: "#808080") }
+        aiDiscard()
+        val generation = aiGeneration
+        val sourceSlots = item.paintSlots.toList()
+        val sourceSlot = item.slot
+        aiItemId = item.id
+        runTool("Preparing the views") {
+            val prepared = withContext(Dispatchers.IO) { AutoPaint.prepare(item.mesh, item.name, filaments, hint, plateWork()) }
+            if (generation != aiGeneration || selectedIds != setOf(item.id)) { prepared.discard(); return@runTool }
+            aiPrepared = prepared; aiItemId = item.id; aiSource = item; aiSourceSlots = sourceSlots; aiSourceSlot = sourceSlot
+        }
+    }
+
+    fun aiSend() {
+        if (toolBusy != null) return
+        if (selectedIds != setOfNotNull(aiItemId)) { aiDiscard(); return }
+        val prepared = aiPrepared ?: return
+        val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }
+        val generation = aiGeneration
+        aiPreviewMesh = null
+        runTool("Waiting for the answer") {
+            val answer = withContext(Dispatchers.IO) { AutoPaint.askReview(prepared, provider) }
+            if (generation == aiGeneration && aiPrepared === prepared) {
+                val target = items.firstOrNull { it.id == aiItemId }
+                if (target == null || target.mesh !== aiSource?.mesh || target.paintSlots.toList() != aiSourceSlots || target.slot != aiSourceSlot) {
+                    notice = "The object's paint or geometry changed. Prepare auto-paint again before applying."
+                    aiDiscard(); return@runTool
+                }
+                aiAnswer = answer; rebuildAiPreview()
+            }
+        }
+    }
+
+    fun aiApply() {
+        if (toolBusy != null) return
+        if (selectedIds != setOfNotNull(aiItemId)) { aiDiscard(); return }
+        val prepared = aiPrepared ?: return
+        val mesh = aiPreviewMesh ?: return
+        if (aiAnswer?.slots?.all { it == 0 } == true) { aiDiscard(); return }
+        val item = items.firstOrNull { it.id == aiItemId } ?: run { aiDiscard(); return }
+        if (item.mesh !== aiSource?.mesh || item.paintSlots.toList() != aiSourceSlots || item.slot != aiSourceSlot) {
+            notice = "The object's paint or geometry changed. Prepare auto-paint again before applying."; aiDiscard(); return
+        }
+        val painted = withMesh(item, mesh)
+        painted.paintSlots.clear(); painted.paintSlots.addAll(1..prepared.filaments.maxOf { it.index })
+        history.beginEdit()
+        replace(item, painted); selected = painted.id
+        changed()
+        history.endEdit()
+        aiDiscard()
+    }
+
+    fun aiDiscard() {
+        aiGeneration++
+        // Do not remove views while a provider is still reading them; runTool completion owns that cleanup.
+        val old = aiPrepared
+        if (toolBusy == null) old?.discard()
+        else if (old != null) aiPendingDiscards.add(old)
+        aiPrepared = null; aiAnswer = null; aiItemId = null; aiSource = null; aiPreviewMesh = null
+        aiSourceSlots = emptyList(); aiCleanedFaces = 0; aiShowOriginal = false; aiCleanBoundaries = false
+    }
+
+    fun autoPaintSelected(hint: String) {
+        val item = items.firstOrNull { it.id == selected } ?: return
+        val provider = autoPaintSettings.provider ?: run { notice = "Choose how to ask first: a command, or an OpenAI-compatible server."; return }
+        val slots = allSlots()
+        if (slots.size < 2) { notice = "AI auto-paint needs at least two filaments to choose between."; return }
+        val filaments = slots.map { (id, label) -> com.nozzleitall.printer.ext.AutoPaintFormat.Filament(id, label, slotHex(id) ?: "#808080") }
+        runTool("AI auto-paint") {
+            val mesh = withContext(Dispatchers.IO) { AutoPaint.paint(item.mesh, item.name, filaments, hint, provider, plateWork()) }
+            val painted = withMesh(item, mesh)
+            val top = filaments.maxOf { it.index }
+            painted.paintSlots.clear(); painted.paintSlots.addAll(1..top)   // paint state N prints in slot N
+            replace(item, painted); selected = painted.id
+            changed()
+        }
+    }
+
+    // --- Paint tools (PaintOps): Orca's support, seam, colour and fuzzy-skin painting, run on the engine's TriangleSelector.
+    /** The kind being painted on the selected object, or null when painting is off. */
+    var paintKind by mutableStateOf<PaintOps.Kind?>(null)
+    /** What a stroke paints: support/seam 1 = enforcer and 2 = blocker, fuzzy skin 1; colour: the slot. 0 erases. */
+    var paintState by mutableStateOf(1)
+    var paintMode by mutableStateOf(PaintOps.Mode.BRUSH)
+    /** Brush radius in millimetres on the plate (the engine gets it in the model's own units). */
+    var paintRadius by mutableStateOf(3f)
+    var paintBusy by mutableStateOf(false)
+    private val paintQueue = ArrayDeque<Pair<Int, List<PaintRay>>>()
+    private class PaintStep(val id: Int, val kind: PaintOps.Kind, val before: Mesh, val slots: List<Int>)
+    private val paintHistory = ArrayDeque<PaintStep>()
+    val canUndoPaint: Boolean get() = paintHistory.isNotEmpty()
+
+    /** The file's filament number that prints in [slot] for [item]: an existing one, or a new one added to its paint slots. */
+    private fun colourStateForSlot(item: PrepItem, slot: Int): Int {
+        val at = item.paintSlots.indexOf(slot)
+        if (at >= 0) return at + 1
+        item.paintSlots.add(slot)
+        return item.paintSlots.size
+    }
+
+    /** Applies the strokes the viewer collected to the object [id], one batch at a time so each builds on the last. */
+    fun paintStroke(id: Int, rays: List<PaintRay>) {
+        if (paintKind == null || rays.isEmpty()) return
+        paintQueue.addLast(id to rays)
+        if (paintBusy) return
+        paintBusy = true
+        app.scope.launch(Dispatchers.Main) {
+            try {
+                while (paintQueue.isNotEmpty()) {
+                    val (target, batch) = paintQueue.removeFirst()
+                    val kind = paintKind ?: break
+                    val item = items.firstOrNull { it.id == target } ?: continue
+                    val slotsBefore = item.paintSlots.toList()
+                    val state = if (kind == PaintOps.Kind.COLOUR && paintState > 0) colourStateForSlot(item, paintState) else paintState
+                    val strokes = batch.map { PaintOps.Stroke(it.origin, it.dir, it.radius, state) }
+                    val mode = paintMode
+                    val mesh = withContext(Dispatchers.IO) { PaintOps.stroke(item.mesh, kind, strokes, mode) }
+                    val fresh = withMesh(item, mesh)
+                    paintHistory.addLast(PaintStep(target, kind, item.mesh, slotsBefore)); while (paintHistory.size > 30) paintHistory.removeFirst()
+                    replace(item, fresh); changed()
+                }
+            } catch (e: Exception) { notice = "Painting didn't work: ${e.message ?: e.javaClass.simpleName}" }
+            finally { paintBusy = false }
+        }
+    }
+
+    /** Takes back the last paint stroke (or clear). */
+    fun undoPaint() {
+        val step = paintHistory.removeLastOrNull() ?: return
+        val item = items.firstOrNull { it.id == step.id } ?: return
+        val fresh = withMesh(item, step.before)
+        fresh.paintSlots.clear(); fresh.paintSlots.addAll(step.slots)
+        replace(item, fresh); changed()
+    }
+
+    /** Removes all paint of [kind] from the selected object. */
+    fun clearPaint(kind: PaintOps.Kind) {
+        val item = items.firstOrNull { it.id == selected } ?: return
+        if (kind.of(item.mesh) == null) return
+        paintHistory.addLast(PaintStep(item.id, kind, item.mesh, item.paintSlots.toList())); while (paintHistory.size > 30) paintHistory.removeFirst()
+        replace(item, withMesh(item, kind.with(item.mesh, null))); changed()
+    }
+
+    fun stopPainting() { paintKind = null; paintQueue.clear() }
+
     /** Orca's Auto orient for the selected object, or every object when none is selected. */
     fun orient() {
-        val targets = plateItems().filter { selected == null || it.id == selected }.ifEmpty { return }
+        val targets = plateItems().filter { selectedIds.isEmpty() || it.id in selectedIds }.ifEmpty { return }
         runTool("Auto orient") {
             targets.forEach { item ->
                 val mesh = withContext(Dispatchers.IO) { PlateOps.orient(item.mesh, plateWork()) }
@@ -612,6 +1042,7 @@ class PrepareState(private val app: AppState) {
 
     /** Orca's Split to objects: each separate part of the selected object becomes its own object, where it was. */
     fun splitSelected() {
+        if (selectedIds.size != 1) return
         val item = items.firstOrNull { it.id == selected } ?: return
         runTool("Split") {
             val parts = withContext(Dispatchers.Default) { PlateOps.split(item.mesh) }
@@ -632,10 +1063,11 @@ class PrepareState(private val app: AppState) {
      * bed, then the plate is arranged. Painted colours don't carry over to the halves.
      */
     fun cutSelected(heightMm: Float) {
+        if (selectedIds.size != 1) return
         val item = items.firstOrNull { it.id == selected } ?: return
         if (heightMm <= 0f || heightMm >= item.height) { notice = "Cut between the object's base and its top (0-${"%.1f".format(item.height)} mm)."; return }
         runTool("Cut") {
-            val z = item.bounds[2] + heightMm / item.scale
+            val z = item.bounds[2] + heightMm / kotlin.math.abs(item.ez)
             val (upper, lower) = withContext(Dispatchers.IO) { PlateOps.cut(item.mesh, z, plateWork()) }
             val halves = listOfNotNull(lower?.let { withMesh(item, it, item.id, "${item.name} (lower)") },
                 upper?.let { withMesh(item, it, nextId++, "${item.name} (upper)", item.x + item.footprintW + 5f) })
@@ -659,6 +1091,10 @@ class PrepareState(private val app: AppState) {
     fun toProject(forSlice: Boolean = false): Project3mf {
         val (bw, bd) = bed
         val plates = if (forSlice) listOf(currentPlate) else plateNames.indices.toList()
+        // Sliced for a printer that offers no mixing, an object or painted area on a mixed filament prints with the
+        // default slot.
+        val unoffered = if (forSlice && offeredMixed().isEmpty()) mixed.indices.map { mixedSlot(it) }.toSet() else emptySet()
+        fun sliceSlot(slot: Int) = if (slot in unoffered) 1 else slot
         val m = (manifest ?: app.library.newManifest(name, app.version)).let { base ->
             val p = printer()
             base.copy(name = name, revision = base.revision + if (dirty || manifest == null) 1 else 0,
@@ -668,21 +1104,19 @@ class PrepareState(private val app: AppState) {
                     family = p?.config?.identity?.family?.id ?: profile?.familyHint,
                     nozzleDiameters = machineVariant()?.let { m -> PrinterSetup.nozzles(machineJson()).map { it.toDoubleOrNull() ?: 0.4 } } ?: base.printer?.nozzleDiameters.orEmpty()),
                 plates = plates.mapIndexed { n, i -> ProjectManifest.PlateEntry(n + 1, plateNames[i], plateItems(i).map {
-                    ProjectManifest.ObjectEntry(it.id, it.name, it.slot, paintSlots = it.paintSlots.toList(), settings = it.settings.toMap()) },
+                    ProjectManifest.ObjectEntry(it.id, it.name, sliceSlot(it.slot), paintSlots = it.paintSlots.map { s -> if (s in unoffered) sliceSlot(it.slot) else s }, settings = it.settings.toMap(), parts = it.parts.toList(), heightRanges = it.ranges.toList(), layerProfile = it.layerProfile.toList(), instanceOf = it.instanceOf) },
                     base.plates.getOrNull(i)?.unknown ?: org.json.JSONObject()) },
                 materials = materials(),
                 settings = ProjectManifest.SettingsChoice(currentProcess()?.let { "process:${it.id}" } ?: preset.name.lowercase(),
                     mapOf("sparse_infill_density" to "$infill%", "enable_support" to if (supports) "1" else "0") + (if (library() == null) preset.overrides else emptyMap()) + overrides +
-                    (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()) + printerOverrides(),
+                    (if (mixed.isEmpty()) emptyMap() else mixedSettings) + printerOverrides(),
                     base.settings.unknown))
         }
-        // PrusaSlicer's ColorMix sidecar is written from the current virtual extruders (and dropped when there are none).
-        val files = if (colorMix.isEmpty()) passthrough - PrusaColorMix.SIDECAR
-            else passthrough + (PrusaColorMix.SIDECAR to PrusaColorMix.sidecar(materials().map { it.colorHex ?: "#FFFFFF" }, colorMix.toList()).toByteArray())
+        val files = passthrough
         val objects = plates.flatMap { i ->
             val (ox, oy) = if (forSlice) 0.0 to 0.0 else Plates.origin(i, plateNames.size, bw.toDouble(), bd.toDouble())
             plateItems(i).map { ModelObject(it.id, it.name, it.mesh, Transform(it.placement().m.copyOf().also { t -> t[9] += ox; t[10] += oy }),
-                it.slot, it.settings.toMap(), if (forSlice) 0 else i) }
+                sliceSlot(it.slot), it.settings.toMap(), if (forSlice) 0 else i) }
         }
         return Project3mf(objects, metadata + ("Title" to name) + ("Application" to "Nozzle It All ${app.version}"),
             m, files, plateNames = if (forSlice || plateNames.size < 2) emptyList() else plateNames.toList())
@@ -701,15 +1135,22 @@ class PrepareState(private val app: AppState) {
         if (plateItems().isEmpty()) { slice = SliceState.Failed("Add a model to ${plateNames.getOrNull(currentPlate) ?: "the plate"} first."); return }
         outOfBounds().takeIf { it.isNotEmpty() }?.let { slice = SliceState.Failed("${it.joinToString { o -> o.name }} is off the plate. Move it or use Arrange."); return }
         val e = SliceEngine(bin, app.paths.slices).also { engine = it }
-        val req = SliceRequest(toProject(forSlice = true), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, flushMatrix = editedFlush(),
-            extraOverrides = printerOverrides() + (overrides.toMap() - FLUSH_KEY) +
-            (if (mixDefinitions.isNotBlank()) mapOf(FullSpectrum.DEFINITIONS_KEY to mixDefinitions) else emptyMap()),
-            virtualExtruders = colorMix.takeIf { it.isNotEmpty() }?.let { PrusaColorMix.sidecar(materials().map { m -> m.colorHex ?: "#FFFFFF" }, it.toList()) })
+        val mixRows = offeredMixed(); val physical = typedPhysical(); val sublayer = mixSublayers
         slice = SliceState.Running(0f, "Starting")
         scope.launch {
-            val outcome = withContext(Dispatchers.IO) { e.slice(req) { p, s -> slice = SliceState.Running(p, s) } }
+            val outcome = withContext(Dispatchers.IO) {
+                // The engine works out the per-filament settings of the mixed filaments (colours, components, ratios, gradients).
+                val mixSettings = if (mixRows.isEmpty()) Result.success(emptyMap()) else runCatching { MixedFilament.sliceOverrides(physical, mixRows, sublayer) }
+                mixSettings.fold({ settings ->
+                    val req = SliceRequest(toProject(forSlice = true), profileDir(), preset, supports, infill, materials(), applyPreset = library() == null, flushMatrix = editedFlush(),
+                        extraOverrides = printerOverrides() + (overrides.toMap() - FLUSH_KEY) + settings)
+                    e.slice(req) { p, s -> slice = SliceState.Running(p, s) }
+                }, { SliceOutcome.Failed(it.message ?: "Mixed filaments could not be set up.", "") })
+            }
             slice = when (outcome) {
-                is SliceOutcome.Done -> SliceState.Done(outcome, withContext(Dispatchers.IO) { runCatching { GcodePreview.parse(outcome.gcode) }.getOrNull() })
+                is SliceOutcome.Done -> SliceState.Done(outcome, withContext(Dispatchers.IO) {
+                    calibration?.let { c -> runCatching { net.jamesjennison.klippercompanion.Calibration.applyToFile(outcome.gcode, c) } }
+                    runCatching { GcodePreview.parse(outcome.gcode) }.getOrNull() })
                     .also { previewLayer = (it.preview?.layers?.size ?: 1) - 1; showPreview = true }
                 is SliceOutcome.Failed -> SliceState.Failed(outcome.message)
                 SliceOutcome.Cancelled -> SliceState.Cancelled

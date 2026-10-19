@@ -38,10 +38,11 @@ LIBRARY_PACKS = {
     "elegoo_centauri_carbon_2_canvas": ("elegoo_centauri_carbon_2_canvas", "0.4"),
 }
 # pack -> (Orca vendor, the machine it is built on, whether Nozzle's derived presets apply). The COSMOS packs are Orca's
-# Centauri Carbon with OpenCentauri COSMOS G-code (P-0011); only the CANVAS one feeds more than one filament.
+# Centauri Carbon with OpenCentauri COSMOS G-code (P-0011). Neither takes derived presets: the only ones made so far were
+# for color mixing, which CANVAS doesn't get (P-0044).
 COMPATIBLE_AS = {
     "elegoo_centauri_carbon_cosmos": ("Elegoo", "Elegoo Centauri Carbon 0.4 nozzle", False),
-    "elegoo_centauri_carbon_cosmos_afc": ("Elegoo", "Elegoo Centauri Carbon 0.4 nozzle", True),
+    "elegoo_centauri_carbon_cosmos_afc": ("Elegoo", "Elegoo Centauri Carbon 0.4 nozzle", False),
 }
 
 

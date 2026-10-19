@@ -23,6 +23,11 @@ fun SettingsScreen(state: AppState) {
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().padding(28.dp).verticalScroll(rememberScrollState()).widthIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         SectionHeader("Settings")
+        var tab by remember { mutableStateOf(SettingsTab.GENERAL) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingsTab.entries.forEach { t -> NzButton(t.label, { tab = t }, kind = if (t == tab) ButtonKind.PRIMARY else ButtonKind.SECONDARY, testTag = "settings-tab-${t.name.lowercase()}") }
+        }
+        if (tab == SettingsTab.GENERAL) {
         Card(Modifier.fillMaxWidth()) {
             Txt("Appearance", Nz.type.title)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -34,6 +39,15 @@ fun SettingsScreen(state: AppState) {
                 }
             }
         }
+        Card(Modifier.fillMaxWidth()) {
+            Txt("Notifications", Nz.type.title)
+            Toggle("Tell me when a print ends", fleet.settings.value.notifications, {
+                fleet.settings.value = fleet.settings.value.copy(notifications = it)
+                PrinterStore.atomicWrite(state.paths.settings, fleet.settings.value.toJson().toString(2), private = false)
+            }, "A desktop notification when a print finishes, is stopped or fails, while Nozzle It All is running. Past prints are under each printer's History tab.")
+        }
+        }
+        if (tab == SettingsTab.CONNECTIONS) {
         Card(Modifier.fillMaxWidth()) {
             Txt("Away from home", Nz.type.title)
             Txt(Glossary.explanations.getValue("remote-access"), Nz.type.body, c.textMuted)
@@ -48,6 +62,8 @@ fun SettingsScreen(state: AppState) {
             if (fleet.settings.value.stockU1Enabled && installed) StockAccountPanel(state)
         }
         ConnectorPanel(state)
+        }
+        if (tab == SettingsTab.DATA) {
         Card(Modifier.fillMaxWidth()) {
             Txt("Your data", Nz.type.title)
             Txt(Glossary.explanations.getValue("cloud"), Nz.type.body, c.textMuted)
@@ -65,8 +81,12 @@ fun SettingsScreen(state: AppState) {
                 NzButton("Licences", { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI("https://nozzleitall.com/open-source/")) } }, kind = ButtonKind.QUIET)
             }
         }
+        }
     }
 }
+
+/** The groups on the Settings page. */
+private enum class SettingsTab(val label: String) { GENERAL("General"), CONNECTIONS("Connections"), DATA("Your data & about") }
 
 @Composable
 private fun ConnectorPanel(state: AppState) {

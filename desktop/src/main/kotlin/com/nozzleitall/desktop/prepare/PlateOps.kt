@@ -1,5 +1,6 @@
 package com.nozzleitall.desktop.prepare
 
+import com.nozzleitall.project.MeshIO
 import com.nozzleitall.project.Mesh
 import org.json.JSONArray
 import org.json.JSONObject
@@ -56,7 +57,7 @@ object PlateOps {
         val v = mesh.vertices
         val out = FloatArray(v.size)
         for (i in v.indices step 3) for (r in 0..2) out[i + r] = (m[r * 3] * v[i] + m[r * 3 + 1] * v[i + 1] + m[r * 3 + 2] * v[i + 2]).toFloat()
-        return Mesh(out, mesh.triangles, mesh.paint)
+        return Mesh(out, mesh.triangles, mesh.paint, mesh.supportPaint, mesh.seamPaint, mesh.fuzzyPaint)
     }
 
     /** Orca's Cut with a horizontal plane at [z] (mesh coordinates), both halves capped by libslic3r. Paint isn't kept. */
@@ -66,6 +67,18 @@ object PlateOps {
             .put("upper", upper.absolutePath).put("lower", lower.absolutePath))
         fun read(f: File) = MeshIO.readStl(f.readBytes()).takeIf { it.triangleCount > 0 }
         return (read(upper) to read(lower)).also { upper.delete(); lower.delete() }
+    }
+
+    /**
+     * Orca's adaptive variable layer height (the layer editing "Adaptive" button) for [mesh] at [factors] (x, y, z size, the object's
+     * own axes) under the print settings in [profileFiles] and [overrides]: z / height pairs up the object. [quality] runs from 0 (smoothest,
+     * fewest layers) to 1 (finest where the surface is shallow).
+     */
+    fun adaptiveLayers(profileFiles: List<File>, overrides: Map<String, String>, mesh: Mesh, factors: Triple<Double, Double, Double>, quality: Double, work: File): List<Double> {
+        val o = run(JSONObject().put("op", "adaptive_layers").put("model", stl(mesh, work, "adaptive.stl").absolutePath).put("profiles", JSONArray(profileFiles.map { it.absolutePath }))
+            .put("overrides", JSONObject(overrides)).put("scale", JSONArray(listOf(factors.first, factors.second, factors.third))).put("quality", quality.coerceIn(0.0, 1.0)))
+        File(work, "adaptive.stl").delete()
+        return o.getJSONArray("profile").let { a -> (0 until a.length()).map { a.getDouble(it) } }
     }
 
     /** its_split: the mesh's parts, each the triangles joined to one another through shared edges, vertices renumbered. */
@@ -94,15 +107,17 @@ object PlateOps {
         }
         if (parts <= 1) return listOf(mesh)
         return (0 until parts).map { p ->
-            val remap = HashMap<Int, Int>(); val verts = ArrayList<Float>(); val tris = ArrayList<Int>(); val paint = ArrayList<String?>()
+            val remap = HashMap<Int, Int>(); val verts = ArrayList<Float>(); val tris = ArrayList<Int>()
+            val kinds = listOf(mesh.paint, mesh.supportPaint, mesh.seamPaint, mesh.fuzzyPaint); val picked = List(4) { ArrayList<String?>() }
             for (f in 0 until n) if (part[f] == p) {
                 for (k in 0..2) {
                     val vi = t[f * 3 + k]
                     tris += remap.getOrPut(vi) { verts.add(mesh.vertices[vi * 3]); verts.add(mesh.vertices[vi * 3 + 1]); verts.add(mesh.vertices[vi * 3 + 2]); remap.size }
                 }
-                paint += mesh.paint?.get(f)
+                kinds.forEachIndexed { k, a -> picked[k] += a?.get(f) }
             }
-            Mesh(verts.toFloatArray(), tris.toIntArray(), if (mesh.paint != null && paint.any { it != null }) paint.toTypedArray() else null)
+            val keep = picked.map { l -> if (l.any { it != null }) l.toTypedArray() else null }
+            Mesh(verts.toFloatArray(), tris.toIntArray(), keep[0], keep[1], keep[2], keep[3])
         }
     }
 }

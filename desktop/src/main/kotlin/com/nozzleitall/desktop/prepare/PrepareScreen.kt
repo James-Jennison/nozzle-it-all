@@ -2,8 +2,11 @@ package com.nozzleitall.desktop.prepare
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,7 +14,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.nozzleitall.design.NozzleTokens
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
@@ -38,97 +44,286 @@ fun chooseSaveFile(title: String, suggested: String): File? {
     return d.file?.let { File(d.directory, it) }
 }
 
+private enum class Drawer { PRINTER, FILAMENT, PROCESS, SEND, CUT, AI }
+
+/**
+ * The Workspace: one place from model to print. A bar across the top holds the project, the printer, filaments and print profile
+ * (each opens its settings in a drawer) and the Slice / Send step; the objects are listed on the left and the plate takes the rest.
+ */
 @Composable
 fun PrepareScreen(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
-    val scope = rememberCoroutineScope()
-    val camera = remember { ViewCamera() }
+    val camera = p.camera
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
-    Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Left: the project and everything about how it prints, with Slice always in view at the bottom. All settings
-        // opens in the same place, wider, so the plate stays visible.
-        // Left: the project, printer, filament and objects, then every print setting in dense tabs, with Slice always
-        // in view at the bottom.
-        BoxWithConstraints(Modifier.width(420.dp).fillMaxHeight()) {
-        val panelHeight = maxHeight
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProjectHeader(state)
+    var drawer by remember { mutableStateOf<Drawer?>(null) }
+    fun toggle(d: Drawer) { drawer = if (drawer == d) null else d }
+    val done = p.slice as? SliceState.Done
+    // The tools need an object; settings pages from the printer and filament icons open the print settings drawer.
+    LaunchedEffect(p.selectedIds) { if (p.selectedIds.size != 1 && (drawer == Drawer.CUT || drawer == Drawer.AI)) drawer = null }
+    LaunchedEffect(drawer, p.selected) { if (drawer != Drawer.AI || (p.aiItemId != null && p.aiItemId != p.selected)) p.aiDiscard() }
+    LaunchedEffect(p.settingsScope) { if (p.settingsScope != com.nozzleitall.desktop.settings.Scope.PROCESS) drawer = Drawer.PROCESS }
+    // A finished slice shows its preview and opens the Send step.
+    LaunchedEffect(done) { if (done != null) { if (done.preview != null) p.showPreview = true; drawer = Drawer.SEND } else if (drawer == Drawer.SEND) { drawer = null; p.showPreview = false } }
+    Column(Modifier.fillMaxSize()) {
+        WorkspaceBar(state, drawer, ::toggle)
+        Row(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Left: the objects on this plate, and the selected one's settings.
+        Column(Modifier.width(300.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             p.notice?.let { Banner(it, BannerKind.WARNING, "Dismiss" to { p.notice = null }) }
-            // Printer, filament and objects scroll within the upper part of the panel when they grow (an open mix or
-            // slot editor, many colours), so the print settings and Slice always stay in view.
-            Column(Modifier.fillMaxWidth().heightIn(max = panelHeight * 0.58f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StepPrinter(state)
-                MaterialsSection(state)
-                StepObjects(state)
+            (p.slice as? SliceState.Failed)?.let { Banner(it.message, BannerKind.DANGER) }
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { StepObjects(state) }
+        }
+        // Right: the plate fills the space. Its controls float over it, so nothing pushes the model smaller.
+        val onPlate = p.plateItems()
+        val sel = onPlate.firstOrNull { it.id == p.selected }
+        val slots = p.materials()
+        val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
+        val objects = onPlate.map { item ->
+            val aiMesh = p.aiPreviewMesh?.takeIf { drawer == Drawer.AI && item.id == p.aiItemId && !p.aiShowOriginal }
+            // A slot is a loaded filament or a Full Spectrum mix (drawn in its blended colour).
+            // While a non-colour paint tool is open on the selected object, that kind of paint is what the plate shows.
+            val shown = p.paintKind?.takeIf { item.id == p.selected && it != PaintOps.Kind.COLOUR }
+            val paintColors = when (shown) {
+                PaintOps.Kind.SUPPORT -> listOf(null, Color(0xFF3BA55D), Color(0xFFE5484D))
+                PaintOps.Kind.SEAM -> listOf(null, Color(0xFF3E7BFA), Color(0xFFF5A623))
+                PaintOps.Kind.FUZZY -> listOf(null, Color(0xFF9B59B6))
+                else -> if (aiMesh != null) List(maxOf(p.aiPrepared?.filaments?.maxOfOrNull { it.index } ?: 0, item.paintSlots.maxOrNull() ?: 0, item.slot).coerceIn(0, 255) + 1) { n -> parseHex(p.slotHex(if (n == 0) item.slot else n)) }
+                    else if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
             }
-            val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
-            com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
-            StepSlice(state)
+            PlateObject(item.id, item.name, aiMesh ?: item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id in p.selectedIds, paintColors,
+                when (shown) { PaintOps.Kind.SUPPORT -> 1; PaintOps.Kind.SEAM -> 2; PaintOps.Kind.FUZZY -> 3; else -> 0 },
+                item.sx, item.sy, item.sz, item.parts.toList(), reach = item.reach, height = item.height)
         }
-        }
-        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                val done = p.slice as? SliceState.Done
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    NzButton("Plate", { p.showPreview = false }, kind = if (!p.showPreview) ButtonKind.PRIMARY else ButtonKind.SECONDARY, icon = NzIcon.PREPARE)
-                    NzButton("Layer preview", { p.showPreview = true }, kind = if (p.showPreview) ButtonKind.PRIMARY else ButtonKind.SECONDARY, icon = NzIcon.LAYERS, enabled = done?.preview != null)
-                    Spacer(Modifier.weight(1f))
-                    Txt("Drag to orbit · Shift-drag to pan · Scroll to zoom", Nz.type.bodySmall, c.textMuted)
+        val (bw, bd) = p.bed
+        // Zoom to fit the bed when the printer (and so the bed) changes.
+        LaunchedEffect(bw, bd) { camera.fitBed(bw, bd) }
+        val shape = RoundedCornerShape(20.dp)
+        Box(Modifier.weight(1f).fillMaxHeight().clip(shape).background(c.surfaceSunken).border(1.dp, c.line, shape)) {
+            if (onPlate.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, if (p.items.isEmpty()) "Start with a model" else "${p.plateNames.getOrNull(p.currentPlate) ?: "This plate"} is empty",
+                "Add an STL, 3MF or OBJ file, or open a saved project. Nothing leaves this computer.", Modifier.align(Alignment.Center)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY, icon = NzIcon.IMPORT)
+                    NzButton("Open a project", { state.destination = Destination.PROJECTS }, kind = ButtonKind.SECONDARY, icon = NzIcon.PROJECTS)
+                    if (state.fleet.order.value.isEmpty()) NzButton("Find my printer", { state.findPrinterRequested = true; state.destination = Destination.FLEET }, kind = ButtonKind.SECONDARY, icon = NzIcon.SEARCH, testTag = "workspace-find-printer")
                 }
-                if (!p.showPreview) PlateTabs(p)
-                val onPlate = p.plateItems()
-                if (!p.showPreview && onPlate.isNotEmpty()) PlateToolbar(p)
-                val slots = p.materials()
-                val slotColors = slots.map { parseHex(it.colorHex) ?: c.accent }
-                val objects = onPlate.map { item ->
-                    // A slot is a loaded filament or a Full Spectrum mix (drawn in its blended colour).
-                    val paintColors = if (item.painted.isEmpty()) emptyList() else List((item.painted.maxOrNull() ?: 0) + 1) { n -> parseHex(p.slotHex(item.slotFor(n))) }
-                    PlateObject(item.id, item.name, item.mesh, parseHex(p.slotHex(item.slot)) ?: c.accent, item.x, item.y, item.rotZ, item.scale, item.id == p.selected, paintColors)
-                }
-                val (bw, bd) = p.bed
-                Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(20.dp))) {
-                    if (onPlate.isEmpty() && !p.showPreview) EmptyState(NzIcon.IMPORT, if (p.items.isEmpty()) "Start with a model" else "${p.plateNames.getOrNull(p.currentPlate) ?: "This plate"} is empty",
-                        "Add an STL, 3MF or OBJ file, or open a project from Projects. Nothing leaves this computer.", Modifier.align(Alignment.Center)) {
-                        NzButton("Add model", { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }, kind = ButtonKind.PRIMARY)
+            }
+            else PlateViewer(bw, bd, objects, camera, c.surfaceRaised, c.lineStrong, Modifier.fillMaxSize(),
+                preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors,
+                previewView = p.previewView ?: if ((done?.preview?.toolsUsed?.size ?: 0) > 1) PreviewView.TOOL else PreviewView.LINE_TYPE,
+                paint = p.selected?.takeIf { p.paintKind != null && !p.showPreview }?.let { id -> PaintInput(id, p.paintRadius) { rays -> p.paintStroke(id, rays) } },
+                onSelection = { id, ctrl, shift -> focus.clearFocus(); p.selectObject(id, ctrl, shift) }, accent = c.accent,
+                onMove = p::moveSelection, onTurn = p::turnSelection, onResize = p::resizeSelection,
+                onTransformStart = p::beginSelectionTransform, onTransformEnd = p::endSelectionTransform, backgroundColor = c.surfaceSunken)
+            // Top left: the plate tools.
+            if (!p.showPreview && onPlate.isNotEmpty()) Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                Floating { PlateToolbar(p, sel, drawer) { toggle(it) } }
+            }
+            if (p.showPreview && done?.preview != null) Column(Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                PreviewLegend(p, done.preview, p.previewView ?: if (done.preview.toolsUsed.size > 1) PreviewView.TOOL else PreviewView.LINE_TYPE, slots)
+            }
+            // Top right: the drawer: print setup, the Send step, or the panel for the tool in use (paint, cut, AI auto-paint).
+            val toolOpen = !p.showPreview && sel != null && (p.paintKind != null || drawer == Drawer.CUT || drawer == Drawer.AI)
+            val settingsOpen = drawer == Drawer.PRINTER || drawer == Drawer.FILAMENT || drawer == Drawer.PROCESS || (drawer == Drawer.SEND && done != null)
+            if (toolOpen || settingsOpen) {
+                val panel = Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp, bottom = 12.dp).width(if (drawer == Drawer.PROCESS) 440.dp else 360.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(c.surface.copy(alpha = 0.97f)).border(1.dp, c.line, RoundedCornerShape(14.dp))
+                if (drawer == Drawer.PROCESS && !toolOpen) Column(panel.fillMaxHeight().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DrawerTitle("Print settings", { drawer = null })
+                    val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
+                    com.nozzleitall.desktop.settings.SettingsSheet(com.nozzleitall.desktop.settings.SettingsCatalog.bundled, profileValues, p, Modifier.weight(1f).fillMaxWidth())
+                } else Column(panel.verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when {
+                        toolOpen && p.paintKind != null -> PaintPanel(p)
+                        toolOpen && drawer == Drawer.CUT && sel != null -> CutPanel(p, sel) { drawer = null }
+                        toolOpen && drawer == Drawer.AI -> AutoPaintPanel(p) { drawer = null }
+                        drawer == Drawer.PRINTER -> { DrawerTitle("Printer", { drawer = null }); StepPrinter(state) }
+                        drawer == Drawer.FILAMENT -> { DrawerTitle("Filament", { drawer = null }); MaterialsSection(state) }
+                        drawer == Drawer.SEND && done != null -> { DrawerTitle("Send", { drawer = null }); SendDrawer(state, done) }
                     }
-                    else PlateViewer(bw, bd, objects, camera, c.surface, c.lineStrong, Modifier.fillMaxSize(),
-                        preview = if (p.showPreview) done?.preview else null, previewLayer = p.previewLayer, toolColors = slotColors, onSelect = { focus.clearFocus(); p.selected = it })
                 }
+            }
+            // Bottom: what the app sees wrong, the layer slider in the preview, the plates and a hint.
+            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (p.showPreview && done?.preview != null) {
                     val layers = done.preview.layers
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        NzButton("−", { p.previewLayer = (p.previewLayer - 1).coerceAtLeast(0) }, kind = ButtonKind.SECONDARY)
+                    Floating(Modifier.fillMaxWidth()) {
+                        NzButton("−", { p.previewLayer = (p.previewLayer - 1).coerceAtLeast(0) }, kind = ButtonKind.QUIET)
                         LayerSlider(p.previewLayer, layers.size, Modifier.weight(1f)) { p.previewLayer = it }
-                        NzButton("+", { p.previewLayer = (p.previewLayer + 1).coerceAtMost(layers.size - 1) }, kind = ButtonKind.SECONDARY)
+                        NzButton("+", { p.previewLayer = (p.previewLayer + 1).coerceAtMost(layers.size - 1) }, kind = ButtonKind.QUIET)
                         Txt("Layer ${p.previewLayer + 1} of ${layers.size} · Z ${"%.2f".format(layers[p.previewLayer].z)} mm", Nz.type.metricSmall, c.textMuted)
                     }
                 }
+                // The full-width advice overlay must not cover AI review's final Apply/Discard controls.
+                if (!p.showPreview && drawer != Drawer.AI) AdviceStrip(state, onChoosePrinter = { drawer = Drawer.PRINTER })
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                    if (!p.showPreview) Floating(Modifier.weight(1f, fill = false)) { PlateTabs(p) }
+                    Spacer(Modifier.weight(1f))
+                    NzButton("Reset view", { camera.reset() }, kind = ButtonKind.QUIET, testTag = "plate-reset-view")
+                    Txt("Drag: move or orbit · Shift: pan · Scroll: zoom", Nz.type.bodySmall, c.textMuted)
+                }
+            }
+        }
+        }
+    }
+}
+
+/** What the preview's colours mean, and a switch between colouring by line type, filament and speed. */
+@Composable
+private fun PreviewLegend(p: PrepareState, preview: GcodePreview, view: PreviewView, slots: List<com.nozzleitall.project.ProjectManifest.MaterialSlot>) {
+    val c = Nz.colors
+    val shape = RoundedCornerShape(14.dp)
+    Column(Modifier.width(250.dp).clip(shape).background(c.surface.copy(alpha = 0.94f)).border(1.dp, c.line, shape).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.surfaceSunken).padding(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            PreviewView.entries.forEach { v ->
+                val on = v == view
+                Box(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).background(if (on) c.accent else Color.Transparent).selectable(on, role = Role.Tab) { p.previewView = v }.padding(vertical = 5.dp)
+                    .semantics { testTag = "preview-view-${v.name.lowercase()}" }, contentAlignment = Alignment.Center) { Txt(v.label, Nz.type.bodySmall, if (on) c.onAccent else c.textMuted, maxLines = 1) }
+            }
+        }
+        fun entry(colour: Color, label: String) = @Composable {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(colour)); Txt(label, Nz.type.bodySmall, maxLines = 1)
+            }
+        }
+        when (view) {
+            PreviewView.LINE_TYPE -> preview.kindsUsed.forEach { k ->
+                val f = GcodePreview.FEATURES.getOrNull(k); entry(Color(f?.second ?: 0xFF8C8C8C), f?.first ?: "Other")()
+            }
+            PreviewView.TOOL -> preview.toolsUsed.forEach { t ->
+                val slot = slots.getOrNull(t); entry(parseHex(slot?.colorHex) ?: c.accent, "${t + 1} · " + (slot?.type ?: "Filament"))()
+            }
+            PreviewView.SPEED -> {
+                val (lo, hi) = preview.speedRange
+                Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(
+                    androidx.compose.ui.graphics.Brush.horizontalGradient((0..8).map { Color(GcodePreview.speedColour(it / 8f)) })))
+                Row { Txt("${lo.toInt()} mm/s", Nz.type.bodySmall, c.textMuted, modifier = Modifier.weight(1f)); Txt("${hi.toInt()} mm/s", Nz.type.bodySmall, c.textMuted) }
             }
         }
     }
 }
 
-/** The project name, whether it's saved, and adding and saving, at the top of the panel. */
+/** A setting that opens a drawer: its current value, lit while the drawer is open. */
 @Composable
-private fun ProjectHeader(state: AppState) {
+private fun BarChip(label: String, on: Boolean, tag: String, onClick: () -> Unit, content: (@Composable RowScope.() -> Unit)? = null) {
+    val c = Nz.colors
+    val shape = RoundedCornerShape(10.dp)
+    Row(Modifier.clip(shape).background(if (on) c.accent.copy(alpha = 0.14f) else c.surfaceSunken).border(1.dp, if (on) c.accent else c.line, shape)
+        .clickable(onClickLabel = label) { onClick() }.padding(horizontal = 10.dp, vertical = 6.dp).semantics { testTag = tag },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        content?.invoke(this)
+        Txt(label, Nz.type.bodySmall, if (on) c.accent else c.text, maxLines = 1)
+        Txt("▾", Nz.type.bodySmall, c.textMuted)
+    }
+}
+
+/** The bar across the top of the Workspace: the project, the printer / filament / print profile, the plate and preview views, and Slice. */
+@Composable
+private fun WorkspaceBar(state: AppState, drawer: Drawer?, toggle: (Drawer) -> Unit) {
     val p = state.prepare
     val c = Nz.colors
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        com.nozzleitall.desktop.settings.DenseInput(p.name, { p.name = it; p.dirty = true }, "Project name", Modifier.weight(1f))
+    val done = p.slice as? SliceState.Done
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        com.nozzleitall.desktop.settings.DenseInput(p.name, { p.name = it; p.dirty = true }, "Project name", Modifier.width(170.dp))
+        NzButton("Save", { runCatching { p.save() }.onFailure { p.notice = "Couldn't save: ${it.message}" } }, kind = if (p.dirty) ButtonKind.SECONDARY else ButtonKind.QUIET, enabled = p.items.isNotEmpty(), testTag = "save-project")
         com.nozzleitall.desktop.settings.IconToggle(NzIcon.IMPORT, "Add model", false) { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }
-        NzButton("Save", { runCatching { p.save() }.onFailure { p.notice = "Couldn't save: ${it.message}" } }, kind = ButtonKind.PRIMARY, enabled = p.items.isNotEmpty(), testTag = "save-project")
+        com.nozzleitall.desktop.settings.IconToggle(NzIcon.PROJECTS, "Projects", false) { state.destination = Destination.PROJECTS }
+        if (p.dirty) Box(Modifier.size(8.dp).clip(CircleShape).background(Nz.status.paused).semantics { contentDescription = "Unsaved changes" })
+        // The chips scroll sideways if the window is narrow; the project and Slice / Send ends keep their size.
+        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        BarChip(p.printer()?.config?.identity?.displayName ?: "No printer", drawer == Drawer.PRINTER, "chip-printer", { toggle(Drawer.PRINTER) })
+        val slots = p.materials()
+        BarChip(if (slots.size == 1) slots.first().type ?: "Filament" else "${slots.size} filaments", drawer == Drawer.FILAMENT, "chip-filament", { toggle(Drawer.FILAMENT) }) {
+            slots.take(6).forEach { m -> Box(Modifier.size(12.dp).clip(CircleShape).background(parseHex(m.colorHex) ?: c.surfaceRaised).border(1.dp, c.line, CircleShape)) }
+        }
+        BarChip(p.currentProcess()?.displayLabel ?: p.preset.label, drawer == Drawer.PROCESS, "chip-process", { toggle(Drawer.PROCESS) })
+        }
+        Floating {
+            ViewToggle("Plate", NzIcon.PREPARE, !p.showPreview, true) { p.showPreview = false }
+            ViewToggle("Preview", NzIcon.LAYERS, p.showPreview, done?.preview != null) { p.showPreview = true }
+        }
+        when (val s = p.slice) {
+            SliceState.Idle, SliceState.Cancelled, is SliceState.Failed ->
+                NzButton("Slice", { p.slice(state.scope) }, kind = ButtonKind.PRIMARY, icon = NzIcon.SLICE, enabled = p.plateItems().isNotEmpty(), testTag = "slice")
+            is SliceState.Running -> {
+                Txt(s.stage, Nz.type.bodySmall, c.textMuted, maxLines = 1)
+                Box(Modifier.width(120.dp)) { ProgressBar(s.progress, label = "Slicing progress") }
+                NzButton("Cancel", { p.cancelSlice() }, kind = ButtonKind.QUIET, icon = NzIcon.CLOSE)
+            }
+            is SliceState.Done -> {
+                val st = s.result.stats
+                Txt(listOfNotNull(formatDuration(st.seconds), st.grams?.let { "%.0f g".format(it) }).joinToString(" · "), Nz.type.metricSmall, maxLines = 1)
+                com.nozzleitall.desktop.settings.IconToggle(NzIcon.SLICE, "Slice again", false) { p.slice(state.scope) }
+                NzButton("Send", { toggle(Drawer.SEND) }, kind = ButtonKind.PRIMARY, icon = NzIcon.SEND, testTag = "open-send")
+            }
+        }
     }
-    Txt(if (p.dirty) "Unsaved changes" else p.file?.let { "Saved" } ?: "Not saved yet", Nz.type.bodySmall, if (p.dirty) Nz.status.paused else c.textMuted)
 }
+
+/** The Send step: the slice's numbers and warnings, then send, export or queue. */
+@Composable
+private fun SendDrawer(state: AppState, s: SliceState.Done) {
+    val p = state.prepare
+    val c = Nz.colors
+    val st = s.result.stats
+    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Metric("Time", formatDuration(st.seconds)); Metric("Material", st.grams?.let { "%.1f g".format(it) } ?: "–"); Metric("Layers", "${st.layers ?: "–"}")
+    }
+    if (st.toolChanges > 0) Txt("${st.toolChanges} toolhead changes", Nz.type.bodySmall, c.textMuted)
+    s.result.warnings.forEach { Banner(it, BannerKind.WARNING) }
+    SendPanel(state)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NzButton("Export file", { chooseSaveFile("Export sliced file", p.name + ".gcode")?.let { t -> s.result.gcode.copyTo(t, overwrite = true) } }, kind = ButtonKind.QUIET, icon = NzIcon.EXPORT)
+        NzButton("Add to queue", {
+            val printer = p.printer()
+            val toolMap = if (printer?.capabilities?.value?.multiMaterial == true && p.materials().size > 1) p.materials().map { (it.toolhead ?: (it.slot - 1)) } else emptyList()
+            state.fleet.enqueue(p.name, s.result.gcode, printer?.config?.identity?.id, toolMap)
+            p.notice = "Added to the print queue on the Printers page."
+        }, kind = ButtonKind.QUIET, testTag = "add-to-queue")
+    }
+}
+
+/** What the app can already see is wrong with the plate, one line each, with the fix when it has one. Each can be dismissed. */
+@Composable
+private fun AdviceStrip(state: AppState, onChoosePrinter: () -> Unit) {
+    val p = state.prepare
+    val c = Nz.colors
+    var dismissed by remember { mutableStateOf(setOf<String>()) }
+    val onPlate = p.plateItems()
+    val advice = PrepareAdvice.compute(PrepareAdvice.Input(
+        offPlate = p.outOfBounds().map { it.name }, hasPrinter = p.printer() != null,
+        openEdges = onPlate.associate { it.name to it.openEdges }, objectCount = onPlate.size, anyPrinterSaved = state.fleet.order.value.isNotEmpty())).filter { it.id !in dismissed }
+    advice.forEach { a ->
+        Floating(Modifier.fillMaxWidth()) {
+            Icon(NzIcon.ALERT, Nz.status.paused, 18.dp, modifier = Modifier.padding(start = 6.dp))
+            Txt(a.text, Nz.type.bodySmall, c.text, modifier = Modifier.weight(1f).padding(horizontal = 6.dp))
+            if (a.action != null) NzButton(a.actionLabel ?: "Fix", { when (a.action) { PrepareAdvice.ARRANGE -> p.arrange(); PrepareAdvice.FIND_PRINTER -> { state.findPrinterRequested = true; state.destination = Destination.FLEET }; else -> onChoosePrinter() } }, kind = ButtonKind.SECONDARY, testTag = "advice-${a.id}")
+            NzButton("Dismiss", { dismissed = dismissed + a.id }, kind = ButtonKind.QUIET)
+        }
+    }
+}
+
+/** A pill that floats over the viewport. */
+@Composable
+private fun Floating(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    val c = Nz.colors
+    val shape = RoundedCornerShape(14.dp)
+    Row(modifier.clip(shape).background(c.surface.copy(alpha = 0.94f)).border(1.dp, c.line, shape).padding(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+}
+
+@Composable
+private fun ViewToggle(label: String, icon: NzIcon, on: Boolean, enabled: Boolean, onClick: () -> Unit) =
+    NzButton(label, onClick, kind = if (on) ButtonKind.PRIMARY else ButtonKind.QUIET, icon = icon, enabled = enabled)
 
 /**
  * One part of the panel: a heading that folds it away, with a one-line [summary] of its current choice shown while
  * folded, so the whole setup can be read at a glance.
  */
 @Composable
-private fun Section(title: String, summary: String, initiallyOpen: Boolean = true, action: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+private fun Section(title: String, summary: String, initiallyOpen: Boolean = true, action: (@Composable () -> Unit)? = null, bare: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     val c = Nz.colors
+    if (bare) { Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp), content = content); return }
     var open by remember(title) { mutableStateOf(initiallyOpen) }
     val shape = RoundedCornerShape(NozzleTokens.Radius.card)
     Column(Modifier.fillMaxWidth().clip(shape).background(c.surface).border(1.dp, c.line, shape).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -234,6 +429,7 @@ private fun MaterialsSection(state: AppState) {
         action = { com.nozzleitall.desktop.settings.IconToggle(NzIcon.TUNE, "Material settings", p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) {
             p.settingsScope = if (p.settingsScope == com.nozzleitall.desktop.settings.Scope.FILAMENT) com.nozzleitall.desktop.settings.Scope.PROCESS else com.nozzleitall.desktop.settings.Scope.FILAMENT } }) {
         if (fromPrinter) Txt("As loaded in ${p.printer()?.config?.identity?.displayName}", Nz.type.bodySmall, c.textMuted)
+        if (p.printer() != null) NzButton("Sync filament from printer", { p.notice = p.syncFromPrinter() }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, icon = NzIcon.IMPORT, testTag = "sync-filament")
         // Two columns of slots: the number on the material's colour, then the filament it slices with. Click to change it.
         var editingSlot by remember { mutableStateOf<Int?>(null) }
         val library = p.filamentLibrary()
@@ -260,10 +456,8 @@ private fun MaterialsSection(state: AppState) {
         if (flushing) FlushVolumesWindow(p) { flushing = false }
         // Painted models: which slot prints each of the model's own colours.
         p.items.filter { it.painted.isNotEmpty() }.forEach { item -> ModelColours(p, item, slots) }
-        // Full Spectrum (Snapmaker Orca's colour mixing), wherever the printer or profile offers it.
-        if (com.nozzleitall.printer.ext.Snapmaker.FULL_SPECTRUM in p.features() && slots.size >= 2) ColourMixingSection(p)
-        // PrusaSlicer's Color mix, on multi-slot printers without Full Spectrum.
-        if (com.nozzleitall.printer.ext.Prusa.COLOR_MIX in p.features() && slots.size >= 2) PrusaColorMixSection(p)
+        // Mixed filaments (OrcaSlicer's colour mixing), wherever the printer or profile offers them.
+        if (com.nozzleitall.printer.ext.MixedFilamentFormat.FEATURE in p.features() && slots.size >= 2) ColourMixingSection(p)
     }
 }
 
@@ -298,18 +492,45 @@ private fun ModelColours(p: PrepareState, item: PrepItem, slots: List<com.nozzle
 }
 
 @Composable
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun StepObjects(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val onPlate = p.plateItems()
-    Section("Objects", if (onPlate.isEmpty()) "None yet" else "${onPlate.size} on ${p.plateNames.getOrNull(p.currentPlate) ?: "the plate"}", initiallyOpen = onPlate.isNotEmpty(),
-        action = { if (onPlate.isNotEmpty()) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() } }) {
+    // The tab is already called Objects, and Arrange is on the plate's toolbar, so this page has no card heading of its own.
+    Section("Objects", "", bare = true) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Txt(if (onPlate.isEmpty()) "Objects" else "Objects (${onPlate.size})", Nz.type.label, modifier = Modifier.weight(1f))
+            com.nozzleitall.desktop.settings.IconToggle(NzIcon.IMPORT, "Add model", false) { chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure { p.notice = it.message } } }
+            if (onPlate.size > 1) com.nozzleitall.desktop.settings.IconToggle(NzIcon.MOVE, "Arrange the plate", false) { p.arrange() }
+        }
         if (onPlate.isEmpty()) { Txt("Nothing on this plate yet.", Nz.type.bodySmall, c.textMuted); return@Section }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Txt("Select all", Nz.type.label, c.accent, modifier = Modifier.clickable { focus.clearFocus(); p.selectAll() }.padding(4.dp))
+            if (p.selectedIds.isNotEmpty()) Txt("Deselect", Nz.type.label, c.accent, modifier = Modifier.clickable { focus.clearFocus(); p.deselect() }.padding(4.dp))
+        }
+        Txt("Ctrl-click to toggle · Shift-click for a range", Nz.type.bodySmall, c.textMuted)
         val slots = p.materials()
         onPlate.forEach { item ->
-            val sel = item.id == p.selected
+            val sel = item.id in p.selectedIds
             Row(Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(6.dp)).background(if (sel) c.accent.copy(alpha = 0.14f) else Color.Transparent)
-                .selectable(sel, role = Role.Button) { p.selected = if (sel) null else item.id }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                .semantics(mergeDescendants = true) { selected = sel; role = Role.Button; onClick { focus.clearFocus(); p.selectObject(item.id); true } }
+                .onKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.Spacebar)) {
+                        p.selectObject(item.id, e.isCtrlPressed, e.isShiftPressed, listRange = true); true
+                    } else false
+                }.focusable()
+                .pointerInput(item.id) { awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    if (!currentEvent.buttons.isPrimaryPressed) return@awaitEachGesture
+                    val up = waitForUpOrCancellation()
+                    if (up != null) {
+                        val modifiers = currentEvent.keyboardModifiers
+                        focus.clearFocus(); p.selectObject(item.id, modifiers.isCtrlPressed, modifiers.isShiftPressed, listRange = true)
+                        up.consume()
+                    }
+                } }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(parseHex(p.slotHex(item.slot)) ?: c.accent))
                 Txt(item.name, Nz.type.bodySmall, if (sel) c.accent else c.text, modifier = Modifier.weight(1f), maxLines = 1)
@@ -317,8 +538,23 @@ private fun StepObjects(state: AppState) {
             }
         }
         val s = onPlate.firstOrNull { it.id == p.selected }
-        if (s != null) {
-            ObjectRow("Material") {
+        if (s != null && p.selectedIds.size > 1) {
+            Txt("${p.selectedIds.size} objects selected", Nz.type.label, c.accent)
+            Txt("Values follow ${s.name}; edits move, turn and scale the group around its centre. Select one object for individual settings.", Nz.type.bodySmall, c.textMuted)
+            ObjectRow("Move (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                GroupNumber("X", s.x) { p.editSelection { p.moveSelection(s.id, it, s.y) } }; GroupNumber("Y", s.y) { p.editSelection { p.moveSelection(s.id, s.x, it) } }
+            } }
+            ObjectRow("Turn together") { GroupNumber("°", s.rotZ) { p.editSelection { p.turnSelection(s.id, it - s.rotZ) } } }
+            ObjectRow("Scale together") { GroupNumber("%", s.scale * 100f, positive = true) { p.editSelection { p.resizeSelection(s.id, it / (s.scale * 100f)) } } }
+            Txt("Enter or leave a field to apply · Esc to cancel", Nz.type.bodySmall, c.textMuted)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clickable { p.duplicateSelected() }.padding(4.dp))
+                Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clickable { p.removeSelected() }.padding(4.dp))
+            }
+        }
+        if (s != null && p.selectedIds.size == 1) {
+            if (s.painted.isNotEmpty()) Txt("This object's colours are painted: choose what each prints as under Filament in the bar above.", Nz.type.bodySmall, c.textMuted)
+            else ObjectRow("Material") {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     slots.forEach { m ->
                         val on = s.slot == m.slot
@@ -329,7 +565,8 @@ private fun StepObjects(state: AppState) {
                 }
             }
             ObjectRow("Position (mm)") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("X", s.x) { s.x = it; p.changed() }; ObjectNumber("Y", s.y) { s.y = it; p.changed() } } }
-            ObjectRow("Turn and size") { Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() }; ObjectNumber("%", s.scale * 100) { v -> if (v > 0) { s.scale = v / 100; p.changed() } } } }
+            ObjectRow("Turn") { ObjectNumber("°", s.rotZ) { s.rotZ = it; p.changed() } }
+            ObjectSizeSection(p, s)
             if (p.plateNames.size > 1) ObjectRow("Plate") {
                 com.nozzleitall.desktop.settings.DenseSelect("Move to plate", p.plateNames.mapIndexed { i, n -> com.nozzleitall.desktop.settings.Choice("$i", n) }, "${s.plate}",
                     Modifier.width(160.dp)) { v -> v.toIntOrNull()?.let { p.moveToPlate(s, it) } }
@@ -337,8 +574,13 @@ private fun StepObjects(state: AppState) {
             ObjectInfo(s)
             val profileValues = remember(p.profileId, p.nozzle, p.processId) { com.nozzleitall.desktop.settings.ProfileValues.read(p.profileDir(), com.nozzleitall.desktop.settings.SettingsCatalog.bundled) }
             ObjectSettingsSection(p, s, profileValues)
+            ObjectPartsSection(p, s, profileValues)
+            HeightRangesSection(p, s, profileValues)
+            VariableLayerSection(p, s)
+            s.instanceOf?.let { root -> Txt("Instance of ${p.items.firstOrNull { it.id == root }?.name ?: "another object"}: its settings, parts and paint follow that object; edit them there.", Nz.type.bodySmall, c.textMuted) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Duplicate", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.duplicateSelected() }.padding(4.dp))
+                Txt("Add instance", Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClickLabel = "Add an instance that shares this object's settings, parts and paint") { p.addInstance() }.padding(4.dp))
                 Txt("Remove", Nz.type.label, c.danger, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.removeSelected() }.padding(4.dp))
             }
         }
@@ -379,31 +621,153 @@ private fun PlateTabs(p: PrepareState) {
 @Composable
 private fun ObjectInfo(s: PrepItem) {
     val c = Nz.colors
-    ObjectRow("Size") { Txt("${"%.1f".format(s.footprintW)} × ${"%.1f".format(s.footprintD)} × ${"%.1f".format(s.height)} mm", Nz.type.bodySmall) }
     ObjectRow("Volume") { Txt("${"%.1f".format(s.volume / 1000.0)} cm³ · ${"%,d".format(s.mesh.triangleCount)} triangles", Nz.type.bodySmall) }
     if (s.openEdges > 0) ObjectRow("Surface") { Txt("${s.openEdges} open edge${if (s.openEdges == 1) "" else "s"}: it may not slice as expected", Nz.type.bodySmall, c.danger) }
 }
 
-/** Orca's plate tools: Arrange, Auto orient (the selection, or everything), Split and Cut for the selected object. */
+/** The plate tools: Arrange, Auto orient (the selection, or everything), Split, Cut, Paint and AI auto-paint for the selected object. */
 @Composable
-private fun PlateToolbar(p: PrepareState) {
-    val c = Nz.colors
-    val sel = p.plateItems().firstOrNull { it.id == p.selected }
-    var cutting by remember(sel?.id) { mutableStateOf(false) }
-    var height by remember(sel?.id) { mutableStateOf(sel?.let { "%.1f".format(it.height / 2) } ?: "") }
+private fun PlateToolbar(p: PrepareState, sel: PrepItem?, drawer: Drawer?, toggle: (Drawer) -> Unit) {
     val idle = p.toolBusy == null
+    val single = sel != null && p.selectedIds.size == 1
+    NzButton("Arrange", { p.arrange() }, kind = ButtonKind.QUIET, icon = NzIcon.MOVE, enabled = idle, testTag = "plate-arrange")
+    NzButton(if (sel == null) "Auto orient all" else "Auto orient", { p.orient() }, kind = ButtonKind.QUIET, enabled = idle, testTag = "plate-orient")
+    NzButton("Split", { p.splitSelected() }, kind = ButtonKind.QUIET, enabled = idle && single, testTag = "plate-split")
+    NzButton("Cut", { toggle(Drawer.CUT) }, kind = if (drawer == Drawer.CUT) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && single, testTag = "plate-cut")
+    NzButton("Paint", { if (p.paintKind == null) { p.paintKind = PaintOps.Kind.SUPPORT; p.paintState = 1 } else p.stopPainting() },
+        kind = if (p.paintKind != null) ButtonKind.PRIMARY else ButtonKind.QUIET, enabled = idle && single, testTag = "plate-paint")
+    NzButton("AI auto-paint", { toggle(Drawer.AI) }, kind = if (drawer == Drawer.AI) ButtonKind.PRIMARY else ButtonKind.QUIET,
+        enabled = idle && single && p.allSlots().size >= 2, testTag = "plate-autopaint")
+    p.toolBusy?.let { Txt("$it…", Nz.type.bodySmall, Nz.colors.accent, modifier = Modifier.padding(horizontal = 8.dp)) }
+}
+
+@Composable
+private fun DrawerTitle(title: String, onClose: (() -> Unit)?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Txt(title, Nz.type.title, modifier = Modifier.weight(1f))
+        if (onClose != null) NzButton("Close", onClose, kind = ButtonKind.QUIET)
+    }
+}
+
+@Composable
+private fun CutPanel(p: PrepareState, sel: PrepItem, onDone: () -> Unit) {
+    val c = Nz.colors
+    var height by remember(sel.id) { mutableStateOf("%.1f".format(sel.height / 2)) }
+    DrawerTitle("Cut", onDone)
+    Txt("Cut ${sel.name} in two at a height above its base.", Nz.type.bodySmall, c.textMuted)
+    com.nozzleitall.desktop.settings.DenseInput(height, { height = it }, "Cut height above the base (of ${"%.1f".format(sel.height)} mm)", Modifier.fillMaxWidth(), units = "mm")
+    NzButton("Cut here", { height.replace(',', '.').toFloatOrNull()?.let { p.cutSelected(it); onDone() } }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null)
+}
+
+/** Orca's paint tools: what to paint (support / seam enforcers and blockers, a colour, fuzzy skin), how (brush, bucket fill, smart fill) and how big. */
+@Composable
+private fun PaintPanel(p: PrepareState) {
+    val c = Nz.colors
+    val kind = p.paintKind ?: return
+    fun choice(v: String, l: String) = com.nozzleitall.desktop.settings.Choice(v, l)
+    val what = when (kind) {
+        PaintOps.Kind.SUPPORT, PaintOps.Kind.SEAM -> listOf(choice("1", "Enforcer"), choice("2", "Blocker"), choice("0", "Erase"))
+        PaintOps.Kind.FUZZY -> listOf(choice("1", "Fuzzy skin"), choice("0", "Erase"))
+        PaintOps.Kind.COLOUR -> p.allSlots().map { (id, label) -> choice(id.toString(), "$id · $label") } + choice("0", "Erase")
+    }
+    DrawerTitle("Paint", { p.stopPainting() })
+    Txt("Drag on the model to paint. Alt-drag orbits, Shift-drag pans.", Nz.type.bodySmall, c.textMuted)
+    com.nozzleitall.desktop.settings.DenseSelect("Paint", PaintOps.Kind.values().map { choice(it.name, it.label) }, kind.name, Modifier.fillMaxWidth()) { v ->
+        val k = PaintOps.Kind.valueOf(v); p.paintKind = k; p.paintState = if (k == PaintOps.Kind.COLOUR) (p.allSlots().firstOrNull()?.first ?: 1) else 1 }
+    com.nozzleitall.desktop.settings.DenseSelect("What", what, p.paintState.toString(), Modifier.fillMaxWidth()) { v -> v.toIntOrNull()?.let { p.paintState = it } }
+    com.nozzleitall.desktop.settings.DenseSelect("Tool", PaintOps.Mode.values().map { choice(it.name, it.label) }, p.paintMode.name, Modifier.fillMaxWidth()) { v -> p.paintMode = PaintOps.Mode.valueOf(v) }
+    if (p.paintMode == PaintOps.Mode.BRUSH) {
+        var radius by remember(p.paintRadius) { mutableStateOf("%.1f".format(p.paintRadius).removeSuffix(".0")) }
+        com.nozzleitall.desktop.settings.DenseInput(radius, { radius = it; it.replace(',', '.').toFloatOrNull()?.takeIf { r -> r in 0.2f..40f }?.let { r -> p.paintRadius = r } }, "Brush radius", Modifier.fillMaxWidth(), units = "mm")
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        NzButton("Arrange", { p.arrange() }, kind = ButtonKind.SECONDARY, icon = NzIcon.MOVE, enabled = idle, testTag = "plate-arrange")
-        NzButton(if (sel == null) "Auto orient all" else "Auto orient", { p.orient() }, kind = ButtonKind.SECONDARY, enabled = idle, testTag = "plate-orient")
-        NzButton("Split", { p.splitSelected() }, kind = ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-split")
-        NzButton("Cut", { cutting = !cutting }, kind = if (cutting) ButtonKind.PRIMARY else ButtonKind.SECONDARY, enabled = idle && sel != null, testTag = "plate-cut")
-        if (cutting && sel != null) {
-            com.nozzleitall.desktop.settings.DenseInput(height, { height = it }, "Cut height above the base", Modifier.width(110.dp), units = "mm")
-            NzButton("Cut here", { height.replace(',', '.').toFloatOrNull()?.let { p.cutSelected(it); cutting = false } }, kind = ButtonKind.PRIMARY, enabled = idle)
-            Txt("of ${"%.1f".format(sel.height)} mm", Nz.type.bodySmall, c.textMuted)
+        NzButton("Undo", { p.undoPaint() }, kind = ButtonKind.SECONDARY, enabled = p.canUndoPaint && !p.paintBusy)
+        NzButton("Clear ${kind.label.lowercase()}", { p.clearPaint(kind) }, kind = ButtonKind.SECONDARY, enabled = !p.paintBusy, testTag = "paint-clear")
+        NzButton("Done", { p.stopPainting() }, kind = ButtonKind.PRIMARY, testTag = "paint-done")
+        p.takeIf { it.paintBusy }?.let { Txt("Painting…", Nz.type.bodySmall, c.accent) }
+    }
+}
+
+/**
+ * AI auto-paint, in the steps Orca's dialog has: choose how to ask and add a hint, look at exactly the views that will be sent,
+ * send them, then keep or drop what comes back. Nothing leaves the computer until Send.
+ */
+@Composable
+private fun AutoPaintPanel(p: PrepareState, onDone: () -> Unit) {
+    val c = Nz.colors
+    var s by remember { mutableStateOf(p.autoPaintSettings) }
+    var hint by remember { mutableStateOf("") }
+    var showReferenceViews by remember { mutableStateOf(false) }
+    fun update(n: AutoPaint.Settings) { s = n; p.saveAutoPaintSettings(n) }
+    val prepared = p.aiPrepared
+    var correctionRegion by remember(prepared) { mutableStateOf(0) }
+    val answer = p.aiAnswer
+    fun close() { p.aiDiscard(); onDone() }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        DrawerTitle("AI auto-paint", ::close)
+        if (prepared == null) {
+            Txt("The engine finds geometric regions, not guaranteed semantic parts. Review the images before sending; inspect and correct the painted draft before applying.", Nz.type.bodySmall, c.textMuted)
+            if (p.selectedItems().singleOrNull()?.mesh?.isPainted == true) Banner("This model already has colour regions. AI can replace their intentional boundaries. Compare the original and use Keep original paint wherever needed.", BannerKind.WARNING)
+            com.nozzleitall.desktop.settings.DenseSelect("Ask through", listOf(com.nozzleitall.desktop.settings.Choice("command", "A command on this computer"),
+                com.nozzleitall.desktop.settings.Choice("server", "An OpenAI-compatible server")), s.kind, Modifier.fillMaxWidth()) { update(s.copy(kind = it)) }
+            if (s.kind == "command") {
+                com.nozzleitall.desktop.settings.DenseInput(s.command, { update(s.copy(command = it)) }, "Command (reads the question on stdin; {dir} is the folder with the views)", Modifier.fillMaxWidth(), placeholder = AutoPaint.DEFAULT_COMMAND)
+            } else {
+                com.nozzleitall.desktop.settings.DenseInput(s.baseUrl, { update(s.copy(baseUrl = it)) }, "Server address", Modifier.fillMaxWidth(), placeholder = "http://localhost:11434/v1")
+                com.nozzleitall.desktop.settings.DenseInput(s.model, { update(s.copy(model = it)) }, "Model (must accept images)", Modifier.fillMaxWidth())
+                com.nozzleitall.desktop.settings.DenseInput(s.apiKey, { update(s.copy(apiKey = it)) }, "API key (blank for a local server)", Modifier.fillMaxWidth())
+            }
+            com.nozzleitall.desktop.settings.DenseInput(hint, { hint = it }, "Hint", Modifier.fillMaxWidth(), placeholder = "Hint (optional), e.g. a goldfish, orange body, black eyes")
+            NzButton("Show what will be sent", { p.aiPrepare(hint) }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && s.provider != null, testTag = "autopaint-run")
+        } else {
+            Txt(if (answer == null) "These images, region descriptions, your hint and filament list will be sent." else "Draft preview only — your saved model is unchanged. Orbit the plate to inspect every side, including underneath.", Nz.type.bodySmall, c.textMuted)
+            val images = remember(prepared) { prepared.seg.views.mapNotNull { v -> runCatching { v.name to org.jetbrains.skia.Image.makeFromEncoded(File(v.path).readBytes()).toComposeImageBitmap() }.getOrNull() } }
+            if (answer != null) NzButton(if (showReferenceViews) "Hide numbered reference views" else "Show numbered reference views", { showReferenceViews = !showReferenceViews }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+            if (answer == null || showReferenceViews) images.chunked(3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { (name, bmp) ->
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            androidx.compose.foundation.Image(bmp, name, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(6.dp)))
+                            Txt(name, Nz.type.bodySmall, c.textMuted)
+                        }
+                    }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Txt("${prepared.seg.segmentCount} parts · ${s.command.takeIf { s.kind == "command" } ?: s.baseUrl}", Nz.type.bodySmall, c.textMuted, maxLines = 1)
+            if (answer == null) {
+                NzButton("Send these ${images.size} images", { p.aiSend() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null, testTag = "autopaint-send")
+                NzButton("Back", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
+            } else {
+                if (p.aiPreviewMesh != null) Banner("${answer.faces().count { it > 0 }} of ${answer.faceRegions.size} faces assigned. Inspect the draft on the plate.", BannerKind.SUCCESS)
+                else {
+                    Banner(if (p.toolBusy != null) "Building the painted draft…" else "The painted draft could not be built. Nothing can be applied until Retry succeeds.", BannerKind.WARNING)
+                    NzButton("Retry draft preview", { p.aiRetryPreview() }, Modifier.fillMaxWidth(), enabled = p.toolBusy == null, kind = ButtonKind.SECONDARY)
+                }
+                NzButton(if (p.aiShowOriginal) "Show painted draft" else "Compare with original", { p.aiShowOriginal = !p.aiShowOriginal }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, enabled = p.aiPreviewMesh != null && p.toolBusy == null)
+                NzButton("Keep all original paint", { p.aiKeepOriginal() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
+                NzButton(if (p.aiCleanBoundaries) "Boundary cleanup: on" else "Boundary cleanup: off", { p.aiSetCleanup(!p.aiCleanBoundaries) }, Modifier.fillMaxWidth(), kind = ButtonKind.SECONDARY, enabled = p.toolBusy == null)
+                Txt("Optional tip smoothing on exact shared edges; may make no changes. Preserves small details and sharp creases. ${p.aiCleanedFaces} faces adjusted. Cannot repair semantic segmentation.", Nz.type.bodySmall, c.textMuted)
+                Txt("Correct regions (numbers match the images)", Nz.type.label)
+                val choices = listOf(com.nozzleitall.desktop.settings.Choice("0", "Keep original paint")) + prepared.filaments.map { f ->
+                    com.nozzleitall.desktop.settings.Choice(f.index.toString(), "Slot ${f.index} · ${f.name.ifBlank { f.type }} · ${f.colorHex}")
+                }
+                com.nozzleitall.desktop.settings.DenseSelect("Region", answer.slots.indices.map { region ->
+                    com.nozzleitall.desktop.settings.Choice(region.toString(), "Region $region")
+                }, correctionRegion.toString(), Modifier.fillMaxWidth()) { correctionRegion = it.toInt() }
+                val correctionSlot = answer.slots.getOrElse(correctionRegion) { 0 }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val filament = prepared.filaments.firstOrNull { it.index == correctionSlot }
+                    Box(Modifier.size(18.dp).background(parseHex(filament?.colorHex) ?: c.surfaceRaised, RoundedCornerShape(3.dp)).border(1.dp, c.line, RoundedCornerShape(3.dp)))
+                    com.nozzleitall.desktop.settings.DenseSelect("Paint region $correctionRegion with", choices, correctionSlot.toString(), Modifier.weight(1f), enabled = p.toolBusy == null) { p.aiCorrect(correctionRegion, it.toInt()) }
+                }
+                NzButton("Reset region corrections", { p.aiResetCorrections() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET, enabled = p.toolBusy == null)
+                val noChanges = answer.slots.all { it == 0 }
+                if (noChanges) Txt("No paint changes. Your original model will stay unchanged.", Nz.type.bodySmall, c.textMuted)
+                NzButton(if (noChanges) "Done — keep original" else "Apply as paint", { p.aiApply(); onDone() }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, enabled = p.toolBusy == null && p.aiPreviewMesh != null, testTag = "autopaint-apply")
+                NzButton("Discard", { p.aiDiscard() }, Modifier.fillMaxWidth(), kind = ButtonKind.QUIET)
+            }
         }
-        Spacer(Modifier.weight(1f))
-        p.toolBusy?.let { Txt("$it…", Nz.type.bodySmall, c.accent) }
     }
 }
 
@@ -418,6 +782,32 @@ private fun ObjectNumber(units: String, value: Float, onValue: (Float) -> Unit) 
     com.nozzleitall.desktop.settings.DenseInput(text, { t -> text = t; t.replace(',', '.').toFloatOrNull()?.let(onValue) }, units, Modifier.width(80.dp), units = units)
 }
 
+/** Group numeric edits commit once, so typing speed never changes the Undo boundary. */
+@Composable
+private fun GroupNumber(units: String, value: Float, positive: Boolean = false, onCommit: (Float) -> Unit) {
+    var text by remember(value) { mutableStateOf(groupNumberDisplay(value)) }
+    var focused by remember { mutableStateOf(false) }
+    var cancelled by remember { mutableStateOf(false) }
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    com.nozzleitall.desktop.settings.DenseInput(text, { text = it }, units,
+        Modifier.width(80.dp).onFocusChanged { state ->
+            if (focused && !state.hasFocus && !cancelled) {
+                val parsed = groupNumberCommit(text, value, positive)
+                if (parsed != null) onCommit(parsed)
+                else text = groupNumberDisplay(value)
+            }
+            focused = state.hasFocus
+            if (focused) cancelled = false
+        }.onPreviewKeyEvent { e ->
+            if (e.type != KeyEventType.KeyDown) false
+            else when (e.key) {
+                Key.Enter -> { focus.clearFocus(); true }
+                Key.Escape -> { cancelled = true; text = groupNumberDisplay(value); focus.clearFocus(); true }
+                else -> false
+            }
+        }, units = units)
+}
+
 @Composable
 private fun NumberField(label: String, value: Float, onValue: (Float) -> Unit) {
     var text by remember(value) { mutableStateOf("%.1f".format(value).removeSuffix(".0")) }
@@ -425,45 +815,11 @@ private fun NumberField(label: String, value: Float, onValue: (Float) -> Unit) {
 }
 
 @Composable
-private fun StepSlice(state: AppState) {
-    val p = state.prepare
-    val c = Nz.colors
-    val scope = rememberCoroutineScope()
-    Card(Modifier.fillMaxWidth()) {
-        when (val s = p.slice) {
-            SliceState.Idle, SliceState.Cancelled, is SliceState.Failed -> {
-                if (s is SliceState.Failed) Banner(s.message, BannerKind.DANGER)
-                if (s is SliceState.Cancelled) Txt("Slicing was cancelled. Nothing was changed.", Nz.type.bodySmall, c.textMuted)
-                NzButton("Slice", { p.slice(state.scope) }, Modifier.fillMaxWidth(), kind = ButtonKind.PRIMARY, icon = NzIcon.SLICE, enabled = p.plateItems().isNotEmpty(), testTag = "slice")
-            }
-            is SliceState.Running -> {
-                Txt(s.stage, Nz.type.body)
-                ProgressBar(s.progress, label = "Slicing progress")
-                NzButton("Cancel", { p.cancelSlice() }, kind = ButtonKind.SECONDARY, icon = NzIcon.CLOSE)
-            }
-            is SliceState.Done -> {
-                val st = s.result.stats
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Metric("Time", formatDuration(st.seconds)); Metric("Material", st.grams?.let { "%.1f g".format(it) } ?: "–"); Metric("Layers", "${st.layers ?: "–"}")
-                }
-                if (st.toolChanges > 0) Txt("${st.toolChanges} toolhead changes", Nz.type.bodySmall, c.textMuted)
-                s.result.warnings.forEach { Banner(it, BannerKind.WARNING) }
-                SendPanel(state)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NzButton("Export file", { chooseSaveFile("Export sliced file", p.name + ".gcode")?.let { t -> s.result.gcode.copyTo(t, overwrite = true) } }, kind = ButtonKind.QUIET, icon = NzIcon.EXPORT)
-                    NzButton("Slice again", { p.slice(state.scope) }, kind = ButtonKind.QUIET)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SendPanel(state: AppState) {
     val p = state.prepare
     val c = Nz.colors
     val scope = rememberCoroutineScope()
-    val entry = p.printer() ?: run { Txt("No printer chosen: export the file and send it yourself, or choose a printer in step 1.", Nz.type.bodySmall, c.textMuted); return }
+    val entry = p.printer() ?: run { Txt("No printer chosen: export the file and send it yourself, or choose a printer in the bar above.", Nz.type.bodySmall, c.textMuted); return }
     val caps = entry.capabilities.value ?: run { Txt("Connecting to ${entry.config.identity.displayName}…", Nz.type.bodySmall, c.textMuted); return }
     val flow = rememberActionFlow(entry)
     var uploaded by remember(p.slice) { mutableStateOf<String?>(null) }

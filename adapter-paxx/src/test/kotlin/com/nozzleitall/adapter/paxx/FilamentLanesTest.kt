@@ -75,6 +75,20 @@ class FilamentLanesTest {
         }
     }
 
+    @Test fun anEmptyPrintTaskConfigDoesNotHideTheLanes() = FakeMoonraker(paxx = false).use { fake ->
+        // A Centauri Carbon on COSMOS defines print_task_config but answers every field with null (as the real one does): its filament is in AFC's lanes.
+        fake.status = JSONObject(fake.status.toString()).apply {
+            put("print_task_config", JSONObject().put("filament_exist", JSONObject.NULL).put("filament_vendor", JSONObject.NULL).put("filament_type", JSONObject.NULL)
+                .put("filament_sub_type", JSONObject.NULL).put("filament_color_rgba", JSONObject.NULL).put("filament_official", JSONObject.NULL)); remove("extruder1"); remove("extruder2"); remove("extruder3")
+            put("AFC", JSONObject().put("current_load", "CANVAS_1"))
+        }
+        fake.laneData = canvas
+        val config = PrinterConfig(PrinterIdentity("cc", "Centauri", "Elegoo Centauri Carbon", PrinterFamily.KLIPPER, fake.address), MoonrakerAdapter.ID)
+        MoonrakerAdapter().open(config).use { session ->
+            assertEquals(listOf("#FF0000", "#00FF00", null, "#0000FF"), session.status().toolheads.map { it.material?.colorHex })
+        }
+    }
+
     @Test fun u1IgnoresLaneData() = FakeMoonraker().use { fake ->
         fake.laneData = canvas
         val config = PrinterConfig(PrinterIdentity("u1", "U1", "Snapmaker U1", PrinterFamily.PAXX_U1, fake.address), PaxxLanAdapter.ID)

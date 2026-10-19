@@ -13,7 +13,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -38,6 +41,9 @@ fun SettingsSheet(catalog: SettingsCatalog, profile: ProfileValues, p: PrepareSt
     var searching by remember { mutableStateOf(false) }
     var query by remember(scope) { mutableStateOf("") }
     fun shown(s: SettingDef) = p.advancedSettings || s.mode == "simple" || p.isChanged(s.key, profile)
+    // Orca's settings rules for this configuration, from the engine: greyed-out and hidden rows, the Setting Overrides page, the IDEX layout choices.
+    LaunchedEffect(p.profileId, p.nozzle, p.processId) { p.refreshRules() }
+    val rules = p.rules
 
     Card(modifier) {
         // Header: what these settings are for, the preset, search and the Advanced switch.
@@ -65,6 +71,8 @@ fun SettingsSheet(catalog: SettingsCatalog, profile: ProfileValues, p: PrepareSt
                 Txt("Reset", Nz.type.label, c.textMuted, modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { p.overrides.clear(); p.changed() }.padding(4.dp))
             }
         }
+        // What Orca tells you about the current combination: a value it resets (OK) and a clash it asks about (pick one).
+        p.ruleChecks?.let { checks -> RuleNotices(p, checks) }
         if (searching) DenseInput(query, { query = it }, "Find a setting", Modifier.fillMaxWidth(), placeholder = "seam, brim, gyroid…")
         if (!searching && tabs.size > 1) TabStrip(tabs, tabId) { tabId = it }
 
@@ -81,8 +89,37 @@ fun SettingsSheet(catalog: SettingsCatalog, profile: ProfileValues, p: PrepareSt
             rows.forEach { (g, list) ->
                 item("h-${g.id}") { GroupHeader(g) }
                 items(list, key = { "${g.id}:${it.key}" }) { s ->
-                    DenseRow(s, p.setting(s.key, profile), p.baseSetting(s.key, profile), p.isChanged(s.key, profile)) { v -> p.setSetting(s.key, v, profile) }
+                    val state = rules?.states?.get(s.key); val override = rules?.overrides?.get(s.key)
+                    if (state?.visible == false || override?.visible == false) return@items
+                    // A dropdown whose contents depend on other settings (the IDEX tool layout) takes the engine's choices.
+                    val def = rules?.choices?.get(s.key)?.let { list -> s.copy(choices = list.map { Choice(it.first, it.second) }) } ?: s
+                    DenseRow(def, p.setting(s.key, profile), p.baseSetting(s.key, profile), p.isChanged(s.key, profile),
+                        enabled = state?.enabled != false && override?.checkboxEnabled != false,
+                        inherited = override?.inherited?.takeIf { it.isNotBlank() && p.setting(s.key, profile).isNullOrBlank() }) { v -> p.setSetting(s.key, v, profile) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RuleNotices(p: PrepareState, checks: com.nozzleitall.desktop.prepare.OptionRules.Result) {
+    val c = Nz.colors
+    // The mixed sub-layer warning is shown beside the layer tools; the rest are the print-setting checks.
+    val notices = checks.notices.filter { it.id != "mixed_sublayer_variable_layer" }
+    if (notices.isEmpty() && checks.conflicts.isEmpty() && checks.notices.none { it.id == "mixed_sublayer_variable_layer" }) return
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.surfaceSunken).border(1.dp, c.line, RoundedCornerShape(8.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        checks.notices.firstOrNull { it.id == "mixed_sublayer_variable_layer" }?.let { Txt(it.message, Nz.type.bodySmall, c.danger) }
+        notices.forEach { n ->
+            Txt(n.message, Nz.type.bodySmall, c.text)
+            if (n.changes.isNotEmpty()) Txt("Apply: " + n.changes.entries.joinToString { "${it.key} = ${it.value}" }, Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                .clickable(onClickLabel = "Apply Orca's reset") { n.changes.forEach { (k, v) -> p.overrides[k] = v }; p.changed() }.padding(4.dp))
+        }
+        checks.conflicts.forEach { cf ->
+            Txt(cf.message, Nz.type.bodySmall, c.text)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                cf.choices.forEach { (label, changes) -> Txt(label, Nz.type.label, c.accent, modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                    .clickable(onClickLabel = label) { changes.forEach { (k, v) -> p.overrides[k] = v }; p.changed() }.padding(4.dp)) }
             }
         }
     }
@@ -119,9 +156,11 @@ private fun GroupHeader(g: SettingGroup) {
 
 /** One setting: label (help on hover), the value with its units, and a reset mark when it differs from the base. */
 @Composable
-internal fun DenseRow(s: SettingDef, value: String?, base: String?, changed: Boolean, onSet: (String?) -> Unit) {
+internal fun DenseRow(s: SettingDef, value: String?, base: String?, changed: Boolean, enabled: Boolean = true, inherited: String? = null, onSet: (String?) -> Unit) {
     val c = Nz.colors
-    Row(Modifier.fillMaxWidth().heightIn(min = 34.dp).padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+    // A setting Orca greys out is dimmed and ignores the pointer.
+    val dim = if (enabled) Modifier else Modifier.alpha(0.45f).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } } }
+    Row(Modifier.fillMaxWidth().heightIn(min = 34.dp).padding(vertical = 1.dp).then(dim), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(3.dp).height(20.dp).clip(RoundedCornerShape(2.dp)).background(if (changed) c.accent else c.surface))
         Spacer(Modifier.width(8.dp))
         TooltipArea(tooltip = { Tip(buildString { s.help?.let { append(it) }; if (base != null && changed) append("\n\nProfile: ${s.display(base).take(80)}") }) },
@@ -129,6 +168,7 @@ internal fun DenseRow(s: SettingDef, value: String?, base: String?, changed: Boo
             Txt(s.label, Nz.type.bodySmall, if (changed) c.accent else c.text, maxLines = 1)
         }
         Spacer(Modifier.width(8.dp))
+        if (inherited != null && value.isNullOrBlank()) Txt("Printer's: " + s.display(inherited).take(20), Nz.type.bodySmall, c.textMuted, maxLines = 1)
         DenseControl(s, value.orEmpty(), onSet)
         Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) {
             if (changed) Txt("↺", Nz.type.label, c.textMuted, modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClickLabel = "Reset ${s.label}") { onSet(null) }.padding(2.dp))
@@ -173,17 +213,17 @@ fun DenseInput(value: String, onChange: (String) -> Unit, label: String, modifie
 }
 
 @Composable
-fun DenseSelect(label: String, choices: List<Choice>, value: String, modifier: Modifier, onSelect: (String) -> Unit) {
+fun DenseSelect(label: String, choices: List<Choice>, value: String, modifier: Modifier, enabled: Boolean = true, onSelect: (String) -> Unit) {
     val c = Nz.colors
     var open by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(6.dp)
     Box(modifier) {
         Row(Modifier.fillMaxWidth().height(28.dp).clip(shape).background(c.surfaceSunken).border(1.dp, if (open) c.focus else c.line, shape)
-            .clickable(onClickLabel = "Choose $label") { open = !open }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Txt(choices.firstOrNull { it.value == value }?.label ?: value, Nz.type.bodySmall, c.text, modifier = Modifier.weight(1f), maxLines = 1)
+            .clickable(enabled = enabled, onClickLabel = "Choose $label") { open = !open }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Txt(choices.firstOrNull { it.value == value }?.label ?: value, Nz.type.bodySmall, if (enabled) c.text else c.textMuted, modifier = Modifier.weight(1f), maxLines = 1)
             Txt("▾", Nz.type.bodySmall, c.textMuted)
         }
-        if (open) Popup(offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 30.dp.roundToPx() }),
+        if (open && enabled) Popup(offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { 30.dp.roundToPx() }),
             onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
             Column(Modifier.width(240.dp).heightIn(max = 320.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceRaised).border(1.dp, c.lineStrong, RoundedCornerShape(10.dp))
                 .verticalScroll(rememberScrollState()).padding(4.dp)) {

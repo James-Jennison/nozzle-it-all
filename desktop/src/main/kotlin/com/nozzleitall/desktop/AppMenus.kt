@@ -40,17 +40,23 @@ import com.nozzleitall.desktop.ui.*
 import com.nozzleitall.project.ThreeMf
 import com.nozzleitall.printer.Glossary
 
+/** The five most recently saved projects in the library, newest first (by file time, so building the menu never opens a project). */
+internal fun recentProjects(state: AppState): List<java.io.File> =
+    (state.library.dir.listFiles { f -> f.isFile && f.name.endsWith(".3mf", true) } ?: emptyArray()).sortedByDescending { it.lastModified() }.take(5)
+
 private fun browse(url: String) { runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } }
 
 /** One menu item: what it says, its shortcut, whether it can run now, and what it does. */
 class MenuAction(val label: String, val shortcut: Shortcut? = null, val enabled: Boolean = true, val run: () -> Unit)
-class Shortcut(val key: Key, val ctrl: Boolean = false, val shift: Boolean = false, val text: String) {
+/** [afterFocus]: tried only after the focused control has had its chance (Ctrl+Z in a text field undoes the typing); by default plain keys are, Ctrl shortcuts are not. */
+class Shortcut(val key: Key, val ctrl: Boolean = false, val shift: Boolean = false, val text: String, val afterFocus: Boolean = !ctrl) {
     fun matches(e: androidx.compose.ui.input.key.KeyEvent) = e.key == key && e.isCtrlPressed == ctrl && e.isShiftPressed == shift && !e.isAltPressed
 }
 /** A menu: title, the Alt+letter that opens it, and its items (null is a separator). */
 class AppMenu(val title: String, val mnemonic: Key, val items: List<MenuAction?>)
 
-private fun ctrl(key: Key, text: String, shift: Boolean = false) = Shortcut(key, ctrl = true, shift = shift, text = (if (shift) "Ctrl+Shift+" else "Ctrl+") + text)
+private fun ctrl(key: Key, text: String, shift: Boolean = false, afterFocus: Boolean = false) =
+    Shortcut(key, ctrl = true, shift = shift, text = (if (shift) "Ctrl+Shift+" else "Ctrl+") + text, afterFocus = afterFocus)
 
 /**
  * The application's menus, as data: drawn by [NozzleMenuBar] in Nozzle's own style, and their shortcuts handled by
@@ -64,9 +70,11 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
     return listOf(
         AppMenu("File", Key.F, listOf(
             MenuAction("New project", ctrl(Key.N, "N")) { guarded { p.newProject(); state.destination = Destination.PREPARE } },
+            MenuAction("Projects…") { state.destination = Destination.PROJECTS },
             MenuAction("Open project…", ctrl(Key.O, "O")) {
                 guarded { chooseFiles("Open a project", listOf("3mf"), multiple = false).firstOrNull()?.let { f -> runCatching { p.open(f); state.destination = Destination.PREPARE }.onFailure(::report) } }
             },
+            *recentProjects(state).map { f -> MenuAction("Recent: " + f.nameWithoutExtension.take(40)) { guarded { runCatching { p.open(f); state.destination = Destination.PREPARE }.onFailure(::report) } } }.toTypedArray(),
             MenuAction("Add model…", ctrl(Key.I, "I")) {
                 chooseFiles("Add a model", listOf("stl", "3mf", "obj")).forEach { f -> runCatching { p.importModel(f) }.onFailure(::report) }
                 state.destination = Destination.PREPARE
@@ -76,6 +84,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Save as…", ctrl(Key.S, "S", shift = true), enabled = p.items.isNotEmpty()) {
                 chooseSaveFile("Save project as", p.name + ".3mf")?.let { f -> runCatching { p.file = f; p.save() }.onFailure(::report) }
             },
+            MenuAction("Reload from disk", enabled = p.file != null) { p.file?.let { f -> guarded { runCatching { p.open(f) }.onFailure(::report) } } },
             MenuAction("Export 3MF…", enabled = p.items.isNotEmpty()) {
                 chooseSaveFile("Export project", p.name + ".3mf")?.let { f -> runCatching { ThreeMf.writeAtomically(p.toProject(), f) }.onFailure(::report) }
             },
@@ -86,18 +95,46 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
             MenuAction("Quit", ctrl(Key.Q, "Q")) { onQuit() },
         )),
         AppMenu("Edit", Key.E, listOf(
-            MenuAction("Duplicate", ctrl(Key.D, "D"), enabled = p.selected != null) { p.duplicateSelected() },
+            MenuAction("Undo", ctrl(Key.Z, "Z", afterFocus = true), enabled = p.history.canUndo) { p.history.undo() },
+            MenuAction("Redo", ctrl(Key.Z, "Z", shift = true, afterFocus = true), enabled = p.history.canRedo) { p.history.redo() },
+            null,
+            MenuAction("Select all", ctrl(Key.A, "A", afterFocus = true), enabled = state.destination == Destination.PREPARE && p.plateItems().isNotEmpty()) { p.selectAll() },
+            MenuAction("Deselect", ctrl(Key.A, "A", shift = true, afterFocus = true), enabled = state.destination == Destination.PREPARE && p.selected != null) { p.deselect() },
+            MenuAction("Duplicate", ctrl(Key.D, "D", afterFocus = true), enabled = p.selected != null) { p.duplicateSelected() },
             MenuAction("Delete", Shortcut(Key.Delete, text = "Delete"), enabled = p.selected != null) { p.removeSelected() },
-            MenuAction("Arrange plate", ctrl(Key.A, "A", shift = true), enabled = p.items.isNotEmpty()) { p.arrange() },
+            MenuAction("Delete all", enabled = p.items.isNotEmpty()) { guarded { p.items.clear(); p.selected = null; p.changed() } },
+            MenuAction("Arrange plate", enabled = p.items.isNotEmpty()) { p.arrange() },
             null,
             MenuAction("Show every setting", ctrl(Key.Period, ".")) { p.advancedSettings = true; p.settingsScope = com.nozzleitall.desktop.settings.Scope.PROCESS; state.destination = Destination.PREPARE },
         )),
-        AppMenu("Go", Key.G, Destination.entries.map { d -> MenuAction(d.label, Shortcut(d.key, ctrl = true, text = "Ctrl+" + if (d.key == Key.Comma) "," else d.key.toString().removePrefix("Key: "))) { state.destination = d } }),
+        AppMenu("Plate", Key.P, listOf(
+            MenuAction("Slice plate", ctrl(Key.R, "R"), enabled = p.items.isNotEmpty()) { state.destination = Destination.PREPARE; p.slice(state.scope) },
+            null,
+            MenuAction("Add plate") { p.addPlate(); state.destination = Destination.PREPARE },
+            MenuAction("Delete this plate", enabled = p.plateNames.size > 1) { guarded { p.removePlate(p.currentPlate) } },
+            null,
+            MenuAction("Previous plate", enabled = p.currentPlate > 0) { p.showPlate(p.currentPlate - 1) },
+            MenuAction("Next plate", enabled = p.currentPlate < p.plateNames.lastIndex) { p.showPlate(p.currentPlate + 1) },
+        )),
+        AppMenu("Calibration", Key.C, net.jamesjennison.klippercompanion.CalibrationKind.entries.map { k ->
+            MenuAction(k.label) { guarded { p.startCalibration(net.jamesjennison.klippercompanion.CalibrationSpec(k)); state.destination = Destination.PREPARE } }
+        }),
+        AppMenu("View", Key.V, listOf(
+            MenuAction("Isometric view") { p.camera.yaw = -35f; p.camera.pitch = 55f; p.camera.pan = androidx.compose.ui.geometry.Offset.Zero },
+            MenuAction("Top view") { p.camera.pitch = 0f },
+            MenuAction("Side view") { p.camera.pitch = 89f },
+            null,
+            MenuAction("Rotate view left") { p.camera.yaw -= 90f },
+            MenuAction("Rotate view right") { p.camera.yaw += 90f },
+            MenuAction("Centre view") { p.camera.pan = androidx.compose.ui.geometry.Offset.Zero },
+        )),
+        AppMenu("Go", Key.G, Destination.entries.filter { it.inRail }.map { d -> MenuAction(d.label, Shortcut(d.key, ctrl = true, text = "Ctrl+" + if (d.key == Key.Comma) "," else d.key.toString().removePrefix("Key: "))) { state.destination = d } }),
         AppMenu("Help", Key.H, listOf(
             MenuAction("Nozzle It All help") { browse("https://nozzleitall.com/docs/") },
             MenuAction("Supported printers") { browse("https://nozzleitall.com/printers/") },
             MenuAction("Report a problem") { browse("https://nozzleitall.com/support/") },
             MenuAction("Source code and licences") { browse("https://nozzleitall.com/open-source/") },
+            MenuAction("Show the data folder") { runCatching { java.awt.Desktop.getDesktop().open(state.paths.data) }.onFailure(::report) },
             null,
             MenuAction("About Nozzle It All") { state.showAbout = true },
         )),
@@ -111,7 +148,7 @@ fun appMenus(state: AppState, onQuit: () -> Unit): List<AppMenu> {
  */
 fun handleMenuShortcut(menus: List<AppMenu>, e: androidx.compose.ui.input.key.KeyEvent, plain: Boolean = false): Boolean {
     if (e.type != KeyEventType.KeyDown) return false
-    val item = menus.flatMap { it.items }.filterNotNull().firstOrNull { it.shortcut?.matches(e) == true && it.shortcut.ctrl != plain } ?: return false
+    val item = menus.flatMap { it.items }.filterNotNull().firstOrNull { it.shortcut?.matches(e) == true && it.shortcut.afterFocus == plain } ?: return false
     if (item.enabled) item.run()
     return true
 }

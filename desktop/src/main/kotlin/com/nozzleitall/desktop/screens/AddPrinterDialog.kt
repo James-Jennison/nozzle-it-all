@@ -13,7 +13,9 @@ import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import com.nozzleitall.desktop.AppState
 import com.nozzleitall.desktop.EXPORT_ONLY
+import com.nozzleitall.desktop.PrinterEntry
 import com.nozzleitall.desktop.PrinterStore
+import com.nozzleitall.desktop.discovery.LanScan
 import com.nozzleitall.desktop.prepare.ProfileCatalog
 import com.nozzleitall.desktop.ui.*
 import com.nozzleitall.printer.*
@@ -40,7 +42,7 @@ private fun formFor(f: PrinterFamily) = when (f) {
 }
 
 @Composable
-fun AddPrinterDialog(state: AppState, onDone: () -> Unit) {
+fun AddPrinterDialog(state: AppState, autoScan: Boolean = false, onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
     val fleet = state.fleet
     // Families this installation can actually connect to, from the adapters it ships; plus the optional Stock U1 support and export-only.
@@ -59,6 +61,29 @@ fun AddPrinterDialog(state: AppState, onDone: () -> Unit) {
     var found by remember { mutableStateOf<DiscoveredPrinter?>(null) }
     var checked by remember { mutableStateOf<PrinterStatus?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Printers found by looking at this network; the ones already added are left out.
+    val nearby = remember { mutableStateListOf<DiscoveredPrinter>() }
+    var scanning by remember { mutableStateOf(false) }
+    var scanned by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var scanDone by remember { mutableStateOf(false) }
+    fun hostOf(a: String) = runCatching { java.net.URI(if ("://" in a) a else "http://$a").host }.getOrNull() ?: a
+    fun scanNetwork() {
+        if (scanning) return
+        scanning = true; scanDone = false; nearby.clear(); scanned = null
+        scope.launch {
+            val have = fleet.printers.values.map { hostOf(it.config.identity.address) }.toSet()
+            // What the saved printers are, so one that answers on another address (Wi-Fi and cable) isn't offered as new.
+            val saved = withContext(Dispatchers.IO) { fleet.printers.values.mapNotNull { LanScan.fingerprint(it.config.identity.address) }.toSet() }
+            val seen = mutableSetOf<String>()
+            LanScan.scan(LanScan.localHosts(), probe = { fleet.probe(it) }, onFound = { d ->
+                val host = hostOf(d.address)
+                val print = LanScan.fingerprint(d.address)
+                if (host !in have && nearby.none { hostOf(it.address) == host } && (print == null || (print !in saved && seen.add(print)))) nearby += d
+            }, onProgress = { n, total -> scanned = n to total })
+            scanning = false; scanDone = true
+        }
+    }
+    LaunchedEffect(Unit) { if (autoScan) scanNetwork() }
 
     fun adapterId(f: PrinterFamily) = if (f == PrinterFamily.STOCK_U1) "stock-u1" else if (f == PrinterFamily.EXPORT_ONLY) EXPORT_ONLY
         else fleet.registry.builtInIds.firstOrNull { f in fleet.registry.adapter(it).families } ?: ""
@@ -89,10 +114,37 @@ fun AddPrinterDialog(state: AppState, onDone: () -> Unit) {
         onPreviewKeyEvent = { if (it.key == Key.Escape && it.type == KeyEventType.KeyDown) { onDone(); true } else false }) {
         NozzleTheme(fleet.settings.value.theme) {
             val c = Nz.colors
-            Column(Modifier.fillMaxSize().background(c.surface).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.fillMaxSize().background(c.surface).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+              // The form scrolls; the buttons stay in view.
+              Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Txt("Add printer", Nz.type.headline)
                 Txt("Nozzle It All connects directly to your printer. Nothing goes through a Nozzle server.", Nz.type.body, c.textMuted)
-                Txt("What kind of printer?", Nz.type.label)
+                Card(raised = true) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Txt("Find printers on this network", Nz.type.title)
+                            Txt(when {
+                                scanning -> scanned?.let { (n, t) -> "Looked at $n of $t addresses…" } ?: "Starting…"
+                                scanDone && nearby.isEmpty() -> "No new printer answered. Check that it is on and on this network, or add it by address below."
+                                scanDone -> "Done. Choose one to fill in the details."
+                                else -> "Looks at this computer's local network only, for Klipper and Snapmaker U1 printers. Nothing leaves it."
+                            }, Nz.type.bodySmall, c.textMuted)
+                        }
+                        NzButton(if (scanning) "Looking…" else if (scanDone) "Look again" else "Look", ::scanNetwork, kind = ButtonKind.SECONDARY, enabled = !scanning, testTag = "scan-network")
+                    }
+                    nearby.forEach { d ->
+                        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Icon(NzIcon.CHECK, Nz.status.ready, 18.dp)
+                            Column(Modifier.weight(1f)) { Txt(d.model, Nz.type.body); Txt(hostOf(d.address), Nz.type.bodySmall, c.textMuted) }
+                            NzButton("Use", {
+                                family = d.suggestedFamily; address = hostOf(d.address); found = d; checked = null; error = null
+                                if (name.isBlank()) name = d.model
+                                ProfileCatalog.search(d.model).firstOrNull()?.let { profileId = it.id }
+                            }, kind = if (found?.address == d.address) ButtonKind.PRIMARY else ButtonKind.SECONDARY, testTag = "use-found")
+                        }
+                    }
+                }
+                Txt("Or add one yourself. What kind of printer?", Nz.type.label)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     families.chunked(3).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEach { f -> NzButton(f.label, { family = f; found = null; checked = null; error = null }, kind = if (family == f) ButtonKind.PRIMARY else ButtonKind.SECONDARY) }
@@ -127,7 +179,7 @@ fun AddPrinterDialog(state: AppState, onDone: () -> Unit) {
                     matches.forEach { p -> NzButton("${p.vendor} · ${p.model}", { profileId = p.id }, kind = if (profileId == p.id) ButtonKind.PRIMARY else ButtonKind.QUIET) }
                 }
                 Txt("Selected: ${ProfileCatalog.byId(profileId)?.name ?: profileId}", Nz.type.bodySmall, c.textMuted)
-                Spacer(Modifier.weight(1f))
+              }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                     NzButton("Cancel", onDone, kind = ButtonKind.QUIET)
                     val ready = when {
@@ -135,7 +187,72 @@ fun AddPrinterDialog(state: AppState, onDone: () -> Unit) {
                         form.canProbe -> found != null || family == PrinterFamily.STOCK_U1 && address.isNotBlank()
                         else -> address.isNotBlank() && (!form.secretRequired || secret.isNotBlank()) && (!form.needsSerial || serial.isNotBlank())
                     }
-                    NzButton("Add printer", { fleet.add(draft()); onDone() }, kind = ButtonKind.PRIMARY, enabled = ready, testTag = "save-printer")
+                    NzButton("Add printer", { val cfg = draft(); fleet.add(cfg); if (state.prepare.printerId == null) state.prepare.choosePrinter(cfg.identity.id); onDone() }, kind = ButtonKind.PRIMARY, enabled = ready, testTag = "save-printer")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Changes a saved printer's address, name, model, credentials and serial number. The printer keeps its id, so projects, the
+ * slicing profile and the order on the Printers page stay as they are. A blank credential field keeps the saved one.
+ */
+@Composable
+fun EditPrinterDialog(state: AppState, entry: PrinterEntry, onDone: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val fleet = state.fleet
+    val old = entry.config
+    val form = formFor(old.identity.family)
+    var address by remember { mutableStateOf(old.identity.address) }
+    var name by remember { mutableStateOf(old.identity.displayName) }
+    var model by remember { mutableStateOf(old.identity.model) }
+    var secret by remember { mutableStateOf("") }
+    var serial by remember { mutableStateOf(old.extras["serial"].orEmpty()) }
+    var busy by remember { mutableStateOf(false) }
+    var checked by remember { mutableStateOf<PrinterStatus?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun edited() = old.copy(
+        identity = old.identity.copy(displayName = name.trim().ifBlank { old.identity.displayName }, model = model.trim().ifBlank { old.identity.model }, address = address.trim()),
+        secret = secret.trim().ifEmpty { old.secret },
+        extras = if (serial.isNotBlank()) old.extras + ("serial" to serial.trim()) else old.extras - "serial")
+
+    fun check() {
+        if (form.needsAddress && address.isBlank()) { error = "Enter the printer's address."; return }
+        busy = true; error = null; checked = null
+        scope.launch {
+            val cfg = edited()
+            checked = withContext(Dispatchers.IO) { runCatching { fleet.registry.open(cfg).use { it.status() } }.getOrElse { PrinterStatus(PrinterState.OFFLINE, ConnectionRoute.LAN, message = it.message) } }
+            if (checked!!.state == PrinterState.OFFLINE || checked!!.state == PrinterState.ERROR) error = checked!!.message ?: "The printer didn't answer."
+            busy = false
+        }
+    }
+
+    DialogWindow(onCloseRequest = onDone, title = "Edit printer", state = rememberDialogState(width = 600.dp, height = 640.dp),
+        onPreviewKeyEvent = { if (it.key == Key.Escape && it.type == KeyEventType.KeyDown) { onDone(); true } else false }) {
+        NozzleTheme(fleet.settings.value.theme) {
+            val c = Nz.colors
+            Column(Modifier.fillMaxSize().background(c.surface).padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Txt("Edit printer", Nz.type.headline)
+                Txt("${old.identity.family.label}. Its projects and slicing profile stay as they are.", Nz.type.body, c.textMuted)
+                form.note?.let { Banner(it, BannerKind.INFO) }
+                if (form.needsAddress) {
+                    Field("Printer address", address, { address = it; checked = null; error = null }, placeholder = "192.168.1.40 or printer.your-tailnet.ts.net",
+                        hint = "At home, the printer's local address. Away from home, its address on your private network (for example Tailscale).", error = error, onSubmit = ::check)
+                    if (form.needsSerial) Field("Serial number", serial, { serial = it; checked = null })
+                    form.secretLabel?.let { Field(it, secret, { v -> secret = v; checked = null }, secret = true, placeholder = if (old.secret.isNotEmpty()) "Saved - leave blank to keep it" else "",
+                        hint = "Stored only on this computer, in a file only you can read.") }
+                    NzButton(if (busy) "Checking…" else "Check connection", ::check, kind = ButtonKind.SECONDARY, enabled = !busy, testTag = "edit-probe")
+                    checked?.takeIf { it.state != PrinterState.OFFLINE && it.state != PrinterState.ERROR }?.let { s -> Banner("Connected: ${s.state.label}.", BannerKind.SUCCESS) }
+                    Field("Model", model, { model = it }, placeholder = "Snapmaker U1, Prusa MK4S, Bambu Lab P1S…")
+                }
+                Field("Name", name, { name = it }, placeholder = "Workshop printer")
+                Spacer(Modifier.weight(1f))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+                    NzButton("Cancel", onDone, kind = ButtonKind.QUIET)
+                    // Saving does not need the printer to answer: the address may be one the printer will have later.
+                    NzButton("Save", { fleet.update(edited()); onDone() }, kind = ButtonKind.PRIMARY, enabled = !busy && (!form.needsAddress || address.isNotBlank()), testTag = "save-edited-printer")
                 }
             }
         }

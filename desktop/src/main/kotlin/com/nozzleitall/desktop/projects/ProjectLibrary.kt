@@ -1,7 +1,7 @@
 package com.nozzleitall.desktop.projects
 
 import com.nozzleitall.desktop.AppPaths
-import com.nozzleitall.desktop.prepare.MeshIO
+import com.nozzleitall.project.MeshIO
 import com.nozzleitall.project.*
 import java.io.File
 import java.util.UUID

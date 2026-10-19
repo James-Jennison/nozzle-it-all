@@ -299,6 +299,12 @@
     "use_firmware_retraction": "0",
     "use_relative_e_distances": "1",
     "wipe_tower_type": "type2",
+    "wipe_tower_x": [
+        "70"
+    ],
+    "wipe_tower_y": [
+        "250"
+    ],
     "wrapping_detection_gcode": "",
     "wrapping_detection_layers": "20",
     "wrapping_exclude_area": [],

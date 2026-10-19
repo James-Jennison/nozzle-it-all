@@ -1235,6 +1235,7 @@ interchange).
   with the parameter changes of Snapmaker's U1 "0.10mm Color Mixing" recipe (listed in the file, with what was left
   out and why). Offered only on multi-filament packs (CANVAS, COSMOS AFC) and marked "(Nozzle It All)" in the picker.
   Not yet tested on a real printer.
+  **Removed by P-0044** (no color mixing on CANVAS); the derived-preset mechanism stays, with no presets.
 - **Packaging:** the shared folder was first named `_processes`. Android packaging leaves out asset folders whose
   names start with "_", so none of its 972 files reached the APK and any non-default profile from it failed to open
   (found 2026-10-01 by the Centauri Carbon color reference slice in Test Mode on a Razr 2023; the unit tests read the
@@ -1355,9 +1356,9 @@ interchange).
 
 ## P-0043 — The prime tower is placed on the bed
 
-- **Upstream:** nozzle-engine `7734a0c557cb63594c913a271c4907e7b4c9bee1` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine
-  branch `fix/arm64-get-at-miscompile`, pull request 11): `490e5b5` (P-0042) plus two commits, `4c182b1` (the tower's
-  place) and `7734a0c` (the flushing volumes, below). The placement is ported
+- **Upstream:** nozzle-engine `1b74455563de3f1dd2944aaa6d80e9d94bb76ace` (`engine/fork/ENGINE_PIN.json`; James-Jennison/nozzle-engine `main`):
+  `490e5b5` (P-0042) plus three commits, `4c182b1` (the tower's place), `7734a0c` (the flushing volumes, below) and
+  `1b74455` (the vendor's corner, below). The placement is ported
   from Snapmaker Orca's GUI, which the engine fork already carries but does not build headless:
   `src/slic3r/GUI/PartPlate.cpp` (`WIPE_TOWER_DEFAULT_X_POS` / `_Y_POS` 13, 214.5; `I3_WIPE_TOWER_DEFAULT_X_POS` /
   `_Y_POS` 0, 250; `PartPlateList::set_default_wipe_tower_pos_for_plate`; `PartPlate::estimate_wipe_tower_size`) and
@@ -1402,8 +1403,63 @@ interchange).
   that already covers the filaments is left alone. `prime_tower_test.sh` gained a five-filament Centauri Carbon case
   and a six-filament MK4S MMU3 case, and a time limit on every slice: both crash the previous engine and pass on
   this one, with a 6 x 6 matrix in the G-code. Golden outputs: all 384 match.
+- **The vendor's corner (`1b74455`):** `4c182b1` gave every printer Snapmaker Orca's default corner, the back left
+  (13, 214.5). Upstream OrcaSlicer (824b216, `src/slic3r/GUI/PartPlate.cpp`: `WIPE_TOWER_DEFAULT_X_POS` / `_Y_POS`
+  165, 250) and ElegooSlicer (the same constants) start at the back, right of the middle. On the owner's Centauri
+  Carbon the back left is the lowest part of the bed (saved mesh -0.29 to -0.15 mm there, +0.04 to +0.09 mm at
+  upstream's corner) and partly outside the probed area (10 to 246 mm); on 2026-10-01 the color reference print's
+  tower came loose there at layer 3 of 39. Now Snapmaker's printers (`printer_model` starting "Snapmaker") keep
+  Snapmaker Orca's corner and every other printer gets upstream OrcaSlicer's; the bed slinger corner (0, 250) is the
+  same in both. Not ported: upstream's lower corner for Bambu's "N9" printer type (Y 160), which needs the vendor's
+  printer type table. `prime_tower_test.sh` checks both corners; the Centauri Carbon color reference slice now puts
+  the tower at X 161.80..204.26, Y 213.00..255.00; golden outputs unchanged (all 384 match). This commit reached the
+  engine's `main` by a direct push, not a pull request (a branch that tracked `origin/main`).
+- **The Centauri Carbon COSMOS pack's own position (app, no engine change):** with the tower at upstream's corner the
+  owner's color reference print reached layer 10 of 39, then the nozzle hit something and shifted layers
+  (2026-10-01; the tower stayed down). COSMOS's tool change purges at a tray behind the bed at X 202, Y 264 and wipes
+  between X 165 and X 202 (the printer's `MOVE_TO_TRAY`, `PURGE` and `CLEAN_NOZZLE` macros), so the tower stood
+  directly in front of the tray and under the nozzle's path back onto the bed; a piece of purge landing on it is
+  the likely cause, not proven. `elegoo_centauri_carbon_cosmos_afc/machine.json` now sets `wipe_tower_x 70`,
+  `wipe_tower_y 250` (the engine keeps a position the profile sets and clamps it onto the bed): back, left of the
+  middle, clear of the tray and off the low back left corner. Only that pack is changed. The engine's golden output
+  for that pack changes with it (the G-code's config block lists the position).
+  Later the same day, with the tower there, the print reached layer 21 after 46 filament changes without an error,
+  then shifted layers again and lost a tile; the tower stood. So purge on the tower was not the cause, or not the only
+  one. The cause of the shifts is open (see P-0044).
 - **Known divergence:** upstream's GUI leaves a generated tower that overruns the plate for the user to move; the
-  bridge moves it. A multi-filament slice's tower now starts at upstream's GUI corner (13, 214.5) instead of
-  libslic3r's (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a
+  bridge moves it. A multi-filament slice's tower now starts at the vendor GUI's corner instead of libslic3r's
+  (15, 220), so its G-code differs from earlier builds. A tower that overlaps a part is still only a
   warning upstream, which the bridge does not surface.
 - **Touches:** every multi-filament slice (Android, desktop, web), engine tests and CI.
+
+## P-0044 — No color mixing on Elegoo CANVAS
+
+- **What (owner decision, 2026-10-01):** Nozzle It All offers no color mixing on the Elegoo CANVAS printers: the
+  Centauri Carbon and Centauri Carbon 2 on Elegoo's firmware and the Centauri Carbon on OpenCentauri COSMOS with AFC
+  (profiles `elegoo_centauri_carbon_canvas`, `elegoo_centauri_carbon_2_canvas`, `elegoo_centauri_carbon_cosmos_afc`).
+  This narrows the 2026-09-27 rule (PrusaSlicer's ColorMix on every printer with two or more filament slots that has
+  no Full Spectrum); every other printer keeps that rule, and the Snapmaker U1 keeps Full Spectrum.
+- **Why:** a mix prints by alternating whole layers between two filaments. CANVAS feeds one nozzle, so every
+  alternation is a filament change: a cut, an unload, a load, a purge and a wipe. On the owner's Centauri Carbon
+  (COSMOS 26.09, AFC) the printer's log shows 40 to 44 s per change. The color reference slice, two 15 x 4 mm tiles
+  of 39 layers, has 71 changes and purges at each. Seven attempts to print it on 2026-10-01 all failed (three lane
+  feed failures, the prime tower coming loose once, three layer shifts whose cause is open). The owner: not worth
+  the purge waste. The 50/50 swatch (`mix-print`) did print on 2026-09-30 (accepted run `b4e000e7`); that record
+  stands as history.
+- **Upstream:** nothing imported or removed from an upstream. ElegooSlicer ships no color mixing preset for these
+  printers; the "0.10mm Color Mixing @Elegoo CC / CC2 0.4 nozzle" presets were Nozzle It All's own (P-0040) and are
+  deleted with their spec, `engine/profiles/derived/elegoo_centauri_color_mixing.json`.
+- **Changes:** `ProfileFeatures.CANVAS_PROFILES` (`printer-api`): `of` and `ofPrinter` take the profile id and return no
+  mixing feature for those three. Android passes the printer's pack (`colourMixFeaturesFor`), Desktop the chosen
+  profile (`PrepareState.features`), so neither shows a mixing section, and Test Mode's slicer refuses a mix for a
+  CANVAS pack. Blends saved in a project made for another printer are kept but neither offered nor sliced on a
+  printer without ColorMix; an object or painted area on one prints with tool 1, the existing rule for a removed
+  blend. The three packs' `processes.json`, the two CANVAS printer libraries and `shared_processes/Elegoo` lose the
+  preset. Test Grid: `mix-slice`, `mix-print`, `color-reference-slice` and `color-reference-print` leave
+  `cosmos-centauri-carbon` (1.10.0); `mix-slice` and `mix-print` leave `elegoo-centauri-carbon-stock` and
+  `opencentauri-patched` (1.9.0).
+- **Not changed:** other printers that feed several filaments through one nozzle (Bambu AMS, Prusa MMU3, Creality
+  CFS, Anycubic ACE, Flashforge IFS, a custom machine's lanes) still get ColorMix: the decision names CANVAS. The
+  layer shifts are a filament-change problem, not a mixing one, and would be expected on a painted CANVAS print with
+  as many changes.
+- **Touches:** Android and Desktop Prepare, the CANVAS profile packs and libraries, three Test Grid suites.

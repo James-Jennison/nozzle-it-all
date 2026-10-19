@@ -38,7 +38,7 @@ class SettingsCatalogTest {
         val tampered = """{"name":"x","base":"b","overrides":{"wall_loops":"5","machine_start_gcode":"M112"}}"""
         assertEquals(mapOf("wall_loops" to "5"), CustomProfile.decode(tampered)!!.overrides)
         assertNull(CustomProfile.decode("not json"))
-        val based = p.copy(basePreset = "0.10mm Color Mixing @Elegoo CC 0.4 nozzle")
+        val based = p.copy(basePreset = "0.12mm Fine @Elegoo CC 0.4 nozzle")
         assertEquals(based, CustomProfile.decode(based.encode()))
         assertNull(CustomProfile.decode(p.encode())!!.basePreset)
     }

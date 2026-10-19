@@ -95,16 +95,15 @@ internal fun multiToolSliceInputsFor(orderedObjects: List<ProjectObject>, toolCo
     return toolSlotIndices to slotMaterials
 }
 
-// Colour mixing (0.2.0): which mixing system (if any) `kind`/`toolCount` offers, using the exact
-// same com.nozzleitall.printer.ext.ProfileFeatures rule Desktop applies to a PrepareState profile
-// (see PrepareState.features()) - Android has no PrinterFamily/familyHint of its own, so this maps
-// the two U1 PrinterKinds onto the same PrinterFamily ids the gating logic actually switches on;
-// every other kind falls through to ColorMix's "any other multi-slot printer" branch.
-internal fun colourMixFeaturesFor(kind: PrinterKind, toolCount: Int): Set<String> {
+// Which mixing features (if any) `kind`/`toolCount` offers, using the exact same
+// com.nozzleitall.printer.ext.ProfileFeatures rule Desktop applies to a PrepareState profile (see
+// PrepareState.features()): mixed filaments on any multi-slot printer except CANVAS. `model`: the printer's slicing
+// profile, whose pack id is the profile id the rule knows. `kind` only names the printer family the rule is given.
+internal fun colourMixFeaturesFor(kind: PrinterKind, toolCount: Int, model: SlicingPrinterModel? = null): Set<String> {
     val familyId = when (kind) {
         PrinterKind.SNAPMAKER_U1_PAXX -> com.nozzleitall.printer.PrinterFamily.PAXX_U1.id
         PrinterKind.SNAPMAKER_U1 -> com.nozzleitall.printer.PrinterFamily.STOCK_U1.id
         else -> "other"
     }
-    return com.nozzleitall.printer.ext.ProfileFeatures.of(familyId, toolCount)
+    return com.nozzleitall.printer.ext.ProfileFeatures.of(familyId, toolCount, model?.let { SlicingModelCatalog.info(it).assetDir })
 }

@@ -18,8 +18,10 @@ while [ $# -gt 0 ]; do
 done
 [ -x "$ENGINE" ] || { echo "slicing engine not found at $ENGINE (build it with engine/native/scripts/build_engine_fork.sh)" >&2; exit 1; }
 mkdir -p "$OUT"
-VERSION="$(cd "$ROOT" && "${GRADLE[@]}" -q :desktop:properties --property version 2>/dev/null | awk '/^version:/{print $2}')"
-[ -n "$VERSION" ] && [ "$VERSION" != "unspecified" ] || VERSION="0.1.0"
+# Compose's package version is nozzleDesktopVersion, not Gradle project.version.
+# Pass it explicitly so both package metadata and provenance use one identity.
+VERSION="${ORG_GRADLE_PROJECT_nozzleDesktopVersion:-0.1.0}"
+GRADLE+=("-PnozzleDesktopVersion=$VERSION")
 
 echo "== Desktop ($VERSION)"
 (cd "$ROOT" && "${GRADLE[@]}" -q :desktop:packageDeb :stock-u1-adapter:installDist -PnozzleEngine="$ENGINE")
@@ -29,8 +31,15 @@ STAGE="$(mktemp -d)"; trap 'rm -rf "$STAGE"' EXIT
 # does nothing on current Ubuntu, and names it "nozzle-it-all" with no StartupWMClass, so docks show a generic icon.
 # Ship a proper launcher and themed icons in the standard places instead; the app names its window class to match.
 PKG="$STAGE/desktop"
-dpkg-deb -R "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb "$PKG"
+SOURCE_DESKTOP_DEB="$ROOT/desktop/build/compose/binaries/main/deb/nozzle-it-all_${VERSION}_amd64.deb"
+[ -s "$SOURCE_DESKTOP_DEB" ] || { echo "missing intended Compose package: $SOURCE_DESKTOP_DEB" >&2; exit 1; }
+[ "$(dpkg-deb -f "$SOURCE_DESKTOP_DEB" Version)" = "$VERSION" ] || { echo "Compose package version mismatch" >&2; exit 1; }
+dpkg-deb -R "$SOURCE_DESKTOP_DEB" "$PKG"
 install -Dm644 "$ROOT/desktop/packaging/linux/nozzle-it-all.desktop" "$PKG/usr/share/applications/nozzle-it-all.desktop"
+install -Dm644 "$ROOT/THIRD_PARTY_NOTICES.md" "$PKG/usr/share/doc/nozzle-it-all/THIRD_PARTY_NOTICES.md"
+# The optional viewport bridge statically links the pinned builder's GCC runtime.
+# Ship its full supplied copyright/licensing texts, not just a link to them.
+install -Dm644 /usr/share/doc/gcc-15-base/copyright "$PKG/usr/share/doc/nozzle-it-all/GCC-runtime-copyright"
 for size in 16 32 48 64 128 256 512; do
   install -Dm644 "$ROOT/desktop/packaging/icons/nozzle-it-all-$size.png" "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/nozzle-it-all.png"
 done
@@ -38,7 +47,10 @@ install -Dm644 "$ROOT/desktop/packaging/icons/nozzle-it-all.svg" "$PKG/usr/share
 rm -f "$PKG/opt/nozzle-it-all/lib/nozzle-it-all-nozzle-it-all.desktop"
 sed -i '/xdg-desktop-menu/d' "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/prerm"
 # ffmpeg plays printer cameras' H.264 streams at full frame rate (MJPEG from camera-streamer tops out near 4 fps).
-sed -i 's/^Depends: /Depends: ffmpeg, /' "$PKG/DEBIAN/control"
+sed -i 's/^Depends: /Depends: ffmpeg, util-linux, procps, libegl1, libgles2, /' "$PKG/DEBIAN/control"
+for dependency in ffmpeg util-linux procps libegl1 libgles2; do
+  grep -Eq "^Depends:.*[ ,]${dependency}([ ,(]|$)" "$PKG/DEBIAN/control"
+done
 cat > "$STAGE/refresh" <<'EOF'
 if [ "$1" = configure ] || [ "$1" = remove ]; then
   command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
@@ -50,7 +62,27 @@ for script in postinst postrm; do
   sed -i '/^exit 0$/d' "$PKG/DEBIAN/$script"; cat "$STAGE/refresh" >> "$PKG/DEBIAN/$script"; echo "exit 0" >> "$PKG/DEBIAN/$script"
   chmod 755 "$PKG/DEBIAN/$script"
 done
-fakeroot dpkg-deb --build "$PKG" "$OUT/$(basename "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb)" >/dev/null
+# Fail before producing an installable artifact if upstream maintainer templates
+# no longer support this integration. Never install the unprocessed jpackage Deb.
+for script in postinst prerm postrm; do
+  if [ -f "$PKG/DEBIAN/$script" ]; then
+    /bin/sh -n "$PKG/DEBIAN/$script"
+    if grep -q 'xdg-desktop-menu' "$PKG/DEBIAN/$script"; then
+      echo "unexpected launcher registration remains in $script" >&2; exit 1
+    fi
+  fi
+done
+for script in postinst postrm; do
+  grep -q 'gtk-update-icon-cache' "$PKG/DEBIAN/$script"
+  grep -q 'update-desktop-database' "$PKG/DEBIAN/$script"
+done
+grep -qx 'StartupWMClass=nozzle-it-all' "$PKG/usr/share/applications/nozzle-it-all.desktop"
+for size in 16 32 48 64 128 256 512; do
+  test -s "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/nozzle-it-all.png"
+done
+DESKTOP_DEB="$OUT/$(basename "$SOURCE_DESKTOP_DEB")"
+fakeroot dpkg-deb --build "$PKG" "$DESKTOP_DEB" >/dev/null
+[ -s "$DESKTOP_DEB" ]
 
 echo "== Stock U1 adapter"
 PKG="$STAGE/stock"
@@ -84,16 +116,22 @@ fakeroot dpkg-deb --build "$PKG" "$OUT/nozzle-stock-u1-adapter_${VERSION}-1_amd6
 
 
 echo "== Provenance"
-(cd "$OUT" && sha256sum -- *.deb > SHA256SUMS)
+ADAPTERS="$(dpkg-deb -c "$DESKTOP_DEB" | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
+[ -n "$ADAPTERS" ] || { echo "no adapters found in intended desktop package" >&2; exit 1; }
+(cd "$OUT" && sha256sum -- "$(basename "$DESKTOP_DEB")" "nozzle-stock-u1-adapter_${VERSION}-1_amd64.deb" > SHA256SUMS)
 {
   echo "Nozzle It All Linux packages $VERSION"
   echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -srm)"
   echo "source: $(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet || echo ' (with uncommitted changes)')"
+  echo "source Compose package: $(sha256sum "$SOURCE_DESKTOP_DEB")"
+  echo "SHA256SUMS scope: only the two current-build outputs listed below; retained older artifacts are not covered or selected."
   echo "java: $(java -version 2>&1 | head -1); gradle: $("${GRADLE[@]}" -q --version 2>/dev/null | awk '/^Gradle/{print $2}')"
+  echo "viewport compiler: $(g++ --version | head -1)"
+  echo "viewport library: $(sha256sum "$ROOT/desktop/build/native/viewport/libnia_viewport.so")"
   echo "stock adapter runtime modules: $MODULES"
   echo "slicing engine: $ENGINE sha256 $(sha256sum "$ENGINE" | cut -d' ' -f1)"
   [ -f "$ROOT/engine/native/PROVENANCE.txt" ] && sed 's/^/  /' "$ROOT/engine/native/PROVENANCE.txt"
-  echo "adapters in nozzle-it-all: $(dpkg-deb -c "$OUT"/nozzle-it-all_*_amd64.deb | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
+  echo "adapters in nozzle-it-all: $ADAPTERS"
   echo; cat "$OUT/SHA256SUMS"
 } > "$OUT/PROVENANCE.txt"
 cat "$OUT/PROVENANCE.txt"

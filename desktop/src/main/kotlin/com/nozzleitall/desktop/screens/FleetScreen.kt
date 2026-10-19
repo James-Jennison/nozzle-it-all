@@ -37,6 +37,10 @@ fun temp(t: Double?) = t?.let { "%.0f °C".format(it) } ?: "–"
 fun FleetScreen(state: AppState) {
     val fleet = state.fleet
     var adding by remember { mutableStateOf(false) }
+    var scanFirst by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<String?>(null) }
+    // The first-run path from the Workspace: open straight into the network search.
+    LaunchedEffect(state.findPrinterRequested) { if (state.findPrinterRequested) { state.findPrinterRequested = false; scanFirst = true; adding = true } }
     Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SectionHeader("Printers", "Everything you print on, at a glance.") {
             NzButton("Add printer", { adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.ADD, testTag = "add-printer")
@@ -46,20 +50,28 @@ fun FleetScreen(state: AppState) {
             Card(Modifier.fillMaxWidth()) {
                 EmptyState(NzIcon.FLEET, "Add your first printer",
                     Glossary.explanations.getValue("first-printer")) {
-                    NzButton("Add printer", { adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.ADD)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NzButton("Find printers on my network", { scanFirst = true; adding = true }, kind = ButtonKind.PRIMARY, icon = NzIcon.SEARCH, testTag = "find-printers")
+                        NzButton("Add by address", { scanFirst = false; adding = true }, kind = ButtonKind.SECONDARY, icon = NzIcon.ADD)
+                    }
                 }
             }
         } else {
-            LazyVerticalGrid(GridCells.Adaptive(340.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it) { state.openPrinter(id) } } }
+            // The cards, with the print queue beside them once there is something in it.
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                LazyVerticalGrid(GridCells.Adaptive(380.dp), Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(ids, key = { it }) { id -> fleet.printers[id]?.let { PrinterCard(it, onEdit = { editing = id }, onPrepare = { state.prepare.choosePrinter(id); state.destination = com.nozzleitall.desktop.Destination.PREPARE }) { state.openPrinter(id) } } }
+                }
+                if (fleet.queue.value.isNotEmpty()) Column(Modifier.width(400.dp).fillMaxHeight().verticalScroll(rememberScrollState())) { QueuePanel(state) }
             }
         }
     }
-    if (adding) AddPrinterDialog(state) { adding = false }
+    if (adding) AddPrinterDialog(state, autoScan = scanFirst) { adding = false }
+    editing?.let { id -> fleet.printers[id]?.let { EditPrinterDialog(state, it) { editing = null } } ?: run { editing = null } }
 }
 
 @Composable
-fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
+fun PrinterCard(entry: PrinterEntry, onEdit: (() -> Unit)? = null, onPrepare: (() -> Unit)? = null, onOpen: () -> Unit) {
     val c = Nz.colors
     val status = entry.status.value
     val identity = entry.config.identity
@@ -94,6 +106,7 @@ fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
                     Txt(if (family.contains(identity.model, ignoreCase = true)) family else "${identity.model} · $family", Nz.type.bodySmall, c.textMuted, maxLines = 1)
                 }
                 if (status.route != ConnectionRoute.NONE) StatusPill(status.state)
+                if (onEdit != null) NzButton("Edit", onEdit, Modifier.padding(start = 8.dp), kind = ButtonKind.SECONDARY, icon = NzIcon.TUNE, testTag = "edit-printer-${identity.id}")
             }
             val job = status.job
             if (job != null) {
@@ -112,7 +125,8 @@ fun PrinterCard(entry: PrinterEntry, onOpen: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RouteBadge(status.route)
                 Spacer(Modifier.weight(1f))
-                status.bed?.current?.let { Txt("Bed ${temp(it)}", Nz.type.metricSmall, c.textMuted) }
+                status.bed?.current?.let { Txt("Bed ${temp(it)}", Nz.type.metricSmall, c.textMuted, modifier = Modifier.padding(end = 8.dp)) }
+                if (onPrepare != null) NzButton("Prepare a print", onPrepare, kind = ButtonKind.SECONDARY, icon = NzIcon.PREPARE, testTag = "prepare-for-${identity.id}")
             }
         }
     }

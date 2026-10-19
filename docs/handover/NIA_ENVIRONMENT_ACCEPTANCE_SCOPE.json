@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "authority": "Owner correction in this chat on 2026-10-19: correct the handover and evidence ledger; remove acceptance gates added without authorization.",
+  "scope": "Opt-in environmental framework, history, foreground Android/Linux BLE and the requested build/test/Synthetic-review/install/live-app verification loop using available Govee devices.",
+  "required_gates": ["remote_build", "core_tests", "existing_regressions", "synthetic_review", "linux_install", "android_install", "linux_runtime", "android_runtime", "off_state", "approved_cpu_memory_budget"],
+  "approved_defaults": {"discovery_seconds": 45, "queue_capacity": 256, "page_size": 500, "retention_days": 30, "history_bytes": 104857600, "reports_per_second": 100, "cpu_percent_one_core_strictly_below": 5, "incremental_memory_bytes_strictly_below": 33554432, "battery": "Measure where possible; no battery-life guarantee"},
+  "removed_added_requirements": ["Physical hardware testing of unrequested protocols", "Separate Govee firmware/calibration/thermal/cadence/coexistence certification program", "Additional cross-target radio/battery/CPU/disk qualification program beyond the approved numeric budgets and requested live verification", "Battery endurance certification", "Physical scanout/GPU certification for this environmental feature"],
+  "limitations_not_completion_gates": {"additional_protocol_hardware": "UNTESTED_NOT_REQUIRED", "formal_govee_certification": "NOT_PERFORMED_NOT_REQUIRED", "additional_target_hardware_certification": "NOT_PERFORMED_NOT_REQUIRED", "battery_endurance": "UNVERIFIED_NO_GUARANTEE"},
+  "preserved_boundaries": ["No untested capability is marked passed", "No qualified thermal deployment or safety guarantee", "No runtime safety guard or foreground/consent/privacy restriction removed", "No hardware procurement, new protocol work, heating, pairing, unbinding, background services, cloud integration or printer actuation authorized", "Original reviewer findings, raw command results, failed attempts, manifest and historical closures remain unchanged"],
+  "precedence": "This owner-directed scope correction supersedes broader acceptance-checklist wording for current completion status. Historical design documents are retained as historical evidence, not authority to expand scope."
+}

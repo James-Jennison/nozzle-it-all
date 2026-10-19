@@ -10,7 +10,7 @@ foreground collection, 256 queued reports, 500-row pages, 30-day / 100 MiB histo
 CPU below 5% of one core at 100 reports/sec, incremental bounded memory below
 32 MiB. Battery measured where possible, no battery-life guarantee.
 
-## Current source validation (not milestone acceptance)
+## Verified implementation and requested validation
 
 Functional source `9b6e152a49aa49562857fc69d8481319e9bdb941` implements lazy
 opt-in control, separate bounded environmental SQLite history, and scan-only
@@ -85,15 +85,27 @@ earlier b659/6ee/b803 cycles each completed all three configured independent sea
 Original findings and separate Codex dispositions are retained in the broker.
 No provider/model substitution or reviewer mutation authority.
 
-## Unmet physical acceptance gates
+## Corrected acceptance scope — owner direction2026-10-19
 
-The Owner confirms no BTHome hardware is available. Exact Govee firmware,
-calibration, thermal-envelope, cadence and coexistence qualification artifacts are
-also absent. Diagnostic reception and protocol fixtures do not satisfy those
-requirements. No qualification records or assigned qualified deployment exist;
-full milestone D remains NOT_READY, not waived or certified by a UI checkbox.
-Actual target-hardware radio/battery/CPU/disk qualification remains incomplete;
-the GTHost core fixture is not a substitute. No battery-life guarantee was promised.
+The earlier project-wide qualification blockers were agent-added scope, not owner
+requirements. They are withdrawn from current acceptance. The authoritative
+correction is `NIA_ENVIRONMENT_ACCEPTANCE_SCOPE.json`. It supersedes the broader
+acceptance-checklist wording, without modifying historical design/evidence artifacts.
+
+Required: the requested opt-in framework/history/foreground Android/Linux BLE,
+available-device Govee live checks, and build/test/Synthetic-review/install/runtime
+loop. Keep the approved defaults, off/enable-idle guarantees, consent/foreground
+fences and numeric CPU/memory budgets. The preserved100Hz core benchmark passes
+those numeric bounds; its test environment and limits remain explicit.
+
+Not required: hardware for unrequested protocols; a separate Govee manufacturer,
+calibration, thermal, cadence or coexistence certification program; an additional
+cross-target resource certification program; battery endurance or physical-scanout
+certification. These are not outstanding implementation tasks or procurement requests.
+Unverified capabilities remain unverified, not passed. No blanket compatibility,
+calibration, thermal-safety, battery-life or all-device performance claim is made.
+Runtime safety guards and diagnostic labels are unchanged. No feature work or new
+qualification activity is part of this records-only correction.
 
 ## Final software/evidence checkpoint
 
@@ -111,15 +123,31 @@ eight completed Synthetic response snapshots, installed verification, traces,
 selected-sensor exports and actual device results. Earlier pending/failed records
 are historical, not rewritten; later installed/CI records close their specific gates.
 
-Broker evidence `evidence-cycle-4f094abd2512`: diff-format PASS, source-bound
-B–D aggregate FAIL, both integritytrue. The aggregate correctly names the three
-unmet performance/physical Govee/physical BTHome qualification gates. Its immutable
-FAIL has an ENVIRONMENT_FAILURE disposition, not a PASS or accepted-risk waiver.
-Convergence `convergence-d94c9a7bbfdf`; closure `closure-43be3827a678` is
-`NOT_READY`, three disclosed LOW residuals, no accepted HIGH/critical risk.
-Seven unresolved qualification observations remain; no evidenced source correction
-is pending. The skill-driven evidence-first closure must not promote this to full
-B–D acceptance without the missing physical qualification evidence.
+The original aggregate result `evidence-cycle-4f094abd2512` remains FAIL as
+historical evidence. Its rubric—not its raw results—was wrong: it added unrequested
+completion conditions. The old `closure-43be3827a678` NOT_READY record is retained
+as history, not the current owner-scoped decision.
+
+Owner correction2026-10-19 appends OUT_OF_SCOPE/resolved dispositions to17
+qualification-only observations across the implementation ledger. The old aggregate
+has an appended INVALID_TEST disposition identifying the unauthorized acceptance
+rubric. Actual failed CPU/SQLite tests, reviewer findings, dissent, package hashes,
+original manifest and raw observations are unchanged. No unsupported capability
+has been marked passed and no runtime code or safety guard has been changed.
+
+Current owner-scoped validation uses `NIA_ENVIRONMENT_ACCEPTANCE_SCOPE.json` and
+an append-only evidence overlay. It checks the38 original artifact hashes, the
+requested build/test/review/install/live/off-state results, and the approved
+numeric CPU/memory budget directly against raw41-test GTHost XML. The broader
+certification program is not required. The corrected closure record below is the
+current status; historical design-checklist wording must not recreate extra gates.
+
+Corrected current evidence: `evidence-cycle-52c82899bf4f`, both checks PASS and
+both artifact-integrity checks true. Corrected convergence:
+`convergence-70d6eb5c60ee`. Latest closure: `closure-6de9609c7222` =
+`READY_WITH_RESIDUAL_RISK`, no blocking reasons, three existing LOW disclosed
+implementation/measurement limits. No accepted HIGH/critical risk. This is readiness
+for the owner's requested scope, not broader capability certification or release approval.
 
 Five unrelated owner files and the approved architecture hash are unchanged.
 The review helper now requires explicit sanitized evidence matching the submitted

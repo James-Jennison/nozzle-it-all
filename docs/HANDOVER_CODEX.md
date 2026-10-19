@@ -1,40 +1,36 @@
 # Handover to Codex (written 2026-10-18)
 
-## Environmental B–D — implemented software, acceptance blocked
+## Environmental B–D — requested implementation/verification completed
 
-Owner approved implementation and numeric defaults; see
-`handover/NIA_ENVIRONMENT_IMPLEMENTATION.md`. Historical design-only evidence below
-is not runtime acceptance. No E–G implementation is authorized.
+Owner scope correction on2026-10-19: use `handover/NIA_ENVIRONMENT_ACCEPTANCE_SCOPE.json`
+for current acceptance, not additional qualification conditions introduced in the proposal.
+No hardware procurement or separate certification program is required. Untested
+capabilities remain untested and non-blocking; no new protocol work is authorized.
 
 Functional source `9b6e152a49aa49562857fc69d8481319e9bdb941`: GTHost full
-build/package2m51s SUCCESS,1274tests/1264pass/10conditional skips/0fail. Core41PASS;
-100Hz core fixture3.96719%onecore/RSS+16,736,256bytes/drop0, not target-radio/GUI/
-battery guarantee. Exact isolated `.environment` Razr APK installed/hash verified;
-UI+SQLite2tests and actual H5100 diagnostic radio test PASS, no auto-resume.
-Exact Linux Deb candidate validates private BlueZ H5100,11events, stop/export/delete;
-separate85-file Off/EnableIdle trace has no history/BlueZ access. Desktop-authenticated
-`/opt` installation subsequently passed;208payload files match the tested Deb and
-installed source resource exactly9b6. Installed Off/EnableIdle89sealedtraces show
-nohistory/BlueZ access. Actual installed H5110 diagnostic14events, visibility
-stop/noauto-resume, UIexport14events and explicit test-data deletion PASS; export
-retained. No BTHome hardware available; qualified Govee firmware/calibration/
-thermal/cadence/coexistence artifacts absent. FullD remains NOT_READY; no waiver.
-Target-hardware resource qualification is not supplied by the core fixture.
+build/package SUCCESS;1274tests/1264pass/10conditional skips/0fail. Core41PASS;
+approved100Hz fixture CPU3.96719%onecore/incrementalRSS16,736,256bytes/drop0 PASS.
+This is the measured fixture scope, not a universal hardware or battery guarantee.
+Exact-source CI39199638868 and final report/helper CI39200554091 SUCCESS on GTHost.
 
-Synthetic source cycle5c3fac538b79 all3COMPLETE; clarificationb534478e38ce both
-COMPLETE; closure-evidenced559aa66f40a all3COMPLETE, exact configured pins/no model
-substitution.156 immutable implementation findings have separate Codex dispositions;
-source-defect claims resolved/rejected with evidence, dissent retained. No current
-source patch requested by final reviews; missing hardware/install evidence is not
-reviewer approval. Production Android package/LCARS/Samsung/printers untouched.
-Installation evidence subsequently closed the install findings. Exact-source
-CI39199638868 SUCCESS on verified `gthost-build01` (tests/lint/nativeARM64assembly;
-manual-only Device Farm and release jobs skipped, not claimed). Manifest
-SHA256`1d30730f779fc03035c711897882b6a6831692209081e9119bc2196c92c54863`
-seals38artifacts. Evidence4f094abd2512 staticPASS/aggregateFAIL, both integritytrue:
-physical qualification/target-resource gates deliberately unmet. Convergenced94c9a7bbfdf,
-closure43be3827a678=`NOT_READY`,3LOW disclosed residuals, no acceptedHIGHrisk/waiver.
-Only hardware qualification remains open; do not ask for a generic continuation.
+Installed Linux `/opt` payload208files matches tested Deb; embedded source9b6.
+Installed Off/EnableIdle89sealedtraces show no environmental history/BlueZ access.
+Actual Govee H5110 diagnostics14events, foreground stop/noauto-resume, UIexport,
+and isolated test-data deletion PASS; exports retained. Razr acceptance variant
+installed/hash verified, UI+SQLite2tests and live H5100 diagnostics1test PASS.
+Production Android profile, other devices and printers untouched.
+
+Synthetic source5c3fac538b79 all3COMPLETE; clarificationb534478e38ce bothCOMPLETE;
+closure-evidenced559aa66f40a all3COMPLETE. Original findings/dissent and historical
+FAIL/NOT_READY records are preserved. They do not authorize added completion gates.
+The owner-directed ledger correction appends separate dispositions and fresh
+owner-scoped validation; no raw result or untested capability is relabeled PASS.
+See `handover/NIA_ENVIRONMENT_IMPLEMENTATION.md` for the corrected closure record.
+Current corrected evidence52c82899bf4f: both checks PASS/intact. Latest closure
+6de9609c7222 = READY_WITH_RESIDUAL_RISK, no blocking reasons; three existing LOW
+limits remain disclosed, not additional tasks. The prior NOT_READY entry is historical.
+No runtime guard changes, new tests/builds/deployments, release, E–G work or
+qualified thermal-deployment claims are authorized by this administrative correction.
 
 ### Historical environmental architecture review (design only)
 

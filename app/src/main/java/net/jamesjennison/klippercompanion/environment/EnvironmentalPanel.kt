@@ -86,11 +86,17 @@ import org.json.JSONObject
         onDispose { pending = null; lifecycle.removeObserver(observer); controller.releaseForegroundAsync() }
     }
     val enabled = view.state != EnvironmentalState.DISABLED && view.state != EnvironmentalState.DISABLED_RECOVERY
-    LaunchedEffect(controller) {
-        if (enabled) action {
-            controller.savedBindings()
-            val loaded = controller.loadHistory()
-            chartHistory = EnvironmentalCharts.history(loaded); rows = loaded
+    LaunchedEffect(controller, enabled) {
+        if (enabled) {
+            try {
+                val (loaded, parsed) = withContext(Dispatchers.IO) {
+                    controller.savedBindings()
+                    val loaded = controller.loadHistory()
+                    loaded to EnvironmentalCharts.history(loaded)
+                }
+                rows = loaded; chartHistory = parsed
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { problem = "Saved readings could not be loaded. Use Open local history to retry." }
         } else { chartHistory = emptyList(); rows = emptyList(); historyMode = false }
     }
     Column(Modifier.fillMaxWidth().testTag("environment-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -171,7 +177,7 @@ import org.json.JSONObject
                 TextButton({ action { controller.calibrate(b, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true) { Text("Save RH calibration") }
                 TextButton({ action { controller.archive(b) } }, enabled = !busy && !stopping) { Text("Archive binding") }
             }
-            if (rows.size == controller.historyPageSize) OutlinedButton({ val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping) { Text("Older ${controller.historyPageSize}") }
+            if (historyMode && rows.size == controller.historyPageSize) OutlinedButton({ val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping) { Text("Older ${controller.historyPageSize}") }
             if (setup) {
                 Text("Monitoring runs while this screen is visible. Times show reception, not when the sensor measured. Charts show up to 500 samples; lines break at known gaps.", style = MaterialTheme.typography.bodySmall)
                 Text(view.status, style = MaterialTheme.typography.bodySmall)

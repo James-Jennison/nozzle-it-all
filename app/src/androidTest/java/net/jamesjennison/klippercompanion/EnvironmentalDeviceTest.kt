@@ -26,9 +26,9 @@ class EnvironmentalDeviceTest {
         compose.onNodeWithTag("open-environment").performScrollTo().performClick()
         compose.onNodeWithTag("environment-enable").performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-discover").fetchSemanticsNodes().isNotEmpty() }
-        assertFalse(File(context.filesDir, "environment/history.db").exists())
-        compose.onNodeWithTag("environment-history").performScrollTo().performClick()
+        // Opting in while the dashboard is open restores saved data, without starting radio.
         compose.waitUntil(5000) { File(context.filesDir, "environment/history.db").exists() }
+        assertEquals(EnvironmentalState.ENABLED_IDLE, (context.applicationContext as NozzleApp).environment.view.value.state)
         val monitor = (context.applicationContext as NozzleApp).environment
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("nav-4").performClick()

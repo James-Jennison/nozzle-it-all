@@ -47,11 +47,17 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         }
     }
     val enabled = v.state != EnvironmentalState.DISABLED && v.state != EnvironmentalState.DISABLED_RECOVERY
-    LaunchedEffect(controller) {
-        if (enabled) action {
-            controller.savedBindings()
-            val loaded = controller.loadHistory()
-            chartHistory = EnvironmentalCharts.history(loaded); rows = loaded
+    LaunchedEffect(controller, enabled) {
+        if (enabled) {
+            try {
+                val (loaded, parsed) = withContext(Dispatchers.IO) {
+                    controller.savedBindings()
+                    val loaded = controller.loadHistory()
+                    loaded to EnvironmentalCharts.history(loaded)
+                }
+                rows = loaded; chartHistory = parsed
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { error = "Saved readings could not be loaded. Use Open local history to retry." }
         } else { chartHistory = emptyList(); rows = emptyList(); historyMode = false }
     }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -155,6 +161,6 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
             Txt("Monitoring runs while NIA is visible. Times show reception, not when the sensor measured. Charts show up to 500 samples; lines break at known gaps.", Nz.type.bodySmall)
             Txt(v.status, Nz.type.bodySmall)
         }
-        if (rows.size == controller.historyPageSize) NzButton("Older ${controller.historyPageSize}", { val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping)
+        if (historyMode && rows.size == controller.historyPageSize) NzButton("Older ${controller.historyPageSize}", { val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping)
     }
 }

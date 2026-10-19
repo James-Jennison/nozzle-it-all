@@ -31,9 +31,12 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
 @Composable internal fun EnvironmentalDashboard(view: EnvironmentalView, history: List<ChartSample>, historyMode: Boolean = false,
     onDetails: (Binding) -> Unit = {}) {
     var memory by remember { mutableStateOf(EnvironmentalDashboardData()) }
-    val next = remember(view, history, memory) { memory.update(view, history) }
-    SideEffect { if (next != memory) memory = next }
-    val data = if (historyMode) EnvironmentalDashboardData().update(view.copy(latest = emptyMap(), discovery = emptyMap(), chartSamples = emptyList()), history) else next
+    LaunchedEffect(view, history) { memory = memory.update(view, history) }
+    val historical = remember(view.state, view.bindings, history) {
+        EnvironmentalDashboardData().update(EnvironmentalView(view.state, bindings = view.bindings), history)
+    }
+    val data = if (view.state == EnvironmentalState.DISABLED || view.state == EnvironmentalState.DISABLED_RECOVERY) EnvironmentalDashboardData()
+        else if (historyMode) historical else memory
     val samples = data.samples
     val bindings = view.bindings.filterNot { it.archived }
     var selected by remember { mutableStateOf<String?>(null) }

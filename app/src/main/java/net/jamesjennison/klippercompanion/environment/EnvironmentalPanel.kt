@@ -118,7 +118,7 @@ import org.json.JSONObject
                 TextButton({ deleting = false }) { Text("Keep data") }
             }
             view.bindings.filterNot { it.archived }.forEach { b ->
-                val (equipment, position) = roomDrafts[b.id] ?: ("Room" to "Shelf")
+                val (equipment, position) = roomDrafts[b.id] ?: view.roomLabels[b.id] ?: ("Room" to "Shelf")
                 Text("${b.model} — diagnostic, unqualified")
                 Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(equipment, { roomDrafts[b.id] = it.take(120) to position }, label = { Text("Room label") })

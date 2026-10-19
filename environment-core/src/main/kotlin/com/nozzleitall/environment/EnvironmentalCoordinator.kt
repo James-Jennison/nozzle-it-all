@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.update
 /** dropped: this coordinator's cumulative ingress-overflow count (including discovery).
  * recordedDrops: retained collection-history gaps across runs. Neither implies complete radio coverage. */
 data class EnvironmentalView(val state: EnvironmentalState, val status: String = "Disabled — no collection", val candidates: List<Candidate> = emptyList(),
-    val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0, val recordedDrops: Long = 0)
+    val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0, val recordedDrops: Long = 0,
+    val roomLabels: Map<String, Pair<String, String>> = emptyMap())
 
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
@@ -310,7 +311,21 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         return identity
     }
     @Synchronized fun loadHistory(before: Long = Long.MAX_VALUE, id: String = "~"): List<String> { historyAccess(); return history.page(before, id, limits.pageSize) }
-    @Synchronized fun savedBindings(): List<Binding> { historyAccess(); return history.bindings().also { mutable.value = mutable.value.copy(bindings = it, recordedDrops = history.recordedDrops()) } }
+    @Synchronized fun savedBindings(): List<Binding> {
+        historyAccess()
+        val bindings = history.bindings()
+        val positions = history.entities("position").associateBy { it.getString("id") }
+        val equipment = history.entities("equipment").associateBy { it.getString("id") }
+        val placements = history.entities("placement").filter { it.isNull("until") }.associateBy { it.getString("sensorId") }
+        val labels = bindings.mapNotNull { b ->
+            val placement = placements[b.sensorId] ?: return@mapNotNull null
+            val position = positions[placement.getString("positionId")] ?: return@mapNotNull null
+            val room = equipment[position.getString("equipmentId")] ?: return@mapNotNull null
+            b.id to (room.getString("name") to position.getString("name"))
+        }.toMap()
+        mutable.value = mutable.value.copy(bindings = bindings, roomLabels = labels, recordedDrops = history.recordedDrops())
+        return bindings
+    }
     @Synchronized fun archive(binding: Binding) { historyAccess(); stop(); history.archive(binding); savedBindings() }
     fun export(write: (String) -> Unit) {
         val identity = historyAccess()
@@ -339,6 +354,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             minC = existingPosition?.takeUnless { it.isNull("minC") }?.getDouble("minC") ?: previousPosition?.takeUnless { it.isNull("minC") }?.getDouble("minC"),
             maxC = existingPosition?.takeUnless { it.isNull("maxC") }?.getDouble("maxC") ?: previousPosition?.takeUnless { it.isNull("maxC") }?.getDouble("maxC"))
         history.configureDraft(binding, equipment, position, System.currentTimeMillis())
+        savedBindings()
         mutable.value = mutable.value.copy(status = "Room assignment saved — press Start to monitor; observations do not certify operating limits")
     }
     @Synchronized fun calibrate(binding: Binding, channel: Channel, offset: Double) {

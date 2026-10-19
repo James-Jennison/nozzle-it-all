@@ -90,7 +90,7 @@ import org.json.JSONObject
             Field("Relative humidity calibration offset (%RH)", offset, { offset = it.take(12) })
         }
         v.bindings.filterNot { it.archived }.forEach { binding -> Column {
-            val (equipmentName, positionName) = roomDrafts[binding.id] ?: ("Room" to "Shelf")
+            val (equipmentName, positionName) = roomDrafts[binding.id] ?: v.roomLabels[binding.id] ?: ("Room" to "Shelf")
             Txt("${binding.model} — firmware/calibration/operating envelope unqualified", Nz.type.bodySmall)
             Txt("${binding.address} · ${binding.protocol} — verify the physical identity before saving assignments", Nz.type.bodySmall)
             Field("Room label", equipmentName, { roomDrafts[binding.id] = it.take(120) to positionName })

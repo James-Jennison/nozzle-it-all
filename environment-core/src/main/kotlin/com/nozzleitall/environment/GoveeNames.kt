@@ -32,9 +32,10 @@ class GoveeNameApi internal constructor(private val budgetMillis: Long = 20_000,
     fun fetch(key: String, current: () -> Boolean = { true }): List<GoveeDeviceName> {
         if (key.length !in 8..256 || key.any { it.code !in 33..126 }) throw GoveeNameException(GoveeNameFailure.KEY)
         val deadline = System.nanoTime() + budgetMillis * 1_000_000L
+        val timedOut = java.util.concurrent.atomic.AtomicBoolean(false)
         fun checkCurrent() {
             if (!current()) throw GoveeNameException(GoveeNameFailure.CANCELLED)
-            if (System.nanoTime() >= deadline) throw GoveeNameException(GoveeNameFailure.NETWORK)
+            if (timedOut.get() || System.nanoTime() >= deadline) throw GoveeNameException(GoveeNameFailure.NETWORK)
         }
         var connection: HttpsURLConnection? = null
         var timer: java.util.Timer? = null
@@ -50,7 +51,7 @@ class GoveeNameApi internal constructor(private val budgetMillis: Long = 20_000,
             val remaining = ((deadline - System.nanoTime()) / 1_000_000L).coerceAtLeast(1)
             c.connectTimeout = minOf(remaining, 10_000).toInt(); c.readTimeout = c.connectTimeout
             timer = java.util.Timer("Govee-name-deadline", true).apply {
-                schedule(object : java.util.TimerTask() { override fun run() { runCatching { c.disconnect() } } }, remaining)
+                schedule(object : java.util.TimerTask() { override fun run() { timedOut.set(true); runCatching { c.disconnect() } } }, remaining)
             }
             when (c.responseCode) {
                 200 -> Unit

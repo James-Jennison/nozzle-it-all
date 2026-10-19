@@ -28,6 +28,7 @@ import org.json.JSONObject
         Txt(v.status, Nz.type.body)
         EnvironmentalProviders.ble.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Active BLE scanning uses radio/battery. No pairing, Govee unbinding, cloud, background service or equipment control.", Nz.type.bodySmall)
+        Txt("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy, testTag = "environment-enable")

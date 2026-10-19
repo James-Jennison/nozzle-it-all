@@ -78,7 +78,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         save("qualification", q.id, JSONObject().put("id", q.id).put("bindingId", q.bindingId).put("bindingRevision", q.bindingRevision)
             .put("model", q.model).put("firmware", q.firmware).put("platform", q.platform).put("radio", q.radio)
             .put("decoder", q.decoder).put("scanMode", q.scanMode).put("channel", q.channel.wire).put("calibrationVersion", q.calibrationVersion)
-            .put("minC", q.minC).put("maxC", q.maxC).put("cadenceMinMillis", q.cadenceMinMillis).put("cadenceMaxMillis", q.cadenceMaxMillis)
+            .put("minC", q.minC).put("maxC", q.maxC).put("cadenceMinMillis", q.cadenceMinMillis).put("cadenceMaxMillis", q.cadenceMaxMillis).put("cadenceMonitoring", "declared-only")
             .put("verifiedAt", q.verifiedAt).put("expiresAt", q.expiresAt).put("evidence", JSONObject(q.evidence)).put("archived", q.archived))
     }
     /** Empty for unassigned diagnostics; throws for any assigned capability lacking exact current evidence. */

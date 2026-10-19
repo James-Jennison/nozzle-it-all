@@ -70,6 +70,7 @@ import org.json.JSONObject
             EnvironmentalProviders.ble.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
+            Text("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
             if (view.state == EnvironmentalState.ENABLED_IDLE) {

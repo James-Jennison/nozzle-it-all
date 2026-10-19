@@ -44,6 +44,7 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
                     val record = result.scanRecord ?: return
                     val manufacturer = record.manufacturerSpecificData
                     if (manufacturer.size() > 16 || (record.serviceData?.size ?: 0) > 16) return
+                    if ((0 until manufacturer.size()).any { manufacturer.valueAt(it).size > 512 } || record.serviceData.orEmpty().values.any { it.size > 512 }) return
                     report(Advertisement(result.device.address, record.deviceName,
                         (0 until manufacturer.size()).associate { manufacturer.keyAt(it) to manufacturer.valueAt(it).copyOf() },
                         record.serviceData.orEmpty().mapKeys { it.key.uuid.toString() }.mapValues { it.value.copyOf() },

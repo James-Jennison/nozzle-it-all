@@ -58,7 +58,7 @@ class LinuxBleTransport : BleTransport {
                     val address = props["Address"]?.value as? String ?: return
                     val name = props["Name"]?.value as? String
                     fun bytes(value: Any?): ByteArray? = when (value) {
-                        is ByteArray -> value.copyOf()
+                        is ByteArray -> value.takeIf { it.size <= 512 }?.copyOf()
                         is List<*> -> value.takeIf { it.size <= 512 }?.map { (it as Number).toByte() }?.toByteArray()
                         else -> null
                     }

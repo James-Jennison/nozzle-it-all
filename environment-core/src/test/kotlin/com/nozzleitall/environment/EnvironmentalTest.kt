@@ -118,7 +118,10 @@ class EnvironmentalTest {
         val entered = CountDownLatch(1); val release = CountDownLatch(1); val closed = CountDownLatch(1)
         val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _ -> entered.countDown(); release.await(5, TimeUnit.SECONDS); object : RadioSession { override fun close() { closed.countDown() } } } })
         c.foreground(true); c.enable(); c.discover(); assertTrue(entered.await(5, TimeUnit.SECONDS)); c.foreground(false); release.countDown()
-        assertTrue(closed.await(5, TimeUnit.SECONDS)); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
+        assertTrue(closed.await(5, TimeUnit.SECONDS))
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (c.view.value.state != EnvironmentalState.ENABLED_IDLE && System.nanoTime() < deadline) Thread.sleep(5)
+        assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
     }
     @Test fun unknownFutureSchemaIsPreserved() {
         val path = Files.createTempFile("nia-env-future", ".db").toFile()
@@ -170,6 +173,23 @@ class EnvironmentalTest {
         assertEquals(droppedBefore, c.view.value.dropped)
         assertTrue("CPU $cpuPercent%", cpuPercent < 5.0)
         assertTrue("RSS increase $memoryIncrease", memoryIncrease < 32L * 1024 * 1024)
+        c.close()
+    }
+    @Test fun failedDurableDeleteIntentCannotPurgeHistoryAndResumeIsExplicit() {
+        org.junit.Assume.assumeTrue(System.getProperty("os.name").contains("Linux"))
+        val control = file(); val h = history()
+        val c = EnvironmentalCoordinator(control, h, { error("No radio authorized") })
+        c.enable(); h.append(observation(), "inc")
+        Files.setPosixFilePermissions(control.parentFile.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("r-x------"))
+        // persist() restores directory owner permissions, so block its target with a test-owned directory instead.
+        Files.setPosixFilePermissions(control.parentFile.toPath(), java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"))
+        val preserved = File(control.parentFile, "preserved-control"); Files.move(control.toPath(), preserved.toPath())
+        control.mkdir()
+        assertThrows(Exception::class.java) { c.deleteAll() }
+        assertEquals(1, h.page().size)
+        assertTrue(c.view.value.status.contains("Cleanup incomplete"))
+        assertTrue(control.delete()) // only the empty test-owned fault-injection directory
+        c.deleteAll(); assertTrue(h.page().isEmpty()); assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
         c.close()
     }
 }

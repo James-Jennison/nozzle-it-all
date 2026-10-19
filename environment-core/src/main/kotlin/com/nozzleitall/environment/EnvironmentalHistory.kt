@@ -109,10 +109,17 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         .put("droppedBefore", o.droppedBefore)
         .put("readings", JSONArray(o.readings.map { JSONObject().put("channel", it.channel.wire).put("raw", it.raw).put("offset", it.offset).put("calibrationVersion", it.calibrationVersion) })).toString()
     @Synchronized fun append(o: Observation, currentIncarnation: String): String {
+        return store().transaction { insert(o, currentIncarnation) }
+    }
+    @Synchronized fun appendBatch(observations: List<Observation>, currentIncarnation: String): List<String> {
+        require(observations.size in 1..32)
+        return store().transaction { observations.map { insert(it, currentIncarnation) } }
+    }
+    private fun insert(o: Observation, currentIncarnation: String): String {
         require(o.incarnation == currentIncarnation)
         require(o.readings.size in 1..16)
         val payload = immutable(o)
-        return store().transaction {
+        return run {
             val existing = store().query("SELECT immutable FROM events WHERE id=?", o.eventId).firstOrNull()?.first()
             when {
                 existing == payload -> "duplicate"

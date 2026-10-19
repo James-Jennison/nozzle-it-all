@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.update
 
 data class EnvironmentalView(val state: EnvironmentalState, val status: String = "Disabled — no collection", val candidates: List<Candidate> = emptyList(),
     val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0)
@@ -16,26 +18,42 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     val gate = EnvironmentalGate(control)
     private val mutable = MutableStateFlow(EnvironmentalView(gate.state, if (gate.state == EnvironmentalState.ENABLED_IDLE) "Enabled, idle — press Discover or Start" else if (gate.state == EnvironmentalState.DISABLED_RECOVERY) "Recovery required — control record preserved; Delete / resume cleanup explicitly" else "Disabled — no collection"))
     val view = mutable.asStateFlow()
-    private var operation: Job? = null
+    @Volatile private var operation: Job? = null
+    @Volatile private var operationScope: CoroutineScope? = null
     private var session: RadioSession? = null
-    private var foreground = false
+    private val foreground = AtomicBoolean(false)
+    private val visibilityEpoch = AtomicLong()
+    private val revocationRequested = AtomicBoolean(false)
+    private val droppedReports = AtomicLong()
     private val collector = newId()
     private val sequence = AtomicLong()
-    @Synchronized fun foreground(visible: Boolean) { foreground = visible; if (!visible && operation != null) stop("Stopped — app not visible; press Start to resume") }
+    fun foreground(visible: Boolean) {
+        foreground.set(visible)
+        if (!visible) {
+            revocationRequested.set(true)
+            visibilityEpoch.incrementAndGet()
+            val current = operation ?: return
+            mutable.update { it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stopped — app not visible; press Start to resume") }
+            operationScope?.launch { synchronized(this@EnvironmentalCoordinator) {
+                if (operation === current) stop("Stopped — app not visible; press Start to resume")
+            } }
+        }
+    }
     @Synchronized fun enable() { gate.enable(); mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened") }
     @Synchronized fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
+        revocationRequested.set(true)
         // Hide live readings immediately, before durable revocation/cancellation.
         mutable.value = mutable.value.copy(latest = emptyMap(), candidates = emptyList(), status = reason)
         try { gate.revoke(disable) }
         finally {
-            operation?.cancel(); operation = null
+            operation?.cancel(); operation = null; operationScope = null
             runCatching { session?.close() }; session = null
             mutable.value = mutable.value.copy(state = gate.state, status = if (gate.persistenceFailure) "Persistence failed — stopped in memory, recovery required" else reason)
         }
     }
     @Synchronized fun discover() = begin(Purpose.DISCOVERY, emptyList())
     @Synchronized fun start() {
-        check(foreground && gate.state == EnvironmentalState.ENABLED_IDLE)
+        check(foreground.get() && gate.state == EnvironmentalState.ENABLED_IDLE)
         val bindings = history.bindings().filterNot { it.archived }
         require(bindings.isNotEmpty()) { "Save a sensor first" }
         // Unknown firmware/envelopes permit unassigned diagnostic reception only, never dryer deployment.
@@ -44,11 +62,15 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         begin(Purpose.COLLECTION, bindings)
     }
     private fun begin(purpose: Purpose, bindings: List<Binding>) {
-        check(foreground)
+        val visibleEpoch = visibilityEpoch.get()
+        check(foreground.get())
         require(bindings.size <= 64) { "At most 64 active environmental bindings per foreground session" }
         val grant = gate.begin(purpose, bindings, if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1_000_000_000L else 86_400_000_000_000)
         val job = SupervisorJob(); operation = job
         val scope = CoroutineScope(job + Dispatchers.IO)
+        operationScope = scope
+        revocationRequested.set(false)
+        val failureQueued = AtomicBoolean(false)
         val queue = Queue<Advertisement>(limits.queueCapacity)
         val runId = newId()
         val calibration = bindings.associate { it.id to history.calibrated(it, listOf(Reading(Channel.TEMPERATURE, 0.0), Reading(Channel.HUMIDITY, 0.0), Reading(Channel.BATTERY_PERCENT, 0.0), Reading(Channel.BATTERY_VOLTAGE, 0.0))).associateBy { r -> r.channel } }
@@ -56,32 +78,55 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             status = if (purpose == Purpose.DISCOVERY) "Discovering for ${limits.discoverySeconds} seconds — active BLE scan, radio impact; diagnostic only" else "Collecting diagnostic receptions — measurement age unknown; active BLE scan")
         scope.launch {
             try {
+                synchronized(this@EnvironmentalCoordinator) {
+                    if (!foreground.get() || visibilityEpoch.get() != visibleEpoch || revocationRequested.get()) {
+                        stop("Stopped — app visibility changed during preparation")
+                        return@launch
+                    }
+                }
                 val opened = transport().start({ report ->
-                    if (!gate.valid(grant)) return@start
+                    // OS scan callbacks may be Main: no locks, disk IO, parsing, or coroutine-per-report here.
+                    if (!job.isActive || revocationRequested.get() || visibilityEpoch.get() != visibleEpoch) return@start
                     if (report.address.length !in 1..64 || (report.name?.length ?: 0) > 256) return@start
                     if (report.manufacturer.size > 16 || report.services.size > 16 || report.manufacturer.values.any { it.size > 512 } || report.services.values.any { it.size > 512 }) return@start
                     if (purpose == Purpose.COLLECTION && bindings.none { it.address.equals(report.address, true) }) return@start
-                    if (!queue.trySend(report).isSuccess) synchronized(this@EnvironmentalCoordinator) {
-                        if (gate.valid(grant)) mutable.value = mutable.value.copy(dropped = mutable.value.dropped + 1, status = "Queue overflow — reception gap, diagnostic history incomplete")
-                    }
-                }, { failure -> synchronized(this@EnvironmentalCoordinator) { if (gate.valid(grant)) stop(failure) } })
-                synchronized(this@EnvironmentalCoordinator) { if (gate.valid(grant)) session = opened else opened.close() }
-                for (report in queue) {
-                    if (!gate.valid(grant)) continue
-                    val decoded = BleDecoders.decode(report) ?: continue
+                    if (!queue.trySend(report).isSuccess) droppedReports.incrementAndGet()
+                }, { failure -> if (failureQueued.compareAndSet(false, true)) scope.launch {
+                    synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop(failure) }
+                } })
+                synchronized(this@EnvironmentalCoordinator) {
+                    if (gate.valid(grant) && visibilityEpoch.get() == visibleEpoch && !revocationRequested.get()) session = opened
+                    else { opened.close(); if (operation === job) stop("Stopped — obsolete radio preparation") }
+                }
+                for (first in queue) {
+                    if (revocationRequested.get() || !gate.valid(grant)) continue
+                    // At most 25ms coalescing, 32 events/transaction: bounded disk/CPU cost, no sample dedup by value.
+                    if (purpose == Purpose.COLLECTION) delay(25)
+                    val reports = mutableListOf(first)
+                    repeat(31) { queue.tryReceive().getOrNull()?.let { reports += it } }
+                    val decodedReports = reports.mapNotNull { report -> BleDecoders.decode(report)?.let { report to it } }
                     synchronized(this@EnvironmentalCoordinator) {
-                        if (!gate.valid(grant)) return@synchronized
+                        if (revocationRequested.get() || !gate.valid(grant)) return@synchronized
+                        if (droppedReports.get() != mutable.value.dropped) mutable.value = mutable.value.copy(dropped = droppedReports.get(), status = "Queue overflow — reception gap, diagnostic history incomplete")
+                        val observations = mutableListOf<Observation>()
+                        val admittedBindings = mutableListOf<Binding>()
+                        for ((report, decoded) in decodedReports) {
                         if (purpose == Purpose.DISCOVERY) {
                             val candidate = Candidate(report.address, decoded.protocol, decoded.model)
                             val current = mutable.value.candidates
                             if (current.none { it.address == candidate.address } && current.size < 64) mutable.value = mutable.value.copy(candidates = current + candidate)
                         } else {
-                            val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: return@synchronized
+                            val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: continue
                             val n = sequence.incrementAndGet()
                             val observation = Observation("$collector/$runId/$n", grant.incarnation, collector, runId, n, binding.id, binding.revision,
                                 report.observedAt, System.currentTimeMillis(), report.monotonicNanos, decoder = BleDecoders.VERSION, sourceCounter = decoded.counter, readings = decoded.readings.map { r -> calibration[binding.id]?.get(r.channel)?.let { r.copy(offset = it.offset, calibrationVersion = it.calibrationVersion) } ?: r }, droppedBefore = mutable.value.dropped)
-                            gate.commit(grant, binding) { history.append(observation, gate.incarnation) }
-                            mutable.value = mutable.value.copy(latest = mutable.value.latest + (binding.id to observation))
+                            admittedBindings += binding
+                            observations += observation
+                        }
+                        }
+                        if (observations.isNotEmpty()) {
+                            gate.commitBatch(grant, admittedBindings) { history.appendBatch(observations, gate.incarnation) }
+                            mutable.value = mutable.value.copy(latest = mutable.value.latest + observations.associateBy { it.bindingId })
                         }
                     }
                 }
@@ -118,11 +163,17 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         history.calibrate(binding, channel, offset)
     }
     @Synchronized fun deleteAll() {
-        try { stop(disable = true) } finally {
+        // Stop always closes the in-memory gate/cancels owned work, even if its persistence fails.
+        runCatching { stop(disable = true) }
+        try {
+            // A thrown intent commit exits this try: no store purge is reached.
             gate.deleteIntent()
             history.deleteAll()
             gate.finishDelete()
             mutable.value = EnvironmentalView(gate.state, "Environmental data deleted; external exports are not removed")
+        } catch (e: Exception) {
+            mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), candidates = emptyList(), status = "Cleanup incomplete — explicitly resume deletion; no collection")
+            throw e
         }
     }
     @Synchronized override fun close() { if (operation != null) stop(); history.close() }

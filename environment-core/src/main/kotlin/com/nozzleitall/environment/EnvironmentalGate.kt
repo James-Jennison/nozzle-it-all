@@ -65,6 +65,11 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
         check(grant.purpose == Purpose.COLLECTION && valid(grant, binding)) { "Stale or unauthorized environmental operation" }
         return block()
     }
+    @Synchronized fun <T> commitBatch(grant: EnvironmentalGrant, bindings: List<Binding>, block: () -> T): T {
+        require(bindings.size in 1..32)
+        check(grant.purpose == Purpose.COLLECTION && bindings.all { valid(grant, it) }) { "Stale or unauthorized environmental batch" }
+        return block()
+    }
     @Synchronized fun deleteIntent() { epoch++; state = EnvironmentalState.DISABLED_RECOVERY; incarnation = newId(); persist("delete-pending") }
     @Synchronized fun finishDelete() { persist("disabled"); state = EnvironmentalState.DISABLED }
     private fun persist(intent: String) {

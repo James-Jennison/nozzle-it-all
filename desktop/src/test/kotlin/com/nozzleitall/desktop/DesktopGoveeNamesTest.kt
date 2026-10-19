@@ -6,6 +6,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DesktopGoveeNamesTest {
+    @Test fun importedExtendedIdentitiesResolveFullAddressesWithoutManualSelection() {
+        val directory = DesktopGoveeNames { _, _ -> listOf(
+            GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5110", "Front left"),
+            GoveeDeviceName("33:44:AB:BB:CC:DD:EE:FF", "H5110", "Rear right")) }
+        directory.import("synthetic-fixture", directory.begin())
+        assertEquals("Front left", directory.devices.value.singleOrNull {
+            it.matches(Candidate("AA:BB:CC:DD:EE:FF", "govee-ble", "H5110")) }?.name)
+        assertEquals("Rear right", directory.devices.value.singleOrNull {
+            it.matches(Candidate("AB:BB:CC:DD:EE:FF", "govee-ble", "H5110")) }?.name)
+    }
     @Test fun explicitImportAndForgetRejectStaleNames() {
         lateinit var directory: DesktopGoveeNames
         var cancelDuringFetch = false

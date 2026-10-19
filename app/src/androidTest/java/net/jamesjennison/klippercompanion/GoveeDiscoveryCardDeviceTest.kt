@@ -13,6 +13,26 @@ import org.junit.Test
 
 class GoveeDiscoveryCardDeviceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun importedExtendedIdentityFillsCorrectCardWithoutMacSelection() {
+        val first = Candidate("AA:BB:CC:DD:EE:FF", "govee-ble", "H5110")
+        val second = Candidate("AB:BB:CC:DD:EE:FF", "govee-ble", "H5110")
+        val directory = mutableStateOf<List<GoveeDeviceName>>(emptyList())
+        val saved = mutableListOf<String>()
+        compose.setContent { MaterialTheme { Column {
+            listOf(first, second).forEach { candidate ->
+                val name = directory.value.singleOrNull { it.matches(candidate) }?.name ?: candidate.defaultName
+                GoveeDiscoveryCard(candidate, null, name, false, false, {}, { saved += name })
+            }
+        } } }
+        compose.runOnIdle { directory.value = listOf(
+            GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5110", "Front left"),
+            GoveeDeviceName("33:44:AB:BB:CC:DD:EE:FF", "H5110", "Rear right")) }
+        compose.onNodeWithTag("govee-name-${first.address}").assertTextContains("Front left")
+        compose.onNodeWithTag("govee-name-${second.address}").assertTextContains("Rear right")
+        compose.onNodeWithTag("govee-add-${first.address}").performClick()
+        compose.onNodeWithTag("govee-add-${second.address}").performClick()
+        compose.runOnIdle { assertEquals(listOf("Front left", "Rear right"), saved) }
+    }
     @Test fun namesAreIndependentAndSaveUsesLatestDraft() {
         val selected = mutableListOf<Pair<String, String>>()
         compose.setContent {

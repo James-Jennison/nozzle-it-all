@@ -123,7 +123,10 @@ import org.json.JSONObject
                 Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(equipment, { roomDrafts[b.id] = it.take(120) to position }, label = { Text("Room label") })
                 OutlinedTextField(position, { roomDrafts[b.id] = equipment to it.take(120) }, label = { Text("Position label") })
-                TextButton({ action { controller.configureRoom(b, equipment, position) } }, enabled = !busy && !stopping && equipment.isNotBlank() && position.isNotBlank()) { Text("Save room assignment") }
+                TextButton({
+                    val current = roomDrafts[b.id] ?: view.roomLabels[b.id] ?: ("Room" to "Shelf")
+                    action { controller.configureRoom(b, current.first, current.second) }
+                }, enabled = !busy && !stopping && equipment.isNotBlank() && position.isNotBlank()) { Text("Save room assignment") }
                 Text("Room assignments do not block monitoring or certify sensor operating limits.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(offset, { offset = it.take(12) }, label = { Text("Humidity calibration offset (%RH)") })
                 TextButton({ action { controller.calibrate(b, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true) { Text("Save RH calibration") }

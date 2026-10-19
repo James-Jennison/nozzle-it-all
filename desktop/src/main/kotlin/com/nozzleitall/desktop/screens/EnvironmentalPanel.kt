@@ -95,7 +95,10 @@ import org.json.JSONObject
             Txt("${binding.address} · ${binding.protocol} — verify the physical identity before saving assignments", Nz.type.bodySmall)
             Field("Room label", equipmentName, { roomDrafts[binding.id] = it.take(120) to positionName })
             Field("Position label", positionName, { roomDrafts[binding.id] = equipmentName to it.take(120) })
-            NzButton("Save room assignment", { action { controller.configureRoom(binding, equipmentName, positionName) } }, enabled = !busy && !stopping && equipmentName.isNotBlank() && positionName.isNotBlank())
+            NzButton("Save room assignment", {
+                val current = roomDrafts[binding.id] ?: v.roomLabels[binding.id] ?: ("Room" to "Shelf")
+                action { controller.configureRoom(binding, current.first, current.second) }
+            }, enabled = !busy && !stopping && equipmentName.isNotBlank() && positionName.isNotBlank())
             Txt("Room assignments do not block monitoring or certify sensor operating limits.", Nz.type.bodySmall)
             NzButton("Save RH calibration", { action { controller.calibrate(binding, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true)
             NzButton("Archive binding", { action { controller.archive(binding) } }, enabled = !busy && !stopping)

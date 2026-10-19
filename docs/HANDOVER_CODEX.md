@@ -1,5 +1,55 @@
 # Handover to Codex (written 2026-10-18)
 
+## S4 delivery checkpoint — 2026-10-19 (supersedes older checkpoints)
+
+Application source `26031922c552896f7853eeba5a6328ce900c7d33`, tag
+`v0.1.17`, Android code782. Owner-approved desktop installation is verified:
+0.1.17 DEB SHA256 `8b6a80885ebdeb992614883ccc525916574566a69c8b9fa0fb7f8a9768cb63d2`,
+all218 installed payloads match; six adapters, launcher/eight icons verified.
+All16 existing environmental entities and29 events preserved. Actual new desktop
+S4 live UI remains pending owner screenshot; installation is not UI proof.
+
+Exact application full GTHost validation:1328 results,1318 pass,10 conditional
+skips, zero failures/errors. Actual Razr isolated fixture:23 tests pass, plus
+one physical Govee reception/history/foreground-stop test passes. Initial pixel
+failure is retained: Android navigation contrast scrim faded the lowest trace
+because the test root lacked safeDrawingPadding. Test-only correction retains
+strict four-color assertions; source SHA256
+`a1b13bfdbc35b995e081b70d59531ae2f8d081e2d2e6a848b4f42db2a2d1e105`.
+Production code unchanged. Desktop package provenance honestly records dirty
+state: only Android instrumentation diagnostic source differed during packaging;
+production/build-affecting desktop sources and embedded source identity match260.
+
+Synthetic cycles7656127a1698/88ddaf21eeb8 completed all three seats; accepted
+fresh-reception timing, empty-history label and selection/accessibility findings
+fixed260. Full-context followups fd7c460a9eed,ee4d1bdcd6d0,fd3f72c5108f and
+fixture22dd839e8ca8 complete. Findings have separate durable dispositions; rejected
+claims/dissent retained, not consensus. Mistral escalation unavailable: disabled
+registry/explicit escalation-only routing rejection; no substitute invoked.
+Evidence cyclec273598608e0 has two PASS/intact checks for candidate only.
+
+Release CI39321423333 completed SUCCESS (device farm conditionally skipped).
+All four CI artifact checksums pass, version782/0.1.17; GitHub attestation payload
+ties AAB SHA0199fa870462ef9c1c5592e7d2570b7004970b9ff8aedd10b5af641eeec4e2c3
+to source260/tagv0.1.17/run39321423333. This is API provenance inspection, not
+local cryptographic attestation verification (installed gh lacks that command).
+Actual APK requires only faketouch and WiFi. Draft GitHub release remains draft.
+Alpha draft752 replaced by782; preview reports zero lost supported devices.
+Submitted the single Alpha change: Publishing overview shows Changes in review,
+quick checks pending. No production-track change or GitHub release publication.
+Play-generated universal782.apk SHA256
+`12e1e1ea66471d81e3a1fa3916a920b18faa3a337e3b0f8fa38d2f0f51b6fb9f`
+matches established Play signing certificate ce6bba61258a3e407a0fb27e5a03342d34b44cdd2bf910844af36169f449c3f3.
+Its actual manifest requires only faketouch/WiFi; Console's six-feature list also
+includes optional features, not six enforced requirements. In-place adb install-r
+on freshly verified motorola razr2023/ZY22HXCVPM succeeded. Normal package now
+782/0.1.17, appId10002 and firstInstallTime2026-09-26 05:41:54 unchanged.
+Postupdate inventory/live checks blocked by non-NIA foreground; guarded helper
+refused observation/input. Owner asked to unlock and leave normal NIA open.
+No uninstall/reset/signer substitution. New desktop process3130954 resolves to
+/opt/nozzle-it-all/bin/nozzle-it-all; live S4 screenshot still requested.
+Finish normal data/live verification, desktop UI proof and Google's review result.
+
 ## Owner-approved S4 spatial overview (2026-10-19, implementation in progress)
 
 Owner explicitly requested recognizable S4 illustration, readings at named actual

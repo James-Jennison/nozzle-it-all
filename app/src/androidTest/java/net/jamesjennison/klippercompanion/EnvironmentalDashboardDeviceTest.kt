@@ -1,6 +1,7 @@
 package net.jamesjennison.klippercompanion
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
@@ -25,7 +26,8 @@ class EnvironmentalDashboardDeviceTest {
             ChartSample("${b.id}-$i", b.id, 1000L + i * 1000, "r", 0,
                 mapOf(Channel.TEMPERATURE to 40.0 + index, Channel.HUMIDITY to 20.0 + index), i.toLong())
         } }
-        compose.setContent { MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+        // Keep the captured Canvas above the real phone's navigation-bar contrast scrim.
+        compose.setContent { MaterialTheme { Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState())) {
             EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = bindings,
                 sensorLabels = bindings.mapIndexed { i, b -> b.sensorId to names[i] }.toMap()), samples, historyMode = true)
         } } }
@@ -34,6 +36,8 @@ class EnvironmentalDashboardDeviceTest {
         compose.onNodeWithText("Range  40.0 – 43.0 °C").assertExists()
         compose.onNodeWithTag("s4-group-trend-TEMPERATURE").performScrollTo().assertIsDisplayed()
         val plotted = compose.onNodeWithTag("s4-group-trend-TEMPERATURE").captureToImage().asAndroidBitmap()
+        val traceOutput = java.io.File(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "s4-traces.png")
+        traceOutput.outputStream().use { plotted.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         val colors = listOf(0xFFB59AFF.toInt(), 0xFF35B9C5.toInt(), 0xFFFFC66D.toInt(), 0xFFFF91B5.toInt())
         colors.forEach { color ->
             var pixels = 0
@@ -43,7 +47,7 @@ class EnvironmentalDashboardDeviceTest {
                     kotlin.math.abs(android.graphics.Color.green(p) - android.graphics.Color.green(color)) < 10 &&
                     kotlin.math.abs(android.graphics.Color.blue(p) - android.graphics.Color.blue(color)) < 10) pixels++
             }
-            org.junit.Assert.assertTrue("Each actual trend stroke renders inside tagged Canvas", pixels > plotted.width)
+            org.junit.Assert.assertTrue("Each actual trend stroke renders inside tagged Canvas: color=$color pixels=$pixels width=${plotted.width} height=${plotted.height}", pixels > plotted.width)
         }
         compose.onNode(hasContentDescription("S4 TEMPERATURE trends: 4 sensors", substring = true)).assertExists()
         compose.onNodeWithTag("s4-group-trend-HUMIDITY").performScrollTo().assertIsDisplayed()

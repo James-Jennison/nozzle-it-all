@@ -13,6 +13,30 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    companion object {
+        /** Test-only child entry point. Forced process death, never a production helper. */
+        @JvmStatic fun main(args: Array<String>) {
+            require(args.size == 2)
+            val root = File(args[0]).canonicalFile; val phase = args[1]
+            require(root.parentFile == File(System.getProperty("java.io.tmpdir")).canonicalFile && root.name.startsWith("nia-env-crash-"))
+            require(phase in setOf("intent", "transaction", "purged"))
+            val gate = EnvironmentalGate(File(root, "control.json"))
+            val history = EnvironmentalHistory(SqlStoreFactory {
+                val sql = Sql(File(root, "history.db"))
+                object : SqlStore by sql {
+                    override fun execute(statement: String, vararg args: Any?) {
+                        sql.execute(statement, *args)
+                        if (phase == "transaction" && statement == "DELETE FROM events") Runtime.getRuntime().halt(17)
+                    }
+                }
+            })
+            gate.deleteIntent()
+            println("ENV_CRASH phase=$phase intent_committed=true expected_exit=17")
+            if (phase == "intent") Runtime.getRuntime().halt(17)
+            history.deleteAll()
+            Runtime.getRuntime().halt(17) // Before finishDelete: explicit resume must complete.
+        }
+    }
     private fun file() = Files.createTempDirectory("nia-env-test").resolve("environment/control.json").toFile()
     private class Sql(file: File) : SqlStore {
         val c = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
@@ -99,6 +123,36 @@ class EnvironmentalTest {
         resumed.finishDelete()
         assertFalse(resumed.deletePending)
         assertEquals(EnvironmentalState.DISABLED, EnvironmentalGate(path).state)
+    }
+    @Test fun realProcessDeathAtDeleteCrashPointsRollsBackAndResumesExplicitly() {
+        for (phase in listOf("intent", "transaction", "purged")) {
+            val root = Files.createTempDirectory("nia-env-crash-").toFile()
+            val control = File(root, "control.json"); val database = File(root, "history.db")
+            val original = EnvironmentalGate(control); original.enable()
+            EnvironmentalHistory(SqlStoreFactory { Sql(database) }).use { it.append(observation(incarnation = original.incarnation), original.incarnation) }
+            val child = ProcessBuilder(File(System.getProperty("java.home"), "bin/java").absolutePath,
+                "-cp", System.getProperty("nia.environment.testClasspath"), EnvironmentalTest::class.java.name, root.absolutePath, phase)
+                .directory(root).redirectErrorStream(true).start()
+            val finished = child.waitFor(15, TimeUnit.SECONDS)
+            if (!finished) child.destroyForcibly().waitFor(5, TimeUnit.SECONDS)
+            assertTrue("Crash child timed out: $phase", finished)
+            val output = child.inputStream.bufferedReader().use { it.readText() }
+            assertEquals("Expected controlled halt $phase: $output", 17, child.exitValue())
+            var opens = 0; var radios = 0
+            val h = EnvironmentalHistory(SqlStoreFactory { opens++; Sql(database) })
+            val resumed = EnvironmentalCoordinator(control, h, { radios++; error("Crash recovery cannot open radio") })
+            assertEquals(EnvironmentalState.DISABLED_RECOVERY, resumed.view.value.state)
+            assertEquals(0, opens); assertEquals(0, radios)
+            val intent = resumed.gate.incarnation
+            assertNotEquals(original.incarnation, intent)
+            assertEquals(if (phase == "purged") 0L else 1L, h.eventCount())
+            resumed.deleteAll()
+            assertEquals(intent, resumed.gate.incarnation)
+            assertEquals(EnvironmentalState.DISABLED, EnvironmentalGate(control).state)
+            assertEquals(0L, h.eventCount()); assertEquals(0, radios)
+            resumed.close()
+            println("ENV_CRASH_RECOVERY phase=$phase actual_process_halt=17 rollback_and_explicit_resume=PASS")
+        }
     }
     @Test fun retryAndConflictAreDifferent() {
         history().use { h ->

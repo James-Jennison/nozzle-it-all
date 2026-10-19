@@ -10,6 +10,7 @@ dependencies {
  testImplementation("org.xerial:sqlite-jdbc:3.49.1.0")
 }
 tasks.withType<Test>().configureEach {
+ systemProperty("nia.environment.testClasspath", classpath.asPath)
  systemProperty("nia.environment.benchmark", providers.gradleProperty("environmentBenchmark").orElse("false").get())
  if (providers.gradleProperty("environmentProfile").orNull == "true") jvmArgs("-XX:StartFlightRecording=filename=${layout.buildDirectory.get()}/environment.jfr,settings=profile,dumponexit=true")
 }

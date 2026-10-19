@@ -548,3 +548,11 @@ No successful build, install, qualification, or milestone completion claimed yet
   Finalcandidate evidence7a724ac9b90a threePASS/intact. No runtimeclaim.
 - No conflictingdesktopprocess; pkexec dpkg exactfinalpackage session98713 started,
   ownerauthentication requested. Installedpayload/data/live verification pending.
+- Play heartbeat2026-10-19 14:23 PDT: refreshed authenticated Publishing overview,
+  existing closed Alpha782(0.1.17) remains Changes in review. No new submission,
+  phone operation, installer bypass or data mutation. Followup remains active.
+- Owner approved desktop auth. dpkg98713 exit0:0.1.18 installed over0.1.17.
+  Exactc0a artifact all218 installed files match; six adapters and launcher/icons
+  verified. Hash-only baseline all16 entities/144 events intact. No running NIA
+  process. Requested owner Start/switch/minimize/return for actual runtime proof;
+  native desktop UI control unavailable. Live collection not yet verified.

@@ -1,5 +1,20 @@
 # Handover to Codex (written 2026-10-18)
 
+## Desktop0.1.18 installed — live app-switch check pending
+
+Owner approved authentication; dpkg session98713 exited0, upgraded0.1.17→0.1.18.
+Installed exactc0a08d4e artifact verified: all218 payload files match, six adapters,
+launcher/eight icons valid. All16 existing environmental entities and144 events
+unchanged by hash. No running installed NIA process at verification. Asked owner
+to open normal NIA, explicitly Start, switch/minimize about2minutes then return
+and leave collection running. Native desktop UI control unavailable; do not claim
+actual app-switch/minimize acceptance until owner action plus new history proof.
+No further installation needed. Pending Play782 remains separate.
+
+Play heartbeat check2026-10-19 14:23 PDT: refreshed existing Publishing overview;
+Alpha782(0.1.17) still under Changes in review. No Store availability yet confirmed;
+no device/install or release mutation. Recurring followup remains active.
+
 ## Compact desktop install awaiting authentication (supersedes candidate below)
 
 Final application source `c0a08d4efdcafc61906993decd9dcfaccd7ac25d`,0.1.18.

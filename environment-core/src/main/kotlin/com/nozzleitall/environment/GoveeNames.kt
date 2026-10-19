@@ -20,19 +20,24 @@ enum class GoveeNameFailure(val description: String) {
     RATE_LIMIT("Govee rate limit reached. Retry later explicitly."),
     RESPONSE("Govee returned an unsupported or oversized response. No names changed."),
     NETWORK("Govee name import failed. Check the connection and retry explicitly."),
+    STORAGE("Saved-key update or cleanup failed. Use Forget Govee key and retry explicitly."),
     CANCELLED("Name import cancelled; no results applied.")
 }
 class GoveeNameException(val reason: GoveeNameFailure) : Exception(reason.description)
 
 /** One explicit read-only request. No retry, redirect, control endpoint, logging or background work. */
-class GoveeNameApi internal constructor(private val connect: (URL) -> HttpsURLConnection) {
-    constructor() : this({ it.openConnection() as HttpsURLConnection })
+class GoveeNameApi internal constructor(private val budgetMillis: Long = 20_000, private val connect: (URL) -> HttpsURLConnection) {
+    constructor() : this(20_000, { it.openConnection() as HttpsURLConnection })
 
     fun fetch(key: String, current: () -> Boolean = { true }): List<GoveeDeviceName> {
         if (key.length !in 8..256 || key.any { it.code !in 33..126 }) throw GoveeNameException(GoveeNameFailure.KEY)
-        val deadline = System.nanoTime() + 20_000_000_000L
-        fun checkCurrent() { if (!current()) throw GoveeNameException(GoveeNameFailure.CANCELLED) }
+        val deadline = System.nanoTime() + budgetMillis * 1_000_000L
+        fun checkCurrent() {
+            if (!current()) throw GoveeNameException(GoveeNameFailure.CANCELLED)
+            if (System.nanoTime() >= deadline) throw GoveeNameException(GoveeNameFailure.NETWORK)
+        }
         var connection: HttpsURLConnection? = null
+        var timer: java.util.Timer? = null
         try {
             checkCurrent()
             val c = connect(URL(ENDPOINT)); connection = c
@@ -42,6 +47,11 @@ class GoveeNameApi internal constructor(private val connect: (URL) -> HttpsURLCo
             c.setRequestProperty("Accept", "application/json")
             c.setRequestProperty("Govee-API-Key", key)
             checkCurrent()
+            val remaining = ((deadline - System.nanoTime()) / 1_000_000L).coerceAtLeast(1)
+            c.connectTimeout = minOf(remaining, 10_000).toInt(); c.readTimeout = c.connectTimeout
+            timer = java.util.Timer("Govee-name-deadline", true).apply {
+                schedule(object : java.util.TimerTask() { override fun run() { runCatching { c.disconnect() } } }, remaining)
+            }
             when (c.responseCode) {
                 200 -> Unit
                 401, 403 -> throw GoveeNameException(GoveeNameFailure.AUTH)
@@ -69,7 +79,7 @@ class GoveeNameApi internal constructor(private val connect: (URL) -> HttpsURLCo
             return parse(text).also { checkCurrent() }
         } catch (e: GoveeNameException) { throw e }
         catch (_: Exception) { throw GoveeNameException(GoveeNameFailure.NETWORK) }
-        finally { connection?.disconnect() }
+        finally { timer?.cancel(); connection?.disconnect() }
     }
 
     companion object {

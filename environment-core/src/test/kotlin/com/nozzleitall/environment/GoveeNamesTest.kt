@@ -9,7 +9,7 @@ import java.security.cert.Certificate
 
 class GoveeNamesTest {
     private val valid = """{"code":200,"data":[{"sku":"H5100","device":"AA:BB:CC:DD:EE:FF","deviceName":"Office shelf"}]}"""
-    private class Connection(private val status: Int, private val body: ByteArray) : HttpsURLConnection(URL(GoveeNameApi.ENDPOINT)) {
+    private open class Connection(private val status: Int, private val body: ByteArray) : HttpsURLConnection(URL(GoveeNameApi.ENDPOINT)) {
         var closed = false
         var readBody = false
         override fun getResponseCode() = status
@@ -60,5 +60,15 @@ class GoveeNamesTest {
         assertFalse(GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "H5100", "Wrong extended ID").matches(candidate))
         assertFalse(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5110", "Different model").matches(candidate))
         assertFalse(GoveeDeviceName("opaque-cloud-id", "H5100", "Choose explicitly").matches(candidate))
+    }
+    @Test fun deadlineDisconnectsEvenWhileWaitingForResponseHeaders() {
+        val closed = java.util.concurrent.CountDownLatch(1)
+        val connection = object : Connection(200, valid.toByteArray()) {
+            override fun getResponseCode(): Int { assertTrue(closed.await(2, java.util.concurrent.TimeUnit.SECONDS)); return 200 }
+            override fun disconnect() { super.disconnect(); closed.countDown() }
+        }
+        val error = assertThrows(GoveeNameException::class.java) { GoveeNameApi(50) { connection }.fetch("fixture-not-a-real-key") }
+        assertEquals(GoveeNameFailure.NETWORK, error.reason)
+        assertTrue(connection.closed)
     }
 }

@@ -86,7 +86,7 @@ import org.json.JSONObject
             Text(view.status)
             EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
-            Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
+            Text("Active BLE scanning uses battery/radio. Readings stay local; physical measurement age unknown. Optional name import is the only Govee cloud request. No pairing, Govee unbinding or background monitoring. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
             Text("Name each sensor using its received values and signal to help identify it. Physical measurement age is unknown; monitoring does not control equipment.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state != EnvironmentalState.DISABLED && view.state != EnvironmentalState.DISABLED_RECOVERY) GoveeNameImport(goveeNames)
@@ -159,7 +159,7 @@ import org.json.JSONObject
         }
     }
     nameTarget?.let { (address, binding) ->
-        val model = binding?.model ?: view.candidates.firstOrNull { it.address == address }?.model
+        val model = binding?.model ?: view.candidates.firstOrNull { it.address.equals(address, true) }?.model
         if (model != null) GoveeNamePicker(model, importedNames, { nameTarget = null }) { selected ->
             nameTarget = null
             if (binding == null) candidateNames[address] = selected.name

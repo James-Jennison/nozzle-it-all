@@ -337,6 +337,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     @Synchronized fun archive(binding: Binding) { historyAccess(); stop(); history.archive(binding); savedBindings() }
     @Synchronized fun renameSensor(binding: Binding, name: String) {
         historyAccess()
+        require(name.isNotBlank() && name.length <= 120 && name.none { it.isISOControl() })
         require(history.bindings().any { it == binding && !it.archived })
         history.renameSensor(binding.sensorId, name)
         savedBindings()

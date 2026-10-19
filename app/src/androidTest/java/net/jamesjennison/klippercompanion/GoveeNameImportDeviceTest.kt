@@ -51,4 +51,32 @@ class GoveeNameImportDeviceTest {
         assertTrue(outcome.get() is GoveeNameException)
         assertTrue(store.devices.value.isEmpty()); assertFalse(store.hasSavedKey())
     }
+    @Test fun cancellationDuringCredentialCommitRestoresThePreviousCredential() = fixture { _, prefs ->
+        assertTrue(prefs.edit().putString("api-key", "previous-synthetic-fixture").commit())
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val firstCommit = java.util.concurrent.atomic.AtomicBoolean(true)
+        val delayed = object : android.content.SharedPreferences by prefs {
+            override fun edit(): android.content.SharedPreferences.Editor {
+                val editor = prefs.edit()
+                return object : android.content.SharedPreferences.Editor by editor {
+                    override fun commit(): Boolean {
+                        if (firstCommit.compareAndSet(true, false)) {
+                            entered.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS))
+                        }
+                        return editor.commit()
+                    }
+                }
+            }
+        }
+        val store = AndroidGoveeNames({ delayed }) { _, _ -> listOf(GoveeDeviceName("AA:BB:CC:DD:EE:FF", "H5100", "Obsolete")) }
+        val outcome = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val request = store.begin()
+        val worker = Thread { try { store.import("fixture-not-a-real-key", true, request) } catch (e: Throwable) { outcome.set(e) } }
+        worker.start(); assertTrue(entered.await(5, TimeUnit.SECONDS))
+        store.cancel(); release.countDown(); worker.join(5000)
+        assertFalse(worker.isAlive); assertTrue(outcome.get() is GoveeNameException)
+        assertEquals("previous-synthetic-fixture", prefs.getString("api-key", null))
+        assertTrue(store.devices.value.isEmpty())
+        store.forget(); assertFalse(store.hasSavedKey())
+    }
 }

@@ -1,5 +1,27 @@
 # Handover to Codex (written 2026-10-18)
 
+## Compact desktop candidate — 2026-10-19
+
+Current application candidate `5b84dc1ef0a19b1fe3141a56f0ec666e6b771135`,
+desktop0.1.18. Owner saved/closed desktop. Exact clean GTHost checkout
+`/home/jjennison/nia-compact-174ae636` built/tested:573 results,563 pass,
+10 skips,zero failures/errors; Android compile passes. Software-rendered
+1500x1000 fixture inspected: S4 overview, side-by-side group charts, four other
+cards and collapsed individual-chart header fit together. Two-line wide position
+cards; diagram240dp only at width>=600dp/fontScale<=1.2;350dp otherwise, scaled
+by font size. Android monitoring lifecycle remains unchanged.
+
+Synthetic initial cycle886e84a4be38: frontend returned findings, separately
+dispositioned (crowding corrected; absent-window/parity claims contradicted by
+actual source/tests). Systems/adversarial FAILED provider capacity metadata;
+not approval. Revised complete-source cycle2254bc33a238 pending. Packaging,
+installation and actual desktop app-switch/minimize verification still pending.
+Evidence cycled182bf9ba64d accidentally used previous0.1.17 profile: its actual
+PASS results remain historical only and DO NOT validate this candidate. New
+candidate-specific profile registered; collect fresh evidence after packaging.
+Baseline `desktop-environment-before-compact-ca89.json`:16 entities,144 events.
+Play782 followup remains separate and unchanged.
+
 ## Owner followup — desktop app switching and compact layout
 
 Owner explicitly selected desktop-only continued monitoring on app switch.

@@ -520,3 +520,18 @@ No successful build, install, qualification, or milestone completion claimed yet
 - Owner-approved desktop0.1.17 installed: DEB8b6a80885ebdeb992614883ccc525916574566a69c8b9fa0fb7f8a9768cb63d2, all218 payloads/six adapters/icons verified. All16 entities/29 events preserved. Package records known dirty Android test diagnostic only; desktop production source260 verified. Owner live screenshot requested.
 - CI39321423333 SUCCESS; four release artifact hashes verified,782/0.1.17, only faketouch/WiFi required. API attestation payload binds AAB0199fa87 to260/tag/run; local gh lacks cryptographic attestation verifier. GitHub release remains draft. Existing Alpha bundle upload underway; normal phone still275, no uninstall/reset/signer substitution.
 - Delivery followup: Alpha782 replaces752, preview zero supported-device losses, single Alpha change submitted; Console Changes in review/quick checks pending. Screenshot play-782-in-review.png retained. Play-generated universal APK12e1e1ea66471d81e3a1fa3916a920b18faa3a337e3b0f8fa38d2f0f51b6fb9f has matching established certificate and actual only2 requiredfeatures. Normal authorized Razr in-place install-r SUCCESS,782/.17, appId10002/original firstInstallTime unchanged. Guarded postupdate helper refused wrong foreground; owner asked unlock/normalNIA. Desktop runningPID3130954 resolves installed /opt binary,16entities/29events stillpreserved; live screenshot pending. No false normal-app/data/UI completion claim.
+# 2026-10-19 compact desktop final candidate
+
+- Owner confirmed desktop closed. No installation authentication requested yet.
+- Candidate5b84dc1e, clean GTHost owned worktree; explicit0.1.18, six Gradle workers,
+  pinned engine inputs. Core/domain/desktop573 results563PASS10skip0fail/errors;
+  app compileDebugKotlin PASS. Final source build57s. Earlier canceled full native
+  invocation remains canceled, not pass.
+- Inspected final software render compact-5b84-desktop.png; two-line corner panels,
+  responsive larger diagram fallback, side-by-side group plots, individual plots
+  collapsed only with S4 present. This is fixture proof, not installed live proof.
+- Synthetic initial886e84a4be38 had two provider-capacity failures; frontend findings
+  separately dispositioned. Revised2254bc33a238 submitted once, pending.
+- Evidence d182bf9ba64d used stale0.1.17 profile; preserve result but exclude from
+  current candidate acceptance. Correct5b84 profile registered. Package pending.
+

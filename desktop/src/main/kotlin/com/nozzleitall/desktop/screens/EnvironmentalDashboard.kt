@@ -38,7 +38,8 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     val data = if (historyMode) historical
         else if (view.state == EnvironmentalState.DISABLED || view.state == EnvironmentalState.DISABLED_RECOVERY) EnvironmentalDashboardData() else memory
     val samples = data.samples
-    val bindings = view.bindings.filterNot { it.archived }
+    val groups = environmentalSensorGroups(view.bindings, view.sensorLabels)
+    val bindings = groups.flatMap { it.bindings }
     var selected by remember { mutableStateOf<String?>(null) }
     val target = bindings.firstOrNull { it.id == selected } ?: bindings.firstOrNull()
     val temperature = Nz.colors.accent
@@ -52,7 +53,9 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val columns = (maxWidth.value / 270f).toInt().coerceIn(1, 4)
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                bindings.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                groups.forEach { group ->
+                group.title?.let { Txt(it, Nz.type.title, modifier = Modifier.semantics { heading() }) }
+                group.bindings.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     row.forEach { binding -> key(binding.id) {
                         val name = view.sensorLabels[binding.sensorId] ?: binding.model
                         val reading = data.readings[binding.id]
@@ -88,6 +91,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                     } }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 } }
+                }
             }
         }
         target?.let { binding -> Card(Modifier.fillMaxWidth()) {

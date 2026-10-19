@@ -18,6 +18,23 @@ import org.junit.Test
 
 class EnvironmentalDashboardDeviceTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun obviousNamedGroupHasHeadingAndOrderedCards() {
+        val names = listOf("S4 Back Left", "Printing Room", "S4 Front Right", "S4 Back Right", "S4 Front Left")
+        val bindings = names.indices.map { Binding("b$it", "s$it", "address$it", "govee-ble", "H5100") }
+        compose.setContent { MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+            EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = bindings,
+                sensorLabels = bindings.mapIndexed { i, b -> b.sensorId to names[i] }.toMap()), emptyList())
+        } } }
+        compose.onNodeWithText("S4", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Other sensors", useUnmergedTree = true).assertExists()
+        val cards = compose.onAllNodesWithTag("environment-sensor-card").fetchSemanticsNodes()
+        val expected = listOf("S4 Front Left", "S4 Front Right", "S4 Back Left", "S4 Back Right", "Printing Room")
+        org.junit.Assert.assertEquals(expected.size, cards.size)
+        cards.zip(expected).forEach { (node, name) ->
+            org.junit.Assert.assertTrue(node.config[androidx.compose.ui.semantics.SemanticsProperties.Text].any { it.text == name })
+        }
+        compose.onNodeWithText("S4 Front Left · trends").assertExists()
+    }
     @Test fun explicitSavedHistoryCanRenderWhileMonitoringIsOff() {
         val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
         val sample = ChartSample("event", "b", 1000, "run", 0, mapOf(Channel.TEMPERATURE to 23.0), 1)

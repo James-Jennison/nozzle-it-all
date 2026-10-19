@@ -25,11 +25,13 @@ class EnvironmentalDashboardRenderTest {
                     Channel.HUMIDITY to 40.0 + index + kotlin.math.cos(i / 3.0)), i.toLong())
         } }
         val output = File("build/reports/dashboard-eight-sensors.png")
+        val names = listOf("S4 Back Left", "Snapmaker U1", "Printing Room", "S4 Back Right",
+            "S4 Front Right", "Filament Closet", "S4 Front Left", "Sunlu S2")
         SwingUtilities.invokeAndWait {
             val scene = ImageComposeScene(width = 1500, height = 1000) {
                 NozzleTheme("dark") { Column(Modifier.fillMaxSize().background(Color(0xFF101418)).padding(24.dp)) {
                     EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = bindings,
-                        sensorLabels = bindings.mapIndexed { i, b -> b.sensorId to "Sensor ${i + 1}" }.toMap()), samples, historyMode = true)
+                        sensorLabels = bindings.mapIndexed { i, b -> b.sensorId to names[i] }.toMap()), samples, historyMode = true)
                 } }
             }
             try {

@@ -4,10 +4,12 @@ package com.nozzleitall.environment
 object BleDecoders {
     const val VERSION = "nia-ble-1"
     private val models = arrayOf("H5100", "H5110", "H5074", "H5179")
-    /** Normalize the H5179's documented-in-capture GV5179 advertising alias. */
+    private val gv5179Alias = Regex("GV5179_[0-9A-Fa-f]{4}")
+    /** Only the captured bare alias is added; preserve existing canonical framing.
+     * Extend variants with evidence rather than guessing from a partial suffix. */
     fun goveeModel(name: String?): String? = when {
         name == null -> null
-        name.matches(Regex("GV5179_[0-9A-Fa-f]{4}")) -> "H5179"
+        gv5179Alias.matches(name) -> "H5179"
         else -> models.firstOrNull { name.contains(it) }
     }
     fun decode(a: Advertisement): Decoded? {

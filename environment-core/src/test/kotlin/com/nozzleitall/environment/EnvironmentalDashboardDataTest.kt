@@ -6,6 +6,11 @@ import org.junit.Test
 class EnvironmentalDashboardDataTest {
     private val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
     private fun view(state: EnvironmentalState) = EnvironmentalView(state, bindings = listOf(binding))
+    @Test fun stoppedReasonDoesNotDependOnEnglishFailureKeywords() {
+        assertEquals("Radio busy", view(EnvironmentalState.ENABLED_IDLE).copy(status = "Radio busy · internal adapter identifier").dashboardNotice())
+        assertEquals("Permission missing", view(EnvironmentalState.DISABLED_RECOVERY).copy(status = "Permission missing").dashboardNotice())
+        assertNull(view(EnvironmentalState.COLLECTING).dashboardNotice())
+    }
     @Test fun stoppingKeepsTimestampedDiscoveryReadingWithoutInventingRecordedSamples() {
         val discovery = view(EnvironmentalState.DISCOVERING).copy(discovery = mapOf(
             "aa:bb:cc:dd:ee:ff" to DiscoveryReception(listOf(Reading(Channel.TEMPERATURE, 24.5)), 1234, null)))

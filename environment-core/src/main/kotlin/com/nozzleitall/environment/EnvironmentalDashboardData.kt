@@ -38,7 +38,8 @@ fun EnvironmentalState.dashboardStatus(): String = when (this) {
 
 /** Surface actionable failures without exposing adapter paths and diagnostic identifiers. */
 fun EnvironmentalView.dashboardNotice(): String? {
-    val message = status.substringBefore(" · ")
-    return message.takeIf { text -> listOf("unavailable", "failed", "denied", "incomplete", "recovery")
-        .any { text.contains(it, ignoreCase = true) } }
+    return when (state) {
+        EnvironmentalState.ENABLED_IDLE, EnvironmentalState.DISABLED_RECOVERY -> status.substringBefore(" · ")
+        else -> null
+    }
 }

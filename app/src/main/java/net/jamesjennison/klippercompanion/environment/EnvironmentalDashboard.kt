@@ -80,6 +80,9 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                             }
                             val series = EnvironmentalCharts.series(samples, binding.id, Channel.TEMPERATURE)
                             if (series != null) TrendCanvas(series, temperature, Modifier.fillMaxWidth().height(32.dp))
+                            else Box(Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.CenterStart) {
+                                DashboardText("No recorded temperature trend yet", MaterialTheme.typography.bodySmall, MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             DashboardText(reading?.let { "Received ${time(it.time)}" } ?: "Waiting for a reading", MaterialTheme.typography.bodySmall, MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } }
@@ -123,8 +126,9 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
         }
         TrendCanvas(series, color, Modifier.weight(1f).height(140.dp).testTag("environment-trend-" + channel.name).semantics { contentDescription = summary }.focusable(), grid = true)
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        DashboardText(time(series.start), MaterialTheme.typography.bodySmall); DashboardText(time(series.end), MaterialTheme.typography.bodySmall)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (series.start == series.end) Arrangement.Center else Arrangement.SpaceBetween) {
+        DashboardText(time(series.start), MaterialTheme.typography.bodySmall)
+        if (series.end != series.start) DashboardText(time(series.end), MaterialTheme.typography.bodySmall)
     }
 }
 

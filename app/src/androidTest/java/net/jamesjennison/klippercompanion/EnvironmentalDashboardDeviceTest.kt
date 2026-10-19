@@ -74,4 +74,16 @@ class EnvironmentalDashboardDeviceTest {
         compose.onNodeWithText("Your environment, at a glance").assertExists()
         compose.onNodeWithTag("environment-trend-TEMPERATURE").assertDoesNotExist()
     }
+    @Test fun firstHumidityReadingHasOneTimeLabelAndNoInventedTemperature() {
+        val binding = Binding("b", "s", "AA:BB:CC:DD:EE:FF", "govee-ble", "H5100")
+        val sample = ChartSample("event", "b", 1000, "run", 0, mapOf(Channel.HUMIDITY to 42.0), 1)
+        compose.setContent { MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) {
+            EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE, bindings = listOf(binding)), listOf(sample), historyMode = true)
+        } } }
+        compose.onNodeWithText("No recorded temperature trend yet").assertExists()
+        compose.onNodeWithTag("environment-trend-TEMPERATURE").assertDoesNotExist()
+        compose.onNodeWithTag("environment-trend-HUMIDITY").performScrollTo().assertIsDisplayed()
+        val time = java.time.format.DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.ofEpochMilli(1000))
+        compose.onAllNodesWithText(time).assertCountEquals(1)
+    }
 }

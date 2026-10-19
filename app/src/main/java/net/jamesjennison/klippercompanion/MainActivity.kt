@@ -431,7 +431,8 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 // Settings is shown last, but each tab keeps its own index (and nav-N test tag).
                 listOf(Triple(0, "Home", CompanionSymbol.DASHBOARD), Triple(1, "Control", CompanionSymbol.CONTROL), Triple(2, "Files", CompanionSymbol.FILES),
                     Triple(3, "Prepare", CompanionSymbol.SLICE), Triple(5, "Discover", CompanionSymbol.DISCOVER), Triple(4, "Settings", CompanionSymbol.SETTINGS)).forEach { (index, title, symbol) ->
-                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = tab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(tab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = {
+                    val selectedTab = if (tab == 6) environmentOrigin else tab
+                    NavigationBarItem(modifier = Modifier.testTag("nav-$index"), selected = selectedTab == index, onClick = { tab = index; if(index == 0) detailAddress = null }, icon = { CompanionIcon(symbol, color = if(selectedTab == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }, label = {
                         // One line, at most 1.2x text: six tabs in a narrow window at a large text size used to wrap a letter per line and leave the screen no height.
                         val d = androidx.compose.ui.platform.LocalDensity.current
                         CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, minOf(d.fontScale, 1.2f))) {

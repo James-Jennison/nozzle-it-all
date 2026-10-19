@@ -70,6 +70,7 @@ class EnvironmentalDeviceTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-start").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("environment-start").performScrollTo().performClick()
         compose.waitUntil(45000) { compose.onAllNodes(hasText("Reception ", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(compose.onAllNodes(hasText("Android BLE · radio", substring = true)).fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("nav-4").performClick()
         compose.onNodeWithTag("environment-discover").performScrollTo().assertExists()

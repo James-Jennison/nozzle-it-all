@@ -34,7 +34,14 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
     @SuppressLint("MissingPermission")
     override fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
         check(request.isCurrent()) { "Obsolete BLE operation" }
-        require(request.requiredAdapterDescription == null || request.requiredAdapterDescription == "Android BLE") { "Adapter not qualified for this assignment" }
+        // Read only during an explicit scan grant. App/user/device-scoped, no CONNECT or raw adapter address.
+        val scopedId = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+        val fingerprint = scopedId?.takeIf { it.isNotBlank() }?.let { id ->
+            java.security.MessageDigest.getInstance("SHA-256").digest("${android.os.Build.MODEL}|${android.os.Build.FINGERPRINT}|$id".toByteArray()).joinToString("") { "%02x".format(it) }
+        }
+        val description = "Android BLE · radio ${fingerprint ?: "unavailable"}"
+        require(request.requiredAdapterDescription == null || (fingerprint != null && request.requiredAdapterDescription == description)) { "Adapter not qualified for this assignment" }
+        check(request.isCurrent()) { "Obsolete BLE operation" }
         val filters = if (request.discovery) null else request.selectedAddresses.map { ScanFilter.Builder().setDeviceAddress(it).build() }.also { require(it.isNotEmpty()) }
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: error("Bluetooth unavailable")
         check(adapter.isEnabled) { "Bluetooth off" }
@@ -77,7 +84,7 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
             throw e
         }
         return object : RadioSession {
-            override val adapterDescription = "Android BLE"
+            override val adapterDescription = description
             override fun close() {
                 if (!closed.compareAndSet(false, true)) return
                 try { scanner.stopScan(callback) } finally { context.unregisterReceiver(receiver) }

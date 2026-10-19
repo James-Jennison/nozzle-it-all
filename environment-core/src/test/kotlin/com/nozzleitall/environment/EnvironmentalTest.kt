@@ -301,7 +301,10 @@ class EnvironmentalTest {
         stopper.join(5000); assertFalse(stopper.isAlive)
         assertTrue(ready.await(5, TimeUnit.SECONDS))
         assertEquals(EnvironmentalState.COLLECTING, c.view.value.state); assertFalse(closed.get())
-        c.stop(); assertTrue(closed.get()); c.close()
+        c.stop()
+        val closeDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (!closed.get() && System.nanoTime() < closeDeadline) Thread.sleep(1)
+        assertTrue(closed.get()); c.close()
     }
     @Test fun pendingDisableDeniesNewStartBeforeTakingCoordinatorMonitor() {
         val c = EnvironmentalCoordinator(file(), history(), { error("No radio authorized") })

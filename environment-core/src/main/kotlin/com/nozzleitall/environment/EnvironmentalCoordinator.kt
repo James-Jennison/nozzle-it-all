@@ -39,6 +39,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         require(bindings.isNotEmpty()) { "Save a sensor first" }
         // Unknown firmware/envelopes permit unassigned diagnostic reception only, never dryer deployment.
         require(history.entities("placement").none { it.isNull("until") && bindings.any { b -> b.sensorId == it.getString("sensorId") } }) { "Assigned sensors require a qualified thermal/firmware record before collection" }
+        history.retain(System.currentTimeMillis())
         begin(Purpose.COLLECTION, bindings)
     }
     private fun begin(purpose: Purpose, bindings: List<Binding>) {
@@ -48,6 +49,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val scope = CoroutineScope(job + Dispatchers.IO)
         val queue = Queue<Advertisement>(256)
         val runId = newId()
+        val calibration = bindings.associate { it.id to history.calibrated(it, listOf(Reading(Channel.TEMPERATURE, 0.0), Reading(Channel.HUMIDITY, 0.0), Reading(Channel.BATTERY_PERCENT, 0.0), Reading(Channel.BATTERY_VOLTAGE, 0.0))).associateBy { r -> r.channel } }
         mutable.value = mutable.value.copy(state = gate.state, candidates = emptyList(), bindings = bindings,
             status = if (purpose == Purpose.DISCOVERY) "Discovering for 45 seconds — active BLE scan, radio impact; diagnostic only" else "Collecting diagnostic receptions — measurement age unknown; active BLE scan")
         scope.launch {
@@ -74,7 +76,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                             val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: return@synchronized
                             val n = sequence.incrementAndGet()
                             val observation = Observation("$collector/$runId/$n", grant.incarnation, collector, runId, n, binding.id, binding.revision,
-                                report.observedAt, System.currentTimeMillis(), report.monotonicNanos, decoder = BleDecoders.VERSION, sourceCounter = decoded.counter, readings = history.calibrated(binding, decoded.readings))
+                                report.observedAt, System.currentTimeMillis(), report.monotonicNanos, decoder = BleDecoders.VERSION, sourceCounter = decoded.counter, readings = decoded.readings.map { r -> calibration[binding.id]?.get(r.channel)?.let { r.copy(offset = it.offset, calibrationVersion = it.calibrationVersion) } ?: r })
                             gate.commit(grant, binding) { history.append(observation, gate.incarnation) }
                             mutable.value = mutable.value.copy(latest = mutable.value.latest + (binding.id to observation))
                         }

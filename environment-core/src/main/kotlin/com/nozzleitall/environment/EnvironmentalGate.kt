@@ -43,7 +43,8 @@ class EnvironmentalGate(private val file: File, private val now: () -> Long = Sy
     @Synchronized fun enable() { check(state != EnvironmentalState.DISABLED_RECOVERY); persist("enabled"); state = EnvironmentalState.ENABLED_IDLE }
     @Synchronized fun revoke(disable: Boolean = false) {
         epoch++
-        state = if (disable || state == EnvironmentalState.DISABLED_RECOVERY) EnvironmentalState.DISABLED else if (state == EnvironmentalState.DISABLED) state else EnvironmentalState.ENABLED_IDLE
+        check(state != EnvironmentalState.DISABLED_RECOVERY) { "Explicit environmental cleanup/recovery required; control preserved" }
+        state = if (disable) EnvironmentalState.DISABLED else if (state == EnvironmentalState.DISABLED) state else EnvironmentalState.ENABLED_IDLE
         try { persist(if (state == EnvironmentalState.ENABLED_IDLE) "enabled" else "disabled") }
         catch (e: Exception) { persistenceFailure = true; state = EnvironmentalState.DISABLED_RECOVERY; throw e }
     }

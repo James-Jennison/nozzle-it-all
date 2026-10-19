@@ -57,9 +57,10 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable
     @Synchronized fun savePosition(value: Position) {
         require(value.name.isNotBlank() && value.name.length <= 120)
         require(entities("equipment").any { it.getString("id") == value.equipmentId })
-        require(value.minC == null || value.minC.isFinite())
-        require(value.maxC == null || value.maxC.isFinite())
-        require(value.minC == null || value.maxC == null || value.minC <= value.maxC)
+        val min = value.minC; val max = value.maxC
+        require(min == null || min.isFinite())
+        require(max == null || max.isFinite())
+        require(min == null || max == null || min <= max)
         save("position", value.id, JSONObject().put("id", value.id).put("equipmentId", value.equipmentId).put("name", value.name).put("minC", value.minC ?: JSONObject.NULL).put("maxC", value.maxC ?: JSONObject.NULL))
     }
     @Synchronized fun reside(spool: String, position: String, at: Long) {

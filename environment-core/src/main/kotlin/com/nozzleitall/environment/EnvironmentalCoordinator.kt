@@ -15,7 +15,8 @@ import kotlinx.coroutines.flow.update
  * recordedDrops: retained collection-history gaps across runs. Neither implies complete radio coverage. */
 data class EnvironmentalView(val state: EnvironmentalState, val status: String = "Disabled — no collection", val candidates: List<Candidate> = emptyList(),
     val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0, val recordedDrops: Long = 0,
-    val roomLabels: Map<String, Pair<String, String>> = emptyMap())
+    val roomLabels: Map<String, Pair<String, String>> = emptyMap(),
+    val discovery: Map<String, DiscoveryReception> = emptyMap(), val sensorLabels: Map<String, String> = emptyMap())
 
 /** No scope, worker, transport, DB open or permission request is created by construction/enable. */
 class EnvironmentalCoordinator(control: File, private val history: EnvironmentalHistory, private val transport: () -> BleTransport,
@@ -59,12 +60,12 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val current = runControl?.takeIf { it.epoch < epoch }
         if (current != null) {
             current.revoked.set(true)
-            mutable.update { if (runControl === current) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — app not visible; cleanup pending") else it }
+            mutable.update { if (runControl === current) it.copy(latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Stop requested — app not visible; cleanup pending") else it }
             operationScope?.launch { synchronized(this@EnvironmentalCoordinator) {
                 if (runControl === current) stop("Stopped — app not visible; press Start to resume")
             } }
         } else if (preparation != null) mutable.update {
-            if (!foreground.get() && runControl == null) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Collection preparation revoked — no radio; press Start to retry") else it
+            if (!foreground.get() && runControl == null) it.copy(latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Collection preparation revoked — no radio; press Start to retry") else it
         }
         return preparation
     }
@@ -91,7 +92,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         // Main-safe prelude, before dispatcher scheduling or waiting for any persistence lock.
         if (target != null || preparation != null) mutable.update {
             if ((target != null && runControl === target) || (preparation != null && (preparations.get() === preparation || runControl?.revoked === preparation.revoked)))
-                it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") else it
+                it.copy(latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Stop requested — cleanup pending") else it
         }
         preparation?.worker?.cancel()
         if (preparation != null) preparations.compareAndSet(preparation, null)
@@ -112,7 +113,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     val gapId = gapSession; gapSession = null
                     val drops = droppedReports.get() - gapDropBase
                     val gapFailed = gapId != null && drops > 0 && runCatching { history.recordGap(gapId, System.currentTimeMillis(), drops) }.isFailure
-                    mutable.value = mutable.value.copy(state = gate.state, dropped = droppedReports.get(), status = when {
+                    mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), dropped = droppedReports.get(), status = when {
                         gate.persistenceFailure -> "Persistence failed — stopped in memory, recovery required"
                         gapFailed -> "Stopped — final overflow count could not be persisted; history coverage incomplete"
                         else -> reason
@@ -215,7 +216,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         gapSession = if (purpose == Purpose.COLLECTION) runId else null
         gapDropBase = runDroppedStart
         val calibration = bindings.associate { it.id to history.calibrated(it, listOf(Reading(Channel.TEMPERATURE, 0.0), Reading(Channel.HUMIDITY, 0.0), Reading(Channel.BATTERY_PERCENT, 0.0), Reading(Channel.BATTERY_VOLTAGE, 0.0))).associateBy { r -> r.channel } }
-        mutable.value = mutable.value.copy(state = gate.state, candidates = emptyList(), bindings = bindings,
+        mutable.value = mutable.value.copy(state = gate.state, candidates = emptyList(), discovery = emptyMap(), bindings = bindings,
             status = if (purpose == Purpose.DISCOVERY) "Discovering for ${limits.discoverySeconds} seconds — active BLE scan, radio impact; diagnostic only" else "Collecting diagnostic receptions — measurement age unknown; active BLE scan")
         scope.launch {
             try {
@@ -268,9 +269,12 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         if (purpose == Purpose.DISCOVERY) {
                             val candidate = Candidate(report.address, decoded.protocol, decoded.model)
                             mutable.update { current ->
-                                if (request.isCurrent() && gate.valid(grant) &&
-                                    current.candidates.none { it.address == candidate.address } && current.candidates.size < 64)
-                                    current.copy(candidates = current.candidates + candidate) else current
+                                val existing = current.candidates.firstOrNull { it.address.equals(candidate.address, true) }
+                                if (request.isCurrent() && gate.valid(grant) && (existing != null || current.candidates.size < 64)) {
+                                    val admitted = existing ?: candidate
+                                    current.copy(candidates = if (existing == null) current.candidates + candidate else current.candidates,
+                                        discovery = current.discovery + (admitted.address to DiscoveryReception(decoded.readings.toList(), report.observedAt, report.rssiDbm?.takeIf { it in -126..20 })))
+                                } else current
                             }
                         } else {
                             val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: continue
@@ -302,7 +306,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         check(gate.state == EnvironmentalState.DISCOVERING && mutable.value.candidates.contains(candidate))
         stop("Discovery stopped — saving selection")
         history.bind(candidate, name)
-        mutable.value = mutable.value.copy(bindings = history.bindings(), status = "Saved only — no collection")
+        savedBindings()
+        mutable.value = mutable.value.copy(status = "Sensor added — press Start monitoring to collect")
     }
     private fun historyAccess(): String {
         if (deleteInFlight.get() != 0) throw EnvironmentalRecoveryException()
@@ -323,7 +328,8 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             val room = equipment[position.getString("equipmentId")] ?: return@mapNotNull null
             b.id to (room.getString("name") to position.getString("name"))
         }.toMap()
-        mutable.value = mutable.value.copy(bindings = bindings, roomLabels = labels, recordedDrops = history.recordedDrops())
+        val sensorLabels = history.entities("sensor").associate { it.getString("id") to it.getString("name") }
+        mutable.value = mutable.value.copy(bindings = bindings, roomLabels = labels, sensorLabels = sensorLabels, recordedDrops = history.recordedDrops())
         return bindings
     }
     @Synchronized fun archive(binding: Binding) { historyAccess(); stop(); history.archive(binding); savedBindings() }
@@ -391,7 +397,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             droppedReports.set(0); gapDropBase = 0; sequence.set(0)
             mutable.value = EnvironmentalView(gate.state, "Environmental data deleted; external exports are not removed")
         } catch (e: Exception) {
-            mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), candidates = emptyList(), status = "Cleanup incomplete — explicitly resume deletion; no collection")
+            mutable.value = mutable.value.copy(state = gate.state, latest = emptyMap(), candidates = emptyList(), discovery = emptyMap(), status = "Cleanup incomplete — explicitly resume deletion; no collection")
             throw e
         }
     }

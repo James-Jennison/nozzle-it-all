@@ -13,6 +13,50 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun goveeDiscoveryRefreshesBoundedReceptionWithoutChangingCandidateIdentity() {
+        val h = history()
+        val ready = CountDownLatch(1)
+        lateinit var send: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, callback, _ ->
+            send = callback; ready.countDown()
+            object : RadioSession { override fun close() {} }
+        } })
+        fun waitFor(condition: () -> Boolean) {
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (!condition() && System.nanoTime() < end) Thread.sleep(2)
+            assertTrue(condition())
+        }
+        fun report(address: String, time: Long, rssi: Int?) = Advertisement(address, "Govee_H5100",
+            mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), time, System.nanoTime(), rssi)
+        try {
+            c.foreground(true); c.enable(); c.discover()
+            assertTrue(ready.await(5, TimeUnit.SECONDS))
+            send(report("sensor-a", 1000, -55))
+            waitFor { c.view.value.discovery["sensor-a"]?.receivedAt == 1000L }
+            val selected = c.view.value.candidates.single()
+            assertEquals(-55, c.view.value.discovery.getValue("sensor-a").rssiDbm)
+            assertTrue(c.view.value.discovery.getValue("sensor-a").readings.any { it.channel == Channel.TEMPERATURE })
+            send(report("SENSOR-A", 2000, 127))
+            waitFor { c.view.value.discovery["sensor-a"]?.receivedAt == 2000L }
+            assertEquals(listOf(selected), c.view.value.candidates)
+            assertNull(c.view.value.discovery.getValue("sensor-a").rssiDbm)
+            for (i in 1..70) {
+                send(report("sensor-$i", 3000L + i, null))
+                if (i % 8 == 0) Thread.sleep(10)
+            }
+            waitFor { c.view.value.candidates.size == 64 }
+            assertEquals(64, c.view.value.discovery.size)
+            assertEquals(0L, h.eventCount()) // Discovery previews are not persisted observations.
+            c.save(selected, "Office thermometer") // A refreshed preview must not stale the selection.
+            assertEquals("Office thermometer", c.view.value.sensorLabels.values.single())
+            assertTrue(c.view.value.candidates.isEmpty())
+            assertTrue(c.view.value.discovery.isEmpty())
+            send(report("late", 9000, -20)); Thread.sleep(30)
+            assertTrue(c.view.value.discovery.isEmpty())
+            assertEquals(0L, h.eventCount())
+        } finally { c.close() }
+    }
+
     companion object {
         /** Test-only child entry point. Forced process death, never a production helper. */
         @JvmStatic fun main(args: Array<String>) {

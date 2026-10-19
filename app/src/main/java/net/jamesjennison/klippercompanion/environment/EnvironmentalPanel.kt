@@ -31,7 +31,8 @@ import org.json.JSONObject
     var stopping by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<String?>(null) }
-    var name by remember { mutableStateOf("Environmental sensor") }
+    val candidateNames = remember { mutableStateMapOf<String, String>() }
+    LaunchedEffect(view.candidates) { candidateNames.keys.retainAll(view.candidates.map { it.address }.toSet()) }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var deleting by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
@@ -81,7 +82,7 @@ import org.json.JSONObject
             EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
-            Text("Room labels organize observations without certification. Measurement age and operating limits are not certified; monitoring does not control equipment or establish dryer safety.", style = MaterialTheme.typography.bodySmall)
+            Text("Name each sensor using its received values and signal to help identify it. Physical measurement age is unknown; monitoring does not control equipment.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
             if (view.state == EnvironmentalState.ENABLED_IDLE) {
@@ -93,10 +94,20 @@ import org.json.JSONObject
                 OutlinedButton({ stop(disable = true) }, enabled = !stopping) { Text("Disable") }
             }
             if (view.candidates.isNotEmpty()) {
-                OutlinedTextField(name, { name = it.take(120) }, label = { Text("Sensor label") })
-                view.candidates.filter { it.protocol == "govee-ble" }.forEachIndexed { i, candidate ->
-                    Text("${candidate.model} · ${candidate.address} · candidate ${i + 1} · firmware/calibration/thermal limits unqualified")
-                    OutlinedButton({ action { controller.save(candidate, name) } }, enabled = !busy && !stopping && name.isNotBlank()) { Text("Save only") }
+                view.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate ->
+                    key(candidate.address) {
+                        val added = view.bindings.any { !it.archived && it.address.equals(candidate.address, true) }
+                        val name = candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                        val reception = view.discovery[candidate.address]
+                        Text("${candidate.model} · ${candidate.address}")
+                        Text(reception?.readings?.takeIf { it.isNotEmpty() }?.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" } ?: "Readings unavailable")
+                        Text("Signal: ${reception?.rssiDbm?.let { "$it dBm" } ?: "unavailable"} · Last received: ${reception?.receivedAt?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "unavailable"}", style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(name, { candidateNames[candidate.address] = it.take(120) }, label = { Text("Name this sensor") }, enabled = !added)
+                        OutlinedButton({
+                            val selectedName = candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                            action { controller.save(candidate, selectedName) }
+                        }, enabled = !busy && !stopping && !added && name.isNotBlank()) { Text(if (added) "Already added" else "Add sensor") }
+                    }
                 }
             }
             view.latest.values.forEach { o ->
@@ -111,7 +122,7 @@ import org.json.JSONObject
             OutlinedButton({ deleting = true }, enabled = !busy && !stopping) { Text("Delete environmental data…") }
             if (deleting) {
                 Text("Delete only environmental history and settings? External exports remain. Failed cleanup requires explicit resume.")
-                Button({ pending = null; stopping = true; rows = emptyList(); name = "Environmental sensor"; roomDrafts.clear(); offset = "0.0"
+                Button({ pending = null; stopping = true; rows = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
                     val cleanup = controller.requestDeleteAsync()
                     scope.launch { try { cleanup.join(); deleting = controller.view.value.state != EnvironmentalState.DISABLED } finally { stopping = false } }
                 }, enabled = !busy && !stopping) { Text("Confirm delete / resume") }
@@ -119,7 +130,7 @@ import org.json.JSONObject
             }
             view.bindings.filterNot { it.archived }.forEach { b ->
                 val (equipment, position) = roomDrafts[b.id] ?: view.roomLabels[b.id] ?: ("Room" to "Shelf")
-                Text("${b.model} — diagnostic, unqualified")
+                Text("Added: ${view.sensorLabels[b.sensorId] ?: b.model} · ${b.model}")
                 Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(equipment, { roomDrafts[b.id] = it.take(120) to position }, label = { Text("Room label") })
                 OutlinedTextField(position, { roomDrafts[b.id] = equipment to it.take(120) }, label = { Text("Position label") })

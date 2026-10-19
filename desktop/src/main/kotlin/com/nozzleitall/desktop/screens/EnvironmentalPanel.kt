@@ -17,7 +17,8 @@ import org.json.JSONObject
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var stopping by remember { mutableStateOf(false) }
-    var name by remember { mutableStateOf("Environmental sensor") }
+    val candidateNames = remember { mutableStateMapOf<String, String>() }
+    LaunchedEffect(v.candidates) { candidateNames.keys.retainAll(v.candidates.map { it.address }.toSet()) }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
@@ -40,7 +41,7 @@ import org.json.JSONObject
         Txt(v.status, Nz.type.body)
         EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Active BLE scanning uses radio/battery. No pairing, Govee unbinding, cloud, background service or equipment control.", Nz.type.bodySmall)
-        Txt("Room labels organize observations without certification. Measurement age and operating limits are not certified; monitoring does not control equipment or establish dryer safety.", Nz.type.bodySmall)
+        Txt("Name each sensor using its received values and signal to help identify it. Physical measurement age is unknown; monitoring does not control equipment.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")
@@ -54,11 +55,19 @@ import org.json.JSONObject
             }
         }
         if (v.candidates.isNotEmpty()) {
-            Field("Sensor label", name, { name = it.take(120) })
-            v.candidates.filter { it.protocol == "govee-ble" }.forEachIndexed { i, candidate -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Txt("${candidate.model} · ${candidate.address} · candidate ${i + 1} · unqualified", Nz.type.body)
-                NzButton("Save only", { action { controller.save(candidate, name) } }, enabled = !busy && !stopping && name.isNotBlank())
-            } }
+            v.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate -> key(candidate.address) { Column {
+                val added = v.bindings.any { !it.archived && it.address.equals(candidate.address, true) }
+                val name = candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                val reception = v.discovery[candidate.address]
+                Txt("${candidate.model} · ${candidate.address}", Nz.type.body)
+                Txt(reception?.readings?.takeIf { it.isNotEmpty() }?.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" } ?: "Readings unavailable", Nz.type.bodySmall)
+                Txt("Signal: ${reception?.rssiDbm?.let { "$it dBm" } ?: "unavailable"} · Last received: ${reception?.receivedAt?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "unavailable"}", Nz.type.bodySmall)
+                if (!added) Field("Name this sensor", name, { candidateNames[candidate.address] = it.take(120) })
+                NzButton(if (added) "Already added" else "Add sensor", {
+                    val selectedName = candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                    action { controller.save(candidate, selectedName) }
+                }, enabled = !busy && !stopping && !added && name.isNotBlank())
+            } } }
         }
         v.latest.values.forEach { observation ->
             Txt(observation.readings.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" }, Nz.type.metricSmall)
@@ -81,7 +90,7 @@ import org.json.JSONObject
         }
         if (confirmDelete) {
             Txt("Delete only environmental configuration/history? External exports remain. Cleanup failures require explicit retry.", Nz.type.body)
-            Row { NzButton("Confirm delete / resume", { stopping = true; rows = emptyList(); name = "Environmental sensor"; roomDrafts.clear(); offset = "0.0"
+            Row { NzButton("Confirm delete / resume", { stopping = true; rows = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
                 val cleanup = controller.requestDeleteAsync()
                 scope.launch { try { cleanup.join(); confirmDelete = controller.view.value.state != EnvironmentalState.DISABLED } finally { stopping = false } }
             }, enabled = !busy && !stopping); NzButton("Keep data", { confirmDelete = false }) }
@@ -91,7 +100,7 @@ import org.json.JSONObject
         }
         v.bindings.filterNot { it.archived }.forEach { binding -> Column {
             val (equipmentName, positionName) = roomDrafts[binding.id] ?: v.roomLabels[binding.id] ?: ("Room" to "Shelf")
-            Txt("${binding.model} — firmware/calibration/operating envelope unqualified", Nz.type.bodySmall)
+            Txt("Added: ${v.sensorLabels[binding.sensorId] ?: binding.model} · ${binding.model}", Nz.type.bodySmall)
             Txt("${binding.address} · ${binding.protocol} — verify the physical identity before saving assignments", Nz.type.bodySmall)
             Field("Room label", equipmentName, { roomDrafts[binding.id] = it.take(120) to positionName })
             Field("Position label", positionName, { roomDrafts[binding.id] = equipmentName to it.take(120) })

@@ -61,7 +61,7 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
                     report(Advertisement(result.device.address, record.deviceName,
                         (0 until manufacturer.size()).associate { manufacturer.keyAt(it) to manufacturer.valueAt(it).copyOf() },
                         record.serviceData.orEmpty().mapKeys { it.key.uuid.toString() }.mapValues { it.value.copyOf() },
-                        System.currentTimeMillis(), System.nanoTime()))
+                        System.currentTimeMillis(), System.nanoTime(), result.rssi))
                 } catch (_: SecurityException) { fail("BLE permission revoked — stopped") }
             }
         }

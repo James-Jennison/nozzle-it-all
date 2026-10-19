@@ -70,8 +70,8 @@ class EnvironmentalDeviceTest {
             compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-discover").fetchSemanticsNodes().isNotEmpty() }
         }
         compose.onNodeWithTag("environment-discover").performScrollTo().performClick()
-        compose.waitUntil(44000) { compose.onAllNodesWithText("Save only").fetchSemanticsNodes().isNotEmpty() }
-        compose.onAllNodesWithText("Save only")[0].performScrollTo().performClick()
+        compose.waitUntil(44000) { compose.onAllNodesWithText("Add sensor").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("Add sensor")[0].performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-start").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("Save room assignment")[0].performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodes(hasText("Room assignment saved", substring = true)).fetchSemanticsNodes().isNotEmpty() }

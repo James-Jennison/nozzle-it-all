@@ -44,13 +44,16 @@ data class Observation(val eventId: String, val incarnation: String, val collect
     val decoder: String, val readings: List<Reading>, val droppedBefore: Long = 0,
     val clockId: String = "System.nanoTime", val bootId: String = sessionId)
 data class Advertisement(val address: String, val name: String?, val manufacturer: Map<Int, ByteArray>,
-                         val services: Map<String, ByteArray>, val observedAt: Long, val monotonicNanos: Long)
+                         val services: Map<String, ByteArray>, val observedAt: Long, val monotonicNanos: Long,
+                         val rssiDbm: Int? = null)
 data class Decoded(val protocol: String, val model: String, val readings: List<Reading>, val counter: Int? = null)
 data class Candidate(val address: String, val protocol: String, val model: String)
+/** Transient discovery reception, not a measurement timestamp or persisted observation. */
+data class DiscoveryReception(val readings: List<Reading>, val receivedAt: Long, val rssiDbm: Int?)
 data class ProviderDescriptor(val id: String, val name: String, val activeScan: Boolean, val available: Boolean)
 object EnvironmentalProviders {
     // Inert descriptors only. Never constructs transports, opens storage, or probes a radio.
-    val ble = listOf(ProviderDescriptor("govee-ble", "Govee BLE (diagnostic, firmware unqualified)", true, true),
+    val ble = listOf(ProviderDescriptor("govee-ble", "Govee BLE", true, true),
         ProviderDescriptor("bthome-v2", "BTHome v2 unencrypted (diagnostic)", true, true))
 }
 interface RadioSession : AutoCloseable { val adapterDescription: String get() = "BLE" }

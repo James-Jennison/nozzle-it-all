@@ -329,10 +329,17 @@ class EnvironmentalTest {
         c.foreground(true); c.enable(); c.start(); assertTrue(ready.await(5, TimeUnit.SECONDS))
         synchronized(c) {
             repeat(1000) { send(Advertisement("test", null, emptyMap(), emptyMap(), 1000, 1)) }
-            c.stop()
         }
+        val startStops = CountDownLatch(1)
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+        val stoppers = List(2) { Thread { startStops.await(); try { c.stop() } catch (t: Throwable) { failure.set(t) } } }
+        stoppers.forEach { it.start() }; startStops.countDown()
+        stoppers.forEach { it.join(5000); assertFalse(it.isAlive) }
+        assertNull(failure.get())
         assertEquals(0L, h.eventCount())
         val dropped = h.recordedDrops(); assertTrue(dropped > 0)
+        assertEquals(c.view.value.dropped, dropped)
+        Sql(path).use { assertEquals("1", it.query("SELECT COUNT(*) FROM gaps").single().single()) }
         c.close()
         EnvironmentalHistory(SqlStoreFactory { Sql(path) }).use { assertEquals(dropped, it.recordedDrops()) }
     }

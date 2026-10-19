@@ -134,14 +134,19 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     val decodedReports = reports.mapNotNull { report -> BleDecoders.decode(report)?.let { report to it } }
                     synchronized(this@EnvironmentalCoordinator) {
                         if (revocationRequested.get() || !gate.valid(grant)) return@synchronized
-                        if (droppedReports.get() != mutable.value.dropped) mutable.value = mutable.value.copy(dropped = droppedReports.get(), status = "Queue overflow — reception gap, diagnostic history incomplete")
+                        if (droppedReports.get() != mutable.value.dropped) mutable.update { current ->
+                            if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch) current.copy(dropped = droppedReports.get(), status = "Queue overflow — reception gap, diagnostic history incomplete") else current
+                        }
                         val observations = mutableListOf<Observation>()
                         val admittedBindings = mutableListOf<Binding>()
                         for ((report, decoded) in decodedReports) {
                         if (purpose == Purpose.DISCOVERY) {
                             val candidate = Candidate(report.address, decoded.protocol, decoded.model)
-                            val current = mutable.value.candidates
-                            if (current.none { it.address == candidate.address } && current.size < 64) mutable.value = mutable.value.copy(candidates = current + candidate)
+                            mutable.update { current ->
+                                if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch && gate.valid(grant) &&
+                                    current.candidates.none { it.address == candidate.address } && current.candidates.size < 64)
+                                    current.copy(candidates = current.candidates + candidate) else current
+                            }
                         } else {
                             val binding = bindings.firstOrNull { it.address.equals(report.address, true) && it.protocol == decoded.protocol && it.model == decoded.model } ?: continue
                             val n = sequence.incrementAndGet()
@@ -153,8 +158,9 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                         }
                         if (observations.isNotEmpty()) {
                             gate.commitBatch(grant, admittedBindings) { history.appendBatch(observations, gate.incarnation) }
-                            if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch && gate.valid(grant)) {
-                                mutable.value = mutable.value.copy(latest = mutable.value.latest + observations.associateBy { it.bindingId })
+                            mutable.update { current ->
+                                if (!revocationRequested.get() && visibilityEpoch.get() == visibleEpoch && gate.valid(grant))
+                                    current.copy(latest = current.latest + observations.associateBy { it.bindingId }) else current
                             }
                         }
                     }

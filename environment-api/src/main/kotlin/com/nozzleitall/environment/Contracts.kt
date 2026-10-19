@@ -15,7 +15,10 @@ data class Sensor(val id: String = newId(), val name: String)
 data class Binding(val id: String = newId(), val sensorId: String, val address: String, val protocol: String,
                    val model: String, val firmware: String? = null, val revision: Long = 1, val archived: Boolean = false)
 data class Equipment(val id: String = newId(), val name: String, val type: String = "room")
-/** Evidence-backed, per-channel declaration. Storing this never certifies a whole device. */
+/** Owner-reviewed per-channel declaration, not an untrusted self-certification endpoint or whole-device badge.
+ * radio is the exact RadioSession.adapterDescription observed in the physical diagnostic run, never a friendly name.
+ * Evidence references are owner-approved physical artifacts; production has no UI/import path to create these records.
+ */
 data class CapabilityQualification(val id: String = newId(), val bindingId: String, val bindingRevision: Long,
     val model: String, val firmware: String, val platform: String, val radio: String,
     val decoder: String, val scanMode: String, val channel: Channel, val calibrationVersion: Int,

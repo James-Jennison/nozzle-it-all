@@ -33,4 +33,14 @@ class GoveeH5179Test {
         assertNull(BleDecoders.decode(advertisement("GV5179_7041", byteArrayOf(1, 1, 4, 59, 200.toByte(), 101))))
         assertNull(BleDecoders.decode(advertisement("GV5179_7041", byteArrayOf(1, 1, 4, 59, 200.toByte(), 128.toByte()))))
     }
+
+    @Test fun canonicalH5179RetainsNineByteFramingNotUnverifiedSixByteFraming() {
+        assertNull(BleDecoders.decode(advertisement("Govee_H5179")))
+        val decoded = requireNotNull(BleDecoders.decode(advertisement("Govee_H5179",
+            byteArrayOf(0, 0, 0, 0, 0xc4.toByte(), 9, 0x94.toByte(), 0x11, 90))))
+        val values = decoded.readings.associate { it.channel to it.raw }
+        assertEquals(25.0, values[Channel.TEMPERATURE]!!, 0.001)
+        assertEquals(45.0, values[Channel.HUMIDITY]!!, 0.001)
+        assertEquals(90.0, values[Channel.BATTERY_PERCENT]!!, 0.001)
+    }
 }

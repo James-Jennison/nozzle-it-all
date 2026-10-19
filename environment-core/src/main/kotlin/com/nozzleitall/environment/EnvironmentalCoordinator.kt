@@ -335,6 +335,12 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         return bindings
     }
     @Synchronized fun archive(binding: Binding) { historyAccess(); stop(); history.archive(binding); savedBindings() }
+    @Synchronized fun renameSensor(binding: Binding, name: String) {
+        historyAccess()
+        require(history.bindings().any { it == binding && !it.archived })
+        history.renameSensor(binding.sensorId, name)
+        savedBindings()
+    }
     fun export(write: (String) -> Unit) {
         val identity = historyAccess()
         fun authorize() { if (deleteInFlight.get() != 0 || !gate.historyIdentityValid(identity)) throw EnvironmentalRecoveryException() }

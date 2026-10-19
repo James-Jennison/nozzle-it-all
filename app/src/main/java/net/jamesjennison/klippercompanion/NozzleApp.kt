@@ -5,6 +5,7 @@ import android.content.Context
 
 /** Installs the persistent Bambu certificate pin store for every entry point (activity, monitor service, widget). */
 class NozzleApp : Application() {
+    val goveeNames by lazy { net.jamesjennison.klippercompanion.environment.AndroidGoveeNames(applicationContext) }
     // One authority per app process. Lazy: no environmental startup, provider, history or permission side effects.
     val environment by lazy {
         com.nozzleitall.environment.EnvironmentalCoordinator(java.io.File(filesDir, "environment/control.json"),

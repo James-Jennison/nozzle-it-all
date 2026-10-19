@@ -25,6 +25,9 @@ import org.json.JSONObject
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val controller = remember { (context.applicationContext as net.jamesjennison.klippercompanion.NozzleApp).environment }
+    val goveeNames = remember { (context.applicationContext as net.jamesjennison.klippercompanion.NozzleApp).goveeNames }
+    val importedNames by goveeNames.devices.collectAsState()
+    var nameTarget by remember { mutableStateOf<Pair<String, Binding?>?>(null) }
     val view by controller.view.collectAsState()
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
@@ -84,6 +87,7 @@ import org.json.JSONObject
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
             Text("Name each sensor using its received values and signal to help identify it. Physical measurement age is unknown; monitoring does not control equipment.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (view.state != EnvironmentalState.DISABLED && view.state != EnvironmentalState.DISABLED_RECOVERY) GoveeNameImport(goveeNames)
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
             if (view.state == EnvironmentalState.ENABLED_IDLE) {
                 OutlinedButton({ authorize("discover") }, enabled = !busy && !stopping && pending == null, modifier = Modifier.testTag("environment-discover")) { Text("Discover sensors (45 seconds)") }
@@ -97,12 +101,13 @@ import org.json.JSONObject
                 view.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate ->
                     key(candidate.address) {
                         val saved = view.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
-                        val name = if (saved != null) view.sensorLabels[saved.sensorId] ?: candidate.defaultName else candidateNames[candidate.address] ?: candidate.defaultName
+                        val imported = importedNames.singleOrNull { it.matches(candidate) }?.name
+                        val name = if (saved != null) view.sensorLabels[saved.sensorId] ?: candidate.defaultName else candidateNames[candidate.address] ?: imported ?: candidate.defaultName
                         GoveeDiscoveryCard(candidate, view.discovery[candidate.address], name, saved != null, busy || stopping,
                             onNameChange = { candidateNames[candidate.address] = it.take(120) }, onAdd = {
-                            val selectedName = candidateNames[candidate.address] ?: candidate.defaultName
+                            val selectedName = candidateNames[candidate.address] ?: importedNames.singleOrNull { it.matches(candidate) }?.name ?: candidate.defaultName
                             action { controller.save(candidate, selectedName) }
-                        })
+                        }, onChooseGoveeName = if (importedNames.any { it.model == candidate.model }) ({ nameTarget = candidate.address to null }) else null)
                     }
                 }
             }
@@ -119,14 +124,19 @@ import org.json.JSONObject
             if (deleting) {
                 Text("Delete only environmental history and settings? External exports remain. Failed cleanup requires explicit resume.")
                 Button({ pending = null; stopping = true; rows = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
+                    goveeNames.cancel()
                     val cleanup = controller.requestDeleteAsync()
-                    scope.launch { try { cleanup.join(); deleting = controller.view.value.state != EnvironmentalState.DISABLED } finally { stopping = false } }
+                    scope.launch { try { cleanup.join(); deleting = controller.view.value.state != EnvironmentalState.DISABLED
+                        if (!deleting) withContext(Dispatchers.IO) { goveeNames.forget() }
+                    } catch (_: Exception) { problem = "Govee key cleanup unavailable. Enable the panel and use Forget Govee key to retry; no automatic retry." }
+                    finally { stopping = false } }
                 }, enabled = !busy && !stopping) { Text("Confirm delete / resume") }
                 TextButton({ deleting = false }) { Text("Keep data") }
             }
             view.bindings.filterNot { it.archived }.forEach { b ->
                 val (equipment, position) = roomDrafts[b.id] ?: view.roomLabels[b.id] ?: ("Room" to "Shelf")
                 Text("Added: ${view.sensorLabels[b.sensorId] ?: b.model} · ${b.model}")
+                if (importedNames.any { it.model == b.model }) TextButton({ nameTarget = b.address to b }, enabled = !busy && !stopping) { Text("Use Govee name…") }
                 Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(equipment, { roomDrafts[b.id] = it.take(120) to position }, label = { Text("Room label") })
                 OutlinedTextField(position, { roomDrafts[b.id] = equipment to it.take(120) }, label = { Text("Position label") })
@@ -141,6 +151,14 @@ import org.json.JSONObject
             }
             rows.forEach { raw -> val j = JSONObject(raw); Text("${java.time.Instant.ofEpochMilli(j.getLong("observedAt"))} · ${j.getJSONArray("readings")} · age unknown", style = MaterialTheme.typography.bodySmall) }
             if (rows.size == 500) OutlinedButton({ val last = JSONObject(rows.last()); action { rows = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")) } }, enabled = !busy && !stopping) { Text("Older 500") }
+        }
+    }
+    nameTarget?.let { (address, binding) ->
+        val model = binding?.model ?: view.candidates.firstOrNull { it.address == address }?.model
+        if (model != null) GoveeNamePicker(model, importedNames, { nameTarget = null }) { selected ->
+            nameTarget = null
+            if (binding == null) candidateNames[address] = selected.name
+            else action { controller.renameSensor(binding, selected.name) }
         }
     }
 }

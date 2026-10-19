@@ -52,10 +52,16 @@ interface BluezEnvironmentalAdapter : DBusInterface {
 /** One private D-Bus connection, one owned discovery reference. Never powers, pairs, removes or unbinds. */
 class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTransport {
     override fun start(request: BleScanRequest, report: (Advertisement) -> Unit, failure: (String) -> Unit): RadioSession {
-        val bus = DBusConnectionBuilder.forSystemBus().build()
+        val closed = AtomicBoolean(false)
+        val bus = DBusConnectionBuilder.forSystemBus().withShared(false)
+            .withDisconnectCallback(object : org.freedesktop.dbus.connections.IDisconnectCallback {
+                override fun disconnectOnError(error: java.io.IOException) { if (!closed.get()) failure("BlueZ connection lost — stopped; no automatic restart") }
+            }).build()
         val acquired = AtomicBoolean(false)
         var adapter: BluezEnvironmentalAdapter? = null
-        val closed = AtomicBoolean(false)
+        val metadata = object : LinkedHashMap<String, Pair<String, String?>>(64, .75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<String, String?>>) = size > 64
+        }
         try {
             val manager = bus.getRemoteObject("org.bluez", "/", ObjectManager::class.java)
             val adapters = manager.GetManagedObjects().entries.filter { it.value.containsKey("org.bluez.Adapter1") }.sortedBy { it.key.path }
@@ -69,10 +75,20 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
                 if (closed.get() || !acquired.get()) return
                 if (!devicePath.startsWith("$path/dev_") || ("ManufacturerData" !in changed && "ServiceData" !in changed)) return
                 try {
-                    val props = bus.getRemoteObject("org.bluez", devicePath, Properties::class.java).GetAll("org.bluez.Device1")
-                    val address = props["Address"]?.value as? String ?: return
+                    val pathAddress = devicePath.substringAfterLast("/dev_").replace('_', ':')
+                    if (!request.discovery && request.selectedAddresses.none { it.equals(pathAddress, true) }) return
+                    val info = synchronized(metadata) { metadata[devicePath] } ?: run {
+                        val props = bus.getRemoteObject("org.bluez", devicePath, Properties::class.java).GetAll("org.bluez.Device1")
+                        val address = props["Address"]?.value as? String ?: return
+                        val name = props["Name"]?.value as? String
+                        if (address.length > 64 || (name?.length ?: 0) > 256) return
+                        (address to name).also {
+                            if (!request.discovery || name?.let { n -> listOf("H5100", "H5110", "H5074", "H5179").any(n::contains) } == true || (changed["ServiceData"]?.value as? Map<*, *>)?.containsKey("0000fcd2-0000-1000-8000-00805f9b34fb") == true) synchronized(metadata) { metadata[devicePath] = it }
+                        }
+                    }
+                    val address = info.first
                     if (!request.discovery && request.selectedAddresses.none { it.equals(address, true) }) return
-                    val name = props["Name"]?.value as? String
+                    val name = info.second
                     fun bytes(value: Any?): ByteArray? = when (value) {
                         is ByteArray -> value.takeIf { it.size <= 512 }?.copyOf()
                         is List<*> -> value.takeIf { it.size <= 512 }?.map { (it as Number).toByte() }?.toByteArray()
@@ -91,10 +107,15 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
                 } catch (_: Exception) { /* Removed transient device or malformed property: no nearby-device logging. */ }
             }
             bus.addSigHandler(Properties.PropertiesChanged::class.java) { s ->
+                if ("Name" in s.propertiesChanged || "Name" in s.propertiesRemoved || "Address" in s.propertiesChanged) synchronized(metadata) { metadata.remove(s.path) }
                 if (s.interfaceName == "org.bluez.Adapter1" && s.path == path && s.propertiesChanged["Powered"]?.value == false) failure("Bluetooth off — stopped; no automatic restart")
                 if (s.interfaceName == "org.bluez.Device1") process(s.path, s.propertiesChanged)
             }
             bus.addSigHandler(ObjectManager.InterfacesAdded::class.java) { s -> s.interfaces["org.bluez.Device1"]?.let { process(s.signalSource.path, it) } }
+            bus.addSigHandler(ObjectManager.InterfacesRemoved::class.java) { s -> synchronized(metadata) { metadata.remove(s.signalSource.path) } }
+            bus.addSigHandler(org.freedesktop.dbus.interfaces.DBus.NameOwnerChanged::class.java) { s ->
+                if (s.name == "org.bluez" && s.oldOwner.isNotEmpty() && s.oldOwner != s.newOwner && !closed.get()) failure("BlueZ service changed — stopped; no automatic restart")
+            }
             adapter.StartDiscovery(); acquired.set(true)
             val ownedAdapter = adapter
             return object : RadioSession {

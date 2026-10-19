@@ -54,6 +54,24 @@ for script in postinst postrm; do
   sed -i '/^exit 0$/d' "$PKG/DEBIAN/$script"; cat "$STAGE/refresh" >> "$PKG/DEBIAN/$script"; echo "exit 0" >> "$PKG/DEBIAN/$script"
   chmod 755 "$PKG/DEBIAN/$script"
 done
+# Fail before producing an installable artifact if upstream maintainer templates
+# no longer support this integration. Never install the unprocessed jpackage Deb.
+for script in postinst prerm postrm; do
+  if [ -f "$PKG/DEBIAN/$script" ]; then
+    /bin/sh -n "$PKG/DEBIAN/$script"
+    if grep -q 'xdg-desktop-menu' "$PKG/DEBIAN/$script"; then
+      echo "unexpected launcher registration remains in $script" >&2; exit 1
+    fi
+  fi
+done
+for script in postinst postrm; do
+  grep -q 'gtk-update-icon-cache' "$PKG/DEBIAN/$script"
+  grep -q 'update-desktop-database' "$PKG/DEBIAN/$script"
+done
+grep -qx 'StartupWMClass=nozzle-it-all' "$PKG/usr/share/applications/nozzle-it-all.desktop"
+for size in 16 32 48 64 128 256 512; do
+  test -s "$PKG/usr/share/icons/hicolor/${size}x${size}/apps/nozzle-it-all.png"
+done
 fakeroot dpkg-deb --build "$PKG" "$OUT/$(basename "$ROOT"/desktop/build/compose/binaries/main/deb/nozzle-it-all_*_amd64.deb)" >/dev/null
 
 echo "== Stock U1 adapter"

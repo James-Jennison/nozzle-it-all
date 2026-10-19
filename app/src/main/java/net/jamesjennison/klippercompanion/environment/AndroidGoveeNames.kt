@@ -52,7 +52,13 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
                 if (persist) {
                     val restore = credentialStore.edit()
                     if (previous == null) restore.remove("api-key") else restore.putString("api-key", previous)
-                    if (!restore.commit()) throw GoveeNameException(GoveeNameFailure.STORAGE)
+                    val restored = try { restore.commit() } catch (_: Exception) { false }
+                    if (!restored) {
+                        savedKeyRevoked.set(true)
+                        throw GoveeNameException(GoveeNameFailure.STORAGE).apply {
+                            if (e is GoveeNameException) addSuppressed(GoveeNameException(e.reason))
+                        }
+                    }
                 }
                 throw e
             }

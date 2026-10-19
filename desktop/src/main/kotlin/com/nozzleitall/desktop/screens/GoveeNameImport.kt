@@ -1,6 +1,7 @@
 package com.nozzleitall.desktop.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
@@ -39,14 +40,18 @@ import kotlinx.coroutines.*
         DisposableEffect(window) {
             val listener = object : java.awt.event.WindowAdapter() {
                 override fun windowLostFocus(e: java.awt.event.WindowEvent) { cancel() }
+                override fun windowClosing(e: java.awt.event.WindowEvent) { cancel() }
+                override fun windowClosed(e: java.awt.event.WindowEvent) { cancel() }
             }
             window.addWindowFocusListener(listener)
-            onDispose { window.removeWindowFocusListener(listener) }
+            window.addWindowListener(listener)
+            onDispose { window.removeWindowFocusListener(listener); window.removeWindowListener(listener); entryText = "" }
         }
         NozzleTheme {
-            Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxSize().background(Nz.colors.surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Names only; readings stay on local Bluetooth. No equipment-control requests.", Nz.type.body)
                 Txt("Enter your key privately here, never in chat. It is used once, not saved on desktop. Some sensors may not appear in the API.", Nz.type.bodySmall)
+                Txt("Desktop does not prevent operating-system screenshots. Closing or leaving this dialog clears the entry.", Nz.type.bodySmall)
                 Field("Govee API key", entryText, { entryText = it.take(256) }, Modifier, "", true)
                 NzButton("Import names", {
                     val entered = entryText.trim(); entryText = ""; busy = true

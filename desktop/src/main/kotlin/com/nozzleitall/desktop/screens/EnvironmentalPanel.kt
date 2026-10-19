@@ -37,7 +37,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
     fun start(purpose: Purpose) {
         if (!busy && !stopping) { busy = true; error = null
             try { val work = controller.requestOperationAsync(purpose); scope.launch { try { work.join() } finally { busy = false } } }
-            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: kotlinx.coroutines.CancellationException) { busy = false }
             catch (_: Exception) { busy = false; error = "Preparation unavailable or cancelled — retry explicitly" }
         }
     }

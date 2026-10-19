@@ -16,6 +16,33 @@ import javax.swing.SwingUtilities
 
 /** Offscreen software-rendered fixture, not installed-app/GPU/physical-radio proof. */
 class EnvironmentalDashboardRenderTest {
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    @Test fun expandedPlacementStillRendersTheDryer() {
+        val bindings = EnvironmentalGroupOverview.corners.mapIndexed { i, _ -> Binding("b$i", "s$i", "fixture-$i", "govee-ble", "H5100") }
+        val group = EnvironmentalSensorGroup("S4", bindings)
+        val positions = EnvironmentalGroupOverview.corners.zip(bindings).toMap()
+        val output = File("build/reports/dashboard-expanded-placement.png")
+        SwingUtilities.invokeAndWait {
+            val scene = ImageComposeScene(width = 1000, height = 700) {
+                NozzleTheme("dark") {
+                    com.nozzleitall.desktop.screens.S4EnvironmentOverview(group, positions,
+                        EnvironmentalDashboardData(), false, false, null, showDiagram = true) {}
+                }
+            }
+            try {
+                scene.render().close()
+                scene.render(1_000_000_000L).use { image ->
+                    image.encodeToData()!!.use { output.parentFile.mkdirs(); output.writeBytes(it.bytes) }
+                }
+            } finally { scene.close() }
+        }
+        val image = javax.imageio.ImageIO.read(output)
+        var shellPixels = 0
+        for (y in 0 until image.height) for (x in 0 until image.width) {
+            if (image.getRGB(x, y) and 0xFFFFFF == 0x24343B) shellPixels++
+        }
+        assertTrue("Expanded placement retains the original dryer illustration", shellPixels > 10000)
+    }
     @Test fun s4PresentationLogicAndGeometryStayIdenticalAcrossPlatforms() {
         fun body(file: File) = file.readText().substringAfter("private val positionColors").substringBefore("@Composable private fun Label")
         assertEquals(body(File("src/main/kotlin/com/nozzleitall/desktop/screens/S4EnvironmentOverview.kt")),

@@ -125,7 +125,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             bindings.forEach { binding -> key(binding.id) {
                 val reading = data.readings[binding.id]
                 val corner = positions?.entries?.firstOrNull { it.value.id == binding.id }?.key
-                val color = corner?.let { colors[EnvironmentalGroupOverview.corners.indexOf(it)] } ?: Nz.colors.text
+                val color = corner?.let { colors.getOrNull(EnvironmentalGroupOverview.corners.indexOf(it)) } ?: Nz.colors.text
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     .background(if (selected == binding.id) Nz.colors.accent.copy(alpha = .12f) else Color.Transparent)
                     .selectable(selected == binding.id, role = Role.Tab) { onSelect(binding) }

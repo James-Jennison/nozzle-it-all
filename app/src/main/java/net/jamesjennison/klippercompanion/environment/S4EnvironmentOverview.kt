@@ -56,11 +56,12 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Label(if (channel == Channel.TEMPERATURE) "AVERAGE TEMPERATURE" else "AVERAGE HUMIDITY")
                             Metric("${fmt(stats?.average)} ${channel.unit}", if (channel == Channel.TEMPERATURE) positionColors[0] else positionColors[1])
-                            Label("${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}  ·  Δ ${fmt(stats?.let { it.maximum - it.minimum })}  ·  ${stats?.count ?: 0}/4 sensors")
+                            Label("${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}  ·  Δ ${fmt(stats?.let { it.maximum - it.minimum })}  ·  ${stats?.count ?: 0}/4 positions")
                         }
                     }
                     Box(Modifier.clickable(role = Role.Button) { showMethod = !showMethod }.padding(vertical = 8.dp)
-                        .semantics { stateDescription = if (showMethod) "Expanded" else "Collapsed" }) {
+                        .testTag("s4-calculation-details")
+                        .semantics(mergeDescendants = true) { stateDescription = if (showMethod) "Expanded" else "Collapsed" }) {
                         Label(if (showMethod) "Hide calculation details" else "How averages are calculated", title = true)
                     }
                     if (showMethod) Label("Only readings received in the last 2 minutes contribute. Missing, older and future-dated readings are excluded. Positions follow sensor names. This is sampled air, not filament moisture; the illustration is not a heat map.")

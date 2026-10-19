@@ -117,11 +117,14 @@ fakeroot dpkg-deb --build "$PKG" "$OUT/nozzle-stock-u1-adapter_${VERSION}-1_amd6
 
 echo "== Provenance"
 ADAPTERS="$(dpkg-deb -c "$DESKTOP_DEB" | grep -o 'adapter-[a-z]*' | sort -u | tr '\n' ' ')"
+[ -n "$ADAPTERS" ] || { echo "no adapters found in intended desktop package" >&2; exit 1; }
 (cd "$OUT" && sha256sum -- "$(basename "$DESKTOP_DEB")" "nozzle-stock-u1-adapter_${VERSION}-1_amd64.deb" > SHA256SUMS)
 {
   echo "Nozzle It All Linux packages $VERSION"
   echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -srm)"
   echo "source: $(git -C "$ROOT" rev-parse HEAD)$(git -C "$ROOT" diff --quiet && git -C "$ROOT" diff --cached --quiet || echo ' (with uncommitted changes)')"
+  echo "source Compose package: $(sha256sum "$SOURCE_DESKTOP_DEB")"
+  echo "SHA256SUMS scope: only the two current-build outputs listed below; retained older artifacts are not covered or selected."
   echo "java: $(java -version 2>&1 | head -1); gradle: $("${GRADLE[@]}" -q --version 2>/dev/null | awk '/^Gradle/{print $2}')"
   echo "viewport compiler: $(g++ --version | head -1)"
   echo "viewport library: $(sha256sum "$ROOT/desktop/build/native/viewport/libnia_viewport.so")"

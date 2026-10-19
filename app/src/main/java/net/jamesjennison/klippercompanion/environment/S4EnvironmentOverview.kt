@@ -120,7 +120,10 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 @Composable private fun DryerDiagram(positions: Map<String, Binding>, data: EnvironmentalDashboardData,
     reference: Long, historyMode: Boolean, selected: String?, onSelect: (Binding) -> Unit) {
     // Original scalable cutaway illustration: long S4 shell, clear lid, four reel bays and front control panel.
-    Box(Modifier.fillMaxWidth().height(240.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)).testTag("s4-dryer-illustration")) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val diagramHeight = if (maxWidth >= 600.dp && fontScale <= 1.2f) 240.dp else 350.dp
+    Box(Modifier.fillMaxWidth().height(diagramHeight * fontScale).testTag("s4-dryer-illustration")) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height
             drawRoundRect(Color(0xFF080D11), Offset(w * .02f, h * .03f), Size(w * .96f, h * .91f), CornerRadius(22.dp.toPx()))
@@ -156,6 +159,9 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
     }
 }
 
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun PositionLabel(corner: String, positions: Map<String, Binding>, data: EnvironmentalDashboardData,
     reference: Long, historyMode: Boolean, index: Int, selected: String?, onSelect: (Binding) -> Unit, modifier: Modifier) {
     val binding = positions[corner]
@@ -174,9 +180,11 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
         .clickable(enabled = binding != null, role = Role.Button) { binding?.let(onSelect) }
         .padding(8.dp).testTag("s4-position-" + corner.replace(" ", "-"))
         .semantics(mergeDescendants = true) { stateDescription = if (binding == null) "No assigned sensor" else if (binding.id == selected) "Charts shown" else "Show charts" }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Label("● $corner", color = positionColors[index], title = true)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Label("● $corner", color = positionColors[index], title = true)
+            Label(status, color = Color(0xFFB7C5CC))
+        }
         Label("${fmt(reading?.values?.get(Channel.TEMPERATURE))}°C  ·  ${fmt(reading?.values?.get(Channel.HUMIDITY))}%RH", color = Color.White)
-        Label(status, color = Color(0xFFB7C5CC))
     }
 }
 

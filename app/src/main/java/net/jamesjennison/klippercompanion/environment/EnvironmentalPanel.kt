@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun EnvironmentalPanel() {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -44,6 +45,8 @@ import org.json.JSONObject
     var deleting by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
+    var setup by remember { mutableStateOf(false) }
+    var details by remember { mutableStateOf<String?>(null) }
     fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: ChartHistoryException) { problem = e.message } catch (e: QualificationUnavailableException) { problem = e.message } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
     fun start(kind: String) {
         if (!busy && !stopping) { busy = true; problem = null
@@ -82,30 +85,41 @@ import org.json.JSONObject
         lifecycle.addObserver(observer)
         onDispose { pending = null; lifecycle.removeObserver(observer); controller.releaseForegroundAsync() }
     }
-    Card(Modifier.fillMaxWidth().testTag("environment-panel")) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Environmental monitoring (optional)", style = MaterialTheme.typography.titleMedium)
-            Text(view.status)
+    val enabled = view.state != EnvironmentalState.DISABLED && view.state != EnvironmentalState.DISABLED_RECOVERY
+    LaunchedEffect(controller) {
+        if (enabled) action {
+            controller.savedBindings()
+            val loaded = controller.loadHistory()
+            chartHistory = EnvironmentalCharts.history(loaded); rows = loaded
+        } else { chartHistory = emptyList(); rows = emptyList(); historyMode = false }
+    }
+    Column(Modifier.fillMaxWidth().testTag("environment-panel"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Environment", style = MaterialTheme.typography.headlineMedium)
+            Text(view.state.dashboardStatus(), style = MaterialTheme.typography.bodyMedium)
             view.nameDirectoryProblem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
-            Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
-            Text("Active BLE scanning uses battery/radio. Readings stay local; physical measurement age unknown. Optional name import is the only Govee cloud request. No pairing, Govee unbinding or background monitoring. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
-            Text("Discovery automatically adds uniquely matched Govee sensors with their saved Govee names. Existing sensors and custom names are preserved. Monitoring starts only with Start monitoring.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            if (view.state != EnvironmentalState.DISABLED && view.state != EnvironmentalState.DISABLED_RECOVERY) GoveeNameImport(goveeNames)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
             if (view.state == EnvironmentalState.ENABLED_IDLE) {
                 OutlinedButton({ authorize("discover") }, enabled = !busy && !stopping && pending == null, modifier = Modifier.testTag("environment-discover")) { Text("Discover sensors (45 seconds)") }
-                OutlinedButton({ authorize("collect") }, enabled = !busy && !stopping && pending == null, modifier = Modifier.testTag("environment-start")) { Text("Start monitoring") }
+                Button({ historyMode = false; authorize("collect") }, enabled = !busy && !stopping && pending == null, modifier = Modifier.testTag("environment-start")) { Text("Start monitoring") }
             }
-            if (view.state != EnvironmentalState.DISABLED || pending != null) {
+            if (view.state == EnvironmentalState.DISCOVERING || view.state == EnvironmentalState.COLLECTING || busy || stopping || pending != null) {
                 OutlinedButton({ stop() }, enabled = !stopping, modifier = Modifier.testTag("environment-stop")) { Text("Stop / cancel") }
-                OutlinedButton({ stop(disable = true) }, enabled = !stopping) { Text("Disable") }
             }
-            if (historyMode) OutlinedButton({ historyMode = false }) { Text("Return to live readings") }
-            EnvironmentalDashboard(view, chartHistory, historyMode)
+            OutlinedButton({
+                if (historyMode) historyMode = false else action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded; historyMode = true }
+            }, enabled = enabled && !busy && !stopping, modifier = Modifier.testTag("environment-history")) { Text(if (historyMode) "Return to live readings" else "Open local history") }
+            OutlinedButton({ setup = !setup }) { Text(if (setup) "Close setup" else "Setup & data") }
+            }
+            EnvironmentalDashboard(view, chartHistory, historyMode, onDetails = { details = if (details == it.id) null else it.id })
+            if (setup) {
+            Text("Govee names & discovery", style = MaterialTheme.typography.titleMedium)
+            Text("Import names once. Discovery reuses them and adds uniquely matched sensors automatically.", style = MaterialTheme.typography.bodySmall)
+            if (enabled) GoveeNameImport(goveeNames)
+            if (enabled) OutlinedButton({ stop(disable = true) }, enabled = !busy && !stopping) { Text("Disable monitoring") }
             if (view.candidates.isNotEmpty()) {
-                view.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate ->
+                view.candidates.filter { it.protocol == "govee-ble" && view.bindings.none { b -> !b.archived && b.address.equals(it.address, true) } }.forEach { candidate ->
                     key(candidate.address) {
                         val saved = view.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
                         val imported = importedNames.singleOrNull { it.matches(candidate) }?.name
@@ -120,7 +134,6 @@ import org.json.JSONObject
             }
             if (view.dropped > 0) Text("Queue overflow counter for this monitor: ${view.dropped} — coverage incomplete", color = MaterialTheme.colorScheme.error)
             if (view.recordedDrops > 0) Text("History records ${view.recordedDrops} dropped reports; other gaps unknown", color = MaterialTheme.colorScheme.error)
-            OutlinedButton({ action { val loaded = controller.loadHistory(); val parsed = EnvironmentalCharts.history(loaded); controller.savedBindings(); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-history")) { Text("Open local history") }
             OutlinedButton({ action { controller.retention() } }, enabled = !busy && !stopping) { Text("Apply 30-day retention") }
             OutlinedButton({ export.launch("environment-history.ndjson") }, enabled = !busy && !stopping) { Text("Export history") }
             OutlinedButton({ deleting = true }, enabled = !busy && !stopping) { Text("Delete environmental data…") }
@@ -139,24 +152,28 @@ import org.json.JSONObject
                 }, enabled = !busy && !stopping) { Text("Confirm delete / resume") }
                 TextButton({ deleting = false }) { Text("Keep data") }
             }
-            view.bindings.filterNot { it.archived }.forEach { b ->
+            }
+            view.bindings.filter { !it.archived && it.id == details }.forEach { b ->
+                TextButton({ details = null }) { Text("Close details") }
                 val (equipment, position) = roomDrafts[b.id] ?: view.roomLabels[b.id] ?: ("Room" to "Shelf")
-                Text("Added: ${view.sensorLabels[b.sensorId] ?: b.model} · ${b.model}")
+                Text("Sensor details · ${view.sensorLabels[b.sensorId] ?: b.model}", style = MaterialTheme.typography.titleMedium)
                 if (importedNames.any { it.model == b.model }) TextButton({ nameTarget = b.address to b }, enabled = !busy && !stopping) { Text("Use Govee name…") }
-                Text("${b.address} · ${b.protocol} — confirm physical identity", style = MaterialTheme.typography.bodySmall)
+                Text("${b.model} · ${b.address}", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(equipment, { roomDrafts[b.id] = it.take(120) to position }, label = { Text("Room label") })
                 OutlinedTextField(position, { roomDrafts[b.id] = equipment to it.take(120) }, label = { Text("Position label") })
                 TextButton({
                     val current = roomDrafts[b.id] ?: view.roomLabels[b.id] ?: ("Room" to "Shelf")
                     action { controller.configureRoom(b, current.first, current.second) }
                 }, enabled = !busy && !stopping && equipment.isNotBlank() && position.isNotBlank()) { Text("Save room assignment") }
-                Text("Room assignments do not block monitoring or certify sensor operating limits.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(offset, { offset = it.take(12) }, label = { Text("Humidity calibration offset (%RH)") })
                 TextButton({ action { controller.calibrate(b, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true) { Text("Save RH calibration") }
                 TextButton({ action { controller.archive(b) } }, enabled = !busy && !stopping) { Text("Archive binding") }
             }
             if (rows.size == controller.historyPageSize) OutlinedButton({ val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping) { Text("Older ${controller.historyPageSize}") }
-        }
+            if (setup) {
+                Text("Monitoring runs while this screen is visible. Times show reception, not when the sensor measured. Charts show up to 500 samples; lines break at known gaps.", style = MaterialTheme.typography.bodySmall)
+                Text(view.status, style = MaterialTheme.typography.bodySmall)
+            }
     }
     nameTarget?.let { (address, binding) ->
         val model = binding?.model ?: view.candidates.firstOrNull { it.address.equals(address, true) }?.model

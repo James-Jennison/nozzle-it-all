@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineStart
 import org.json.JSONObject
 import com.nozzleitall.desktop.environment.DesktopGoveeNames
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun EnvironmentalPanel(controller: EnvironmentalCoordinator, directory: DesktopGoveeNames) {
     val v by controller.view.collectAsState()
     val scope = rememberCoroutineScope()
@@ -30,6 +31,8 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
     var confirmDelete by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
+    var setup by remember { mutableStateOf(false) }
+    var details by remember { mutableStateOf<String?>(null) }
     fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: ChartHistoryException) { error = e.message } catch (e: QualificationUnavailableException) { error = e.message } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
     fun start(purpose: Purpose) {
         if (!busy && !stopping) { busy = true; error = null
@@ -43,30 +46,40 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
             scope.launch { try { cleanup.join() } finally { stopping = false } }
         }
     }
-    Card(Modifier.fillMaxWidth()) {
-        Txt("Environmental monitoring (optional)", Nz.type.title)
-        Txt(v.status, Nz.type.body)
+    val enabled = v.state != EnvironmentalState.DISABLED && v.state != EnvironmentalState.DISABLED_RECOVERY
+    LaunchedEffect(controller) {
+        if (enabled) action {
+            controller.savedBindings()
+            val loaded = controller.loadHistory()
+            chartHistory = EnvironmentalCharts.history(loaded); rows = loaded
+        } else { chartHistory = emptyList(); rows = emptyList(); historyMode = false }
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SectionHeader("Environment", v.state.dashboardStatus())
         v.nameDirectoryProblem?.let { Banner(it, BannerKind.WARNING) }
-        EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
-        Txt("Local foreground only. Optional name import is the only Govee cloud request; no cloud readings, pairing, background service or equipment control.", Nz.type.bodySmall)
-        GoveeNameImport(directory)
-        Txt("Discovery automatically adds uniquely matched Govee sensors with their saved Govee names. Existing sensors and custom names are preserved. Monitoring starts only with Start monitoring.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy && !stopping, testTag = "environment-enable")
             if (v.state == EnvironmentalState.ENABLED_IDLE) {
                 NzButton("Discover sensors", { start(Purpose.DISCOVERY) }, enabled = !busy && !stopping, testTag = "environment-discover")
-                NzButton("Start monitoring", { start(Purpose.COLLECTION) }, enabled = !busy && !stopping, testTag = "environment-start")
+                NzButton("Start monitoring", { historyMode = false; start(Purpose.COLLECTION) }, kind = ButtonKind.PRIMARY, enabled = !busy && !stopping, testTag = "environment-start")
             }
-            if (v.state != EnvironmentalState.DISABLED) {
+            if (v.state == EnvironmentalState.DISCOVERING || v.state == EnvironmentalState.COLLECTING || busy || stopping) {
                 NzButton("Stop / cancel", { stop() }, enabled = !stopping, testTag = "environment-stop")
-                NzButton("Disable", { stop(disable = true) }, enabled = !stopping)
             }
+            NzButton(if (historyMode) "Return to live readings" else "Open local history", {
+                if (historyMode) historyMode = false else action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded; historyMode = true }
+            }, enabled = enabled && !busy && !stopping, testTag = "environment-history")
+            NzButton(if (setup) "Close setup" else "Setup & data", { setup = !setup })
         }
-        if (historyMode) NzButton("Return to live readings", { historyMode = false })
-        EnvironmentalDashboard(v, chartHistory, historyMode)
+        EnvironmentalDashboard(v, chartHistory, historyMode, onDetails = { details = if (details == it.id) null else it.id })
+        if (setup) Card(Modifier.fillMaxWidth()) {
+        Txt("Govee names & discovery", Nz.type.title)
+        Txt("Import names once. Discovery reuses them and adds uniquely matched sensors automatically.", Nz.type.bodySmall)
+        GoveeNameImport(directory)
+        if (enabled) NzButton("Disable monitoring", { stop(disable = true) }, enabled = !busy && !stopping)
         if (v.candidates.isNotEmpty()) {
-            v.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate -> key(candidate.address) { Column {
+            v.candidates.filter { it.protocol == "govee-ble" && v.bindings.none { b -> !b.archived && b.address.equals(it.address, true) } }.forEach { candidate -> key(candidate.address) { Column {
                 val saved = v.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
                 val added = saved != null
                 val name = if (saved != null) v.sensorLabels[saved.sensorId] ?: candidate.defaultName
@@ -91,8 +104,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         }
         if (v.dropped > 0) Banner("Queue overflow counter for this monitor: ${v.dropped} — coverage incomplete", BannerKind.WARNING)
         if (v.recordedDrops > 0) Banner("History records ${v.recordedDrops} dropped reports; other unobserved gaps remain unknown", BannerKind.WARNING)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NzButton("Open local history", { action { val loaded = controller.loadHistory(); val parsed = EnvironmentalCharts.history(loaded); controller.savedBindings(); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping, testTag = "environment-history")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             NzButton("Apply 30-day retention", { action { controller.retention() } }, enabled = !busy && !stopping)
             NzButton("Export history…", {
                 val chooser = javax.swing.JFileChooser()
@@ -116,29 +128,31 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
                 } finally { stopping = false } }
             }, enabled = !busy && !stopping); NzButton("Keep data", { confirmDelete = false }) }
         }
-        if (v.bindings.any { !it.archived }) {
-            Field("Relative humidity calibration offset (%RH)", offset, { offset = it.take(12) })
         }
-        v.bindings.filterNot { it.archived }.forEach { binding -> Column {
+        v.bindings.filter { !it.archived && it.id == details }.forEach { binding -> Card(Modifier.fillMaxWidth()) {
             val (equipmentName, positionName) = roomDrafts[binding.id] ?: v.roomLabels[binding.id] ?: ("Room" to "Shelf")
-            Txt("Added: ${v.sensorLabels[binding.sensorId] ?: binding.model} · ${binding.model}", Nz.type.bodySmall)
+            SectionHeader("Sensor details", "${v.sensorLabels[binding.sensorId] ?: binding.model} · ${binding.model}") { NzButton("Close details", { details = null }) }
             if (importedNames.any { it.model == binding.model }) {
                 NzButton("Choose Govee name…", { choosing = binding.id }, enabled = !busy && !stopping)
                 if (choosing == binding.id) GoveeNameChoices(binding.model, importedNames, { choosing = null }) { chosen ->
                     choosing = null; action { controller.renameSensor(binding, chosen.name) }
                 }
             }
-            Txt("${binding.address} · ${binding.protocol} — verify the physical identity before saving assignments", Nz.type.bodySmall)
+            Txt(binding.address, Nz.type.bodySmall)
             Field("Room label", equipmentName, { roomDrafts[binding.id] = it.take(120) to positionName })
             Field("Position label", positionName, { roomDrafts[binding.id] = equipmentName to it.take(120) })
             NzButton("Save room assignment", {
                 val current = roomDrafts[binding.id] ?: v.roomLabels[binding.id] ?: ("Room" to "Shelf")
                 action { controller.configureRoom(binding, current.first, current.second) }
             }, enabled = !busy && !stopping && equipmentName.isNotBlank() && positionName.isNotBlank())
-            Txt("Room assignments do not block monitoring or certify sensor operating limits.", Nz.type.bodySmall)
+            Field("Relative humidity calibration offset (%RH)", offset, { offset = it.take(12) })
             NzButton("Save RH calibration", { action { controller.calibrate(binding, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true)
             NzButton("Archive binding", { action { controller.archive(binding) } }, enabled = !busy && !stopping)
         } }
+        if (setup) {
+            Txt("Monitoring runs while NIA is visible. Times show reception, not when the sensor measured. Charts show up to 500 samples; lines break at known gaps.", Nz.type.bodySmall)
+            Txt(v.status, Nz.type.bodySmall)
+        }
         if (rows.size == controller.historyPageSize) NzButton("Older ${controller.historyPageSize}", { val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping)
     }
 }

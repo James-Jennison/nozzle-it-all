@@ -23,6 +23,7 @@ class EnvironmentalDeviceTest {
         check(context.packageName.endsWith(".environment")) { "Requires isolated environment acceptance package" }
         assertFalse(File(context.filesDir, "environment/history.db").exists())
         compose.onNodeWithTag("nav-4").performClick()
+        compose.onNodeWithTag("open-environment").performScrollTo().performClick()
         compose.onNodeWithTag("environment-enable").performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-discover").fetchSemanticsNodes().isNotEmpty() }
         assertFalse(File(context.filesDir, "environment/history.db").exists())
@@ -31,8 +32,10 @@ class EnvironmentalDeviceTest {
         val monitor = (context.applicationContext as NozzleApp).environment
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("nav-4").performClick()
+        compose.onNodeWithTag("open-environment").performScrollTo().performClick()
         compose.onNodeWithTag("environment-discover").performScrollTo().assertExists()
         assertSame(monitor, (context.applicationContext as NozzleApp).environment)
+        compose.onNodeWithText("Setup & data").performScrollTo().performClick()
         compose.onNodeWithText("Delete environmental data…").performScrollTo().performClick()
         compose.onNodeWithText("Confirm delete / resume").performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-enable").fetchSemanticsNodes().isNotEmpty() }
@@ -65,14 +68,17 @@ class EnvironmentalDeviceTest {
         val permission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_SCAN else Manifest.permission.ACCESS_FINE_LOCATION
         assertEquals("Grant the actual OS prompt before this opt-in run", PackageManager.PERMISSION_GRANTED, context.checkSelfPermission(permission))
         compose.onNodeWithTag("nav-4").performClick()
+        compose.onNodeWithTag("open-environment").performScrollTo().performClick()
         if (compose.onAllNodesWithTag("environment-enable").fetchSemanticsNodes().isNotEmpty()) {
             compose.onNodeWithTag("environment-enable").performScrollTo().performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-discover").fetchSemanticsNodes().isNotEmpty() }
         }
         compose.onNodeWithTag("environment-discover").performScrollTo().performClick()
+        compose.onNodeWithText("Setup & data").performScrollTo().performClick()
         compose.waitUntil(44000) { compose.onAllNodesWithText("Add sensor").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithText("Add sensor")[0].performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-start").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Sensor details").performScrollTo().performClick()
         compose.onAllNodesWithText("Save room assignment")[0].performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodes(hasText("Room assignment saved", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         val monitor = (context.applicationContext as NozzleApp).environment
@@ -85,6 +91,7 @@ class EnvironmentalDeviceTest {
         assertTrue(compose.onAllNodes(hasText("Android BLE · radio", substring = true)).fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("nav-4").performClick()
+        compose.onNodeWithTag("open-environment").performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-discover").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("environment-discover").performScrollTo().assertExists()
         val history = EnvironmentalHistory(SqlStoreFactory { AndroidEnvironmentalStore(File(context.filesDir, "environment/history.db")) })

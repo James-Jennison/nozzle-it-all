@@ -2,6 +2,23 @@
 
 Newest entries at the bottom. Times are PDT.
 
+## Visual dashboard correction (2026-10-19, active)
+
+Owner rejected the installed0.1.12 settings-form presentation. Correcting within
+the existing visual monitoring scope: dedicated desktop Environment destination,
+Android Environment screen reached from Home and Settings, responsive sensor
+grid, prominent temperature/humidity gauges, real trends with axes, and collapsed
+setup/selected-sensor details. Display-only bounded last-reception memory retains
+timestamps across Stop without starting monitoring or persisting discovery as
+observations. Enabled screen entry restores saved metadata/history on IO.
+Existing unique automatic name matching, names-only cache, storage and radio gates
+remain unchanged. New reducer and eight-sensor visual fixtures added; build,
+review, installation and normal-app verification still pending for this source.
+Previous0.1.12 installer exit0 and installed package/data verifier preserved8
+existing entities/0events; Owner screenshots supply actual UI evidence and show
+why that presentation is not accepted. Superseded CI39311882284 completed before
+cancel request; no cancellation occurred and no Play rollout is claimed.
+
 ## Automatic discovery follow-up (2026-10-19, in progress)
 
 Exactdd GTHost full SUCCESS3m59s/132tasks35executed97cached;1314results0fail/error,

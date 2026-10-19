@@ -37,6 +37,7 @@ import kotlinx.coroutines.SupervisorJob
 enum class Destination(val label: String, val icon: NzIcon, val key: Key, val inRail: Boolean = true) {
     PREPARE("Workspace", NzIcon.PREPARE, Key.One),
     FLEET("Printers", NzIcon.FLEET, Key.Two),
+    ENVIRONMENT("Environment", NzIcon.HEAT, Key.Seven),
     PROJECTS("Projects", NzIcon.PROJECTS, Key.Three, inRail = false),
     // One printer's own page (a Monitor tab and a Materials tab). It is reached from a printer on the Printers page, so it
     // has no place of its own in the rail, where Printers stays lit while you are on it.
@@ -162,6 +163,7 @@ fun App(state: AppState) {
                 Destination.MATERIALS -> MaterialsScreen(state)
                 Destination.HISTORY -> HistoryScreen(state)
                 Destination.SETTINGS -> SettingsScreen(state)
+                Destination.ENVIRONMENT -> EnvironmentalScreen(state)
             }
           }
         }

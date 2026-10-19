@@ -55,7 +55,7 @@ class EnvironmentalDashboardDeviceTest {
     }
     @Test fun emptyViewHasNoInventedCharts() {
         compose.setContent { MaterialTheme { EnvironmentalDashboard(EnvironmentalView(EnvironmentalState.ENABLED_IDLE), emptyList()) } }
-        compose.onNodeWithText("Discover and add sensors, or open local history to restore saved sensors.").assertExists()
+        compose.onNodeWithText("Your environment, at a glance").assertExists()
         compose.onNodeWithTag("environment-trend-TEMPERATURE").assertDoesNotExist()
     }
 }

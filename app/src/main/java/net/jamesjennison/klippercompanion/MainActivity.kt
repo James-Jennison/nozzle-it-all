@@ -451,6 +451,11 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
                 CameraContent(state)
             }
+        } else if (tab == 6) {
+            Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextButton({ tab = 0 }) { Text("Back to Home") }
+                net.jamesjennison.klippercompanion.environment.EnvironmentalPanel()
+            }
         } else if (tab == 5) {
             Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = wideGutter - 16.dp)) {
                 DiscoverScreen(settings = remember { MmfSettings(context.applicationContext) }, dao = projectDb.projectDao(), signInRedirect = MmfRedirects.pending, onRedirectConsumed = { MmfRedirects.pending = null },
@@ -473,7 +478,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             if((tab == 0 && !overview) || tab == 4) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
-            if(tab == 4) item { net.jamesjennison.klippercompanion.environment.EnvironmentalPanel() }
+            if(tab == 4) item { OutlinedButton({ tab = 6 }, modifier = Modifier.testTag("open-environment")) { Text("Environment dashboard") } }
             if(tab == 4) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -581,6 +586,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
             } else when(tab) {
                 0 -> {
                     if(overview) {
+                        item { OutlinedButton({ tab = 6 }, modifier = Modifier.fillMaxWidth().testTag("open-environment")) { Text("Environment dashboard") } }
                         val tiles = state.connectedPrinterTiles()
                         item { Text("Connected printers", style = MaterialTheme.typography.titleLarge) }
                         if(tiles.isEmpty()) item {

@@ -42,8 +42,10 @@ class EnvironmentalDashboardRenderTest {
             val scene = ImageComposeScene(width = 440, height = 1600) {
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f, 1.5f)) {
                     NozzleTheme("light") {
-                        com.nozzleitall.desktop.screens.S4EnvironmentOverview(EnvironmentalSensorGroup("S4", emptyList()),
-                            emptyMap(), EnvironmentalDashboardData(), false, false, null) {}
+                        Column(Modifier.fillMaxSize().background(Color.White)) {
+                            com.nozzleitall.desktop.screens.S4EnvironmentOverview(EnvironmentalSensorGroup("S4", emptyList()),
+                                emptyMap(), EnvironmentalDashboardData(), false, false, null) {}
+                        }
                     }
                 }
             }

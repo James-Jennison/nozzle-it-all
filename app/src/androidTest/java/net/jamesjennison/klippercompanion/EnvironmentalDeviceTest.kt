@@ -9,6 +9,11 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import org.junit.Assume.assumeTrue
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import org.json.JSONObject
 
 /** Run only against the isolated .environment acceptance package, never an owner's populated app. */
 class EnvironmentalDeviceTest {
@@ -46,5 +51,36 @@ class EnvironmentalDeviceTest {
         h.deleteAll(); assertTrue(h.page().isEmpty()); h.close()
         // Only this test-owned environmental fixture, not any owner data.
         assertTrue(context.deleteDatabase(path.absolutePath))
+    }
+    /** Explicitly opt in on the authorized phone after granting the real OS permission prompt. */
+    @Test fun foregroundRadioHardwareAcceptance() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("environmentRadio") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        check(context.packageName.endsWith(".environment"))
+        val permission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_SCAN else Manifest.permission.ACCESS_FINE_LOCATION
+        assertEquals("Grant the actual OS prompt before this opt-in run", PackageManager.PERMISSION_GRANTED, context.checkSelfPermission(permission))
+        compose.onNodeWithTag("nav-4").performClick()
+        if (compose.onAllNodesWithTag("environment-enable").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithTag("environment-enable").performScrollTo().performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-discover").fetchSemanticsNodes().isNotEmpty() }
+        }
+        compose.onNodeWithTag("environment-discover").performScrollTo().performClick()
+        compose.waitUntil(44000) { compose.onAllNodesWithText("Save only").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("Save only")[0].performScrollTo().performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("environment-start").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("environment-start").performScrollTo().performClick()
+        compose.waitUntil(45000) { compose.onAllNodes(hasText("Reception ", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("nav-0").performClick()
+        compose.onNodeWithTag("nav-4").performClick()
+        compose.onNodeWithTag("environment-discover").performScrollTo().assertExists()
+        val history = EnvironmentalHistory(SqlStoreFactory { AndroidEnvironmentalStore(File(context.filesDir, "environment/history.db")) })
+        history.use { h ->
+            val before = h.eventCount()
+            assertTrue("Actual hardware reception must persist", before > 0)
+            Thread.sleep(2000)
+            assertEquals("Leaving panel must stop persistence and not auto-resume", before, h.eventCount())
+            val event = JSONObject(h.page().first())
+            println("ENV_RADIO actual_receptions=$before decoder=${event.getString("decoder")} foreground_stop=true qualification=false")
+        }
     }
 }

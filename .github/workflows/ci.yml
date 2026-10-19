@@ -288,11 +288,22 @@ jobs:
           retention-days: 90
       # A DRAFT release: nothing is public until the owner reviews the notes and presses Publish on GitHub.
       - name: Create draft GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" --draft --generate-notes --title "Nozzle It All ${GITHUB_REF_NAME#v}" \
-            release-artifacts/*.apk release-artifacts/*.aab release-artifacts/SHA256SUMS release-artifacts/nozzle-it-all.cdx.json
+        # Use the authenticated Actions API, not an unprovisioned host gh executable.
+        uses: actions/github-script@d746ffe35508b1917358783b479e04febd2b8f71 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const tag = context.ref.replace(/^refs\/tags\//, '');
+            const files = fs.readdirSync('release-artifacts').filter(name => /\.(apk|aab)$/.test(name) || ['SHA256SUMS', 'nozzle-it-all.cdx.json'].includes(name));
+            if (!files.some(name => name.endsWith('.aab')) || !files.includes('SHA256SUMS')) throw new Error('Release payload incomplete');
+            const { data: release } = await github.rest.repos.createRelease({
+              ...context.repo, tag_name: tag, target_commitish: context.sha,
+              name: `Nozzle It All ${tag.replace(/^v/, '')}`, draft: true, generate_release_notes: true
+            });
+            for (const name of files) {
+              await github.rest.repos.uploadReleaseAsset({ ...context.repo, release_id: release.id,
+                name, data: fs.readFileSync(`release-artifacts/${name}`) });
+            }
       - name: Remove signing key
         if: always()
         run: shred -u "$RUNNER_TEMP/release.jks" 2>/dev/null || rm -f "$RUNNER_TEMP/release.jks"

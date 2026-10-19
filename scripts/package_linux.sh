@@ -46,7 +46,7 @@ sed -i '/xdg-desktop-menu/d' "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/prerm"
 # ffmpeg plays printer cameras' H.264 streams at full frame rate (MJPEG from camera-streamer tops out near 4 fps).
 sed -i 's/^Depends: /Depends: ffmpeg, util-linux, procps, libegl1, libgles2, /' "$PKG/DEBIAN/control"
 for dependency in ffmpeg util-linux procps libegl1 libgles2; do
-  grep -Eq "^Depends: .*(^|[ ,])${dependency}([ ,(]|$)" "$PKG/DEBIAN/control"
+  grep -Eq "^Depends:.*[ ,]${dependency}([ ,(]|$)" "$PKG/DEBIAN/control"
 done
 cat > "$STAGE/refresh" <<'EOF'
 if [ "$1" = configure ] || [ "$1" = remove ]; then

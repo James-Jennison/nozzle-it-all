@@ -4,6 +4,24 @@ Newest entries at the bottom. Times are PDT.
 
 ## Owner follow-up: retained names and visual dashboard (2026-10-19)
 
+Exactdce GTHost full SUCCESS3m2s/132tasks26executed106cached; targeted core+desktop
+renderSUCCESS1m11s. Charts9PASS/coordinator48PASS/renderer1PASS0.822s;
+100Hz4.06554951%onecore/RSS+5332992bytes/drop0. Actual900x1000 software-render PNG
+SHA d3617c36fbc5d09d3cbc8c89cf0cf8c3e6487641db72a6122726e4f7cb954dd7
+manually inspected: two actual fixture trend lines/card. Not installed/GPU/radio.
+Synthetic6a37dff8d867 all3COMPLETE. Frontend correctly questioned original history
+compatibility: Git18833767/pre8e1e writer omitted encoding marker. Added explicit
+v0 compatibility and missing legacy droppedBefore default, while rejecting unknown
+future encodings. Added mixed legacy/current fixture and cursor validation before
+UI publication. Tightened Android pixel assertion to actual theme-primary color,
+nontrivial image dimensions and rising-series vertical extent. No data migration
+or stored-row mutation. Immutable v0.1.9 source dce candidate CI39302478808 canceled
+before any Play upload as superseded; no tag rewrite. Owned superseded feature
+CI39300665546/39301351145/39301976132 canceled, unrelated jobs untouched. Normal app
+still275, firstInstallTime unchanged. Updated external hash-only normal-app probe
+on GTHost, fixture APK SHA55dc8d5d9356e759903a5e736b02346880e5dd791eae2c63999a726c16b92a9a;
+installed only com.nozzleitall.verification, no normal data access/reset.
+
 Synthetic929 closure review3bad35ac5e5a underway. Adversarial explicitly withdrew
 prior HIGH stop-counter claim against actual try/finally; frontend confirms it.
 Added focusable chart summaries/selection state announcements, explicit safe

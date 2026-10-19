@@ -58,4 +58,17 @@ class EnvironmentalChartsTest {
             assertFalse(failure.message!!.contains(row))
         }
     }
+    @Test fun initialUnmarkedHistoryAndCurrentEncodingCanBePlottedTogether() {
+        // Matches the initial18833767/last pre-encoder writer: no encoding/clock/boot;
+        // earliest rows also had no droppedBefore. page() supplies stored receivedAt.
+        val observation = Observation("legacy", "inc", "collector", "session", 1, "sensor", 1,
+            1000, 1001, 1, decoder = "fixture", readings = listOf(Reading(Channel.TEMPERATURE, 22.0)))
+        val legacy = org.json.JSONObject(ObservationEncoding.encode(observation)).apply {
+            remove("encoding"); remove("clockId"); remove("bootId"); remove("droppedBefore"); put("receivedAt", 1001)
+        }
+        val current = org.json.JSONObject(ObservationEncoding.encode(observation.copy(eventId = "current", sequence = 2, observedAt = 2000))).put("receivedAt", 2001)
+        val samples = EnvironmentalCharts.history(listOf(legacy.toString(), current.toString()))
+        assertEquals(2, samples.size); assertEquals(0L, samples.first().dropped)
+        assertTrue(EnvironmentalCharts.series(samples, "sensor", Channel.TEMPERATURE)!!.points.last().connect)
+    }
 }

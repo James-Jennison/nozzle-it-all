@@ -19,7 +19,11 @@ object EnvironmentalCharts {
     fun history(rows: List<String>): List<ChartSample> = try { rows.take(MAX_SAMPLES).map { raw ->
         require(raw.length <= 16_384)
         val j = JSONObject(raw)
-        require(j.getInt("encoding") == 1)
+        // Initial history writer had this same shape without an encoding marker.
+        // Missing marker is documented v0, not an assumption about future versions.
+        val encoding = if (j.has("encoding")) j.getInt("encoding") else 0
+        require(encoding in 0..1)
+        j.getLong("observedAt") // Validate the continuation cursor before publishing the page.
         val readings = j.getJSONArray("readings")
         require(readings.length() in 1..16)
         val values = buildMap {
@@ -31,7 +35,7 @@ object EnvironmentalCharts {
             }
         }
         ChartSample(j.getString("eventId"), j.getString("binding"), j.getLong("receivedAt"),
-            j.getString("session"), j.getLong("droppedBefore"), values, j.optLong("sequence", 0))
+            j.getString("session"), j.optLong("droppedBefore", 0), values, j.optLong("sequence", 0))
     } } catch (_: Exception) { throw ChartHistoryException() }
 
     fun merge(history: List<ChartSample>, live: List<ChartSample>): List<ChartSample> =

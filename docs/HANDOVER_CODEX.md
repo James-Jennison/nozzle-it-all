@@ -4,6 +4,19 @@
 
 CURRENT OWNER SCOPE: retained automatic names AND visual environmental data on
 desktop/Android. First integrated source24fb5a36 GTHost full SUCCESS3m54s,
+
+Latest tested source dce52f36: full GTHostSUCCESS3m2s/132tasks26executed106cached;
+targeted core+desktop software-renderSUCCESS1m11s. Charts9PASS/coordinator48PASS,
+100Hz4.06555%onecore/RSS+5332992bytes/drop0. Actual900x1000 synthetic render
+inspected: friendly sensor card and both trend lines. This is not installed-app
+or physical-radio proof. New correction (this commit) accepts initial documented
+unmarkedv0 history alongside encoding1, validates cursor fields before publication,
+and tightens Android stroke pixels to exact theme-primary color/vertical extent.
+No DB mutation. Earliest18833767/pre8e1e writer lacked marker, confirmed from Git.
+Synthetic6a37dff8d867 all3COMPLETE; current corrections need targeted closure.
+v0.1.9 immutable dce tag CI canceled before any Play upload as superseded; do not
+retag or promote it. Desktop remains940/normalAndroid275, Owner saved/closed desktop.
+Final combined replacement build/Play candidate/runtime evidence pending.
 132tasks48executed84up-to-date. Its100Hz fixture4.32784%onecore/RSS+10809344bytes,
 drop0, not physical-radio/GUI/battery proof. Follow-up source (this commit) fixes
 cumulative-drop chart continuity and configurable page button, separates live

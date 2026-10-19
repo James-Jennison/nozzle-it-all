@@ -17,6 +17,24 @@ failures. Accepted history/style findings corrected376, targeted systems review
 c248 evidence0ed8d1de7275 bothPASS explicitly excludes delivery/runtime proof.
 Normal Razr remains275 and Play draft752 unchanged; finish original delivery loop.
 
+Current376 validation/install: GTHost full SUCCESS2m57s/132tasks40executed92cached,
+1321results1311PASS10conditional skips0fail/errors; actual Razr19UI testsPASS26.57s
+(includes explicit off/recovery historical rendering), Govee physical radio chart/
+persistence/foregroundstop1PASS14.94s. Integrated0.1.15 DebSHA27a626d8e5c6ace20934f2deff359a6317349cd978495c48739b1e9cf8506249
+installed via owner-approved dpkg exit0; all218payload hashes/source376,6adapters,
+launcher/eight icons and dpkg-V verified. RunningPID3084240 normal/opt executable.
+All16preinstall environmental entity hashes unchanged;0events at lastcheck.
+Owner asked to open Environment/Start and provide actual dashboard screenshot;
+native desktop controls unavailable in this session, runtime UI not yet verified.
+No API-key prompt inspection. Fresh normal Razr before-visual-376 inventory still
+2printers/1project matching baseline; Play275 remains installed, no data reset.
+Synthetic9984 completed: accepted test-evidence finding resolved by actual19PASS;
+other LOW statements explicitly dispositioned. Adversarial8a8 completed retry and
+withdrew all3 prior claims againstc248; later off-history correction separately
+reviewed9984. Evidence37e78bbfa42e all4PASS/intact for exact376 candidate, installed
+payload and16entity preservation; expressly not actual UI/Play/normal-app closure.
+Private final manifest156cf94747c02467d180965df92becd33d13689d4660a0c8a776d31a0de82014.
+
 This section supersedes the older checkpoints below. Owner rejected the long
 text/form dashboard and requires the already-authorized visual experience and
 desktop/Play Alpha/normal Razr delivery, not a new proposal or expanded scope.

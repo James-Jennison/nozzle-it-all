@@ -4,6 +4,18 @@ Newest entries at the bottom. Times are PDT.
 
 ## Visual dashboard correction (2026-10-19, active)
 
+Final376 full GTHost PASS2m57s;1321unitresults1311PASS10skip0fail. Actual Razr19UI
+PASS26.57s and physicalGovee1PASS14.94s. IntegratedLinux0.1.15 installed afterowner
+authentication, dpkg0/all218files+source+6adapters+iconsverified;16existingentities
+unchanged. RunningnormaldesktopPID3084240; actualdashboard screenshot requested,
+not claimed verified. CurrentSynthetic initial3COMPLETE plus systems9984COMPLETE;
+adversarial8a8 explicitwithdrawal COMPLETE afterretainedcapacityfailure/retry.
+Accepted findings separately resolved afteractualtests, speculative alternatives
+dispositioned not silentlyimplemented. Finalsealedmanifest156cf947 and evidence
+37e78bbfa42e4PASS/intact explicitly distinguishcandidate/installfromUI/Play.
+FreshnormalRazr inventory2printers/1projectunchanged; normal275stilluntouched.
+Currentv.15 CI39317931108 nativeAndroidbuildactive; Playdraft752unchanged.
+
 376367da/v.15/code776 supersedes c248 after genuine review regression: explicit
 off-state history was wrongly gated; restored read-only gesture and historical
 projection without enabling monitoring or changing storage-recovery guards.

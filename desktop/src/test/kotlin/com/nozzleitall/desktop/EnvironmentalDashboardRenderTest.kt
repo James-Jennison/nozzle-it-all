@@ -88,11 +88,17 @@ class EnvironmentalDashboardRenderTest {
         }
         val image = javax.imageio.ImageIO.read(output)
         assertEquals(900, image.width); assertEquals(1000, image.height)
-        var accentPixels = 0
-        for (y in 180 until 650) for (x in 20 until 880) {
-            val color = java.awt.Color(image.getRGB(x, y))
-            if (color.blue - color.green > 25 && color.red - color.green > 25) accentPixels++
+        // Inspect only the chart interiors, not colored labels/selected rows.
+        // Each diagonal must span almost every interior column in this fixed fixture.
+        for ((start, temperature) in listOf(100 to true, 530 to false)) {
+            val columns = (start until start + 320).count { x ->
+                (280 until 400).any { y ->
+                    val c = java.awt.Color(image.getRGB(x, y))
+                    if (temperature) c.blue - c.green > 25 && c.red - c.green > 25
+                    else c.green - c.red > 70 && c.blue - c.red > 70
+                }
+            }
+            assertTrue("Actual ${if (temperature) "temperature" else "humidity"} trace spans chart width", columns > 300)
         }
-        assertTrue("Visible purple chart strokes in rendered dashboard", accentPixels > 1000)
     }
 }

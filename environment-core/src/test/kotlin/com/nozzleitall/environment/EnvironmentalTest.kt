@@ -13,6 +13,34 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun existingGoveeHistoryRestoresNamesAndExplicitRenamePreservesObservations() {
+        val path = Files.createTempFile("nia-govee-names-history", ".db").toFile()
+        val binding: Binding
+        val original: String
+        EnvironmentalHistory(SqlStoreFactory { Sql(path) }).use { history ->
+            binding = history.bind(Candidate("fixture-address", "govee-ble", "H5100"), "Existing shelf")
+            history.append(Observation("fixture-event", "fixture-inc", "fixture-collector", "fixture-session", 1,
+                binding.id, 1, 1000, 1001, 1, decoder = BleDecoders.VERSION,
+                readings = listOf(Reading(Channel.TEMPERATURE, 23.5))), "fixture-inc")
+            original = history.page().single()
+        }
+        val history = EnvironmentalHistory(SqlStoreFactory { Sql(path) })
+        val coordinator = EnvironmentalCoordinator(file(), history, { error("Reading names must not start BLE") })
+        try {
+            coordinator.enable(); coordinator.savedBindings()
+            assertEquals("Existing shelf", coordinator.view.value.sensorLabels[binding.sensorId])
+            assertEquals(original, history.page().single())
+            for (name in listOf("", " ", "x".repeat(121), "bad\nlabel")) {
+                assertThrows(IllegalArgumentException::class.java) { coordinator.renameSensor(binding, name) }
+                assertEquals("Existing shelf", coordinator.view.value.sensorLabels[binding.sensorId])
+            }
+            coordinator.renameSensor(binding, "Govee Home shelf")
+            assertEquals("Govee Home shelf", coordinator.view.value.sensorLabels[binding.sensorId])
+            assertEquals(original, history.page().single())
+            assertEquals(binding, history.bindings().single())
+        } finally { coordinator.close() }
+    }
+
     @Test fun goveeDiscoveryRefreshesBoundedReceptionWithoutChangingCandidateIdentity() {
         val h = history()
         val ready = CountDownLatch(1)

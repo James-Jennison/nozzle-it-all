@@ -2,6 +2,19 @@
 
 ## Current delivery checkpoint — visual Environment screen (2026-10-19)
 
+Owner follow-up: group obvious devices (actual0.1.15 screenshot shows all8named
+live sensors and charts). New sourcea3855a15a628c560deacc15891f93517de048ded,
+v0.1.16/code779, groups assigned common-prefix positional names (S4 Front/Back
+Left/Right), orders corners, places unrelated sensors separately. Pure display
+helper, no DB/rename/assignment/radio change. Tests include stable shuffle, case,
+singleton/duplicate/model rejection, archives, device semantics and8sensor render.
+Full GTHost run pending; Syntheticb6d8a6d16572 pending; tagCI39319181316 queued.
+Supersededv.15 releaseCI39317931108 canceled, tag retained; desktop0.1.15 remains
+installed and actually verified by owner screenshot plus29persisted receptions,
+all16existing entity hashes preserved. Screenshot private evidence
+desktop-owner-0.1.15-eight-live.png. No normal Razr/Play update yet. Finish grouping
+validation/install and original Play/normal Razr delivery, no extra scope.
+
 Latest correction supersedes candidate below:376367da34c26c05ed536b0f1b9c263c3f0f9891,
 v0.1.15/code776, restores explicit read-only saved history while monitoring is off
 and uses neutral stopped notices. No enable/radio implied. New off/recovery render

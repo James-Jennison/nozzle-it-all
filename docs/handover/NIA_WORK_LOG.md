@@ -4,6 +4,16 @@ Newest entries at the bottom. Times are PDT.
 
 ## Visual dashboard correction (2026-10-19, active)
 
+Owner supplied actualdesktop0.1.15 screenshot:8correctly named sensors receiving,
+gauges/sparklines and selectedaxisplots. Read-only DB confirms29events/16entities
+withbaselineunchanged. Owner asks groupingobviousdevices. a3855a15/v.16/code779
+adds pure named-position grouping sharedbothplatforms, S4cornersFL/FR/BL/BR,
+unrelatedsensorsseparate, no saveddata changes. Added core+actualdevicegrouping
+tests and8sensor render. Full GTHost validation andSyntheticb6d8 pending;
+releaseCI39319181316 queued, supersededv.15CIcanceled/tagretained. Desktop0.1.15
+remains running, normalRazr275/Playdraft752 stillunchanged. Groupedupdate delivery
+and originalnormalappverificationremainunfinished.
+
 Final376 full GTHost PASS2m57s;1321unitresults1311PASS10skip0fail. Actual Razr19UI
 PASS26.57s and physicalGovee1PASS14.94s. IntegratedLinux0.1.15 installed afterowner
 authentication, dpkg0/all218files+source+6adapters+iconsverified;16existingentities

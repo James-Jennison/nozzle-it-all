@@ -23,6 +23,7 @@ fun SettingsScreen(state: AppState) {
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().padding(28.dp).verticalScroll(rememberScrollState()).widthIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         SectionHeader("Settings")
+        EnvironmentalPanel(state.environment)
         var tab by remember { mutableStateOf(SettingsTab.GENERAL) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsTab.entries.forEach { t -> NzButton(t.label, { tab = t }, kind = if (t == tab) ButtonKind.PRIMARY else ButtonKind.SECONDARY, testTag = "settings-tab-${t.name.lowercase()}") }

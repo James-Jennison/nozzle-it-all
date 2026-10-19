@@ -50,6 +50,11 @@ enum class Destination(val label: String, val icon: NzIcon, val key: Key, val in
 }
 
 class AppState(val paths: AppPaths, val scope: CoroutineScope) {
+    val environment = com.nozzleitall.environment.EnvironmentalCoordinator(
+        File(paths.config, "environment/control.json"),
+        com.nozzleitall.environment.EnvironmentalHistory(com.nozzleitall.environment.SqlStoreFactory {
+            com.nozzleitall.desktop.environment.JdbcEnvironmentalStore(File(paths.data, "environment/history.db"))
+        }), { com.nozzleitall.desktop.environment.LinuxBleTransport() })
     val fleet = Fleet(paths, scope, log = { System.err.println(it) })
     val library = ProjectLibrary(paths)
     val prepare = PrepareState(this)
@@ -97,7 +102,7 @@ private fun runApp(open: List<File>) = application {
         runCatching { projects.firstOrNull()?.let(state.prepare::open); models.forEach(state.prepare::importModel) }.onFailure { state.prepare.notice = it.message }
         state.destination = Destination.PREPARE
     }
-    val quit = { state.connector.stop(); state.fleet.shutdown(); exitApplication() }
+    val quit = { state.environment.close(); state.connector.stop(); state.fleet.shutdown(); exitApplication() }
     Window(onCloseRequest = quit, title = Glossary.PRODUCT_FAMILY,
         icon = painterResource("brand/mark-violet.svg"), state = rememberWindowState(size = DpSize(1360.dp, 860.dp)),
         onPreviewKeyEvent = { e ->
@@ -109,6 +114,16 @@ private fun runApp(open: List<File>) = application {
         // Keys no focused control used (a text field keeps its Delete): plain shortcuts such as Delete for the selected object.
         onKeyEvent = { e -> handleMenuShortcut(appMenus(state, quit), e, plain = true) }) {
         window.minimumSize = java.awt.Dimension(960, 640)
+        DisposableEffect(window) {
+            val listener = object : java.awt.event.WindowAdapter() {
+                override fun windowIconified(e: java.awt.event.WindowEvent) { state.environment.foreground(false) }
+                override fun windowDeiconified(e: java.awt.event.WindowEvent) { state.environment.foreground(true) }
+                override fun windowClosed(e: java.awt.event.WindowEvent) { state.environment.foreground(false) }
+            }
+            state.environment.foreground(true)
+            window.addWindowListener(listener)
+            onDispose { window.removeWindowListener(listener); state.environment.foreground(false) }
+        }
         NozzleTheme(state.fleet.settings.value.theme) {
             Column(Modifier.fillMaxSize()) {
                 NozzleMenuBar(appMenus(state, quit), state.openMenu) { state.openMenu = it }

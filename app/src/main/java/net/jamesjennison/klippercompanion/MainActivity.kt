@@ -473,6 +473,7 @@ fun CompanionScreen(state: ScreenState, connect: (String)->Unit, disconnect: ()-
                 }
             }
             if((tab == 0 && !overview) || tab == 4) item { TextButton({customize=true}, Modifier.testTag("customize-dashboard")) { Text("Customize dashboard") } }
+            if(tab == 4) item { net.jamesjennison.klippercompanion.environment.EnvironmentalPanel() }
             if(tab == 4) item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

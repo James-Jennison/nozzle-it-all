@@ -13,6 +13,10 @@ java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaV
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {
+ implementation(project(":environment-core"))
+ implementation("org.xerial:sqlite-jdbc:3.49.1.0")
+ implementation("com.github.hypfvieh:dbus-java-core:5.1.1")
+ runtimeOnly("com.github.hypfvieh:dbus-java-transport-native-unixsocket:5.1.1")
  implementation(project(":printer-api"))
  // Printer adapters are discovered at run time (ServiceLoader); Desktop's own code never names a vendor. Which adapter
  // modules ship is a build choice: -PnozzleAdapters=paxx,octoprint,prusa,bambu,elegoo (PAXX U1, the flagship, is the default
@@ -106,7 +110,7 @@ compose.desktop {
    copyright = "Copyright 2026 Nozzle It All contributors. AGPL-3.0-or-later."
    licenseFile.set(rootProject.file("LICENSE"))
    // Only what the app uses, so the bundled runtime stays small.
-   modules("java.desktop", "java.logging", "java.net.http", "java.xml", "jdk.unsupported", "java.naming")
+   modules("java.desktop", "java.logging", "java.net.http", "java.xml", "jdk.unsupported", "java.naming", "java.sql")
    linux {
     packageName = "nozzle-it-all"
     debMaintainer = "support@nozzleitall.com"

@@ -1,5 +1,30 @@
 # Handover to Codex (written 2026-10-18)
 
+## Environmental B–D — approved, implementation in progress
+
+Owner approved implementation and numeric defaults; see
+`handover/NIA_ENVIRONMENT_IMPLEMENTATION.md`. Historical design-only evidence below
+is not runtime acceptance. No E–G implementation is authorized.
+
+### Historical environmental architecture review (design only)
+
+Owner requested Synthetic council review and design remediation, explicitly no
+implementation. Proposal: `docs/ENVIRONMENT_MONITORING_ARCHITECTURE.md`, SHA256
+`dfbdd62225e24e89e850fa7326f8a877993e4ec0edba3b08a09760742fa5700d`.
+Review packet: `docs/ENVIRONMENT_MONITORING_REVIEW.md`. Three independent Synthetic
+seats on exact GLM5.3/KimiK3/DeepSeekV4.1Flash completed initial/remediation/final
+cycles071c0ccfa241/349560cea827/c4580d55ee78 (nine reviews);49 immutable entries
+have separate resolved dispositions, final reviews no actionable design defects.
+Evidence35c3067bfc8d both checks PASS/intact; closure5e2fa77f1ac3 is
+READY_WITH_RESIDUAL_RISK **for architecture review readiness only**. No owner
+architecture approval or implementation milestone is authorized by that closure.
+No runtime code/config/build/install/service/sensor changes or new live tests.
+Viewport acceptance below is unchanged. Evidence lives under
+`~/.local/state/nozzle-it-all/architecture/20261018-environment`.
+Current registered Evidence Profile is architecture-only and checks unchanged
+runtime source; replace it with an appropriate source/build/runtime profile if
+the owner later authorizes implementation. Do not use this review as runtime proof.
+
 ## Current smooth-motion installation (2026-10-18)
 
 Installed executable source is `9f068d34c862c1ec0f7255371f1d68e44d22ddf8`.

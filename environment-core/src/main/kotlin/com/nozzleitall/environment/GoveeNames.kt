@@ -22,9 +22,11 @@ data class GoveeDeviceName(val device: String, val model: String, val name: Stri
                 lengths.any { count -> value.matches(Regex("[0-9a-fA-F]{2}(-[0-9a-fA-F]{2}){${count - 1}}")) } -> value.replace("-", "")
                 else -> return null
             }
-            return if (cloud && compact.length == 16 && model == "H5100")
-                compact.take(12).chunked(2).reversed().joinToString("").uppercase()
-            else compact.takeLast(12).uppercase()
+            return if (cloud && compact.length == 16) when (model) {
+                "H5100" -> compact.take(12).chunked(2).reversed().joinToString("").uppercase()
+                "H5110", "H5074", "H5179" -> compact.takeLast(12).uppercase()
+                else -> null // No assumed eight-byte layout for an unknown model.
+            } else compact.uppercase()
         }
     }
 }

@@ -40,6 +40,7 @@ import org.json.JSONObject
     LaunchedEffect(view.candidates) { candidateNames.keys.retainAll(view.candidates.map { it.address }.toSet()) }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var chartHistory by remember { mutableStateOf<List<ChartSample>>(emptyList()) }
+    var historyMode by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
@@ -100,7 +101,8 @@ import org.json.JSONObject
                 OutlinedButton({ stop() }, enabled = !stopping, modifier = Modifier.testTag("environment-stop")) { Text("Stop / cancel") }
                 OutlinedButton({ stop(disable = true) }, enabled = !stopping) { Text("Disable") }
             }
-            EnvironmentalDashboard(view, chartHistory)
+            if (historyMode) OutlinedButton({ historyMode = false }) { Text("Return to live readings") }
+            EnvironmentalDashboard(view, chartHistory, historyMode)
             if (view.candidates.isNotEmpty()) {
                 view.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate ->
                     key(candidate.address) {
@@ -117,7 +119,7 @@ import org.json.JSONObject
             }
             if (view.dropped > 0) Text("Queue overflow counter for this monitor: ${view.dropped} — coverage incomplete", color = MaterialTheme.colorScheme.error)
             if (view.recordedDrops > 0) Text("History records ${view.recordedDrops} dropped reports; other gaps unknown", color = MaterialTheme.colorScheme.error)
-            OutlinedButton({ action { val loaded = controller.loadHistory(); val parsed = EnvironmentalCharts.history(loaded); controller.savedBindings(); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-history")) { Text("Open local history") }
+            OutlinedButton({ action { val loaded = controller.loadHistory(); val parsed = EnvironmentalCharts.history(loaded); controller.savedBindings(); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping, modifier = Modifier.testTag("environment-history")) { Text("Open local history") }
             OutlinedButton({ action { controller.retention() } }, enabled = !busy && !stopping) { Text("Apply 30-day retention") }
             OutlinedButton({ export.launch("environment-history.ndjson") }, enabled = !busy && !stopping) { Text("Export history") }
             OutlinedButton({ deleting = true }, enabled = !busy && !stopping) { Text("Delete environmental data…") }
@@ -152,7 +154,7 @@ import org.json.JSONObject
                 TextButton({ action { controller.calibrate(b, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true) { Text("Save RH calibration") }
                 TextButton({ action { controller.archive(b) } }, enabled = !busy && !stopping) { Text("Archive binding") }
             }
-            if (rows.size == 500) OutlinedButton({ val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping) { Text("Older 500") }
+            if (rows.size == controller.historyPageSize) OutlinedButton({ val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping) { Text("Older ${controller.historyPageSize}") }
         }
     }
     nameTarget?.let { (address, binding) ->

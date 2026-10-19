@@ -25,6 +25,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     val gate = EnvironmentalGate(control)
     private val mutable = MutableStateFlow(EnvironmentalView(gate.state, if (gate.state == EnvironmentalState.ENABLED_IDLE) "Enabled, idle — press Discover or Start" else if (gate.state == EnvironmentalState.DISABLED_RECOVERY) "Recovery required — control record preserved; Delete / resume cleanup explicitly" else "Disabled — no collection"))
     val view = mutable.asStateFlow()
+    val historyPageSize: Int get() = limits.pageSize
     @Volatile private var operation: Job? = null
     @Volatile private var operationScope: CoroutineScope? = null
     private class PreparationControl(val serial: Long, val epoch: Long, val revoked: AtomicBoolean = AtomicBoolean(false)) {

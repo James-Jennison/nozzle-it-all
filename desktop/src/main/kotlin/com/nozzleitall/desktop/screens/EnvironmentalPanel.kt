@@ -24,6 +24,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
     LaunchedEffect(v.candidates) { candidateNames.keys.retainAll(v.candidates.map { it.address }.toSet()) }
     var rows by remember { mutableStateOf<List<String>>(emptyList()) }
     var chartHistory by remember { mutableStateOf<List<ChartSample>>(emptyList()) }
+    var historyMode by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
@@ -59,7 +60,8 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
                 NzButton("Disable", { stop(disable = true) }, enabled = !stopping)
             }
         }
-        EnvironmentalDashboard(v, chartHistory)
+        if (historyMode) NzButton("Return to live readings", { historyMode = false })
+        EnvironmentalDashboard(v, chartHistory, historyMode)
         if (v.candidates.isNotEmpty()) {
             v.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate -> key(candidate.address) { Column {
                 val saved = v.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
@@ -87,7 +89,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
         if (v.dropped > 0) Banner("Queue overflow counter for this monitor: ${v.dropped} — coverage incomplete", BannerKind.WARNING)
         if (v.recordedDrops > 0) Banner("History records ${v.recordedDrops} dropped reports; other unobserved gaps remain unknown", BannerKind.WARNING)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NzButton("Open local history", { action { val loaded = controller.loadHistory(); val parsed = EnvironmentalCharts.history(loaded); controller.savedBindings(); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping, testTag = "environment-history")
+            NzButton("Open local history", { action { val loaded = controller.loadHistory(); val parsed = EnvironmentalCharts.history(loaded); controller.savedBindings(); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping, testTag = "environment-history")
             NzButton("Apply 30-day retention", { action { controller.retention() } }, enabled = !busy && !stopping)
             NzButton("Export history…", {
                 val chooser = javax.swing.JFileChooser()
@@ -129,6 +131,6 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
             NzButton("Save RH calibration", { action { controller.calibrate(binding, Channel.HUMIDITY, offset.toDouble()) } }, enabled = !busy && !stopping && offset.toDoubleOrNull()?.isFinite() == true)
             NzButton("Archive binding", { action { controller.archive(binding) } }, enabled = !busy && !stopping)
         } }
-        if (rows.size == 500) NzButton("Older 500", { val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed } }, enabled = !busy && !stopping)
+        if (rows.size == controller.historyPageSize) NzButton("Older ${controller.historyPageSize}", { val last = JSONObject(rows.last()); action { val loaded = controller.loadHistory(last.getLong("observedAt"), last.getString("eventId")); val parsed = EnvironmentalCharts.history(loaded); rows = loaded; chartHistory = parsed; historyMode = true } }, enabled = !busy && !stopping)
     }
 }

@@ -4,6 +4,18 @@ Newest entries at the bottom. Times are PDT.
 
 ## Owner follow-up: retained names and visual dashboard (2026-10-19)
 
+Exact24fb5a36 GTHost full SUCCESS3m54s/132tasks48executed84up-to-date;
+core100Hz4.32783694%onecore/RSS+10809344bytes/drop0, not physical radio/GUI/battery
+proof. Synthetic74f9516b7751 all3COMPLETE;17immutable findings recorded with
+separate dispositions. Confirmed cumulative-drop display issue fixed to break
+only on counter transition; unknown8byte layouts explicitly rejected; continuation
+uses configured page size. Added real encoder-to-history sequence regression and
+Android Compose visual/empty fixtures. Separated live/history page mode so paging
+cannot be drowned by newest live samples. Plot expansion stays in selected card.
+False desktop-on-disk-key premise rejected against memory-only directory source;
+false export overwrite premise rejected against official ACTION_CREATE_DOCUMENT
+contract. Final follow-up validation and targeted closure review pending.
+
 Implementation checkpoint: H5100 eight-byte cloud IDs use their first six bytes
 in reverse order; H5110 uses the last six bytes. Owner screenshot and primary
 govee2mqtt issue308 independently demonstrate this difference. Matching remains

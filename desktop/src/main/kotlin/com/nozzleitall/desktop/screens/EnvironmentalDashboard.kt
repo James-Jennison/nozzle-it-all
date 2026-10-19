@@ -21,18 +21,20 @@ private fun number(value: Double?) = value?.let { String.format(Locale.getDefaul
 private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
 /** Rendering only: no radio, cloud request, storage, or invented samples. */
-@Composable internal fun EnvironmentalDashboard(view: EnvironmentalView, history: List<ChartSample>) {
-    val samples = remember(history, view.chartSamples) { EnvironmentalCharts.merge(history, view.chartSamples) }
+@Composable internal fun EnvironmentalDashboard(view: EnvironmentalView, history: List<ChartSample>, historyMode: Boolean = false) {
+    val samples = if (historyMode) history else view.chartSamples
     val bindings = view.bindings.filterNot { it.archived }
     var selected by remember { mutableStateOf<String?>(null) }
     val target = bindings.firstOrNull { it.id == selected } ?: bindings.firstOrNull()
     Column(Modifier.fillMaxWidth().testTag("environment-dashboard"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Txt("Sensor dashboard", Nz.type.title)
+        Txt(if (historyMode) "Local history page — recorded receptions" else "Live view — explicitly start monitoring for trends", Nz.type.bodySmall)
         if (bindings.isEmpty()) Txt("Discover and add sensors, or open local history to restore saved sensors.")
         bindings.forEach { binding ->
             val name = view.sensorLabels[binding.sensorId] ?: binding.model
-            val latest = samples.lastOrNull { it.binding == binding.id }
-            val reception = view.discovery[binding.address]
+            val latest = if (historyMode) samples.lastOrNull { it.binding == binding.id }
+                else view.latest[binding.id]?.let(EnvironmentalCharts::sample)
+            val reception = if (historyMode) null else view.discovery[binding.address]
             val values = reception?.readings?.associate { it.channel to it.value } ?: latest?.values.orEmpty()
             val received = reception?.receivedAt ?: latest?.time
             Card(Modifier.fillMaxWidth().testTag("environment-sensor-card")) {
@@ -41,13 +43,12 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                     Txt("${number(values[Channel.TEMPERATURE])} °C    ${number(values[Channel.HUMIDITY])} %RH", Nz.type.metricSmall)
                     Txt("Battery ${number(values[Channel.BATTERY_PERCENT])}% · ${if (received == null) "No reception available" else "Received " + time(received)}", Nz.type.bodySmall)
                     Txt("Reception snapshot · physical measurement age unknown", Nz.type.bodySmall)
+                    if (target?.id == binding.id) {
+                        EnvironmentalTrend(samples, binding.id, Channel.TEMPERATURE)
+                        EnvironmentalTrend(samples, binding.id, Channel.HUMIDITY)
+                    }
                 }
             }
-        }
-        target?.let { binding ->
-            Txt((view.sensorLabels[binding.sensorId] ?: binding.model) + " · reception history", Nz.type.title)
-            EnvironmentalTrend(samples, binding.id, Channel.TEMPERATURE)
-            EnvironmentalTrend(samples, binding.id, Channel.HUMIDITY)
         }
         Txt("Up to 500 received samples in this view. Lines stop at session changes, known drops and gaps over 2 minutes; unobserved gaps remain unknown. Open local history to load/refresh stored readings.", Nz.type.bodySmall)
     }

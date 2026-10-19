@@ -34,4 +34,15 @@ class EnvironmentalChartsTest {
         val series = EnvironmentalCharts.series(listOf(sample(0, 1000), sample(1, 2000), sample(2, 1500)), "sensor", Channel.TEMPERATURE)!!
         assertFalse(series.points.last().connect)
     }
+    @Test fun cumulativeDropCounterBreaksOnlyAtItsTransition() {
+        val series = EnvironmentalCharts.series(listOf(sample(0), sample(1, dropped = 1), sample(2, dropped = 1), sample(3, dropped = 1)), "sensor", Channel.TEMPERATURE)!!
+        assertEquals(listOf(false, false, true, true), series.points.map { it.connect })
+    }
+    @Test fun realHistoryEncodingRetainsSequenceAndConnects() {
+        val observations = (1L..2L).map { i -> Observation("e$i", "inc", "collector", "session", i, "sensor", 1,
+            i * 1000, i * 1000, i, decoder = "fixture", readings = listOf(Reading(Channel.HUMIDITY, 40.0 + i))) }
+        val rows = observations.map { org.json.JSONObject(ObservationEncoding.encode(it)).put("receivedAt", it.receivedAt).toString() }
+        val series = EnvironmentalCharts.series(EnvironmentalCharts.history(rows), "sensor", Channel.HUMIDITY)!!
+        assertEquals(listOf(false, true), series.points.map { it.connect })
+    }
 }

@@ -2,6 +2,21 @@
 
 ## Active correction: automatic Govee names, desktop + normal Razr (2026-10-19)
 
+CURRENT OWNER SCOPE: retained automatic names AND visual environmental data on
+desktop/Android. First integrated source24fb5a36 GTHost full SUCCESS3m54s,
+132tasks48executed84up-to-date. Its100Hz fixture4.32784%onecore/RSS+10809344bytes,
+drop0, not physical-radio/GUI/battery proof. Follow-up source (this commit) fixes
+cumulative-drop chart continuity and configurable page button, separates live
+from historical charts, embeds plots in the selected card, and adds actual Android
+Compose chart tests. H5100 eight-byte ID is reverse(first6bytes), unlike H5110's
+last6bytes; full48bits/model/unique guard retained, unknown8byte layouts rejected.
+Synthetic initial74f9516b7751 all3COMPLETE,17immutable findings/separate durable
+dispositions. Desktop-memory-key and history-sequence concerns contradicted by
+actual store/encoder sources; include those sources in targeted closure review.
+Current follow-up not yet validated/installed. Desktop still940; normal Razr275
+with data untouched. v0.1.8 owned CI canceled as superseded; do not promote752/756
+or claim dashboard/normal-app acceptance. Final combined Play candidate pending.
+
 Owner requires automatic correct Govee Home names, not identification of MACs that
 Govee Home does not expose. Shared matcher now accepts six-byte IDs or eight-byte
 Govee IDs with two prefix bytes followed by the complete six-byte BLE address.

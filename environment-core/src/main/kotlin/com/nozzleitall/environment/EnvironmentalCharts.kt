@@ -45,7 +45,7 @@ object EnvironmentalCharts {
             val previous = rows.getOrNull(i - 1)
             Point(if (start == end) .5f else ((r.time.toDouble() - start.toDouble()) / span).toFloat(),
                 (1.0 - (r.values.getValue(channel) - low) / (high - low)).toFloat(),
-                previous != null && r.session == previous.session && r.sequence > previous.sequence && r.dropped == 0L &&
+                previous != null && r.session == previous.session && r.sequence > previous.sequence && r.dropped == previous.dropped &&
                     r.time > previous.time && r.time.toDouble() - previous.time.toDouble() <= 120_000.0)
         }
         return Series(points, low, high, start, end)

@@ -8,6 +8,10 @@ import javax.net.ssl.HttpsURLConnection
 import java.security.cert.Certificate
 
 class GoveeNamesTest {
+    @Test fun unknownEightByteModelNeverAssumesAnAddressLayout() {
+        assertFalse(GoveeDeviceName("11:22:AA:BB:CC:DD:EE:FF", "UNKNOWN", "Fixture")
+            .matches(Candidate("AA:BB:CC:DD:EE:FF", "govee-ble", "UNKNOWN")))
+    }
     private val valid = """{"code":200,"data":[{"sku":"H5100","device":"AA:BB:CC:DD:EE:FF","deviceName":"Office shelf"}]}"""
     private open class Connection(private val status: Int, private val body: ByteArray) : HttpsURLConnection(URL(GoveeNameApi.ENDPOINT)) {
         var closed = false

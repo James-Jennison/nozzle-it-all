@@ -350,7 +350,9 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         val existingEquipment = history.entities("equipment").firstOrNull { it.getString("name") == equipmentName && it.optString("type") == "room" }
         val equipment = Equipment(id = existingEquipment?.getString("id") ?: newId(), name = equipmentName)
         val existingPosition = history.entities("position").firstOrNull { it.getString("equipmentId") == equipment.id && it.getString("name") == positionName }
-        val envelope = existingPosition?.takeIf { !it.isNull("minC") || !it.isNull("maxC") } ?: previousPosition
+        // A pre-existing target owns its limits, including deliberately absent limits.
+        // Carry the old pair only when creating a new position for renamed labels.
+        val envelope = existingPosition ?: previousPosition
         val position = Position(id = existingPosition?.getString("id") ?: newId(), equipmentId = equipment.id, name = positionName,
             minC = envelope?.takeUnless { it.isNull("minC") }?.getDouble("minC"),
             maxC = envelope?.takeUnless { it.isNull("maxC") }?.getDouble("maxC"))

@@ -655,6 +655,15 @@ class EnvironmentalTest {
             assertTrue(target.isNull("minC"))
             assertEquals(30.0, target.getDouble("maxC"), 0.0)
             assertThrows(QualificationUnavailableException::class.java) { c.start() }
+            val ordinary = Position(equipmentId = renamed.getString("equipmentId"), name = "Existing ordinary shelf")
+            h.savePosition(ordinary)
+            c.configureRoom(b, "Renamed Room", ordinary.name)
+            val unchanged = h.entities("position").single { it.getString("id") == ordinary.id }
+            assertTrue(unchanged.isNull("minC") && unchanged.isNull("maxC"))
+            assertEquals(QualificationAdmission(emptySet(), Long.MAX_VALUE), h.assignedQualificationRadios(listOf(b), "any-platform", System.currentTimeMillis()))
+            val original = h.entities("position").single { it.getString("id") == shelf.id }
+            assertEquals(10.0, original.getDouble("minC"), 0.0)
+            assertEquals(40.0, original.getDouble("maxC"), 0.0)
         } finally { c.close() }
     }
     @Test fun roomSaveCannotReclassifyNonRoomEquipmentOrDuplicateItsName() {

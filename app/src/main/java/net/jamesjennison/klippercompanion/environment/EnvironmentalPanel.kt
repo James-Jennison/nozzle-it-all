@@ -96,17 +96,13 @@ import org.json.JSONObject
             if (view.candidates.isNotEmpty()) {
                 view.candidates.filter { it.protocol == "govee-ble" }.forEach { candidate ->
                     key(candidate.address) {
-                        val added = view.bindings.any { !it.archived && it.address.equals(candidate.address, true) }
-                        val name = candidateNames[candidate.address] ?: "${candidate.model} sensor"
-                        val reception = view.discovery[candidate.address]
-                        Text("${candidate.model} · ${candidate.address}")
-                        Text(reception?.readings?.takeIf { it.isNotEmpty() }?.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" } ?: "Readings unavailable")
-                        Text("Signal: ${reception?.rssiDbm?.let { "$it dBm" } ?: "unavailable"} · Last received: ${reception?.receivedAt?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "unavailable"}", style = MaterialTheme.typography.bodySmall)
-                        OutlinedTextField(name, { candidateNames[candidate.address] = it.take(120) }, label = { Text("Name this sensor") }, enabled = !added)
-                        OutlinedButton({
+                        val saved = view.bindings.firstOrNull { !it.archived && it.address.equals(candidate.address, true) }
+                        val name = if (saved != null) view.sensorLabels[saved.sensorId] ?: "${candidate.model} sensor" else candidateNames[candidate.address] ?: "${candidate.model} sensor"
+                        GoveeDiscoveryCard(candidate, view.discovery[candidate.address], name, saved != null, busy || stopping,
+                            onNameChange = { candidateNames[candidate.address] = it.take(120) }, onAdd = {
                             val selectedName = candidateNames[candidate.address] ?: "${candidate.model} sensor"
                             action { controller.save(candidate, selectedName) }
-                        }, enabled = !busy && !stopping && !added && name.isNotBlank()) { Text(if (added) "Already added" else "Add sensor") }
+                        })
                     }
                 }
             }

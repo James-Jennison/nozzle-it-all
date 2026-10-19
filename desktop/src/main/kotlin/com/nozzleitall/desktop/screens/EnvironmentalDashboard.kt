@@ -63,7 +63,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                         modifier = Modifier.weight(1f).semantics { heading() })
                     if (positions != null) NzButton(if (showDryer) "Hide placement" else "Sensor placement", { showDryer = !showDryer })
                 }
-                EnvironmentalSensorTable(group.bindings, view.sensorLabels, data, target?.id, positions) {
+                if (positions == null) EnvironmentalSensorTable(group.bindings, view.sensorLabels, data, target?.id, positions) {
                     selected = it.id; expandedChoice = true
                 }
                 if (positions != null) S4EnvironmentOverview(group, positions, data, historyMode,
@@ -76,16 +76,8 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             val primary = groups.firstOrNull { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
             if (maxWidth >= 1200.dp && primary != null && groups.size > 1) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1.6f)) { renderGroup(primary, false) }
+                    Column(Modifier.weight(1.6f)) { renderGroup(primary, true) }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        if (showDryer) Card(Modifier.fillMaxWidth()) {
-                            Txt("S4 sensor placement", Nz.type.title)
-                            Txt("Viewed from the front", Nz.type.bodySmall, Nz.colors.textMuted)
-                            S4EnvironmentOverview(primary, EnvironmentalGroupOverview.s4Positions(primary, view.sensorLabels)!!,
-                                data, historyMode, view.state == EnvironmentalState.COLLECTING, target?.id, placementOnly = true) {
-                                selected = it.id; expandedChoice = true
-                            }
-                        }
                         groups.filter { it != primary }.forEach { renderGroup(it, true) }
                     }
                 }

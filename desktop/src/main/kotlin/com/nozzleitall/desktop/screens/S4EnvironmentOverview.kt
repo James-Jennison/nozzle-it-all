@@ -71,10 +71,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                     if (showMethod) Label("Only readings received in the last 2 minutes contribute. Missing, older and future-dated readings are excluded. Positions follow sensor names. This is sampled air, not filament moisture; the illustration is not a heat map.")
                 }
             }
-            if (showDiagram && maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1.6f)) { diagram() }
-                Box(Modifier.weight(1f)) { summary() }
-            } else if (showDiagram) Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { diagram(); summary() }
+            if (showDiagram) Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { diagram(); summary() }
             else summary()
         }
         Label("Recorded trends", title = true)
@@ -134,7 +131,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
     // Original scalable cutaway illustration: long S4 shell, clear lid, four reel bays and front control panel.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    val diagramHeight = if (maxWidth >= 600.dp && fontScale <= 1.2f) 240.dp else 350.dp
+    val diagramHeight = if (maxWidth >= 480.dp && fontScale <= 1.2f) 210.dp else 350.dp
     Box(Modifier.fillMaxWidth().height(diagramHeight * fontScale).testTag("s4-dryer-illustration")) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width; val h = size.height

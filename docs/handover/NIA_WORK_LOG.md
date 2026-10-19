@@ -609,3 +609,15 @@ No successful build, install, qualification, or milestone completion claimed yet
   All16entities/1980events preserved by hash. No runningnormalNIA process yet.
   Requested owner open/Start/selectcorner/leave1minute/screenshot. NativeUIcontrol
   unavailable; actual live and Stop evidence remains pending, not inferred.
+# 2026-10-19 — tighter S4 overview, source27428a20
+
+Owner supplied live .19 screenshot and requested tighter layout. Kept official
+artwork/native corner readings/statistics/trends. Wide layout now places a250dp
+statistics column beside weighted illustration; narrow/large text stays stacked.
+Reduced spacing and metric text32to28sp on desktop and Android. No data or BLE
+changes. Added1920px render alongside1500px and existing narrow/light tests.
+GTHost test/Android compile command exited0, BUILD SUCCESSFUL. Manually inspected
+wide software fixture; not installed/runtime proof. Packaging0.1.20 ongoing.
+Synthetic6fd1ace662eb failed unsupported INITIAL phase; corrected CONVERGENCE
+package submitted once as67734e1567a7. All3 seats running. Requested owner close
+desktop before install; existing .19 app not stopped by agent.

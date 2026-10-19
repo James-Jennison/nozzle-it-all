@@ -143,6 +143,20 @@ class EnvironmentalDashboardRenderTest {
             if (c.green > 140 && c.green - c.red > 70 && c.green - c.blue > 50) shellPixels++
         }
         assertTrue("Default overview paints distinctive green branding", shellPixels > 40)
+        if (width == 1920) {
+            // Summary metrics must be to the right of the dryer in its vertical band,
+            // not below it. Excludes corner labels and the separate other-sensor table.
+            for (rgb in listOf(0xB59AFF, 0x35B9C5)) {
+                val expected = java.awt.Color(rgb)
+                var metricPixels = 0
+                for (y in 110 until 360) for (x in 900 until 1130) {
+                    val c = java.awt.Color(image.getRGB(x, y))
+                    if (kotlin.math.abs(c.red - expected.red) < 10 && kotlin.math.abs(c.green - expected.green) < 10 &&
+                        kotlin.math.abs(c.blue - expected.blue) < 10) metricPixels++
+                }
+                assertTrue("Wide summary metric $rgb occupies the column beside the dryer", metricPixels > 100)
+            }
+        }
         for (rgb in listOf(0xB59AFF, 0x35B9C5, 0xFFC66D, 0xFF91B5)) {
             var pixels = 0
             val expected = java.awt.Color(rgb)

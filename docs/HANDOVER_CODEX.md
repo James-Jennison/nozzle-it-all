@@ -1,5 +1,22 @@
 # Handover to Codex (written 2026-10-18)
 
+## Current tightening candidate — 0.1.20 / 27428a20
+
+Owner's live .19 screenshot confirms the official-reference artwork, eight named
+sensors, live S4 corner readings, group statistics and trends in the normal app.
+The normal executable was observed running and history grew beyond the preserved
+baseline. Explicit Stop/corner-selection acceptance has not yet been observed.
+Owner now requests a tighter layout. Source27428a20 places statistics alongside
+the illustration at overview widths >=900dp and font scale <=1.2, retaining a
+stacked accessible fallback. Spacing and metric typography reduced; monitoring,
+storage, naming and artwork are unchanged. Added1920px software-render fixture.
+GTHost full test tasks and Android compile succeeded; package0.1.20 is running.
+Wide render manually inspected: all corners and metrics visible; charts directly
+below. Synthetic cycle67734e1567a7 is running. Prior6fd1ace662eb failed package
+phase validation before review; corrected package submitted, failure retained.
+Owner has been asked to close running NIA before installation. Not installed yet.
+Older entries below are historical and are superseded by this current section.
+
 ## Official-reference compact S4 candidate — supersedes earlier .19 candidates
 
 INSTALLED: owner approved desktop authentication; dpkg session61701 exit0 upgraded

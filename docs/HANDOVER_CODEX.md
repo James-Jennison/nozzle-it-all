@@ -2,6 +2,15 @@
 
 ## Current H5179 detection fix — 0.1.21 candidate
 
+LIVE VERIFIED at16:03PDT: owner screenshot d811e7c7 shows normal desktop active
+monitoring, Centauri Carbon27.8C45.6%RH, all9sensors, S4 corners/statistics/trends.
+Read-only database independently confirms9bindings, unarchivedH5179,12fresh
+H5179 receptions with progressing timestamps (latest27.8C45.5%RH100%battery).
+All16preexisting entities and4909events retain hashes; now18entities/4969events
+at initial check. H5179 implementation/build/tests/review/install/live loop done.
+Begin owner-requested product wizard; U1 and Centauri Carbon overlays included
+as design requirements. Separate Android verification is not claimed complete.
+
 Owner authorizes narrow fix/build/tests/Synthetic/install/live verification, then
 question-card product wizard including future U1 and Centauri Carbon overlays.
 Read-only evidence: imported directory has9names including Centauri CarbonH5179;
@@ -34,6 +43,12 @@ Rollback source is the prior two production hunks; no schema migration. Do not
 perform a package downgrade or delete the new binding without owner authority.
 
 ## Play heartbeat — 2026-10-19 15:31 PDT
+
+16:01PDT recheck: verified connected ZY22HXCVPM model motorola razr2023;
+782/.17, installer com.android.vending, lastUpdate15:18:25 and original
+firstInstallSep26 05:41:54 unchanged. No installation/data mutations. Native
+phone UI remains unavailable; previously requested live/inventory proof pending.
+No repeated owner prompt and no completion claim; follow-up remains active.
 
 15:46PDT recheck: same verified Razr model,782/.17, Play installer and install
 timestamps. No change; runtime/inventory proof still pending unavailable native

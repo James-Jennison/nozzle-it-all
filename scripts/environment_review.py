@@ -29,7 +29,7 @@ elif sys.argv[1] == 'submit':
     for path in ['desktop/src/main/kotlin/com/nozzleitall/desktop/Main.kt', 'app/src/main/java/net/jamesjennison/klippercompanion/MainActivity.kt']:
         sources[path] = '\n'.join(subprocess.check_output(['git', 'diff', 'ed50eae7', '--', path], cwd=repo, text=True).splitlines())
     package = {
-        'phase': 'CURRENT_SOURCE_REVIEW',
+        'phase': 'INITIAL_REVIEW',
         'task': 'Independent read-only implementation review of approved B-D environmental monitoring. Return normalized JSON findings, not patch execution. No tool execution or workspace access. Owner requirements are authoritative; no majority vote or fabricated runtime proof.',
         'source_revision': revision,
         'owner_requirements': (repo/'docs/ENVIRONMENT_MONITORING_ARCHITECTURE.md').read_text(),

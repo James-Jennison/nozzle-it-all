@@ -57,7 +57,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                         Label("Range  ${fmt(stats?.minimum)} – ${fmt(stats?.maximum)} ${channel.unit}")
                         Label("Spread  ${fmt(stats?.let { it.maximum - it.minimum })} ${channel.unit} · ${stats?.count ?: 0}/4 positions")
                     }
-                    Label("Recent readings only · named positions · sampled air, not filament moisture")
+                    Label("Last 2 min only · excludes missing/future readings · sampled air, not filament moisture")
                 }
             }
             if (maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -174,7 +174,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
         historyMode -> "Saved reception"
         else -> "Recent reception"
     }
-    Column(modifier.background(Color(0xEE111B22), RoundedCornerShape(8.dp))
+    Column(modifier.heightIn(min = 48.dp).background(Color(0xEE111B22), RoundedCornerShape(8.dp))
         .border(if (binding != null && binding.id == selected) 2.dp else 0.dp,
             if (binding != null && binding.id == selected) positionColors[index] else Color.Transparent, RoundedCornerShape(8.dp))
         .clickable(enabled = binding != null, role = Role.Button) { binding?.let(onSelect) }

@@ -41,9 +41,8 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     val groups = remember(view.bindings, view.sensorLabels) { environmentalSensorGroups(view.bindings, view.sensorLabels) }
     val bindings = groups.flatMap { it.bindings }
     var selected by remember { mutableStateOf<String?>(null) }
-    var expandedTrends by remember(groups) {
-        mutableStateOf(groups.none { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null })
-    }
+    var expandedChoice by remember { mutableStateOf<Boolean?>(null) }
+    val expandedTrends = expandedChoice ?: groups.none { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
     val target = bindings.firstOrNull { it.id == selected } ?: bindings.firstOrNull()
     val temperature = Nz.colors.accent
     val humidity = Color(0xFF35B9C5)
@@ -104,10 +103,10 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Txt("${view.sensorLabels[binding.sensorId] ?: binding.model} · trends", Nz.type.title)
-                    Txt(if (historyMode) "Saved history" else if (view.state == EnvironmentalState.COLLECTING) "Recording until Stop or app exit" else "Start monitoring to record new chart data", Nz.type.bodySmall)
+                    Txt(if (historyMode) "Saved history" else if (view.state == EnvironmentalState.COLLECTING) "Recording · continues when switching apps" else "Start monitoring to record new chart data", Nz.type.bodySmall)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NzButton(if (expandedTrends) "Hide sensor charts" else "Show sensor charts", { expandedTrends = !expandedTrends })
+                    NzButton(if (expandedTrends) "Hide sensor charts" else "Show sensor charts", { expandedChoice = !expandedTrends })
                     NzButton("Sensor details", { onDetails(binding) })
                 }
             }

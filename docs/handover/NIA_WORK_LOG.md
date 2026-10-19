@@ -533,5 +533,8 @@ No successful build, install, qualification, or milestone completion claimed yet
 - Synthetic initial886e84a4be38 had two provider-capacity failures; frontend findings
   separately dispositioned. Revised2254bc33a238 submitted once, pending.
 - Evidence d182bf9ba64d used stale0.1.17 profile; preserve result but exclude from
-  current candidate acceptance. Correct5b84 profile registered. Package pending.
-
+  current candidate acceptance. Correct5b84 profile registered.
+- Integrated0.1.18 packaging completed on GTHost; downloaded exact package SHA256
+  a8c6b18f6fc6fc5ca2d23deb4cc9d89709abcdb5ead9ce7c6a7fb52908fb5c6c.
+  Candidate verifier confirms embedded5b84 revision, six adapters, launcher/eight
+  icons. New candidate evidence545b55204540 submitted; not installed yet.

@@ -78,7 +78,7 @@ import org.json.JSONObject
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Environmental monitoring (optional)", style = MaterialTheme.typography.titleMedium)
             Text(view.status)
-            EnvironmentalProviders.ble.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
+            EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
             Text("Room labels organize observations without certification. Measurement age and operating limits are not certified; monitoring does not control equipment or establish dryer safety.", style = MaterialTheme.typography.bodySmall)
@@ -94,7 +94,7 @@ import org.json.JSONObject
             }
             if (view.candidates.isNotEmpty()) {
                 OutlinedTextField(name, { name = it.take(120) }, label = { Text("Sensor label") })
-                view.candidates.forEachIndexed { i, candidate ->
+                view.candidates.filter { it.protocol == "govee-ble" }.forEachIndexed { i, candidate ->
                     Text("${candidate.model} · ${candidate.address} · candidate ${i + 1} · firmware/calibration/thermal limits unqualified")
                     OutlinedButton({ action { controller.save(candidate, name) } }, enabled = !busy && !stopping && name.isNotBlank()) { Text("Save only") }
                 }

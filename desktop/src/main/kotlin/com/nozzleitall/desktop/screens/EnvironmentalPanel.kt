@@ -38,7 +38,7 @@ import org.json.JSONObject
     Card(Modifier.fillMaxWidth()) {
         Txt("Environmental monitoring (optional)", Nz.type.title)
         Txt(v.status, Nz.type.body)
-        EnvironmentalProviders.ble.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
+        EnvironmentalProviders.ble.filter { it.id == "govee-ble" }.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Active BLE scanning uses radio/battery. No pairing, Govee unbinding, cloud, background service or equipment control.", Nz.type.bodySmall)
         Txt("Room labels organize observations without certification. Measurement age and operating limits are not certified; monitoring does not control equipment or establish dryer safety.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
@@ -55,7 +55,7 @@ import org.json.JSONObject
         }
         if (v.candidates.isNotEmpty()) {
             Field("Sensor label", name, { name = it.take(120) })
-            v.candidates.forEachIndexed { i, candidate -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            v.candidates.filter { it.protocol == "govee-ble" }.forEachIndexed { i, candidate -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Txt("${candidate.model} · ${candidate.address} · candidate ${i + 1} · unqualified", Nz.type.body)
                 NzButton("Save only", { action { controller.save(candidate, name) } }, enabled = !busy && !stopping && name.isNotBlank())
             } }

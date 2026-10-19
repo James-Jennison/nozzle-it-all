@@ -71,11 +71,12 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
         cancel(); names.value = emptyList(); savedKeyRevoked.set(true); pendingForgets++; cleanup.value = true
         return cleanupScope.async(start = CoroutineStart.ATOMIC) {
             try { synchronized(storageLock) {
-                try { check(credentialStore.edit().remove("api-key").commit()); savedKeyRevoked.set(false) }
-                catch (e: Exception) { savedKeyRevoked.set(true); throw e }
+                try {
+                    if (!credentialStore.edit().remove("api-key").commit()) throw GoveeNameException(GoveeNameFailure.STORAGE)
+                    savedKeyRevoked.set(false)
+                } catch (_: Exception) { savedKeyRevoked.set(true); throw GoveeNameException(GoveeNameFailure.STORAGE) }
             } }
             finally { synchronized(this) { pendingForgets--; cleanup.value = pendingForgets != 0 } }
         }
     }
-    fun forget() { runBlocking { requestForgetAsync().await() } }
 }

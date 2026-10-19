@@ -47,6 +47,7 @@ import kotlinx.coroutines.*
         val forget = store.requestForgetAsync()
         busy = true; cancel()
         scope.launch(start = CoroutineStart.UNDISPATCHED) { try { withContext(NonCancellable) { forget.await() }; saved = false; message = "Saved Govee key and imported name list forgotten. Added sensor names/history are unchanged." }
+            catch (e: GoveeNameException) { message = e.reason.description }
             catch (_: Exception) { message = "Could not forget saved key; retry explicitly." }
             finally { busy = false } }
     }, enabled = !busy && !forgetting) { Text("Forget Govee key and imported names") }
@@ -79,7 +80,7 @@ import kotlinx.coroutines.*
                     if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                         message = "Imported $count Govee names. Exact model/address matches fill new sensors; otherwise choose the matching Govee name explicitly. Existing sensor names are not overwritten."
                     }
-                } catch (_: CancellationException) { store.cancel() }
+                } catch (_: CancellationException) { cancel(); message = GoveeNameFailure.CANCELLED.description }
                 catch (e: GoveeNameException) { message = e.reason.description; dialog = false }
                 catch (_: Exception) { message = "Name import unavailable; no names changed. Retry explicitly."; dialog = false }
                 finally { busy = false }

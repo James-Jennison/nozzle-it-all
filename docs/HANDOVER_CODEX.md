@@ -1,5 +1,45 @@
 # Handover to Codex (written 2026-10-18)
 
+## Current authorized follow-up: normal Razr + Govee Home names (2026-10-19)
+
+The Owner has authorized the existing Play Closed testing–Alpha track update,
+then explicitly authorized read-only Govee Home name import with private key entry
+inside NIA. The Owner has obtained a key; Codex has not received or handled it.
+The prior signing-boundary approval request below is historical and superseded.
+Normal-app installation and actual-account name import are not complete yet.
+
+Current candidate source `90053bde7099d014bbbe6b0b7bfe30dd5cd71c56` adds fixed-GET
+Govee device-list import, protected non-saveable/password key dialog with autofill
+opt-out, optional dedicated encrypted credential file, and no control requests.
+Only full six-byte MAC+model matches auto-name; opaque/eight-byte cloud IDs require
+explicit user selection, never guessed suffix matching. Existing saved labels are
+not overwritten automatically. Imported names stay in process memory; added labels
+persist locally. No real key in tests, logs, evidence, exports or reviewer packages.
+Synthetic key fixtures cover cancellation/Forget/commit rollback. Android cleanup
+is app-owned, atomically scheduled with a synchronous intent fence; failed cleanup
+or rollback revokes saved-key reuse. Owner additionally requests desktop parity
+and dock-icon correction. Desktop private key entry is session-only, not persisted;
+explicit selection handles non-MAC cloud IDs, and existing labels are preserved.
+Installed Linux currently lacks standard launcher/themed icons: the raw jpackage
+Deb was installed, bypassing scripts/package_linux.sh integration. The integrated
+packager now validates maintainer-script syntax, refresh hooks, launcher WM class
+and icon payloads before producing its Deb. Installation remains pending.
+Current GTHost full validation and Synthetic review-cycle-5bba7833d3dd run in the
+visible task; no current-source success or installation inferred yet. Prior cc48
+full build SUCCESS3m21s/132tasks29executed103up-to-date. Prior12c device fixtures
+6/7PASS, one key-field selector failure retained and corrected to a stable testTag;
+current tests add failed rollback/deletion and cancelled-cleanup-handle coverage.
+
+Normal package remains Play0.1.2/code275; hash-only pre-update list baseline has
+two saved printer entries and one saved project. No uninstall/reset/private-data
+export. Prior source54d full suite/build SUCCESS4m48s (36executed/96cached), c93 full
+SUCCESS3m46s; these do not validate later fixes. Actual generated Room synthetic
+schema7→9 validation PASS1test0.343s. v0.1.3/v0.1.4 tags remain immutable, never
+uploaded to Play. v0.1.3 built/attested artifacts but its final GitHub-draft step
+failed because the runner lacks gh; repository workflow now uses SHA-pinned
+official github-script without mutating the host. Superseded owned CI runs were
+cancelled to free GTHost; retained failures are not rewritten as PASS.
+
 ## Normal Razr installation requested — signing boundary (2026-10-19)
 
 Owner requires Govee in normal `com.nozzleitall.app`, preserving data; the isolated

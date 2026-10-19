@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class GoveeNameImportDeviceTest {
+    private fun AndroidGoveeNames.forget() { kotlinx.coroutines.runBlocking { requestForgetAsync().await() } }
     @get:Rule val compose = createComposeRule()
     private fun fixture(block: (AndroidGoveeNames, android.content.SharedPreferences) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

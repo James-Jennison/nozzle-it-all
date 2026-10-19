@@ -51,10 +51,17 @@ class EnvironmentalDashboardRenderTest {
             }
             try {
                 scene.render().close()
+                scene.render(500_000_000L).close()
                 scene.render(1_000_000_000L).use { it.encodeToData()!!.use { data -> output.parentFile.mkdirs(); output.writeBytes(data.bytes) } }
             } finally { scene.close() }
         }
         assertTrue(output.length() > 1000)
+        val rendered = javax.imageio.ImageIO.read(output)
+        val metricPixels = (580 until 960).sumOf { y -> (0 until 350).count { x ->
+            val c = java.awt.Color(rendered.getRGB(x, y))
+            (c.blue - c.green > 25 && c.red - c.green > 25) || (c.green - c.red > 70 && c.blue - c.red > 70)
+        } }
+        assertTrue("Large-text summary metrics are actually painted", metricPixels > 50)
     }
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
     @Test fun expandedPlacementStillRendersTheDryer() {

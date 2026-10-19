@@ -32,7 +32,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun S4EnvironmentOverview(group: EnvironmentalSensorGroup,
     positions: Map<String, Binding>, data: EnvironmentalDashboardData, historyMode: Boolean,
-    collecting: Boolean, selected: String?, onSelect: (Binding) -> Unit) {
+    collecting: Boolean, selected: String?, showDiagram: Boolean = true, onSelect: (Binding) -> Unit) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(historyMode) {
         while (!historyMode) { now = System.currentTimeMillis(); delay(15_000) }
@@ -50,7 +50,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                 DryerDiagram(positions, data, reference, historyMode, selected, onSelect)
             }
             val summary: @Composable () -> Unit = {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     for (channel in listOf(Channel.TEMPERATURE, Channel.HUMIDITY)) {
                         val stats = EnvironmentalGroupOverview.stats(group.bindings, data.readings, channel, reference)
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -66,10 +66,11 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                     if (showMethod) Label("Only readings received in the last 2 minutes contribute. Missing, older and future-dated readings are excluded. Positions follow sensor names. This is sampled air, not filament moisture; the illustration is not a heat map.")
                 }
             }
-            if (maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (showDiagram && maxWidth >= 800.dp) Row(horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1.6f)) { diagram() }
                 Box(Modifier.weight(1f)) { summary() }
-            } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { diagram(); summary() }
+            } else if (showDiagram) Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { diagram(); summary() }
+            else summary()
         }
         Label("Recorded trends", title = true)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {

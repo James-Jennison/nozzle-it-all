@@ -1,6 +1,7 @@
 package com.nozzleitall.desktop.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -42,6 +43,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     val bindings = groups.flatMap { it.bindings }
     var selected by remember { mutableStateOf<String?>(null) }
     var expandedChoice by remember { mutableStateOf<Boolean?>(null) }
+    var showDryer by remember { mutableStateOf(false) }
     val expandedTrends = expandedChoice ?: groups.none { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
     val hasOverview = groups.any { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
     val target = bindings.firstOrNull { it.id == selected } ?: if (hasOverview) null else bindings.firstOrNull()
@@ -53,53 +55,20 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             Txt("Your environment, at a glance", Nz.type.title)
             Txt("Discover sensors to see their temperature and humidity here. Import Govee names once to add matching sensors automatically.")
         }
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val columns = (maxWidth.value / 270f).toInt().coerceIn(1, 4)
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                groups.forEach { group ->
-                val positions = EnvironmentalGroupOverview.s4Positions(group, view.sensorLabels)
-                if (positions != null) Card(Modifier.fillMaxWidth()) {
-                    Txt("SUNLU ${group.title ?: "S4"}", Nz.type.title, modifier = Modifier.semantics { heading() })
-                    S4EnvironmentOverview(group, positions, data, historyMode,
-                        view.state == EnvironmentalState.COLLECTING, target?.id) { selected = it.id; expandedChoice = true }
-                } else {
-                group.title?.let { Txt(it, Nz.type.label, Nz.colors.textMuted, modifier = Modifier.semantics { heading() }) }
-                group.bindings.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    row.forEach { binding -> key(binding.id) {
-                        val name = view.sensorLabels[binding.sensorId] ?: binding.model
-                        val reading = data.readings[binding.id]
-                        Card(Modifier.weight(1f).testTag("environment-sensor-card")
-                            .border(if (target?.id == binding.id) 2.dp else 0.dp, if (target?.id == binding.id) temperature else Color.Transparent, RoundedCornerShape(16.dp))
-                            .selectable(target?.id == binding.id, role = Role.Tab) { selected = binding.id; expandedChoice = true }
-                            .semantics { stateDescription = if (target?.id == binding.id) "Charts shown" else "Show charts" }) {
-                            Txt(name, Nz.type.title, maxLines = 2)
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Column {
-                                    Txt("${number(reading?.values?.get(Channel.TEMPERATURE))}°C", Nz.type.metric.copy(fontSize = 30.sp), temperature)
-                                }
-                                Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
-                                    val rh = reading?.values?.get(Channel.HUMIDITY)
-                                    Canvas(Modifier.fillMaxSize()) {
-                                        drawArc(humidity.copy(alpha = .16f), 0f, 360f, false, style = Stroke(5.dp.toPx()))
-                                        if (rh != null) drawArc(humidity, -90f, rh.coerceIn(0.0, 100.0).toFloat() * 3.6f, false, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round))
-                                    }
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Txt(number(rh), Nz.type.metricSmall, humidity)
-                                        Txt("%RH", Nz.type.bodySmall, humidity)
-                                    }
-                                }
-                            }
-                            val series = EnvironmentalCharts.series(samples, binding.id, Channel.TEMPERATURE)
-                            if (series != null) TrendCanvas(series, temperature, Modifier.fillMaxWidth().height(24.dp))
-                            else Box(Modifier.fillMaxWidth().height(24.dp), contentAlignment = Alignment.CenterStart) {
-                                Txt("Waiting for trend data", Nz.type.bodySmall, Nz.colors.textMuted)
-                            }
-                            Txt(reading?.let { "${if (historyMode) "Saved reception" else "Received"} ${time(it.time)}" } ?: if (historyMode) "No saved reading in this page" else "Waiting for a reading", Nz.type.bodySmall, Nz.colors.textMuted)
-                        }
-                    } }
-                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                } }
+        groups.forEach { group ->
+            val positions = EnvironmentalGroupOverview.s4Positions(group, view.sensorLabels)
+            Card(Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Txt(if (positions != null) "SUNLU S4" else group.title ?: "Sensors", Nz.type.title,
+                        modifier = Modifier.weight(1f).semantics { heading() })
+                    if (positions != null) NzButton(if (showDryer) "Hide placement" else "Sensor placement", { showDryer = !showDryer })
                 }
+                EnvironmentalSensorTable(group.bindings, view.sensorLabels, data, target?.id, positions) {
+                    selected = it.id; expandedChoice = true
+                }
+                if (positions != null) S4EnvironmentOverview(group, positions, data, historyMode,
+                    view.state == EnvironmentalState.COLLECTING, target?.id, showDiagram = showDryer) {
+                    selected = it.id; expandedChoice = true
                 }
             }
         }
@@ -124,6 +93,43 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                 }
             }
         } }
+    }
+}
+
+/** Read-only aligned values; selecting a row opens its recorded charts below. */
+@Composable private fun EnvironmentalSensorTable(bindings: List<Binding>, labels: Map<String, String>,
+    data: EnvironmentalDashboardData, selected: String?, positions: Map<String, Binding>?, onSelect: (Binding) -> Unit) {
+    val colors = listOf(Color(0xFFB59AFF), Color(0xFF35B9C5), Color(0xFFFFC66D), Color(0xFFFF91B5))
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val wide = maxWidth >= 650.dp
+        Column {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Txt("Sensor", Nz.type.bodySmall, Nz.colors.textMuted, Modifier.weight(1f))
+                Txt("°C", Nz.type.bodySmall, Nz.colors.textMuted, Modifier.width(90.dp))
+                Txt("%RH", Nz.type.bodySmall, Nz.colors.textMuted, Modifier.width(90.dp))
+                if (wide) Txt("Last received", Nz.type.bodySmall, Nz.colors.textMuted, Modifier.width(150.dp))
+            }
+            bindings.forEach { binding -> key(binding.id) {
+                val reading = data.readings[binding.id]
+                val corner = positions?.entries?.firstOrNull { it.value.id == binding.id }?.key
+                val color = corner?.let { colors[EnvironmentalGroupOverview.corners.indexOf(it)] } ?: Nz.colors.text
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    .background(if (selected == binding.id) Nz.colors.accent.copy(alpha = .12f) else Color.Transparent)
+                    .selectable(selected == binding.id, role = Role.Tab) { onSelect(binding) }
+                    .semantics(mergeDescendants = true) { stateDescription = if (selected == binding.id) "Charts shown" else "Show charts" }
+                    .testTag("environment-sensor-card").padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Txt((if (corner != null) "● " else "") + (labels[binding.sensorId] ?: binding.model), Nz.type.label, color)
+                        if (!wide) Txt(reading?.let { time(it.time) } ?: "No reception", Nz.type.bodySmall, Nz.colors.textMuted)
+                    }
+                    Txt(number(reading?.values?.get(Channel.TEMPERATURE)), Nz.type.metricSmall, Nz.colors.accent, Modifier.width(90.dp))
+                    Txt(number(reading?.values?.get(Channel.HUMIDITY)), Nz.type.metricSmall, Color(0xFF35B9C5), Modifier.width(90.dp))
+                    if (wide) Txt(reading?.let { time(it.time) } ?: "No reception", Nz.type.bodySmall, Nz.colors.textMuted, Modifier.width(150.dp))
+                }
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Nz.colors.line))
+            } }
+        }
     }
 }
 

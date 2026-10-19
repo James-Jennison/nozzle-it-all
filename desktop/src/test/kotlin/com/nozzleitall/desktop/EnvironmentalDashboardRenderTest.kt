@@ -29,7 +29,7 @@ class EnvironmentalDashboardRenderTest {
         assertTrue(wiring.contains("onDispose { window.removeWindowListener(listener); state.environment.foreground(false) }"))
     }
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-    @Test fun eightSensorsRenderAsCompactDesktopGrid() {
+    @Test fun eightSensorsRenderAsCompactDesktopTable() {
         val bindings = (1..8).map { Binding("b$it", "s$it", "AA:BB:CC:DD:EE:0$it", "govee-ble", "H5100") }
         val samples = bindings.flatMapIndexed { index, b -> (0..15).map { i ->
             ChartSample("${b.id}-$i", b.id, 1_792_418_400_000L + i * 60_000, "session", 0,
@@ -54,12 +54,7 @@ class EnvironmentalDashboardRenderTest {
             } finally { scene.close() }
         }
         val image = javax.imageio.ImageIO.read(output)
-        var shellPixels = 0
-        for (y in 100 until 450) for (x in 24 until 850) {
-            if (image.getRGB(x, y) and 0xFFFFFF == 0x24343B) shellPixels++
-        }
-        assertTrue("Original S4 shell actually rendered", shellPixels > 10000)
-        // Original S4 illustration and four distinct trace/position colors must actually render.
+        // Table-first overview retains four distinct named series; illustration is expandable.
         for (rgb in listOf(0xB59AFF, 0x35B9C5, 0xFFC66D, 0xFF91B5)) {
             var pixels = 0
             val expected = java.awt.Color(rgb)

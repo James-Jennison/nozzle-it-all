@@ -142,9 +142,9 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     @Synchronized fun save(candidate: Candidate, name: String) {
         check(gate.state == EnvironmentalState.DISCOVERING && mutable.value.candidates.contains(candidate))
-        stop("Saved only — no collection")
+        stop("Discovery stopped — saving selection")
         history.bind(candidate, name)
-        mutable.value = mutable.value.copy(bindings = history.bindings())
+        mutable.value = mutable.value.copy(bindings = history.bindings(), status = "Saved only — no collection")
     }
     @Synchronized fun loadHistory(before: Long = Long.MAX_VALUE, id: String = "~") = history.page(before, id, limits.pageSize)
     @Synchronized fun savedBindings(): List<Binding> = history.bindings().also { mutable.value = mutable.value.copy(bindings = it, recordedDrops = history.recordedDrops()) }
@@ -156,17 +156,18 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     @Synchronized fun assign(binding: Binding, positionId: String) { stop("Draft assignment saved — qualification required"); history.assign(binding.sensorId, positionId, System.currentTimeMillis()) }
     @Synchronized fun reside(spoolId: String, positionId: String) { history.reside(spoolId, positionId, System.currentTimeMillis()) }
     @Synchronized fun configureRoom(binding: Binding, equipmentName: String, positionName: String) {
-        stop("Saved draft assignment — thermal qualification required before collection")
+        stop("Stopped — editing draft assignment")
         val existingEquipment = history.entities("equipment").firstOrNull { it.getString("name") == equipmentName && it.optString("type") == "room" }
         val equipment = Equipment(id = existingEquipment?.getString("id") ?: newId(), name = equipmentName)
         val existingPosition = history.entities("position").firstOrNull { it.getString("equipmentId") == equipment.id && it.getString("name") == positionName }
         val position = Position(id = existingPosition?.getString("id") ?: newId(), equipmentId = equipment.id, name = positionName)
-        history.saveEquipment(equipment); history.savePosition(position)
-        history.assign(binding.sensorId, position.id, System.currentTimeMillis())
+        history.configureDraft(binding, equipment, position, System.currentTimeMillis())
+        mutable.value = mutable.value.copy(status = "Saved draft assignment — thermal qualification required before collection")
     }
     @Synchronized fun calibrate(binding: Binding, channel: Channel, offset: Double) {
-        stop("Calibration saved — press Start for a new operation")
+        stop("Stopped — editing calibration")
         history.calibrate(binding, channel, offset)
+        mutable.value = mutable.value.copy(status = "Calibration saved — press Start for a new operation")
     }
     @Synchronized fun deleteAll() {
         // Stop always closes the in-memory gate/cancels owned work, even if its persistence fails.

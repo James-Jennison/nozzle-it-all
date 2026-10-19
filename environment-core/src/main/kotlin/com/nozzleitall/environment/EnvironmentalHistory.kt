@@ -95,15 +95,22 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
     }
     @Synchronized fun archive(binding: Binding) = save("binding", binding.id, bindingJson(binding.copy(archived = true, revision = binding.revision + 1)))
     @Synchronized fun assign(sensorId: String, positionId: String, at: Long) {
+        store().transaction { assignInside(sensorId, positionId, at) }
+    }
+    @Synchronized fun configureDraft(binding: Binding, equipment: Equipment, position: Position, at: Long) {
+        store().transaction {
+            saveEquipment(equipment); savePosition(position)
+            if (entities("placement").none { it.getString("sensorId") == binding.sensorId && it.getString("positionId") == position.id && it.isNull("until") }) assignInside(binding.sensorId, position.id, at)
+        }
+    }
+    private fun assignInside(sensorId: String, positionId: String, at: Long) {
         require(entities("sensor").any { it.getString("id") == sensorId })
         require(entities("position").any { it.getString("id") == positionId })
-        store().transaction {
             val previous = entities("placement").filter { it.getString("sensorId") == sensorId }
             require(previous.none { it.getLong("from") >= at }) { "Assignment would rewrite existing history" }
             previous.filter { it.isNull("until") }.forEach { it.put("until", at); save("placement", it.getString("id"), it) }
             val id = newId()
             save("placement", id, JSONObject().put("id", id).put("sensorId", sensorId).put("positionId", positionId).put("from", at).put("until", JSONObject.NULL))
-        }
     }
     /** ReceivedAt intentionally excluded: a retry must not become a conflicting physical sample. */
     fun immutable(o: Observation): String = ObservationEncoding.encode(o)

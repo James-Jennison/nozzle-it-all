@@ -2,6 +2,21 @@
 
 ## Current delivery checkpoint — visual Environment screen (2026-10-19)
 
+Latest correction supersedes candidate below:376367da34c26c05ed536b0f1b9c263c3f0f9891,
+v0.1.15/code776, restores explicit read-only saved history while monitoring is off
+and uses neutral stopped notices. No enable/radio implied. New off/recovery render
+regression; full GTHost validation underway. v.14 not installed/delivered; its tag
+retained and CI39316590782 canceled. Current v.15 CI39317931108 runs on GTHost.
+c248 exact validation passed4m11s,1321results1311PASS10skip0fail; actual Razr18UI
+PASS24.749s and physicalGovee chart/persistence/foregroundstop1PASS12.967s.
+c248 package7d58a69c verified, not installed. Owner saved/closed desktop; verified
+no process. Fresh hash-only baseline preserves16existing environmental entities.
+Current initial Synthetic9df65a68f2d6 all3COMPLETE after retained bounded retry
+failures. Accepted history/style findings corrected376, targeted systems review
+9984d7304d4a pending. Adversarial clarification8a8aea3df641 pending. Candidate-only
+c248 evidence0ed8d1de7275 bothPASS explicitly excludes delivery/runtime proof.
+Normal Razr remains275 and Play draft752 unchanged; finish original delivery loop.
+
 This section supersedes the older checkpoints below. Owner rejected the long
 text/form dashboard and requires the already-authorized visual experience and
 desktop/Play Alpha/normal Razr delivery, not a new proposal or expanded scope.

@@ -4,6 +4,19 @@ Newest entries at the bottom. Times are PDT.
 
 ## Visual dashboard correction (2026-10-19, active)
 
+376367da/v.15/code776 supersedes c248 after genuine review regression: explicit
+off-state history was wrongly gated; restored read-only gesture and historical
+projection without enabling monitoring or changing storage-recovery guards.
+Benign statuses now neutral; new off/recovery device regression added. Exact full
+GTHost build running. c248 passed1321results1311PASS10skip,18deviceUI+1physical
+Govee radio test, package/icon/source verification. Phone synthetic render inspected
+without clipping; not normal-account proof. All3Synthetic9df complete after retries;
+targeted systems9984 and adversarialclarification8a8 pending. Owner closed desktop,
+fresh baseline16entities/0events saved; no installation of supersededv.14. Normal
+phone untouched, oldPlaydraft752 not delivered. v.14 tag retained/CIcanceled;
+v.15 CI39317931108 active. Sealedc248 candidateevidence0ed8 bothPASS, excludes
+installation/runtime/Play. No extra hardware/protocol gates or provider substitution.
+
 Current application c248ecb1/v0.1.14/code774: dedicated visual screen, compact
 4-column desktop/1-column phone layout, actual trend charts, collapsed setup.
 Full GTHost ea3 validation passed4m7s; exact c248 build/tests running. Reviewed

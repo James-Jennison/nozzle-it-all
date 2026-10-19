@@ -55,7 +55,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             Txt("Your environment, at a glance", Nz.type.title)
             Txt("Discover sensors to see their temperature and humidity here. Import Govee names once to add matching sensors automatically.")
         }
-        groups.forEach { group ->
+        val renderGroup: @Composable (EnvironmentalSensorGroup) -> Unit = { group ->
             val positions = EnvironmentalGroupOverview.s4Positions(group, view.sensorLabels)
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -70,6 +70,19 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                     view.state == EnvironmentalState.COLLECTING, target?.id, showDiagram = showDryer) {
                     selected = it.id; expandedChoice = true
                 }
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val primary = groups.firstOrNull { EnvironmentalGroupOverview.s4Positions(it, view.sensorLabels) != null }
+            if (maxWidth >= 1200.dp && primary != null && groups.size > 1) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1.6f)) { renderGroup(primary) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        groups.filter { it != primary }.forEach { renderGroup(it) }
+                    }
+                }
+            } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                groups.forEach { renderGroup(it) }
             }
         }
         target?.let { binding -> Card(Modifier.fillMaxWidth()) {

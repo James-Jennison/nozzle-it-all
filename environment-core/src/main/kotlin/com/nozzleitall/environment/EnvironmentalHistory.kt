@@ -4,7 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Own lazy database, never the project DB. All access is serialized by the coordinator. */
-class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable {
+class EnvironmentalHistory(private val factory: SqlStoreFactory, private val limits: EnvironmentalLimits = EnvironmentalLimits()) : AutoCloseable {
     private var db: SqlStore? = null
     private fun store(): SqlStore {
         db?.let { return it }
@@ -24,7 +24,8 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable
             sql.execute("PRAGMA journal_mode=DELETE")
             sql.execute("PRAGMA secure_delete=ON")
             val pageSize = sql.query("PRAGMA page_size").first().first()!!.toLong()
-            sql.execute("PRAGMA max_page_count=${104857600L / pageSize}")
+            val maximum = limits.historyBytes / pageSize
+            require(sql.query("PRAGMA max_page_count=$maximum").first().first()!!.toLong() <= maximum) { "History exceeds configured disk budget; explicit export/retention needed" }
             db = sql
             return sql
         } catch (e: Exception) { sql.close(); throw e }
@@ -80,7 +81,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable
         require(bindings().any { it.id == binding.id && !it.archived })
         val version = entities("calibration").filter { it.getString("binding") == binding.id && it.getString("channel") == channel.wire }.maxOfOrNull { it.getInt("version") }?.plus(1) ?: 1
         val id = newId()
-        save("calibration", id, JSONObject().put("id", id).put("binding", binding.id).put("channel", channel.wire).put("version", version).put("offset", offset))
+        save("calibration", id, JSONObject().put("id", id).put("binding", binding.id).put("channel", channel.wire).put("version", version).put("offset", offset).put("createdAt", System.currentTimeMillis()))
         return version
     }
     @Synchronized fun calibrated(binding: Binding, readings: List<Reading>): List<Reading> {
@@ -105,6 +106,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory) : AutoCloseable
         .put("binding", o.bindingId).put("bindingRevision", o.bindingRevision).put("observedAt", o.observedAt)
         .put("monotonicNanos", o.monotonicNanos).put("measuredAt", o.measuredAt ?: JSONObject.NULL)
         .put("sourceCounter", o.sourceCounter ?: JSONObject.NULL).put("decoder", o.decoder)
+        .put("droppedBefore", o.droppedBefore)
         .put("readings", JSONArray(o.readings.map { JSONObject().put("channel", it.channel.wire).put("raw", it.raw).put("offset", it.offset).put("calibrationVersion", it.calibrationVersion) })).toString()
     @Synchronized fun append(o: Observation, currentIncarnation: String): String {
         require(o.incarnation == currentIncarnation)

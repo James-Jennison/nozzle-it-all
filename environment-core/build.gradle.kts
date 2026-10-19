@@ -9,3 +9,6 @@ dependencies {
  testImplementation("junit:junit:4.13.2")
  testImplementation("org.xerial:sqlite-jdbc:3.49.1.0")
 }
+tasks.withType<Test>().configureEach {
+ systemProperty("nia.environment.benchmark", providers.gradleProperty("environmentBenchmark").orElse("false").get())
+}

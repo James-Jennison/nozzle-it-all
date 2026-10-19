@@ -28,7 +28,7 @@ data class Observation(val eventId: String, val incarnation: String, val collect
     val sessionId: String, val sequence: Long, val bindingId: String, val bindingRevision: Long,
     val observedAt: Long, val receivedAt: Long, val monotonicNanos: Long,
     val measuredAt: Long? = null, val sourceCounter: Int? = null,
-    val decoder: String, val readings: List<Reading>)
+    val decoder: String, val readings: List<Reading>, val droppedBefore: Long = 0)
 data class Advertisement(val address: String, val name: String?, val manufacturer: Map<Int, ByteArray>,
                          val services: Map<String, ByteArray>, val observedAt: Long, val monotonicNanos: Long)
 data class Decoded(val protocol: String, val model: String, val readings: List<Reading>, val counter: Int? = null)

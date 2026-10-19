@@ -120,4 +120,56 @@ class EnvironmentalTest {
         c.foreground(true); c.enable(); c.discover(); assertTrue(entered.await(5, TimeUnit.SECONDS)); c.foreground(false); release.countDown()
         assertTrue(closed.await(5, TimeUnit.SECONDS)); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
     }
+    @Test fun unknownFutureSchemaIsPreserved() {
+        val path = Files.createTempFile("nia-env-future", ".db").toFile()
+        Sql(path).use { it.execute("PRAGMA user_version=9") }
+        val h = EnvironmentalHistory(SqlStoreFactory { Sql(path) })
+        assertThrows(IllegalArgumentException::class.java) { h.page() }
+        Sql(path).use { assertEquals("9", it.query("PRAGMA user_version")[0][0]) }
+    }
+    @Test fun actualSqlTransactionRollsBackPartialAssignment() {
+        val path = Files.createTempFile("nia-env-rollback", ".db").toFile()
+        val h = EnvironmentalHistory(SqlStoreFactory { Sql(path) })
+        val b = h.bind(Candidate("test", "bthome-v2", "BTHome v2"), "sensor")
+        val e = Equipment(name = "room"); h.saveEquipment(e)
+        val p = Position(equipmentId = e.id, name = "shelf"); h.savePosition(p)
+        h.assign(b.sensorId, p.id, 100)
+        Sql(path).use { it.execute("CREATE TRIGGER fail_new_placement BEFORE INSERT ON entities WHEN NEW.kind='placement' BEGIN SELECT RAISE(ABORT,'injected'); END") }
+        assertThrows(Exception::class.java) { h.assign(b.sensorId, p.id, 200) }
+        assertTrue(h.entities("placement").single().isNull("until")); h.close()
+    }
+    @Test fun hundredReportsPerSecondBudgetAndStaleCallbacks() {
+        org.junit.Assume.assumeTrue(java.lang.Boolean.getBoolean("nia.environment.benchmark"))
+        val h = history()
+        h.bind(Candidate("test", "bthome-v2", "BTHome v2"), "fixture sensor")
+        val started = CountDownLatch(1)
+        lateinit var send: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { report, _ -> send = report; started.countDown(); object : RadioSession { override fun close() {} } } })
+        c.foreground(true); c.enable(); c.start(); assertTrue(started.await(5, TimeUnit.SECONDS))
+        val payload = byteArrayOf(0x40, 0, 1, 2, 0x2e, 0xfb.toByte(), 3, 0xd2.toByte(), 4)
+        fun report() = send(Advertisement("test", null, emptyMap(), mapOf("0000fcd2-0000-1000-8000-00805f9b34fb" to payload), System.currentTimeMillis(), System.nanoTime()))
+        repeat(2000) { report(); if (it % 100 == 0) Thread.sleep(100) }
+        Thread.sleep(1000)
+        val os = java.lang.management.ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean
+        fun rss() = File("/proc/self/status").readLines().first { it.startsWith("VmRSS:") }.trim().split(Regex("\\s+"))[1].toLong() * 1024
+        val droppedBefore = c.view.value.dropped
+        val memoryBefore = rss(); val cpuBefore = os.processCpuTime; val start = System.nanoTime()
+        repeat(1000) { i ->
+            report()
+            val wait = start + (i + 1) * 10_000_000L - System.nanoTime()
+            if (wait > 0) java.util.concurrent.locks.LockSupport.parkNanos(wait)
+        }
+        Thread.sleep(500)
+        val elapsed = System.nanoTime() - start
+        val cpuPercent = (os.processCpuTime - cpuBefore) * 100.0 / elapsed
+        val memoryIncrease = rss() - memoryBefore
+        assertTrue(c.view.value.latest.isNotEmpty())
+        c.stop(); val latest = h.page().first(); report(); Thread.sleep(100)
+        assertEquals(latest, h.page().first())
+        println("ENV_BENCHMARK reports_per_second=100 cpu_percent_one_core=$cpuPercent rss_increase_bytes=$memoryIncrease dropped=${c.view.value.dropped - droppedBefore} physical_radio=false")
+        assertEquals(droppedBefore, c.view.value.dropped)
+        assertTrue("CPU $cpuPercent%", cpuPercent < 5.0)
+        assertTrue("RSS increase $memoryIncrease", memoryIncrease < 32L * 1024 * 1024)
+        c.close()
+    }
 }

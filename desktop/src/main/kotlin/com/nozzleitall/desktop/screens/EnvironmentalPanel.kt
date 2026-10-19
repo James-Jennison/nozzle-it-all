@@ -33,10 +33,11 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
     var offset by remember { mutableStateOf("0.0") }
     var setup by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf<String?>(null) }
-    fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: ChartHistoryException) { error = e.message } catch (e: QualificationUnavailableException) { error = e.message } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
+    fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: ChartHistoryException) { error = e.message } catch (e: QualificationUnavailableException) { error = e.message } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
     fun start(purpose: Purpose) {
         if (!busy && !stopping) { busy = true; error = null
             try { val work = controller.requestOperationAsync(purpose); scope.launch { try { work.join() } finally { busy = false } } }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (_: Exception) { busy = false; error = "Preparation unavailable or cancelled — retry explicitly" }
         }
     }

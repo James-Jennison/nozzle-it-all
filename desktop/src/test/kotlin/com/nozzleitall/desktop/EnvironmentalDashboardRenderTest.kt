@@ -61,7 +61,7 @@ class EnvironmentalDashboardRenderTest {
         assertTrue(wiring.contains("onDispose { window.removeWindowListener(listener); state.environment.foreground(false) }"))
     }
     @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-    @Test fun eightSensorsRenderAsCompactDesktopTable() {
+    @Test fun eightSensorsRenderWithDefaultDryerAndNamedSeries() {
         val bindings = (1..8).map { Binding("b$it", "s$it", "AA:BB:CC:DD:EE:0$it", "govee-ble", "H5100") }
         val samples = bindings.flatMapIndexed { index, b -> (0..15).map { i ->
             ChartSample("${b.id}-$i", b.id, 1_792_418_400_000L + i * 60_000, "session", 0,
@@ -86,7 +86,11 @@ class EnvironmentalDashboardRenderTest {
             } finally { scene.close() }
         }
         val image = javax.imageio.ImageIO.read(output)
-        // Table-first overview retains four distinct named series; illustration is expandable.
+        // Default dryer plus four distinct named series. Not a semantics/click test.
+        var shellPixels = 0
+        for (y in 100 until 330) for (x in 40 until 900)
+            if (image.getRGB(x, y) and 0xFFFFFF == 0x24343B) shellPixels++
+        assertTrue("Default overview contains the compact dryer", shellPixels > 10000)
         for (rgb in listOf(0xB59AFF, 0x35B9C5, 0xFFC66D, 0xFF91B5)) {
             var pixels = 0
             val expected = java.awt.Color(rgb)

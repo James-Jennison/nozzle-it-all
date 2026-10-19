@@ -63,6 +63,8 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
                         modifier = Modifier.weight(1f).semantics { heading() })
                     if (positions != null) NzButton(if (showDryer) "Hide placement" else "Sensor placement", { showDryer = !showDryer })
                 }
+                if (positions == null && group.title.equals("S4", ignoreCase = true))
+                    Txt("Placement unavailable: S4 sensors need unique Front Left, Front Right, Back Left or Back Right names. All sensors remain listed below.", Nz.type.bodySmall, Nz.colors.textMuted)
                 if (positions == null) EnvironmentalSensorTable(group.bindings, view.sensorLabels, data, target?.id, positions) {
                     selected = it.id; expandedChoice = true
                 }

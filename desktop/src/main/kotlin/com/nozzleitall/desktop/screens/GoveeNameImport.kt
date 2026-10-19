@@ -67,7 +67,9 @@ import kotlinx.coroutines.*
                 Field("Govee API key", entryText, { entryText = it.take(256) }, Modifier, "", true)
                 NzButton("Import names", {
                     val entered = entryText.trim(); entryText = ""; busy = true
-                    val request = store.begin()
+                    val request = try { store.begin() } catch (e: GoveeNameException) {
+                        busy = false; dialog = false; message = e.reason.description; return@NzButton
+                    }
                     scope.launch {
                         try {
                             val count = withContext(Dispatchers.IO) { store.import(entered, request) }

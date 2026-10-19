@@ -4,6 +4,18 @@ Newest entries at the bottom. Times are PDT.
 
 ## Automatic discovery follow-up (2026-10-19, in progress)
 
+Exactdd GTHost full SUCCESS3m59s/132tasks35executed97cached;1314results0fail/error,
+10conditional skips. Actual same-source Razr15targeted fixtures PASS17.463s, including
+the prior failed cache-write/restart tests: replacing FileStore probe with per-file
+attribute view fixed the platform failure. Prior2fail retained, not rewritten PASS.
+Latest source adds desktop import-begin CLEANUP catch, publishes exact committed
+binding rows without reloading all metadata per sensor, and adds70-report cap and
+blocked-metadata Stop-intent/admission tests. The latter deliberately permits a
+metadata transaction admitted BEFORE Stop to finish; no new radio admission or
+observations after Stop. No promise of cancellation of an OS transaction added.
+Synthetic06ee939435f5 systems/adversarial COMPLETE, frontend transport FAILED with
+no substitute. New exact source/fixture/review/package/delivery validation pending.
+
 Exact4efd GTHost full SUCCESS3m55s/132tasks35executed97cached,1312results with
 0failure/error (counts sealed in retained tar). Actual authorized Razr4efd14fixtures:
 12PASS/2cache-write failures; original failure evidence retained. Initial runner

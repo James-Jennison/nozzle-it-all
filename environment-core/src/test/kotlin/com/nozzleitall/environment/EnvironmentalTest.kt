@@ -13,6 +13,58 @@ import kotlinx.coroutines.flow.collect
 import java.util.concurrent.atomic.AtomicBoolean
 
 class EnvironmentalTest {
+    @Test fun autoAddHonorsCandidateCapAndNeverBindsUnadmittedReports() {
+        val h = history(); val ready = CountDownLatch(1)
+        lateinit var send: (Advertisement) -> Unit
+        fun address(i: Int) = "AA:BB:CC:DD:EE:" + "%02X".format(i)
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, callback, _ ->
+            send = callback; ready.countDown(); object : RadioSession { override fun close() {} }
+        } }, goveeNames = { (1..70).map { GoveeDeviceName(address(it), "H5100", "Shelf $it") } })
+        fun report(i: Int, time: Long) = Advertisement(address(i), "Govee_H5100",
+            mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), time, System.nanoTime())
+        try {
+            c.foreground(true); c.enable(); c.discover(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+            for (i in 1..70) send(report(i, i.toLong()))
+            send(report(1, 99999)) // FIFO barrier: all 70 distinct reports must have been processed.
+            val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+            while (c.view.value.discovery[address(1)]?.receivedAt != 99999L && System.nanoTime() < end) Thread.sleep(2)
+            assertEquals(99999L, c.view.value.discovery[address(1)]?.receivedAt)
+            assertEquals(64, c.view.value.candidates.size); assertEquals(64, h.bindings().size)
+            assertEquals((1..64).map(::address).toSet(), h.bindings().map { it.address }.toSet())
+            assertEquals(0L, h.eventCount()); assertEquals(EnvironmentalState.DISCOVERING, c.view.value.state)
+        } finally { c.close() }
+    }
+    @Test fun stopIntentImmediatelyRevokesRadioAdmissionWhileAdmittedMetadataTransactionFinishes() = runBlocking {
+        val entered = CountDownLatch(1); val release = CountDownLatch(1); val ready = CountDownLatch(1)
+        val sql = Sql(Files.createTempFile("nia-slow-auto-add", ".db").toFile())
+        val h = EnvironmentalHistory(SqlStoreFactory { object : SqlStore by sql {
+            override fun execute(statement: String, vararg args: Any?) {
+                if (statement.startsWith("INSERT OR REPLACE INTO entities") && args.firstOrNull() == "sensor") {
+                    entered.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS))
+                }
+                sql.execute(statement, *args)
+            }
+        } })
+        lateinit var send: (Advertisement) -> Unit
+        lateinit var request: BleScanRequest
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { active, callback, _ ->
+            request = active; send = callback; ready.countDown(); object : RadioSession { override fun close() {} }
+        } }, goveeNames = { listOf(GoveeDeviceName("AA:BB:CC:DD:EE:01", "H5100", "Shelf one"), GoveeDeviceName("AA:BB:CC:DD:EE:02", "H5100", "Shelf two")) })
+        fun report(i: String) = Advertisement("AA:BB:CC:DD:EE:$i", "Govee_H5100",
+            mapOf(0x0001 to byteArrayOf(0, 0, 3, 0x97.toByte(), 0xec.toByte(), 80)), emptyMap(), 1000, System.nanoTime())
+        try {
+            c.foreground(true); c.enable(); c.discover(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+            send(report("01")); assertTrue(entered.await(5, TimeUnit.SECONDS))
+            val started = System.nanoTime(); val stopping = c.requestStopAsync()
+            assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) < 1000)
+            assertFalse(request.isCurrent()); assertTrue(c.view.value.status.startsWith("Stop requested"))
+            send(report("02")) // Callback must drop this, without waiting on the metadata transaction.
+            release.countDown(); withTimeout(5000) { stopping.join() }
+            assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state)
+            assertEquals(1, h.bindings().size) // Only the row admitted BEFORE Stop; never observations.
+            assertEquals(0L, h.eventCount()); assertTrue(c.view.value.latest.isEmpty())
+        } finally { release.countDown(); c.close() }
+    }
     @Test fun slowNameRestoreDoesNotHoldCoordinatorMonitorAndStoppedPreparationCannotStartRadio() = runBlocking {
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val radios = java.util.concurrent.atomic.AtomicInteger()

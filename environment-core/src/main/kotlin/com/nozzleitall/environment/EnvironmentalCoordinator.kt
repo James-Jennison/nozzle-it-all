@@ -316,8 +316,11 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                                 val matched = if (examinedCandidates.add(candidate.copy(address = candidate.address.uppercase())))
                                     directory.singleOrNull { it.matches(candidate) } else null
                                 if (matched != null && request.isCurrent() && gate.valid(grant)) {
-                                    history.bind(candidate, matched.name)
-                                    savedBindings()
+                                    val binding = history.bind(candidate, matched.name)
+                                    // Publish the exact committed row; do not re-read all room,
+                                    // placement and sensor metadata for every newly found sensor.
+                                    mutable.update { it.copy(bindings = it.bindings + binding,
+                                        sensorLabels = it.sensorLabels + (binding.sensorId to matched.name)) }
                                 }
                             }
                         } else {

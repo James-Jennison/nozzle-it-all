@@ -668,3 +668,25 @@ test only. Full GTHost rerun/package0.1.21 and Synthetic0141760dfd8f in progress
 Owner confirmed closed; fresh baseline recorded, installation not yet performed.
 After verified fix, start requested question-card product wizard with future
 Snapmaker U1 and Centauri Carbon overlays included, not implemented prematurely.
+
+H5179 final source464b7de7 built on GTHost: core89 tests (1skip), domain240,
+desktop254 (9skips), zero failures/errors; Android compilation PASS. Linux.21
+package SHA2568046090c9a580c6c44c98bf5e11c6db18ef25eef15769f6760387b5d19edb4f6
+verified embedded source, six adapters and launcher/icons. Synthetic initial and
+closure all3 completed; targeted context cycles preserve dissent and Codex
+dispositions. Missing enclosing-lock context corrected; claims of decode/delay
+inside lock rejected against source. Stop intentionally suppresses live display
+after revocation while retaining already committed history, covered by existing
+passing regression test. No automatic retry or new acceptance gates added.
+Evidence21ca6ee7d606 twoPASS/intact. Preinstall recheck preserves16entities and
+4909events. Installation and fresh H5179 reception remain pending, not claimed.
+
+0.1.21 INSTALLED: dpkg session4841 exit0 upgraded.20 in place. All218 installed
+payload files verified against exact464 artifact; all16existing entities and4909
+events match hash baseline after installation. Synthetic final5d32c4bcad3b both
+COMPLETE: truncated-test concern closed; no alias-specific defect identified by
+adversarial reviewer; frontend low optional polling/attribution notes separately
+dispositioned. Prior dissent retained, not consensus asserted. Owner requested
+to reopen normal desktop, Discover then explicitly Start. Native UI controls
+unavailable; fresh ninth-sensor binding/receptions still pending owner action.
+Product wizard waits for live verification; future U1/Carbon overlays retained.

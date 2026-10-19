@@ -11,9 +11,22 @@ lookup requiredH5179 substring, making existing GV5179 decoding unreachable.
 ace66bf2 adds shared alias normalization and Linux metadata admission;6a9938e3
 corrects only test expected humidity44.0to44.8 (0x043bc8=277448). Initial failure
 archived h5179-initial-failure.xml, not rewritten. No data/radio-control changes.
-GTHost validation/package running. Synthetic0141760dfd8f running all3. Owner
+Final production464b7de7: GTHost core89/domain240/desktop254 tests,0failures,
+10skips; Android compile and Linux0.1.21 packaging PASS. Exact package SHA256
+8046090c9a580c6c44c98bf5e11c6db18ef25eef15769f6760387b5d19edb4f6.
+Synthetic0141760dfd8f and1c278ada76a8 all3COMPLETE; targeted context correction
+5f78e2264dec and5d32c4bcad3b COMPLETE. Final targeted review closes incomplete
+test-evidence claim; low optional polling/attribution observations dispositioned.
+Regex allocation finding fixed; canonical9byte framing
+retained and regression-tested. Ledger nia-h5179-ace66bf2 preserves findings
+and separate Codex dispositions. Evidence21ca6ee7d606 twoPASS/intact, candidate
+only, not runtime proof. Owner
 saved/closed desktop, no normal process observed. Fresh hash-only baseline
-desktop-environment-before-h5179.json created. No installation yet.
+desktop-environment-before-h5179.json created. INSTALLED: dpkg session4841
+exit0 upgraded.20to.21; all218 payload files match exact464 package. Hash-only
+baseline preserves all16entities and4909events. Owner asked to reopen normal
+desktop app, Discover then Start. Native UI control unavailable; new H5179
+binding and fresh live reception remain unverified. Do not mark task complete.
 After install owner must run Discover then explicitly Start; verify new uniquely
 named H5179 binding and fresh recorded readings while preserving old hashes.
 No native UI control available; do not bypass. Wizard follows verified fix.

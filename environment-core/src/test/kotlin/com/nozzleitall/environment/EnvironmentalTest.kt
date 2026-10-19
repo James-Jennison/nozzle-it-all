@@ -192,4 +192,17 @@ class EnvironmentalTest {
         c.deleteAll(); assertTrue(h.page().isEmpty()); assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
         c.close()
     }
+    @Test fun radioCallbacksNeverWaitForCoordinatorMonitor() {
+        val ready = CountDownLatch(1)
+        lateinit var failure: (String) -> Unit
+        lateinit var report: (Advertisement) -> Unit
+        val c = EnvironmentalCoordinator(file(), history(), { BleTransport { r, f -> report = r; failure = f; ready.countDown(); object : RadioSession { override fun close() {} } } })
+        c.foreground(true); c.enable(); c.discover(); assertTrue(ready.await(5, TimeUnit.SECONDS))
+        synchronized(c) {
+            val finished = CountDownLatch(1)
+            Thread { failure("Injected radio unavailable"); report(Advertisement("test", null, emptyMap(), emptyMap(), 0, 0)); finished.countDown() }.start()
+            assertTrue("OS callback blocked on coordinator lock", finished.await(1, TimeUnit.SECONDS))
+        }
+        c.close()
+    }
 }

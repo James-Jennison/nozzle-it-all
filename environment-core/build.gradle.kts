@@ -11,4 +11,5 @@ dependencies {
 }
 tasks.withType<Test>().configureEach {
  systemProperty("nia.environment.benchmark", providers.gradleProperty("environmentBenchmark").orElse("false").get())
+ if (providers.gradleProperty("environmentProfile").orNull == "true") jvmArgs("-XX:StartFlightRecording=filename=${layout.buildDirectory.get()}/environment.jfr,settings=profile,dumponexit=true")
 }

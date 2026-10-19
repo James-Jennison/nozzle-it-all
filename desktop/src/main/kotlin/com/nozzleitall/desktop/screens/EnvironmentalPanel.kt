@@ -78,6 +78,7 @@ import com.nozzleitall.desktop.environment.DesktopGoveeNames
             NzButton(if (historyMode) "Return to live readings" else "Open local history", {
                 if (historyMode) historyMode = false else action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded; historyMode = true }
             }, enabled = enabled && !busy && !stopping, testTag = "environment-history")
+            if (historyMode) NzButton("Latest history", { action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded } }, enabled = !busy && !stopping)
             NzButton(if (setup) "Close setup" else "Setup & data", { setup = !setup })
         }
         EnvironmentalDashboard(v, chartHistory, historyMode, onDetails = { details = if (details == it.id) null else it.id })

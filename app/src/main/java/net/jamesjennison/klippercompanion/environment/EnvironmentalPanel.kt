@@ -118,6 +118,7 @@ import org.json.JSONObject
             OutlinedButton({
                 if (historyMode) historyMode = false else action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded; historyMode = true }
             }, enabled = enabled && !busy && !stopping, modifier = Modifier.testTag("environment-history")) { Text(if (historyMode) "Return to live readings" else "Open local history") }
+            if (historyMode) OutlinedButton({ action { val loaded = controller.loadHistory(); chartHistory = EnvironmentalCharts.history(loaded); rows = loaded } }, enabled = !busy && !stopping) { Text("Latest history") }
             OutlinedButton({ setup = !setup }) { Text(if (setup) "Close setup" else "Setup & data") }
             }
             EnvironmentalDashboard(view, chartHistory, historyMode, onDetails = { details = if (details == it.id) null else it.id })

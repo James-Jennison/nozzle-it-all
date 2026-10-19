@@ -31,7 +31,7 @@ data class EnvironmentalDashboardData(
 fun EnvironmentalState.dashboardStatus(): String = when (this) {
     EnvironmentalState.DISABLED -> "Monitoring is off"
     EnvironmentalState.DISABLED_RECOVERY -> "Storage recovery needed"
-    EnvironmentalState.ENABLED_IDLE -> "Stopped · showing last received readings"
+    EnvironmentalState.ENABLED_IDLE -> "Stopped · start monitoring to record readings"
     EnvironmentalState.DISCOVERING -> "Finding sensors · monitoring has not started"
     EnvironmentalState.COLLECTING -> "Monitoring · receiving and recording readings"
 }

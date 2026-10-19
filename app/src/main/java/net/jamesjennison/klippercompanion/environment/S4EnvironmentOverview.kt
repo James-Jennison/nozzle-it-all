@@ -136,41 +136,17 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
     // Original scalable cutaway illustration: long S4 shell, clear lid, four reel bays and front control panel.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    val diagramHeight = if (maxWidth >= 480.dp && fontScale <= 1.2f) 210.dp else 350.dp
-    Box(Modifier.fillMaxWidth().height(diagramHeight * fontScale).testTag("s4-dryer-illustration")) {
+    val diagramHeight = if (maxWidth >= 480.dp && fontScale <= 1.2f) 260.dp else 350.dp
+    Box(Modifier.widthIn(max = 640.dp).fillMaxWidth().height(diagramHeight * fontScale).align(Alignment.Center).testTag("s4-dryer-illustration")) {
+        DryerArtwork(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 4.dp))
         Canvas(Modifier.fillMaxSize()) {
-            val w = size.width; val h = size.height
-            // Layered enclosure and smoked lid; neutral materials are not a heat map.
-            drawRoundRect(Color.Black.copy(alpha = .3f), Offset(w * .045f, h * .12f), Size(w * .91f, h * .82f), CornerRadius(18.dp.toPx()))
-            drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF394148), Color(0xFF11171C))),
-                Offset(w * .03f, h * .04f), Size(w * .94f, h * .85f), CornerRadius(16.dp.toPx()))
-            drawRoundRect(Color(0xFF647078).copy(alpha = .65f), Offset(w * .03f, h * .04f),
-                Size(w * .94f, h * .85f), CornerRadius(16.dp.toPx()), style = Stroke(1.dp.toPx()))
-            drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF26363F), Color(0xFF151F26))),
-                Offset(w * .045f, h * .065f), Size(w * .91f, h * .67f), CornerRadius(12.dp.toPx()))
-            for (i in 0..3) {
-                val x = w * (.23f + i * .18f)
-                val left = x - w * .065f
-                val top = h * .22f
-                val spoolWidth = w * .13f
-                val spoolHeight = h * .38f
-                drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF6C7880), Color(0xFF303D46), Color(0xFF586570))),
-                    Offset(left, top), Size(spoolWidth, spoolHeight), CornerRadius(8.dp.toPx()))
-                for (j in 1..16) drawLine(Color(0xFF101A21).copy(alpha = .3f),
-                    Offset(left + spoolWidth * j / 17, top + 4.dp.toPx()),
-                    Offset(left + spoolWidth * j / 17, top + spoolHeight - 4.dp.toPx()), .6.dp.toPx())
-                for (edge in listOf(left, left + spoolWidth - w * .022f)) {
-                    drawOval(Brush.horizontalGradient(listOf(Color(0xFF9BA5AA), Color(0xFF3A464F))),
-                        Offset(edge, top - 3.dp.toPx()), Size(w * .022f, spoolHeight + 6.dp.toPx()))
-                    drawOval(Color(0xFF26323B), Offset(edge + w * .005f, top + h * .12f), Size(w * .012f, h * .14f))
-                }
+            val anchors = listOf(Offset(.35f, .28f), Offset(.65f, .28f), Offset(.30f, .65f), Offset(.70f, .65f))
+            anchors.forEachIndexed { i, anchor ->
+                val p = Offset(anchor.x * size.width, anchor.y * size.height)
+                val edge = Offset((if (i % 2 == 0) .19f else .81f) * size.width, (if (i < 2) .18f else .70f) * size.height)
+                drawLine(positionColors[i].copy(alpha = .65f), edge, p, 1.dp.toPx())
+                drawCircle(positionColors[i], 3.dp.toPx(), p)
             }
-            drawRoundRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .075f), Color.Transparent)),
-                Offset(w * .05f, h * .07f), Size(w * .90f, h * .25f), CornerRadius(10.dp.toPx()))
-            drawLine(Color(0xFF7D8A92).copy(alpha = .4f), Offset(w * .055f, h * .74f), Offset(w * .945f, h * .74f), 1.dp.toPx())
-            drawRoundRect(Color(0xFF0A1116), Offset(w * .42f, h * .77f), Size(w * .16f, h * .085f), CornerRadius(4.dp.toPx()))
-            for (side in listOf(.09f, .67f)) drawRoundRect(Color(0xFF829777).copy(alpha = .55f),
-                Offset(w * side, h * .805f), Size(w * .24f, h * .012f), CornerRadius(1.dp.toPx()))
         }
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 26.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -185,7 +161,7 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
                     PositionLabel("Front Right", positions, data, reference, historyMode, 3, selected, onSelect, Modifier.weight(1f, fill = false).widthIn(max = 220.dp))
                 }
                 Spacer(Modifier.height(22.dp))
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Label("S4  ·  FRONT", color = Color(0xFFDAEEF5)) }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Label("FRONT", color = Color(0xFFAEBCC5)) }
             }
         }
     }
@@ -226,5 +202,11 @@ private fun stamp(t: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").withZ
 
 @Composable private fun Metric(text: String, color: Color) {
     Text(text, style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp), color = color)
+}
+
+@Composable private fun DryerArtwork(modifier: Modifier) {
+    androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(net.jamesjennison.klippercompanion.R.drawable.s4_dryer),
+        contentDescription = "S4 dryer illustration, viewed from the front", modifier = modifier,
+        contentScale = androidx.compose.ui.layout.ContentScale.Fit)
 }
 

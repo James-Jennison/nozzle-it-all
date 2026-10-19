@@ -126,11 +126,11 @@ import org.json.JSONObject
             if (deleting) {
                 Text("Delete only environmental history and settings? External exports remain. Failed cleanup requires explicit resume.")
                 Button({ pending = null; stopping = true; rows = emptyList(); candidateNames.clear(); roomDrafts.clear(); offset = "0.0"
-                    val forgetGovee = goveeNames.prepareForget()
+                    val forgetGovee = goveeNames.requestForgetAsync()
                     val cleanup = controller.requestDeleteAsync()
                     scope.launch(start = CoroutineStart.UNDISPATCHED) { try {
                         // Secret cleanup is independent of history cleanup outcome and survives navigation.
-                        try { withContext(NonCancellable + Dispatchers.IO) { forgetGovee() } }
+                        try { withContext(NonCancellable) { forgetGovee.await() } }
                         catch (_: Exception) { problem = "Govee key cleanup unavailable. Enable the panel and use Forget Govee key to retry; no automatic retry." }
                         cleanup.join(); deleting = controller.view.value.state != EnvironmentalState.DISABLED
                     } catch (_: Exception) { problem = "Environmental cleanup incomplete; retry deletion explicitly." }

@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -43,9 +44,9 @@ import kotlinx.coroutines.*
     Text("Optional account lookup for names only. Readings stay on local Bluetooth; no device-control commands.", style = MaterialTheme.typography.bodySmall)
     message?.let { Text(it) }
     TextButton({
-        val forget = store.prepareForget()
+        val forget = store.requestForgetAsync()
         busy = true; cancel()
-        scope.launch(start = CoroutineStart.UNDISPATCHED) { try { withContext(NonCancellable + Dispatchers.IO) { forget() }; saved = false; message = "Saved Govee key and imported name list forgotten. Added sensor names/history are unchanged." }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { try { withContext(NonCancellable) { forget.await() }; saved = false; message = "Saved Govee key and imported name list forgotten. Added sensor names/history are unchanged." }
             catch (_: Exception) { message = "Could not forget saved key; retry explicitly." }
             finally { busy = false } }
     }, enabled = !busy && !forgetting) { Text("Forget Govee key and imported names") }
@@ -61,7 +62,7 @@ import kotlinx.coroutines.*
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Your key is sent only to Govee's official device-list API. Enter it here, never in chat. Some sensors may not appear in the API.")
-            OutlinedTextField(key, { key = it.take(256) }, label = { Text("Govee API key") }, enabled = !busy,
+            OutlinedTextField(key, { key = it.take(256) }, modifier = Modifier.testTag("govee-private-key"), label = { Text("Govee API key") }, enabled = !busy,
                 visualTransformation = PasswordVisualTransformation(), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false))
             Row { Checkbox(rememberKey, { rememberKey = it }, enabled = !busy); Text("Remember key on this device (encrypted)") }

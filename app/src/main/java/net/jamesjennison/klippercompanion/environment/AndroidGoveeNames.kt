@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import net.jamesjennison.klippercompanion.CredentialStore
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.*
 
 /** No startup IO. Key is never part of observable state, logs, exports or saved UI state. */
 class AndroidGoveeNames internal constructor(private val credentials: () -> android.content.SharedPreferences,
@@ -19,6 +20,7 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
     private var pendingForgets = 0
     private val cleanup = MutableStateFlow(false)
     val forgetting = cleanup.asStateFlow()
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     fun hasSavedKey(): Boolean = synchronized(storageLock) { credentialStore.contains("api-key") }
     @Synchronized fun begin(): Long {
         if (pendingForgets != 0) throw GoveeNameException(GoveeNameFailure.CLEANUP)
@@ -53,14 +55,13 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
         return result.size
     }
     /** Main-safe intent fence: prevent a newer import overtaking queued secret cleanup. */
-    @Synchronized fun prepareForget(): () -> Unit {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Synchronized fun requestForgetAsync(): Deferred<Unit> {
         cancel(); names.value = emptyList(); pendingForgets++; cleanup.value = true
-        val started = java.util.concurrent.atomic.AtomicBoolean(false)
-        return {
-            check(started.compareAndSet(false, true))
+        return cleanupScope.async(start = CoroutineStart.ATOMIC) {
             try { synchronized(storageLock) { check(credentialStore.edit().remove("api-key").commit()) } }
             finally { synchronized(this) { pendingForgets--; cleanup.value = pendingForgets != 0 } }
         }
     }
-    fun forget() = prepareForget().invoke()
+    fun forget() { runBlocking { requestForgetAsync().await() } }
 }

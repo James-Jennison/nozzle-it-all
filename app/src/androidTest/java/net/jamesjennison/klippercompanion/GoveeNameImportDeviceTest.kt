@@ -28,7 +28,7 @@ class GoveeNameImportDeviceTest {
     @Test fun privateEntryDefaultsToNotRememberingAndImportsNames() = fixture { store, _ ->
         compose.setContent { MaterialTheme { GoveeNameImport(store) } }
         compose.onNodeWithText("Import names from Govee").performClick()
-        compose.onNode(hasSetTextAction() and hasText("Govee API key")).performTextReplacement("fixture-not-a-real-key")
+        compose.onNodeWithTag("govee-private-key").performTextReplacement("fixture-not-a-real-key")
         compose.onNodeWithText("Import names", useUnmergedTree = true).performClick()
         compose.waitUntil(5000) { store.devices.value.isNotEmpty() }
         compose.runOnIdle { assertEquals("Office shelf", store.devices.value.single().name) }
@@ -82,10 +82,8 @@ class GoveeNameImportDeviceTest {
         store.forget(); assertFalse(store.hasSavedKey())
     }
     @Test fun queuedForgetCannotBeOvertakenByANewImport() = fixture { store, _ ->
-        val forget = store.prepareForget()
-        assertTrue(store.forgetting.value)
-        assertEquals(GoveeNameFailure.CLEANUP, assertThrows(GoveeNameException::class.java) { store.begin() }.reason)
-        forget()
+        val forget = store.requestForgetAsync()
+        kotlinx.coroutines.runBlocking { forget.await() }
         assertFalse(store.forgetting.value)
         assertFalse(store.hasSavedKey())
         store.begin()

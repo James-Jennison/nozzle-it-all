@@ -20,12 +20,14 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     val view = mutable.asStateFlow()
     @Volatile private var operation: Job? = null
     @Volatile private var operationScope: CoroutineScope? = null
+    private class RunControl(val job: Job, val revoked: AtomicBoolean = AtomicBoolean(false))
+    @Volatile private var runControl: RunControl? = null
     private var session: RadioSession? = null
     private var gapSession: String? = null
     private var gapDropBase = 0L
     private val foreground = AtomicBoolean(false)
     private val visibilityEpoch = AtomicLong()
-    private val revocationRequested = AtomicBoolean(false)
+    private val disableRequested = AtomicBoolean(false)
     private val droppedReports = AtomicLong()
     private val disposed = AtomicBoolean(false)
     private val collector get() = gate.collectorId
@@ -33,24 +35,33 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     fun foreground(visible: Boolean) {
         foreground.set(visible)
         if (!visible) {
-            revocationRequested.set(true)
             visibilityEpoch.incrementAndGet()
-            val current = operation ?: return
-            mutable.update { it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — app not visible; cleanup pending") }
+            val current = runControl ?: return
+            current.revoked.set(true)
+            mutable.update { if (runControl === current) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — app not visible; cleanup pending") else it }
             operationScope?.launch { synchronized(this@EnvironmentalCoordinator) {
-                if (operation === current) stop("Stopped — app not visible; press Start to resume")
+                if (runControl === current) stop("Stopped — app not visible; press Start to resume")
             } }
         }
     }
-    @Synchronized fun enable() { check(!disposed.get()); gate.enable(); mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened") }
+    @Synchronized fun enable() {
+        check(!disposed.get() && operation == null)
+        check(!disableRequested.get() || gate.state == EnvironmentalState.DISABLED)
+        gate.enable(); disableRequested.set(false)
+        mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened")
+    }
     fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
-        revocationRequested.set(true)
+        val target = runControl
+        if (disable) disableRequested.set(true)
+        target?.revoked?.set(true)
         // Hide live readings immediately, before durable revocation/cancellation.
-        mutable.update { it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") }
+        if (target != null) mutable.update { if (runControl === target) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") else it }
         synchronized(this) {
+            if (!disable && runControl !== target) return // This request never owns a newer Start.
+            runControl?.revoked?.set(true)
             try { gate.revoke(disable) }
             finally {
-                operation?.cancel(); operation = null; operationScope = null
+                operation?.cancel(); operation = null; operationScope = null; runControl = null
                 runCatching { session?.close() }; session = null
                 val gapId = gapSession; gapSession = null
                 val drops = droppedReports.get() - gapDropBase
@@ -65,7 +76,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     @Synchronized fun discover() = begin(Purpose.DISCOVERY, emptyList())
     @Synchronized fun start() {
-        check(foreground.get() && gate.state == EnvironmentalState.ENABLED_IDLE)
+        check(foreground.get() && !disableRequested.get() && !disposed.get() && gate.state == EnvironmentalState.ENABLED_IDLE)
         val bindings = history.bindings().filterNot { it.archived }
         require(bindings.isNotEmpty()) { "Save a sensor first" }
         // Unknown firmware/envelopes permit unassigned diagnostic reception only, never dryer deployment.
@@ -75,15 +86,16 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     private fun begin(purpose: Purpose, bindings: List<Binding>, qualification: QualificationAdmission? = null) {
         val visibleEpoch = visibilityEpoch.get()
-        check(foreground.get() && !disposed.get())
+        check(foreground.get() && !disableRequested.get() && !disposed.get())
         val durationMillis = if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1000L else
             minOf(86_400_000L, (qualification?.validUntil ?: Long.MAX_VALUE) - System.currentTimeMillis())
         require(durationMillis > 0) { "Physical qualification expired" }
         val grant = gate.begin(purpose, bindings, durationMillis * 1_000_000L)
         val job = SupervisorJob(); operation = job
+        val control = RunControl(job); runControl = control
+        val revocationRequested = control.revoked
         val scope = CoroutineScope(job + Dispatchers.IO)
         operationScope = scope
-        revocationRequested.set(false)
         val failureQueued = AtomicBoolean(false)
         val queue = Queue<Advertisement>(limits.queueCapacity)
         val runId = newId()
@@ -96,13 +108,14 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         scope.launch {
             try {
                 synchronized(this@EnvironmentalCoordinator) {
-                    if (!foreground.get() || visibilityEpoch.get() != visibleEpoch || revocationRequested.get()) {
+                    if (runControl !== control) return@launch
+                    if (!foreground.get() || disableRequested.get() || visibilityEpoch.get() != visibleEpoch || revocationRequested.get()) {
                         stop("Stopped — app visibility changed during preparation")
                         return@launch
                     }
                 }
                 val request = BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet(), qualification?.radios?.singleOrNull()) {
-                    job.isActive && !revocationRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
+                    job.isActive && !revocationRequested.get() && !disableRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
                 }
                 val opened = transport().start(request, { report ->
                     // OS scan callbacks may be Main: no locks, disk IO, parsing, or coroutine-per-report here.

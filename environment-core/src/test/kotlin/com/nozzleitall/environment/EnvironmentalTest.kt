@@ -277,6 +277,47 @@ class EnvironmentalTest {
             assertEquals(31L, JSONObject(output[1]).getLong("knownDroppedReports"))
         }
     }
+    @Test fun cumulativeGapUpsertsDoNotLoseOrDoubleCountEarlierBatches() {
+        history().use { h ->
+            h.appendBatch(listOf(observation().copy(droppedBefore = 10)), "inc")
+            h.recordGap("session", 1001, 15)
+            h.recordGap("session", 1001, 15)
+            assertEquals(15L, h.recordedDrops())
+        }
+    }
+    @Test fun staleIdleStopCannotRevokeAYoungerStart() {
+        val h = history(); h.bind(Candidate("test", "bthome-v2", "BTHome v2"), "fixture")
+        val ready = CountDownLatch(1); val closed = AtomicBoolean(false)
+        val c = EnvironmentalCoordinator(file(), h, { BleTransport { _, _, _ -> ready.countDown(); object : RadioSession { override fun close() { closed.set(true) } } } })
+        c.foreground(true); c.enable()
+        val stopper = Thread { c.stop() }
+        synchronized(c) {
+            stopper.start()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (stopper.state != Thread.State.BLOCKED && System.nanoTime() < deadline) Thread.sleep(1)
+            assertEquals(Thread.State.BLOCKED, stopper.state)
+            c.start()
+        }
+        stopper.join(5000); assertFalse(stopper.isAlive)
+        assertTrue(ready.await(5, TimeUnit.SECONDS))
+        assertEquals(EnvironmentalState.COLLECTING, c.view.value.state); assertFalse(closed.get())
+        c.stop(); assertTrue(closed.get()); c.close()
+    }
+    @Test fun pendingDisableDeniesNewStartBeforeTakingCoordinatorMonitor() {
+        val c = EnvironmentalCoordinator(file(), history(), { error("No radio authorized") })
+        c.foreground(true); c.enable()
+        val stopper = Thread { c.stop(disable = true) }
+        synchronized(c) {
+            stopper.start()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (stopper.state != Thread.State.BLOCKED && System.nanoTime() < deadline) Thread.sleep(1)
+            assertEquals(Thread.State.BLOCKED, stopper.state)
+            assertThrows(IllegalStateException::class.java) { c.start() }
+        }
+        stopper.join(5000); assertFalse(stopper.isAlive)
+        assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
+        c.enable(); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
+    }
     @Test fun missingPlatformDependencyStopsInsteadOfLeavingDiscoveryActive() {
         val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _, _ -> throw NoClassDefFoundError("fixture dependency") } })
         c.foreground(true); c.enable(); c.discover()

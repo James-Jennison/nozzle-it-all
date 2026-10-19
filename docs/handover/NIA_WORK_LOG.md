@@ -621,3 +621,14 @@ wide software fixture; not installed/runtime proof. Packaging0.1.20 ongoing.
 Synthetic6fd1ace662eb failed unsupported INITIAL phase; corrected CONVERGENCE
 package submitted once as67734e1567a7. All3 seats running. Requested owner close
 desktop before install; existing .19 app not stopped by agent.
+
+Final candidate50a1d26a adds48dp calculation-details target;9bde98cd adds actual
+right-column metric pixel assertion. GTHost final desktop254tests245pass9skip,
+zero failures/errors; AndroidcompilePASS; package0.1.20 completed. Artifact SHA
+f27a6ca38a760a08de7732451c22611ad8526e9f6417e661d7c62a81e7698d78.
+Candidate verifier/source/adapters/icons PASS; evidence d6a00f37c17f twoPASS.
+Final wide/light renders inspected. Synthetic677/dd06/0ba cycles complete with
+all findings dispositioned separately, retaining reviewer text. Fixed test and
+touch-target issues; no production clipping demonstrated. Not unanimous approval.
+Normal NIA still running PID3248368; owner close response outstanding. No install
+or data mutation performed. Ready for owner close, fresh baseline and authinstall.

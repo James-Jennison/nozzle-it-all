@@ -1,6 +1,24 @@
 # Handover to Codex (written 2026-10-18)
 
-## Current tightening candidate — 0.1.20 / 27428a20
+## Current tightening candidate — 0.1.20 / 50a1d26a
+
+READY TO INSTALL, awaiting owner to save/close running normal NIA (PID3248368 at
+last check). Do not terminate it or install over it. New package not installed.
+Final source50a1d26aee644675e5be6b8599de9018ce37e61b; package SHA256
+f27a6ca38a760a08de7732451c22611ad8526e9f6417e661d7c62a81e7698d78 at
+/home/jjennison/.local/state/nozzle-it-all/acceptance/20261019-normal-razr/nozzle-it-all_0.1.20_50a1d26a_amd64.deb.
+Final GTHost desktop254 tests245pass9skip0fail/errors; Android compilePASS;
+environment-core/domain tests passed earlier27428 with unchanged source.
+Packaging/source identity/adapters/icons verified. Wide and narrow/light final
+renders inspected. 9bde98cd added positional metric assertion;50a adds48dp
+calculation-details target before clickable on both platforms.
+Synthetic67734e1567a7 all3COMPLETE; dd06b10aa2b0 systems/adversarialCOMPLETE;
+final0ba84b409b5c all3COMPLETE. Test/touch findings fixed. Unsupported clipping
+claims and optional broader test suggestions have separate durable dispositions;
+not unanimous approval. Evidence d6a00f37c17f twoPASS/intact, candidate only.
+After owner closes: take fresh hash-only data baseline, request pkexec install
+authentication, verify exact installed payload and baseline, then normal-app
+runtime/Start/Stop verification. No desktop UI control available. Play unchanged.
 
 Owner's live .19 screenshot confirms the official-reference artwork, eight named
 sensors, live S4 corner readings, group statistics and trends in the normal app.

@@ -85,7 +85,13 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
             val path = (if (requestedAdapter == null) adapters.firstOrNull { it.value["org.bluez.Adapter1"]?.get("Powered")?.value == true }
                 else adapters.firstOrNull { it.key.path == requestedAdapter })?.key?.path
                 ?: error("Bluetooth adapter unavailable")
-            require(request.requiredAdapterDescription == null || request.requiredAdapterDescription == "BlueZ $path") { "Adapter not qualified for this assignment" }
+            val adapterProperties = adapters.single { it.key.path == path }.value.getValue("org.bluez.Adapter1")
+            // The path alone can be reused by replacement hardware. Do not print/persist the raw adapter address.
+            val identity = listOf("Address", "Modalias").joinToString("|") { adapterProperties[it]?.value?.toString().orEmpty() }
+            val fingerprint = java.security.MessageDigest.getInstance("SHA-256").digest(identity.toByteArray()).joinToString("") { "%02x".format(it) }
+            val description = "BlueZ $path · radio $fingerprint"
+            require(request.requiredAdapterDescription == null ||
+                (adapterProperties["Address"]?.value is String && request.requiredAdapterDescription == description)) { "Adapter not qualified for this assignment" }
             adapter = bus.getRemoteObject("org.bluez", path, BluezEnvironmentalAdapter::class.java)
             // D-Bus daemon combines client filters. Host still admits only fresh authorized reports.
             check(request.isCurrent()) { "Obsolete BLE operation" }
@@ -140,7 +146,7 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
             adapter.StartDiscovery(); acquired.set(true)
             val ownedAdapter = adapter
             return object : RadioSession {
-                override val adapterDescription = "BlueZ $path"
+                override val adapterDescription = description
                 override fun close() {
                     if (!closed.compareAndSet(false, true)) return
                     try { if (acquired.compareAndSet(true, false)) ownedAdapter.StopDiscovery() }

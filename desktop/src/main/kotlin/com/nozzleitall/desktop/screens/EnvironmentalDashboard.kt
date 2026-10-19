@@ -120,7 +120,6 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
 /** Read-only aligned values; selecting a row opens its recorded charts below. */
 @Composable private fun EnvironmentalSensorTable(bindings: List<Binding>, labels: Map<String, String>,
     data: EnvironmentalDashboardData, selected: String?, positions: Map<String, Binding>?, onSelect: (Binding) -> Unit) {
-    val colors = listOf(Color(0xFFB59AFF), Color(0xFF35B9C5), Color(0xFFFFC66D), Color(0xFFFF91B5))
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 650.dp
         Column {
@@ -133,7 +132,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             bindings.forEach { binding -> key(binding.id) {
                 val reading = data.readings[binding.id]
                 val corner = positions?.entries?.firstOrNull { it.value.id == binding.id }?.key
-                val color = corner?.let { colors.getOrNull(EnvironmentalGroupOverview.corners.indexOf(it)) } ?: Nz.colors.text
+                val color = corner?.let { positionColors.getOrNull(EnvironmentalGroupOverview.corners.indexOf(it)) } ?: Nz.colors.text
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
                     .background(if (selected == binding.id) Nz.colors.accent.copy(alpha = .12f) else Color.Transparent)
                     .selectable(selected == binding.id, role = Role.Tab) { onSelect(binding) }

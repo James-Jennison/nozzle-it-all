@@ -44,7 +44,12 @@ class EnvironmentalDashboardRenderTest {
         assertTrue("Expanded placement retains the original dryer illustration", shellPixels > 10000)
     }
     @Test fun s4PresentationLogicAndGeometryStayIdenticalAcrossPlatforms() {
-        fun body(file: File) = file.readText().substringAfter("private val positionColors").substringBefore("@Composable private fun Label")
+        fun body(file: File): String {
+            val source = file.readText()
+            assertTrue(source.contains("internal val positionColors"))
+            assertTrue(source.contains("@Composable private fun Label"))
+            return source.substringAfter("internal val positionColors").substringBefore("@Composable private fun Label")
+        }
         assertEquals(body(File("src/main/kotlin/com/nozzleitall/desktop/screens/S4EnvironmentOverview.kt")),
             body(File("../app/src/main/java/net/jamesjennison/klippercompanion/environment/S4EnvironmentOverview.kt")))
     }

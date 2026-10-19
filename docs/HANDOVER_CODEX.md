@@ -1,10 +1,40 @@
 # Handover to Codex (written 2026-10-18)
 
-## Environmental B–D — approved, implementation in progress
+## Environmental B–D — implemented software, acceptance blocked
 
 Owner approved implementation and numeric defaults; see
 `handover/NIA_ENVIRONMENT_IMPLEMENTATION.md`. Historical design-only evidence below
 is not runtime acceptance. No E–G implementation is authorized.
+
+Functional source `9b6e152a49aa49562857fc69d8481319e9bdb941`: GTHost full
+build/package2m51s SUCCESS,1274tests/1264pass/10conditional skips/0fail. Core41PASS;
+100Hz core fixture3.96719%onecore/RSS+16,736,256bytes/drop0, not target-radio/GUI/
+battery guarantee. Exact isolated `.environment` Razr APK installed/hash verified;
+UI+SQLite2tests and actual H5100 diagnostic radio test PASS, no auto-resume.
+Exact Linux Deb candidate validates private BlueZ H5100,11events, stop/export/delete;
+separate85-file Off/EnableIdle trace has no history/BlueZ access. Desktop-authenticated
+`/opt` installation subsequently passed;208payload files match the tested Deb and
+installed source resource exactly9b6. Installed Off/EnableIdle89sealedtraces show
+nohistory/BlueZ access. Actual installed H5110 diagnostic14events, visibility
+stop/noauto-resume, UIexport14events and explicit test-data deletion PASS; export
+retained. No BTHome hardware available; qualified Govee firmware/calibration/
+thermal/cadence/coexistence artifacts absent. FullD remains NOT_READY; no waiver.
+Target-hardware resource qualification is not supplied by the core fixture.
+
+Synthetic source cycle5c3fac538b79 all3COMPLETE; clarificationb534478e38ce both
+COMPLETE; closure-evidenced559aa66f40a all3COMPLETE, exact configured pins/no model
+substitution.156 immutable implementation findings have separate Codex dispositions;
+source-defect claims resolved/rejected with evidence, dissent retained. No current
+source patch requested by final reviews; missing hardware/install evidence is not
+reviewer approval. Production Android package/LCARS/Samsung/printers untouched.
+Installation evidence subsequently closed the install findings. Exact-source
+CI39199638868 SUCCESS on verified `gthost-build01` (tests/lint/nativeARM64assembly;
+manual-only Device Farm and release jobs skipped, not claimed). Manifest
+SHA256`1d30730f779fc03035c711897882b6a6831692209081e9119bc2196c92c54863`
+seals38artifacts. Evidence4f094abd2512 staticPASS/aggregateFAIL, both integritytrue:
+physical qualification/target-resource gates deliberately unmet. Convergenced94c9a7bbfdf,
+closure43be3827a678=`NOT_READY`,3LOW disclosed residuals, no acceptedHIGHrisk/waiver.
+Only hardware qualification remains open; do not ask for a generic continuation.
 
 ### Historical environmental architecture review (design only)
 
@@ -21,9 +51,9 @@ architecture approval or implementation milestone is authorized by that closure.
 No runtime code/config/build/install/service/sensor changes or new live tests.
 Viewport acceptance below is unchanged. Evidence lives under
 `~/.local/state/nozzle-it-all/architecture/20261018-environment`.
-Current registered Evidence Profile is architecture-only and checks unchanged
-runtime source; replace it with an appropriate source/build/runtime profile if
-the owner later authorizes implementation. Do not use this review as runtime proof.
+At that design-only checkpoint the Evidence Profile was architecture-only and
+checked unchanged runtime source. Approved implementation now has its own external
+source/build/runtime profile. Do not use this historical design review as runtime proof.
 
 ## Current smooth-motion installation (2026-10-18)
 

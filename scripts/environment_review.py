@@ -21,9 +21,17 @@ if sys.argv[1] == 'register':
         'affected_components': ['environment-api', 'environment-core', 'desktop', 'app'],
         'provenance': {'source_revision': revision, 'architecture_sha256': 'dfbdd62225e24e89e850fa7326f8a877993e4ec0edba3b08a09760742fa5700d'}}})))
 elif sys.argv[1] == 'submit':
+    if len(sys.argv) != 3:
+        raise SystemExit('submit requires a sanitized, source-bound evidence JSON file')
+    current_evidence = json.loads(Path(sys.argv[2]).read_text())
+    if current_evidence.get('source_revision') != revision:
+        raise SystemExit('Evidence source_revision must equal current HEAD')
     paths = [*repo.glob('environment-*/src/**/*.kt'), *repo.glob('environment-*/build.gradle.kts'),
              *repo.glob('desktop/src/main/kotlin/com/nozzleitall/desktop/environment/*.kt'),
              *repo.glob('app/src/main/java/net/jamesjennison/klippercompanion/environment/*.kt'),
+             repo/'app/src/main/java/net/jamesjennison/klippercompanion/NozzleApp.kt',
+             repo/'app/src/androidTest/java/net/jamesjennison/klippercompanion/EnvironmentalDeviceTest.kt',
+             repo/'desktop/src/test/kotlin/com/nozzleitall/desktop/EnvironmentalStoreTest.kt',
              repo/'desktop/src/main/kotlin/com/nozzleitall/desktop/screens/EnvironmentalPanel.kt']
     sources = {str(p.relative_to(repo)): p.read_text() for p in paths}
     for path in ['desktop/src/main/kotlin/com/nozzleitall/desktop/Main.kt', 'app/src/main/java/net/jamesjennison/klippercompanion/MainActivity.kt']:
@@ -36,10 +44,11 @@ elif sys.argv[1] == 'submit':
         'approved_scope': (repo/'docs/handover/NIA_ENVIRONMENT_IMPLEMENTATION.md').read_text(),
         'sources': sources,
         'build_diff': subprocess.check_output(['git', 'diff', 'ed50eae7', '--', 'settings.gradle.kts', 'desktop/build.gradle.kts', 'app/build.gradle.kts', 'app/src/main/AndroidManifest.xml'], cwd=repo, text=True),
-        'evidence': 'All builds GTHost only. b19ff9a9 compiled both platforms and passed14coretests. 773de56c full core/domain/desktop/Android-local suites and Debian package passed. 8bee5c02 full desktop/Android-local tests and both debug/AndroidTest APKs/package passed, fresh pinned native engine source matched byte-for-byte against export. Early incorrect CGAL5 prefix failed configure; corrected to verified6.2.1 prefix, no engine changes. Resource failures retained: early total processCPU9-10%onecore100Hz, later fcdbf7d0 steady5.52% stillFAIL. 605b2985 steady4.6666%, incrementalRSS6.35MB/drop0 passed resource case but suiteFAILED2deleteVACUUM tests due cached active statements. Current source closes cache before VACUUM and adds tests; fresh exactsource validation pending, not claimedPASS. Owner confirms no BTHome hardware available, so physical BTHome qualification cannot pass. No current installed/radio/battery/Goveequalification evidence yet. No serials/MACs/credentials/raw nearby payloads in this package.',
-        'implementation_details': 'OS scan callbacks are bounded atomic enqueue only, no gate/DB locks or direct disk writes; failure coalesces onto IO. Visibility epoch invalidates scan preparation and admission; Android composition disposal closes owned resources asynchronously and creates no cleanup worker for untouched off/idle. JDBC statement cache max32, cache closed before VACUUM, max100ms/32report batches. Stable encodingv1 preserves raw/calibration/collector/session/boot/clock provenance; receivedAt stored separately, never immutable retry identity. Dropped reports are persisted with batch/gap records and exported; unknown missing coverage remains explicit. Initial API31+ operation requests SCAN only, not CONNECT; no GATT/name/bond/alias APIs. Android collection uses selected-address OS scan filters plus host postfilter, bounded unfiltered discovery only. Linux uses own connection/discovery reference, first powered adapter deterministically or explicitly configured path and reports selected adapter. Draft equipment/positions reuse IDs and draft+placement saves are atomic. No qualified firmware/thermal/calibration claims or assigned deployment.',
-        'review_questions': 'Find actual implementation defects, missing B-D requirements, unsafe lifecycle/permission/BlueZ ownership/deletion/history concurrency and resource failures. Unknown firmware/calibration/thermal evidence must not become qualified dryer deployment. Distinguish missing physical acceptance evidence from source bugs. E-G background/sync/HA/MQTT/analytics/alerts are intentionally absent. Android initial scope STARTED Activity only, no background service; local environmental data never projectDB/3MF. Compiled descriptors inert. CPU/memory/physical qualification pending, not PASS.',
         'response_format': 'Concise JSON summary and findings array; severity BLOCKER/HIGH/MEDIUM/LOW/INFORMATIONAL, area, finding, evidence, consequence, required_correction, acceptance_test, confidence. Report all material defects but avoid repeating requirements as bugs or speculative runtime claims. No chain of thought. Initial reviews independent; no other reviewer conclusions supplied.'}
+    # Require explicit source-bound evidence; never replay an old checkpoint as current proof.
+    package['evidence'] = current_evidence
+    package['implementation_details'] = 'Current source and supplied source-bound evidence are authoritative; historical checkpoint prose is not runtime proof.'
+    package['review_questions'] = 'Review current source for lifecycle, privacy, storage, platform and resource defects against the approved B-D requirements. Distinguish unfulfilled physical qualification from source defects. No model substitution, requirement changes or E-G expansion.'
     print(json.dumps(call({'operation': 'control_submit', 'change_id': change, 'package': package,
                           'reviewers': ['council-synthetic-systems', 'council-synthetic-frontend', 'council-synthetic-adversarial']})))
 elif sys.argv[1] == 'status':

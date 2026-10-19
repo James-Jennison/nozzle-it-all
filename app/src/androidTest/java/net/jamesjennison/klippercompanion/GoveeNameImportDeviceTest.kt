@@ -81,4 +81,13 @@ class GoveeNameImportDeviceTest {
         assertTrue(store.devices.value.isEmpty())
         store.forget(); assertFalse(store.hasSavedKey())
     }
+    @Test fun queuedForgetCannotBeOvertakenByANewImport() = fixture { store, _ ->
+        val forget = store.prepareForget()
+        assertTrue(store.forgetting.value)
+        assertEquals(GoveeNameFailure.CLEANUP, assertThrows(GoveeNameException::class.java) { store.begin() }.reason)
+        forget()
+        assertFalse(store.forgetting.value)
+        assertFalse(store.hasSavedKey())
+        store.begin()
+    }
 }

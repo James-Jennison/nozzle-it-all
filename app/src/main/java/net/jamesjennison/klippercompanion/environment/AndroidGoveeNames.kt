@@ -16,8 +16,14 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
     private val credentialStore by lazy { credentials() }
     private val names = MutableStateFlow<List<GoveeDeviceName>>(emptyList())
     val devices = names.asStateFlow()
+    private var pendingForgets = 0
+    private val cleanup = MutableStateFlow(false)
+    val forgetting = cleanup.asStateFlow()
     fun hasSavedKey(): Boolean = synchronized(storageLock) { credentialStore.contains("api-key") }
-    @Synchronized fun begin(): Long = epoch.incrementAndGet()
+    @Synchronized fun begin(): Long {
+        if (pendingForgets != 0) throw GoveeNameException(GoveeNameFailure.CLEANUP)
+        return epoch.incrementAndGet()
+    }
     @Synchronized fun cancel() { epoch.incrementAndGet() }
     fun import(key: String?, remember: Boolean, request: Long): Int {
         if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
@@ -46,8 +52,15 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
         }
         return result.size
     }
-    fun forget() {
-        synchronized(this) { cancel(); names.value = emptyList() }
-        synchronized(storageLock) { check(credentialStore.edit().remove("api-key").commit()) }
+    /** Main-safe intent fence: prevent a newer import overtaking queued secret cleanup. */
+    @Synchronized fun prepareForget(): () -> Unit {
+        cancel(); names.value = emptyList(); pendingForgets++; cleanup.value = true
+        val started = java.util.concurrent.atomic.AtomicBoolean(false)
+        return {
+            check(started.compareAndSet(false, true))
+            try { synchronized(storageLock) { check(credentialStore.edit().remove("api-key").commit()) } }
+            finally { synchronized(this) { pendingForgets--; cleanup.value = pendingForgets != 0 } }
+        }
     }
+    fun forget() = prepareForget().invoke()
 }

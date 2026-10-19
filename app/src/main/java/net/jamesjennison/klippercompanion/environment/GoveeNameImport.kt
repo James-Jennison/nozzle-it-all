@@ -29,6 +29,7 @@ import kotlinx.coroutines.*
     var saved by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    val forgetting by store.forgetting.collectAsState()
     fun cancel() { store.cancel(); key = ""; dialog = false }
     DisposableEffect(lifecycle, store) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) cancel() }
@@ -38,15 +39,16 @@ import kotlinx.coroutines.*
     OutlinedButton({
         dialog = true; key = ""; rememberKey = false
         scope.launch { saved = try { withContext(Dispatchers.IO) { store.hasSavedKey() } } catch (_: Exception) { false } }
-    }, enabled = !busy) { Text("Import names from Govee") }
+    }, enabled = !busy && !forgetting) { Text("Import names from Govee") }
     Text("Optional account lookup for names only. Readings stay on local Bluetooth; no device-control commands.", style = MaterialTheme.typography.bodySmall)
     message?.let { Text(it) }
     TextButton({
+        val forget = store.prepareForget()
         busy = true; cancel()
-        scope.launch(start = CoroutineStart.UNDISPATCHED) { try { withContext(NonCancellable + Dispatchers.IO) { store.forget() }; saved = false; message = "Saved Govee key and imported name list forgotten. Added sensor names/history are unchanged." }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { try { withContext(NonCancellable + Dispatchers.IO) { forget() }; saved = false; message = "Saved Govee key and imported name list forgotten. Added sensor names/history are unchanged." }
             catch (_: Exception) { message = "Could not forget saved key; retry explicitly." }
             finally { busy = false } }
-    }, enabled = !busy) { Text("Forget Govee key and imported names") }
+    }, enabled = !busy && !forgetting) { Text("Forget Govee key and imported names") }
     if (dialog) AlertDialog(onDismissRequest = { if (!busy) cancel() },
         properties = DialogProperties(securePolicy = SecureFlagPolicy.SecureOn),
         title = { Text("Read-only Govee name import") },
@@ -68,13 +70,13 @@ import kotlinx.coroutines.*
         confirmButton = { TextButton({
             val entered = key.trim().takeIf { it.isNotEmpty() }; val persist = rememberKey
             key = ""; busy = true
-            val request = store.begin()
+            val request = try { store.begin() } catch (e: GoveeNameException) { busy = false; dialog = false; message = e.reason.description; return@TextButton }
             scope.launch {
                 try {
                     val count = withContext(Dispatchers.IO) { store.import(entered, persist, request) }
+                    dialog = false
                     if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
                         message = "Imported $count Govee names. Exact model/address matches fill new sensors; otherwise choose the matching Govee name explicitly. Existing sensor names are not overwritten."
-                        dialog = false
                     }
                 } catch (_: CancellationException) { store.cancel() }
                 catch (e: GoveeNameException) { message = e.reason.description; dialog = false }

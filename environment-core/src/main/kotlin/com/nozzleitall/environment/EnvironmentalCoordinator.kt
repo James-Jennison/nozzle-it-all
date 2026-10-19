@@ -304,6 +304,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
         scope.launch { delay(durationMillis); synchronized(this@EnvironmentalCoordinator) { if (runControl === control) stop("Time limit reached — press Discover / Start for a new operation") } }
     }
     @Synchronized fun save(candidate: Candidate, name: String) {
+        require(name.isNotBlank() && name.length <= 120 && name.none { it.isISOControl() })
         check(gate.state == EnvironmentalState.DISCOVERING && mutable.value.candidates.contains(candidate))
         check(history.bindings().none { !it.archived && it.address.equals(candidate.address, true) }) { "Sensor already added" }
         stop("Discovery stopped — saving selection")

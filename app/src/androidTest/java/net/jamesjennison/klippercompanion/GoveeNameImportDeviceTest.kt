@@ -81,11 +81,38 @@ class GoveeNameImportDeviceTest {
         assertTrue(store.devices.value.isEmpty())
         store.forget(); assertFalse(store.hasSavedKey())
     }
-    @Test fun queuedForgetCannotBeOvertakenByANewImport() = fixture { store, _ ->
-        val forget = store.requestForgetAsync()
-        kotlinx.coroutines.runBlocking { forget.await() }
+    @Test fun queuedForgetCannotBeOvertakenOrAbandonedAndFailureRevokesSavedKey() = fixture { _, prefs ->
+        assertTrue(prefs.edit().putString("api-key", "synthetic-old-key").commit())
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        var fail = true
+        val delayed = object : android.content.SharedPreferences by prefs {
+            override fun edit(): android.content.SharedPreferences.Editor {
+                val editor = prefs.edit()
+                return object : android.content.SharedPreferences.Editor by editor {
+                    override fun remove(key: String?): android.content.SharedPreferences.Editor { editor.remove(key); return this }
+                    override fun commit(): Boolean {
+                        entered.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS))
+                        return if (fail) false else editor.commit()
+                    }
+                }
+            }
+        }
+        var fetched = false
+        val store = AndroidGoveeNames({ delayed }) { _, _ -> fetched = true; emptyList() }
+        val work = store.requestForgetAsync()
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS))
+            assertTrue(store.forgetting.value)
+            assertEquals(GoveeNameFailure.CLEANUP, assertThrows(GoveeNameException::class.java) { store.begin() }.reason)
+            // Cancelling the caller's handle cannot orphan the already-owned cleanup.
+            work.cancel()
+        } finally { release.countDown() }
+        kotlinx.coroutines.runBlocking { work.join() }
         assertFalse(store.forgetting.value)
         assertFalse(store.hasSavedKey())
-        store.begin()
+        assertEquals(GoveeNameFailure.CLEANUP, assertThrows(GoveeNameException::class.java) { store.import(null, false, store.begin()) }.reason)
+        assertFalse(fetched)
+        fail = false; store.forget()
+        assertFalse(prefs.contains("api-key"))
     }
 }

@@ -21,7 +21,8 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
     private val cleanup = MutableStateFlow(false)
     val forgetting = cleanup.asStateFlow()
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    fun hasSavedKey(): Boolean = synchronized(storageLock) { credentialStore.contains("api-key") }
+    private val savedKeyRevoked = java.util.concurrent.atomic.AtomicBoolean(false)
+    fun hasSavedKey(): Boolean = synchronized(storageLock) { !savedKeyRevoked.get() && credentialStore.contains("api-key") }
     @Synchronized fun begin(): Long {
         if (pendingForgets != 0) throw GoveeNameException(GoveeNameFailure.CLEANUP)
         return epoch.incrementAndGet()
@@ -29,7 +30,10 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
     @Synchronized fun cancel() { epoch.incrementAndGet() }
     fun import(key: String?, remember: Boolean, request: Long): Int {
         if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
-        val selected = key ?: synchronized(storageLock) { credentialStore.getString("api-key", null) } ?: throw GoveeNameException(GoveeNameFailure.KEY)
+        val selected = key ?: synchronized(storageLock) {
+            if (savedKeyRevoked.get()) throw GoveeNameException(GoveeNameFailure.CLEANUP)
+            credentialStore.getString("api-key", null)
+        } ?: throw GoveeNameException(GoveeNameFailure.KEY)
         val result = fetch(selected) { epoch.get() == request }
         synchronized(storageLock) {
             if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
@@ -41,6 +45,7 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
                 synchronized(this) {
                     if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
                     names.value = result
+                    if (persist) savedKeyRevoked.set(false)
                 }
             } catch (e: Exception) {
                 // A cancellation racing a commit restores the previous credential, not merely its absence.
@@ -55,11 +60,14 @@ class AndroidGoveeNames internal constructor(private val credentials: () -> andr
         return result.size
     }
     /** Main-safe intent fence: prevent a newer import overtaking queued secret cleanup. */
-    @OptIn(ExperimentalCoroutinesApi::class)
+    @OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
     @Synchronized fun requestForgetAsync(): Deferred<Unit> {
-        cancel(); names.value = emptyList(); pendingForgets++; cleanup.value = true
+        cancel(); names.value = emptyList(); savedKeyRevoked.set(true); pendingForgets++; cleanup.value = true
         return cleanupScope.async(start = CoroutineStart.ATOMIC) {
-            try { synchronized(storageLock) { check(credentialStore.edit().remove("api-key").commit()) } }
+            try { synchronized(storageLock) {
+                try { check(credentialStore.edit().remove("api-key").commit()); savedKeyRevoked.set(false) }
+                catch (e: Exception) { savedKeyRevoked.set(true); throw e }
+            } }
             finally { synchronized(this) { pendingForgets--; cleanup.value = pendingForgets != 0 } }
         }
     }

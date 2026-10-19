@@ -14,6 +14,7 @@ class DesktopGoveeNames(private val fetch: (String, () -> Boolean) -> List<Govee
     @Synchronized fun cancel() { epoch.incrementAndGet() }
     @Synchronized fun forget() { cancel(); names.value = emptyList() }
     fun import(key: String, request: Long): Int {
+        if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)
         val result = fetch(key) { epoch.get() == request }
         synchronized(this) {
             if (epoch.get() != request) throw GoveeNameException(GoveeNameFailure.CANCELLED)

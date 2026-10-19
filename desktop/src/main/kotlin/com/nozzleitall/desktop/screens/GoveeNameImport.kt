@@ -25,12 +25,12 @@ import kotlinx.coroutines.*
 
 @Composable internal fun GoveeNameImport(store: DesktopGoveeNames) {
     var dialog by remember { mutableStateOf(false) }
-    var secret by remember { mutableStateOf("") }
+    var entryText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    fun cancel() { store.cancel(); secret = ""; dialog = false }
-    DisposableEffect(store) { onDispose { store.cancel(); secret = "" } }
+    fun cancel() { store.cancel(); entryText = ""; dialog = false }
+    DisposableEffect(store) { onDispose { store.cancel(); entryText = "" } }
     NzButton("Import names from Govee", { dialog = true }, enabled = !busy)
     NzButton("Forget imported Govee names", { cancel(); store.forget() })
     message?.let { Txt(it, Nz.type.bodySmall) }
@@ -47,9 +47,9 @@ import kotlinx.coroutines.*
             Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Txt("Names only; readings stay on local Bluetooth. No equipment-control requests.", Nz.type.body)
                 Txt("Enter your key privately here, never in chat. It is used once, not saved on desktop. Some sensors may not appear in the API.", Nz.type.bodySmall)
-                Field("Govee API key", secret, { secret = it.take(256) }, secret = true)
+                Field("Govee API key", entryText, { entryText = it.take(256) }, Modifier, "", true)
                 NzButton("Import names", {
-                    val entered = secret.trim(); secret = ""; busy = true
+                    val entered = entryText.trim(); entryText = ""; busy = true
                     val request = store.begin()
                     scope.launch {
                         try {
@@ -57,9 +57,9 @@ import kotlinx.coroutines.*
                             message = "Imported $count Govee names. Existing saved names are unchanged."
                         } catch (e: GoveeNameException) { message = e.reason.description }
                         catch (_: Exception) { message = "Name import unavailable; retry explicitly." }
-                        finally { busy = false; secret = ""; dialog = false }
+                        finally { busy = false; entryText = ""; dialog = false }
                     }
-                }, enabled = !busy && secret.isNotBlank())
+                }, enabled = !busy && entryText.isNotBlank())
                 NzButton("Cancel", { cancel() })
             }
         }

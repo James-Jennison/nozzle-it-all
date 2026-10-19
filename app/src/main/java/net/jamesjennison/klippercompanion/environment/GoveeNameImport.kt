@@ -31,14 +31,14 @@ import kotlinx.coroutines.*
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val forgetting by store.forgetting.collectAsState()
-    fun cancel() { store.cancel(); key = ""; dialog = false }
+    fun cancel() { store.cancel(); key = ""; saved = false; dialog = false }
     DisposableEffect(lifecycle, store) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) cancel() }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); cancel() }
     }
     OutlinedButton({
-        dialog = true; key = ""; rememberKey = false
+        dialog = true; key = ""; saved = false; rememberKey = false
         scope.launch { saved = try { withContext(Dispatchers.IO) { store.hasSavedKey() } } catch (_: Exception) { false } }
     }, enabled = !busy && !forgetting) { Text("Import names from Govee") }
     Text("Optional account lookup for names only. Readings stay on local Bluetooth; no device-control commands.", style = MaterialTheme.typography.bodySmall)

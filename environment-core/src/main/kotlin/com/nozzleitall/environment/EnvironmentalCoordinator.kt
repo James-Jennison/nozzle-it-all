@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.update
 
+/** dropped: this coordinator's cumulative ingress-overflow count (including discovery).
+ * recordedDrops: retained collection-history gaps across runs. Neither implies complete radio coverage. */
 data class EnvironmentalView(val state: EnvironmentalState, val status: String = "Disabled — no collection", val candidates: List<Candidate> = emptyList(),
     val bindings: List<Binding> = emptyList(), val latest: Map<String, Observation> = emptyMap(), val dropped: Long = 0, val recordedDrops: Long = 0)
 
@@ -52,7 +54,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
         val target = runControl
-        if (disable) disableRequested.set(true)
+        if (disable) disableRequested.set(true) // Global Off intent supersedes every run; ordinary Stop owns only target.
         target?.revoked?.set(true)
         // Hide live readings immediately, before durable revocation/cancellation.
         if (target != null) mutable.update { if (runControl === target) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") else it }
@@ -125,18 +127,18 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     if (purpose == Purpose.COLLECTION && bindings.none { it.address.equals(report.address, true) }) return@start
                     if (!queue.trySend(report).isSuccess) droppedReports.incrementAndGet()
                 }, { failure -> if (failureQueued.compareAndSet(false, true)) scope.launch {
-                    synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop(failure) }
+                    synchronized(this@EnvironmentalCoordinator) { if (runControl === control) stop(failure) }
                 } })
                 if (qualification?.radios?.isNotEmpty() == true && opened.adapterDescription !in qualification.radios) {
                     runCatching { opened.close() }
-                    error("Physical qualification adapter changed")
+                    throw QualificationUnavailableException()
                 }
                 synchronized(this@EnvironmentalCoordinator) {
                     if (gate.valid(grant) && visibilityEpoch.get() == visibleEpoch && !revocationRequested.get()) {
                         session = opened
                         mutable.value = mutable.value.copy(status = mutable.value.status + " · " + opened.adapterDescription)
                     }
-                    else { opened.close(); if (operation === job) stop("Stopped — obsolete radio preparation") }
+                    else { opened.close(); if (runControl === control) stop("Stopped — obsolete radio preparation") }
                 }
                 for (first in queue) {
                     if (revocationRequested.get() || !gate.valid(grant)) continue
@@ -179,11 +181,12 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
                     }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: LinkageError) { synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop("Environmental provider unavailable — installation dependency missing; no automatic retry") } }
-            catch (e: Exception) { synchronized(this@EnvironmentalCoordinator) { if (gate.valid(grant)) stop("Environmental operation unavailable — radio, permission or storage failure; no automatic retry") } }
+            catch (e: QualificationUnavailableException) { synchronized(this@EnvironmentalCoordinator) { if (runControl === control) stop(e.message!!) } }
+            catch (e: LinkageError) { synchronized(this@EnvironmentalCoordinator) { if (runControl === control) stop("Environmental provider unavailable — installation dependency missing; no automatic retry") } }
+            catch (e: Exception) { synchronized(this@EnvironmentalCoordinator) { if (runControl === control && gate.valid(grant)) stop("Environmental operation unavailable — radio, permission or storage failure; no automatic retry") } }
             finally { queue.close() }
         }
-        scope.launch { delay(durationMillis); synchronized(this@EnvironmentalCoordinator) { if (operation === job) stop("Time limit reached — press Discover / Start for a new operation") } }
+        scope.launch { delay(durationMillis); synchronized(this@EnvironmentalCoordinator) { if (runControl === control) stop("Time limit reached — press Discover / Start for a new operation") } }
     }
     @Synchronized fun save(candidate: Candidate, name: String) {
         check(gate.state == EnvironmentalState.DISCOVERING && mutable.value.candidates.contains(candidate))

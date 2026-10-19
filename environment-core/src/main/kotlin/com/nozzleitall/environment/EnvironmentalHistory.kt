@@ -97,7 +97,7 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
                         q.getString("channel") == channel.wire && q.getInt("calibrationVersion") == calibration &&
                         q.getLong("verifiedAt") <= now && now < q.getLong("expiresAt") &&
                         q.getDouble("minC") <= p.getDouble("minC") && q.getDouble("maxC") >= p.getDouble("maxC")
-                } ?: error("Assigned sensors require current channel-specific physical qualification")
+                } ?: throw QualificationUnavailableException()
                 radios += q.getString("radio")
                 validUntil = minOf(validUntil, q.getLong("expiresAt"))
             }
@@ -170,14 +170,18 @@ class EnvironmentalHistory(private val factory: SqlStoreFactory, private val lim
         return store().transaction {
             val results = observations.map { insert(it, currentIncarnation) }
             val last = observations.last()
-            if (last.droppedBefore > 0) store().execute("INSERT OR REPLACE INTO gaps(id,observed,dropped) VALUES(?,?,?)", last.sessionId, last.observedAt, last.droppedBefore)
+            if (last.droppedBefore > 0) recordGapInside(last.sessionId, last.observedAt, last.droppedBefore)
             results
         }
     }
     @Synchronized fun recordedDrops(): Long = store().query("SELECT COALESCE(SUM(dropped),0) FROM gaps").first().first()!!.toLong()
     @Synchronized fun recordGap(sessionId: String, observedAt: Long, dropped: Long) {
         require(dropped > 0)
-        store().transaction { store().execute("INSERT OR REPLACE INTO gaps(id,observed,dropped) VALUES(?,?,?)", sessionId, observedAt, dropped) }
+        store().transaction { recordGapInside(sessionId, observedAt, dropped) }
+    }
+    private fun recordGapInside(sessionId: String, observedAt: Long, dropped: Long) {
+        // Cumulative, idempotent, monotonic even if an older checkpoint is retried. Compatible with API28 SQLite.
+        store().execute("INSERT OR REPLACE INTO gaps(id,observed,dropped) VALUES(?,MAX(?,COALESCE((SELECT observed FROM gaps WHERE id=?),?)),MAX(?,COALESCE((SELECT dropped FROM gaps WHERE id=?),0)))", sessionId, observedAt, sessionId, observedAt, dropped, sessionId)
     }
     @Synchronized fun eventCount(): Long = store().query("SELECT COUNT(*) FROM events").first().first()!!.toLong()
     private fun insert(o: Observation, currentIncarnation: String): String {

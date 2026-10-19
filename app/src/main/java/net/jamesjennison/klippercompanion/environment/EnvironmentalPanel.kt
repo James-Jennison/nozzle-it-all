@@ -39,7 +39,7 @@ import org.json.JSONObject
     var equipment by remember { mutableStateOf("Room") }
     var position by remember { mutableStateOf("Shelf") }
     var offset by remember { mutableStateOf("0.0") }
-    fun action(block: () -> Unit) { if (!busy) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
+    fun action(block: () -> Unit) { if (!busy) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: QualificationUnavailableException) { problem = e.message } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
     fun start(kind: String) { action { if (kind == "discover") controller.discover() else controller.start() } }
     val permissions = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
@@ -70,7 +70,7 @@ import org.json.JSONObject
             EnvironmentalProviders.ble.forEach { Text(it.name + " · active scan", style = MaterialTheme.typography.bodySmall) }
             Text("Nearby-device permission is for scanning only; no CONNECT permission, GATT connection or pairing is used.", style = MaterialTheme.typography.bodySmall)
             Text("Active BLE scanning uses battery/radio. Local diagnostic receptions only; physical measurement age unknown. No pairing, Govee unbinding, cloud or background service. Leaving this panel or app stops collection.", style = MaterialTheme.typography.bodySmall)
-            Text("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided.", style = MaterialTheme.typography.bodySmall)
+            Text("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided. OS/user/device/radio identity changes require requalification; generic radio IDs are not migrated.", style = MaterialTheme.typography.bodySmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (view.state == EnvironmentalState.DISABLED) Button({ action { controller.enable() } }, enabled = !busy, modifier = Modifier.testTag("environment-enable")) { Text("Enable") }
             if (view.state == EnvironmentalState.ENABLED_IDLE) {
@@ -92,7 +92,7 @@ import org.json.JSONObject
                 Text(o.readings.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" })
                 Text("Reception ${java.time.Instant.ofEpochMilli(o.observedAt)} — measurement age unknown", style = MaterialTheme.typography.bodySmall)
             }
-            if (view.dropped > 0) Text("${view.dropped} reports dropped — coverage incomplete", color = MaterialTheme.colorScheme.error)
+            if (view.dropped > 0) Text("Queue overflow counter for this monitor: ${view.dropped} — coverage incomplete", color = MaterialTheme.colorScheme.error)
             if (view.recordedDrops > 0) Text("History records ${view.recordedDrops} dropped reports; other gaps unknown", color = MaterialTheme.colorScheme.error)
             OutlinedButton({ action { rows = controller.loadHistory(); controller.savedBindings() } }, enabled = !busy, modifier = Modifier.testTag("environment-history")) { Text("Open local history") }
             OutlinedButton({ action { controller.retention() } }, enabled = !busy) { Text("Apply 30-day retention") }

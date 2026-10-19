@@ -18,6 +18,7 @@ data class Equipment(val id: String = newId(), val name: String, val type: Strin
 /** Owner-reviewed per-channel declaration, not an untrusted self-certification endpoint or whole-device badge.
  * radio is the exact RadioSession.adapterDescription observed in the physical diagnostic run, never a friendly name.
  * Evidence references are owner-approved physical artifacts; production has no UI/import path to create these records.
+ * OS/user/device/radio identity changes invalidate declarations; legacy generic radio IDs are not migrated.
  */
 data class CapabilityQualification(val id: String = newId(), val bindingId: String, val bindingRevision: Long,
     val model: String, val firmware: String, val platform: String, val radio: String,
@@ -25,6 +26,7 @@ data class CapabilityQualification(val id: String = newId(), val bindingId: Stri
     val minC: Double, val maxC: Double, val cadenceMinMillis: Long, val cadenceMaxMillis: Long,
     val verifiedAt: Long, val expiresAt: Long, val evidence: Map<String, String>, val archived: Boolean = false)
 data class QualificationAdmission(val radios: Set<String>, val validUntil: Long)
+class QualificationUnavailableException : IllegalStateException("Assigned deployment unavailable — position, firmware, platform or radio qualification missing/changed; owner-reviewed physical evidence required")
 data class Position(val id: String = newId(), val equipmentId: String, val name: String,
                     val minC: Double? = null, val maxC: Double? = null)
 data class Placement(val id: String = newId(), val sensorId: String, val positionId: String,

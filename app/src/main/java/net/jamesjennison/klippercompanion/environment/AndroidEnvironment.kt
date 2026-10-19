@@ -40,7 +40,7 @@ class AndroidBleTransport(private val context: Context) : BleTransport {
             java.security.MessageDigest.getInstance("SHA-256").digest("${android.os.Build.MODEL}|${android.os.Build.FINGERPRINT}|$id".toByteArray()).joinToString("") { "%02x".format(it) }
         }
         val description = "Android BLE · radio ${fingerprint ?: "unavailable"}"
-        require(request.requiredAdapterDescription == null || (fingerprint != null && request.requiredAdapterDescription == description)) { "Adapter not qualified for this assignment" }
+        if (request.requiredAdapterDescription != null && (fingerprint == null || request.requiredAdapterDescription != description)) throw QualificationUnavailableException()
         check(request.isCurrent()) { "Obsolete BLE operation" }
         val filters = if (request.discovery) null else request.selectedAddresses.map { ScanFilter.Builder().setDeviceAddress(it).build() }.also { require(it.isNotEmpty()) }
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: error("Bluetooth unavailable")

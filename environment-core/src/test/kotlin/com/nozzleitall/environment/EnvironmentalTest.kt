@@ -280,8 +280,11 @@ class EnvironmentalTest {
     @Test fun cumulativeGapUpsertsDoNotLoseOrDoubleCountEarlierBatches() {
         history().use { h ->
             h.appendBatch(listOf(observation().copy(droppedBefore = 10)), "inc")
+            assertEquals(10L, h.recordedDrops())
             h.recordGap("session", 1001, 15)
+            assertEquals(15L, h.recordedDrops())
             h.recordGap("session", 1001, 15)
+            h.recordGap("session", 999, 12)
             assertEquals(15L, h.recordedDrops())
         }
     }

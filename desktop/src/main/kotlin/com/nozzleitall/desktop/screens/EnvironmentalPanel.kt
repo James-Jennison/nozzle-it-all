@@ -22,13 +22,13 @@ import org.json.JSONObject
     var equipmentName by remember { mutableStateOf("Room") }
     var positionName by remember { mutableStateOf("Shelf") }
     var offset by remember { mutableStateOf("0.0") }
-    fun action(block: () -> Unit) { if (!busy) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
+    fun action(block: () -> Unit) { if (!busy) { busy = true; error = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: QualificationUnavailableException) { error = e.message } catch (_: Exception) { error = "Operation failed; data preserved where possible. Check radio/permission/storage and retry explicitly." } finally { busy = false } } } }
     Card(Modifier.fillMaxWidth()) {
         Txt("Environmental monitoring (optional)", Nz.type.title)
         Txt(v.status, Nz.type.body)
         EnvironmentalProviders.ble.forEach { Txt(it.name + " · active scan", Nz.type.bodySmall) }
         Txt("Local foreground only. Active BLE scanning uses radio/battery. No pairing, Govee unbinding, cloud, background service or equipment control.", Nz.type.bodySmall)
-        Txt("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided.", Nz.type.bodySmall)
+        Txt("Cadence declarations are not runtime-enforced; receptions never prove physical freshness. Assigned deployment needs owner-reviewed physical evidence; no self-qualification workflow is provided. OS/user/device/radio identity changes require requalification; generic radio IDs are not migrated.", Nz.type.bodySmall)
         error?.let { Banner(it, BannerKind.WARNING) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (v.state == EnvironmentalState.DISABLED) NzButton("Enable", { action { controller.enable() } }, enabled = !busy, testTag = "environment-enable")
@@ -52,7 +52,7 @@ import org.json.JSONObject
             Txt(observation.readings.joinToString(" · ") { "${it.channel.name}: ${it.value} ${it.channel.unit}" }, Nz.type.metricSmall)
             Txt("Reception ${java.time.Instant.ofEpochMilli(observation.observedAt)} — physical measurement age unknown; decoder ${observation.decoder}", Nz.type.bodySmall)
         }
-        if (v.dropped > 0) Banner("${v.dropped} reports dropped — coverage incomplete", BannerKind.WARNING)
+        if (v.dropped > 0) Banner("Queue overflow counter for this monitor: ${v.dropped} — coverage incomplete", BannerKind.WARNING)
         if (v.recordedDrops > 0) Banner("History records ${v.recordedDrops} dropped reports; other unobserved gaps remain unknown", BannerKind.WARNING)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             NzButton("Open local history", { action { rows = controller.loadHistory(); controller.savedBindings() } }, enabled = !busy, testTag = "environment-history")

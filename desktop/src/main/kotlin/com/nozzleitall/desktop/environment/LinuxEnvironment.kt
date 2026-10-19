@@ -90,8 +90,8 @@ class LinuxBleTransport(private val requestedAdapter: String? = null) : BleTrans
             val identity = listOf("Address", "Modalias").joinToString("|") { adapterProperties[it]?.value?.toString().orEmpty() }
             val fingerprint = java.security.MessageDigest.getInstance("SHA-256").digest(identity.toByteArray()).joinToString("") { "%02x".format(it) }
             val description = "BlueZ $path · radio $fingerprint"
-            require(request.requiredAdapterDescription == null ||
-                (adapterProperties["Address"]?.value is String && request.requiredAdapterDescription == description)) { "Adapter not qualified for this assignment" }
+            if (request.requiredAdapterDescription != null &&
+                ((adapterProperties["Address"]?.value as? String).isNullOrBlank() || (adapterProperties["Modalias"]?.value as? String).isNullOrBlank() || request.requiredAdapterDescription != description)) throw QualificationUnavailableException()
             adapter = bus.getRemoteObject("org.bluez", path, BluezEnvironmentalAdapter::class.java)
             // D-Bus daemon combines client filters. Host still admits only fresh authorized reports.
             check(request.isCurrent()) { "Obsolete BLE operation" }

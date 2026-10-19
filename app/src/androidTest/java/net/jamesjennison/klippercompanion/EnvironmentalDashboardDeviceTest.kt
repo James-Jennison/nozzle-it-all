@@ -26,6 +26,14 @@ class EnvironmentalDashboardDeviceTest {
         compose.onNodeWithText("Office shelf").assertExists()
         compose.onNodeWithTag("environment-sensor-card").assertExists()
         compose.onNodeWithTag("environment-trend-TEMPERATURE").performScrollTo().assertIsDisplayed()
+        val chart = compose.onNodeWithTag("environment-trend-TEMPERATURE").captureToImage().asAndroidBitmap()
+        var colored = 0
+        for (y in 0 until chart.height) for (x in 0 until chart.width) {
+            val pixel = chart.getPixel(x, y)
+            val channels = listOf(android.graphics.Color.red(pixel), android.graphics.Color.green(pixel), android.graphics.Color.blue(pixel))
+            if (android.graphics.Color.alpha(pixel) > 0 && channels.max() - channels.min() > 30) colored++
+        }
+        org.junit.Assert.assertTrue("Real colored trend strokes, not an empty Canvas or only three dots", colored > chart.width)
         compose.onNode(hasContentDescription("Temperature: 3 samples", substring = true)).assertExists()
         compose.onNodeWithTag("environment-trend-HUMIDITY").performScrollTo().assertIsDisplayed()
         compose.onNode(hasContentDescription("Humidity: 3 samples", substring = true)).assertExists()

@@ -81,7 +81,7 @@ class EnvironmentalDeviceTest {
         assertTrue(position.isNull("minC") && position.isNull("maxC"))
         assertEquals("room", monitor.metadata("equipment").single { it.getString("id") == position.getString("equipmentId") }.getString("type"))
         compose.onNodeWithTag("environment-start").performScrollTo().performClick()
-        compose.waitUntil(45000) { compose.onAllNodes(hasText("Reception ", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(45000) { compose.onAllNodesWithTag("environment-trend-TEMPERATURE").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(compose.onAllNodes(hasText("Android BLE · radio", substring = true)).fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithTag("nav-0").performClick()
         compose.onNodeWithTag("nav-4").performClick()

@@ -25,7 +25,7 @@ class EnvironmentalChartsTest {
         assertEquals(listOf(false, true, false, false, false), series.points.map { it.connect })
     }
     @Test fun historyUsesCalibratedValuesAndReceptionNotMeasurementTime() {
-        val row = """{"eventId":"one","binding":"sensor","receivedAt":1234,"observedAt":1000,"session":"s","droppedBefore":2,"readings":[{"channel":"environment.temperature","raw":20,"offset":1.5}]}"""
+        val row = """{"encoding":1,"eventId":"one","binding":"sensor","receivedAt":1234,"observedAt":1000,"session":"s","droppedBefore":2,"readings":[{"channel":"environment.temperature","raw":20,"offset":1.5}]}"""
         val result = EnvironmentalCharts.history(listOf(row)).single()
         assertEquals(1234L, result.time); assertEquals(21.5, result.values.getValue(Channel.TEMPERATURE), 0.0)
         assertEquals(2L, result.dropped)
@@ -44,5 +44,12 @@ class EnvironmentalChartsTest {
         val rows = observations.map { org.json.JSONObject(ObservationEncoding.encode(it)).put("receivedAt", it.receivedAt).toString() }
         val series = EnvironmentalCharts.series(EnvironmentalCharts.history(rows), "sensor", Channel.HUMIDITY)!!
         assertEquals(listOf(false, true), series.points.map { it.connect })
+    }
+    @Test fun malformedFutureAndOversizedHistoryFailWithSpecificSafeStatus() {
+        for (row in listOf("not-json", "{\"encoding\":2,\"readings\":[]}", "{\"encoding\":1}", "x".repeat(16_385),
+            "{\"encoding\":1,\"readings\":[" + List(17) { "{}" }.joinToString(",") + "]}")) {
+            val failure = assertThrows(ChartHistoryException::class.java) { EnvironmentalCharts.history(listOf(row)) }
+            assertFalse(failure.message!!.contains(row))
+        }
     }
 }

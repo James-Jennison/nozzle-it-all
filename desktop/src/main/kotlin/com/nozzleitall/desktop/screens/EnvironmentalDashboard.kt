@@ -1,6 +1,7 @@
 package com.nozzleitall.desktop.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -9,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.nozzleitall.environment.*
 import com.nozzleitall.desktop.ui.*
@@ -39,7 +41,9 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
             val received = reception?.receivedAt ?: latest?.time
             Card(Modifier.fillMaxWidth().testTag("environment-sensor-card")) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    NzButton(name, { selected = binding.id })
+                    NzButton(name, { selected = binding.id }, modifier = Modifier.semantics {
+                        stateDescription = if (target?.id == binding.id) "Charts shown" else "Show charts"
+                    })
                     Txt("${number(values[Channel.TEMPERATURE])} °C    ${number(values[Channel.HUMIDITY])} %RH", Nz.type.metricSmall)
                     Txt("Battery ${number(values[Channel.BATTERY_PERCENT])}% · ${if (received == null) "No reception available" else "Received " + time(received)}", Nz.type.bodySmall)
                     Txt("Reception snapshot · physical measurement age unknown", Nz.type.bodySmall)
@@ -62,7 +66,7 @@ private fun time(value: Long) = DateTimeFormatter.ofPattern("MMM d HH:mm:ss").wi
     if (series == null) { Txt("No recorded ${title.lowercase()} samples"); return }
     val summary = "$title: ${series.points.size} samples, ${number(series.low)} to ${number(series.high)} ${channel.unit}; ${time(series.start)} to ${time(series.end)}"
     Canvas(Modifier.fillMaxWidth().height(140.dp).testTag("environment-trend-" + channel.name)
-        .semantics { contentDescription = summary }) {
+        .semantics { contentDescription = summary }.focusable()) {
         val inset = 6.dp.toPx()
         val w = (size.width - inset * 2).coerceAtLeast(1f)
         val h = (size.height - inset * 2).coerceAtLeast(1f)

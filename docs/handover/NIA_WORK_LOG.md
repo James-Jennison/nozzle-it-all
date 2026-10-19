@@ -4,6 +4,15 @@ Newest entries at the bottom. Times are PDT.
 
 ## Owner follow-up: retained names and visual dashboard (2026-10-19)
 
+Synthetic929 closure review3bad35ac5e5a underway. Adversarial explicitly withdrew
+prior HIGH stop-counter claim against actual try/finally; frontend confirms it.
+Added focusable chart summaries/selection state announcements, explicit safe
+unsupported/damaged-history error and per-row encoding/readings/size bounds.
+Android fixture now checks actual colored trend strokes rather than semantics
+alone, and physical Govee fixture waits for plotted received samples. Added
+headless desktop Compose software-render fixture (not installed-app/GPU proof).
+Owner confirmed desktop saved/closed. Normal app data remains unchanged.
+
 Exact24fb5a36 GTHost full SUCCESS3m54s/132tasks48executed84up-to-date;
 core100Hz4.32783694%onecore/RSS+10809344bytes/drop0, not physical radio/GUI/battery
 proof. Synthetic74f9516b7751 all3COMPLETE;17immutable findings recorded with

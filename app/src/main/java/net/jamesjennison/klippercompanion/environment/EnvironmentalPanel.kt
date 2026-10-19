@@ -44,7 +44,7 @@ import org.json.JSONObject
     var deleting by remember { mutableStateOf(false) }
     val roomDrafts = remember { mutableStateMapOf<String, Pair<String, String>>() }
     var offset by remember { mutableStateOf("0.0") }
-    fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: QualificationUnavailableException) { problem = e.message } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
+    fun action(block: () -> Unit) { if (!busy && !stopping) { busy = true; problem = null; scope.launch { try { withContext(Dispatchers.IO) { block() } } catch (e: ChartHistoryException) { problem = e.message } catch (e: QualificationUnavailableException) { problem = e.message } catch (_: Exception) { problem = "Environmental operation unavailable — check radio, permission or storage. No automatic retry." } finally { busy = false } } } }
     fun start(kind: String) {
         if (!busy && !stopping) { busy = true; problem = null
             try {

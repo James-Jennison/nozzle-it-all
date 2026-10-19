@@ -6,15 +6,20 @@ import org.json.JSONObject
 data class ChartSample(val id: String, val binding: String, val time: Long, val session: String,
     val dropped: Long, val values: Map<Channel, Double>, val sequence: Long = 0)
 
+class ChartHistoryException : IllegalStateException("Local history cannot be plotted: unsupported or damaged data. Existing data has not been changed.")
+
 object EnvironmentalCharts {
     const val MAX_SAMPLES = 500
     fun sample(o: Observation) = ChartSample(o.eventId, o.bindingId, o.receivedAt, o.sessionId,
         o.droppedBefore, o.readings.filter { it.value.isFinite() }.associate { it.channel to it.value }, o.sequence)
 
     /** Called on the IO dispatcher alongside the bounded history query. */
-    fun history(rows: List<String>): List<ChartSample> = rows.take(MAX_SAMPLES).map { raw ->
+    fun history(rows: List<String>): List<ChartSample> = try { rows.take(MAX_SAMPLES).map { raw ->
+        require(raw.length <= 16_384)
         val j = JSONObject(raw)
+        require(j.getInt("encoding") == 1)
         val readings = j.getJSONArray("readings")
+        require(readings.length() in 1..16)
         val values = buildMap {
             for (i in 0 until readings.length()) {
                 val r = readings.getJSONObject(i)
@@ -25,7 +30,7 @@ object EnvironmentalCharts {
         }
         ChartSample(j.getString("eventId"), j.getString("binding"), j.getLong("receivedAt"),
             j.getString("session"), j.getLong("droppedBefore"), values, j.optLong("sequence", 0))
-    }
+    } } catch (_: Exception) { throw ChartHistoryException() }
 
     fun merge(history: List<ChartSample>, live: List<ChartSample>): List<ChartSample> =
         (history + live).associateBy { it.id }.values.sortedWith(compareBy<ChartSample> { it.time }.thenBy { it.id }).takeLast(MAX_SAMPLES)

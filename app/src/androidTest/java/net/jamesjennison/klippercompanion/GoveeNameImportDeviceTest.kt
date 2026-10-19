@@ -41,6 +41,16 @@ class GoveeNameImportDeviceTest {
         compose.onNodeWithText("Forget Govee key and imported names").performClick()
         compose.waitUntil(5000) { store.devices.value.isEmpty() }
     }
+    @Test fun rememberedFixtureCanBeReusedAndExplicitlyForgotten() = fixture { store, prefs ->
+        assertEquals(1, store.import("fixture-not-a-real-key", true, store.begin()))
+        assertTrue(store.hasSavedKey())
+        assertEquals("fixture-not-a-real-key", prefs.getString("api-key", null))
+        assertEquals(1, store.import(null, false, store.begin()))
+        assertEquals("Office shelf", store.devices.value.single().name)
+        store.forget()
+        assertFalse(store.hasSavedKey()); assertFalse(prefs.contains("api-key"))
+        assertTrue(store.devices.value.isEmpty())
+    }
     @Test fun forgetRejectsAnInFlightLookupAndDoesNotResurrectNamesOrSavedKey() = fixture { _, prefs ->
         val entered = CountDownLatch(1); val release = CountDownLatch(1)
         val store = AndroidGoveeNames({ prefs }) { _, _ ->

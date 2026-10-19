@@ -556,3 +556,51 @@ No successful build, install, qualification, or milestone completion claimed yet
   verified. Hash-only baseline all16 entities/144 events intact. No running NIA
   process. Requested owner Start/switch/minimize/return for actual runtime proof;
   native desktop UI control unavailable. Live collection not yet verified.
+- Superseding runtime evidence: owner says back after switch/minimize with monitoring
+  still running;14:24 screenshot confirms live UI. Read-only history346new events,
+  8sensors,14:24:14.521–14:26:58.239PDT,163.718s,maxcrosssensor gap2.831s.
+  All16entities/144originalevents intact; running/optbinary3181339. Owner report is
+  focus evidence; no independent focus timestamps claimed.
+- Owner asks major UI cleanup.954c636c unifies S4 card/largeaverage metrics,
+  smallcornercallouts,conditional calculationdetails,compact othercards and toolbar;
+  sensorcharts on selection. Shared S4 parity kept; no monitoring/storage change.
+  GTHost validation started, no newcandidate/installPASS claimed yet.
+- Owner clarified overlay stays visible, labels content-sized, then explicitly
+  replaces S4 table rows. ce7c6112 implements compact210dp normal-scale illustration
+  with group metrics/trends underneath, other sensors in adjacent table. Latest
+  GTHost574results564pass10skip0fail/errors and AndroidcompilePASS. Prior802 pixel
+  assertion failure retained; corrected actual chart-area assertion in9fc17c7c.
+  Expanded dryer coverage restorede410, sharedpalette/parity guards99ebfc50.
+  Latest software image inspected; not installed/live proof. Synthetic final
+  cycle27de919d0b48 running; initialbc7d findings recorded with separate dispositions.
+  Owner closed desktop; no installed process. Hash baseline16entities1980events.
+- 2026-10-19 14:52 PDT Play heartbeat: refreshed existing authenticated Publishing
+  overview. Alpha 782 (0.1.17) still Changes in review, last published September 27.
+  No release/device/install/data mutation. Genuine Store update and normal Razr
+  verification await availability; recurring follow-up remains active.
+- Official-reference correction: retrieved SUNLU S4 product photo (SHA256 recorded
+  in packaged S4_ARTWORK.md), manually inspected it, and used built-in image tool
+  to refine a transparent rectangular S4 illustration. Rejected prior schematic/
+  dome assets are not selected for installation. Numeric data stays native Compose.
+- Source8ed3a084 replaces both artwork copies, corrects fitted-rectangle anchors,
+  makes dark summary Range text white, strengthens artwork/resource/geometry tests,
+  and documents synchronous start ownership with cancellation retry feedback.
+  Sourcebf7f4d2b corrects light fixture background;5ace3575 explicitly pins test
+  working directory and clarifies manual provenance/reference checksum.
+- GTHost full validation577results567pass10skip0fail/errors; current final packaging
+  running. Synthetic13a1 all3 COMPLETE, targeted0480 closure pending. Original raw
+  findings retained; prior776/5185/85f/1363 dispositions recorded separately.
+  No .19 installed/live or Android runtime success claimed.
+- Final5ace GTHost tests577(567pass10skip0fail/errors),Androidcompile/packagePASS.
+  DEB b6e9fe1ae5820ed084075ca9ab9e3e84d8acbd3ec4e4a21fefe3a75610b289b0
+  verified source5ace,sixadapters,launcher/eighticons,newartworkhash.09b changes
+  testonly: thirdsettleframe and positive summarymetric pixelassertion,focusedPASS.
+  Softwarefixture visualinspection is not normal-app proof.
+- Synthetic13a1all3/0480systems+adversarial/c147systems COMPLETE; findings retained
+  with separate dispositions. False UI-blocking allegation withdrawn. Null-message
+  claim refuted by final no-argument exception with fixed literal. No new review
+  gates imposed; no unanimous-approval or Androidruntime claim. Evidence76643
+  twoPASS/intact validates candidate.
+- Preinstall normaldesktop closed;16entities/1980eventhashes preserved. pkexec
+  dpkg session61701 started for exact5ace0.1.19, requested desktopauthentication.
+  Installedpayload,postinstalldata and actualliveUI checks remain pending.

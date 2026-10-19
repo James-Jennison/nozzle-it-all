@@ -1,5 +1,85 @@
 # Handover to Codex (written 2026-10-18)
 
+## Official-reference compact S4 candidate — supersedes earlier .19 candidates
+
+Final package built from5ace3575196ae67e0a298ddab6ee42089d708cce is verified:
+nozzle-it-all_0.1.19_5ace3575_amd64.deb SHA256
+b6e9fe1ae5820ed084075ca9ab9e3e84d8acbd3ec4e4a21fefe3a75610b289b0.
+GTHost577 results567pass10skip0fail/errors, AndroidcompilePASS, package contains
+intended source identity, six adapters, launcher/eight icons and exact new artwork
+edb31e72baf7ac73449583cefb8477eef306e1265b3481d6e0db8e8245e828b5.
+09b790f4 changes only a render test: extra settle frame plus positive metric-pixel
+assertion; focused GTHost testPASS. Production code remains identical to5ace.
+Actual full fixture overlay-final-5ace.png and settled light fixture
+overlay-final-light-09b.png inspected; these are synthetic software renders.
+Synthetic13a1 all3COMPLETE, closure0480 systems/adversarialCOMPLETE, boundaryc147
+systemsCOMPLETE. Findings separately dispositioned; no unanimous-approval claim.
+Systems withdrew false UI-blocking allegation after actual caller evidence.
+Its null-message exception claim is impossible for final no-argument fixed-message
+exception. Existing coordinator/decoder behavior was not expanded for speculative
+findings. Evidence76643ce1ba1b twoPASS/intact, candidate evidence only.
+
+Installation started via pkexec dpkg, session61701, awaiting owner desktop auth.
+Do not claim installed yet. No conflicting process;16entities/1980events still
+match baseline immediately before installation. After auth verify all payloads
+and baseline, then ask owner to open normal NIA and Start/select corners/Stop
+for actual live UI/history verification. Native desktop UI control unavailable.
+
+Application source 5ace3575196ae67e0a298ddab6ee42089d708cce (desktop0.1.19).
+Owner rejected the flat schematic and rounded/dome asset. Both are superseded:
+current transparent artwork follows the official SUNLU S4 reference (box shell,
+split flat lids, smoked front, green accents, blank light central control panel).
+The compact overlay replaces the S4 table rows, four native selectable corner
+readings remain, and group averages/ranges/spreads/coverage/trends follow.
+Other sensors remain a compact adjacent table. No telemetry is baked into artwork.
+Anchor coordinates now track the actual fitted image rectangle at all widths.
+
+GTHost validation for current application reports577 results,567pass,10skip,
+zero failures/errors. Android compile and final package are finishing; no Android
+release/install is part of this desktop candidate. Software renders manually
+inspected, not installed/live proof. Synthetic13a1df7136a3 completed all3;
+targeted closure0480b7215b9a pending. Prior1363 findings have separate dispositions.
+Tests now decode the packaged resource, compare Android bytes/exact dimensions,
+check fitted anchors across widths/font scales, render narrow light large text,
+and detect distinctive green branding rather than generic gray chrome.
+
+No .19 installation yet. Owner already saved/closed desktop; no conflicting
+installed process at check. Preserve baseline desktop-environment-before-overlay-ce7.json
+(16entities/1980events). After final package/review, verify exact artifact and request
+desktop installation authentication, then verify installed payload/data and actual
+normal-app live Start/Stop/corner selection. Native desktop UI control is unavailable;
+owner UI actions plus read-only history evidence remain necessary for live checks.
+Existing Alpha782 Play monitor remains separate; no installer bypass or data reset.
+
+Play heartbeat 2026-10-19 14:52 PDT: refreshed authenticated Publishing overview.
+Closed testing Alpha 782 (0.1.17) remains under Changes in review; last published
+September 27. Store-mediated update and normal Razr runtime verification remain
+pending availability. No release, device, installation or data changes made.
+Recurring follow-up remains active; no owner action required for unchanged state.
+
+## Compact overlay candidate — 2026-10-19
+
+Owner explicitly requests the compact live dryer overlay REPLACE the four S4
+table rows, with averages/ranges/trends underneath; other sensors remain a table.
+Application source ce7c611286b3aa7f743179218ce05c8128ba144f implements this.
+Content-sized corner labels, normal-width 210dp illustration, scaled accessible
+narrow layout. GTHost574 results:564pass,10skip,zero failures/errors; Android
+compile passes. Software render overlay-ce7-desktop.png inspected; not live proof.
+Final Synthetic cycle27de919d0b48 pending; initialbc7d findings separately
+dispositioned with source-based corrections/rebuttals. Packaging still running.
+Owner saved/closed desktop; no installed NIA process. Baseline
+desktop-environment-before-overlay-ce7.json contains16entities/1980events.
+No .19 install yet. Existing Play782 review remains separate, no bypass permitted.
+
+Desktop0.1.18 live followup: owner reports returned after switching/minimizing,
+monitoring still running; screenshot14:24 confirms normal Environment live UI.
+Read-only history then shows346new events across8sensors14:24:14.521–14:26:58.239
+PDT (163.718s,largest cross-sensor gap2.831s). Original16entities/144events unchanged.
+This corroborates live reception after owner action, not independent focus-timestamp
+instrumentation. Installed process3181339 resolves/opt/nozzle-it-all/bin/nozzle-it-all.
+Owner rejects remaining UI clutter; cleanup954c636c candidate now building. No
+monitoring/storage/identity change, no further installation yet.
+
 ## Desktop0.1.18 installed — live app-switch check pending
 
 Owner approved authentication; dpkg session98713 exited0, upgraded0.1.17→0.1.18.

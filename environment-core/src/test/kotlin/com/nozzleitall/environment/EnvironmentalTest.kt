@@ -324,6 +324,23 @@ class EnvironmentalTest {
         assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
         c.enable(); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
     }
+    @Test fun pendingDisableAlsoDeniesEnableWhenAlreadyDisabled() {
+        val path = file()
+        val c = EnvironmentalCoordinator(path, history(), { error("No radio authorized") })
+        c.foreground(true)
+        val stopper = Thread { c.stop(disable = true) }
+        synchronized(c) {
+            stopper.start()
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (stopper.state != Thread.State.BLOCKED && System.nanoTime() < deadline) Thread.sleep(1)
+            assertEquals(Thread.State.BLOCKED, stopper.state)
+            assertThrows(IllegalStateException::class.java) { c.enable() }
+            assertFalse(path.exists())
+        }
+        stopper.join(5000); assertFalse(stopper.isAlive)
+        assertEquals(EnvironmentalState.DISABLED, c.view.value.state)
+        c.enable(); assertEquals(EnvironmentalState.ENABLED_IDLE, c.view.value.state); c.close()
+    }
     @Test fun missingPlatformDependencyStopsInsteadOfLeavingDiscoveryActive() {
         val c = EnvironmentalCoordinator(file(), history(), { BleTransport { _, _, _ -> throw NoClassDefFoundError("fixture dependency") } })
         c.foreground(true); c.enable(); c.discover()

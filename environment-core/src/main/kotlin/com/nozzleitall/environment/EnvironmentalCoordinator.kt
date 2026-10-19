@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.update
 
 /** dropped: this coordinator's cumulative ingress-overflow count (including discovery).
@@ -30,6 +31,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     private val foreground = AtomicBoolean(false)
     private val visibilityEpoch = AtomicLong()
     private val disableRequested = AtomicBoolean(false)
+    private val disableInFlight = AtomicInteger()
     private val droppedReports = AtomicLong()
     private val disposed = AtomicBoolean(false)
     private val collector get() = gate.collectorId
@@ -48,37 +50,42 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     @Synchronized fun enable() {
         check(!disposed.get() && operation == null)
+        check(disableInFlight.get() == 0) { "Disable cleanup is pending" }
         check(!disableRequested.get() || gate.state == EnvironmentalState.DISABLED)
-        gate.enable(); disableRequested.set(false)
+        gate.enable(); if (disableInFlight.get() == 0) disableRequested.set(false)
         mutable.value = mutable.value.copy(state = gate.state, status = "Enabled, idle — no radio or history opened")
     }
     fun stop(reason: String = "Stopped — no collection", disable: Boolean = false) {
-        val target = runControl
-        if (disable) disableRequested.set(true) // Global Off intent supersedes every run; ordinary Stop owns only target.
-        target?.revoked?.set(true)
-        // Hide live readings immediately, before durable revocation/cancellation.
-        if (target != null) mutable.update { if (runControl === target) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") else it }
-        synchronized(this) {
-            if (!disable && runControl !== target) return // This request never owns a newer Start.
-            runControl?.revoked?.set(true)
-            try { gate.revoke(disable) }
-            finally {
-                operation?.cancel(); operation = null; operationScope = null; runControl = null
-                runCatching { session?.close() }; session = null
-                val gapId = gapSession; gapSession = null
-                val drops = droppedReports.get() - gapDropBase
-                val gapFailed = gapId != null && drops > 0 && runCatching { history.recordGap(gapId, System.currentTimeMillis(), drops) }.isFailure
-                mutable.value = mutable.value.copy(state = gate.state, dropped = droppedReports.get(), status = when {
-                    gate.persistenceFailure -> "Persistence failed — stopped in memory, recovery required"
-                    gapFailed -> "Stopped — final overflow count could not be persisted; history coverage incomplete"
-                    else -> reason
-                })
+        if (disable) disableInFlight.incrementAndGet()
+        try {
+            val target = runControl
+            if (disable) disableRequested.set(true) // Global Off intent supersedes every run; ordinary Stop owns only target.
+            target?.revoked?.set(true)
+            // Hide live readings immediately, before durable revocation/cancellation.
+            if (target != null) mutable.update { if (runControl === target) it.copy(latest = emptyMap(), candidates = emptyList(), status = "Stop requested — cleanup pending") else it }
+            synchronized(this) {
+                if (!disable && runControl !== target) return // This request never owns a newer Start.
+                if (disable) disableRequested.set(true)
+                runControl?.revoked?.set(true)
+                try { gate.revoke(disable) }
+                finally {
+                    operation?.cancel(); operation = null; operationScope = null; runControl = null
+                    runCatching { session?.close() }; session = null
+                    val gapId = gapSession; gapSession = null
+                    val drops = droppedReports.get() - gapDropBase
+                    val gapFailed = gapId != null && drops > 0 && runCatching { history.recordGap(gapId, System.currentTimeMillis(), drops) }.isFailure
+                    mutable.value = mutable.value.copy(state = gate.state, dropped = droppedReports.get(), status = when {
+                        gate.persistenceFailure -> "Persistence failed — stopped in memory, recovery required"
+                        gapFailed -> "Stopped — final overflow count could not be persisted; history coverage incomplete"
+                        else -> reason
+                    })
+                }
             }
-        }
+        } finally { if (disable) disableInFlight.decrementAndGet() }
     }
     @Synchronized fun discover() = begin(Purpose.DISCOVERY, emptyList())
     @Synchronized fun start() {
-        check(foreground.get() && !disableRequested.get() && !disposed.get() && gate.state == EnvironmentalState.ENABLED_IDLE)
+        check(foreground.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get() && gate.state == EnvironmentalState.ENABLED_IDLE)
         val bindings = history.bindings().filterNot { it.archived }
         require(bindings.isNotEmpty()) { "Save a sensor first" }
         // Unknown firmware/envelopes permit unassigned diagnostic reception only, never dryer deployment.
@@ -88,7 +95,7 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
     }
     private fun begin(purpose: Purpose, bindings: List<Binding>, qualification: QualificationAdmission? = null) {
         val visibleEpoch = visibilityEpoch.get()
-        check(foreground.get() && !disableRequested.get() && !disposed.get())
+        check(foreground.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get())
         val durationMillis = if (purpose == Purpose.DISCOVERY) limits.discoverySeconds * 1000L else
             minOf(86_400_000L, (qualification?.validUntil ?: Long.MAX_VALUE) - System.currentTimeMillis())
         require(durationMillis > 0) { "Physical qualification expired" }
@@ -111,13 +118,13 @@ class EnvironmentalCoordinator(control: File, private val history: Environmental
             try {
                 synchronized(this@EnvironmentalCoordinator) {
                     if (runControl !== control) return@launch
-                    if (!foreground.get() || disableRequested.get() || visibilityEpoch.get() != visibleEpoch || revocationRequested.get()) {
+                    if (!foreground.get() || disableInFlight.get() != 0 || disableRequested.get() || visibilityEpoch.get() != visibleEpoch || revocationRequested.get()) {
                         stop("Stopped — app visibility changed during preparation")
                         return@launch
                     }
                 }
                 val request = BleScanRequest(purpose == Purpose.DISCOVERY, bindings.map { it.address }.toSet(), qualification?.radios?.singleOrNull()) {
-                    job.isActive && !revocationRequested.get() && !disableRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
+                    job.isActive && !revocationRequested.get() && disableInFlight.get() == 0 && !disableRequested.get() && !disposed.get() && foreground.get() && visibilityEpoch.get() == visibleEpoch && System.nanoTime() < grant.expires
                 }
                 val opened = transport().start(request, { report ->
                     // OS scan callbacks may be Main: no locks, disk IO, parsing, or coroutine-per-report here.

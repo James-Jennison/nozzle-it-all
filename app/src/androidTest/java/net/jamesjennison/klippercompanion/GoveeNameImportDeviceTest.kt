@@ -59,6 +59,8 @@ class GoveeNameImportDeviceTest {
             override fun edit(): android.content.SharedPreferences.Editor {
                 val editor = prefs.edit()
                 return object : android.content.SharedPreferences.Editor by editor {
+                    override fun putString(key: String?, value: String?): android.content.SharedPreferences.Editor { editor.putString(key, value); return this }
+                    override fun remove(key: String?): android.content.SharedPreferences.Editor { editor.remove(key); return this }
                     override fun commit(): Boolean {
                         if (firstCommit.compareAndSet(true, false)) {
                             entered.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS))

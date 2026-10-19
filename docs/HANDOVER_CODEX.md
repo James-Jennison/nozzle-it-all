@@ -1,5 +1,27 @@
 # Handover to Codex (written 2026-10-18)
 
+## Compact desktop install awaiting authentication (supersedes candidate below)
+
+Final application source `c0a08d4efdcafc61906993decd9dcfaccd7ac25d`,0.1.18.
+GTHost exact clean source passes573 results (563pass,10skip,0fail/errors), Android
+compile and integrated Linux packaging. DEB SHA256
+`dfe6ff87a71e1fc8801821a573be845943a5ffa0264ad540deaf9a86171adb7a`.
+Verified embedded revision,six adapters,launcher/eight icons; final software render
+`compact-c0a-desktop.png` inspected. Not installed/live proof yet.
+Synthetic2254bc33a238 complete all3; closure5f307da60097 complete systems/frontend.
+Accepted small findings corrected: explicit chart choice persists,48dp minimum,
+2-minute scope retained,recording copy qualified. Context8d46455c128b withdrew
+all four earlier frontend claims; new color-only claim rejected because its own
+evidence names corners. Raw dissent and separate dispositions retained, no claim
+unanimity. Final evidence7a724ac9b90a threePASS/intact, candidate only.
+
+Owner closed NIA; verified no conflicting process. Started pkexec dpkg for exact
+`nozzle-it-all_0.1.18_c0a08d4e_amd64.deb`, session98713, requested desktop auth.
+Do not treat earlier close confirmation as authentication. After install verify
+all payloads and baseline16entities/144events, then actual Start/switch/minimize/
+return/Stop. Native desktop control unavailable here; owner UI action and read-only
+history evidence are needed. Android behavior and pending Play782 unchanged.
+
 ## Compact desktop candidate — 2026-10-19
 
 Current application candidate `5b84dc1ef0a19b1fe3141a56f0ec666e6b771135`,

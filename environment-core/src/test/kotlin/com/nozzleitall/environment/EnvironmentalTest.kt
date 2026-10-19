@@ -620,6 +620,21 @@ class EnvironmentalTest {
             assertThrows(Exception::class.java) { h.assignedQualificationRadios(listOf(b), "any-platform", 2) }
         }
     }
+    @Test fun editingRoomLabelDoesNotEraseAnExistingOperatingEnvelope() {
+        val h = history()
+        val b = h.bind(Candidate("room-sensor", "govee-ble", "H5100"), "Room")
+        val room = Equipment(name = "Room"); h.saveEquipment(room)
+        val shelf = Position(equipmentId = room.id, name = "Shelf", minC = 10.0, maxC = 40.0)
+        h.savePosition(shelf)
+        val c = EnvironmentalCoordinator(file(), h, { error("No radio while saving") })
+        try {
+            c.foreground(true); c.enable(); c.configureRoom(b, "Room", "Shelf")
+            val saved = h.entities("position").single()
+            assertEquals(10.0, saved.getDouble("minC"), 0.0)
+            assertEquals(40.0, saved.getDouble("maxC"), 0.0)
+            assertThrows(Exception::class.java) { c.start() }
+        } finally { c.close() }
+    }
     @Test fun capabilityQualificationRequiresExactCurrentEvidenceAndNeverPromotesUnknownFirmware() {
         history().use { h ->
             val b = h.recordFirmware(h.bind(Candidate("test", "govee-ble", "H5100"), "fixture"), "fixture-firmware1")

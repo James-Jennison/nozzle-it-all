@@ -1,9 +1,10 @@
 {
 	"type": "filament",
-	"from": "system",
-	"instantiation": "false",
 	"name": "Generic PVA @U1 base",
 	"inherits": "fdm_filament_pva_category",
+	"from": "system",
+	"filament_id": "OFqm0KE2",
+	"instantiation": "false",
 	"activate_air_filtration": [
 		"0"
 	],
@@ -156,6 +157,5 @@
 	],
 	"textured_cool_plate_temp_initial_layer": [
 		"40"
-	],
-	"filament_id": "P865745e"
+	]
 }

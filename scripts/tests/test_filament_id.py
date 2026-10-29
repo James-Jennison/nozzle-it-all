@@ -1283,6 +1283,29 @@ class TestRemint(SyntheticTreeCase):
         legacy = load_json_file(self.t.preset_path("VendorA", "APLA @legacy"))
         self.assertEqual(legacy["filament_id"], want)
 
+    def test_inherited_id_from_different_product_gets_own_declaration(self):
+        # The child deliberately changes its product identity while inheriting
+        # settings from APLA.  Re-minting APLA cannot make that inherited id
+        # correct for the child, so generate-id must give the child its own key.
+        self.t.write_preset("VendorA", preset(
+            "APLA @base", filament_id=afi.generate_filament_id(*self.TRIPLE),
+            instantiation=False, filament_vendor="AVendor", filament_type="PLA"),
+            register=False)
+        self.t.write_preset("VendorA", preset(
+            "APLA Generic @P1", inherits="APLA @base",
+            filament_vendor="Generic", filament_type="PLA",
+            compatible_printers=["P1 0.4 nozzle"]))
+        want = afi.generate_filament_id("Generic", "PLA", "APLA Generic")
+
+        changed, errors, out = self.t.remint(["VendorA"])
+
+        self.assertEqual((changed, errors), (1, 0), out)
+        child = load_json_file(
+            self.t.preset_path("VendorA", "APLA Generic @P1"))
+        self.assertEqual(child["filament_id"], want)
+        changed, errors, out = self.t.remint(["VendorA"])
+        self.assertEqual((changed, errors), (0, 0), out)
+
     def test_same_triple_converges_within_run(self):
         self.t.add_vendor("VendorB", [
             preset("APLA @Bbase", filament_id="BX01", instantiation=False,

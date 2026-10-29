@@ -1,8 +1,8 @@
 {
 	"type": "filament",
-	"from": "system",
-	"instantiation": "false",
 	"name": "Generic PCTG @U1 base",
 	"inherits": "fdm_filament_pctg_category",
-	"filament_id": "Pd905f82"
+	"from": "system",
+	"filament_id": "OFJvtEBt",
+	"instantiation": "false"
 }

@@ -1,9 +1,10 @@
 {
 	"type": "filament",
-	"from": "system",
-	"instantiation": "false",
 	"name": "Snapmaker PLA Wood @U1 base",
 	"inherits": "fdm_filament_pla_category",
+	"from": "system",
+	"filament_id": "OFdd8ZqJ",
+	"instantiation": "false",
 	"activate_air_filtration": [
 		"0"
 	],
@@ -258,6 +259,5 @@
 	],
 	"textured_plate_temp_initial_layer": [
 		"65"
-	],
-	"filament_id": "P35f2e48"
+	]
 }

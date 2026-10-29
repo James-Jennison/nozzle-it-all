@@ -1,6 +1,6 @@
 {
 	"name": "Snapmaker",
-	"version": "02.04.00.18",
+	"version": "02.04.00.20",
 	"force_update": "0",
 	"description": "Snapmaker configurations",
 	"machine_model_list": [
@@ -725,8 +725,16 @@
 			"sub_path": "filament/fdm_filament_abs.json"
 		},
 		{
+			"name": "fdm_filament_abs_category",
+			"sub_path": "filament/fdm_filament_abs_category.json"
+		},
+		{
 			"name": "fdm_filament_asa",
 			"sub_path": "filament/fdm_filament_asa.json"
+		},
+		{
+			"name": "fdm_filament_asa_category",
+			"sub_path": "filament/fdm_filament_asa_category.json"
 		},
 		{
 			"name": "fdm_filament_breakaway",
@@ -737,24 +745,112 @@
 			"sub_path": "filament/fdm_filament_pa.json"
 		},
 		{
+			"name": "fdm_filament_pa_category",
+			"sub_path": "filament/fdm_filament_pa_category.json"
+		},
+		{
+			"name": "fdm_filament_pa_cf_category",
+			"sub_path": "filament/fdm_filament_pa_cf_category.json"
+		},
+		{
+			"name": "fdm_filament_pc_category",
+			"sub_path": "filament/fdm_filament_pc_category.json"
+		},
+		{
+			"name": "fdm_filament_pctg_category",
+			"sub_path": "filament/fdm_filament_pctg_category.json"
+		},
+		{
+			"name": "fdm_filament_peba_category",
+			"sub_path": "filament/fdm_filament_peba_category.json"
+		},
+		{
 			"name": "fdm_filament_pet",
 			"sub_path": "filament/fdm_filament_pet.json"
+		},
+		{
+			"name": "fdm_filament_pet_category",
+			"sub_path": "filament/fdm_filament_pet_category.json"
 		},
 		{
 			"name": "fdm_filament_petg",
 			"sub_path": "filament/fdm_filament_petg.json"
 		},
 		{
+			"name": "fdm_filament_petg_category",
+			"sub_path": "filament/fdm_filament_petg_category.json"
+		},
+		{
+			"name": "fdm_filament_petg_cf_category",
+			"sub_path": "filament/fdm_filament_petg_cf_category.json"
+		},
+		{
+			"name": "fdm_filament_petg_gf_category",
+			"sub_path": "filament/fdm_filament_petg_gf_category.json"
+		},
+		{
+			"name": "fdm_filament_petg_hf_category",
+			"sub_path": "filament/fdm_filament_petg_hf_category.json"
+		},
+		{
 			"name": "fdm_filament_pla",
 			"sub_path": "filament/fdm_filament_pla.json"
+		},
+		{
+			"name": "fdm_filament_pla_category",
+			"sub_path": "filament/fdm_filament_pla_category.json"
+		},
+		{
+			"name": "fdm_filament_pla_cf_category",
+			"sub_path": "filament/fdm_filament_pla_cf_category.json"
+		},
+		{
+			"name": "fdm_filament_pla_hs_category",
+			"sub_path": "filament/fdm_filament_pla_hs_category.json"
+		},
+		{
+			"name": "fdm_filament_pla_matte_category",
+			"sub_path": "filament/fdm_filament_pla_matte_category.json"
+		},
+		{
+			"name": "fdm_filament_pla_silk_category",
+			"sub_path": "filament/fdm_filament_pla_silk_category.json"
 		},
 		{
 			"name": "fdm_filament_pva",
 			"sub_path": "filament/fdm_filament_pva.json"
 		},
 		{
+			"name": "fdm_filament_pva_category",
+			"sub_path": "filament/fdm_filament_pva_category.json"
+		},
+		{
+			"name": "fdm_filament_support_breakaway_category",
+			"sub_path": "filament/fdm_filament_support_breakaway_category.json"
+		},
+		{
+			"name": "fdm_filament_support_bvoh_category",
+			"sub_path": "filament/fdm_filament_support_bvoh_category.json"
+		},
+		{
+			"name": "fdm_filament_support_pla_category",
+			"sub_path": "filament/fdm_filament_support_pla_category.json"
+		},
+		{
 			"name": "fdm_filament_tpu",
 			"sub_path": "filament/fdm_filament_tpu.json"
+		},
+		{
+			"name": "fdm_filament_tpu_90a_category",
+			"sub_path": "filament/fdm_filament_tpu_90a_category.json"
+		},
+		{
+			"name": "fdm_filament_tpu_95a_hf_category",
+			"sub_path": "filament/fdm_filament_tpu_95a_hf_category.json"
+		},
+		{
+			"name": "fdm_filament_tpu_unspecified_category",
+			"sub_path": "filament/fdm_filament_tpu_unspecified_category.json"
 		},
 		{
 			"name": "Fiberon PPS-GF20 @Snapmaker U1 base",
@@ -777,6 +873,10 @@
 			"sub_path": "filament/Snapmaker J1 ABS @base.json"
 		},
 		{
+			"name": "Generic ABS @U1 base",
+			"sub_path": "filament/Generic ABS @U1 base.json"
+		},
+		{
 			"name": "Fiberon ASA-CF08 @Snapmaker U1 base",
 			"sub_path": "filament/Polymaker/Fiberon ASA-CF08 @Snapmaker U1 base.json"
 		},
@@ -795,6 +895,10 @@
 		{
 			"name": "Snapmaker J1 ASA @base",
 			"sub_path": "filament/Snapmaker J1 ASA @base.json"
+		},
+		{
+			"name": "Generic ASA @U1 base",
+			"sub_path": "filament/Generic ASA @U1 base.json"
 		},
 		{
 			"name": "Snapmaker Dual Breakaway @base",
@@ -831,6 +935,26 @@
 		{
 			"name": "Snapmaker PA-CF @base",
 			"sub_path": "filament/Snapmaker PA-CF @base.json"
+		},
+		{
+			"name": "Generic PA @U1 base",
+			"sub_path": "filament/Generic PA @U1 base.json"
+		},
+		{
+			"name": "Generic PA-CF @U1 base",
+			"sub_path": "filament/Generic PA-CF @U1 base.json"
+		},
+		{
+			"name": "Generic PC @U1 base",
+			"sub_path": "filament/Generic PC @U1 base.json"
+		},
+		{
+			"name": "Generic PCTG @U1 base",
+			"sub_path": "filament/Generic PCTG @U1 base.json"
+		},
+		{
+			"name": "Snapmaker PEBA 90A @U1 base",
+			"sub_path": "filament/Snapmaker PEBA 90A @U1 base.json"
 		},
 		{
 			"name": "Snapmaker Dual PET @base",
@@ -915,6 +1039,26 @@
 		{
 			"name": "Snapmaker PETG-CF @base",
 			"sub_path": "filament/Snapmaker PETG-CF @base.json"
+		},
+		{
+			"name": "Generic PETG @U1 base",
+			"sub_path": "filament/Generic PETG @U1 base.json"
+		},
+		{
+			"name": "Generic PETG-CF @U1 base",
+			"sub_path": "filament/Generic PETG-CF @U1 base.json"
+		},
+		{
+			"name": "Generic PETG-GF @U1 base",
+			"sub_path": "filament/Generic PETG-GF @U1 base.json"
+		},
+		{
+			"name": "Generic PETG HF @U1 base",
+			"sub_path": "filament/Generic PETG HF @U1 base.json"
+		},
+		{
+			"name": "Snapmaker PETG HF @U1 base",
+			"sub_path": "filament/Snapmaker PETG HF @U1 base.json"
 		},
 		{
 			"name": "Panchroma CoPE @Snapmaker U1 base",
@@ -1177,6 +1321,34 @@
 			"sub_path": "filament/fdm_filament_pla_eco.json"
 		},
 		{
+			"name": "Generic PLA @U1 base",
+			"sub_path": "filament/Generic PLA @U1 base.json"
+		},
+		{
+			"name": "Snapmaker PLA Full Spectrum @U1 base",
+			"sub_path": "filament/Snapmaker PLA Full Spectrum @U1 base.json"
+		},
+		{
+			"name": "Snapmaker PLA Rainbow @U1 base",
+			"sub_path": "filament/Snapmaker PLA Rainbow @U1 base.json"
+		},
+		{
+			"name": "Snapmaker PLA Wood @U1 base",
+			"sub_path": "filament/Snapmaker PLA Wood @U1 base.json"
+		},
+		{
+			"name": "Generic PLA-CF @U1 base",
+			"sub_path": "filament/Generic PLA-CF @U1 base.json"
+		},
+		{
+			"name": "Generic PLA High Speed @U1 base",
+			"sub_path": "filament/Generic PLA High Speed @U1 base.json"
+		},
+		{
+			"name": "Generic PLA Silk @U1 base",
+			"sub_path": "filament/Generic PLA Silk @U1 base.json"
+		},
+		{
 			"name": "Snapmaker Dual PVA @base",
 			"sub_path": "filament/Snapmaker Dual PVA @base.json"
 		},
@@ -1191,6 +1363,22 @@
 		{
 			"name": "Snapmaker PVA @base",
 			"sub_path": "filament/Snapmaker PVA @base.json"
+		},
+		{
+			"name": "Generic PVA @U1 base",
+			"sub_path": "filament/Generic PVA @U1 base.json"
+		},
+		{
+			"name": "Generic BVOH @U1 base",
+			"sub_path": "filament/Generic BVOH @U1 base.json"
+		},
+		{
+			"name": "Generic Support For PLA @U1 base",
+			"sub_path": "filament/Generic Support For PLA @U1 base.json"
+		},
+		{
+			"name": "Snapmaker Support For PLA @U1 base",
+			"sub_path": "filament/Snapmaker Support For PLA @U1 base.json"
 		},
 		{
 			"name": "Snapmaker Dual TPU @base",
@@ -1231,6 +1419,14 @@
 		{
 			"name": "Snapmaker TPU @base",
 			"sub_path": "filament/Snapmaker TPU @base.json"
+		},
+		{
+			"name": "Generic TPU 95A HF @U1 base",
+			"sub_path": "filament/Generic TPU 95A HF @U1 base.json"
+		},
+		{
+			"name": "Generic TPU @U1 base",
+			"sub_path": "filament/Generic TPU @U1 base.json"
 		},
 		{
 			"name": "Fiberon PPS-GF20 @Snapmaker U1",
@@ -1285,6 +1481,18 @@
 			"sub_path": "filament/Snapmaker J1 ABS Benchy.json"
 		},
 		{
+			"name": "Generic ABS @U1 0.2 nozzle",
+			"sub_path": "filament/Generic ABS @U1 0.2 nozzle.json"
+		},
+		{
+			"name": "Generic ABS @U1 0.6 nozzle",
+			"sub_path": "filament/Generic ABS @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Generic ABS @U1 0.8 nozzle",
+			"sub_path": "filament/Generic ABS @U1 0.8 nozzle.json"
+		},
+		{
 			"name": "Fiberon ASA-CF08 @Snapmaker U1",
 			"sub_path": "filament/Polymaker/Fiberon ASA-CF08 @Snapmaker U1.json"
 		},
@@ -1315,6 +1523,22 @@
 		{
 			"name": "Snapmaker J1 ASA @0.2 nozzle",
 			"sub_path": "filament/Snapmaker J1 ASA @0.2 nozzle.json"
+		},
+		{
+			"name": "Generic ASA @U1 0.2 nozzle",
+			"sub_path": "filament/Generic ASA @U1 0.2 nozzle.json"
+		},
+		{
+			"name": "Generic ASA @U1 0.4 nozzle",
+			"sub_path": "filament/Generic ASA @U1 0.4 nozzle.json"
+		},
+		{
+			"name": "Generic ASA @U1 0.6 nozzle",
+			"sub_path": "filament/Generic ASA @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Generic ASA @U1 0.8 nozzle",
+			"sub_path": "filament/Generic ASA @U1 0.8 nozzle.json"
 		},
 		{
 			"name": "Snapmaker Dual Breakaway",
@@ -1359,6 +1583,26 @@
 		{
 			"name": "Snapmaker PA-CF",
 			"sub_path": "filament/Snapmaker PA-CF.json"
+		},
+		{
+			"name": "Generic PC @U1 0.6 nozzle",
+			"sub_path": "filament/Generic PC @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Generic PC @U1 0.8 nozzle",
+			"sub_path": "filament/Generic PC @U1 0.8 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PEBA 90A @U1 0.4 nozzle",
+			"sub_path": "filament/Snapmaker PEBA 90A @U1 0.4 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PEBA 90A @U1 0.6 nozzle",
+			"sub_path": "filament/Snapmaker PEBA 90A @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PEBA 90A @U1 0.8 nozzle",
+			"sub_path": "filament/Snapmaker PEBA 90A @U1 0.8 nozzle.json"
 		},
 		{
 			"name": "Snapmaker Dual PET",
@@ -1483,6 +1727,14 @@
 		{
 			"name": "Snapmaker PETG-CF",
 			"sub_path": "filament/Snapmaker PETG-CF.json"
+		},
+		{
+			"name": "Generic PETG-GF @U1 0.6 nozzle",
+			"sub_path": "filament/Generic PETG-GF @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Generic PETG-GF @U1 0.8 nozzle",
+			"sub_path": "filament/Generic PETG-GF @U1 0.8 nozzle.json"
 		},
 		{
 			"name": "Panchroma CoPE @Snapmaker U1",
@@ -1737,6 +1989,14 @@
 			"sub_path": "filament/Snapmaker PLA Glow @U1 0.4 nozzle.json"
 		},
 		{
+			"name": "Snapmaker PLA Glow @U1 0.6 nozzle",
+			"sub_path": "filament/Snapmaker PLA Glow @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PLA Glow @U1 0.8 nozzle",
+			"sub_path": "filament/Snapmaker PLA Glow @U1 0.8 nozzle.json"
+		},
+		{
 			"name": "Snapmaker PLA Metal @U1",
 			"sub_path": "filament/Snapmaker PLA Metal @U1.json"
 		},
@@ -1785,6 +2045,30 @@
 			"sub_path": "filament/Snapmaker PLA Eco @base.json"
 		},
 		{
+			"name": "Snapmaker PLA Full Spectrum @U1 0.2 nozzle",
+			"sub_path": "filament/Snapmaker PLA Full Spectrum @U1 0.2 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PLA Full Spectrum @U1 0.6 nozzle",
+			"sub_path": "filament/Snapmaker PLA Full Spectrum @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PLA Rainbow @U1 0.2 nozzle",
+			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.2 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PLA Rainbow @U1 0.4 nozzle",
+			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.4 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PLA Rainbow @U1 0.6 nozzle",
+			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Snapmaker PLA Rainbow @U1 0.8 nozzle",
+			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.8 nozzle.json"
+		},
+		{
 			"name": "Snapmaker Dual PVA",
 			"sub_path": "filament/Snapmaker Dual PVA.json"
 		},
@@ -1819,6 +2103,34 @@
 		{
 			"name": "Snapmaker PVA @0.2 nozzle",
 			"sub_path": "filament/Snapmaker PVA @0.2 nozzle.json"
+		},
+		{
+			"name": "Generic Support For PLA @U1 0.2 nozzle",
+			"sub_path": "filament/Generic Support For PLA @U1 0.2 nozzle.json"
+		},
+		{
+			"name": "Generic Support For PLA @U1 0.6 nozzle",
+			"sub_path": "filament/Generic Support For PLA @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Generic Support For PLA @U1 0.8 nozzle",
+			"sub_path": "filament/Generic Support For PLA @U1 0.8 nozzle.json"
+		},
+		{
+			"name": "Snapmaker Support For PLA @U1 0.2 nozzle",
+			"sub_path": "filament/Snapmaker Support For PLA @U1 0.2 nozzle.json"
+		},
+		{
+			"name": "Snapmaker Support For PLA @U1 0.4 nozzle",
+			"sub_path": "filament/Snapmaker Support For PLA @U1 0.4 nozzle.json"
+		},
+		{
+			"name": "Snapmaker Support For PLA @U1 0.6 nozzle",
+			"sub_path": "filament/Snapmaker Support For PLA @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Snapmaker Support For PLA @U1 0.8 nozzle",
+			"sub_path": "filament/Snapmaker Support For PLA @U1 0.8 nozzle.json"
 		},
 		{
 			"name": "Snapmaker Dual TPE",
@@ -1863,6 +2175,14 @@
 		{
 			"name": "Snapmaker TPU",
 			"sub_path": "filament/Snapmaker TPU.json"
+		},
+		{
+			"name": "Generic TPU 95A HF @U1 0.6 nozzle",
+			"sub_path": "filament/Generic TPU 95A HF @U1 0.6 nozzle.json"
+		},
+		{
+			"name": "Generic TPU 95A HF @U1 0.8 nozzle",
+			"sub_path": "filament/Generic TPU 95A HF @U1 0.8 nozzle.json"
 		},
 		{
 			"name": "PolyLite Dual PLA @0.2 nozzle",
@@ -2047,326 +2367,6 @@
 		{
 			"name": "Snapmaker PLA Matte @U1 base",
 			"sub_path": "filament/Snapmaker PLA Matte @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_abs_category",
-			"sub_path": "filament/fdm_filament_abs_category.json"
-		},
-		{
-			"name": "Generic ABS @U1 base",
-			"sub_path": "filament/Generic ABS @U1 base.json"
-		},
-		{
-			"name": "Generic ABS @U1 0.2 nozzle",
-			"sub_path": "filament/Generic ABS @U1 0.2 nozzle.json"
-		},
-		{
-			"name": "Generic ABS @U1 0.6 nozzle",
-			"sub_path": "filament/Generic ABS @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Generic ABS @U1 0.8 nozzle",
-			"sub_path": "filament/Generic ABS @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "fdm_filament_asa_category",
-			"sub_path": "filament/fdm_filament_asa_category.json"
-		},
-		{
-			"name": "Generic ASA @U1 base",
-			"sub_path": "filament/Generic ASA @U1 base.json"
-		},
-		{
-			"name": "Generic ASA @U1 0.2 nozzle",
-			"sub_path": "filament/Generic ASA @U1 0.2 nozzle.json"
-		},
-		{
-			"name": "Generic ASA @U1 0.4 nozzle",
-			"sub_path": "filament/Generic ASA @U1 0.4 nozzle.json"
-		},
-		{
-			"name": "Generic ASA @U1 0.6 nozzle",
-			"sub_path": "filament/Generic ASA @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Generic ASA @U1 0.8 nozzle",
-			"sub_path": "filament/Generic ASA @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "fdm_filament_support_bvoh_category",
-			"sub_path": "filament/fdm_filament_support_bvoh_category.json"
-		},
-		{
-			"name": "Generic BVOH @U1 base",
-			"sub_path": "filament/Generic BVOH @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_pa_category",
-			"sub_path": "filament/fdm_filament_pa_category.json"
-		},
-		{
-			"name": "Generic PA @U1 base",
-			"sub_path": "filament/Generic PA @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_pa_cf_category",
-			"sub_path": "filament/fdm_filament_pa_cf_category.json"
-		},
-		{
-			"name": "Generic PA-CF @U1 base",
-			"sub_path": "filament/Generic PA-CF @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_pc_category",
-			"sub_path": "filament/fdm_filament_pc_category.json"
-		},
-		{
-			"name": "Generic PC @U1 base",
-			"sub_path": "filament/Generic PC @U1 base.json"
-		},
-		{
-			"name": "Generic PC @U1 0.6 nozzle",
-			"sub_path": "filament/Generic PC @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Generic PC @U1 0.8 nozzle",
-			"sub_path": "filament/Generic PC @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "fdm_filament_pctg_category",
-			"sub_path": "filament/fdm_filament_pctg_category.json"
-		},
-		{
-			"name": "Generic PCTG @U1 base",
-			"sub_path": "filament/Generic PCTG @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_petg_category",
-			"sub_path": "filament/fdm_filament_petg_category.json"
-		},
-		{
-			"name": "Generic PETG @U1 base",
-			"sub_path": "filament/Generic PETG @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_petg_hf_category",
-			"sub_path": "filament/fdm_filament_petg_hf_category.json"
-		},
-		{
-			"name": "Generic PETG HF @U1 base",
-			"sub_path": "filament/Generic PETG HF @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_petg_cf_category",
-			"sub_path": "filament/fdm_filament_petg_cf_category.json"
-		},
-		{
-			"name": "Generic PETG-CF @U1 base",
-			"sub_path": "filament/Generic PETG-CF @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_petg_gf_category",
-			"sub_path": "filament/fdm_filament_petg_gf_category.json"
-		},
-		{
-			"name": "Generic PETG-GF @U1 base",
-			"sub_path": "filament/Generic PETG-GF @U1 base.json"
-		},
-		{
-			"name": "Generic PETG-GF @U1 0.6 nozzle",
-			"sub_path": "filament/Generic PETG-GF @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Generic PETG-GF @U1 0.8 nozzle",
-			"sub_path": "filament/Generic PETG-GF @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "fdm_filament_pla_category",
-			"sub_path": "filament/fdm_filament_pla_category.json"
-		},
-		{
-			"name": "Generic PLA @U1 base",
-			"sub_path": "filament/Generic PLA @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_pla_hs_category",
-			"sub_path": "filament/fdm_filament_pla_hs_category.json"
-		},
-		{
-			"name": "Generic PLA High Speed @U1 base",
-			"sub_path": "filament/Generic PLA High Speed @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_pla_silk_category",
-			"sub_path": "filament/fdm_filament_pla_silk_category.json"
-		},
-		{
-			"name": "Generic PLA Silk @U1 base",
-			"sub_path": "filament/Generic PLA Silk @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_pla_cf_category",
-			"sub_path": "filament/fdm_filament_pla_cf_category.json"
-		},
-		{
-			"name": "Generic PLA-CF @U1 base",
-			"sub_path": "filament/Generic PLA-CF @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_pva_category",
-			"sub_path": "filament/fdm_filament_pva_category.json"
-		},
-		{
-			"name": "Generic PVA @U1 base",
-			"sub_path": "filament/Generic PVA @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_support_pla_category",
-			"sub_path": "filament/fdm_filament_support_pla_category.json"
-		},
-		{
-			"name": "Generic Support For PLA @U1 base",
-			"sub_path": "filament/Generic Support For PLA @U1 base.json"
-		},
-		{
-			"name": "Generic Support For PLA @U1 0.2 nozzle",
-			"sub_path": "filament/Generic Support For PLA @U1 0.2 nozzle.json"
-		},
-		{
-			"name": "Generic Support For PLA @U1 0.6 nozzle",
-			"sub_path": "filament/Generic Support For PLA @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Generic Support For PLA @U1 0.8 nozzle",
-			"sub_path": "filament/Generic Support For PLA @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "fdm_filament_tpu_95a_hf_category",
-			"sub_path": "filament/fdm_filament_tpu_95a_hf_category.json"
-		},
-		{
-			"name": "Generic TPU 95A HF @U1 base",
-			"sub_path": "filament/Generic TPU 95A HF @U1 base.json"
-		},
-		{
-			"name": "Generic TPU 95A HF @U1 0.6 nozzle",
-			"sub_path": "filament/Generic TPU 95A HF @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Generic TPU 95A HF @U1 0.8 nozzle",
-			"sub_path": "filament/Generic TPU 95A HF @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "fdm_filament_tpu_unspecified_category",
-			"sub_path": "filament/fdm_filament_tpu_unspecified_category.json"
-		},
-		{
-			"name": "Generic TPU @U1 base",
-			"sub_path": "filament/Generic TPU @U1 base.json"
-		},
-		{
-			"name": "fdm_filament_peba_category",
-			"sub_path": "filament/fdm_filament_peba_category.json"
-		},
-		{
-			"name": "Snapmaker PEBA 90A @U1 base",
-			"sub_path": "filament/Snapmaker PEBA 90A @U1 base.json"
-		},
-		{
-			"name": "Snapmaker PEBA 90A @U1 0.4 nozzle",
-			"sub_path": "filament/Snapmaker PEBA 90A @U1 0.4 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PEBA 90A @U1 0.6 nozzle",
-			"sub_path": "filament/Snapmaker PEBA 90A @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PEBA 90A @U1 0.8 nozzle",
-			"sub_path": "filament/Snapmaker PEBA 90A @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PETG HF @U1 base",
-			"sub_path": "filament/Snapmaker PETG HF @U1 base.json"
-		},
-		{
-			"name": "Snapmaker PLA Full Spectrum @U1 base",
-			"sub_path": "filament/Snapmaker PLA Full Spectrum @U1 base.json"
-		},
-		{
-			"name": "Snapmaker PLA Full Spectrum @U1 0.2 nozzle",
-			"sub_path": "filament/Snapmaker PLA Full Spectrum @U1 0.2 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Full Spectrum @U1 0.6 nozzle",
-			"sub_path": "filament/Snapmaker PLA Full Spectrum @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Glow @U1 0.6 nozzle",
-			"sub_path": "filament/Snapmaker PLA Glow @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Glow @U1 0.8 nozzle",
-			"sub_path": "filament/Snapmaker PLA Glow @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Rainbow @U1 base",
-			"sub_path": "filament/Snapmaker PLA Rainbow @U1 base.json"
-		},
-		{
-			"name": "Snapmaker PLA Rainbow @U1 0.2 nozzle",
-			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.2 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Rainbow @U1 0.4 nozzle",
-			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.4 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Rainbow @U1 0.6 nozzle",
-			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Rainbow @U1 0.8 nozzle",
-			"sub_path": "filament/Snapmaker PLA Rainbow @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "Snapmaker PLA Wood @U1 base",
-			"sub_path": "filament/Snapmaker PLA Wood @U1 base.json"
-		},
-		{
-			"name": "Snapmaker Support For PLA @U1 base",
-			"sub_path": "filament/Snapmaker Support For PLA @U1 base.json"
-		},
-		{
-			"name": "Snapmaker Support For PLA @U1 0.2 nozzle",
-			"sub_path": "filament/Snapmaker Support For PLA @U1 0.2 nozzle.json"
-		},
-		{
-			"name": "Snapmaker Support For PLA @U1 0.4 nozzle",
-			"sub_path": "filament/Snapmaker Support For PLA @U1 0.4 nozzle.json"
-		},
-		{
-			"name": "Snapmaker Support For PLA @U1 0.6 nozzle",
-			"sub_path": "filament/Snapmaker Support For PLA @U1 0.6 nozzle.json"
-		},
-		{
-			"name": "Snapmaker Support For PLA @U1 0.8 nozzle",
-			"sub_path": "filament/Snapmaker Support For PLA @U1 0.8 nozzle.json"
-		},
-		{
-			"name": "fdm_filament_tpu_90a_category",
-			"sub_path": "filament/fdm_filament_tpu_90a_category.json"
-		},
-		{
-			"name": "fdm_filament_pet_category",
-			"sub_path": "filament/fdm_filament_pet_category.json"
-		},
-		{
-			"name": "fdm_filament_pla_matte_category",
-			"sub_path": "filament/fdm_filament_pla_matte_category.json"
-		},
-		{
-			"name": "fdm_filament_support_breakaway_category",
-			"sub_path": "filament/fdm_filament_support_breakaway_category.json"
 		}
 	],
 	"machine_list": [

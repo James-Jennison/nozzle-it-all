@@ -1,9 +1,10 @@
 {
 	"type": "filament",
-	"from": "system",
-	"instantiation": "false",
 	"name": "Generic ASA @U1 base",
 	"inherits": "fdm_filament_asa_category",
+	"from": "system",
+	"filament_id": "OFLPAxz3",
+	"instantiation": "false",
 	"chamber_temperatures": [
 		"0"
 	],
@@ -126,6 +127,5 @@
 	],
 	"textured_plate_temp_initial_layer": [
 		"90"
-	],
-	"filament_id": "Pbae8fa5"
+	]
 }

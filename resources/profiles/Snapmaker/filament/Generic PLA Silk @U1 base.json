@@ -1,8 +1,8 @@
 {
 	"type": "filament",
-	"from": "system",
-	"instantiation": "false",
 	"name": "Generic PLA Silk @U1 base",
 	"inherits": "fdm_filament_pla_silk_category",
-	"filament_id": "P7b32cae"
+	"from": "system",
+	"filament_id": "OFzn2Q1e",
+	"instantiation": "false"
 }

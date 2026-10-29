@@ -1,6 +1,7 @@
 #include "NativePrinterPanel.hpp"
 
 #include "GUI_App.hpp"
+#include "GUI.hpp"
 #include "I18N.hpp"
 #include "CreatePresetsDialog.hpp"
 #include "MainFrame.hpp"

@@ -1,8 +1,14 @@
 {
 	"type": "filament",
-	"from": "system",
-	"instantiation": "false",
 	"name": "Generic PETG-GF @U1 base",
 	"inherits": "fdm_filament_petg_gf_category",
-	"filament_id": "P1bb6222"
+	"from": "system",
+	"filament_id": "OFyLWVF3",
+	"instantiation": "false",
+	"filament_vendor": [
+		"Generic"
+	],
+	"filament_type": [
+		"PETG-GF"
+	]
 }

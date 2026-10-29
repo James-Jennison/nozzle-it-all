@@ -1,9 +1,9 @@
 {
 	"type": "filament",
-	"from": "system",
-	"instantiation": "false",
 	"name": "fdm_filament_pa_cf_category",
 	"inherits": "fdm_filament_common",
+	"from": "system",
+	"instantiation": "false",
 	"activate_chamber_temp_control": [
 		"0"
 	],

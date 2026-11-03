@@ -12,6 +12,7 @@
 #include <wx/slider.h>
 #include <wx/dcmemory.h>
 #include "GUI_App.hpp"
+#include "LinuxDisplayBackend.hpp"
 #include "MainFrame.hpp"
 #include "Widgets/Button.hpp"
 #include <chrono>
@@ -164,8 +165,18 @@ void BaseTransparentDPIFrame::on_hide()
     Hide();
     auto *mainframe = wxGetApp().mainframe;
     if (mainframe != nullptr) {
-        if (!mainframe->IsShown())
+        if (!mainframe->IsShown()) {
             mainframe->Show();
+            mainframe->Raise();
+            return;
+        }
+#if defined(__WXGTK__)
+        // On Wayland, hiding this timed overlay already returns activation to its
+        // visible parent. Re-presenting the main frame from the timer callback can
+        // re-enter GTK layout/activation handling and leave the UI unresponsive.
+        if (is_running_on_wayland())
+            return;
+#endif
         mainframe->Raise();
     }
 }

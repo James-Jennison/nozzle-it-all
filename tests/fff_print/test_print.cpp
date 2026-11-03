@@ -9,7 +9,9 @@
 #endif
 
 #include <catch2/catch_test_macros.hpp>
+#include <atomic>
 #include <string>
+#include <thread>
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 #include <catch2/catch_message.hpp>
@@ -867,7 +869,10 @@ TEST_CASE("Custom G-code placeholders are substituted", "[Print]")
 // A finished export is reused, so a renamed plate needs the export step invalidated.
 TEST_CASE("Plate name reaches the G-code once G-code export is invalidated", "[Print]")
 {
-    Print print;
+    struct LockInspectablePrint : Print {
+        using Print::state_mutex;
+    };
+    LockInspectablePrint print;
     Model model;
     init_print({ cube(20) }, print, model, { { "machine_start_gcode", "; Plate {plate_name}" } });
     print.set_status_silent();
@@ -890,7 +895,18 @@ TEST_CASE("Plate name reaches the G-code once G-code export is invalidated", "[P
     CHECK(export_and_read().find("; Plate First") != std::string::npos);
 
     // Invalidating the export step re-emits the name without re-slicing.
+    std::atomic<bool> state_mutex_was_available { false };
+    print.set_cancel_callback([&print, &state_mutex_was_available]() {
+        std::thread probe([&print, &state_mutex_was_available]() {
+            if (print.state_mutex().try_lock()) {
+                state_mutex_was_available = true;
+                print.state_mutex().unlock();
+            }
+        });
+        probe.join();
+    });
     print.set_gcode_file_invalidated();
+    CHECK_FALSE(state_mutex_was_available);
     CHECK_FALSE(print.finished());
     CHECK(print.objects().front()->is_step_done(posSlice));
     const std::string regenerated = export_and_read();

@@ -5738,6 +5738,9 @@ void Print::set_gcode_file_ready()
 //BBS: add gcode file preload logic
 void Print::set_gcode_file_invalidated()
 {
+    // UI callers do not hold the print-state mutex. Invalidation may invoke the background
+    // process cancel callback, whose stop_internal() contract requires this mutex to be held.
+    std::scoped_lock<std::mutex> lock(this->state_mutex());
     this->invalidate_step(psGCodeExport);
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ <<  boost::format(": done");
 }

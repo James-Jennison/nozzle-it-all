@@ -15,7 +15,7 @@ from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = (
-    REPOSITORY_ROOT / "docs/upstream/baselines/hybrid-96d38a07c0.json"
+    REPOSITORY_ROOT / "docs/upstream/baselines/hybrid-3d0a917697.json"
 )
 PRODUCT_TREE_EXCLUSIONS = (
     ":(exclude)docs/upstream/**",

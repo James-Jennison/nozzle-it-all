@@ -35,8 +35,12 @@ ALREADY_PRESENT = {
     "3610d8bb35a6129baed6f110efcc2a7aaa5fe900",
 }
 
-ADD_NOW = {
-    "b3f8d0af15ea14615cb1583273a09d6a47106e85",
+ADD_NOW: set[str] = set()
+
+DO_NOT_ADD = {
+    "b5517b693e898261a6e28f940b110cd62683fede",
+    "19a78830d70032133afb88d470061f6b6e0df0ff",
+    "2117d28713502a7e5480f12775d133dcf33c91ae",
 }
 
 ADAPT = {
@@ -68,7 +72,6 @@ DEFER = {
     "b044fbacfa7d42fac51529ce5cd481621a0acac7",
     "49770913a5b8680aeff18b32686fe95e11745339",
     "95a27321456e73cf6c6270d37dccfe819a96b130",
-    "b5517b693e898261a6e28f940b110cd62683fede",
     "d1d8204dc10ede60cbc25adcc7cdf3ec87a6f6ff",
     "4a4128176110b73e1bbc87f66606d4834b50e160",
     "4045a87b70fc4745d586bda69d844b2e7b09f74e",
@@ -78,12 +81,10 @@ DEFER = {
     "efd65b7334c6f3ea05de5857b9aa45a799bc3515",
     "ffdb5da100662754b799c85eda41edd9570ce0ad",
     "eac3ba4416be7589354f827fa2fe5818c61d2076",
-    "19a78830d70032133afb88d470061f6b6e0df0ff",
     "52c50e626e93242182c8bc0c57d1ad99fe14490a",
     "3bc827066df2f5ca7e4dcc6ad25dcc6f36092da6",
     "f894d0888113109c133055fc2013054490b206c5",
     "6372a37d71175ffadecef02a02ac551312ff3741",
-    "2117d28713502a7e5480f12775d133dcf33c91ae",
     "3911c9a56e494114b0e59adc79af83cf248e12f6",
 }
 
@@ -93,6 +94,56 @@ RATIONALE = {
     "ADAPT": ("filament-device-adaptation", "Overlaps Hybrid printer, toolhead, filament or preset behavior and must be adapted rather than replayed."),
     "DEFER": ("post-first-release-upstream", "Profiles, localization, packaging, cosmetic UI or unrelated maintenance is outside the bounded first-release intake."),
     "ALREADY_PRESENT": ("none", "Equivalent source-bound behavior is already present in the accepted Hybrid baseline through its recorded selective upstream intake."),
+    "DO_NOT_ADD": ("none", "Repository-maintenance automation or release-process behavior does not belong in NIA product source."),
+}
+
+ALREADY_EVIDENCE = {
+    "1093ff0714e26ca8d81f3d7fe15d782cc047346f": "Hybrid commit 4666a155ad: Let Slice and Print retry after a post-processing script or plugin fails",
+    "5cc5fb7f9c40c42ca47fc13969756c4e53119046": "Hybrid commit acc09845d2: Fix a crash when closing OrcaSlicer with a Bambu LAN printer connected",
+    "913c622574d313ac1d4164a5226c031ae16488e3": "Hybrid commit 80cd092301: Remember the last printer and keep AMS-synced filaments across restarts",
+    "7ac46c9a6186458633a8c52203179c684c23fadc": "Hybrid commit d18311425c: Fix lightning infill hang when an overhang sample lands past the infill",
+    "eda4062d68abe3b68155bb06270906dbbfb70ae2": "Hybrid commit 568c7e3077: Fix crash opening a project with missing or empty settings",
+    "efe735853a1bc14e6665c2bddefebe5aa2cb4c80": "Hybrid commit 0a17b12fc6: Drop a Scheduled Print Host Upload When the Slice Ends Before It Is Queued",
+    "3610d8bb35a6129baed6f110efcc2a7aaa5fe900": "Hybrid commit edc17b8728: Do not prebuild pages while a modal dialog is open",
+}
+
+DETAILS = {
+    "ADD_NOW": {
+        "nia_relevance": "Direct first-release stability or data-integrity relevance.",
+        "integration_method": "Isolate the smallest behavior after proving it is absent; port or reimplement with preserved attribution, never replay the surrounding range.",
+        "compatibility_concerns": ["Hybrid slicing output", "3MF/profile compatibility", "Snapmaker U1 and non-U1 behavior", "cross-platform behavior"],
+        "required_tests": ["upstream focused regression", "Hybrid-focused regression", "representative normalized golden G-code", "3MF/profile round trip where affected"],
+    },
+    "ADD_NEXT": {
+        "nia_relevance": "Useful correctness or workflow improvement outside the pre-branding stability minimum.",
+        "integration_method": "Reassess equivalent current code, then stage one bounded behavior in the engine-correctness batch.",
+        "compatibility_concerns": ["slicing defaults", "golden G-code", "project/profile compatibility", "multi-printer behavior"],
+        "required_tests": ["upstream focused regression", "affected Hybrid unit or GUI test", "representative golden slice when slicing can change"],
+    },
+    "ADAPT": {
+        "nia_relevance": "Overlaps NIA printer, filament, toolhead, preset or device behavior.",
+        "integration_method": "Compare behavior against the accepted Hybrid implementation and adapt only the missing invariant.",
+        "compatibility_concerns": ["U1 toolhead and filament mapping", "user presets", "vendor-specific device behavior", "existing settings and projects"],
+        "required_tests": ["U1 and ordinary-printer focused tests", "preset/settings persistence", "filament/tool mapping regression", "candidate-specific GUI or protocol test"],
+    },
+    "DEFER": {
+        "nia_relevance": "Not required for the bounded first-release outcome or lacks a safe comparison base.",
+        "integration_method": "Do not integrate; retain the exact source identity for a later named-capability assessment.",
+        "compatibility_concerns": ["scope expansion", "vendor/profile drift", "unbounded platform or packaging changes"],
+        "required_tests": ["none until a named capability reopens the candidate; then define candidate-specific tests before source change"],
+    },
+    "ALREADY_PRESENT": {
+        "nia_relevance": "Behavior is already carried by the accepted Hybrid baseline.",
+        "integration_method": "Do not replay; preserve the existing implementation and provenance mapping.",
+        "compatibility_concerns": ["duplicate patching", "divergent duplicate implementations", "invalidating accepted baseline evidence"],
+        "required_tests": ["no new test required in P2; existing source-bound baseline evidence remains authoritative until a material change"],
+    },
+    "DO_NOT_ADD": {
+        "nia_relevance": "No product-runtime relevance; this belongs to the upstream repository's own maintenance or release process.",
+        "integration_method": "Do not integrate into NIA product source.",
+        "compatibility_concerns": ["unrelated CI or release-process coupling", "maintenance burden without user-visible value"],
+        "required_tests": ["none; disposition is exclusion from product-source intake"],
+    },
 }
 
 
@@ -111,6 +162,7 @@ def disposition(commit: str) -> str:
             ("ADD_NOW", ADD_NOW),
             ("ADAPT", ADAPT),
             ("DEFER", DEFER),
+            ("DO_NOT_ADD", DO_NOT_ADD),
         )
         if commit in commits
     ]
@@ -133,16 +185,24 @@ def commit_metadata(git_dir: Path, commit: str) -> tuple[str, str, str, str]:
 def commit_record(git_dir: Path, commit: str) -> dict:
     commit_id, author, email, subject = commit_metadata(git_dir, commit)
     files = git(git_dir, "diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+    file_lines = files.splitlines() if files else ["<merge or metadata-only commit; inspect parent range before implementation>"]
     disp = disposition(commit_id)
     batch, reason = RATIONALE[disp]
+    details = DETAILS[disp]
+    top_level = sorted({path.split("/", 1)[0] for path in file_lines if path})
     return {
         "commit": commit_id,
         "original_author": {"name": author, "email": email},
         "behavioral_purpose": subject,
-        "files": files.splitlines() if files else [],
+        "files": file_lines,
+        "subsystems": top_level,
+        "dependencies": ["current accepted Hybrid implementation", "upstream behavior and tests named by the commit"],
+        "downstream_adaptations": "Reconcile with Snapmaker and NIA changes after the shared lineage point; do not assume clean cherry-pick applicability.",
         "disposition": disp,
         "recommended_batch": batch,
         "reason": reason,
+        "presence_evidence": ALREADY_EVIDENCE.get(commit_id, "not applicable to this disposition"),
+        **details,
     }
 
 
@@ -169,6 +229,8 @@ def build(cache_root: Path, registry_path: Path) -> dict:
                 "origin_repository": source["repository"],
                 "license": source["license"],
                 "range": {"exclusive_base": base, "inclusive_tip": tip},
+                "assessment_kind": "exact_delta",
+                "advances_last_assessed": True,
                 "candidates": records,
             }
         elif source_id == "snapmaker-orca":
@@ -180,12 +242,18 @@ def build(cache_root: Path, registry_path: Path) -> dict:
                 disposition="ADAPT",
                 recommended_batch="snapmaker-u1-delta-review",
                 reason="The single squashed vendor sync changes broad engine and GUI surfaces; compare U1-specific behavior against the Orca range and accepted Hybrid before staging any subset.",
+                nia_relevance="High vendor relevance, but the squashed change is not a safe integration unit.",
+                integration_method="Diff and test named U1 capabilities individually; never stage the squashed vendor sync as one patch.",
+                compatibility_concerns=["squashed provenance", "broad GUI and engine change", "U1 behavior", "overlap with Orca and Hybrid"],
+                required_tests=["candidate-specific U1 protocol or GUI test", "multi-printer regression", "normalized golden slices", "3MF/profile compatibility"],
             )
             assessment = {
                 "source": source_id,
                 "origin_repository": source["repository"],
                 "license": source["license"],
                 "range": {"exclusive_base": base, "inclusive_tip": tip},
+                "assessment_kind": "exact_delta",
+                "advances_last_assessed": True,
                 "candidates": [rec],
             }
         else:
@@ -195,20 +263,27 @@ def build(cache_root: Path, registry_path: Path) -> dict:
                 "origin_repository": source["repository"],
                 "license": source["license"],
                 "range": {"exclusive_base": None, "inclusive_tip": tip},
+                "assessment_kind": "base_registration_only",
+                "advances_last_assessed": False,
                 "candidates": [{
                     "commit": tip,
                     "original_author": {"name": author_name, "email": author_email},
                     "behavioral_purpose": f"Initial registered tip snapshot: {subject}",
-                    "files": [],
+                    "files": ["<repository-wide exact tip snapshot; no prior accepted source base>"],
+                    "subsystems": ["repository-wide initial snapshot"],
+                    "dependencies": ["named future capability", "an explicit comparison base selected before implementation"],
+                    "downstream_adaptations": "Conceptual fork ancestry is routing context only; commit and behavior equivalence must be established for the named capability.",
                     "disposition": "DEFER",
                     "recommended_batch": "targeted-capability-assessment",
                     "reason": "No previously accepted source commit is registered. Preserve the exact tip and assess a named capability rather than treating the repository history as a merge queue.",
+                    "presence_evidence": "not applicable to this disposition",
+                    **DETAILS["DEFER"],
                 }],
             }
         assessments.append(assessment)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "phase": "P2",
         "assessment_date": "2026-11-03",
         "accepted_hybrid_baseline": "3d0a917697e036a90a4aca75268c186bec3e0f2f",

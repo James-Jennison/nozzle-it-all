@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""Verify a frozen Hybrid Orca baseline without inspecting user data."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_MANIFEST = (
+    REPOSITORY_ROOT / "docs/upstream/baselines/hybrid-96d38a07c0.json"
+)
+PRODUCT_TREE_EXCLUSIONS = (
+    ":(exclude)docs/upstream/**",
+    ":(exclude)scripts/upstream/**",
+)
+
+
+class VerificationError(RuntimeError):
+    """A baseline invariant did not hold."""
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_path(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def git(*arguments: str, capture: bool = True) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        ["git", *arguments],
+        cwd=REPOSITORY_ROOT,
+        check=False,
+        stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise VerificationError(message)
+
+
+def load_manifest(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as stream:
+        manifest = json.load(stream)
+    require(manifest.get("schema_version") == 1, "unsupported schema_version")
+    require(bool(manifest.get("baseline_id")), "baseline_id is missing")
+    require(bool(manifest.get("source", {}).get("commit")), "source.commit is missing")
+    return manifest
+
+
+def git_object_bytes(commit: str, path: str) -> bytes:
+    result = git("show", f"{commit}:{path}")
+    require(
+        result.returncode == 0,
+        f"cannot read {path!r} from source commit {commit}: "
+        f"{result.stderr.decode(errors='replace').strip()}",
+    )
+    return result.stdout
+
+
+def verify_source(manifest: dict[str, Any], check_product_tree: bool) -> list[str]:
+    source = manifest["source"]
+    commit = source["commit"]
+    resolved = git("rev-parse", f"{commit}^{{commit}}")
+    require(resolved.returncode == 0, f"source commit is unavailable: {commit}")
+    require(resolved.stdout.decode().strip() == commit, "source commit did not resolve exactly")
+
+    parent = git("rev-parse", f"{commit}^")
+    require(parent.returncode == 0, f"cannot resolve parent of {commit}")
+    require(
+        parent.stdout.decode().strip() == source["parent"],
+        "recorded source parent does not match Git history",
+    )
+
+    checked = [f"source commit {commit}", f"source parent {source['parent']}"]
+    if check_product_tree:
+        diff = git(
+            "diff",
+            "--quiet",
+            commit,
+            "--",
+            ".",
+            *PRODUCT_TREE_EXCLUSIONS,
+            capture=False,
+        )
+        require(
+            diff.returncode == 0,
+            "product tree differs from the frozen source commit "
+            "(baseline documentation and verifier files are excluded)",
+        )
+        checked.append("current product tree matches frozen source")
+    return checked
+
+
+def verify_fixture_sources(manifest: dict[str, Any]) -> list[str]:
+    commit = manifest["source"]["commit"]
+    checked: list[str] = []
+    for fixture in manifest.get("golden_fixtures", []):
+        for field in ("model", "machine_profile", "process_profile", "filament_profile"):
+            item = fixture[field]
+            actual = sha256_bytes(git_object_bytes(commit, item["path"]))
+            require(actual == item["sha256"], f"source hash mismatch: {item['path']}")
+            checked.append(f"source hash {item['path']}")
+    return checked
+
+
+def resolve_artifact(path: str) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else REPOSITORY_ROOT / candidate
+
+
+def verify_artifacts(
+    manifest: dict[str, Any], allow_missing: bool
+) -> tuple[list[str], list[str]]:
+    checked: list[str] = []
+    skipped: list[str] = []
+    for artifact in manifest.get("artifacts", []):
+        path = resolve_artifact(artifact["path"])
+        if not path.is_file():
+            if allow_missing:
+                skipped.append(f"missing artifact {path}")
+                continue
+            raise VerificationError(f"required artifact is missing: {path}")
+        require(path.stat().st_size == artifact["size_bytes"], f"size mismatch: {path}")
+        require(sha256_path(path) == artifact["sha256"], f"SHA-256 mismatch: {path}")
+        checked.append(f"artifact {artifact['role']} {path}")
+    return checked, skipped
+
+
+def normalize_generated_header(gcode: bytes) -> bytes:
+    normalized: list[bytes] = []
+    replacements = 0
+    for line in gcode.splitlines(keepends=True):
+        if line.startswith(b"; generated by "):
+            ending = b"\r\n" if line.endswith(b"\r\n") else b"\n" if line.endswith(b"\n") else b""
+            normalized.append(b"; generated by <normalized>" + ending)
+            replacements += 1
+        else:
+            normalized.append(line)
+    require(replacements == 1, f"expected one generated-by header, found {replacements}")
+    return b"".join(normalized)
+
+
+def reproduce_golden(manifest: dict[str, Any]) -> list[str]:
+    require(len(manifest.get("golden_fixtures", [])) == 1, "expected exactly one golden fixture")
+    fixture = manifest["golden_fixtures"][0]
+    binary_entry = next(
+        artifact for artifact in manifest["artifacts"] if artifact["role"] == "embedded_binary"
+    )
+    binary = resolve_artifact(binary_entry["path"])
+    require(binary.is_file(), f"golden-slice binary is missing: {binary}")
+
+    def source_path(field: str) -> str:
+        return str(REPOSITORY_ROOT / fixture[field]["path"])
+
+    with tempfile.TemporaryDirectory(prefix="hybrid-orca-baseline-") as output_dir:
+        command = [
+            str(binary),
+            "--slice",
+            "0",
+            "--outputdir",
+            output_dir,
+            "--load-settings",
+            f"{source_path('machine_profile')};{source_path('process_profile')}",
+            "--load-filaments",
+            source_path("filament_profile"),
+            source_path("model"),
+        ]
+        result = subprocess.run(
+            command,
+            cwd=REPOSITORY_ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        require(
+            result.returncode == 0,
+            "golden slice failed:\n" + result.stdout.decode(errors="replace")[-4000:],
+        )
+        gcode_files = list(Path(output_dir).rglob("*.gcode"))
+        require(len(gcode_files) == 1, f"expected one G-code output, found {len(gcode_files)}")
+        normalized_hash = sha256_bytes(normalize_generated_header(gcode_files[0].read_bytes()))
+        require(
+            normalized_hash == fixture["normalized_sha256"],
+            "golden G-code hash mismatch: "
+            f"expected {fixture['normalized_sha256']}, got {normalized_hash}",
+        )
+    return [f"golden slice {fixture['id']} {fixture['normalized_sha256']}"]
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument(
+        "--allow-missing-artifacts",
+        action="store_true",
+        help="report missing packaged artifacts instead of failing",
+    )
+    parser.add_argument(
+        "--check-product-tree",
+        action="store_true",
+        help="require product source to match the frozen commit",
+    )
+    parser.add_argument(
+        "--reproduce-golden",
+        action="store_true",
+        help="run the recorded U1 slice and verify normalized G-code",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    try:
+        manifest = load_manifest(arguments.manifest.resolve())
+        checked = verify_source(manifest, arguments.check_product_tree)
+        checked.extend(verify_fixture_sources(manifest))
+        artifact_checks, skipped = verify_artifacts(
+            manifest, arguments.allow_missing_artifacts
+        )
+        checked.extend(artifact_checks)
+        if arguments.reproduce_golden:
+            require(
+                arguments.check_product_tree,
+                "--reproduce-golden requires --check-product-tree",
+            )
+            checked.extend(reproduce_golden(manifest))
+    except (OSError, KeyError, TypeError, ValueError, VerificationError) as error:
+        print(f"FAIL: {error}", file=sys.stderr)
+        return 1
+
+    print(f"PASS: {manifest['baseline_id']}")
+    for item in checked:
+        print(f"  checked: {item}")
+    for item in skipped:
+        print(f"  skipped: {item}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

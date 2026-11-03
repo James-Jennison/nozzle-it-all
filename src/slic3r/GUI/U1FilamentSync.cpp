@@ -1,6 +1,7 @@
 #include "U1FilamentSync.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -22,6 +23,45 @@
 #include "slic3r/Utils/U1LanPrintHost.hpp"
 
 namespace Slic3r::GUI {
+
+std::size_t u1_physical_filament_capacity(const DynamicPrintConfig &printer_config)
+{
+    const std::string model = printer_config.has("printer_model") ? printer_config.opt_string("printer_model") : std::string();
+    return boost::iequals(model, "Snapmaker U1") ? 4u : 0u;
+}
+
+std::uint64_t u1_filament_preset_rank(const Preset &preset, const std::string &reported_vendor, const std::string &reported_sub_type)
+{
+    const std::string vendor        = boost::to_lower_copy(reported_vendor);
+    const std::string sub_type      = boost::to_lower_copy(reported_sub_type);
+    const std::string name          = boost::to_lower_copy(preset.name);
+    const std::string preset_vendor = boost::to_lower_copy(preset.config.opt_string("filament_vendor", 0u));
+    const bool vendor_known         = !vendor.empty() && vendor != "none";
+    const bool vendor_match = vendor_known && preset_vendor == vendor;
+    const bool subtype_match = !sub_type.empty() && sub_type != "none" && boost::contains(name, sub_type);
+    const bool generic_match = boost::contains(name, "generic");
+
+    std::uint64_t rank = vendor_match ? 1 : 0;
+    rank               = rank * 2 + (generic_match ? 1 : 0);
+    rank               = rank * 2 + (subtype_match ? 1 : 0);
+    rank               = rank * 2 + (preset.is_system ? 1 : 0);
+    rank               = rank * 2 + (preset.is_visible ? 1 : 0);
+    return rank * 1000 + (999 - std::min<std::size_t>(name.size(), 999));
+}
+
+void set_u1_filament_color(DynamicPrintConfig &config, std::size_t index, const std::string &color)
+{
+    auto set_value = [index](ConfigOptionStrings *option, const std::string &value, const std::string &fill) {
+        if (option == nullptr)
+            return;
+        if (option->values.size() <= index)
+            option->values.resize(index + 1, fill);
+        option->values[index] = value;
+    };
+    set_value(config.option<ConfigOptionStrings>("filament_colour", true), color, "#FFFFFF");
+    set_value(config.option<ConfigOptionStrings>("filament_multi_colour", true), color, "#FFFFFF");
+    set_value(config.option<ConfigOptionStrings>("filament_colour_type", true), "1", "1");
+}
 
 namespace {
 
@@ -76,35 +116,25 @@ std::vector<Slot> parse_report(const nlohmann::json &report)
     return slots;
 }
 
-// Best compatible, visible filament preset of the given type; prefers the vendor named by the
-// printer, then Snapmaker/Generic profiles, then a plain name match on the sub type.
+// Best compatible filament preset of the given type; prefers the vendor named by the printer,
+// then a Generic fallback, then a plain name match on the subtype.
 const Preset *pick_preset(PresetBundle &bundle, const Slot &slot)
 {
-    const std::string vendor = boost::to_lower_copy(slot.vendor);
-    const Preset     *best   = nullptr;
-    int               best_score = -1;
+    const Preset *best      = nullptr;
+    std::uint64_t best_rank = 0;
     for (const Preset &p : bundle.filaments.get_presets()) {
         if (!p.is_compatible || p.is_default)
             continue;
         if (p.config.opt_string("filament_type", 0u) != slot.type)
             continue;
-        const std::string name = boost::to_lower_copy(p.name);
-        int               score = 0;
-        if (!vendor.empty() && vendor != "none" && boost::contains(name, vendor))
-            score += 8;
-        if (boost::contains(name, "generic"))
-            score += 2;
-        if (!slot.sub_type.empty() && slot.sub_type != "NONE" && boost::contains(name, boost::to_lower_copy(slot.sub_type)))
-            score += 4;
-        if (p.is_system)
-            score += 1;
-        if (p.is_visible)
-            score += 20; // selected in the setup wizard / filament list
-        // Shorter names are plainer variants of the same filament.
-        score = score * 100 - int(std::min<size_t>(name.size(), 99));
-        if (score > best_score) {
-            best_score = score;
-            best       = &p;
+
+        // Rank identity before presentation state. Visibility only means the user enabled a preset;
+        // it must never make an unrelated brand beat the printer-reported vendor or a generic fallback.
+        const std::uint64_t rank = u1_filament_preset_rank(p, slot.vendor, slot.sub_type);
+        // Equal semantic ranks are resolved by the stable preset name instead of collection order.
+        if (best == nullptr || rank > best_rank || (rank == best_rank && p.name < best->name)) {
+            best_rank = rank;
+            best      = &p;
         }
     }
     return best;
@@ -118,8 +148,7 @@ bool u1_filament_sync_available()
     if (bundle == nullptr)
         return false;
     const DynamicPrintConfig &printer = bundle->printers.get_edited_preset().config;
-    const std::string         model   = printer.has("printer_model") ? printer.opt_string("printer_model") : std::string();
-    return boost::icontains(model, "Snapmaker") && boost::icontains(model, "U1") && !resolve_printer_lan_host().empty();
+    return u1_physical_filament_capacity(printer) != 0 && !resolve_printer_lan_host().empty();
 }
 
 bool sync_filaments_from_u1(wxWindow *parent)
@@ -156,9 +185,8 @@ bool sync_filaments_from_u1(wxWindow *parent)
     if (bundle.filament_presets.size() != count)
         plater->on_filament_count_change(count);
 
-    ConfigOptionStrings *colors = bundle.project_config.option<ConfigOptionStrings>("filament_colour");
-    wxString             summary;
-    size_t               applied = 0;
+    wxString summary;
+    size_t   applied = 0;
     for (size_t i = 0; i < count && i < bundle.filament_presets.size(); ++i) {
         const Slot &slot = slots[i];
         if (!slot.present) {
@@ -168,8 +196,10 @@ bool sync_filaments_from_u1(wxWindow *parent)
         const Preset *preset = pick_preset(bundle, slot);
         if (preset != nullptr)
             bundle.set_filament_preset(i, preset->name);
-        if (colors != nullptr && i < colors->values.size())
-            colors->values[i] = slot.color;
+        // Solid filament colors have three parallel project-config representations. The sidebar
+        // renders filament_multi_colour when it is present, so updating only filament_colour leaves
+        // the visible swatch (and mixed-color consumers) on the previous value.
+        set_u1_filament_color(bundle.project_config, i, slot.color);
         ++applied;
         summary += wxString::Format("T%d: %s %s %s -> %s\n", int(i), from_u8(slot.vendor), from_u8(slot.type), from_u8(slot.color),
                                     preset ? from_u8(preset->name) : _L("no matching preset (colour only)"));

@@ -5860,6 +5860,10 @@ void Sidebar::on_filaments_delete(size_t filament_id)
 }
 
 void Sidebar::add_filament() {
+    auto       *bundle         = wxGetApp().preset_bundle;
+    const auto &printer_config = bundle->printers.get_edited_preset().config;
+    const size_t u1_capacity   = u1_physical_filament_capacity(printer_config);
+    if (u1_capacity != 0 && bundle->num_physical_filaments() >= u1_capacity) return;
     if (p->combos_filament.size() >= MAXIMUM_EXTRUDER_NUMBER) return;
     wxColour    new_col        = Plater::get_next_color_for_filament();
     add_custom_filament(new_col);
@@ -5975,15 +5979,18 @@ void Sidebar::edit_filament()
 
 void Sidebar::add_custom_filament(wxColour new_col, const std::string& preset_name, bool /*skip_preset_validation*/) {
     if (is_new_project_in_gcode3mf()) { return; }
+    auto       *bundle         = wxGetApp().preset_bundle;
+    const auto &printer_config = bundle->printers.get_edited_preset().config;
+    const size_t u1_capacity   = u1_physical_filament_capacity(printer_config);
+    if (u1_capacity != 0 && bundle->num_physical_filaments() >= u1_capacity) return;
     if (p->combos_filament.size() >= MAXIMUM_EXTRUDER_NUMBER) return;
-    if (wxGetApp().preset_bundle->filament_presets.size() >= MAXIMUM_EXTRUDER_NUMBER) return;
+    if (bundle->filament_presets.size() >= MAXIMUM_EXTRUDER_NUMBER) return;
 
     // Mixed-color slots are kept at the tail of the filament arrays, so a new physical
     // filament has to be inserted just after the last physical one rather than appended.
     // Count actual colour slots, not filament_presets or the combos: the extruder-count spinner
     // reaches this before the sidebar has rebuilt, and update_multi_material_filament_presets()
     // can have grown filament_presets alone.
-    auto       *bundle         = wxGetApp().preset_bundle;
     size_t      insert_pos     = bundle->num_physical_filaments();
     size_t      total          = insert_pos + bundle->num_mixed_filaments();
     int         filament_count = (int)(total + 1);
@@ -6614,12 +6621,16 @@ void Sidebar::show_SEMM_buttons()
     
     bool is_multi_material = p->combos_filament.size() > 1;
     bool single_or_bbl     = should_show_SEMM_buttons();
+    const auto &printer_config = wxGetApp().preset_bundle->printers.get_edited_preset().config;
+    const size_t u1_capacity   = u1_physical_filament_capacity(printer_config);
+    const bool is_u1           = u1_capacity != 0;
+    const size_t physical_filaments = wxGetApp().preset_bundle->num_physical_filaments();
     bool is_single = single_or_bbl && !is_multi_material; // SINGLE EXTRUDER / BBL WITH 1 MATERIAL
     bool is_multi  = single_or_bbl && is_multi_material;  // MULTI MATERIAL WITH SINGLE EXTRUDER
     bool is_fixed  = !is_single && !is_multi;             // MULTI EXTRUDER / TOOLCHANGER / IDEX WITH FIXED MATERIAL
 
-    p->m_bpButton_add_filament->Show(single_or_bbl);
-    p->m_bpButton_del_filament->Show(is_multi);
+    p->m_bpButton_add_filament->Show(single_or_bbl || (is_u1 && physical_filaments < u1_capacity));
+    p->m_bpButton_del_filament->Show(is_multi || (is_u1 && physical_filaments > 1));
     p->m_flushing_volume_btn->Show(  is_multi);
 
     if (is_multi) {

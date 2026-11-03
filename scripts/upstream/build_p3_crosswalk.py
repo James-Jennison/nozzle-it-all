@@ -39,13 +39,22 @@ def main() -> int:
                 "trigger": "A named capability request or new defect evidence plus candidate-specific objective tests and review; no automatic promotion.",
             })
     identities = {(row["source"], row["candidate"]) for row in rows}
-    if len(rows) != 82 or len(identities) != 82:
+    assessment_identities = {
+        (source["source"], candidate["commit"])
+        for source in assessment["sources"]
+        for candidate in source["candidates"]
+    }
+    required_route_fields = ("p3_route", "timing", "trigger")
+    complete_routes = all(all(row.get(field) for field in required_route_fields) for row in rows)
+    if len(rows) != 82 or len(identities) != 82 or identities != assessment_identities or not complete_routes:
         raise ValueError(f"expected 82 unique candidate identities, got {len(rows)} rows and {len(identities)} identities")
     output = {
         "schema_version": 1,
         "source_assessment": str(args.assessment),
         "candidate_count": len(rows),
         "unique_candidate_count": len(identities),
+        "identity_set_matches_p2": identities == assessment_identities,
+        "all_routes_have_route_timing_trigger": complete_routes,
         "rows": rows,
     }
     args.output.write_text(json.dumps(output, indent=2) + "\n")

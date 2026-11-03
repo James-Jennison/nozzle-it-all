@@ -37,7 +37,10 @@ std::uint64_t u1_filament_preset_rank(const Preset &preset, const std::string &r
     const std::string name          = boost::to_lower_copy(preset.name);
     const std::string preset_vendor = boost::to_lower_copy(preset.config.opt_string("filament_vendor", 0u));
     const bool vendor_known         = !vendor.empty() && vendor != "none";
-    const bool vendor_match = vendor_known && preset_vendor == vendor;
+    // Current profiles carry filament_vendor. Keep a name fallback only for older profiles that
+    // do not, without allowing an explicitly different vendor to match by substring.
+    const bool vendor_match = vendor_known &&
+                              (preset_vendor == vendor || (preset_vendor.empty() && boost::contains(name, vendor)));
     const bool subtype_match = !sub_type.empty() && sub_type != "none" && boost::contains(name, sub_type);
     const bool generic_match = boost::contains(name, "generic");
 

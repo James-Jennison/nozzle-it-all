@@ -645,7 +645,7 @@ namespace Slic3r
         }
     }
 
-    bool DeviceManager::set_selected_machine(std::string dev_id)
+    bool DeviceManager::set_selected_machine(std::string dev_id, bool remember_selection)
     {
         m_restore_last_machine = false; // any selection settles a pending restore_last_machine()
         BOOST_LOG_TRIVIAL(info) << "set_selected_machine=" << dev_id
@@ -767,7 +767,8 @@ namespace Slic3r
         }
 
         selected_machine = dev_id;
-        record_user_last_machine(selected_machine);
+        if (remember_selection)
+            record_user_last_machine(selected_machine);
         BOOST_LOG_TRIVIAL(trace) << "Orca diagnostic: DeviceManager selection complete selected_machine="
                                 << selected_machine;
         return true;
@@ -1120,10 +1121,14 @@ namespace Slic3r
             config->set(LAST_SELECTED_MACHINE_SECTION, agent_id, dev_id);
         else
             config->erase(LAST_SELECTED_MACHINE_SECTION, agent_id);
-        // The pre-per-agent key is only read until the Bambu agent records its own printer, a forget
-        // included, so it can't bring back a printer the user has left.
-        if (agent_id == BBL_PRINTER_AGENT_ID && config->has(LEGACY_LAST_SELECTED_MACHINE_KEY))
-            config->erase("app", LEGACY_LAST_SELECTED_MACHINE_KEY);
+        // Keep the pre-per-agent Bambu key in sync for downgrade compatibility. Other agents must
+        // not write it: a later Bambu session would otherwise restore another agent's printer.
+        if (agent_id == BBL_PRINTER_AGENT_ID) {
+            if (!dev_id.empty())
+                config->set(LEGACY_LAST_SELECTED_MACHINE_KEY, dev_id);
+            else
+                config->erase("app", LEGACY_LAST_SELECTED_MACHINE_KEY);
+        }
     }
 
     std::string DeviceManager::get_user_last_machine() const
@@ -1142,7 +1147,9 @@ namespace Slic3r
             }
         }
 
-        return m_agent ? m_agent->get_user_selected_machine() : "";
+        // The network-level selected machine is legacy Bambu account state. Non-Bambu agents use
+        // their scoped local entry only, so an agent switch cannot select a Bambu printer by ID.
+        return agent_id == BBL_PRINTER_AGENT_ID && m_agent ? m_agent->get_user_selected_machine() : "";
     }
 
     void DeviceManager::load_last_machine()

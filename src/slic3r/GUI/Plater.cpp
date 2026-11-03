@@ -9404,6 +9404,27 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
                         }
                     }
 
+                    // Geometry-only import discards slicer overrides while preserving explicit
+                    // extruder assignments. Prusa 3MF is the established exception: its model
+                    // configuration is intentionally retained.
+                    if (!load_config && en_3mf_file_type != En3mfType::From_Prusa) {
+                        for (ModelObject *model_object : model.objects) {
+                            const bool has_extruder = model_object->config.has("extruder");
+                            const int  extruder_id  = has_extruder ? model_object->config.extruder() : -1;
+                            model_object->config.reset();
+                            if (has_extruder)
+                                model_object->config.set("extruder", extruder_id);
+
+                            for (ModelVolume *model_volume : model_object->volumes) {
+                                const bool volume_has_extruder = model_volume->config.has("extruder");
+                                const int  volume_extruder_id  = volume_has_extruder ? model_volume->config.extruder() : -1;
+                                model_volume->config.reset();
+                                if (volume_has_extruder)
+                                    model_volume->config.set("extruder", volume_extruder_id);
+                            }
+                        }
+                    }
+
                     // 1. add extruder for prusa model if the number of existing extruders is not enough
                     // 2. add extruder for BBS or Other model if only import geometry, by choice or by the checks above
                     if (en_3mf_file_type == En3mfType::From_Prusa || (load_model && !load_config)) {

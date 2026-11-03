@@ -19,6 +19,12 @@ Preset filament_preset(const std::string &name, const std::string &vendor, bool 
     return preset;
 }
 
+Preset legacy_filament_preset(const std::string &name, bool visible)
+{
+    Preset preset = filament_preset(name, "", visible);
+    return preset;
+}
+
 } // namespace
 
 TEST_CASE("U1 physical filament capacity is limited to its four toolheads", "[U1FilamentSync]")
@@ -51,6 +57,7 @@ TEST_CASE("U1 filament matching ranks identity ahead of visibility", "[U1Filamen
     const Preset branded_subtype   = filament_preset("Overture ABS Basic @System", "Overture", true);
     const Preset generic_abs       = filament_preset("Generic ABS @U1", "Generic", false);
     const Preset substring_vendor  = filament_preset("SUNLU3D PLA @System", "SUNLU3D", true);
+    const Preset legacy_snapmaker = legacy_filament_preset("Snapmaker PLA Legacy @U1", false);
 
     REQUIRE(u1_filament_preset_rank(exact_hidden, "Snapmaker", "PLA") >
             u1_filament_preset_rank(unrelated_visible, "Snapmaker", "PLA"));
@@ -60,6 +67,8 @@ TEST_CASE("U1 filament matching ranks identity ahead of visibility", "[U1Filamen
             u1_filament_preset_rank(branded_subtype, "SUNLU", "ABS Basic"));
     REQUIRE(u1_filament_preset_rank(generic_hidden, "SUNLU", "PLA") >
             u1_filament_preset_rank(substring_vendor, "SUNLU", "PLA"));
+    REQUIRE(u1_filament_preset_rank(legacy_snapmaker, "Snapmaker", "PLA") >
+            u1_filament_preset_rank(unrelated_visible, "Snapmaker", "PLA"));
 }
 
 TEST_CASE("U1 solid colors replace every rendered project color representation", "[U1FilamentSync]")

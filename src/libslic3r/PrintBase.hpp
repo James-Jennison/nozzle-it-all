@@ -605,6 +605,9 @@ public:
             this->status_update_warnings(static_cast<int>(active_step.first), warning_level, message, nullptr, message_id);
     }
 protected:
+    // These invalidation helpers operate on PrintState's unguarded invalidate API. Their UI-thread
+    // callers already hold state_mutex() (normally from Print::apply()); the worker-only helper
+    // below is the exceptional entry point and therefore acquires the mutex itself.
     bool            set_started(PrintStepEnum step) { return m_state.set_started(step, this->state_mutex(), [this](){ this->throw_if_canceled(); }); }
 	PrintStateBase::TimeStamp set_done(PrintStepEnum step) {
 		std::pair<PrintStateBase::TimeStamp, bool> status = m_state.set_done(step, this->state_mutex(), [this](){ this->throw_if_canceled(); });
@@ -621,8 +624,9 @@ protected:
         { return m_state.invalidate_multiple(il.begin(), il.end(), this->cancel_callback()); }
     bool            invalidate_all_steps()
         { return m_state.invalidate_all(this->cancel_callback()); }
-    // invalidate_step() for the background processing thread, about a step it finished itself. It skips the
-    // cancel callback, which stops the background processing and so would wait for this very thread.
+    // invalidate_step() for the background processing thread, about a step it finished itself. The
+    // worker enters without state_mutex() held, acquires it here, and skips the cancel callback,
+    // which stops the background processing and so would wait for this very thread.
     bool            invalidate_step_from_worker(PrintStepEnum step)
         { std::scoped_lock<std::mutex> lock(this->state_mutex()); return m_state.invalidate(step, []() {}); }
 

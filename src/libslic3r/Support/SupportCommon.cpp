@@ -1250,6 +1250,7 @@ static void modulate_extrusion_by_overlapping_layers(
     if (extrusion_path_template == nullptr) {
         // Defensive bail-out: the list contains an unexpected entity type. Skip the
         // modulation and hand the loops back rather than dereferencing a null pointer.
+        BOOST_LOG_TRIVIAL(warning) << "Support height modulation skipped an unexpected non-path extrusion entity";
         prepend_extrusion_entities(extrusions_in_out, std::move(loop_entities));
         return;
     }

@@ -223,10 +223,46 @@ TEST_CASE("Device manager reads the pre-per-agent last machine for Bambu printer
     network.set_printer_agent(std::make_shared<TestPrinterAgent>(BBL_PRINTER_AGENT_ID));
     CHECK(manager.get_user_last_machine() == "legacy-machine");
 
+    // Recording a Bambu printer keeps the old key in sync for a downgrade.
+    manager.record_user_last_machine("new-bambu-machine");
+    CHECK(app_config.config.get("user_last_selected_machine") == "new-bambu-machine");
+
     // A forget is a record too: the legacy machine must not come back after it.
     manager.record_user_last_machine("");
     CHECK_FALSE(app_config.config.has("user_last_selected_machine"));
     CHECK(manager.get_user_last_machine() != "legacy-machine");
+}
+
+TEST_CASE("Transient deselection preserves the remembered printer", "[DeviceManager][integration]")
+{
+    ScopedAppConfig app_config;
+    auto agent = std::make_shared<TestPrinterAgent>("integration-agent");
+    NetworkAgent network(nullptr, agent);
+    DeviceManager manager(&network, false, &app_config.config);
+
+    manager.record_user_last_machine("remembered-machine");
+    REQUIRE(manager.get_user_last_machine() == "remembered-machine");
+    REQUIRE(manager.set_selected_machine("", false));
+    CHECK(manager.get_user_last_machine() == "remembered-machine");
+
+    REQUIRE(manager.set_selected_machine(""));
+    CHECK(manager.get_user_last_machine().empty());
+}
+
+TEST_CASE("Non-Bambu agents do not inherit the network-level selected machine", "[DeviceManager][integration]")
+{
+    ScopedAppConfig app_config;
+    auto other = std::make_shared<TestPrinterAgent>("integration-agent");
+    NetworkAgent network(nullptr, other);
+    DeviceManager manager(&network, false, &app_config.config);
+
+    REQUIRE(other->set_user_selected_machine("network-selected-machine") == 0);
+    CHECK(manager.get_user_last_machine().empty());
+
+    auto bambu = std::make_shared<TestPrinterAgent>(BBL_PRINTER_AGENT_ID);
+    network.set_printer_agent(bambu);
+    REQUIRE(bambu->set_user_selected_machine("network-selected-machine") == 0);
+    CHECK(manager.get_user_last_machine() == "network-selected-machine");
 }
 
 TEST_CASE("Device manager keeps a pending last-machine restore until a cloud list is accepted", "[DeviceManager][integration]")

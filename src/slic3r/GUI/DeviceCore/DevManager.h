@@ -56,7 +56,9 @@ public:
     void stop_refresher();
 
     MachineObject* get_selected_machine();
-    bool set_selected_machine(std::string dev_id);
+    // remember_selection is false only for transient disconnects (for example a failed LAN
+    // connection). Explicit deselection keeps the default and forgets an empty selection.
+    bool set_selected_machine(std::string dev_id, bool remember_selection = true);
 
     // why: clears stale sidebar sync-status / AMS visuals. Public so the printer-agent
     // swap path can reuse it instead of duplicating the two sidebar calls.

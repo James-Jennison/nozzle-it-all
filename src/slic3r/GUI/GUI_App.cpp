@@ -2449,7 +2449,9 @@ void GUI_App::init_networking_callbacks()
                                 // Orca: only update status if same device id
                                 if (m_device_manager->selected_machine != dev_id) return;
 
-                                m_device_manager->set_selected_machine("");
+                                // A connection failure is a transient deselection, not the user
+                                // forgetting this printer. Keep it available for the next restore.
+                                m_device_manager->set_selected_machine("", false);
                                 wxString text;
                                 if (msg == "5") {
                                     obj->set_access_code("");
@@ -2469,7 +2471,8 @@ void GUI_App::init_networking_callbacks()
 
                                 obj->set_online_state(false);
                             } else if (state == ConnectStatus::ConnectStatusLost) {
-                                m_device_manager->set_selected_machine("");
+                                // A lost connection is transient too; preserve the remembered printer.
+                                m_device_manager->set_selected_machine("", false);
                                 event.SetInt(-1);
                                 BOOST_LOG_TRIVIAL(info) << "set_on_local_connect_fn: state = lost";
 

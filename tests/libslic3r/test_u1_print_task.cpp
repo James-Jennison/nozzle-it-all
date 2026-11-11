@@ -137,6 +137,20 @@ TEST_CASE("U1 suggested mapping prefers matching type, then closest color", "[U1
     // More filaments than toolheads: the own number wraps around.
     CHECK(U1PrintTask::suggest_mapping(std::vector<F>(5, F{true, "", "", "PLA", "", "#26A69A"}), alike) == std::vector<int>{0, 1, 2, 3, 0});
 
+    // Two filaments that look alike but match no toolhead exactly (the halves of a color mix) get a toolhead
+    // each, the closer one going to the filament with that number, instead of both taking the nearest color.
+    const std::vector<F> near_teal = {{true, "", "", "PLA", "", "#1F9E90"}, {true, "", "", "PLA", "", "#2AAE9F"},
+                                      {true, "", "", "PLA", "", "#000000"}, {true, "", "", "PLA", "", "#FFFFFF"}};
+    CHECK(U1PrintTask::suggest_mapping(std::vector<F>(2, F{true, "", "", "PLA", "", "#26A69A"}), near_teal) == std::vector<int>{0, 1});
+    CHECK(U1PrintTask::suggest_mapping(alike, near_teal) == std::vector<int>{0, 1, 2, 3});
+    // A toolhead whose color is exactly the filament's is shared before a wrong color is used.
+    const std::vector<F> one_teal = {{true, "", "", "PLA", "", "#26A69A"}, {true, "", "", "PLA", "", "#000000"}, F{}, F{}};
+    CHECK(U1PrintTask::suggest_mapping(std::vector<F>(2, F{true, "", "", "PLA", "", "#26A69A"}), one_teal) == std::vector<int>{0, 0});
+    // More like filaments than toolheads of their material: the extra one shares the closest.
+    std::vector<F> two_pla = near_teal;
+    two_pla[2].type = two_pla[3].type = "PETG";
+    CHECK(U1PrintTask::suggest_mapping(std::vector<F>(3, F{true, "", "", "PLA", "", "#26A69A"}), two_pla) == std::vector<int>{0, 1, 1});
+
     // Nothing loaded: fall back to the same index.
     const std::vector<F> none(4);
     CHECK(U1PrintTask::suggest_mapping({{true, "", "", "PLA", "", "#FFFFFF"}, {true, "", "", "PLA", "", "#000000"}}, none) ==

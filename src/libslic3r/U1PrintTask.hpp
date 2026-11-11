@@ -71,10 +71,14 @@ struct PrinterState
 /// back to "empty toolhead" / false instead of failing, so the dialog still opens.
 PrinterState parse_printer_state(const nlohmann::json &print_task_config);
 
-/// Suggests a toolhead for each plate filament: a loaded toolhead with the same
-/// type and the closest color, else any loaded toolhead with the closest color,
-/// else the same index. Among equally good toolheads the one with the filament's
-/// own index wins. Filaments the plate does not use stay UNMAPPED.
+/// Suggests a toolhead for each plate filament. Every filament that can have a
+/// loaded toolhead of its own material gets one, closest colors first; a
+/// toolhead is shared only when its color is exactly the filament's, or when
+/// there is no other toolhead of that material left. A filament with no
+/// toolhead of its material goes to the closest color among those loaded, and
+/// with nothing loaded to its own index. Among equally good toolheads the one
+/// with the filament's own index wins. Filaments the plate does not use stay
+/// UNMAPPED.
 std::vector<int> suggest_mapping(const std::vector<Filament> &plate_filaments, const std::vector<Filament> &toolheads);
 
 /// Builds the filament report the slicer's Sync Filament flow consumes

@@ -1,7 +1,9 @@
 #include "U1PrintTask.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <optional>
 #include <set>
 
 namespace Slic3r {
@@ -95,33 +97,60 @@ PrinterState parse_printer_state(const nlohmann::json &cfg)
 std::vector<int> suggest_mapping(const std::vector<Filament> &plate_filaments, const std::vector<Filament> &toolheads)
 {
     std::vector<int> mapping(plate_filaments.size(), UNMAPPED);
-    for (size_t i = 0; i < plate_filaments.size(); ++i) {
-        const Filament &want = plate_filaments[i];
-        if (!want.present)
-            continue;
+    const size_t     count = std::min(toolheads.size(), size_t(PHYSICAL_EXTRUDER_COUNT));
 
-        int  best      = UNMAPPED;
-        bool best_type = false;
-        long best_dist = 0;
-        for (size_t t = 0; t < toolheads.size() && t < size_t(PHYSICAL_EXTRUDER_COUNT); ++t) {
-            const Filament &have = toolheads[t];
-            if (!have.present)
-                continue;
-            const bool same_type = !want.type.empty() && upper(want.type) == have.type;
-            const long dist      = color_distance(normalize_color(want.color), have.color);
-            // Equally good toolheads (filaments that look alike) go to the one with the filament's own number,
-            // so four like filaments spread over the four toolheads instead of all landing on the first.
-            const bool own_number = t == i % size_t(PHYSICAL_EXTRUDER_COUNT);
-            if (best == UNMAPPED || (same_type && !best_type) || (same_type == best_type && dist < best_dist) ||
-                (same_type == best_type && dist == best_dist && own_number)) {
-                best      = int(t);
-                best_type = same_type;
-                best_dist = dist;
-            }
+    struct Pair
+    {
+        size_t filament, toolhead;
+        bool   same_type;
+        long   distance;
+        bool   own_number; // the toolhead with the filament's own number
+    };
+    const auto pair_of = [&](size_t f, size_t t) {
+        const Filament &want = plate_filaments[f];
+        return Pair{f, t, !want.type.empty() && upper(want.type) == toolheads[t].type,
+                    color_distance(normalize_color(want.color), toolheads[t].color), t == f % size_t(PHYSICAL_EXTRUDER_COUNT)};
+    };
+    // Closest color first; among equals the filament's own number, so like filaments keep their numbers.
+    const auto closer = [](const Pair &a, const Pair &b) {
+        if (a.distance != b.distance)
+            return a.distance < b.distance;
+        if (a.own_number != b.own_number)
+            return a.own_number;
+        return a.filament != b.filament ? a.filament < b.filament : a.toolhead < b.toolhead;
+    };
+
+    // First, every filament that can have a loaded toolhead of its own material gets one, best matches first.
+    // A toolhead already given to another filament is shared only when its color is exactly the filament's;
+    // otherwise two filaments that merely look alike (the two halves of a color mix, say) would both be sent to
+    // the nearest color and print from one spool. This is how Orca matches filaments to AMS trays.
+    std::vector<Pair> pairs;
+    for (size_t f = 0; f < plate_filaments.size(); ++f)
+        for (size_t t = 0; plate_filaments[f].present && t < count; ++t)
+            if (toolheads[t].present)
+                if (const Pair pair = pair_of(f, t); pair.same_type)
+                    pairs.push_back(pair);
+    std::sort(pairs.begin(), pairs.end(), closer);
+    std::vector<bool> taken(count, false);
+    for (const Pair &pair : pairs)
+        if (mapping[pair.filament] == UNMAPPED && (!taken[pair.toolhead] || pair.distance == 0)) {
+            mapping[pair.filament] = int(pair.toolhead);
+            taken[pair.toolhead]   = true;
         }
-        if (best == UNMAPPED)
-            best = int(i % PHYSICAL_EXTRUDER_COUNT);
-        mapping[i] = best;
+
+    // Whatever is left has no toolhead of its own to go to: the best loaded toolhead, shared if need be, with
+    // the right material before the right color; with nothing loaded at all, the filament's own number.
+    for (size_t f = 0; f < plate_filaments.size(); ++f) {
+        if (!plate_filaments[f].present || mapping[f] != UNMAPPED)
+            continue;
+        std::optional<Pair> best;
+        for (size_t t = 0; t < count; ++t)
+            if (toolheads[t].present) {
+                const Pair pair = pair_of(f, t);
+                if (!best || (pair.same_type && !best->same_type) || (pair.same_type == best->same_type && closer(pair, *best)))
+                    best = pair;
+            }
+        mapping[f] = best ? int(best->toolhead) : int(f % size_t(PHYSICAL_EXTRUDER_COUNT));
     }
     return mapping;
 }

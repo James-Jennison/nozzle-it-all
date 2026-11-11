@@ -139,8 +139,8 @@ wxStaticText *label(wxWindow *parent, const wxString &text, double scale = 1.0, 
 wxString temp_text(const PP::Heater &h)
 {
     if (h.target > 0.)
-        return wxString::Format("%.0f° / %.0f°", h.temperature, h.target);
-    return wxString::Format("%.0f° / off", h.temperature);
+        return wxString::Format(wxString::FromUTF8("%.0f° / %.0f°"), h.temperature, h.target);
+    return wxString::Format(wxString::FromUTF8("%.0f° / off"), h.temperature);
 }
 
 // wxStaticText pins its minimum size to the text extent at creation; fonts
@@ -439,7 +439,7 @@ void NativePrinterPanel::refresh_job_identity(const std::string &filename)
                                                   job->value("jobId", std::string()).substr(0, 8),
                                                   job->value("sha256", std::string()).substr(0, 12), job->value("startsSent", 0));
                 if (job->value("recoveredFromLostAck", false))
-                    text += "  ·  " + _L("Start confirmed from printer state after a lost reply");
+                    text += wxString::FromUTF8("  ·  ") + _L("Start confirmed from printer state after a lost reply");
                 self->m_job_identity->SetLabel(text);
                 self->m_identity_known = true;
             } else {
@@ -517,7 +517,7 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
     if (!s.warnings.empty()) {
         wxString text;
         for (const auto &w : s.warnings)
-            text += (text.empty() ? "" : "  ·  ") + wxString::FromUTF8(w);
+            text += wxString::FromUTF8(text.empty() ? "" : "  ·  ") + wxString::FromUTF8(w);
         m_health_label->SetLabel(text);
         m_health_label->SetForegroundColour(p.danger);
     } else if (m_client) {
@@ -537,7 +537,7 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
         if (s.total_layers)
             detail = wxString::Format(_L("%d layers"), *s.total_layers);
         if (!s.job_message.empty())
-            detail += (detail.empty() ? "" : " · ") + wxString::FromUTF8(s.job_message);
+            detail += wxString::FromUTF8(detail.empty() ? "" : " · ") + wxString::FromUTF8(s.job_message);
         m_job_detail->SetLabel(detail);
     } else {
         m_job_name->SetLabel(_L("No active print"));
@@ -568,7 +568,7 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
         m_nozzle_label->SetLabel(s.toolheads.size() > 1 ? wxString::Format(_L("Nozzle · T%d"), index + 1) : _L("Nozzle"));
     }
     m_bed_value->SetLabel(s.bed ? temp_text(*s.bed) : wxString("-"));
-    m_chamber_value->SetLabel(s.chamber ? wxString::Format("%.0f°", *s.chamber) : wxString("-"));
+    m_chamber_value->SetLabel(s.chamber ? wxString::Format(wxString::FromUTF8("%.0f°"), *s.chamber) : wxString("-"));
     m_speed_value->SetLabel(wxString::Format("%d%%", s.speed_percent));
     m_flow_value->SetLabel(wxString::Format("%d%%", s.flow_percent));
 

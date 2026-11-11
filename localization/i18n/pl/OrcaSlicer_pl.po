@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OrcaSlicer 2.3.0-rc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 06:12-0800\n"
+"POT-Creation-Date: 2026-11-11 07:06-0800\n"
 "PO-Revision-Date: \n"
 "Last-Translator: Krzysztof Morga <<tlumaczeniebs@gmail.com>>\n"
 "Language-Team: \n"
@@ -25694,6 +25694,9 @@ msgstr ""
 msgid "LAN: %s"
 msgstr ""
 
+msgid "Check again"
+msgstr ""
+
 msgid "Each filament prints from the toolhead shown under it. Click a filament to change its toolhead."
 msgstr ""
 
@@ -25725,6 +25728,14 @@ msgid "Start Print"
 msgstr ""
 
 msgid "Online • Ready"
+msgstr ""
+
+msgid "Online. Readiness is checked when the file is sent."
+msgstr ""
+
+#. TRN %1$s is the printer's status or the reason a print cannot start, %2$s a time of day.
+#, c-format, boost-format
+msgid "%1$s (checked at %2$s)"
 msgstr ""
 
 msgid "Please enter a file name without the characters #, *, ;, \\, /, :, \", <, >, or |."

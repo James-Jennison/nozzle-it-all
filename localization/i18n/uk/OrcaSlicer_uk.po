@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: orcaslicerua\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 13:23-0800\n"
+"POT-Creation-Date: 2026-11-11 15:49-0800\n"
 "PO-Revision-Date: 2026-07-17 16:25+0300\n"
 "Last-Translator: Andrij Mizyk <andm1zyk@proton.me>\n"
 "Language-Team: Ukrainian\n"
@@ -25847,7 +25847,7 @@ msgstr ""
 msgid "Find RFID products in 3D Filament Profiles"
 msgstr ""
 
-msgid "Generic presets are never selected automatically for an RFID-tagged product."
+msgid "Choose a preset for each toolhead, or look the RFID products up in 3D Filament Profiles."
 msgstr ""
 
 msgid "Apply mappings"
@@ -25966,11 +25966,23 @@ msgstr ""
 msgid "The filament mappings could not be applied: %1%%2%"
 msgstr ""
 
-msgid "The reviewed Snapmaker U1 filament mappings were applied."
+msgid "Filaments synchronized from the printer:"
 msgstr ""
 
 #, boost-format
-msgid "The reviewed Snapmaker U1 filament mappings were applied. The printer reported an invalid color for toolheads %1%; their existing project colors were kept."
+msgid "T%1%: empty (unchanged)"
+msgstr ""
+
+#. TRN toolhead number, then what the printer reports (vendor, material, colour), then the preset chosen for it
+#, boost-format
+msgid "T%1%: %2% %3% %4% -> %5%"
+msgstr ""
+
+#, boost-format
+msgid "The printer reported an invalid color for toolheads %1%; their existing project colors were kept."
+msgstr ""
+
+msgid "Change…"
 msgstr ""
 
 msgid "Unable to perform boolean operation on selected parts"

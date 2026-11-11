@@ -4,10 +4,12 @@
 #include <atomic>
 #include <cctype>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -541,6 +543,29 @@ private:
     bool m_replacing{false};
 };
 
+// The preset a loaded toolhead gets without asking: the highest ranked compatible preset of the
+// reported material (see u1_filament_preset_rank). Empty when the material is not recognised or no
+// compatible preset has it; such a toolhead is mapped by hand.
+std::string automatic_preset(const PresetBundle& bundle, const Slot& slot)
+{
+    const std::string reported_material = canonical_material(slot.type, slot.sub_type);
+    if (reported_material.empty())
+        return {};
+    const Preset* best = nullptr;
+    std::uint64_t best_rank = 0;
+    for (const Preset& preset : bundle.filaments.get_presets()) {
+        if (!preset.is_compatible || preset.is_default ||
+            !boost::iequals(canonical_material(preset.config.opt_string("filament_type", 0u)), reported_material))
+            continue;
+        const std::uint64_t rank = u1_filament_preset_rank(preset, slot.vendor, slot.sub_type);
+        if (best == nullptr || rank > best_rank) {
+            best      = &preset;
+            best_rank = rank;
+        }
+    }
+    return best != nullptr ? best->name : std::string();
+}
+
 class U1FilamentMappingDialog final : public DPIDialog
 {
 public:
@@ -629,10 +654,9 @@ public:
                     }
                 }
             }
-            // The strongest identity match is still only a suggestion. Leave
-            // the placeholder selected so the user must confirm every loaded
-            // toolhead explicitly.
-            row.control->SetSelection(0);
+            // A project slot that already fits the reported material is the starting point; a toolhead
+            // with nothing fitting waits for a choice.
+            row.control->SetSelection(row.choices.size() > 1 && row.choices[1].keep_current ? 1 : 0);
             row.control->Bind(wxEVT_COMBOBOX, [this](wxCommandEvent&) { update_apply(); });
             grid->Add(row.control, 1, wxEXPAND);
         }
@@ -646,7 +670,7 @@ public:
         actions->Add(key, 0, wxRIGHT, em / 2);
         actions->Add(search, 0);
         root->Add(actions, 0, wxALL, em);
-        m_status = new wxStaticText(this, wxID_ANY, _L("Generic presets are never selected automatically for an RFID-tagged product."));
+        m_status = new wxStaticText(this, wxID_ANY, _L("Choose a preset for each toolhead, or look the RFID products up in 3D Filament Profiles."));
         m_status->SetForegroundColour(NIATheme::text_muted(dark));
         root->Add(m_status, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, em);
 
@@ -1139,10 +1163,9 @@ bool sync_filaments_from_u1(wxWindow* parent)
             .ShowModal();
         return false;
     }
-    U1FilamentMappingDialog mapping(parent, slots, report_source, bundle);
-    if (mapping.ShowModal() != wxID_OK)
-        return false;
-
+    // Applies one choice per loaded toolhead as a single change: either all of it lands or the project is
+    // put back as it was and the reason is shown.
+    const auto apply = [&](const std::function<std::optional<MappingChoice>(size_t)>& choice_for) -> bool {
     Plater* plater = wxGetApp().plater();
     // The U1 has four fixed physical toolheads. Project slots intentionally
     // retain the same physical indices even when occupancy is sparse.
@@ -1161,7 +1184,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
         for (size_t i = 0; i < slots.size(); ++i) {
             if (!slots[i].present)
                 continue;
-            const std::optional<MappingChoice> choice = mapping.selection(i);
+            const std::optional<MappingChoice> choice = choice_for(i);
             if (!choice)
                 throw std::runtime_error((boost::format("The selected mapping for toolhead T%1% is invalid.") % i).str());
             if (choice->keep_current) {
@@ -1283,6 +1306,28 @@ bool sync_filaments_from_u1(wxWindow* parent)
             .ShowModal();
         return false;
     }
+    return true;
+    };
+
+    // As in OrcaSlicer, synchronising picks the presets itself and says what it picked. The mapping
+    // dialog is for changing that, and for a toolhead no preset could be picked for.
+    std::vector<std::string> automatic(slots.size());
+    bool all_automatic = true;
+    for (size_t i = 0; i < slots.size(); ++i)
+        if (slots[i].present) {
+            automatic[i] = automatic_preset(bundle, slots[i]);
+            all_automatic = all_automatic && !automatic[i].empty();
+        }
+    const auto review = [&]() {
+        U1FilamentMappingDialog mapping(parent, slots, report_source, bundle);
+        return mapping.ShowModal() == wxID_OK && apply([&mapping](size_t i) { return mapping.selection(i); });
+    };
+    bool reviewed = !all_automatic;
+    if (all_automatic) {
+        if (!apply([&automatic](size_t i) { return std::optional<MappingChoice>(MappingChoice{automatic[i], std::nullopt, false}); }))
+            return false;
+    } else if (!review())
+        return false;
 
     wxString invalid_colors;
     for (size_t i = 0; i < slots.size(); ++i) {
@@ -1292,12 +1337,28 @@ bool sync_filaments_from_u1(wxWindow* parent)
             invalid_colors += ", ";
         invalid_colors += wxString::Format("T%d", int(i));
     }
-    const wxString success = invalid_colors.empty()
-                                 ? _L("The reviewed Snapmaker U1 filament mappings were applied.")
-                                 : format_wxstr(
-                                       _L("The reviewed Snapmaker U1 filament mappings were applied. The printer reported an invalid color for toolheads %1%; their existing project colors were kept."),
-                                       invalid_colors);
-    MessageDialog(parent, success, _L("Sync filaments"), wxOK | wxICON_INFORMATION).ShowModal();
+    const auto summary = [&]() {
+        wxString text = _L("Filaments synchronized from the printer:") + "\n\n";
+        for (size_t i = 0; i < slots.size(); ++i) {
+            if (!slots[i].present) {
+                text += format_wxstr(_L("T%1%: empty (unchanged)"), int(i)) + "\n";
+                continue;
+            }
+            const Preset* preset = i < bundle.filament_presets.size() ? preset_named(bundle, bundle.filament_presets[i]) : nullptr;
+            // TRN toolhead number, then what the printer reports (vendor, material, colour), then the preset chosen for it
+            text += format_wxstr(_L("T%1%: %2% %3% %4% -> %5%"), int(i), from_u8(slots[i].vendor), from_u8(slots[i].type),
+                                 from_u8(slots[i].color), preset != nullptr ? from_u8(preset->label(false)) : wxString()) + "\n";
+        }
+        if (!invalid_colors.empty())
+            text += "\n" + format_wxstr(_L("The printer reported an invalid color for toolheads %1%; their existing project colors were kept."),
+                                        invalid_colors);
+        return text;
+    };
+    MessageDialog done(parent, summary(), _L("Sync filaments"), wxOK | wxICON_INFORMATION);
+    if (!reviewed)
+        done.AddButton(wxID_EDIT, _L("Change…"));
+    if (done.ShowModal() == wxID_EDIT && review())
+        MessageDialog(parent, summary(), _L("Sync filaments"), wxOK | wxICON_INFORMATION).ShowModal();
     return true;
 }
 

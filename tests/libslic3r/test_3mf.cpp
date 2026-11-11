@@ -9,6 +9,7 @@
 #include "libslic3r/Model.hpp"
 #include "libslic3r/Format/3mf.hpp"
 #include "libslic3r/Format/bbs_3mf.hpp"
+#include "libslic3r_version.h"
 #include "libslic3r/GCode/ThumbnailData.hpp"
 #include "libslic3r/Format/STL.hpp"
 #include "libslic3r/Utils.hpp"
@@ -1911,6 +1912,62 @@ SCENARIO("Minimal published 3MF omits project config, preset dumps and slicer ta
             release_PlateData_list(dst_plates);
         }
     }
+}
+
+TEST_CASE("NIA 3MF identity is additive and preserves Orca compatibility", "[3mf][nia_identity]")
+{
+    Model model;
+    ModelObject *object = model.add_object();
+    object->add_volume(make_cube(10.0, 10.0, 10.0));
+    object->add_instance();
+
+    ScopedTemporaryDir backup_dir("nia_identity_src");
+    model.set_backup_path(backup_dir.string());
+    DynamicPrintConfig config;
+    PlateData plate;
+    plate.plate_index = 0;
+    ScopedTemporaryFile file(".3mf");
+    const std::string path = file.string();
+    StoreParams params;
+    params.path = path.c_str();
+    params.model = &model;
+    params.config = &config;
+    params.strategy = SaveStrategy::Zip64 | SaveStrategy::Silence;
+    params.plate_data_list.push_back(&plate);
+    REQUIRE(store_bbs_3mf(params));
+
+    std::string model_xml;
+    REQUIRE(read_cad_recipe_entry(path, model_xml, "3D/3dmodel.model"));
+    CHECK(model_xml.find("name=\"Application\">BambuStudio-" + std::string(SLIC3R_VERSION)) != std::string::npos);
+    CHECK(model_xml.find("name=\"OrcaSlicer\">" + std::string(SoftFever_VERSION)) != std::string::npos);
+#if NOZZLE_BRANDING
+    CHECK(model_xml.find("name=\"NozzleItAll\">" + std::string(NIA_DESKTOP_VERSION)) != std::string::npos);
+    CHECK(model_xml.find("name=\"NozzleItAllEngine\">" + std::string(SoftFever_VERSION)) != std::string::npos);
+#else
+    CHECK(model_xml.find("name=\"NozzleItAll\"") == std::string::npos);
+    CHECK(model_xml.find("name=\"NozzleItAllEngine\"") == std::string::npos);
+#endif
+
+    Model reloaded_model;
+    ScopedTemporaryDir loaded_backup_dir("nia_identity_loaded");
+    reloaded_model.set_backup_path(loaded_backup_dir.string());
+    DynamicPrintConfig reloaded_config;
+    ConfigSubstitutionContext substitutions{ForwardCompatibilitySubstitutionRule::Enable};
+    PlateDataPtrs reloaded_plates;
+    std::vector<Preset *> reloaded_presets;
+    bool is_bbl_3mf = false;
+    bool is_orca_3mf = false;
+    Semver file_version;
+    REQUIRE(load_bbs_3mf(path.c_str(), &reloaded_config, &substitutions, &reloaded_model, &reloaded_plates,
+                         &reloaded_presets, &is_bbl_3mf, &is_orca_3mf, &file_version, nullptr,
+                         LoadStrategy::LoadModel | LoadStrategy::LoadConfig));
+    release_PlateData_list(reloaded_plates);
+    CHECK(is_bbl_3mf);
+    CHECK(is_orca_3mf);
+    const auto expected_engine_version = Semver::parse(SoftFever_VERSION);
+    REQUIRE(bool(expected_engine_version));
+    REQUIRE(file_version.valid());
+    CHECK(file_version == *expected_engine_version);
 }
 
 // A minimal published 3MF must not leak the slicer tags of the source project. The exporter seeds

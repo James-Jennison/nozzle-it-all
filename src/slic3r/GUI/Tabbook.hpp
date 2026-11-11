@@ -40,6 +40,7 @@ public:
     void SetSelection(int sel);
     void showNewTag(int sel, bool show = false);
     void Rescale();
+    void RefreshTheme();
     bool InsertPage(size_t n, const wxString& text, bool bSelect = false, const std::string& bmp_name = "");
     void RemovePage(size_t n);
     bool SetPageImage(size_t n, const std::string& bmp_name);

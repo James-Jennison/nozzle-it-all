@@ -1,6 +1,7 @@
 #include "WebGuideDialog.hpp"
 #include "CloudProvider.hpp"
 #include "ConfigWizard.hpp"
+#include "libslic3r/libslic3r.h"
 
 #include <algorithm>
 #include <boost/algorithm/string/join.hpp>
@@ -95,8 +96,13 @@ static json guide_strings()
         {"loading", _u8L("Loading…")},
         // TRN Sidebar entry of the printer selection page for the group of custom (user-defined) printers.
         {"custom_vendor", _u8L_CONTEXT("Custom", "Printer vendor")},
+#if NOZZLE_BRANDING
+        {"welcome", _u8L("Welcome to Nozzle It All Desktop")},
+        {"setup_intro", _u8L("Nozzle It All Desktop will be set up in several steps. Let's start!")},
+#else
         {"welcome", _u8L("Welcome to Orca Slicer")},
         {"setup_intro", _u8L("Orca Slicer will be set up in several steps. Let's start!")},
+#endif
         {"get_started", _u8L("Get Started")},
         {"login_region", _u8L("Please select your login region")},
         {"asia_pacific", _u8L("Asia-Pacific")},
@@ -220,7 +226,7 @@ static wxString update_custom_filaments()
 }
 
 GuideFrame::GuideFrame(GUI_App *pGUI, long style)
-    : DPIDialog((wxWindow *) (pGUI->mainframe), wxID_ANY, "OrcaSlicer", wxDefaultPosition, wxDefaultSize, style),
+    : DPIDialog((wxWindow *) (pGUI->mainframe), wxID_ANY, SLIC3R_APP_FULL_NAME, wxDefaultPosition, wxDefaultSize, style),
 	m_appconfig_new()
 {
     SetBackgroundColour(*wxWHITE);

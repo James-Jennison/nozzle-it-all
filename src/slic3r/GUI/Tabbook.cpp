@@ -3,6 +3,7 @@
 //#ifdef _WIN32
 
 #include "GUI_App.hpp"
+#include "NIATheme.hpp"
 #include "wxExtensions.hpp"
 #include "TabButton.hpp"
 
@@ -23,8 +24,15 @@
 
 wxDEFINE_EVENT(wxCUSTOMEVT_TABBOOK_SEL_CHANGED, wxCommandEvent);
 
-const static wxColour TAB_BUTTON_BG  = wxColour("#FEFFFF");
-const static wxColour TAB_BUTTON_SEL = wxColour("#BFE1DE"); // ORCA
+static wxColour tab_button_bg()
+{
+    return NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::background(Slic3r::GUI::wxGetApp().dark_mode()) : wxColour("#FEFFFF");
+}
+
+static wxColour tab_button_selected()
+{
+    return NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::surface_raised(Slic3r::GUI::wxGetApp().dark_mode()) : wxColour("#BFE1DE");
+}
 
 static const wxFont& TAB_BUTTON_FONT     = Label::Body_14;
 static const wxFont& TAB_BUTTON_FONT_SEL = Label::Head_14;
@@ -40,7 +48,7 @@ TabButtonsListCtrl::TabButtonsListCtrl(wxWindow *parent, wxBoxSizer *side_tools)
 #ifdef __WINDOWS__
     SetDoubleBuffered(true);
 #endif //__WINDOWS__
-    SetBackgroundColour(TAB_BUTTON_BG);
+    SetBackgroundColour(tab_button_bg());
 
     int em = em_unit(this);
     // BBS: no gap
@@ -74,23 +82,35 @@ void TabButtonsListCtrl::OnPaint(wxPaintEvent &)
     if (m_selection < 0 || m_selection >= (int)m_pageButtons.size())
         return;
 
-    const wxColour& btn_marker_color = Slic3r::GUI::wxGetApp().get_color_hovered_btn_label();
+    const wxColour btn_marker_color = NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::accent(Slic3r::GUI::wxGetApp().dark_mode())
+                                                      : Slic3r::GUI::wxGetApp().get_color_hovered_btn_label();
 
     // highlight selected notebook button
 
     for (int idx = 0; idx < int(m_pageButtons.size()); idx++) {
         TabButton *btn = m_pageButtons[idx];
-        btn->SetBackgroundColor(idx == m_selection ? TAB_BUTTON_SEL : TAB_BUTTON_BG);
+        btn->SetBackgroundColor(idx == m_selection ? tab_button_selected() : tab_button_bg());
         
         wxPoint pos = btn->GetPosition();
         wxSize size = btn->GetSize();
-        const wxColour &clr  = StateColor::darkModeColorFor(idx == m_selection ? btn_marker_color : TAB_BUTTON_BG);
+#if NOZZLE_BRANDING
+        const wxColour clr = idx == m_selection ? btn_marker_color
+                                                : Slic3r::GUI::NIATheme::line(Slic3r::GUI::wxGetApp().dark_mode());
+#else
+        const wxColour clr = StateColor::darkModeColorFor(idx == m_selection ? btn_marker_color : tab_button_bg());
+#endif
         dc.SetPen(clr);
         dc.SetBrush(clr);
+#if NOZZLE_BRANDING
+        if (idx == m_selection)
+            dc.DrawRoundedRectangle(pos.x + FromDIP(12), pos.y + size.y - FromDIP(3), size.x - FromDIP(24), FromDIP(3),
+                                    FromDIP(2));
+#else
         dc.DrawRectangle(pos.x, pos.y + size.y, size.x, sz.y - size.y);
+#endif
     }
-    dc.SetPen(btn_marker_color);
-    dc.SetBrush(btn_marker_color);
+    dc.SetPen(NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::line(Slic3r::GUI::wxGetApp().dark_mode()) : btn_marker_color);
+    dc.SetBrush(NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::line(Slic3r::GUI::wxGetApp().dark_mode()) : btn_marker_color);
     dc.DrawRectangle(1, sz.y - m_line_margin, sz.x, m_line_margin);
 }
 
@@ -108,16 +128,32 @@ void TabButtonsListCtrl::Rescale()
     m_sizer->Layout();
 }
 
+void TabButtonsListCtrl::RefreshTheme()
+{
+#if NOZZLE_BRANDING
+    const bool dark = Slic3r::GUI::wxGetApp().dark_mode();
+    for (size_t index = 0; index < m_pageButtons.size(); ++index) {
+        TabButton* btn = m_pageButtons[index];
+        btn->SetBackgroundColor(int(index) == m_selection ? tab_button_selected() : tab_button_bg());
+        btn->SetTextColor(StateColor(std::make_pair(Slic3r::GUI::NIATheme::accent(dark), (int) StateColor::Checked),
+                                     std::make_pair(Slic3r::GUI::NIATheme::text(dark), (int) StateColor::Hovered),
+                                     std::make_pair(Slic3r::GUI::NIATheme::text_muted(dark), (int) StateColor::Normal)));
+        btn->Refresh();
+    }
+#endif
+    Refresh();
+}
+
 void TabButtonsListCtrl::SetSelection(int sel)
 {
     if (m_selection == sel)
         return;
     if (m_selection >= 0) {
-        m_pageButtons[m_selection]->SetBackgroundColor(TAB_BUTTON_BG);
+        m_pageButtons[m_selection]->SetBackgroundColor(tab_button_bg());
         m_pageButtons[m_selection]->SetFont(TAB_BUTTON_FONT);
     }
     m_selection = sel;
-    m_pageButtons[m_selection]->SetBackgroundColor(TAB_BUTTON_SEL);
+    m_pageButtons[m_selection]->SetBackgroundColor(tab_button_selected());
     m_pageButtons[m_selection]->SetFont(TAB_BUTTON_FONT_SEL);
     Refresh();
 }
@@ -136,13 +172,20 @@ void TabButtonsListCtrl::showNewTag(int sel, bool tag)
 bool TabButtonsListCtrl::InsertPage(size_t n, const wxString &text, bool bSelect /* = false*/, const std::string &bmp_name /* = ""*/)
 {
     TabButton *btn = new TabButton(this, text, m_arrow_img, wxNO_BORDER);
-    btn->SetCornerRadius(0);
+    btn->SetCornerRadius(NOZZLE_BRANDING ? FromDIP(12) : 0);
 
     int em = em_unit(this);
     btn->SetMinSize({BUTTON_DEF_WIDTH * em / 10, BUTTON_DEF_HEIGHT * em / 10});
 
-    btn->SetBackgroundColor(TAB_BUTTON_BG);
+    btn->SetBackgroundColor(tab_button_bg());
+#if NOZZLE_BRANDING
+    const bool dark = Slic3r::GUI::wxGetApp().dark_mode();
+    btn->SetTextColor(StateColor(std::make_pair(Slic3r::GUI::NIATheme::accent(dark), (int) StateColor::Checked),
+                                 std::make_pair(Slic3r::GUI::NIATheme::text(dark), (int) StateColor::Hovered),
+                                 std::make_pair(Slic3r::GUI::NIATheme::text_muted(dark), (int) StateColor::Normal)));
+#else
     btn->SetTextColor(*wxBLACK);
+#endif
     btn->Bind(wxEVT_BUTTON, [this, btn](wxCommandEvent& event) {
         if (auto it = std::find(m_pageButtons.begin(), m_pageButtons.end(), btn); it != m_pageButtons.end()) {
             auto sel = it - m_pageButtons.begin();

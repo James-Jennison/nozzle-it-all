@@ -9,6 +9,7 @@
 #include "GUI.hpp"
 #include "DeviceManager.hpp"
 #include "DeviceCore/DevConfigUtil.h"
+#include "libslic3r/libslic3r.h"
 #include "libslic3r_version.h"
 #include "slic3r/Utils/NetworkAgent.hpp"
 #include "slic3r/Utils/NetworkAgentFactory.hpp"
@@ -794,7 +795,7 @@ void MediaPlayCtrl::ToggleStream()
         }
     }
     if (!url.empty() && wxGetApp().app_config->get("not_show_vcamera_stop_prev") != "1") {
-        MessageDialog dlg(this->GetParent(), _L("Another virtual camera is running.\nOrca Slicer supports only a single virtual camera.\nDo you want to stop this virtual camera?"), _L("Warning"),
+        MessageDialog dlg(this->GetParent(), wxString::Format(_L("Another virtual camera is running.\n%s supports only a single virtual camera.\nDo you want to stop this virtual camera?"), SLIC3R_APP_FULL_NAME), _L("Warning"),
                                  wxYES | wxCANCEL | wxICON_INFORMATION);
         dlg.show_dsa_button();
         auto          res = dlg.ShowModal();

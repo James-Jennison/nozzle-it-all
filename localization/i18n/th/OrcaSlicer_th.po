@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Orca Slicer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-26 21:45+0800\n"
+"POT-Creation-Date: 2026-11-05 09:54+0000\n"
 "PO-Revision-Date: 2026-06-19 13:40+0700\n"
 "Last-Translator: Icezaza\n"
 "Language-Team: Thai\n"
@@ -2208,21 +2208,23 @@ msgstr "ไฟล์ SLA ที่ปกปิด"
 msgid "Draco files"
 msgstr "ไฟล์เดรโก"
 
-msgid "OrcaSlicer will terminate because of running out of memory. It may be a bug. It will be appreciated if you report the issue to our team."
-msgstr "OrcaSlicer จะยุติลงเนื่องจากหน่วยความจำไม่เพียงพอ มันอาจจะเป็นข้อผิดพลาด เราจะยินดีเป็นอย่างยิ่งหากคุณรายงานปัญหาดังกล่าวให้ทีมงานของเราทราบ"
+#, c-format, boost-format
+msgid "%s will terminate because it ran out of memory. This may be a bug; please report the issue to our team."
+msgstr ""
 
 msgid "Fatal error"
 msgstr "ข้อผิดพลาดร้ายแรง"
 
-msgid "OrcaSlicer will terminate because of a localization error. It will be appreciated if you report the specific scenario this issue happened."
-msgstr "OrcaSlicer จะยุติลงเนื่องจากข้อผิดพลาดในการแปล เราจะยินดีอย่างยิ่งหากคุณรายงานสถานการณ์เฉพาะที่ปัญหานี้เกิดขึ้น"
+#, c-format, boost-format
+msgid "%s will terminate because of a localization error. Please report the specific scenario in which this happened."
+msgstr ""
 
 msgid "Critical error"
 msgstr "ข้อผิดพลาดร้ายแรง"
 
 #, boost-format
-msgid "OrcaSlicer got an unhandled exception: %1%"
-msgstr "OrcaSlicer พบข้อยกเว้นที่ไม่ได้จัดการ: %1%"
+msgid "%1% encountered an unhandled exception: %2%"
+msgstr ""
 
 msgid "Untitled"
 msgstr "ไม่มีชื่อ"
@@ -2267,6 +2269,15 @@ msgstr "รหัสผ่านไม่ถูกต้อง"
 msgid "Connect %s failed! [SN:%s, code=%s]"
 msgstr "เชื่อมต่อ %s ล้มเหลว! [SN:%s, รหัส=%s]"
 
+msgid "Check that the printer is on the same network as this computer and that its IP address is correct."
+msgstr ""
+
+msgid "If the connection still fails, try a different network plug-in version in Preferences."
+msgstr ""
+
+msgid "A missing or damaged TLS/CA certificate in 'printer.cer' can also cause this error."
+msgstr ""
+
 msgid ""
 "Orca Slicer requires the Microsoft WebView2 Runtime to operate certain features.\n"
 "Click Yes to install it now."
@@ -2289,19 +2300,131 @@ msgstr ""
 "โปรดติดตั้งด้วยตนเองจาก %1% แล้วรีสตาร์ท Orca Slicer"
 
 #, c-format, boost-format
-msgid "Resources path does not exist or is not a directory: %s"
-msgstr "ไม่มีเส้นทางทรัพยากรหรือไม่ใช่ไดเรกทอรี: %s"
+msgid ""
+"An interrupted settings import could not be recovered safely. No new import was attempted.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import recovery failed"
+msgstr ""
 
 #, c-format, boost-format
 msgid ""
-"%s\n"
-"Do you want to continue?"
+"An interrupted settings import was recovered.\n"
+"\n"
+"Recovered settings: %s"
 msgstr ""
-"%s\n"
-"คุณต้องการดำเนินการต่อหรือไม่?"
 
-msgid "Remember my choice"
-msgstr "จดจำตัวเลือกของฉัน"
+msgid "Settings import recovered"
+msgstr ""
+
+msgid "No importable Orca-family settings were found."
+msgstr ""
+
+msgid "Import existing settings"
+msgstr ""
+
+msgid "Choose the settings source to import."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Import settings from %s on this launch?\n"
+"\n"
+"Source: %s\n"
+"\n"
+"Your current Nozzle It All Desktop settings will be backed up and replaced. The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Nozzle It All Desktop found settings from %s. Copy those settings into its own data directory?\n"
+"\n"
+"Source: %s\n"
+"\n"
+"The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
+msgstr ""
+
+msgid "None."
+msgstr ""
+
+msgid "No existing settings directory needs a backup."
+msgstr ""
+
+msgid "Your current settings will be retained in a timestamped backup beside the Nozzle It All Desktop data directory. The exact path will be shown after import."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Some source files were sanitized before import, and some could not be imported safely.\n"
+"\n"
+"Source: %s\n"
+"\n"
+"Target to replace: %s\n"
+"\n"
+"Sanitized and copied files:\n"
+"%s\n"
+"\n"
+"Skipped files:\n"
+"%s\n"
+"\n"
+"%s\n"
+"\n"
+"Continue with this exact prepared import?"
+msgstr ""
+
+msgid "Confirm partial settings import"
+msgstr ""
+
+msgid "Settings import cleanup failed"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The settings import could not be completed. No source data was changed.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import failed"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Settings were imported with the warnings you approved. Your previous settings remain available at the backup path below.\n"
+"\n"
+"Migration report: %s\n"
+"\n"
+"Backup: %s"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Settings were copied successfully.\n"
+"\n"
+"Migration report: %s"
+msgstr ""
+
+msgid "Settings imported with warnings"
+msgstr ""
+
+msgid "Settings imported"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The settings import could not be scheduled.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import is scheduled. Restart Nozzle It All Desktop normally to choose the source and review the backup-and-replace confirmation."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Resources path does not exist or is not a directory: %s"
+msgstr "ไม่มีเส้นทางทรัพยากรหรือไม่ใช่ไดเรกทอรี: %s"
 
 #, c-format, boost-format
 msgid "Click to download new version in default browser: %s"
@@ -2481,6 +2604,12 @@ msgstr "กำลังดึงปลั๊กอิน…"
 msgid "Loading user presets…"
 msgstr "กำลังโหลดพรีเซ็ตของผู้ใช้…"
 
+msgid "Nozzle It All Desktop updates"
+msgstr ""
+
+msgid "The Nozzle It All Desktop update channel is not available yet. No update request was sent."
+msgstr ""
+
 msgid "Retrieving printer information, please try again later."
 msgstr "กำลังดึงข้อมูลเครื่องพิมพ์ โปรดลองอีกครั้งในภายหลัง"
 
@@ -2650,6 +2779,10 @@ msgstr "มีอัปเดตพร้อมใช้งาน เปิด�
 msgid "%s has been removed."
 msgstr "ลบ %s แล้ว"
 
+#, c-format, boost-format
+msgid "Switching Nozzle It All Desktop to language %s failed."
+msgstr ""
+
 # AI Translated
 #, c-format, boost-format
 msgid "Switching Orca Slicer to language %s failed."
@@ -2666,6 +2799,9 @@ msgstr ""
 # AI Translated
 msgid "Application will close."
 msgstr "แอปพลิเคชันจะปิดลง"
+
+msgid "Nozzle It All Desktop - Switching language failed"
+msgstr ""
 
 # AI Translated
 msgid "Orca Slicer - Switching language failed"
@@ -2750,6 +2886,9 @@ msgstr "เปิด"
 
 msgid "Rename"
 msgstr "เปลี่ยนชื่อ"
+
+msgid "Nozzle It All Desktop GUI initialization failed"
+msgstr ""
 
 msgid "Orca Slicer GUI initialization failed"
 msgstr "การเริ่มต้น Orca Slicer GUI ล้มเหลว"
@@ -2991,6 +3130,12 @@ msgstr "วางวัตถุที่เลือกลงในเพลต
 
 msgid "Fix Model"
 msgstr "ซ่อมโมเดล"
+
+msgid "AI auto-paint"
+msgstr ""
+
+msgid "Let Claude suggest a filament for each part of the surface"
+msgstr ""
 
 msgid "Export as one STL"
 msgstr "ส่งออกเป็น STL เดียว"
@@ -3303,8 +3448,8 @@ msgstr "โคลน"
 msgid "Simplify Model"
 msgstr "ลดความซับซ้อนของโมเดล"
 
-msgid "Subdivision mesh (Lost color)"
-msgstr "แบ่งตาข่าย (สีที่หายไป)"
+msgid "Subdivision mesh"
+msgstr ""
 
 msgid "Center"
 msgstr "กึ่งกลาง"
@@ -3459,6 +3604,23 @@ msgstr "ข้อผิดพลาด!"
 
 msgid "Failed to get the model data in the current file."
 msgstr "ไม่สามารถรับข้อมูลโมเดลในไฟล์ปัจจุบัน"
+
+msgid "X"
+msgstr "X"
+
+msgid "Y"
+msgstr "Y"
+
+# AI Translated
+msgid "Z"
+msgstr "Z"
+
+#. TRN Size of a torus (ring): the diameter of its hole and the thickness of the ring.
+msgid "Inner diameter"
+msgstr ""
+
+msgid "Tube diameter"
+msgstr ""
 
 # AI Translated
 msgid "Add primitive"
@@ -4377,8 +4539,8 @@ msgstr "กำลังส่งไฟล์ G-code ไปยังการ์�
 msgid "Successfully sent. Close current page in %s s"
 msgstr "ส่งสำเร็จ หน้านี้จะปิดใน %s วินาที"
 
-msgid "Storage needs to be inserted before sending to printer."
-msgstr "ต้องใส่ที่เก็บข้อมูลก่อนที่จะส่งไปยังเครื่องพิมพ์"
+msgid "Insert storage or free up space before sending to the printer."
+msgstr ""
 
 msgid "Sending G-code file over LAN, but the Storage in the printer is abnormal and print-issues may be caused by this."
 msgstr "กำลังส่งไฟล์ G-code ผ่าน LAN แต่ที่เก็บข้อมูลในเครื่องพิมพ์ผิดปกติและปัญหาการพิมพ์อาจมีสาเหตุจากสิ่งนี้"
@@ -4529,8 +4691,19 @@ msgstr "ซอฟต์แวร์นี้ใช้ส่วนประกอ
 msgid "About %s"
 msgstr "เกี่ยวกับ %s"
 
+#. TRN %s is the Nozzle It All Desktop product version.
+#. TRN %s is the Nozzle It All for Desktop product version.
+#, c-format, boost-format
+msgid "Version %s"
+msgstr ""
+
+#. TRN The first %s is the OrcaSlicer engine version; the second is the source commit.
+#, c-format, boost-format
+msgid "Engine: OrcaSlicer %s | Build %s"
+msgstr ""
+
 # AI Translated
-#. TRN %s is the commit the application was built from
+#. TRN %s is the commit the application was built from.
 #, c-format, boost-format
 msgid "Build %s"
 msgstr "บิลด์ %s"
@@ -4538,15 +4711,42 @@ msgstr "บิลด์ %s"
 msgid "Open-source slicing stands on a tradition of collaboration and attribution. Slic3r, created by Alessandro Ranellucci and the RepRap community, laid the foundation. PrusaSlicer by Prusa Research built on that work, Bambu Studio forked from PrusaSlicer, and SuperSlicer extended it with community-driven enhancements. Each project carried the work of its predecessors forward, crediting those who came before."
 msgstr "การแบ่งส่วนโอเพ่นซอร์สยืนหยัดบนพื้นฐานของการทำงานร่วมกันและการระบุแหล่งที่มา Slic3r ซึ่งสร้างโดย Alessandro Ranellucci และชุมชน RepRap ได้วางรากฐาน PrusaSlicer โดย Prusa Research สร้างขึ้นจากผลงานดังกล่าว Bambu Studio แยกจาก PrusaSlicer และ SuperSlicer ได้ขยายขอบเขตด้วยการปรับปรุงที่ขับเคลื่อนโดยชุมชน แต่ละโครงการได้สานต่องานของรุ่นก่อนไปข้างหน้า โดยให้เครดิตผู้ที่มาก่อนหน้านี้"
 
+msgid "Nozzle It All Desktop is a fork of OrcaSlicer that adds native Snapmaker U1 and Moonraker printer tools. All upstream credits below remain."
+msgstr ""
+
 msgid "OrcaSlicer began in that same spirit, drawing from PrusaSlicer, BambuStudio, SuperSlicer, and CuraSlicer. But it has since grown far beyond its origins — introducing advanced calibration tools, precise wall and seam control and hundreds of other features."
 msgstr "OrcaSlicer เริ่มต้นด้วยจิตวิญญาณเดียวกัน โดยวาดจาก PrusaSlicer, BambuStudio, SuperSlicer และ CuraSlicer แต่ตั้งแต่นั้นเป็นต้นมามันก็เติบโตไปไกลเกินกว่าต้นกำเนิด โดยนำเสนอเครื่องมือสอบเทียบขั้นสูง การควบคุมผนังและรอยตะเข็บที่แม่นยำ และคุณสมบัติอื่น ๆ หลายร้อยรายการ"
 
 msgid "Today, OrcaSlicer is the most widely used and actively developed open-source slicer in the 3D printing community. Many of its innovations have been adopted by other slicers, making it a driving force for the entire industry."
 msgstr "ปัจจุบัน OrcaSlicer เป็นตัวแบ่งส่วนข้อมูลแบบโอเพ่นซอร์สที่ใช้กันอย่างแพร่หลายและได้รับการพัฒนาอย่างแข็งขันที่สุดในชุมชนการพิมพ์ 3 มิติ นวัตกรรมหลายอย่างของบริษัทได้ถูกนำไปใช้โดยตัวแบ่งส่วนข้อมูลอื่นๆ ทำให้สิ่งนี้เป็นแรงผลักดันสำหรับอุตสาหกรรมทั้งหมด"
 
+msgid "Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."
+msgstr ""
+
 # AI Translated
 msgid "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved"
 msgstr "ลิขสิทธิ์ (C) 2026 OrcaSlicer Pte Ltd สงวนลิขสิทธิ์ทั้งหมด"
+
+msgid "Nozzle It All"
+msgstr ""
+
+msgid "FOR DESKTOP"
+msgstr ""
+
+msgid "A focused workshop for slicing, filament mapping, and connected printer control."
+msgstr ""
+
+msgid "Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."
+msgstr ""
+
+msgid "Open-source lineage"
+msgstr ""
+
+msgid "Built on OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r, SuperSlicer, CuraSlicer, and the work of their contributors. Nozzle It All is independently built and is not endorsed by those projects or their vendors."
+msgstr ""
+
+msgid "nozzleitall.com"
+msgstr ""
 
 # AI Translated
 msgid "Script plugin skipped."
@@ -4940,6 +5140,13 @@ msgstr "จัดเรียงคำสั่งซื้อ AMS"
 msgid "AMS ID will be reset. If you want a specific ID sequence, disconnect all AMS before resetting and connect them in the desired order after resetting."
 msgstr "รหัส AMS จะถูกรีเซ็ต หากคุณต้องการลำดับ ID เฉพาะ ให้ยกเลิกการเชื่อมต่อ AMS ทั้งหมดก่อนที่จะรีเซ็ต และเชื่อมต่อตามลำดับที่ต้องการหลังจากรีเซ็ต"
 
+msgid "DESKTOP"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Nozzle It All Desktop — %s"
+msgstr ""
+
 msgid "File"
 msgstr "ไฟล์"
 
@@ -4949,8 +5156,9 @@ msgstr "การปรับเทียบ"
 msgid "Failed to download the plug-in. Please check your firewall settings and VPN software and retry."
 msgstr "ดาวน์โหลดปลั๊กอินไม่สำเร็จ โปรดตรวจสอบการตั้งค่าไฟร์วอลล์และซอฟต์แวร์ VPN แล้วลองอีกครั้ง"
 
-msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart OrcaSlicer and try again. Also check whether it is blocked or has been deleted by anti-virus software."
-msgstr "ไม่สามารถติดตั้งปลั๊กอินได้ ไฟล์ปลั๊กอินอาจถูกใช้งานอยู่ โปรดรีสตาร์ท OrcaSlicer แล้วลองอีกครั้ง ตรวจสอบด้วยว่าซอฟต์แวร์ป้องกันไวรัสบล็อกหรือลบหรือไม่"
+#, c-format, boost-format
+msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart %s and try again. Also check whether it is blocked or has been deleted by anti-virus software."
+msgstr ""
 
 msgid "Click here to see more info"
 msgstr "คลิกที่นี่เพื่อดูข้อมูลเพิ่มเติม"
@@ -5482,6 +5690,7 @@ msgstr ""
 msgid "Select automatic or painted brim ears on a printer without a tilted belt to use this setting."
 msgstr ""
 
+#, c-format, boost-format
 msgid "Enable elephant foot compensation or set elephant foot layer density below 100% to use this setting."
 msgstr ""
 
@@ -6757,6 +6966,9 @@ msgstr "หัวฉีดด้านซ้าย: X:%1%-%2%, Y:%3%-%4%, Z:%5%-
 msgid "Right nozzle: X:%1%-%2%, Y:%3%-%4%, Z:%5%-%6%"
 msgstr "หัวฉีดด้านขวา: X:%1%-%2%, Y:%3%-%4%, Z:%5%-%6%"
 
+msgid "The position or size of some models exceeds the assigned extruder's printable range. Please check and adjust the part's position or size to fit the printable range."
+msgstr ""
+
 msgid "Mirror object"
 msgstr "กลับด้านวัตถุ"
 
@@ -7012,7 +7224,7 @@ msgid "Size:"
 msgstr "ขนาด:"
 
 # AI Translated
-#, boost-format
+#, c-format, boost-format
 msgid "Conflicts of G-code paths have been found at layer %d, Z = %.2lfmm. Please separate the conflicted objects farther (%s <-> %s)."
 msgstr "พบความขัดแย้งของเส้นทาง G-code ที่เลเยอร์ %d, Z = %.2lfmm โปรดแยกวัตถุที่ขัดแย้งกันให้ไกลออกไป (%s <-> %s)"
 
@@ -7257,6 +7469,12 @@ msgstr "วัดความเร็วในการเรนเดอร์
 msgid "Show Tip of the Day"
 msgstr "แสดงเคล็ดลับประจำวัน"
 
+msgid "Check for Nozzle It All Desktop Updates"
+msgstr ""
+
+msgid "The Nozzle It All Desktop update channel is not available yet"
+msgstr ""
+
 msgid "Check for Updates"
 msgstr "ตรวจสอบการอัปเดต"
 
@@ -7348,6 +7566,12 @@ msgstr "นำเข้าการกำหนดค่า"
 
 msgid "Load configs"
 msgstr "โหลดการกำหนดค่า"
+
+msgid "Import settings from another slicer on next launch"
+msgstr ""
+
+msgid "Back up current settings and choose Orca-family settings to import after restarting"
+msgstr ""
 
 msgid "Import"
 msgstr "นำเข้า"
@@ -7776,14 +8000,12 @@ msgstr ""
 msgid "Downloading Virtual Camera Tools"
 msgstr "กำลังดาวน์โหลดเครื่องมือกล้องเสมือน"
 
+#, c-format, boost-format
 msgid ""
 "Another virtual camera is running.\n"
-"Orca Slicer supports only a single virtual camera.\n"
+"%s supports only a single virtual camera.\n"
 "Do you want to stop this virtual camera?"
 msgstr ""
-"กล้องเสมือนอีกตัวกำลังทำงานอยู่\n"
-"Orca Slicer รองรับกล้องเสมือนเพียงตัวเดียวเท่านั้น\n"
-"คุณต้องการหยุดกล้องเสมือนนี้หรือไม่?"
 
 #, c-format, boost-format
 msgid "Virtual camera initialize failed (%s)!"
@@ -7840,6 +8062,9 @@ msgstr "ดาวน์โหลด"
 msgid "Download selected files from printer."
 msgstr "ดาวน์โหลดไฟล์ที่เลือกจากเครื่องพิมพ์"
 
+msgid "Select all files in the list for batch management."
+msgstr ""
+
 msgid "Batch manage files."
 msgstr "จัดการไฟล์เป็นกลุ่ม"
 
@@ -7891,8 +8116,9 @@ msgstr "ไม่สามารถดึงข้อมูลรุ่นจา
 msgid "Failed to parse model information."
 msgstr "ไม่สามารถแยกวิเคราะห์ข้อมูลโมเดล"
 
-msgid "The .gcode.3mf file contains no G-code data. Please slice it with Orca Slicer and export a new .gcode.3mf file."
-msgstr "ไฟล์ .gcode.3mf ไม่มีข้อมูล G-code โปรดแบ่งส่วนด้วย Orca Slicer และส่งออกไฟล์ .gcode.3mf ใหม่"
+#, c-format, boost-format
+msgid "The .gcode.3mf file contains no G-code data. Please slice it with %s and export a new .gcode.3mf file."
+msgstr ""
 
 #, c-format, boost-format
 msgid "File '%s' was lost! Please download it again."
@@ -8748,6 +8974,9 @@ msgstr "ส่งออกวัตถุทั้งหมดเป็น DRC (
 msgid "Export Toolpaths as OBJ"
 msgstr "ส่งออกเส้นทางเครื่องมือเป็น OBJ"
 
+msgid "About Nozzle It All Desktop"
+msgstr ""
+
 # AI Translated
 msgid "About OrcaSlicer"
 msgstr "เกี่ยวกับ OrcaSlicer"
@@ -9528,6 +9757,9 @@ msgstr "เส้นพลาสติกผสมมีส่วนประก
 msgid "Search plate, object and part."
 msgstr "ค้นหาจาน วัตถุ และชิ้นส่วน"
 
+msgid "Synchronize filament list from the printer"
+msgstr ""
+
 msgid "Pellets"
 msgstr "เม็ด"
 
@@ -9559,12 +9791,11 @@ msgstr "ไม่มีเส้นพลาสติกที่เข้าก
 msgid "Sync filaments with AMS"
 msgstr "ซิงค์เส้นพลาสติกกับ AMS"
 
+#, c-format, boost-format
 msgid ""
-"There are some unknown or incompatible filaments mapped to generic preset.\n"
-"Please update Orca Slicer or restart Orca Slicer to check if there is an update to system presets."
+"There are unknown or incompatible filaments mapped to generic presets.\n"
+"Please update or restart %s to check for updated system presets."
 msgstr ""
-"มีเส้นพลาสติกที่ไม่รู้จักหรือเข้ากันไม่ได้บางส่วนที่แมปกับค่าที่ตั้งล่วงหน้าทั่วไป\n"
-"โปรดอัปเดต Orca Slicer หรือรีสตาร์ท Orca Slicer เพื่อตรวจสอบว่ามีการอัปเดตการตั้งค่าล่วงหน้าของระบบหรือไม่"
 
 msgid "Only filament color information has been synchronized from printer."
 msgstr "เฉพาะข้อมูลสีของเส้นพลาสติกเท่านั้นที่ได้รับการซิงโครไนซ์จากเครื่องพิมพ์"
@@ -9630,6 +9861,9 @@ msgstr "ไฟล์ 3MF ถูกสร้างขึ้นโดยเวอ�
 
 msgid "The 3MF file was generated by BambuStudio, loading geometry data only."
 msgstr "ไฟล์ 3MF สร้างโดย BambuStudio โดยโหลดข้อมูลเรขาคณิตเท่านั้น"
+
+msgid "The 3MF file has no project settings that OrcaSlicer can import."
+msgstr ""
 
 msgid "This project was created with an OrcaSlicer 2.3.1-alpha and uses infill rotation template settings that may not work properly with your current infill pattern. This could result in weak support or print quality issues."
 msgstr "โปรเจ็กต์นี้สร้างขึ้นด้วย OrcaSlicer 2.3.1-alpha และใช้การตั้งค่าเทมเพลตการหมุน ไส้ใน ที่อาจทำงานไม่ถูกต้องกับรูปแบบ ไส้ใน ปัจจุบันของคุณ ซึ่งอาจส่งผลให้ส่วนรองรับไม่ดีหรือปัญหาคุณภาพการพิมพ์"
@@ -10044,8 +10278,9 @@ msgstr "กำลังเตรียมไฟล์ 3MF..."
 msgid "Download failed; unknown file format."
 msgstr "การดาวน์โหลดล้มเหลว รูปแบบไฟล์ที่ไม่รู้จัก"
 
-msgid "Importing to Orca Slicer failed. Please download the file and manually import it."
-msgstr "การนำเข้าไปยัง Orca Slicer ล้มเหลว โปรดดาวน์โหลดไฟล์และนำเข้าด้วยตนเอง"
+#, c-format, boost-format
+msgid "Importing to %s failed. Please download the file and import it manually."
+msgstr ""
 
 msgid "Downloading project..."
 msgstr "กำลังดาวน์โหลดโปรเจ็กต์..."
@@ -10255,6 +10490,16 @@ msgstr "เหตุผล: \"%1%\" และอีกส่วนหนึ่�
 msgid "Unable to perform boolean operation on model meshes. Only positive parts will be exported."
 msgstr "ไม่สามารถดำเนินการบูลีนบนโมเดลเมชได้ เฉพาะส่วนที่เป็นบวกเท่านั้นที่จะถูกส่งออก"
 
+msgid "No Snapmaker U1 address is known yet. Enter its IP address in the printer settings (Connection > Hostname, IP or URL)."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Could not reach the Snapmaker U1 at %s on the local network.\n"
+"\n"
+"%s"
+msgstr ""
+
 msgid "Flashforge host is not available."
 msgstr "โฮสต์ Flashforge ไม่พร้อมใช้งาน"
 
@@ -10295,8 +10540,8 @@ msgid "Printer not connected. Please go to the device page to connect %s before 
 msgstr "ไม่ได้เชื่อมต่อเครื่องพิมพ์ โปรดไปที่หน้าอุปกรณ์เพื่อเชื่อมต่อ %s ก่อนที่จะทำการซิงค์"
 
 #, c-format, boost-format
-msgid "OrcaSlicer can't connect to %s. Please check if the printer is powered on and connected to the network."
-msgstr "OrcaSlicer ไม่สามารถเชื่อมต่อกับ %s ได้ โปรดตรวจสอบว่าเครื่องพิมพ์เปิดอยู่และเชื่อมต่อกับเครือข่ายหรือไม่"
+msgid "%s can't connect to %s. Please check that the printer is powered on and connected to the network."
+msgstr ""
 
 #, c-format, boost-format
 msgid "The currently connected printer on the device page is not %s. Please switch to %s before syncing."
@@ -10555,11 +10800,10 @@ msgstr "โหลดใหม่ล้มเหลว"
 msgid "Associate %s://"
 msgstr "เชื่อมโยง %s://"
 
-# AI Translated
 #. TRN The first %s is a URL scheme, for example "prusaslicer"; the second is a website name.
 #, c-format, boost-format
-msgid "Associate %s:// with OrcaSlicer so that Orca can open models from %s"
-msgstr "เชื่อมโยง %s:// กับ OrcaSlicer เพื่อให้ Orca เปิดโมเดลจาก %s ได้"
+msgid "Associate %s:// with %s so the application can open models from %s"
+msgstr ""
 
 msgid "Current Association: "
 msgstr "สมาคมปัจจุบัน: "
@@ -10597,11 +10841,17 @@ msgstr "ตั้งค่าเพจที่เปิดเมื่อเร
 msgid "Enable dark Mode"
 msgstr "เปิดใช้งานโหมดมืด"
 
+msgid "Allow only one Nozzle It All Desktop instance"
+msgstr ""
+
 msgid "Allow only one OrcaSlicer instance"
 msgstr "อนุญาตอินสแตนซ์ OrcaSlicer เพียงอินสแตนซ์เดียวเท่านั้น"
 
 msgid "On OSX there is always only one instance of app running by default. However it is allowed to run multiple instances of same app from the command line. In such case this settings will allow only one instance."
 msgstr "บน OSX จะมีแอปเพียงอินสแตนซ์เดียวที่ทำงานตามค่าเริ่มต้นเสมอ อย่างไรก็ตาม อนุญาตให้เรียกใช้แอปเดียวกันหลายอินสแตนซ์จากบรรทัดคำสั่ง ในกรณีเช่นนี้ การตั้งค่านี้จะอนุญาตเพียงอินสแตนซ์เดียวเท่านั้น"
+
+msgid "If this is enabled, when starting Nozzle It All Desktop and another instance is already running, that instance will be reactivated instead."
+msgstr ""
 
 msgid "If this is enabled, when starting OrcaSlicer and another instance of the same OrcaSlicer is already running, that instance will be reactivated instead."
 msgstr "หากเปิดใช้งานนี้ เมื่อเริ่มต้น OrcaSlicer และอินสแตนซ์อื่นของ OrcaSlicer เดียวกันกำลังทำงานอยู่แล้ว อินสแตนซ์นั้นจะถูกเปิดใช้งานอีกครั้งแทน"
@@ -10622,7 +10872,9 @@ msgstr "(ต้องรีสตาร์ท)"
 msgid "Render on the discrete GPU"
 msgstr ""
 
-#. TRN DRI_PRIME is an environment variable name and must stay as it is.
+msgid "On a computer with two GPUs, run Nozzle It All Desktop on the discrete GPU instead of the one that drives the display. Some Wayland systems cannot show frames rendered on the other GPU, or fail to open the window at all. Turn this off if the 3D view stays empty; if Nozzle It All Desktop no longer starts, start it once with DRI_PRIME=0 in the environment to get back here."
+msgstr ""
+
 msgid "On a computer with two GPUs, run OrcaSlicer on the discrete GPU instead of the one that drives the display. Some Wayland systems cannot show frames rendered on the other GPU, or fail to open the window at all. Turn this off if the 3D view stays empty; if OrcaSlicer no longer starts, start it once with DRI_PRIME=0 in the environment to get back here."
 msgstr ""
 
@@ -10844,11 +11096,18 @@ msgstr "คำนวณปริมาณการไล่เส้นชิ่
 msgid "Auto arrange plate after cloning"
 msgstr "จัดเรียงจานอัตโนมัติหลังจากการโคลน"
 
+msgid "Show options when adding a primitive"
+msgstr ""
+
+msgid "If enabled, a dialog asks for the dimensions of a primitive shape before it is added."
+msgstr ""
+
 msgid "Auto slice after changes"
 msgstr "แบ่งส่วนอัตโนมัติหลังจากการเปลี่ยนแปลง"
 
-msgid "If enabled, OrcaSlicer will re-slice automatically whenever slicing-related settings change."
-msgstr "หากเปิดใช้งาน OrcaSlicer จะแบ่งส่วนใหม่โดยอัตโนมัติทุกครั้งที่การตั้งค่าที่เกี่ยวข้องกับการแบ่งมีการเปลี่ยนแปลง"
+#, c-format, boost-format
+msgid "If enabled, %s will re-slice automatically whenever slicing-related settings change."
+msgstr ""
 
 msgid "Delay in seconds before auto slicing starts, allowing multiple edits to be grouped. Use 0 to slice immediately."
 msgstr "หน่วงเวลาเป็นวินาทีก่อนที่การแบ่งส่วนอัตโนมัติจะเริ่มขึ้น ทำให้สามารถจัดกลุ่มการแก้ไขได้หลายรายการ ใช้ 0 เพื่อสไลซ์ทันที"
@@ -10863,9 +11122,9 @@ msgstr "เมื่อเปิดใช้งานตัวเลือกน
 msgid "Remember last print action"
 msgstr "จดจำการดำเนินการพิมพ์ล่าสุด"
 
-# AI Translated
-msgid "If enabled, OrcaSlicer will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
-msgstr "หากเปิดใช้งาน OrcaSlicer จะจดจำตัวเลือกล่าสุดที่เลือกในเมนูดรอปดาวน์ของปุ่มพิมพ์ (เช่น พิมพ์, ส่งออกไฟล์เพลตที่สไลซ์แล้ว, ส่งออกไฟล์ G-code) และใช้เป็นค่าเริ่มต้นเมื่อเปิดโปรแกรมครั้งถัดไป"
+#, c-format, boost-format
+msgid "If enabled, %s will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
+msgstr ""
 
 msgid "Camera"
 msgstr "กล้อง"
@@ -11321,6 +11580,9 @@ msgstr "เลือกเวอร์ชันปลั๊กอินเคร
 msgid "Associate"
 msgstr "เชื่อมโยง"
 
+msgid "Associate files to Nozzle It All Desktop"
+msgstr ""
+
 msgid "Associate files to OrcaSlicer"
 msgstr "เชื่อมโยงไฟล์กับ OrcaSlicer"
 
@@ -11329,6 +11591,33 @@ msgstr "การเชื่อมโยงไฟล์สำหรับเว
 
 msgid "Open Windows Default Apps Settings"
 msgstr "เปิดการตั้งค่าแอปเริ่มต้นของ Windows"
+
+msgid "Associate 3MF files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open 3MF files."
+msgstr ""
+
+msgid "Associate DRC files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open DRC files."
+msgstr ""
+
+msgid "Associate STL files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STL files."
+msgstr ""
+
+msgid "Associate STEP files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STEP files."
+msgstr ""
+
+msgid "Associate web links to Nozzle It All Desktop"
+msgstr ""
 
 msgid "Associate 3MF files to OrcaSlicer"
 msgstr "เชื่อมโยงไฟล์ 3MF กับ OrcaSlicer"
@@ -11397,13 +11686,10 @@ msgstr ""
 msgid "Use printer agents instead of print hosts"
 msgstr "ใช้เอเจนต์เครื่องพิมพ์แทนโฮสต์การพิมพ์"
 
-# AI Translated
 msgid ""
 "Route print jobs for non-Bambu printers through printer plug-in agents instead of the classic print-host upload flow.\n"
-"When disabled, OrcaSlicer uses the legacy print-host behavior."
+"When disabled, the application uses the legacy print-host behavior."
 msgstr ""
-"ส่งงานพิมพ์ของเครื่องพิมพ์ที่ไม่ใช่ Bambu ผ่านเอเจนต์ปลั๊กอินของเครื่องพิมพ์ แทนการอัพโหลดไปยังโฮสต์การพิมพ์แบบเดิม\n"
-"เมื่อปิดใช้ OrcaSlicer จะใช้พฤติกรรมโฮสต์การพิมพ์แบบเดิม"
 
 msgid "Allow Abnormal Storage"
 msgstr "อนุญาตให้จัดเก็บผิดปกติ"
@@ -11557,6 +11843,27 @@ msgstr "เข้ากันไม่ได้"
 
 msgid "The selected preset is null!"
 msgstr "ค่าที่ตั้งล่วงหน้าที่เลือกเป็นโมฆะ!"
+
+msgid "Changing one dimension changes the others in proportion."
+msgstr ""
+
+# AI Translated
+msgid "Save these settings as default"
+msgstr "บันทึกการตั้งค่าเหล่านี้เป็นค่าเริ่มต้น"
+
+msgid "If enabled, these dimensions are used for this shape from now on, also when this dialog is not shown."
+msgstr ""
+
+msgid "If enabled, shapes are added at their default size without asking. The dialog can be turned back on in Preferences."
+msgstr ""
+
+# AI Translated
+msgid "The size must be greater than zero"
+msgstr "ขนาดต้องมากกว่าศูนย์"
+
+# AI Translated
+msgid "Invalid numeric input."
+msgstr "ป้อนตัวเลขไม่ถูกต้อง"
 
 # AI Translated
 msgctxt "Layer range"
@@ -11739,6 +12046,15 @@ msgstr "ค่าที่ตั้งไว้ล่วงหน้า \"%1%\" 
 
 msgid "Please note that saving will overwrite the current preset."
 msgstr "โปรดทราบว่าการบันทึกจะเขียนทับค่าที่ตั้งล่วงหน้านี้"
+
+msgid "control characters are not allowed."
+msgstr ""
+
+msgid "The name is a reserved system name."
+msgstr ""
+
+msgid "The name is too long."
+msgstr ""
 
 msgid "The name cannot be the same as a preset alias name."
 msgstr "ชื่อต้องไม่เหมือนกับชื่อนามแฝงที่ตั้งไว้ล่วงหน้า"
@@ -12429,8 +12745,8 @@ msgstr "ต้องใส่ที่เก็บข้อมูลก่อน
 msgid "Storage is in abnormal state or is in read-only mode."
 msgstr "ที่เก็บข้อมูลอยู่ในสถานะผิดปกติหรืออยู่ในโหมดอ่านอย่างเดียว"
 
-msgid "Storage needs to be inserted before printing."
-msgstr "ต้องใส่ที่เก็บข้อมูลก่อนพิมพ์"
+msgid "Insert storage or free up space before printing."
+msgstr ""
 
 msgid "Cannot send the print job to a printer whose firmware must be updated."
 msgstr "ไม่สามารถส่งงานพิมพ์ไปยังเครื่องพิมพ์ที่จำเป็นต้องอัปเดตเฟิร์มแวร์ได้"
@@ -12503,11 +12819,9 @@ msgstr "ไม่สามารถส่งงานพิมพ์ขณะก
 msgid "The selected printer is incompatible with the chosen printer presets."
 msgstr "เครื่องพิมพ์ที่เลือกเข้ากันไม่ได้กับการตั้งค่าล่วงหน้าของเครื่องพิมพ์ที่เลือก"
 
-msgid "Storage needs to be inserted before send to printer."
-msgstr "ต้องใส่ที่เก็บข้อมูลก่อนส่งไปยังเครื่องพิมพ์"
-
-msgid "The printer is required to be on the same LAN as Orca Slicer."
-msgstr "เครื่องพิมพ์จะต้องอยู่ใน LAN เดียวกันกับ Orca Slicer"
+#, c-format, boost-format
+msgid "The printer must be on the same LAN as %s."
+msgstr ""
 
 msgid "The printer does not support sending to printer storage."
 msgstr "เครื่องพิมพ์ไม่รองรับการส่งไปยังที่เก็บข้อมูลของเครื่องพิมพ์"
@@ -13418,9 +13732,11 @@ msgstr ""
 msgid "Set retraction length above zero and disable firmware retraction to edit this setting."
 msgstr ""
 
+#, c-format, boost-format
 msgid "Enable retraction and wiping, and set retract after wipe below 100% to edit retract before wipe."
 msgstr ""
 
+#, c-format, boost-format
 msgid "Enable retraction and wiping, and set retract before wipe below 100% to edit retract after wipe."
 msgstr ""
 
@@ -14071,8 +14387,9 @@ msgstr "การอัดกระแทกเส้นทั้งหมด"
 msgid "Ramming line"
 msgstr "เส้นราม"
 
-msgid "Orca would re-calculate your flushing volumes everytime the filaments color changed or filaments changed. You could disable the auto-calculate in Orca Slicer > Preferences"
-msgstr "Orca จะคำนวณปริมาตรการไล่เส้นของคุณใหม่ทุกครั้งที่สีเส้นพลาสติกเปลี่ยนไปหรือเส้นพลาสติกเปลี่ยนไป คุณสามารถปิดการใช้งานการคำนวณอัตโนมัติใน Orca Slicer > การตั้งค่า"
+#, c-format, boost-format
+msgid "%s recalculates flushing volumes whenever filament colors or filaments change. You can disable automatic calculation in Preferences."
+msgstr ""
 
 msgid "Flushing volume (mm³) for each filament pair."
 msgstr "ปริมาณการไล่เส้นชิ่ง (มม.) สำหรับคู่เส้นพลาสติกแต่ละคู่"
@@ -14098,6 +14415,9 @@ msgstr "ปริมาณการไล่เส้นชิ่งสำหร
 #. TRN Corner header of the flushing volume table: rows are the filament flushed from, columns the filament changed to.
 msgid "from/to"
 msgstr "จาก/ไปยัง"
+
+msgid "Cloud agent is not available. Please restart Nozzle It All Desktop and try again."
+msgstr ""
 
 msgid "Cloud agent is not available. Please restart OrcaSlicer and try again."
 msgstr "ตัวแทนระบบคลาวด์ไม่พร้อมใช้งาน โปรดรีสตาร์ท OrcaSlicer แล้วลองอีกครั้ง"
@@ -14127,6 +14447,12 @@ msgstr "กำลังโหลด…"
 msgctxt "Printer vendor"
 msgid "Custom"
 msgstr "กำหนดเอง"
+
+msgid "Welcome to Nozzle It All Desktop"
+msgstr ""
+
+msgid "Nozzle It All Desktop will be set up in several steps. Let's start!"
+msgstr ""
 
 # AI Translated
 msgid "Welcome to Orca Slicer"
@@ -15088,6 +15414,10 @@ msgid "%1% is too close to others, and collisions may be caused."
 msgstr "%1% อยู่ใกล้ผู้อื่นมากเกินไป และอาจเกิดการชนกันได้"
 
 #, boost-format
+msgid "%1% is printed later than its place in the object list, to avoid a collision."
+msgstr ""
+
+#, boost-format
 msgid "%1% is too tall, and collisions will be caused."
 msgstr "%1% สูงเกินไป และจะเกิดการชนกัน"
 
@@ -15396,6 +15726,9 @@ msgstr ""
 
 msgid "The precise wall option will be ignored for outer-inner or inner-outer-inner wall sequences."
 msgstr "ตัวเลือกผนังที่แม่นยำจะถูกละเว้นสำหรับลำดับผนังด้านนอก-ด้านใน หรือด้านใน-ด้านนอก-ด้านใน"
+
+msgid "Adaptive pressure advance is enabled for one or more extruders, but no measurements have been entered in their Adaptive Pressure Advance model."
+msgstr ""
 
 # AI Translated
 msgid "The Adaptive Pressure Advance model for one or more extruders may contain invalid values."
@@ -20630,16 +20963,6 @@ msgstr "แกนเอียงสายพาน"
 msgid "Axis the mesh is rotated about before slicing. This is the belt printer's tilt: an isometric (no distortion) rotation that also drives bed rendering and support gravity tilt, and that the G-code back-transform inverts before the machine-frame shear/scale and remap. X is the typical gantry tilt (belt travels along Y)."
 msgstr "แกนที่ใช้หมุนเมชก่อนการสไลซ์ นี่คือการเอียงของเครื่องพิมพ์สายพาน: การหมุนแบบไอโซเมตริก (ไม่บิดเบี้ยว) ซึ่งยังใช้กำหนดการแสดงผลฐานพิมพ์และการเอียงแรงโน้มถ่วงของส่วนรองรับ และการแปลงกลับของ G-code จะย้อนการหมุนนี้ก่อนการเฉือน/ปรับสเกลและการแมปแกนของระบบพิกัดเครื่อง X คือการเอียงแกนทรีที่ใช้ทั่วไป (สายพานเคลื่อนที่ตามแนว Y)"
 
-msgid "X"
-msgstr "X"
-
-msgid "Y"
-msgstr "Y"
-
-# AI Translated
-msgid "Z"
-msgstr "Z"
-
 # AI Translated
 msgid "Belt tilt angle"
 msgstr "มุมเอียงสายพาน"
@@ -24419,6 +24742,305 @@ msgstr "การแมปเส้นพลาสติก:"
 msgid "Ext - %s"
 msgstr "ภายนอก - %s"
 
+msgid "empty"
+msgstr ""
+
+msgid "Print on Snapmaker U1"
+msgstr ""
+
+msgid "Online • Ready"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Project: %s"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Plate %d"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Printer file: %s"
+msgstr ""
+
+msgid "Estimated duration unavailable"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Estimated normal-mode duration: %s"
+msgstr ""
+
+msgid "Filament and toolhead mapping"
+msgstr ""
+
+msgid "Confirm that each sliced filament is mapped to the loaded material you intend to use."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Toolhead %d"
+msgstr ""
+
+msgid "Print preparation"
+msgstr ""
+
+msgid "Measure the build plate before this print."
+msgstr ""
+
+msgid "Flow calibration"
+msgstr ""
+
+msgid "Calibrate only the toolheads used by this print."
+msgstr ""
+
+msgid "Input shaper calibration"
+msgstr ""
+
+msgid "Measure vibration compensation before printing."
+msgstr ""
+
+msgid "Capture a timelapse with the printer camera."
+msgstr ""
+
+msgid "File name on the printer"
+msgstr ""
+
+msgid "Start Print"
+msgstr ""
+
+msgid "Please enter a file name without the characters #, *, ;, \\, /, :, \", <, >, or |."
+msgstr ""
+
+msgid "Send to Snapmaker U1"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Filament %d is %s, but toolhead %d has %s loaded."
+msgstr ""
+
+msgid "The filament types do not match:"
+msgstr ""
+
+msgid "The print will use the temperatures and speeds sliced for the original filament. Continue anyway?"
+msgstr ""
+
+msgid "3D Filament Profiles API key"
+msgstr ""
+
+msgid "Connect 3D Filament Profiles"
+msgstr ""
+
+msgid "A 3D Filament Profiles API key is already stored in the operating-system keychain. Enter a new key only to replace it."
+msgstr ""
+
+msgid "Enter your personal API key. It will be stored only in the operating-system keychain."
+msgstr ""
+
+msgid "Save securely"
+msgstr ""
+
+msgid "Enter an API key before saving."
+msgstr ""
+
+msgid "3D Filament Profiles"
+msgstr ""
+
+msgid "A 3D Filament Profiles API key is already stored. Replace it with the new key you entered?"
+msgstr ""
+
+msgid "Replace stored API key?"
+msgstr ""
+
+msgid "The API key could not be stored in the operating-system keychain."
+msgstr ""
+
+msgid "Map Snapmaker U1 filaments"
+msgstr ""
+
+msgid "Map the material in each toolhead"
+msgstr ""
+
+msgid "Review every loaded toolhead. Applying expands the project to the U1's fixed T0-T3 slots; empty toolheads keep their current project slot."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Report source: %s"
+msgstr ""
+
+msgid "RFID / printer report"
+msgstr ""
+
+msgid "Filament preset"
+msgstr ""
+
+msgid "Empty toolhead"
+msgstr ""
+
+#, boost-format
+msgid "Toolhead T%1%: empty toolhead"
+msgstr ""
+
+msgid "Keep current project slot"
+msgstr ""
+
+msgid "RFID tag"
+msgstr ""
+
+msgid "Printer setting"
+msgstr ""
+
+msgid "invalid color; current project color will be kept"
+msgstr ""
+
+msgid "material identity unresolved; choose a compatible preset explicitly"
+msgstr ""
+
+#, boost-format
+msgid "%1%: %2% %3% (%4%)"
+msgstr ""
+
+#, boost-format
+msgid "Filament preset for toolhead T%1%. Printer report: %2%"
+msgstr ""
+
+msgid "Select a matching filament preset"
+msgstr ""
+
+#, boost-format
+msgid "Manual override — %1%"
+msgstr ""
+
+msgid "Configure API key"
+msgstr ""
+
+msgid "Find RFID products in 3D Filament Profiles"
+msgstr ""
+
+msgid "Generic presets are never selected automatically for an RFID-tagged product."
+msgstr ""
+
+msgid "Apply mappings"
+msgstr ""
+
+msgid "At least one loaded toolhead has no material family in the printer report. Apply the selected presets as explicit manual overrides for those unresolved toolheads?"
+msgstr ""
+
+msgid "Confirm unresolved material overrides"
+msgstr ""
+
+msgid "3D Filament Profiles results are catalog candidates, not proof of the RFID identity. Apply the selected catalog products as explicit overrides for the corresponding U1 reports?"
+msgstr ""
+
+msgid "Confirm catalog overrides"
+msgstr ""
+
+msgid "Searching 3D Filament Profiles…"
+msgstr ""
+
+msgid "The 3D Filament Profiles API key is unavailable."
+msgstr ""
+
+#, boost-format
+msgid "Catalog lookup could not start for toolhead T%1%."
+msgstr ""
+
+#, boost-format
+msgid "Catalog lookup failed for toolhead T%1%: %2%"
+msgstr ""
+
+#, boost-format
+msgid "%1% (record %2%)"
+msgstr ""
+
+#, boost-format
+msgid "%1% — 3D Filament Profiles"
+msgstr ""
+
+#, boost-format
+msgid "Found %1% matching catalog products. Review each selection before applying."
+msgstr ""
+
+#, boost-format
+msgid "Found %1% catalog products. Toolheads %2% are still unmapped; choose a matching preset in those rows."
+msgstr ""
+
+msgid "selected printer RFID / device report"
+msgstr ""
+
+msgid "direct Snapmaker U1 LAN report"
+msgstr ""
+
+msgid "The direct Snapmaker U1 report and the selected printer report disagree about loaded toolheads or filament identity. Refresh the printer on the Device page and review its RFID data before synchronizing."
+msgstr ""
+
+msgid "Sync filaments"
+msgstr ""
+
+msgid "The printer reported loaded filament trays, but their physical U1 toolhead assignment is ambiguous. Refresh the printer on the Device page and try again."
+msgstr ""
+
+msgid "The configured U1 LAN address and the selected printer refer to different devices. Select the matching U1 or correct its LAN address before synchronizing filaments."
+msgstr ""
+
+msgid "No Snapmaker U1 connection is available. Configure the printer LAN address or select the printer on the Device page, then try again."
+msgstr ""
+
+msgid "The selected printer could not be verified as a Snapmaker U1. Select the U1 on the Device page or configure its LAN address before synchronizing filaments."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The printer reports no loaded filaments.\n"
+"\n"
+"The direct U1 query also reported: %s"
+msgstr ""
+
+msgid "The printer reports no loaded filaments."
+msgstr ""
+
+msgid "This project has more than the Snapmaker U1's four physical filament slots. Synchronization was not applied because removing the additional project slots would lose data."
+msgstr ""
+
+#, boost-format
+msgid "The compatible filament presets could not be refreshed: %1%"
+msgstr ""
+
+#, boost-format
+msgid ""
+"\n"
+"\n"
+"%1% failed: %2%"
+msgstr ""
+
+#, boost-format
+msgid "Removing catalog-created preset %1%"
+msgstr ""
+
+msgid "Restoring the previous complete preset selection"
+msgstr ""
+
+msgid "Restoring the previous project filament count"
+msgstr ""
+
+msgid "Restoring the previous project filament state"
+msgstr ""
+
+msgid "Refreshing the restored project controls"
+msgstr ""
+
+msgid "Persisting the restored preset selections"
+msgstr ""
+
+#, boost-format
+msgid "The filament mappings could not be applied: %1%%2%"
+msgstr ""
+
+msgid "The reviewed Snapmaker U1 filament mappings were applied."
+msgstr ""
+
+#, boost-format
+msgid "The reviewed Snapmaker U1 filament mappings were applied. The printer reported an invalid color for toolheads %1%; their existing project colors were kept."
+msgstr ""
+
 msgid "Unable to perform boolean operation on selected parts"
 msgstr "ไม่สามารถดำเนินการบูลีนกับส่วนที่เลือกได้"
 
@@ -25228,9 +25850,9 @@ msgstr "เลือก NO เพื่อปิดกล่องโต้ต�
 msgid "No project file on current session. Only logs will be included to package"
 msgstr "ไม่มีไฟล์โปรเจกต์ในเซสชันปัจจุบัน จะรวมเฉพาะบันทึกลงในแพ็กเกจ"
 
-# AI Translated
-msgid "Please make sure any instances of OrcaSlicer are not running"
-msgstr "โปรดตรวจสอบให้แน่ใจว่าไม่มีอินสแตนซ์ของ OrcaSlicer ที่กำลังทำงานอยู่"
+#, c-format, boost-format
+msgid "Please make sure no instances of %s are running"
+msgstr ""
 
 # AI Translated
 msgid "System folder cannot be deleted because some files are in use by another application. Please close any applications using these files and try again."
@@ -25247,6 +25869,21 @@ msgstr "ไม่สามารถระบุพาธของไฟล์ป
 # AI Translated
 msgid "Failed to launch a new instance."
 msgstr "ไม่สามารถเปิดอินสแตนซ์ใหม่ได้"
+
+msgid "Delete all stored logs except the current-session logs?"
+msgstr ""
+
+msgid "This cannot be undone. Export the logs first if you may need them."
+msgstr ""
+
+msgid "Clear stored logs"
+msgstr ""
+
+msgid "The current-session log could not be identified. No logs were deleted."
+msgstr ""
+
+msgid "Some stored logs could not be deleted. The current-session logs were preserved."
+msgstr ""
 
 # AI Translated
 #. TRN Number of log files, then their total size and its unit (KB or MB).
@@ -25433,6 +26070,10 @@ msgstr "โฮสต์ตอบสนองแต่ดูเหมือนไ
 #, c-format, boost-format
 msgid "Could not parse Moonraker server response: %s"
 msgstr "ไม่สามารถแยกวิเคราะห์การตอบสนองของเซิร์ฟเวอร์ Moonraker ได้: %s"
+
+#, boost-format
+msgid "Printing can only be started from the \"gcodes\" storage, but \"%1%\" is selected. Choose \"gcodes\" under \"Upload to storage\", or use Upload only."
+msgstr ""
 
 msgid "Connection to OctoPrint is working correctly."
 msgstr "การเชื่อมต่อกับ OctoPrint ทำงานอย่างถูกต้อง"
@@ -26114,10 +26755,6 @@ msgstr "จำนวนด้านสามเหลี่ยม"
 
 msgid "Calculating, please wait..."
 msgstr "กำลังคำนวณ โปรดรอสักครู่..."
-
-# AI Translated
-msgid "Save these settings as default"
-msgstr "บันทึกการตั้งค่าเหล่านี้เป็นค่าเริ่มต้น"
 
 # AI Translated
 msgid "If enabled, the values above are stored as the defaults used for future STEP imports (and shown in Preferences)."
@@ -30033,10 +30670,6 @@ msgid "Those two lines do not meet at a corner — pick two lines that do"
 msgstr "เส้นทั้งสองนั้นไม่ได้บรรจบกันที่มุม — เลือกเส้นสองเส้นที่บรรจบกัน"
 
 # AI Translated
-msgid "The size must be greater than zero"
-msgstr "ขนาดต้องมากกว่าศูนย์"
-
-# AI Translated
 msgid "Fillet: the radius overruns a leg, or the two lines do not meet at a corner"
 msgstr "ลบมุมมน: รัศมีเกินความยาวของด้านใดด้านหนึ่ง หรือเส้นทั้งสองไม่ได้บรรจบกันที่มุม"
 
@@ -30946,6 +31579,36 @@ msgstr "สลับระหว่างการเตรียม/ดูต�
 
 msgid "Collapse/Expand the sidebar"
 msgstr "ยุบ/ขยายแถบด้านข้าง"
+
+msgid "Go to the Home tab"
+msgstr ""
+
+msgid "Go to the Design tab"
+msgstr ""
+
+msgid "Go to the Prepare tab"
+msgstr ""
+
+msgid "Go to the Preview tab"
+msgstr ""
+
+msgid "Go to the Device tab"
+msgstr ""
+
+msgid "Go to the Multi-device tab"
+msgstr ""
+
+msgid "Go to the Project tab"
+msgstr ""
+
+msgid "Go to the Calibration tab"
+msgstr ""
+
+msgid "Switch to the next tab"
+msgstr ""
+
+msgid "Switch to the previous tab"
+msgstr ""
 
 # AI Translated
 msgid "Reload the device page"
@@ -33625,10 +34288,6 @@ msgid "Set the shape of your printer's bed."
 msgstr "ตั้งค่ารูปทรงฐานพิมพ์ของเครื่องพิมพ์คุณ"
 
 # AI Translated
-msgid "Invalid numeric input."
-msgstr "ป้อนตัวเลขไม่ถูกต้อง"
-
-# AI Translated
 msgid "Filament and Nozzle Diameters"
 msgstr "เส้นผ่านศูนย์กลางเส้นพลาสติกและหัวฉีด"
 
@@ -33857,6 +34516,49 @@ msgstr "วิกิ->"
 # AI Translated
 msgid "Note:"
 msgstr "หมายเหตุ:"
+
+#. TRN %1% is a setting's label and %2% the plugin capability name stored in that setting.
+#, boost-format
+msgid "• %1%: %2%"
+msgstr ""
+
+#. TRN %1% is a preset name, %2% a setting's label and %3% the plugin capability name.
+#, boost-format
+msgid "• %1% — %2%: %3%"
+msgstr ""
+
+#, boost-format
+msgid ""
+"The following settings refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the preset won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+#, boost-format
+msgid ""
+"The following settings refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the project won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+msgid "Plugin Not Identified"
+msgstr ""
+
+msgid "Save anyway"
+msgstr ""
+
+#, boost-format
+msgid ""
+"The presets being saved refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the presets won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
 
 # AI Translated
 msgctxt "Texture Displacement"
@@ -35645,18 +36347,13 @@ msgstr "ไม่สามารถเปิดใช้งาน \"%s\" ได�
 msgid "Activated \"%s\"."
 msgstr "เปิดใช้งาน \"%s\" แล้ว"
 
-# AI Translated
 #, c-format, boost-format
 msgid ""
 "The following installed plugins were not found on disk:\n"
 "%s\n"
 "\n"
-"Remove them from OrcaSlicer?"
+"Remove them from %s?"
 msgstr ""
-"ไม่พบปลั๊กอินที่ติดตั้งต่อไปนี้บนดิสก์:\n"
-"%s\n"
-"\n"
-"ต้องการนำออกจาก OrcaSlicer หรือไม่?"
 
 # AI Translated
 msgid "Missing Plugins"
@@ -37368,17 +38065,17 @@ msgstr "ยืนยันตัวตนเสร็จสมบูรณ์"
 msgid "Authentication failed"
 msgstr "ยืนยันตัวตนล้มเหลว"
 
-# AI Translated
-msgid "You can return to OrcaSlicer. This window will close automatically."
-msgstr "คุณสามารถกลับไปที่ OrcaSlicer ได้ หน้าต่างนี้จะปิดโดยอัตโนมัติ"
+#, boost-format
+msgid "You can return to %1%. This window will close automatically."
+msgstr ""
 
-# AI Translated
-msgid "Something went wrong. Please return to OrcaSlicer and try again."
-msgstr "เกิดข้อผิดพลาดบางอย่าง โปรดกลับไปที่ OrcaSlicer แล้วลองอีกครั้ง"
+#, boost-format
+msgid "Something went wrong. Please return to %1% and try again."
+msgstr ""
 
-# AI Translated
-msgid "You can return to OrcaSlicer. If your browser does not redirect automatically, use the button below."
-msgstr "คุณสามารถกลับไปที่ OrcaSlicer ได้ หากเบราว์เซอร์ไม่เปลี่ยนเส้นทางโดยอัตโนมัติ ให้ใช้ปุ่มด้านล่าง"
+#, boost-format
+msgid "You can return to %1%. If your browser does not redirect automatically, use the button below."
+msgstr ""
 
 # AI Translated
 #, boost-format
@@ -37805,3 +38502,120 @@ msgid ""
 msgstr ""
 "หลีกเลี่ยงการบิดเบี้ยว\n"
 "คุณรู้หรือไม่ว่าเมื่อพิมพ์วัสดุที่มีแนวโน้มที่จะเกิดการบิดเบี้ยว เช่น ABS การเพิ่มอุณหภูมิฐานพิมพ์อย่างเหมาะสมสามารถลดความน่าจะเป็นของการบิดเบี้ยวได้"
+
+#~ msgid "OrcaSlicer will terminate because of running out of memory. It may be a bug. It will be appreciated if you report the issue to our team."
+#~ msgstr "OrcaSlicer จะยุติลงเนื่องจากหน่วยความจำไม่เพียงพอ มันอาจจะเป็นข้อผิดพลาด เราจะยินดีเป็นอย่างยิ่งหากคุณรายงานปัญหาดังกล่าวให้ทีมงานของเราทราบ"
+
+#~ msgid "OrcaSlicer will terminate because of a localization error. It will be appreciated if you report the specific scenario this issue happened."
+#~ msgstr "OrcaSlicer จะยุติลงเนื่องจากข้อผิดพลาดในการแปล เราจะยินดีอย่างยิ่งหากคุณรายงานสถานการณ์เฉพาะที่ปัญหานี้เกิดขึ้น"
+
+#, boost-format
+#~ msgid "OrcaSlicer got an unhandled exception: %1%"
+#~ msgstr "OrcaSlicer พบข้อยกเว้นที่ไม่ได้จัดการ: %1%"
+
+#~ msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart OrcaSlicer and try again. Also check whether it is blocked or has been deleted by anti-virus software."
+#~ msgstr "ไม่สามารถติดตั้งปลั๊กอินได้ ไฟล์ปลั๊กอินอาจถูกใช้งานอยู่ โปรดรีสตาร์ท OrcaSlicer แล้วลองอีกครั้ง ตรวจสอบด้วยว่าซอฟต์แวร์ป้องกันไวรัสบล็อกหรือลบหรือไม่"
+
+#~ msgid ""
+#~ "Another virtual camera is running.\n"
+#~ "Orca Slicer supports only a single virtual camera.\n"
+#~ "Do you want to stop this virtual camera?"
+#~ msgstr ""
+#~ "กล้องเสมือนอีกตัวกำลังทำงานอยู่\n"
+#~ "Orca Slicer รองรับกล้องเสมือนเพียงตัวเดียวเท่านั้น\n"
+#~ "คุณต้องการหยุดกล้องเสมือนนี้หรือไม่?"
+
+#~ msgid "The .gcode.3mf file contains no G-code data. Please slice it with Orca Slicer and export a new .gcode.3mf file."
+#~ msgstr "ไฟล์ .gcode.3mf ไม่มีข้อมูล G-code โปรดแบ่งส่วนด้วย Orca Slicer และส่งออกไฟล์ .gcode.3mf ใหม่"
+
+#~ msgid ""
+#~ "There are some unknown or incompatible filaments mapped to generic preset.\n"
+#~ "Please update Orca Slicer or restart Orca Slicer to check if there is an update to system presets."
+#~ msgstr ""
+#~ "มีเส้นพลาสติกที่ไม่รู้จักหรือเข้ากันไม่ได้บางส่วนที่แมปกับค่าที่ตั้งล่วงหน้าทั่วไป\n"
+#~ "โปรดอัปเดต Orca Slicer หรือรีสตาร์ท Orca Slicer เพื่อตรวจสอบว่ามีการอัปเดตการตั้งค่าล่วงหน้าของระบบหรือไม่"
+
+#~ msgid "Importing to Orca Slicer failed. Please download the file and manually import it."
+#~ msgstr "การนำเข้าไปยัง Orca Slicer ล้มเหลว โปรดดาวน์โหลดไฟล์และนำเข้าด้วยตนเอง"
+
+#, c-format, boost-format
+#~ msgid "OrcaSlicer can't connect to %s. Please check if the printer is powered on and connected to the network."
+#~ msgstr "OrcaSlicer ไม่สามารถเชื่อมต่อกับ %s ได้ โปรดตรวจสอบว่าเครื่องพิมพ์เปิดอยู่และเชื่อมต่อกับเครือข่ายหรือไม่"
+
+# AI Translated
+#, c-format, boost-format
+#~ msgid "Associate %s:// with OrcaSlicer so that Orca can open models from %s"
+#~ msgstr "เชื่อมโยง %s:// กับ OrcaSlicer เพื่อให้ Orca เปิดโมเดลจาก %s ได้"
+
+#~ msgid "If enabled, OrcaSlicer will re-slice automatically whenever slicing-related settings change."
+#~ msgstr "หากเปิดใช้งาน OrcaSlicer จะแบ่งส่วนใหม่โดยอัตโนมัติทุกครั้งที่การตั้งค่าที่เกี่ยวข้องกับการแบ่งมีการเปลี่ยนแปลง"
+
+# AI Translated
+#~ msgid "If enabled, OrcaSlicer will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
+#~ msgstr "หากเปิดใช้งาน OrcaSlicer จะจดจำตัวเลือกล่าสุดที่เลือกในเมนูดรอปดาวน์ของปุ่มพิมพ์ (เช่น พิมพ์, ส่งออกไฟล์เพลตที่สไลซ์แล้ว, ส่งออกไฟล์ G-code) และใช้เป็นค่าเริ่มต้นเมื่อเปิดโปรแกรมครั้งถัดไป"
+
+# AI Translated
+#~ msgid ""
+#~ "Route print jobs for non-Bambu printers through printer plug-in agents instead of the classic print-host upload flow.\n"
+#~ "When disabled, OrcaSlicer uses the legacy print-host behavior."
+#~ msgstr ""
+#~ "ส่งงานพิมพ์ของเครื่องพิมพ์ที่ไม่ใช่ Bambu ผ่านเอเจนต์ปลั๊กอินของเครื่องพิมพ์ แทนการอัพโหลดไปยังโฮสต์การพิมพ์แบบเดิม\n"
+#~ "เมื่อปิดใช้ OrcaSlicer จะใช้พฤติกรรมโฮสต์การพิมพ์แบบเดิม"
+
+#~ msgid "The printer is required to be on the same LAN as Orca Slicer."
+#~ msgstr "เครื่องพิมพ์จะต้องอยู่ใน LAN เดียวกันกับ Orca Slicer"
+
+#~ msgid "Orca would re-calculate your flushing volumes everytime the filaments color changed or filaments changed. You could disable the auto-calculate in Orca Slicer > Preferences"
+#~ msgstr "Orca จะคำนวณปริมาตรการไล่เส้นของคุณใหม่ทุกครั้งที่สีเส้นพลาสติกเปลี่ยนไปหรือเส้นพลาสติกเปลี่ยนไป คุณสามารถปิดการใช้งานการคำนวณอัตโนมัติใน Orca Slicer > การตั้งค่า"
+
+# AI Translated
+#~ msgid "Please make sure any instances of OrcaSlicer are not running"
+#~ msgstr "โปรดตรวจสอบให้แน่ใจว่าไม่มีอินสแตนซ์ของ OrcaSlicer ที่กำลังทำงานอยู่"
+
+# AI Translated
+#, c-format, boost-format
+#~ msgid ""
+#~ "The following installed plugins were not found on disk:\n"
+#~ "%s\n"
+#~ "\n"
+#~ "Remove them from OrcaSlicer?"
+#~ msgstr ""
+#~ "ไม่พบปลั๊กอินที่ติดตั้งต่อไปนี้บนดิสก์:\n"
+#~ "%s\n"
+#~ "\n"
+#~ "ต้องการนำออกจาก OrcaSlicer หรือไม่?"
+
+# AI Translated
+#~ msgid "You can return to OrcaSlicer. This window will close automatically."
+#~ msgstr "คุณสามารถกลับไปที่ OrcaSlicer ได้ หน้าต่างนี้จะปิดโดยอัตโนมัติ"
+
+# AI Translated
+#~ msgid "Something went wrong. Please return to OrcaSlicer and try again."
+#~ msgstr "เกิดข้อผิดพลาดบางอย่าง โปรดกลับไปที่ OrcaSlicer แล้วลองอีกครั้ง"
+
+# AI Translated
+#~ msgid "You can return to OrcaSlicer. If your browser does not redirect automatically, use the button below."
+#~ msgstr "คุณสามารถกลับไปที่ OrcaSlicer ได้ หากเบราว์เซอร์ไม่เปลี่ยนเส้นทางโดยอัตโนมัติ ให้ใช้ปุ่มด้านล่าง"
+
+#, c-format, boost-format
+#~ msgid ""
+#~ "%s\n"
+#~ "Do you want to continue?"
+#~ msgstr ""
+#~ "%s\n"
+#~ "คุณต้องการดำเนินการต่อหรือไม่?"
+
+#~ msgid "Remember my choice"
+#~ msgstr "จดจำตัวเลือกของฉัน"
+
+#~ msgid "Subdivision mesh (Lost color)"
+#~ msgstr "แบ่งตาข่าย (สีที่หายไป)"
+
+#~ msgid "Storage needs to be inserted before sending to printer."
+#~ msgstr "ต้องใส่ที่เก็บข้อมูลก่อนที่จะส่งไปยังเครื่องพิมพ์"
+
+#~ msgid "Storage needs to be inserted before printing."
+#~ msgstr "ต้องใส่ที่เก็บข้อมูลก่อนพิมพ์"
+
+#~ msgid "Storage needs to be inserted before send to printer."
+#~ msgstr "ต้องใส่ที่เก็บข้อมูลก่อนส่งไปยังเครื่องพิมพ์"

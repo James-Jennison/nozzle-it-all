@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-# detect if Catch is being bundled,
-# disable testsuite in that case
-if(NOT DEFINED PROJECT_NAME)
+# Detect whether Catch2 is the top-level source tree. PROJECT_NAME is a
+# directory-scoped variable and is not a reliable subproject test when parent
+# projects use nested project() declarations.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set(NOT_SUBPROJECT ON)
 else()
   set(NOT_SUBPROJECT OFF)

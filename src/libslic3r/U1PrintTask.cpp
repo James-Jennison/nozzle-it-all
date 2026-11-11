@@ -74,9 +74,15 @@ PrinterState parse_printer_state(const nlohmann::json &cfg)
     for (size_t i = 0; i < state.toolheads.size(); ++i) {
         Filament &f = state.toolheads[i];
         f.present   = array_item<bool>(cfg, "filament_exist", i, false);
+        f.vendor    = array_item<std::string>(cfg, "filament_vendor", i, "");
         f.type      = upper(array_item<std::string>(cfg, "filament_type", i, ""));
+        f.sub_type  = array_item<std::string>(cfg, "filament_sub_type", i, "");
         if (f.type == "NONE")
             f.type.clear();
+        if (upper(f.vendor) == "NONE")
+            f.vendor.clear();
+        if (upper(f.sub_type) == "NONE")
+            f.sub_type.clear();
         f.color = normalize_color(array_item<std::string>(cfg, "filament_color_rgba", i, ""));
     }
     state.bed_level         = flag(cfg, "auto_bed_leveling");

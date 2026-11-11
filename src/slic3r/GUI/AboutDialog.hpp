@@ -11,6 +11,10 @@
 #include <wx/html/htmlwin.h>
 
 #include "GUI_Utils.hpp"
+#include "Widgets/Button.hpp"
+#include "Widgets/HyperLink.hpp"
+#include "Widgets/Label.hpp"
+#include "Widgets/StaticLine.hpp"
 #include "wxExtensions.hpp"
 
 class wxEvent;
@@ -78,6 +82,16 @@ protected:
     void on_dpi_changed(const wxRect &suggested_rect) override;
     
 private:
+#if NOZZLE_BRANDING
+    void build_nozzle_layout();
+    void apply_nozzle_theme();
+    void on_sys_color_changed() override;
+    wxPanel* m_nia_card{nullptr};
+    StaticLine* m_nia_rule{nullptr};
+    HyperLink* m_nia_site{nullptr};
+    Button* m_nia_license{nullptr};
+    std::vector<std::pair<Label*, bool>> m_nia_labels;
+#endif
     void onLinkClicked(wxHtmlLinkEvent &event);
     void onCloseDialog(wxEvent &);
     void onCopyrightBtn(wxEvent &);

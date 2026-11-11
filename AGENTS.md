@@ -2,9 +2,59 @@
 
 OrcaSlicer — open-source C++17 3D slicer. wxWidgets GUI, CMake build system.
 
+## Credential handling
+
+Distinguish restrictions enforced by the active execution environment from repository
+security practices. State an enforced restriction once and do not repeatedly debate it,
+invent additional governance requirements, or stall unrelated engineering work.
+
+Never expose credentials in chat, logs, source code, commits, command output, test
+fixtures, screenshots, build artifacts, or review packages, and never persist them in
+plaintext. When the active execution environment prohibits direct credential access,
+implement the smallest usable alternative: a masked native credential-entry control that
+writes directly to the operating-system keychain. Continue unrelated implementation,
+validation, correction, and review work without waiting for the credential. Request Owner
+entry only at the first acceptance step that actually needs the external service.
+
 ## Build Commands
 
 Build the Release configuration unless asked otherwise.
+
+### Required build host
+
+All configure, compile, link, test-binary, package, image, and other artifact-producing
+build work for this repository runs on `gthost-build01`. The Owner workstation (MORG)
+does not provide `heavy-build` and must not be used as a fallback build host. Do not
+invoke `heavy-build`, CMake builds, native compilation, packaging, or generated-artifact
+validation on MORG.
+
+Source inspection, source editing, and non-artifact static checks may run on MORG. Before
+building, transfer an exact source snapshot to a new candidate-specific directory on
+`gthost-build01`; record the local source commit and dirty-state/archive identity, the
+remote source verification, explicit configuration, build command, produced artifact,
+and artifact digest. Existing remote build directories or dependency trees may be reused
+only after their provenance and configuration are verified. A partial or successful local
+build is never acceptance evidence.
+
+Candidate validation must use `scripts/upstream/gthost_candidate.py` on
+`gthost-build01`. The entrypoint verifies the pinned builder image, canonical container
+mount, numeric builder identity, UTF-8 test locale, CMake source path, CTest metadata,
+configuration, and packaging output record before it runs or records anything. Use its `list`, `focused`,
+`full`, and `manifest` modes. Never invoke host-side CTest for a build whose cache records
+container paths, reconstruct an ad hoc Docker test command, or guess an artifact filename.
+
+GTHost source, dependency and active build directories belong under `/vmdata`, never on
+the root filesystem or RAM-backed `/tmp`. A candidate is not complete until the protected
+`archive` mode has copied its exact artifact, candidate manifest, package record and full
+test record to the CIFS storage node and written a verified storage archive record. Use
+`/mnt/storage-node/cold/gthost-build01/orcaslicer-candidates`; do not run active builds,
+Git worktrees, databases, VM disks or container writable layers there. Keep a local
+artifact only while a named acceptance gate requires it, then retire it with the protected
+archive command after the storage copy has been verified. The protected command delegates
+to the machine-global lifecycle and publishes below
+`/mnt/storage-node/cold/gthost-build01/orcaslicer-candidates/artifacts`; local retirement
+also requires the exact hash-bound retirement record proving that all named acceptance
+gates are closed.
 
 ```bash
 # macOS
@@ -22,9 +72,12 @@ cmake --build . --config Release --target ALL_BUILD -- -m
 Catch2 framework. Tests in `tests/`; see [tests/AGENTS.md](tests/AGENTS.md) for where a new test belongs and the conventions to follow.
 
 ```bash
-cd build && ctest -C Release --output-on-failure    # all tests
-ctest --test-dir ./tests/libslic3r -C Release       # individual suite
-ctest --test-dir ./tests/fff_print -C Release
+# Run on gthost-build01 from the exact candidate source directory.
+python3 scripts/upstream/gthost_candidate.py list
+python3 scripts/upstream/gthost_candidate.py focused --regex '<CTest regex>'
+python3 scripts/upstream/gthost_candidate.py full
+python3 scripts/upstream/gthost_candidate.py manifest --source-archive-sha256 '<sha256>'
+sudo -n python3 scripts/upstream/gthost_candidate.py archive
 ```
 
 ## Documentation

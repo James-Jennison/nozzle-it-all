@@ -12,6 +12,7 @@
 #include <functional>
 #include <map>
 #include "libslic3r/Config.hpp"
+#include "libslic3r/libslic3r.h"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/Technologies.hpp"
 #include "libslic3r/Semver.hpp"
@@ -440,7 +441,7 @@ public:
     int  FilterEvent(wxEvent& event) override;
     // The Preferences "Default page" choice, stored as its index: 0 Home, 1 Prepare.
     bool starts_on_prepare() const;
-    std::string logo_name() const { return is_editor() ? "OrcaSlicer" : "OrcaSlicer-gcodeviewer"; }
+    std::string logo_name() const { return is_editor() ? SLIC3R_APP_ICON_BASE : "OrcaSlicer-gcodeviewer"; }
 
     bool is_closing() const { return m_is_closing.load(std::memory_order_acquire); }
     void set_closing(bool closing) { m_is_closing.store(closing, std::memory_order_release); }
@@ -881,6 +882,9 @@ public:
     // 01.10.01.50 when the legacy network plugin lacks get_my_token support
     // so the auth server stays on the ?access_token= redirect path.
     std::string     get_bbl_client_version();
+#if NOZZLE_BRANDING
+    void            schedule_nia_settings_import();
+#endif
 
 private:
     int             updating_bambu_networking();
@@ -889,6 +893,9 @@ private:
     bool            on_init_network(bool try_backup = false);
     void            init_networking_callbacks();
     void            init_app_config();
+#if NOZZLE_BRANDING
+    void            run_nia_settings_migration();
+#endif
     // GUI-side subscriptions to plugin loader events (dialog refresh,
     // network-agent registration, plate revalidation).
     void            init_plugin_gui_wiring();

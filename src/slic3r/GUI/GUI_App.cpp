@@ -44,12 +44,15 @@
 #include <boost/locale/encoding_utf.hpp>
 #include <boost/log/detail/native_typeof.hpp>
 #include <cstdint>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <cassert>
 #include <filesystem>
 #include <ctime>
 #include "libslic3r/AppConfig.hpp"
+#include "libslic3r/NIASettingsMigration.hpp"
+#include "libslic3r/NIAUpdatePolicy.hpp"
 #include <ios>
 #include <chrono>
 #include <functional>
@@ -65,6 +68,7 @@
 #include "slic3r/GUI/Widgets/StateColor.hpp"
 #include <ostream>
 #include <new>
+#include <wx/choicdlg.h>
 #include "libslic3r/Exception.hpp"
 #include "slic3r/GUI/MsgDialog.hpp"
 #include <memory>
@@ -107,6 +111,7 @@
 #include <wx/translation.h>
 #include <wx/msgdlg.h>
 #include <wx/setup.h>
+#include <wx/stdpaths.h>
 #include <wx/timer.h>
 #include <wx/snglinst.h>
 #include <wx/image.h>
@@ -256,6 +261,7 @@
 #include "slic3r/GUI/Gizmos/GLGizmosManager.hpp"
 #include "slic3r/GUI/HttpServer.hpp"
 #include "slic3r/GUI/ImGuiWrapper.hpp"
+#include "slic3r/GUI/NIATheme.hpp"
 #include "slic3r/GUI/ParamsDialog.hpp"
 #include "slic3r/GUI/ParamsPanel.hpp"
 #include "slic3r/GUI/PartPlate.hpp"
@@ -884,8 +890,9 @@ static void generic_exception_handle()
         // and terminate the app so it is at least certain to happen now.
         BOOST_LOG_TRIVIAL(error) << boost::format("std::bad_alloc exception: %1%") % ex.what();
         flush_logs();
-        wxString errmsg = wxString::Format(_L("OrcaSlicer will terminate because of running out of memory. "
-                                              "It may be a bug. It will be appreciated if you report the issue to our team."));
+        wxString errmsg = wxString::Format(_L("%s will terminate because it ran out of memory. "
+                                              "This may be a bug; please report the issue to our team."),
+                                             SLIC3R_APP_FULL_NAME);
         wxMessageBox(errmsg + "\n\n" + wxString(ex.what()), _L("Fatal error"), wxOK | wxICON_ERROR);
 
         std::terminate();
@@ -893,15 +900,16 @@ static void generic_exception_handle()
      } catch (const boost::io::bad_format_string& ex) {
      	BOOST_LOG_TRIVIAL(error) << boost::format("Uncaught exception: %1%") % ex.what();
         	flush_logs();
-        wxString errmsg = _L("OrcaSlicer will terminate because of a localization error. "
-                             "It will be appreciated if you report the specific scenario this issue happened.");
+        wxString errmsg = wxString::Format(_L("%s will terminate because of a localization error. "
+                                              "Please report the specific scenario in which this happened."),
+                                             SLIC3R_APP_FULL_NAME);
         wxMessageBox(errmsg + "\n\n" + wxString(ex.what()), _L("Critical error"), wxOK | wxICON_ERROR);
         std::terminate();
         //throw;
     } catch (const std::exception& ex) {
         BOOST_LOG_TRIVIAL(error) << boost::format("Uncaught exception: %1%") % ex.what();
         flush_logs();
-        wxLogError(format_wxstr(_L("OrcaSlicer got an unhandled exception: %1%"), ex.what()));
+        wxLogError(format_wxstr(_L("%1% encountered an unhandled exception: %2%"), SLIC3R_APP_FULL_NAME, ex.what()));
         throw;
     }
 //#endif
@@ -1147,7 +1155,9 @@ void GUI_App::post_init()
                 this->preset_updater->sync(http_url, language, network_ver, sys_preset ? preset_bundle : nullptr);
             }
 
+#if !NOZZLE_BRANDING
             this->check_new_version_sf();
+#endif
             if (!cw_showed)
                 this->check_legacy_user_filament_presets(false);
             const auto cloud_provider = get_printer_cloud_provider();
@@ -2821,7 +2831,12 @@ void GUI_App::init_app_config()
     set_log_path_and_level(log_filename, 3);
 #endif
 
+#if NOZZLE_BRANDING
+    BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, %1% product %2%, engine %3%, build %4%")
+                                   % SLIC3R_APP_FULL_NAME % NIA_DESKTOP_VERSION % SoftFever_VERSION % build_commit_label;
+#else
     BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, Current OrcaSlicer Version %1% build %2%") % SoftFever_VERSION % build_commit_label;
+#endif
 
     //BBS: remove GCodeViewer as seperate APP logic
 	if (!app_config)
@@ -2862,6 +2877,194 @@ void GUI_App::init_app_config()
     set_logging_level(Slic3r::level_string_to_boost(app_config->get("log_severity_level")));
 
 }
+
+#if NOZZLE_BRANDING
+void GUI_App::run_nia_settings_migration()
+{
+    if (m_datadir_redefined)
+        return;
+
+    const NIASettingsMigration::RecoveryResult recovery = NIASettingsMigration::recover_interrupted(data_dir());
+    if (recovery.busy)
+        return;
+    if (!recovery.error.empty()) {
+        wxMessageBox(wxString::Format(
+                         _L("An interrupted settings import could not be recovered safely. No new import was attempted.\n\n%s"),
+                         wxString::FromUTF8(recovery.error)),
+                     _L("Settings import recovery failed"), wxOK | wxICON_ERROR);
+        return;
+    }
+    if (recovery.recovered && !recovery.recovery_path.empty())
+        wxMessageBox(wxString::Format(_L("An interrupted settings import was recovered.\n\nRecovered settings: %s"),
+                                      wxString::FromUTF8(recovery.recovery_path)),
+                     _L("Settings import recovered"), wxOK | wxICON_INFORMATION);
+
+    const bool requested = NIASettingsMigration::import_requested(data_dir());
+    if (!requested && NIASettingsMigration::is_meaningful_data_dir(data_dir()))
+        return;
+
+    std::vector<NIASettingsMigration::SourceSpec> sources;
+#ifdef __linux__
+    const char *home_env = std::getenv("HOME");
+    const fs::path home = home_env != nullptr ? fs::path(home_env) : fs::path();
+    sources = {
+        {NIASettingsMigration::SourceKind::NiaDesktop, "Nozzle It All Desktop", xdg_config_dir("nozzle-it-all"),
+         {"nozzle-it-all.conf", "OrcaSlicer.conf", "OrcaSlicer.ini"}},
+        {NIASettingsMigration::SourceKind::HybridOrca, "Hybrid Orca",
+         (home / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer").string(),
+         {"OrcaSlicer.conf", "OrcaSlicer.ini"}},
+        {NIASettingsMigration::SourceKind::SnapmakerOrca, "Snapmaker Orca",
+         (home / ".var/app/io.github.Snapmaker.Snapmaker_Orca/config/Snapmaker_Orca").string(),
+         {"Snapmaker_Orca.conf", "Snapmaker_Orca.ini", "OrcaSlicer.conf", "OrcaSlicer.ini"}},
+        {NIASettingsMigration::SourceKind::SnapmakerOrca, "Snapmaker Orca", xdg_config_dir("Snapmaker_Orca"),
+         {"Snapmaker_Orca.conf", "Snapmaker_Orca.ini", "OrcaSlicer.conf", "OrcaSlicer.ini"}},
+        {NIASettingsMigration::SourceKind::OrcaSlicer, "OrcaSlicer", xdg_config_dir("OrcaSlicer"),
+         {"OrcaSlicer.conf", "OrcaSlicer.ini"}}
+    };
+#else
+    const fs::path config_root(wxStandardPaths::Get().GetUserConfigDir().ToUTF8().data());
+    sources = {
+        {NIASettingsMigration::SourceKind::NiaDesktop, "Nozzle It All Desktop", (config_root / "nozzle-it-all").string(),
+         {"nozzle-it-all.conf", "nozzle-it-all.ini", "OrcaSlicer.conf", "OrcaSlicer.ini"}},
+        {NIASettingsMigration::SourceKind::SnapmakerOrca, "Snapmaker Orca", (config_root / "Snapmaker_Orca").string(),
+         {"Snapmaker_Orca.conf", "Snapmaker_Orca.ini", "OrcaSlicer.conf", "OrcaSlicer.ini"}},
+        {NIASettingsMigration::SourceKind::OrcaSlicer, "OrcaSlicer", (config_root / "OrcaSlicer").string(),
+         {"OrcaSlicer.conf", "OrcaSlicer.ini"}}
+    };
+#endif
+
+    const auto candidates = NIASettingsMigration::discover(sources, data_dir(), requested);
+    if (candidates.empty()) {
+        if (requested) {
+            NIASettingsMigration::clear_import_requested(data_dir());
+            wxMessageBox(_L("No importable Orca-family settings were found."), _L("Import existing settings"),
+                         wxOK | wxICON_INFORMATION);
+        }
+        return;
+    }
+
+    size_t candidate_index = 0;
+    if (candidates.size() > 1) {
+        wxArrayString choices;
+        for (const NIASettingsMigration::Candidate &candidate : candidates)
+            choices.Add(wxString::Format("%s — %s", wxString::FromUTF8(candidate.source.label),
+                                         wxString::FromUTF8(candidate.source.path)));
+        wxSingleChoiceDialog source_choice(nullptr, _L("Choose the settings source to import."),
+                                           _L("Import existing settings"), choices);
+        if (source_choice.ShowModal() != wxID_OK) {
+            const std::string marker_error = requested ? NIASettingsMigration::clear_import_requested(data_dir())
+                                                       : NIASettingsMigration::record_import_declined(data_dir());
+            if (!marker_error.empty())
+                BOOST_LOG_TRIVIAL(warning) << "Could not record dismissed NIA settings import: " << marker_error;
+            return;
+        }
+        candidate_index = size_t(source_choice.GetSelection());
+    }
+    const auto &candidate = candidates[candidate_index];
+    const wxString message = requested
+        ? wxString::Format(
+              _L("Import settings from %s on this launch?\n\nSource: %s\n\nYour current Nozzle It All Desktop settings will be backed up and replaced. The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."),
+              wxString::FromUTF8(candidate.source.label), wxString::FromUTF8(candidate.source.path))
+        : wxString::Format(
+              _L("Nozzle It All Desktop found settings from %s. Copy those settings into its own data directory?\n\nSource: %s\n\nThe source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."),
+              wxString::FromUTF8(candidate.source.label), wxString::FromUTF8(candidate.source.path));
+    wxMessageDialog consent(nullptr, message, _L("Import existing settings"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    const bool consent_granted = consent.ShowModal() == wxID_YES;
+    if (!consent_granted) {
+        const std::string marker_error = requested ? NIASettingsMigration::clear_import_requested(data_dir())
+                                                   : NIASettingsMigration::record_import_declined(data_dir());
+        if (!marker_error.empty())
+            BOOST_LOG_TRIVIAL(warning) << "Could not record declined NIA settings import: " << marker_error;
+        return;
+    }
+
+    const std::string target_config_name =
+        fs::path(AppConfig::config_path(data_dir(), AppConfig::EAppMode::Editor)).filename().string();
+    NIASettingsMigration::Result result =
+        NIASettingsMigration::copy_candidate(candidate, data_dir(), target_config_name, consent_granted, false);
+    if (result.cancelled)
+        return;
+    if (result.partial_confirmation_required) {
+        wxString skipped;
+        for (const std::string &entry : result.skipped_files) {
+            if (!skipped.empty())
+                skipped += "\n";
+            skipped += wxString::FromUTF8(entry);
+        }
+        wxString sanitized;
+        for (const std::string &entry : result.sanitized_files) {
+            if (!sanitized.empty())
+                sanitized += "\n";
+            sanitized += wxString::FromUTF8(entry);
+        }
+        if (skipped.empty())
+            skipped = _L("None.");
+        if (sanitized.empty())
+            sanitized = _L("None.");
+        const wxString backup = result.backup_path.empty()
+                                    ? _L("No existing settings directory needs a backup.")
+                                    : _L("Your current settings will be retained in a timestamped backup beside the Nozzle It All Desktop data directory. The exact path will be shown after import.");
+        wxMessageDialog partial_consent(
+            nullptr,
+            wxString::Format(
+                _L("Some source files were sanitized before import, and some could not be imported safely.\n\nSource: %s\n\nTarget to replace: %s\n\nSanitized and copied files:\n%s\n\nSkipped files:\n%s\n\n%s\n\nContinue with this exact prepared import?"),
+                wxString::FromUTF8(candidate.source.label), wxString::FromUTF8(candidate.source.path),
+                wxString::FromUTF8(data_dir()), sanitized, skipped, backup),
+            _L("Confirm partial settings import"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING);
+        if (partial_consent.ShowModal() != wxID_YES) {
+            const std::string discard_error = NIASettingsMigration::discard_prepared_candidate(result, data_dir());
+            if (!discard_error.empty())
+                wxMessageBox(wxString::FromUTF8(discard_error), _L("Settings import cleanup failed"), wxOK | wxICON_ERROR);
+            return;
+        }
+        const NIASettingsMigration::Result prepared = result;
+        result = NIASettingsMigration::copy_candidate(candidate, data_dir(), target_config_name, true, true, &prepared);
+    }
+    if (!result.success) {
+        if (requested)
+            NIASettingsMigration::clear_import_requested(data_dir());
+        wxMessageBox(wxString::Format(_L("The settings import could not be completed. No source data was changed.\n\n%s"),
+                                      wxString::FromUTF8(result.error)),
+                     _L("Settings import failed"), wxOK | wxICON_ERROR);
+        return;
+    }
+
+    delete app_config;
+    app_config = new AppConfig();
+    m_app_conf_exists = app_config->exists();
+    m_config_corrupted = false;
+    if (m_app_conf_exists) {
+        const std::string error = app_config->load();
+        if (!error.empty())
+            m_config_corrupted = true;
+        m_last_config_version = app_config->orig_version();
+    }
+    m_shortcuts->load(*app_config);
+    init_download_path();
+    set_logging_level(Slic3r::level_string_to_boost(app_config->get("log_severity_level")));
+
+    const wxString result_message = result.partial
+                                        ? wxString::Format(
+                                              _L("Settings were imported with the warnings you approved. Your previous settings remain available at the backup path below.\n\nMigration report: %s\n\nBackup: %s"),
+                                              wxString::FromUTF8(result.report_path), wxString::FromUTF8(result.backup_path))
+                                        : wxString::Format(_L("Settings were copied successfully.\n\nMigration report: %s"),
+                                                           wxString::FromUTF8(result.report_path));
+    wxMessageBox(result_message, result.partial ? _L("Settings imported with warnings") : _L("Settings imported"),
+                 wxOK | (result.partial ? wxICON_WARNING : wxICON_INFORMATION));
+}
+
+void GUI_App::schedule_nia_settings_import()
+{
+    const std::string error = NIASettingsMigration::record_import_requested(data_dir());
+    if (!error.empty()) {
+        wxMessageBox(wxString::Format(_L("The settings import could not be scheduled.\n\n%s"), wxString::FromUTF8(error)),
+                     _L("Import existing settings"), wxOK | wxICON_ERROR);
+        return;
+    }
+    wxMessageBox(_L("Settings import is scheduled. Restart Nozzle It All Desktop normally to choose the source and review the backup-and-replace confirmation."),
+                 _L("Import existing settings"), wxOK | wxICON_INFORMATION);
+}
+#endif
 
 // returns true if found newer version and user agreed to use it
 bool GUI_App::check_older_app_config(Semver current_version, bool backup)
@@ -3226,6 +3429,9 @@ bool GUI_App::on_init_inner()
 
     // Set initialization of image handlers before any UI actions - See GH issue #7469
     wxInitAllImageHandlers();
+#if NOZZLE_BRANDING
+    run_nia_settings_migration();
+#endif
 #ifdef NDEBUG
     wxImage::SetDefaultLoadFlags(0); // ignore waring in release build
 #endif
@@ -3486,6 +3692,11 @@ bool GUI_App::on_init_inner()
 
         preset_updater = new PresetUpdater();
         Bind(EVT_SLIC3R_VERSION_ONLINE, [this](const wxCommandEvent& evt) {
+#if NOZZLE_BRANDING
+            (void) this;
+            (void) evt;
+            BOOST_LOG_TRIVIAL(warning) << "Ignored an upstream application-update event in Nozzle It All Desktop.";
+#else
             if (this->plater_ != nullptr) {
                 // this->plater_->get_notification_manager()->push_notification(NotificationType::NewAppAvailable);
                 //BBS show msg box to download new version
@@ -3534,9 +3745,15 @@ bool GUI_App::on_init_inner()
                     }
                 }
             }
+#endif
             });
 
         Bind(EVT_ENTER_FORCE_UPGRADE, [this](const wxCommandEvent& evt) {
+#if NOZZLE_BRANDING
+                (void) this;
+                (void) evt;
+                BOOST_LOG_TRIVIAL(warning) << "Ignored an upstream forced-upgrade event in Nozzle It All Desktop.";
+#else
                 wxString      version_str = wxString::FromUTF8(this->app_config->get("upgrade", "version"));
                 wxString      description_text = wxString::FromUTF8(this->app_config->get("upgrade", "description"));
                 std::string   download_url = this->app_config->get("upgrade", "url");
@@ -3560,6 +3777,7 @@ bool GUI_App::on_init_inner()
                  default:
                      wxGetApp().mainframe->Close(true);
                 }
+#endif
             });
 
         Bind(EVT_SHOW_NO_NEW_VERSION, [](const wxCommandEvent& evt) {
@@ -4589,6 +4807,17 @@ const wxColour GUI_App::get_label_default_clr_modified()
 void GUI_App::init_label_colours()
 {
     bool is_dark_mode = dark_mode();
+#if NOZZLE_BRANDING
+    m_color_label_modified = NIATheme::heat(is_dark_mode);
+    m_color_label_sys      = NIATheme::text_muted(is_dark_mode);
+    m_color_label_default           = NIATheme::text(is_dark_mode);
+    m_color_highlight_label_default = NIATheme::text(is_dark_mode);
+    m_color_highlight_default       = NIATheme::surface_raised(is_dark_mode);
+    m_color_hovered_btn_label       = NIATheme::on_accent(is_dark_mode);
+    m_color_default_btn_label       = NIATheme::text(is_dark_mode);
+    m_color_selected_btn_bg         = NIATheme::accent(is_dark_mode);
+    m_color_window_default          = NIATheme::background(is_dark_mode);
+#else
     m_color_label_modified = is_dark_mode ? wxColour("#F1754E") : wxColour("#F1754E");
     m_color_label_sys      = is_dark_mode ? wxColour("#B2B3B5") : wxColour("#363636");
 
@@ -4603,6 +4832,7 @@ void GUI_App::init_label_colours()
     m_color_label_default = wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT);
 #endif
     m_color_window_default          = is_dark_mode ? wxColour(43, 43, 43)   : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW);
+#endif
     StateColor::SetDarkMode(is_dark_mode);
 }
 
@@ -6626,6 +6856,18 @@ void maybe_attach_updater_signature(Http& http, const std::string& canonical_que
 
 void GUI_App::check_new_version_sf(bool show_tips, int by_user)
 {
+#if NOZZLE_BRANDING
+    (void)show_tips;
+    const bool channel_available = NIAUpdatePolicy::channel_available();
+    BOOST_LOG_TRIVIAL(info) << "Nozzle It All Desktop update check skipped: the NIA update channel is "
+                            << (channel_available ? "available" : "disabled") << ".";
+    if (by_user != 0) {
+        InfoDialog dialog(nullptr, _L("Nozzle It All Desktop updates"),
+                          _L("The Nozzle It All Desktop update channel is not available yet. No update request was sent."));
+        dialog.ShowModal();
+    }
+    return;
+#else
     AppConfig* app_config = wxGetApp().app_config;
     bool       check_stable_only = app_config->get_bool("check_stable_update_only");
     auto version_check_url = app_config->version_check_url();
@@ -6767,6 +7009,7 @@ void GUI_App::check_new_version_sf(bool show_tips, int by_user)
         });
 
     http.perform();
+#endif
 }
 
 // return true if handled
@@ -8605,7 +8848,7 @@ bool GUI_App::load_language(wxString language, bool initial)
                     // There seems to be a support for that on Windows and OSX, while on Linuxes the code just returns wxLocale::GetSystemLanguage().
                     // The last parameter gets added to the list of detected dictionaries. This is a workaround
                     // for not having the English dictionary. Let's hope wxWidgets of various versions process this call the same way.
-                    wxString best_language = wxTranslations::Get()->GetBestTranslation(SLIC3R_APP_KEY, wxLANGUAGE_ENGLISH);
+                    wxString best_language = wxTranslations::Get()->GetBestTranslation(SLIC3R_TRANSLATION_CATALOG, wxLANGUAGE_ENGLISH);
                     if (!best_language.IsEmpty()) {
                         m_language_info_best = wxLocale::FindLanguageInfo(best_language);
                         BOOST_LOG_TRIVIAL(info) << boost::format("Best translation language detected (may be different from user locales): %1%") %
@@ -8752,14 +8995,24 @@ bool GUI_App::load_language(wxString language, bool initial)
 
     if (!wxLocale::IsAvailable(locale_language_info->Language)) {
     	// Loading the language dictionary failed.
+#if NOZZLE_BRANDING
+	    wxString message = wxString::Format(_L("Switching Nozzle It All Desktop to language %s failed."), requested_language_code);
+#else
 	    wxString message = wxString::Format(_L("Switching Orca Slicer to language %s failed."), requested_language_code);
+#endif
 #if !defined(_WIN32) && !defined(__APPLE__)
         // likely some linux system
         message += _L("\nYou may need to reconfigure the missing locales, likely by running the \"locale-gen\" and \"dpkg-reconfigure locales\" commands.\n");
 #endif
         if (initial)
         	message += "\n\n" + _L("Application will close.");
-        wxMessageBox(message, _L("Orca Slicer - Switching language failed"), wxOK | wxICON_ERROR);
+        wxMessageBox(message,
+#if NOZZLE_BRANDING
+                     _L("Nozzle It All Desktop - Switching language failed"),
+#else
+                     _L("Orca Slicer - Switching language failed"),
+#endif
+                     wxOK | wxICON_ERROR);
         if (initial)
 			std::exit(EXIT_FAILURE);
 		else
@@ -8774,7 +9027,7 @@ bool GUI_App::load_language(wxString language, bool initial)
     // Override language at the active wxTranslations class (which is stored in the active m_wxLocale)
     // to load possibly different dictionary, for example, load Czech dictionary for Slovak language.
     wxTranslations::Get()->SetLanguage(language_dict);
-    m_wxLocale->AddCatalog(SLIC3R_APP_KEY);
+    m_wxLocale->AddCatalog(SLIC3R_TRANSLATION_CATALOG);
     m_active_language_code = requested_language_code;
     m_imgui->set_language(into_u8(requested_language_code));
 

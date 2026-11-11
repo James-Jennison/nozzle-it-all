@@ -5,12 +5,14 @@
 #include "libslic3r/U1PrintTask.hpp"
 
 #include <boost/filesystem/path.hpp>
+#include <wx/bitmap.h>
+#include <wx/string.h>
 
 #include <vector>
 
-class wxCheckBox;
-class wxChoice;
-class wxTextCtrl;
+class CheckBox;
+class ComboBox;
+class TextInput;
 
 namespace Slic3r {
 namespace GUI {
@@ -25,7 +27,11 @@ public:
     U1SendDialog(wxWindow                               *parent,
                  const boost::filesystem::path          &default_name,
                  const std::vector<U1PrintTask::Filament> &plate_filaments,
-                 const U1PrintTask::PrinterState          &printer);
+                 const U1PrintTask::PrinterState          &printer,
+                 const wxString                           &project_name,
+                 int                                       plate_number,
+                 const wxString                           &estimated_time,
+                 const wxBitmap                           &thumbnail);
 
     boost::filesystem::path filename() const;
     bool                    start_print() const { return m_start_print; }
@@ -40,17 +46,17 @@ private:
     struct Row
     {
         size_t    filament;
-        wxChoice *toolhead;
+        ::ComboBox *toolhead;
     };
 
     std::vector<U1PrintTask::Filament> m_plate_filaments;
     std::vector<U1PrintTask::Filament> m_toolheads;
     std::vector<Row>                   m_rows;
-    wxTextCtrl                        *m_filename          = nullptr;
-    wxCheckBox                        *m_bed_level         = nullptr;
-    wxCheckBox                        *m_flow_calibrate    = nullptr;
-    wxCheckBox                        *m_time_lapse        = nullptr;
-    wxCheckBox                        *m_shaper_calibrate  = nullptr;
+    ::TextInput                       *m_filename          = nullptr;
+    ::CheckBox                        *m_bed_level         = nullptr;
+    ::CheckBox                        *m_flow_calibrate    = nullptr;
+    ::CheckBox                        *m_time_lapse        = nullptr;
+    ::CheckBox                        *m_shaper_calibrate  = nullptr;
     bool                               m_start_print       = true;
 };
 

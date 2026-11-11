@@ -276,6 +276,10 @@ set(lisbslic3r_sources
     PrinterSnapshot.cpp
     PrinterSnapshot.hpp
     DeviceWorkspaceState.cpp
+    NIASettingsMigration.cpp
+    NIASettingsMigration.hpp
+    NIAUpdatePolicy.cpp
+    NIAUpdatePolicy.hpp
     DeviceWorkspaceState.hpp
     GCode/GCodeProcessor.hpp
     GCode/GCodeStatistics.cpp

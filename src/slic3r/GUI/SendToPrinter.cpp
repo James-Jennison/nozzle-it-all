@@ -75,6 +75,7 @@
 #include "DeviceCore/DevManager.h"
 #include "DeviceCore/DevConfigUtil.h"
 #include "DeviceCore/DevStorage.h"
+#include "libslic3r/libslic3r.h"
 #include "libslic3r_version.h"
 #include "slic3r/Utils/FileTransferUtils.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
@@ -1492,7 +1493,7 @@ void SendToPrinterDialog::show_status(PrintDialogStatus status, std::vector<wxSt
 		Enable_Send_Button(false);
 		Enable_Refresh_Button(true);
     } else if (status == PrintDialogStatus::PrintStatusNotOnTheSameLAN) {
-        wxString msg_text = _L("The printer is required to be on the same LAN as Orca Slicer.");
+        wxString msg_text = wxString::Format(_L("The printer must be on the same LAN as %s."), SLIC3R_APP_FULL_NAME);
         update_print_status_msg(msg_text, true, true);
         Enable_Send_Button(false);
         Enable_Refresh_Button(true);

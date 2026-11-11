@@ -2,6 +2,7 @@
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include "libslic3r/libslic3r.h"
 #include "slic3r/GUI/HttpServer.hpp"
 #include <memory>
 #include <boost/log/trivial.hpp>
@@ -108,7 +109,7 @@ int ZUserLogin::ensure_loopback_port()
 }
 
 ZUserLogin::ZUserLogin(std::shared_ptr<ICloudServiceAgent> cloud_agent)
-    : wxDialog((wxWindow*) (wxGetApp().mainframe), wxID_ANY, "OrcaSlicer"), m_cloud_agent(cloud_agent)
+    : wxDialog((wxWindow*) (wxGetApp().mainframe), wxID_ANY, SLIC3R_APP_FULL_NAME), m_cloud_agent(cloud_agent)
 {
     SetBackgroundColour(*wxWHITE);
 
@@ -119,7 +120,11 @@ ZUserLogin::ZUserLogin(std::shared_ptr<ICloudServiceAgent> cloud_agent)
         m_sizer_main->Add(m_line_top, 0, wxEXPAND, 0);
 
         auto* m_message = new wxStaticText(this, wxID_ANY,
+#if NOZZLE_BRANDING
+                                          _L("Cloud agent is not available. Please restart Nozzle It All Desktop and try again."),
+#else
                                           _L("Cloud agent is not available. Please restart OrcaSlicer and try again."),
+#endif
                                           wxDefaultPosition, wxDefaultSize, 0);
         m_message->SetForegroundColour(*wxBLACK);
         m_message->Wrap(FromDIP(360));

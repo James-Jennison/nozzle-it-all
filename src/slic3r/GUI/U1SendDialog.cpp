@@ -532,6 +532,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     auto *cancel = buttons->GetCANCEL();
     auto *upload = m_upload = buttons->GetButtonFromIndex(1);
     auto *print  = m_print  = buttons->GetButtonFromIndex(2);
+    buttons->SetBackgroundColour(colours.window); // the row behind the buttons, which is otherwise white
     top->Add(buttons, 0, wxEXPAND);
 
     cancel->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { EndModal(wxID_CANCEL); });

@@ -33,6 +33,8 @@ constexpr long QUERY_TIMEOUT_S = 5;
 // After a lost Start reply the printer is watched for as long as the Start itself may take.
 constexpr int  RECONCILE_SECONDS = 60;
 constexpr int  START_REPLY_SECONDS = 60;
+// Connecting, the websocket handshake and writing the request each get this long.
+constexpr int  CONNECT_SECONDS = 10;
 // The read-back is fetched in ranges so the file is never held in memory whole.
 constexpr size_t READBACK_CHUNK = 4 * 1024 * 1024;
 
@@ -455,30 +457,51 @@ U1LanPrintHost::StartOutcome U1LanPrintHost::start_print(const std::string &path
 
     // Before the first byte of the request is written the printer cannot have started anything.
     // From then on, anything short of a reply is "unknown" and is settled from the printer's state.
+    // Every step is an asynchronous operation run to completion under a deadline on the stream (the
+    // stream's expiry does not apply to blocking calls), so no step can hang this thread: run()
+    // returns only once the step's handler has run, with success, an error or the timeout.
     bool write_begun = false;
     try {
         boost::asio::io_context            ioc;
         websocket::stream<beast::tcp_stream> ws{ioc};
-        beast::get_lowest_layer(ws).connect(tcp::resolver{ioc}.resolve(host, port));
-        ws.handshake(host + ":" + port, "/websocket");
-        write_begun = true;
-        ws.write(boost::asio::buffer(request.dump()));
-
-        // Moonraker also pushes status notifications on this socket; wait for our reply. The printer
-        // scans metadata before starting, so allow time. The reads are asynchronous under one deadline
-        // on the stream, so a printer that goes silent, or stalls part-way through a frame, ends the
-        // wait at the deadline as "unknown".
-        beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(START_REPLY_SECONDS));
-        for (;;) {
-            beast::flat_buffer buffer;
-            beast::error_code  read_error = boost::asio::error::operation_aborted;
-            ws.async_read(buffer, [&read_error](beast::error_code ec, std::size_t) { read_error = ec; });
+        auto                              &stream = beast::get_lowest_layer(ws);
+        beast::error_code                  step_error;
+        const auto finish = [&](const char *what) {
             ioc.restart();
             ioc.run();
-            if (read_error == beast::error::timeout)
-                throw std::runtime_error("no reply within 60 s");
-            if (read_error)
-                throw beast::system_error(read_error);
+            if (step_error == beast::error::timeout)
+                throw std::runtime_error(std::string(what) + " timed out");
+            if (step_error)
+                throw beast::system_error(step_error);
+        };
+        const auto endpoints = tcp::resolver{ioc}.resolve(host, port);
+
+        step_error = boost::asio::error::operation_aborted;
+        stream.expires_after(std::chrono::seconds(CONNECT_SECONDS));
+        stream.async_connect(endpoints, [&step_error](beast::error_code ec, const tcp::endpoint &) { step_error = ec; });
+        finish("connecting");
+
+        step_error = boost::asio::error::operation_aborted;
+        stream.expires_after(std::chrono::seconds(CONNECT_SECONDS));
+        ws.async_handshake(host + ":" + port, "/websocket", [&step_error](beast::error_code ec) { step_error = ec; });
+        finish("the websocket handshake");
+
+        const std::string text = request.dump();
+        write_begun            = true;
+        step_error             = boost::asio::error::operation_aborted;
+        stream.expires_after(std::chrono::seconds(CONNECT_SECONDS));
+        ws.async_write(boost::asio::buffer(text), [&step_error](beast::error_code ec, std::size_t) { step_error = ec; });
+        finish("sending the Start");
+
+        // Moonraker also pushes status notifications on this socket; wait for our reply. The printer
+        // scans metadata before starting, so allow time. One deadline covers the whole wait, so a
+        // printer that goes silent, or stalls part-way through a frame, ends it as "unknown".
+        stream.expires_after(std::chrono::seconds(START_REPLY_SECONDS));
+        for (;;) {
+            beast::flat_buffer buffer;
+            step_error = boost::asio::error::operation_aborted;
+            ws.async_read(buffer, [&step_error](beast::error_code ec, std::size_t) { step_error = ec; });
+            finish("waiting for the reply");
             const auto reply = nlohmann::json::parse(beast::buffers_to_string(buffer.data()), nullptr, false);
             if (reply.is_discarded() || !reply.is_object() || reply.value("id", -1) != request_id)
                 continue;

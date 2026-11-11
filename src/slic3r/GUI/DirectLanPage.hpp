@@ -156,11 +156,18 @@ private:
     {
         const wxString origin = html_escape(wxString::FromUTF8(m_origin.c_str()));
         const wxString path   = html_escape(wxString::FromUTF8(m_mjpeg_only.c_str()));
-        // "scheme://host" without the port, so that "<host>:*" is a valid source when the origin has one.
+        // "scheme://host" without port or path, so that "<host>:*" is a valid source. An IPv6 host keeps its brackets.
         std::string host_only = m_origin;
-        if (const auto scheme_end = host_only.find("://"); scheme_end != std::string::npos)
-            if (const auto colon = host_only.find(':', scheme_end + 3); colon != std::string::npos && host_only.find(']', colon) == std::string::npos)
-                host_only.erase(colon);
+        if (const auto scheme_end = host_only.find("://"); scheme_end != std::string::npos) {
+            const auto host_begin = scheme_end + 3;
+            auto       host_end   = host_only.find_first_of(":/", host_begin);
+            if (host_begin < host_only.size() && host_only[host_begin] == '[') {
+                const auto bracket = host_only.find(']', host_begin);
+                host_end           = bracket == std::string::npos ? std::string::npos : bracket + 1;
+            }
+            if (host_end != std::string::npos)
+                host_only.erase(host_end);
+        }
         const wxString any_port = html_escape(wxString::FromUTF8(host_only.c_str()));
         // Moonraker may report an absolute stream_url (camera service on another port). The image
         // policy below still confines it to this printer's host.

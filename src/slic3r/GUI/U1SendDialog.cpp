@@ -288,7 +288,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
             dc.Clear();
             wxGCDC gc(dc);
             gc.SetPen(*wxTRANSPARENT_PEN);
-            gc.SetBrush(wxBrush(StateColor::darkModeColorFor(wxColour(0xF0, 0xF0, 0xF0))));
+            gc.SetBrush(wxBrush(StateColor::darkModeColorFor(wxColour(0xF1, 0xF1, 0xF1))));
             gc.DrawRoundedRectangle(0, 0, box.x, box.y, FromDIP(14));
             gc.DrawBitmap(wxBitmap(image), (box.x - image.GetWidth()) / 2, (box.y - image.GetHeight()) / 2, true);
         }
@@ -301,11 +301,15 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     if (thumbnail.IsOk())
         model_row->Add(picture(model, thumbnail.ConvertToImage()), 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
     auto           *details           = new wxBoxSizer(wxVERTICAL);
-    const wxString  displayed_project = project_name.empty() ? from_path(default_name.stem()) : project_name;
+    // The project's own name; its folder would only widen the dialog, and is in the tooltip.
+    const wxString  displayed_project = project_name.empty() ? from_path(default_name.stem()) : project_name.AfterLast('/').AfterLast('\\');
     auto *printer_filename = new Label(model, wxString::Format(_L("File name: %s"), from_path(default_name.filename())));
     details->Add(printer_filename, 0, wxBOTTOM, FromDIP(6));
     // TRN %1$s is a project name, %2$d a plate number.
-    details->Add(new Label(model, wxString::Format(_L("Project: %1$s, plate %2$d"), displayed_project, plate_number)), 0, wxBOTTOM, FromDIP(6));
+    auto *project = new Label(model, wxString::Format(_L("Project: %1$s, plate %2$d"), displayed_project, plate_number));
+    if (!project_name.empty())
+        project->SetToolTip(project_name);
+    details->Add(project, 0, wxBOTTOM, FromDIP(6));
     details->Add(new Label(model, estimated_time.empty() ? _L("Estimated time unavailable") :
                                                            wxString::Format(_L("Estimated time: %s"), estimated_time)),
                  0, wxBOTTOM, FromDIP(6));

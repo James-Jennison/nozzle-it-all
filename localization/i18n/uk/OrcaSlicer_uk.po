@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: orcaslicerua\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-06 11:31-0600\n"
+"POT-Creation-Date: 2026-11-11 06:12-0800\n"
 "PO-Revision-Date: 2026-07-17 16:25+0300\n"
 "Last-Translator: Andrij Mizyk <andm1zyk@proton.me>\n"
 "Language-Team: Ukrainian\n"
@@ -2202,21 +2202,23 @@ msgstr "Файли Masked SLA"
 msgid "Draco files"
 msgstr "Файли Draco"
 
-msgid "OrcaSlicer will terminate because of running out of memory. It may be a bug. It will be appreciated if you report the issue to our team."
-msgstr "OrcaSlicer завершить роботу через брак памʼяті. Можливо, це помилка. Ми будемо вдячні, якщо ви повідомите про проблему нашій команді."
+#, c-format, boost-format
+msgid "%s will terminate because it ran out of memory. This may be a bug; please report the issue to our team."
+msgstr ""
 
 msgid "Fatal error"
 msgstr "Фатальна помилка"
 
-msgid "OrcaSlicer will terminate because of a localization error. It will be appreciated if you report the specific scenario this issue happened."
-msgstr "Програма OrcaSlicer завершить роботу через помилку локалізації. Буде вдячний, якщо ви повідомите про конкретний сценарій виникнення цієї проблеми."
+#, c-format, boost-format
+msgid "%s will terminate because of a localization error. Please report the specific scenario in which this happened."
+msgstr ""
 
 msgid "Critical error"
 msgstr "Критична помилка"
 
 #, boost-format
-msgid "OrcaSlicer got an unhandled exception: %1%"
-msgstr "Невідома помилка OrcaSlicer : %1%"
+msgid "%1% encountered an unhandled exception: %2%"
+msgstr ""
 
 msgid "Untitled"
 msgstr "Без назви"
@@ -2293,19 +2295,131 @@ msgstr ""
 "Встановіть його вручну зі сторінки %1% і перезапустіть Orca Slicer."
 
 #, c-format, boost-format
-msgid "Resources path does not exist or is not a directory: %s"
-msgstr "Файл ресурсів не існує або це не каталог: %s"
+msgid ""
+"An interrupted settings import could not be recovered safely. No new import was attempted.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import recovery failed"
+msgstr ""
 
 #, c-format, boost-format
 msgid ""
-"%s\n"
-"Do you want to continue?"
+"An interrupted settings import was recovered.\n"
+"\n"
+"Recovered settings: %s"
 msgstr ""
-"%s\n"
-"Хочете продовжити?"
 
-msgid "Remember my choice"
-msgstr "Запамʼятати мій вибір"
+msgid "Settings import recovered"
+msgstr ""
+
+msgid "No importable Orca-family settings were found."
+msgstr ""
+
+msgid "Import existing settings"
+msgstr ""
+
+msgid "Choose the settings source to import."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Import settings from %s on this launch?\n"
+"\n"
+"Source: %s\n"
+"\n"
+"Your current Nozzle It All Desktop settings will be backed up and replaced. The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Nozzle It All Desktop found settings from %s. Copy those settings into its own data directory?\n"
+"\n"
+"Source: %s\n"
+"\n"
+"The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
+msgstr ""
+
+msgid "None."
+msgstr ""
+
+msgid "No existing settings directory needs a backup."
+msgstr ""
+
+msgid "Your current settings will be retained in a timestamped backup beside the Nozzle It All Desktop data directory. The exact path will be shown after import."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Some source files were sanitized before import, and some could not be imported safely.\n"
+"\n"
+"Source: %s\n"
+"\n"
+"Target to replace: %s\n"
+"\n"
+"Sanitized and copied files:\n"
+"%s\n"
+"\n"
+"Skipped files:\n"
+"%s\n"
+"\n"
+"%s\n"
+"\n"
+"Continue with this exact prepared import?"
+msgstr ""
+
+msgid "Confirm partial settings import"
+msgstr ""
+
+msgid "Settings import cleanup failed"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The settings import could not be completed. No source data was changed.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import failed"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Settings were imported with the warnings you approved. Your previous settings remain available at the backup path below.\n"
+"\n"
+"Migration report: %s\n"
+"\n"
+"Backup: %s"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Settings were copied successfully.\n"
+"\n"
+"Migration report: %s"
+msgstr ""
+
+msgid "Settings imported with warnings"
+msgstr ""
+
+msgid "Settings imported"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The settings import could not be scheduled.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import is scheduled. Restart Nozzle It All Desktop normally to choose the source and review the backup-and-replace confirmation."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Resources path does not exist or is not a directory: %s"
+msgstr "Файл ресурсів не існує або це не каталог: %s"
 
 #, c-format, boost-format
 msgid "Click to download new version in default browser: %s"
@@ -2484,6 +2598,12 @@ msgstr "Отримання плагінів…"
 msgid "Loading user presets…"
 msgstr "Завантаження пресетів користувача…"
 
+msgid "Nozzle It All Desktop updates"
+msgstr ""
+
+msgid "The Nozzle It All Desktop update channel is not available yet. No update request was sent."
+msgstr ""
+
 msgid "Retrieving printer information, please try again later."
 msgstr "Отримання інформації про принтер, спробуйте ще раз пізніше."
 
@@ -2653,6 +2773,10 @@ msgid "%s has been removed."
 msgstr "%s вилучено."
 
 #, c-format, boost-format
+msgid "Switching Nozzle It All Desktop to language %s failed."
+msgstr ""
+
+#, c-format, boost-format
 msgid "Switching Orca Slicer to language %s failed."
 msgstr "Не вдалося перемкнути Orca Slicer на мову %s."
 
@@ -2666,6 +2790,9 @@ msgstr ""
 # AI Translated
 msgid "Application will close."
 msgstr "Програму буде закрито."
+
+msgid "Nozzle It All Desktop - Switching language failed"
+msgstr ""
 
 msgid "Orca Slicer - Switching language failed"
 msgstr "Orca Slicer - Не вдале перемикання мови"
@@ -2749,6 +2876,9 @@ msgstr "Відкрити"
 
 msgid "Rename"
 msgstr "Перейменувати"
+
+msgid "Nozzle It All Desktop GUI initialization failed"
+msgstr ""
 
 msgid "Orca Slicer GUI initialization failed"
 msgstr "Помилка ініціалізації графічного інтерфейсу Orca Slicer"
@@ -2984,6 +3114,12 @@ msgstr "Автоматично кидає вибраний обʼєкт на р�
 
 msgid "Fix Model"
 msgstr "Виправити модель"
+
+msgid "AI auto-paint"
+msgstr ""
+
+msgid "Let Claude suggest a filament for each part of the surface"
+msgstr ""
 
 msgid "Export as one STL"
 msgstr "Експортувати як один STL"
@@ -3297,8 +3433,9 @@ msgstr "Клонувати"
 msgid "Simplify Model"
 msgstr "Спростити модель"
 
-msgid "Subdivision mesh (Lost color)"
-msgstr "Сітка розділення (Втрачений колір)"
+# AI Translated
+msgid "Subdivision mesh"
+msgstr "Поділ сітки"
 
 msgid "Center"
 msgstr "Центр"
@@ -4536,8 +4673,19 @@ msgstr "Це програмне забезпечення використову�
 msgid "About %s"
 msgstr "Про %s"
 
+#. TRN %s is the Nozzle It All Desktop product version.
+#. TRN %s is the Nozzle It All for Desktop product version.
+#, c-format, boost-format
+msgid "Version %s"
+msgstr ""
+
+#. TRN The first %s is the OrcaSlicer engine version; the second is the source commit.
+#, c-format, boost-format
+msgid "Engine: OrcaSlicer %s | Build %s"
+msgstr ""
+
 # AI Translated
-#. TRN %s is the commit the application was built from
+#. TRN %s is the commit the application was built from.
 #, c-format, boost-format
 msgid "Build %s"
 msgstr "Збірка %s"
@@ -4545,6 +4693,9 @@ msgstr "Збірка %s"
 # AI Translated
 msgid "Open-source slicing stands on a tradition of collaboration and attribution. Slic3r, created by Alessandro Ranellucci and the RepRap community, laid the foundation. PrusaSlicer by Prusa Research built on that work, Bambu Studio forked from PrusaSlicer, and SuperSlicer extended it with community-driven enhancements. Each project carried the work of its predecessors forward, crediting those who came before."
 msgstr "Нарізка з відкритим кодом спирається на традицію співпраці та зазначення авторства. Slic3r, створений Алессандро Ранеллуччі та спільнотою RepRap, заклав основу. PrusaSlicer від Prusa Research розвинув цю роботу, Bambu Studio відгалузився від PrusaSlicer, а SuperSlicer розширив його вдосконаленнями від спільноти. Кожен проєкт продовжував роботу своїх попередників, віддаючи належне тим, хто був до нього."
+
+msgid "Nozzle It All Desktop is a fork of OrcaSlicer that adds native Snapmaker U1 and Moonraker printer tools. All upstream credits below remain."
+msgstr ""
 
 # AI Translated
 msgid "OrcaSlicer began in that same spirit, drawing from PrusaSlicer, BambuStudio, SuperSlicer, and CuraSlicer. But it has since grown far beyond its origins — introducing advanced calibration tools, precise wall and seam control and hundreds of other features."
@@ -4554,9 +4705,33 @@ msgstr "OrcaSlicer народився в тому ж дусі, спираючи�
 msgid "Today, OrcaSlicer is the most widely used and actively developed open-source slicer in the 3D printing community. Many of its innovations have been adopted by other slicers, making it a driving force for the entire industry."
 msgstr "Сьогодні OrcaSlicer — це найпоширеніший і найактивніше розвинений слайсер з відкритим кодом у спільноті 3D-друку. Багато його нововведень перейняли інші слайсери, що робить його рушійною силою для всієї галузі."
 
+msgid "Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."
+msgstr ""
+
 # AI Translated
 msgid "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved"
 msgstr "Copyright(C) 2026 OrcaSlicer Pte Ltd. Усі права захищено."
+
+msgid "Nozzle It All"
+msgstr ""
+
+msgid "FOR DESKTOP"
+msgstr ""
+
+msgid "A focused workshop for slicing, filament mapping, and connected printer control."
+msgstr ""
+
+msgid "Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."
+msgstr ""
+
+msgid "Open-source lineage"
+msgstr ""
+
+msgid "Built on OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r, SuperSlicer, CuraSlicer, and the work of their contributors. Nozzle It All is independently built and is not endorsed by those projects or their vendors."
+msgstr ""
+
+msgid "nozzleitall.com"
+msgstr ""
 
 # AI Translated
 msgid "Script plugin skipped."
@@ -4966,6 +5141,13 @@ msgstr "Упорядкувати AMS"
 msgid "AMS ID will be reset. If you want a specific ID sequence, disconnect all AMS before resetting and connect them in the desired order after resetting."
 msgstr "Ідентифікатори AMS буде скинуто. Якщо вам потрібна певна послідовність ID, відключіть усі AMS перед скиданням і підключіть їх у потрібному порядку після скидання."
 
+msgid "DESKTOP"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Nozzle It All Desktop — %s"
+msgstr ""
+
 msgid "File"
 msgstr "Файл"
 
@@ -4975,9 +5157,9 @@ msgstr "Калібрування"
 msgid "Failed to download the plug-in. Please check your firewall settings and VPN software and retry."
 msgstr "Не вдалося завантажити плагін. Будь ласка, перевірте налаштування брандмауера та VPN програмне забезпечення, перевірте та повторіть спробу."
 
-# AI Translated
-msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart OrcaSlicer and try again. Also check whether it is blocked or has been deleted by anti-virus software."
-msgstr "Не вдалося встановити плагін. Файл плагіна може використовуватися. Перезапустіть OrcaSlicer і спробуйте ще раз. Також перевірте, чи не заблоковано або не видалено його антивірусним програмним забезпеченням."
+#, c-format, boost-format
+msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart %s and try again. Also check whether it is blocked or has been deleted by anti-virus software."
+msgstr ""
 
 msgid "Click here to see more info"
 msgstr "натисніть тут, щоб побачити більше інформації"
@@ -7245,7 +7427,7 @@ msgid "Size:"
 msgstr "Розмір:"
 
 # AI Translated
-#, c-format, boost-format
+#, boost-format
 msgid "Conflicts of G-code paths have been found at layer %d, Z = %.2lfmm. Please separate the conflicted objects farther (%s <-> %s)."
 msgstr "Виявлено конфлікти шляхів G-code на шарі %d, Z = %.2lf мм. Будь ласка, рознесіть конфліктуючі обʼєкти далі один від одного (%s <-> %s)."
 
@@ -7521,6 +7703,12 @@ msgstr "Виміряти швидкість відображення 3D-сцен
 msgid "Show Tip of the Day"
 msgstr "Показати пораду дня"
 
+msgid "Check for Nozzle It All Desktop Updates"
+msgstr ""
+
+msgid "The Nozzle It All Desktop update channel is not available yet"
+msgstr ""
+
 msgid "Check for Updates"
 msgstr "Перевірка оновлень"
 
@@ -7612,6 +7800,12 @@ msgstr "Імпорт конфігурацій"
 
 msgid "Load configs"
 msgstr "Завантажити конфігурацію"
+
+msgid "Import settings from another slicer on next launch"
+msgstr ""
+
+msgid "Back up current settings and choose Orca-family settings to import after restarting"
+msgstr ""
 
 msgid "Import"
 msgstr "Імпорт"
@@ -8048,14 +8242,12 @@ msgstr ""
 msgid "Downloading Virtual Camera Tools"
 msgstr "Завантаження інструментів віртуальної камери"
 
+#, c-format, boost-format
 msgid ""
 "Another virtual camera is running.\n"
-"Orca Slicer supports only a single virtual camera.\n"
+"%s supports only a single virtual camera.\n"
 "Do you want to stop this virtual camera?"
 msgstr ""
-"Працює інша віртуальна камера.\n"
-"Orca Slicer підтримує лише одну віртуальну камеру.\n"
-"Ви хочете зупинити цю віртуальну камеру?"
 
 #, c-format, boost-format
 msgid "Virtual camera initialize failed (%s)!"
@@ -8171,8 +8363,9 @@ msgstr "Не вдалося отримати інформацію про мод�
 msgid "Failed to parse model information."
 msgstr "Не вдалося розібрати інформацію про модель."
 
-msgid "The .gcode.3mf file contains no G-code data. Please slice it with Orca Slicer and export a new .gcode.3mf file."
-msgstr "Файл .gcode.3mf не містить даних G-code. Будь ласка, розріжте його за допомогою Orca Slicer і експортуйте новий файл .gcode.3mf."
+#, c-format, boost-format
+msgid "The .gcode.3mf file contains no G-code data. Please slice it with %s and export a new .gcode.3mf file."
+msgstr ""
 
 #, c-format, boost-format
 msgid "File '%s' was lost! Please download it again."
@@ -9032,6 +9225,9 @@ msgstr "Експортувати всі обʼєкти як декілька DRC
 msgid "Export Toolpaths as OBJ"
 msgstr "Експортувати траєкторії як OBJ"
 
+msgid "About Nozzle It All Desktop"
+msgstr ""
+
 # AI Translated
 msgid "About OrcaSlicer"
 msgstr "Про OrcaSlicer"
@@ -9861,6 +10057,9 @@ msgstr "У змішаного філаменту недійсні або нев�
 msgid "Search plate, object and part."
 msgstr "Пошук пластини, об’єкта і деталі."
 
+msgid "Synchronize filament list from the printer"
+msgstr ""
+
 msgid "Pellets"
 msgstr "Гранули"
 
@@ -9896,13 +10095,11 @@ msgstr "Немає сумісних філаментів, а синхроніз�
 msgid "Sync filaments with AMS"
 msgstr "Синхронізація ниток з AMS"
 
-# AI Translated
+#, c-format, boost-format
 msgid ""
-"There are some unknown or incompatible filaments mapped to generic preset.\n"
-"Please update Orca Slicer or restart Orca Slicer to check if there is an update to system presets."
+"There are unknown or incompatible filaments mapped to generic presets.\n"
+"Please update or restart %s to check for updated system presets."
 msgstr ""
-"Деякі невідомі або несумісні філаменти зіставлено із загальним пресетом.\n"
-"Оновіть Orca Slicer або перезапустіть його, щоб перевірити наявність оновлень системних пресетів."
 
 # AI Translated
 msgid "Only filament color information has been synchronized from printer."
@@ -10403,8 +10600,9 @@ msgstr "підготувати файл 3MF..."
 msgid "Download failed; unknown file format."
 msgstr "Не вдалося завантажити, невідомий формат файлу."
 
-msgid "Importing to Orca Slicer failed. Please download the file and manually import it."
-msgstr "Не вдалося імпортувати файл до Orca Slicer. Завантажте файл і імпортуйте його вручну."
+#, c-format, boost-format
+msgid "Importing to %s failed. Please download the file and import it manually."
+msgstr ""
 
 msgid "Downloading project..."
 msgstr "завантажую проект..."
@@ -10615,6 +10813,51 @@ msgstr "Причина: “%1%” та інша частина не мають �
 msgid "Unable to perform boolean operation on model meshes. Only positive parts will be exported."
 msgstr "Не можливо виконати булеву операцію на сітках моделі. Тільки позитивні частини будуть експортовані."
 
+msgid "No Snapmaker U1 address is known yet. Enter its IP address in the printer settings (Connection > Hostname, IP or URL)."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Could not reach the Snapmaker U1 at %s on the local network.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "A job is still being sent to this printer. Wait for it to finish, then press Print again."
+msgstr ""
+
+msgid "An earlier Start on this printer was never confirmed, and the printer cannot be reached to check it. Nothing was sent. Try again when the printer answers."
+msgstr ""
+
+#, boost-format
+msgid ""
+"Job %1% was sent a Start that was never confirmed, and the Start was not sent again.\n"
+"File on the printer: %2%\n"
+"The printer now reports: %3%, and is not printing that file.\n"
+"\n"
+"Did that print start?\n"
+"\n"
+"Yes: record it as started.\n"
+"No: record that nothing started, so a new print can be sent.\n"
+"Cancel: decide later. The printer stays held and nothing can be sent to it from here."
+msgstr ""
+
+msgid "Send to Snapmaker U1"
+msgstr ""
+
+msgid "The printer now reports that it is printing that job, so it was recorded as started. Nothing was sent."
+msgstr ""
+
+msgid "The printer cannot be reached to check it, so the answer was not recorded and the printer stays held. Nothing was sent."
+msgstr ""
+
+msgid "The answer could not be recorded, so the printer stays held. Nothing was sent."
+msgstr ""
+
+#, boost-format
+msgid "That job was settled in the meantime (%1%), so your answer was not recorded. Nothing was sent."
+msgstr ""
+
 # AI Translated
 msgid "Flashforge host is not available."
 msgstr "Хост Flashforge недоступний."
@@ -10655,10 +10898,9 @@ msgstr "Оптимізація повороту"
 msgid "Printer not connected. Please go to the device page to connect %s before syncing."
 msgstr "Принтер не підключено. Перейдіть на сторінку пристрою, щоб підключити %s перед синхронізацією."
 
-# AI Translated
 #, c-format, boost-format
-msgid "OrcaSlicer can't connect to %s. Please check if the printer is powered on and connected to the network."
-msgstr "OrcaSlicer не може підключитися до %s. Перевірте, чи принтер увімкнено та підключено до мережі."
+msgid "%s can't connect to %s. Please check that the printer is powered on and connected to the network."
+msgstr ""
 
 # AI Translated
 #, c-format, boost-format
@@ -10927,11 +11169,10 @@ msgstr "Не вдалося перезавантажити"
 msgid "Associate %s://"
 msgstr "Асоціювати %s://"
 
-# AI Translated
 #. TRN The first %s is a URL scheme, for example "prusaslicer"; the second is a website name.
 #, c-format, boost-format
-msgid "Associate %s:// with OrcaSlicer so that Orca can open models from %s"
-msgstr "Асоціювати %s:// з OrcaSlicer, щоб Orca могла відкривати моделі з %s"
+msgid "Associate %s:// with %s so the application can open models from %s"
+msgstr ""
 
 msgid "Current Association: "
 msgstr "Поточна асоціація: "
@@ -10969,11 +11210,17 @@ msgstr "Задати сторінку, яка відкривається при 
 msgid "Enable dark Mode"
 msgstr "Увімкнути темний режим"
 
+msgid "Allow only one Nozzle It All Desktop instance"
+msgstr ""
+
 msgid "Allow only one OrcaSlicer instance"
 msgstr "Дозволити лише один екземпляр OrcaSlicer"
 
 msgid "On OSX there is always only one instance of app running by default. However it is allowed to run multiple instances of same app from the command line. In such case this settings will allow only one instance."
 msgstr "На MacOS за замовчуванням завжди працює лише один екземпляр програми. Однак з командного рядка дозволяється запускати кілька екземплярів однієї й тієї ж програми. У цьому випадку цей параметр дозволить запускати лише один екземпляр."
+
+msgid "If this is enabled, when starting Nozzle It All Desktop and another instance is already running, that instance will be reactivated instead."
+msgstr ""
 
 msgid "If this is enabled, when starting OrcaSlicer and another instance of the same OrcaSlicer is already running, that instance will be reactivated instead."
 msgstr "Якщо цей параметр увімкнено, під час запуску OrcaSlicer, коли вже запущено інший екземпляр того ж самого OrcaSlicer, цей екземпляр буде повторно активовано замість нього."
@@ -10995,8 +11242,10 @@ msgstr "(Потрібен перезапуск)"
 msgid "Render on the discrete GPU"
 msgstr "Рендеринг на дискретному GPU"
 
+msgid "On a computer with two GPUs, run Nozzle It All Desktop on the discrete GPU instead of the one that drives the display. Some Wayland systems cannot show frames rendered on the other GPU, or fail to open the window at all. Turn this off if the 3D view stays empty; if Nozzle It All Desktop no longer starts, start it once with DRI_PRIME=0 in the environment to get back here."
+msgstr ""
+
 # AI Translated
-#. TRN DRI_PRIME is an environment variable name and must stay as it is.
 msgid "On a computer with two GPUs, run OrcaSlicer on the discrete GPU instead of the one that drives the display. Some Wayland systems cannot show frames rendered on the other GPU, or fail to open the window at all. Turn this off if the 3D view stays empty; if OrcaSlicer no longer starts, start it once with DRI_PRIME=0 in the environment to get back here."
 msgstr "На компʼютері з двома GPU запускати OrcaSlicer на дискретному GPU замість того, що керує дисплеєм. Деякі системи Wayland не можуть показувати кадри, відрендерені на іншому GPU, або взагалі не відкривають вікно. Вимкніть цей параметр, якщо 3D-вигляд залишається порожнім; якщо OrcaSlicer більше не запускається, запустіть його один раз зі змінною середовища DRI_PRIME=0, щоб повернутися сюди."
 
@@ -11237,9 +11486,9 @@ msgstr "Якщо увімкнено, перед додаванням примі�
 msgid "Auto slice after changes"
 msgstr "Авто-нарізання після змін"
 
-# AI Translated
-msgid "If enabled, OrcaSlicer will re-slice automatically whenever slicing-related settings change."
-msgstr "Якщо увімкнено, OrcaSlicer автоматично виконуватиме повторну нарізку щоразу, коли змінюються повʼязані з нарізкою налаштування."
+#, c-format, boost-format
+msgid "If enabled, %s will re-slice automatically whenever slicing-related settings change."
+msgstr ""
 
 # AI Translated
 msgid "Delay in seconds before auto slicing starts, allowing multiple edits to be grouped. Use 0 to slice immediately."
@@ -11256,9 +11505,9 @@ msgstr "Якщо цю опцію увімкнено, ви можете друк�
 msgid "Remember last print action"
 msgstr "Запамʼятовувати останню дію друку"
 
-# AI Translated
-msgid "If enabled, OrcaSlicer will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
-msgstr "Якщо увімкнено, OrcaSlicer запамʼятовуватиме останній вибраний варіант у випадному списку кнопки друку (наприклад, «Друк», «Експортувати файл нарізки пластини», «Експорт файлу G-code») і використовуватиме його як типовий під час наступного запуску."
+#, c-format, boost-format
+msgid "If enabled, %s will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
+msgstr ""
 
 msgid "Camera"
 msgstr "Камера"
@@ -11728,6 +11977,9 @@ msgstr "Вибрати версію мережевого плагіна для �
 msgid "Associate"
 msgstr "Ассоціювати"
 
+msgid "Associate files to Nozzle It All Desktop"
+msgstr ""
+
 msgid "Associate files to OrcaSlicer"
 msgstr "Асоціювати файли з OrcaSlicer"
 
@@ -11736,6 +11988,33 @@ msgstr "Асоціації файлів для версії з Microsoft Strore 
 
 msgid "Open Windows Default Apps Settings"
 msgstr "Відкрити налаштування типових програм Windows"
+
+msgid "Associate 3MF files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open 3MF files."
+msgstr ""
+
+msgid "Associate DRC files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open DRC files."
+msgstr ""
+
+msgid "Associate STL files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STL files."
+msgstr ""
+
+msgid "Associate STEP files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STEP files."
+msgstr ""
+
+msgid "Associate web links to Nozzle It All Desktop"
+msgstr ""
 
 msgid "Associate 3MF files to OrcaSlicer"
 msgstr "Асоціювати файли .3mf з OrcaSlicer"
@@ -11805,13 +12084,10 @@ msgstr ""
 msgid "Use printer agents instead of print hosts"
 msgstr "Використовувати агентів принтера замість хостів друку"
 
-# AI Translated
 msgid ""
 "Route print jobs for non-Bambu printers through printer plug-in agents instead of the classic print-host upload flow.\n"
-"When disabled, OrcaSlicer uses the legacy print-host behavior."
+"When disabled, the application uses the legacy print-host behavior."
 msgstr ""
-"Спрямовує завдання друку для принтерів, відмінних від Bambu, через агентів плагінів принтера замість класичного завантаження на хост друку.\n"
-"Коли вимкнено, OrcaSlicer використовує попередню поведінку хоста друку."
 
 msgid "Allow Abnormal Storage"
 msgstr "Дозволити незвичне сховище"
@@ -12961,8 +13237,9 @@ msgstr "Не вдалося надіслати завдання на друк п
 msgid "The selected printer is incompatible with the chosen printer presets."
 msgstr "Вибраний принтер несумісний зі встановленими пресетами."
 
-msgid "The printer is required to be on the same LAN as Orca Slicer."
-msgstr "Принтер повинен бути підключений до тієї ж локальної мережі, що й Orca Slicer."
+#, c-format, boost-format
+msgid "The printer must be on the same LAN as %s."
+msgstr ""
 
 msgid "The printer does not support sending to printer storage."
 msgstr "Принтер не підтримує надсилання до сховище принтера."
@@ -14660,9 +14937,9 @@ msgstr "Загальний раммінг"
 msgid "Ramming line"
 msgstr "Лінія раммінгу"
 
-# AI Translated
-msgid "Orca would re-calculate your flushing volumes everytime the filaments color changed or filaments changed. You could disable the auto-calculate in Orca Slicer > Preferences"
-msgstr "Orca перераховуватиме ваші обʼєми промивки щоразу, коли змінюється колір філаментів або самі філаменти. Ви можете вимкнути автоматичний розрахунок в Orca Slicer > Параметри"
+#, c-format, boost-format
+msgid "%s recalculates flushing volumes whenever filament colors or filaments change. You can disable automatic calculation in Preferences."
+msgstr ""
 
 msgid "Flushing volume (mm³) for each filament pair."
 msgstr "Обʼєм промивки (мм³) для кожної пари філаментів."
@@ -14689,6 +14966,9 @@ msgstr "Обʼєми промивки для зміни філаменту"
 #. TRN Corner header of the flushing volume table: rows are the filament flushed from, columns the filament changed to.
 msgid "from/to"
 msgstr "з/на"
+
+msgid "Cloud agent is not available. Please restart Nozzle It All Desktop and try again."
+msgstr ""
 
 # AI Translated
 msgid "Cloud agent is not available. Please restart OrcaSlicer and try again."
@@ -14718,6 +14998,12 @@ msgstr "Завантаження…"
 msgctxt "Printer vendor"
 msgid "Custom"
 msgstr "Власні"
+
+msgid "Welcome to Nozzle It All Desktop"
+msgstr ""
+
+msgid "Nozzle It All Desktop will be set up in several steps. Let's start!"
+msgstr ""
 
 # AI Translated
 msgid "Welcome to Orca Slicer"
@@ -15685,6 +15971,11 @@ msgstr "%1% перетинає обʼєм зіткнення для екстру
 #, boost-format
 msgid "%1% is too close to others, and collisions may be caused."
 msgstr "%1% знаходиться надто близько до інших, що може призвести до зіткнень."
+
+# AI Translated
+#, boost-format
+msgid "%1% is printed later than its place in the object list, to avoid a collision."
+msgstr "Обʼєкт %1% друкується пізніше за своє місце у списку обʼєктів, щоб уникнути зіткнення."
 
 #, boost-format
 msgid "%1% is too tall, and collisions will be caused."
@@ -25348,6 +25639,317 @@ msgstr "Принтер повідомляє, що CFS не підключено,
 msgid "The printer did not report any filament slots, so the print will use the external spool."
 msgstr "Принтер не повідомив про жодні слоти філаменту, тому для друку використовуватиметься зовнішня котушка."
 
+msgid "empty"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Filament %d is mapped to toolhead %d, which is empty."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Filament %d is %s, but toolhead %d has %s loaded."
+msgstr ""
+
+#. TRN %1$d is a toolhead number, %2$s what is loaded in it ("Snapmaker PLA Basic", "empty").
+#, c-format, boost-format
+msgid "Toolhead %1$d (%2$s)"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Filament %d: %s"
+msgstr ""
+
+msgid "Print on Snapmaker U1"
+msgstr ""
+
+msgid "Model information"
+msgstr ""
+
+#, c-format, boost-format
+msgid "File name: %s"
+msgstr ""
+
+#. TRN %1$s is a project name, %2$d a plate number.
+#, c-format, boost-format
+msgid "Project: %1$s, plate %2$d"
+msgstr ""
+
+msgid "Estimated time unavailable"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Estimated time: %s"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Estimated material: %.2f g"
+msgstr ""
+
+#. TRN %s is the printer's network address.
+#, c-format, boost-format
+msgid "LAN: %s"
+msgstr ""
+
+msgid "Each filament prints from the toolhead shown under it. Click a filament to change its toolhead."
+msgstr ""
+
+msgid "Print preparation"
+msgstr ""
+
+msgid "Measure the build plate before this print."
+msgstr ""
+
+msgid "Flow calibration"
+msgstr ""
+
+msgid "Calibrate only the toolheads used by this print."
+msgstr ""
+
+msgid "Input shaper calibration"
+msgstr ""
+
+msgid "Measure vibration compensation before printing."
+msgstr ""
+
+msgid "Capture a timelapse with the printer camera."
+msgstr ""
+
+msgid "File name on the printer"
+msgstr ""
+
+msgid "Start Print"
+msgstr ""
+
+msgid "Online • Ready"
+msgstr ""
+
+msgid "Please enter a file name without the characters #, *, ;, \\, /, :, \", <, >, or |."
+msgstr ""
+
+msgid "The filament types do not match:"
+msgstr ""
+
+msgid "The print will use the temperatures and speeds sliced for the original filament. Continue anyway?"
+msgstr ""
+
+msgid "3D Filament Profiles API key"
+msgstr ""
+
+msgid "Connect 3D Filament Profiles"
+msgstr ""
+
+msgid "A 3D Filament Profiles API key is already stored in the operating-system keychain. Enter a new key only to replace it."
+msgstr ""
+
+msgid "Enter your personal API key. It will be stored only in the operating-system keychain."
+msgstr ""
+
+msgid "Save securely"
+msgstr ""
+
+msgid "Enter an API key before saving."
+msgstr ""
+
+msgid "3D Filament Profiles"
+msgstr ""
+
+msgid "A 3D Filament Profiles API key is already stored. Replace it with the new key you entered?"
+msgstr ""
+
+msgid "Replace stored API key?"
+msgstr ""
+
+msgid "The API key could not be stored in the operating-system keychain."
+msgstr ""
+
+msgid "Map Snapmaker U1 filaments"
+msgstr ""
+
+msgid "Map the material in each toolhead"
+msgstr ""
+
+msgid "Review every loaded toolhead. Applying expands the project to the U1's fixed T0-T3 slots; empty toolheads keep their current project slot."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Report source: %s"
+msgstr ""
+
+msgid "RFID / printer report"
+msgstr ""
+
+msgid "Filament preset"
+msgstr ""
+
+msgid "Empty toolhead"
+msgstr ""
+
+#, boost-format
+msgid "Toolhead T%1%: empty toolhead"
+msgstr ""
+
+msgid "Keep current project slot"
+msgstr ""
+
+msgid "RFID tag"
+msgstr ""
+
+msgid "Printer setting"
+msgstr ""
+
+msgid "invalid color; current project color will be kept"
+msgstr ""
+
+msgid "material identity unresolved; choose a compatible preset explicitly"
+msgstr ""
+
+#, boost-format
+msgid "%1%: %2% %3% (%4%)"
+msgstr ""
+
+#, boost-format
+msgid "Filament preset for toolhead T%1%. Printer report: %2%"
+msgstr ""
+
+msgid "Select a matching filament preset"
+msgstr ""
+
+#, boost-format
+msgid "Manual override — %1%"
+msgstr ""
+
+msgid "Configure API key"
+msgstr ""
+
+msgid "Find RFID products in 3D Filament Profiles"
+msgstr ""
+
+msgid "Generic presets are never selected automatically for an RFID-tagged product."
+msgstr ""
+
+msgid "Apply mappings"
+msgstr ""
+
+msgid "At least one loaded toolhead has no material family in the printer report. Apply the selected presets as explicit manual overrides for those unresolved toolheads?"
+msgstr ""
+
+msgid "Confirm unresolved material overrides"
+msgstr ""
+
+msgid "3D Filament Profiles results are catalog candidates, not proof of the RFID identity. Apply the selected catalog products as explicit overrides for the corresponding U1 reports?"
+msgstr ""
+
+msgid "Confirm catalog overrides"
+msgstr ""
+
+msgid "Searching 3D Filament Profiles…"
+msgstr ""
+
+msgid "The 3D Filament Profiles API key is unavailable."
+msgstr ""
+
+#, boost-format
+msgid "Catalog lookup could not start for toolhead T%1%."
+msgstr ""
+
+#, boost-format
+msgid "Catalog lookup failed for toolhead T%1%: %2%"
+msgstr ""
+
+#, boost-format
+msgid "%1% (record %2%)"
+msgstr ""
+
+#, boost-format
+msgid "%1% — 3D Filament Profiles"
+msgstr ""
+
+#, boost-format
+msgid "Found %1% matching catalog products. Review each selection before applying."
+msgstr ""
+
+#, boost-format
+msgid "Found %1% catalog products. Toolheads %2% are still unmapped; choose a matching preset in those rows."
+msgstr ""
+
+msgid "selected printer RFID / device report"
+msgstr ""
+
+msgid "direct Snapmaker U1 LAN report"
+msgstr ""
+
+msgid "The direct Snapmaker U1 report and the selected printer report disagree about loaded toolheads or filament identity. Refresh the printer on the Device page and review its RFID data before synchronizing."
+msgstr ""
+
+msgid "Sync filaments"
+msgstr ""
+
+msgid "The printer reported loaded filament trays, but their physical U1 toolhead assignment is ambiguous. Refresh the printer on the Device page and try again."
+msgstr ""
+
+msgid "The configured U1 LAN address and the selected printer refer to different devices. Select the matching U1 or correct its LAN address before synchronizing filaments."
+msgstr ""
+
+msgid "No Snapmaker U1 connection is available. Configure the printer LAN address or select the printer on the Device page, then try again."
+msgstr ""
+
+msgid "The selected printer could not be verified as a Snapmaker U1. Select the U1 on the Device page or configure its LAN address before synchronizing filaments."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The printer reports no loaded filaments.\n"
+"\n"
+"The direct U1 query also reported: %s"
+msgstr ""
+
+msgid "The printer reports no loaded filaments."
+msgstr ""
+
+msgid "This project has more than the Snapmaker U1's four physical filament slots. Synchronization was not applied because removing the additional project slots would lose data."
+msgstr ""
+
+#, boost-format
+msgid "The compatible filament presets could not be refreshed: %1%"
+msgstr ""
+
+#, boost-format
+msgid ""
+"\n"
+"\n"
+"%1% failed: %2%"
+msgstr ""
+
+#, boost-format
+msgid "Removing catalog-created preset %1%"
+msgstr ""
+
+msgid "Restoring the previous complete preset selection"
+msgstr ""
+
+msgid "Restoring the previous project filament count"
+msgstr ""
+
+msgid "Restoring the previous project filament state"
+msgstr ""
+
+msgid "Refreshing the restored project controls"
+msgstr ""
+
+msgid "Persisting the restored preset selections"
+msgstr ""
+
+#, boost-format
+msgid "The filament mappings could not be applied: %1%%2%"
+msgstr ""
+
+msgid "The reviewed Snapmaker U1 filament mappings were applied."
+msgstr ""
+
+#, boost-format
+msgid "The reviewed Snapmaker U1 filament mappings were applied. The printer reported an invalid color for toolheads %1%; their existing project colors were kept."
+msgstr ""
+
 msgid "Unable to perform boolean operation on selected parts"
 msgstr "Не вдається виконати булеву операцію на вибраних частинах"
 
@@ -26143,8 +26745,9 @@ msgstr "Виберіть НІ, щоб закрити вікно і перегл�
 msgid "No project file on current session. Only logs will be included to package"
 msgstr "Нема файла проєкту в поточному сеансі. Лише логи будуть включені до пакунку."
 
-msgid "Please make sure any instances of OrcaSlicer are not running"
-msgstr "Будь ласка, перевірте чи не запущено інші екземпляри OrcaSlicer"
+#, c-format, boost-format
+msgid "Please make sure no instances of %s are running"
+msgstr ""
 
 msgid "System folder cannot be deleted because some files are in use by another application. Please close any applications using these files and try again."
 msgstr "Системну теку неможливо видалити, тому що деякі файли використовуються іншою програмою. Будь ласка, закрийте будь-які програми, що використовують ці файли і спробуйте ще раз."
@@ -26157,6 +26760,21 @@ msgstr "Не вдалося визначити виконуваний шлях."
 
 msgid "Failed to launch a new instance."
 msgstr "Не вдалося запустити новий екземпляр."
+
+msgid "Delete all stored logs except the current-session logs?"
+msgstr ""
+
+msgid "This cannot be undone. Export the logs first if you may need them."
+msgstr ""
+
+msgid "Clear stored logs"
+msgstr ""
+
+msgid "The current-session log could not be identified. No logs were deleted."
+msgstr ""
+
+msgid "Some stored logs could not be deleted. The current-session logs were preserved."
+msgstr ""
 
 # AI Translated
 #. TRN Number of log files, then their total size and its unit (KB or MB).
@@ -26339,6 +26957,10 @@ msgstr "Хост відповів, але це не схоже на Moonraker (�
 #, c-format, boost-format
 msgid "Could not parse Moonraker server response: %s"
 msgstr "Не вдалося розпізнати відповідь сервера Moonraker: %s"
+
+#, boost-format
+msgid "Printing can only be started from the \"gcodes\" storage, but \"%1%\" is selected. Choose \"gcodes\" under \"Upload to storage\", or use Upload only."
+msgstr ""
 
 msgid "Connection to OctoPrint is working correctly."
 msgstr "Підключення до OctoPrint працює правильно."
@@ -34959,6 +35581,53 @@ msgid "Note:"
 msgstr "Примітка:"
 
 # AI Translated
+#. TRN %1% is a setting's label and %2% the plugin capability name stored in that setting.
+#, boost-format
+msgid "• %1%: %2%"
+msgstr "• %1%: %2%"
+
+# AI Translated
+#. TRN %1% is a preset name, %2% a setting's label and %3% the plugin capability name.
+#, boost-format
+msgid "• %1% — %2%: %3%"
+msgstr "• %1% — %2%: %3%"
+
+#, boost-format
+msgid ""
+"The following settings refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the preset won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+#, boost-format
+msgid ""
+"The following settings refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the project won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+# AI Translated
+msgid "Plugin Not Identified"
+msgstr "Плагін не визначено"
+
+# AI Translated
+msgid "Save anyway"
+msgstr "Усе одно зберегти"
+
+#, boost-format
+msgid ""
+"The presets being saved refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the presets won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+# AI Translated
 msgctxt "Texture Displacement"
 msgid "Bake"
 msgstr "Запікати"
@@ -37025,18 +37694,13 @@ msgstr "Не вдалося активувати «%s»."
 msgid "Activated \"%s\"."
 msgstr "Активовано «%s»."
 
-# AI Translated
 #, c-format, boost-format
 msgid ""
 "The following installed plugins were not found on disk:\n"
 "%s\n"
 "\n"
-"Remove them from OrcaSlicer?"
+"Remove them from %s?"
 msgstr ""
-"Такі встановлені плагіни не знайдено на диску:\n"
-"%s\n"
-"\n"
-"Вилучити їх з OrcaSlicer?"
 
 # AI Translated
 msgid "Missing Plugins"
@@ -38978,17 +39642,17 @@ msgstr "Автентифікацію завершено"
 msgid "Authentication failed"
 msgstr "Помилка автентифікації"
 
-# AI Translated
-msgid "You can return to OrcaSlicer. This window will close automatically."
-msgstr "Можете повернутися до OrcaSlicer. Це вікно закриється автоматично."
+#, boost-format
+msgid "You can return to %1%. This window will close automatically."
+msgstr ""
 
-# AI Translated
-msgid "Something went wrong. Please return to OrcaSlicer and try again."
-msgstr "Щось пішло не так. Поверніться до OrcaSlicer і спробуйте ще раз."
+#, boost-format
+msgid "Something went wrong. Please return to %1% and try again."
+msgstr ""
 
-# AI Translated
-msgid "You can return to OrcaSlicer. If your browser does not redirect automatically, use the button below."
-msgstr "Можете повернутися до OrcaSlicer. Якщо браузер не перенаправить вас автоматично, скористайтеся кнопкою нижче."
+#, boost-format
+msgid "You can return to %1%. If your browser does not redirect automatically, use the button below."
+msgstr ""
 
 # AI Translated
 #, boost-format
@@ -39420,9 +40084,117 @@ msgstr ""
 "Уникнення деформації\n"
 "Чи знаєте ви, що при друку матеріалами, схильними до деформації, такими як ABS, відповідне підвищення температури столу може зменшити ймовірність деформації?"
 
+#~ msgid "OrcaSlicer will terminate because of running out of memory. It may be a bug. It will be appreciated if you report the issue to our team."
+#~ msgstr "OrcaSlicer завершить роботу через брак памʼяті. Можливо, це помилка. Ми будемо вдячні, якщо ви повідомите про проблему нашій команді."
+
+#~ msgid "OrcaSlicer will terminate because of a localization error. It will be appreciated if you report the specific scenario this issue happened."
+#~ msgstr "Програма OrcaSlicer завершить роботу через помилку локалізації. Буде вдячний, якщо ви повідомите про конкретний сценарій виникнення цієї проблеми."
+
+#, boost-format
+#~ msgid "OrcaSlicer got an unhandled exception: %1%"
+#~ msgstr "Невідома помилка OrcaSlicer : %1%"
+
+#, c-format, boost-format
+#~ msgid ""
+#~ "%s\n"
+#~ "Do you want to continue?"
+#~ msgstr ""
+#~ "%s\n"
+#~ "Хочете продовжити?"
+
+#~ msgid "Remember my choice"
+#~ msgstr "Запамʼятати мій вибір"
+
+#~ msgid "Subdivision mesh (Lost color)"
+#~ msgstr "Сітка розділення (Втрачений колір)"
+
 # AI Translated
-#~ msgid "Subdivision mesh"
-#~ msgstr "Поділ сітки"
+#~ msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart OrcaSlicer and try again. Also check whether it is blocked or has been deleted by anti-virus software."
+#~ msgstr "Не вдалося встановити плагін. Файл плагіна може використовуватися. Перезапустіть OrcaSlicer і спробуйте ще раз. Також перевірте, чи не заблоковано або не видалено його антивірусним програмним забезпеченням."
+
+#~ msgid ""
+#~ "Another virtual camera is running.\n"
+#~ "Orca Slicer supports only a single virtual camera.\n"
+#~ "Do you want to stop this virtual camera?"
+#~ msgstr ""
+#~ "Працює інша віртуальна камера.\n"
+#~ "Orca Slicer підтримує лише одну віртуальну камеру.\n"
+#~ "Ви хочете зупинити цю віртуальну камеру?"
+
+#~ msgid "The .gcode.3mf file contains no G-code data. Please slice it with Orca Slicer and export a new .gcode.3mf file."
+#~ msgstr "Файл .gcode.3mf не містить даних G-code. Будь ласка, розріжте його за допомогою Orca Slicer і експортуйте новий файл .gcode.3mf."
+
+# AI Translated
+#~ msgid ""
+#~ "There are some unknown or incompatible filaments mapped to generic preset.\n"
+#~ "Please update Orca Slicer or restart Orca Slicer to check if there is an update to system presets."
+#~ msgstr ""
+#~ "Деякі невідомі або несумісні філаменти зіставлено із загальним пресетом.\n"
+#~ "Оновіть Orca Slicer або перезапустіть його, щоб перевірити наявність оновлень системних пресетів."
+
+#~ msgid "Importing to Orca Slicer failed. Please download the file and manually import it."
+#~ msgstr "Не вдалося імпортувати файл до Orca Slicer. Завантажте файл і імпортуйте його вручну."
+
+# AI Translated
+#, c-format, boost-format
+#~ msgid "OrcaSlicer can't connect to %s. Please check if the printer is powered on and connected to the network."
+#~ msgstr "OrcaSlicer не може підключитися до %s. Перевірте, чи принтер увімкнено та підключено до мережі."
+
+# AI Translated
+#, c-format, boost-format
+#~ msgid "Associate %s:// with OrcaSlicer so that Orca can open models from %s"
+#~ msgstr "Асоціювати %s:// з OrcaSlicer, щоб Orca могла відкривати моделі з %s"
+
+# AI Translated
+#~ msgid "If enabled, OrcaSlicer will re-slice automatically whenever slicing-related settings change."
+#~ msgstr "Якщо увімкнено, OrcaSlicer автоматично виконуватиме повторну нарізку щоразу, коли змінюються повʼязані з нарізкою налаштування."
+
+# AI Translated
+#~ msgid "If enabled, OrcaSlicer will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
+#~ msgstr "Якщо увімкнено, OrcaSlicer запамʼятовуватиме останній вибраний варіант у випадному списку кнопки друку (наприклад, «Друк», «Експортувати файл нарізки пластини», «Експорт файлу G-code») і використовуватиме його як типовий під час наступного запуску."
+
+# AI Translated
+#~ msgid ""
+#~ "Route print jobs for non-Bambu printers through printer plug-in agents instead of the classic print-host upload flow.\n"
+#~ "When disabled, OrcaSlicer uses the legacy print-host behavior."
+#~ msgstr ""
+#~ "Спрямовує завдання друку для принтерів, відмінних від Bambu, через агентів плагінів принтера замість класичного завантаження на хост друку.\n"
+#~ "Коли вимкнено, OrcaSlicer використовує попередню поведінку хоста друку."
+
+#~ msgid "The printer is required to be on the same LAN as Orca Slicer."
+#~ msgstr "Принтер повинен бути підключений до тієї ж локальної мережі, що й Orca Slicer."
+
+# AI Translated
+#~ msgid "Orca would re-calculate your flushing volumes everytime the filaments color changed or filaments changed. You could disable the auto-calculate in Orca Slicer > Preferences"
+#~ msgstr "Orca перераховуватиме ваші обʼєми промивки щоразу, коли змінюється колір філаментів або самі філаменти. Ви можете вимкнути автоматичний розрахунок в Orca Slicer > Параметри"
+
+#~ msgid "Please make sure any instances of OrcaSlicer are not running"
+#~ msgstr "Будь ласка, перевірте чи не запущено інші екземпляри OrcaSlicer"
+
+# AI Translated
+#, c-format, boost-format
+#~ msgid ""
+#~ "The following installed plugins were not found on disk:\n"
+#~ "%s\n"
+#~ "\n"
+#~ "Remove them from OrcaSlicer?"
+#~ msgstr ""
+#~ "Такі встановлені плагіни не знайдено на диску:\n"
+#~ "%s\n"
+#~ "\n"
+#~ "Вилучити їх з OrcaSlicer?"
+
+# AI Translated
+#~ msgid "You can return to OrcaSlicer. This window will close automatically."
+#~ msgstr "Можете повернутися до OrcaSlicer. Це вікно закриється автоматично."
+
+# AI Translated
+#~ msgid "Something went wrong. Please return to OrcaSlicer and try again."
+#~ msgstr "Щось пішло не так. Поверніться до OrcaSlicer і спробуйте ще раз."
+
+# AI Translated
+#~ msgid "You can return to OrcaSlicer. If your browser does not redirect automatically, use the button below."
+#~ msgstr "Можете повернутися до OrcaSlicer. Якщо браузер не перенаправить вас автоматично, скористайтеся кнопкою нижче."
 
 # AI Translated
 #~ msgid "Updates are available for your OrcaCloud plugins."
@@ -39521,11 +40293,6 @@ msgstr ""
 # AI Translated
 #~ msgid "Speed dial"
 #~ msgstr "Швидкий виклик"
-
-# AI Translated
-#, boost-format
-#~ msgid "%1% is printed later than its place in the object list, to avoid a collision."
-#~ msgstr "Обʼєкт %1% друкується пізніше за своє місце у списку обʼєктів, щоб уникнути зіткнення."
 
 # AI Translated
 #, boost-format
@@ -39668,16 +40435,6 @@ msgstr ""
 
 # AI Translated
 #, boost-format
-#~ msgid "• %1%: %2%"
-#~ msgstr "• %1%: %2%"
-
-# AI Translated
-#, boost-format
-#~ msgid "• %1% — %2%: %3%"
-#~ msgstr "• %1% — %2%: %3%"
-
-# AI Translated
-#, boost-format
 #~ msgid ""
 #~ "The following settings refer to plugins Orca Slicer can't identify on this computer:\n"
 #~ "\n"
@@ -39705,14 +40462,6 @@ msgstr ""
 #~ "%1%\n"
 #~ "\n"
 #~ "Якщо все одно зберегти, у проєкті не буде збережено посилань на плагіни для цих налаштувань. На іншому компʼютері Orca Slicer не знатиме, які плагіни запропонувати, і ці налаштування можуть там не працювати."
-
-# AI Translated
-#~ msgid "Plugin Not Identified"
-#~ msgstr "Плагін не визначено"
-
-# AI Translated
-#~ msgid "Save anyway"
-#~ msgstr "Усе одно зберегти"
 
 # AI Translated
 #, boost-format
@@ -39782,705 +40531,3 @@ msgstr ""
 # AI Translated
 #~ msgid "import SVG failed: could not parse imported svg data."
 #~ msgstr "помилка імпорту svg: не вдалося розібрати імпортовані дані svg."
-
-#, c-format, boost-format
-msgid "%s will terminate because it ran out of memory. This may be a bug; please report the issue to our team."
-msgstr ""
-
-#, c-format, boost-format
-msgid "%s will terminate because of a localization error. Please report the specific scenario in which this happened."
-msgstr ""
-
-#, boost-format
-msgid "%1% encountered an unhandled exception: %2%"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"An interrupted settings import could not be recovered safely. No new import was attempted.\n"
-"\n"
-"%s"
-msgstr ""
-
-msgid "Settings import recovery failed"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"An interrupted settings import was recovered.\n"
-"\n"
-"Recovered settings: %s"
-msgstr ""
-
-msgid "Settings import recovered"
-msgstr ""
-
-msgid "No importable Orca-family settings were found."
-msgstr ""
-
-msgid "Import existing settings"
-msgstr ""
-
-msgid "Choose the settings source to import."
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"Import settings from %s on this launch?\n"
-"\n"
-"Source: %s\n"
-"\n"
-"Your current Nozzle It All Desktop settings will be backed up and replaced. The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"Nozzle It All Desktop found settings from %s. Copy those settings into its own data directory?\n"
-"\n"
-"Source: %s\n"
-"\n"
-"The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
-msgstr ""
-
-msgid "None."
-msgstr ""
-
-msgid "No existing settings directory needs a backup."
-msgstr ""
-
-msgid "Your current settings will be retained in a timestamped backup beside the Nozzle It All Desktop data directory. The exact path will be shown after import."
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"Some source files were sanitized before import, and some could not be imported safely.\n"
-"\n"
-"Source: %s\n"
-"\n"
-"Target to replace: %s\n"
-"\n"
-"Sanitized and copied files:\n"
-"%s\n"
-"\n"
-"Skipped files:\n"
-"%s\n"
-"\n"
-"%s\n"
-"\n"
-"Continue with this exact prepared import?"
-msgstr ""
-
-msgid "Confirm partial settings import"
-msgstr ""
-
-msgid "Settings import cleanup failed"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"The settings import could not be completed. No source data was changed.\n"
-"\n"
-"%s"
-msgstr ""
-
-msgid "Settings import failed"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"Settings were imported with the warnings you approved. Your previous settings remain available at the backup path below.\n"
-"\n"
-"Migration report: %s\n"
-"\n"
-"Backup: %s"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"Settings were copied successfully.\n"
-"\n"
-"Migration report: %s"
-msgstr ""
-
-msgid "Settings imported with warnings"
-msgstr ""
-
-msgid "Settings imported"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"The settings import could not be scheduled.\n"
-"\n"
-"%s"
-msgstr ""
-
-msgid "Settings import is scheduled. Restart Nozzle It All Desktop normally to choose the source and review the backup-and-replace confirmation."
-msgstr ""
-
-msgid "Nozzle It All Desktop updates"
-msgstr ""
-
-msgid "The Nozzle It All Desktop update channel is not available yet. No update request was sent."
-msgstr ""
-
-#, c-format, boost-format
-msgid "Switching Nozzle It All Desktop to language %s failed."
-msgstr ""
-
-msgid "Nozzle It All Desktop - Switching language failed"
-msgstr ""
-
-msgid "Nozzle It All Desktop GUI initialization failed"
-msgstr ""
-
-msgid "AI auto-paint"
-msgstr ""
-
-msgid "Let Claude suggest a filament for each part of the surface"
-msgstr ""
-
-#. TRN %s is the Nozzle It All Desktop product version.
-#. TRN %s is the Nozzle It All for Desktop product version.
-#, c-format, boost-format
-msgid "Version %s"
-msgstr ""
-
-#. TRN The first %s is the OrcaSlicer engine version; the second is the source commit.
-#, c-format, boost-format
-msgid "Engine: OrcaSlicer %s | Build %s"
-msgstr ""
-
-msgid "Nozzle It All Desktop is a fork of OrcaSlicer that adds native Snapmaker U1 and Moonraker printer tools. All upstream credits below remain."
-msgstr ""
-
-msgid "Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."
-msgstr ""
-
-msgid "Nozzle It All"
-msgstr ""
-
-msgid "FOR DESKTOP"
-msgstr ""
-
-msgid "A focused workshop for slicing, filament mapping, and connected printer control."
-msgstr ""
-
-msgid "Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."
-msgstr ""
-
-msgid "Open-source lineage"
-msgstr ""
-
-msgid "Built on OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r, SuperSlicer, CuraSlicer, and the work of their contributors. Nozzle It All is independently built and is not endorsed by those projects or their vendors."
-msgstr ""
-
-msgid "nozzleitall.com"
-msgstr ""
-
-msgid "DESKTOP"
-msgstr ""
-
-#, c-format, boost-format
-msgid "Nozzle It All Desktop — %s"
-msgstr ""
-
-#, c-format, boost-format
-msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart %s and try again. Also check whether it is blocked or has been deleted by anti-virus software."
-msgstr ""
-
-msgid "Check for Nozzle It All Desktop Updates"
-msgstr ""
-
-msgid "The Nozzle It All Desktop update channel is not available yet"
-msgstr ""
-
-msgid "Import settings from another slicer on next launch"
-msgstr ""
-
-msgid "Back up current settings and choose Orca-family settings to import after restarting"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"Another virtual camera is running.\n"
-"%s supports only a single virtual camera.\n"
-"Do you want to stop this virtual camera?"
-msgstr ""
-
-#, c-format, boost-format
-msgid "The .gcode.3mf file contains no G-code data. Please slice it with %s and export a new .gcode.3mf file."
-msgstr ""
-
-msgid "About Nozzle It All Desktop"
-msgstr ""
-
-msgid "Synchronize filament list from the printer"
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"There are unknown or incompatible filaments mapped to generic presets.\n"
-"Please update or restart %s to check for updated system presets."
-msgstr ""
-
-#, c-format, boost-format
-msgid "Importing to %s failed. Please download the file and import it manually."
-msgstr ""
-
-msgid "No Snapmaker U1 address is known yet. Enter its IP address in the printer settings (Connection > Hostname, IP or URL)."
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"Could not reach the Snapmaker U1 at %s on the local network.\n"
-"\n"
-"%s"
-msgstr ""
-
-#, c-format, boost-format
-msgid "%s can't connect to %s. Please check that the printer is powered on and connected to the network."
-msgstr ""
-
-#. TRN The first %s is a URL scheme, for example "prusaslicer"; the second is a website name.
-#, c-format, boost-format
-msgid "Associate %s:// with %s so the application can open models from %s"
-msgstr ""
-
-msgid "Allow only one Nozzle It All Desktop instance"
-msgstr ""
-
-msgid "If this is enabled, when starting Nozzle It All Desktop and another instance is already running, that instance will be reactivated instead."
-msgstr ""
-
-msgid "On a computer with two GPUs, run Nozzle It All Desktop on the discrete GPU instead of the one that drives the display. Some Wayland systems cannot show frames rendered on the other GPU, or fail to open the window at all. Turn this off if the 3D view stays empty; if Nozzle It All Desktop no longer starts, start it once with DRI_PRIME=0 in the environment to get back here."
-msgstr ""
-
-#, c-format, boost-format
-msgid "If enabled, %s will re-slice automatically whenever slicing-related settings change."
-msgstr ""
-
-#, c-format, boost-format
-msgid "If enabled, %s will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
-msgstr ""
-
-msgid "Associate files to Nozzle It All Desktop"
-msgstr ""
-
-msgid "Associate 3MF files to Nozzle It All Desktop"
-msgstr ""
-
-msgid "If enabled, this sets Nozzle It All Desktop as the default application to open 3MF files."
-msgstr ""
-
-msgid "Associate DRC files to Nozzle It All Desktop"
-msgstr ""
-
-msgid "If enabled, this sets Nozzle It All Desktop as the default application to open DRC files."
-msgstr ""
-
-msgid "Associate STL files to Nozzle It All Desktop"
-msgstr ""
-
-msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STL files."
-msgstr ""
-
-msgid "Associate STEP files to Nozzle It All Desktop"
-msgstr ""
-
-msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STEP files."
-msgstr ""
-
-msgid "Associate web links to Nozzle It All Desktop"
-msgstr ""
-
-msgid ""
-"Route print jobs for non-Bambu printers through printer plug-in agents instead of the classic print-host upload flow.\n"
-"When disabled, the application uses the legacy print-host behavior."
-msgstr ""
-
-#, c-format, boost-format
-msgid "The printer must be on the same LAN as %s."
-msgstr ""
-
-#, c-format, boost-format
-msgid "%s recalculates flushing volumes whenever filament colors or filaments change. You can disable automatic calculation in Preferences."
-msgstr ""
-
-msgid "Cloud agent is not available. Please restart Nozzle It All Desktop and try again."
-msgstr ""
-
-msgid "Welcome to Nozzle It All Desktop"
-msgstr ""
-
-msgid "Nozzle It All Desktop will be set up in several steps. Let's start!"
-msgstr ""
-
-msgid "empty"
-msgstr ""
-
-msgid "Print on Snapmaker U1"
-msgstr ""
-
-msgid "Online • Ready"
-msgstr ""
-
-#, c-format, boost-format
-msgid "Project: %s"
-msgstr ""
-
-#, c-format, boost-format
-msgid "Plate %d"
-msgstr ""
-
-#, c-format, boost-format
-msgid "Printer file: %s"
-msgstr ""
-
-msgid "Estimated duration unavailable"
-msgstr ""
-
-#, c-format, boost-format
-msgid "Estimated normal-mode duration: %s"
-msgstr ""
-
-msgid "Filament and toolhead mapping"
-msgstr ""
-
-msgid "Confirm that each sliced filament is mapped to the loaded material you intend to use."
-msgstr ""
-
-#, c-format, boost-format
-msgid "Toolhead %d"
-msgstr ""
-
-msgid "Print preparation"
-msgstr ""
-
-msgid "Measure the build plate before this print."
-msgstr ""
-
-msgid "Flow calibration"
-msgstr ""
-
-msgid "Calibrate only the toolheads used by this print."
-msgstr ""
-
-msgid "Input shaper calibration"
-msgstr ""
-
-msgid "Measure vibration compensation before printing."
-msgstr ""
-
-msgid "Capture a timelapse with the printer camera."
-msgstr ""
-
-msgid "File name on the printer"
-msgstr ""
-
-msgid "Start Print"
-msgstr ""
-
-msgid "Please enter a file name without the characters #, *, ;, \\, /, :, \", <, >, or |."
-msgstr ""
-
-msgid "Send to Snapmaker U1"
-msgstr ""
-
-#, c-format, boost-format
-msgid "Filament %d is %s, but toolhead %d has %s loaded."
-msgstr ""
-
-msgid "The filament types do not match:"
-msgstr ""
-
-msgid "The print will use the temperatures and speeds sliced for the original filament. Continue anyway?"
-msgstr ""
-
-msgid "3D Filament Profiles API key"
-msgstr ""
-
-msgid "Connect 3D Filament Profiles"
-msgstr ""
-
-msgid "A 3D Filament Profiles API key is already stored in the operating-system keychain. Enter a new key only to replace it."
-msgstr ""
-
-msgid "Enter your personal API key. It will be stored only in the operating-system keychain."
-msgstr ""
-
-msgid "Save securely"
-msgstr ""
-
-msgid "Enter an API key before saving."
-msgstr ""
-
-msgid "3D Filament Profiles"
-msgstr ""
-
-msgid "A 3D Filament Profiles API key is already stored. Replace it with the new key you entered?"
-msgstr ""
-
-msgid "Replace stored API key?"
-msgstr ""
-
-msgid "The API key could not be stored in the operating-system keychain."
-msgstr ""
-
-msgid "Map Snapmaker U1 filaments"
-msgstr ""
-
-msgid "Map the material in each toolhead"
-msgstr ""
-
-msgid "Review every loaded toolhead. Applying expands the project to the U1's fixed T0-T3 slots; empty toolheads keep their current project slot."
-msgstr ""
-
-#, c-format, boost-format
-msgid "Report source: %s"
-msgstr ""
-
-msgid "RFID / printer report"
-msgstr ""
-
-msgid "Filament preset"
-msgstr ""
-
-msgid "Empty toolhead"
-msgstr ""
-
-#, boost-format
-msgid "Toolhead T%1%: empty toolhead"
-msgstr ""
-
-msgid "Keep current project slot"
-msgstr ""
-
-msgid "RFID tag"
-msgstr ""
-
-msgid "Printer setting"
-msgstr ""
-
-msgid "invalid color; current project color will be kept"
-msgstr ""
-
-msgid "material identity unresolved; choose a compatible preset explicitly"
-msgstr ""
-
-#, boost-format
-msgid "%1%: %2% %3% (%4%)"
-msgstr ""
-
-#, boost-format
-msgid "Filament preset for toolhead T%1%. Printer report: %2%"
-msgstr ""
-
-msgid "Select a matching filament preset"
-msgstr ""
-
-#, boost-format
-msgid "Manual override — %1%"
-msgstr ""
-
-msgid "Configure API key"
-msgstr ""
-
-msgid "Find RFID products in 3D Filament Profiles"
-msgstr ""
-
-msgid "Generic presets are never selected automatically for an RFID-tagged product."
-msgstr ""
-
-msgid "Apply mappings"
-msgstr ""
-
-msgid "At least one loaded toolhead has no material family in the printer report. Apply the selected presets as explicit manual overrides for those unresolved toolheads?"
-msgstr ""
-
-msgid "Confirm unresolved material overrides"
-msgstr ""
-
-msgid "3D Filament Profiles results are catalog candidates, not proof of the RFID identity. Apply the selected catalog products as explicit overrides for the corresponding U1 reports?"
-msgstr ""
-
-msgid "Confirm catalog overrides"
-msgstr ""
-
-msgid "Searching 3D Filament Profiles…"
-msgstr ""
-
-msgid "The 3D Filament Profiles API key is unavailable."
-msgstr ""
-
-#, boost-format
-msgid "Catalog lookup could not start for toolhead T%1%."
-msgstr ""
-
-#, boost-format
-msgid "Catalog lookup failed for toolhead T%1%: %2%"
-msgstr ""
-
-#, boost-format
-msgid "%1% (record %2%)"
-msgstr ""
-
-#, boost-format
-msgid "%1% — 3D Filament Profiles"
-msgstr ""
-
-#, boost-format
-msgid "Found %1% matching catalog products. Review each selection before applying."
-msgstr ""
-
-#, boost-format
-msgid "Found %1% catalog products. Toolheads %2% are still unmapped; choose a matching preset in those rows."
-msgstr ""
-
-msgid "selected printer RFID / device report"
-msgstr ""
-
-msgid "direct Snapmaker U1 LAN report"
-msgstr ""
-
-msgid "The direct Snapmaker U1 report and the selected printer report disagree about loaded toolheads or filament identity. Refresh the printer on the Device page and review its RFID data before synchronizing."
-msgstr ""
-
-msgid "Sync filaments"
-msgstr ""
-
-msgid "The printer reported loaded filament trays, but their physical U1 toolhead assignment is ambiguous. Refresh the printer on the Device page and try again."
-msgstr ""
-
-msgid "The configured U1 LAN address and the selected printer refer to different devices. Select the matching U1 or correct its LAN address before synchronizing filaments."
-msgstr ""
-
-msgid "No Snapmaker U1 connection is available. Configure the printer LAN address or select the printer on the Device page, then try again."
-msgstr ""
-
-msgid "The selected printer could not be verified as a Snapmaker U1. Select the U1 on the Device page or configure its LAN address before synchronizing filaments."
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"The printer reports no loaded filaments.\n"
-"\n"
-"The direct U1 query also reported: %s"
-msgstr ""
-
-msgid "The printer reports no loaded filaments."
-msgstr ""
-
-msgid "This project has more than the Snapmaker U1's four physical filament slots. Synchronization was not applied because removing the additional project slots would lose data."
-msgstr ""
-
-#, boost-format
-msgid "The compatible filament presets could not be refreshed: %1%"
-msgstr ""
-
-#, boost-format
-msgid ""
-"\n"
-"\n"
-"%1% failed: %2%"
-msgstr ""
-
-#, boost-format
-msgid "Removing catalog-created preset %1%"
-msgstr ""
-
-msgid "Restoring the previous complete preset selection"
-msgstr ""
-
-msgid "Restoring the previous project filament count"
-msgstr ""
-
-msgid "Restoring the previous project filament state"
-msgstr ""
-
-msgid "Refreshing the restored project controls"
-msgstr ""
-
-msgid "Persisting the restored preset selections"
-msgstr ""
-
-#, boost-format
-msgid "The filament mappings could not be applied: %1%%2%"
-msgstr ""
-
-msgid "The reviewed Snapmaker U1 filament mappings were applied."
-msgstr ""
-
-#, boost-format
-msgid "The reviewed Snapmaker U1 filament mappings were applied. The printer reported an invalid color for toolheads %1%; their existing project colors were kept."
-msgstr ""
-
-#, c-format, boost-format
-msgid "Please make sure no instances of %s are running"
-msgstr ""
-
-msgid "Delete all stored logs except the current-session logs?"
-msgstr ""
-
-msgid "This cannot be undone. Export the logs first if you may need them."
-msgstr ""
-
-msgid "Clear stored logs"
-msgstr ""
-
-msgid "The current-session log could not be identified. No logs were deleted."
-msgstr ""
-
-msgid "Some stored logs could not be deleted. The current-session logs were preserved."
-msgstr ""
-
-#, boost-format
-msgid "Printing can only be started from the \"gcodes\" storage, but \"%1%\" is selected. Choose \"gcodes\" under \"Upload to storage\", or use Upload only."
-msgstr ""
-
-#, boost-format
-msgid ""
-"The following settings refer to plugins this application can't identify on this computer:\n"
-"\n"
-"%1%\n"
-"\n"
-"If you save anyway, the preset won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
-msgstr ""
-
-#, boost-format
-msgid ""
-"The following settings refer to plugins this application can't identify on this computer:\n"
-"\n"
-"%1%\n"
-"\n"
-"If you save anyway, the project won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
-msgstr ""
-
-#, boost-format
-msgid ""
-"The presets being saved refer to plugins this application can't identify on this computer:\n"
-"\n"
-"%1%\n"
-"\n"
-"If you save anyway, the presets won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
-msgstr ""
-
-#, c-format, boost-format
-msgid ""
-"The following installed plugins were not found on disk:\n"
-"%s\n"
-"\n"
-"Remove them from %s?"
-msgstr ""
-
-#, boost-format
-msgid "You can return to %1%. This window will close automatically."
-msgstr ""
-
-#, boost-format
-msgid "Something went wrong. Please return to %1% and try again."
-msgstr ""
-
-#, boost-format
-msgid "You can return to %1%. If your browser does not redirect automatically, use the button below."
-msgstr ""

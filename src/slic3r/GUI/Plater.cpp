@@ -21158,6 +21158,23 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
             if (answer != wxID_YES && answer != wxID_NO)
                 return;
             const bool started = answer == wxID_YES;
+            // The dialog may have been open for a long time. Read the printer again: the answer is
+            // recorded against what the printer reports now, and a printer that turns out to be
+            // running the job's file settles it without the answer.
+            {
+                wxBusyCursor wait;
+                printer_state = U1LanPrintHost::reconcile(*open_job, base_url);
+            }
+            if (!open_job->unresolved()) {
+                show_info(this, _L("The printer now reports that it is printing that job, so it was recorded as started. Nothing was sent."),
+                          _L("Send to Snapmaker U1"));
+                return;
+            }
+            if (printer_state.empty()) {
+                show_error(this, _L("The printer cannot be reached to check it, so the answer was not recorded and the printer stays held. "
+                                    "Nothing was sent."), false);
+                return;
+            }
             const auto settled = U1Jobs::update(
                 open_job->id,
                 [started](U1Jobs::Job &record) -> std::optional<U1Jobs::State> {
@@ -21170,6 +21187,15 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
                 started ? "USER_SAID_STARTED" : "USER_SAID_NOT_STARTED");
             if (!settled || settled->unresolved()) {
                 show_error(this, _L("The answer could not be recorded, so the printer stays held. Nothing was sent."), false);
+                return;
+            }
+            // Another part of the app settled the job while the question was open: the answer was not used.
+            const std::string answer_event    = started ? "USER_SAID_STARTED" : "USER_SAID_NOT_STARTED";
+            const bool        answer_recorded = std::any_of(settled->events.begin(), settled->events.end(),
+                                                            [&](const auto &event) { return event.first == answer_event; });
+            if (!answer_recorded) {
+                show_info(this, GUI::format_wxstr(_L("That job was settled in the meantime (%1%), so your answer was not recorded. Nothing was sent."),
+                                                  U1Jobs::state_name(settled->state)), _L("Send to Snapmaker U1"));
                 return;
             }
             if (started)

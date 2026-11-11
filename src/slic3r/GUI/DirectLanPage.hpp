@@ -156,6 +156,12 @@ private:
     {
         const wxString origin = html_escape(wxString::FromUTF8(m_origin.c_str()));
         const wxString path   = html_escape(wxString::FromUTF8(m_mjpeg_only.c_str()));
+        // "scheme://host" without the port, so that "<host>:*" is a valid source when the origin has one.
+        std::string host_only = m_origin;
+        if (const auto scheme_end = host_only.find("://"); scheme_end != std::string::npos)
+            if (const auto colon = host_only.find(':', scheme_end + 3); colon != std::string::npos && host_only.find(']', colon) == std::string::npos)
+                host_only.erase(colon);
+        const wxString any_port = html_escape(wxString::FromUTF8(host_only.c_str()));
         // Moonraker may report an absolute stream_url (camera service on another port). The image
         // policy below still confines it to this printer's host.
         const bool     absolute = m_mjpeg_only.rfind("http://", 0) == 0 || m_mjpeg_only.rfind("https://", 0) == 0;
@@ -166,7 +172,7 @@ private:
 <style>html,body{height:100%%;margin:0;background:#090a0a;color:#f5f5f5;font:14px sans-serif}img{width:100%%;height:100%%;object-fit:contain}#error{position:absolute;top:45%%;width:100%%;text-align:center;color:#ffb4ab}</style>
 </head><body><img id="mjpeg" alt="Printer camera" src="%s%s"><div id="error" role="status"></div>
 <script>(()=>{'use strict';const img=document.getElementById('mjpeg');img.addEventListener('error',()=>{img.removeAttribute('src');document.getElementById('error').textContent='The printer camera is unavailable.';});addEventListener('pagehide',()=>img.removeAttribute('src'),{once:true});})();</script></body></html>)HTML",
-                                                 origin, origin, absolute ? wxString() : origin, path);
+                                                 origin, any_port, absolute ? wxString() : origin, path);
         load_html(html);
     }
 

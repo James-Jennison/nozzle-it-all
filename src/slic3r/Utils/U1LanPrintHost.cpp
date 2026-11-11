@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/asio/connect.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
@@ -17,12 +18,6 @@
 #include <boost/nowide/fstream.hpp>
 #include <nlohmann/json.hpp>
 #include <openssl/evp.h>
-
-#ifndef _WIN32
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#endif
 
 #include <algorithm>
 #include <chrono>
@@ -223,7 +218,8 @@ bool U1LanPrintHost::read_back_sha256(const std::string &path, std::uintmax_t ex
     const std::string url    = m_base_url + "/server/files/gcodes/" + url_path(path);
     std::uintmax_t    offset = 0;
     bool              ok     = true;
-    // A server that ignores Range answers 200 with the whole file; that is hashed as it is.
+    // A server that ignores Range answers 200 with the whole file: accepted only as the first answer
+    // and only when it is exactly the expected length.
     while (ok && offset < expected_bytes) {
         const std::uintmax_t last = std::min<std::uintmax_t>(expected_bytes, offset + READBACK_CHUNK) - 1;
         std::uintmax_t       got  = 0;
@@ -234,7 +230,7 @@ bool U1LanPrintHost::read_back_sha256(const std::string &path, std::uintmax_t ex
             .timeout_max(120)
             .size_limit(size_t(expected_bytes) + 1024)
             .on_complete([&](std::string body, unsigned status) {
-                if ((status == 206 && body.size() == size_t(last - offset + 1)) || (status == 200 && offset == 0)) {
+                if ((status == 206 && body.size() == size_t(last - offset + 1)) || (status == 200 && offset == 0 && body.size() == expected_bytes)) {
                     ok  = EVP_DigestUpdate(ctx, body.data(), body.size()) == 1;
                     got = body.size();
                 }
@@ -415,7 +411,9 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     // The Start may or may not have run. It is never sent again: the printer's own state decides.
     U1Jobs::save(job, U1Jobs::State::StartUnconfirmed, "The Start was sent and no reply came back: " + GUI::into_u8(detail));
     std::string seen;
-    for (int i = 0; i < RECONCILE_SECONDS; ++i) {
+    // Bounded by the clock, not by a count of reads: a printer that stops answering makes each read slow.
+    const auto watch_until = std::chrono::steady_clock::now() + std::chrono::seconds(RECONCILE_SECONDS);
+    while (std::chrono::steady_clock::now() < watch_until) {
         const std::string state = reconcile(job, m_base_url);
         if (!state.empty())
             seen = state;
@@ -455,54 +453,37 @@ U1LanPrintHost::StartOutcome U1LanPrintHost::start_print(const std::string &path
         host = host.substr(0, colon);
     }
 
-    // Until the whole request has been written the printer cannot have started anything: a partial
-    // websocket frame is not a request. After that, anything short of a reply is "unknown".
-    bool written = false;
+    // Before the first byte of the request is written the printer cannot have started anything.
+    // From then on, anything short of a reply is "unknown" and is settled from the printer's state.
+    bool write_begun = false;
     try {
         boost::asio::io_context            ioc;
         websocket::stream<beast::tcp_stream> ws{ioc};
-        beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(10));
         beast::get_lowest_layer(ws).connect(tcp::resolver{ioc}.resolve(host, port));
         ws.handshake(host + ":" + port, "/websocket");
+        write_begun = true;
         ws.write(boost::asio::buffer(request.dump()));
-        written = true;
 
-        // Blocking reads ignore the stream's expiry. Wait for data with select(), so a silent printer
-        // ends at the deadline, and bound a frame that stalls part-way with a socket timeout; such a
-        // stall ends the wait as "unknown" rather than reading on from a half-read frame.
-        auto &socket = beast::get_lowest_layer(ws).socket();
-        const auto native = socket.native_handle();
-#ifdef _WIN32
-        const DWORD stall_timeout = 15000;
-        ::setsockopt(native, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&stall_timeout), sizeof(stall_timeout));
-#else
-        const timeval stall_timeout{15, 0};
-        ::setsockopt(native, SOL_SOCKET, SO_RCVTIMEO, &stall_timeout, sizeof(stall_timeout));
-#endif
-        beast::get_lowest_layer(ws).expires_never();
-
-        // Moonraker also pushes status notifications on this socket; wait for
-        // our reply. The printer scans metadata before starting, so allow time.
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(START_REPLY_SECONDS);
+        // Moonraker also pushes status notifications on this socket; wait for our reply. The printer
+        // scans metadata before starting, so allow time. The reads are asynchronous under one deadline
+        // on the stream, so a printer that goes silent, or stalls part-way through a frame, ends the
+        // wait at the deadline as "unknown".
+        beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(START_REPLY_SECONDS));
         for (;;) {
-            if (std::chrono::steady_clock::now() > deadline)
-                throw std::runtime_error("no reply within 60 s");
-            fd_set readable;
-            FD_ZERO(&readable);
-            FD_SET(native, &readable);
-            timeval slice{1, 0};
-            const int ready = ::select(int(native) + 1, &readable, nullptr, nullptr, &slice);
-            if (ready == 0)
-                continue;
-            if (ready < 0)
-                throw std::runtime_error("the connection failed while waiting for the reply");
             beast::flat_buffer buffer;
-            ws.read(buffer);
+            beast::error_code  read_error = boost::asio::error::operation_aborted;
+            ws.async_read(buffer, [&read_error](beast::error_code ec, std::size_t) { read_error = ec; });
+            ioc.restart();
+            ioc.run();
+            if (read_error == beast::error::timeout)
+                throw std::runtime_error("no reply within 60 s");
+            if (read_error)
+                throw beast::system_error(read_error);
             const auto reply = nlohmann::json::parse(beast::buffers_to_string(buffer.data()), nullptr, false);
             if (reply.is_discarded() || !reply.is_object() || reply.value("id", -1) != request_id)
                 continue;
             beast::error_code ignored;
-            socket.shutdown(tcp::socket::shutdown_both, ignored);
+            beast::get_lowest_layer(ws).socket().shutdown(tcp::socket::shutdown_both, ignored);
 
             BOOST_LOG_TRIVIAL(warning) << "U1 LAN: start_local_print reply " << reply.dump();
             if (reply.contains("error")) {
@@ -518,8 +499,8 @@ U1LanPrintHost::StartOutcome U1LanPrintHost::start_print(const std::string &path
             return StartOutcome::Accepted;
         }
     } catch (const std::exception &e) {
-        BOOST_LOG_TRIVIAL(error) << "U1 LAN: start_local_print failed (request written: " << written << "): " << e.what();
-        if (!written) {
+        BOOST_LOG_TRIVIAL(error) << "U1 LAN: start_local_print failed (request begun: " << write_begun << "): " << e.what();
+        if (!write_begun) {
             detail = GUI::format_wxstr(_L("The file was uploaded, but the printer could not be reached to start it: %s"), e.what());
             return StartOutcome::NotSent;
         }

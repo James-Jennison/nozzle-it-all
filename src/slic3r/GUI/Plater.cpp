@@ -2033,7 +2033,7 @@ static std::map<int, std::vector<DevNozzle>> deserialize_nozzle_config(const std
             boost::split(values, part, boost::is_any_of(","));
             if (values.size() == 2) {
                 DevNozzle nozzle;
-                nozzle.m_diameter = std::stof(values[0]);
+                nozzle.m_diameter = string_to_double_decimal_point(values[0]);
                 nozzle.m_nozzle_flow = static_cast<NozzleFlowType>(std::stoi(values[1]));
                 nozzles.push_back(nozzle);
             }
@@ -2439,7 +2439,7 @@ bool Sidebar::priv::sync_extruder_list(bool &only_external_material, bool is_man
     std::vector<NozzleVolumeType> target_types(extruder_nums, NozzleVolumeType::nvtStandard);
     for (size_t index = 0; index < extruder_nums; ++index) {
         int extruder_id = extruder_map[index];
-        nozzle_diameters[extruder_id] = nozzle_option ? atof(nozzle_option->diameter.c_str()) : obj->GetExtderSystem()->GetNozzleDiameter(index);
+        nozzle_diameters[extruder_id] = nozzle_option ? string_to_double_decimal_point(nozzle_option->diameter) : obj->GetExtderSystem()->GetNozzleDiameter(index);
         NozzleVolumeType target_type = NozzleVolumeType::nvtStandard;
         std::optional<NozzleVolumeType> select_type;
         if (nozzle_option && nozzle_option->extruder_nozzle_stats.count(index)) {
@@ -6360,6 +6360,14 @@ void Sidebar::sync_ams_list(bool is_from_big_sync_btn)
 
     auto & list = wxGetApp().preset_bundle->filament_ams_list;
     if (list.empty()) {
+        // Only an unreachable printer is "not connected". One that is online and has
+        // delivered at least one status push answered the request without listing any
+        // filament slot, and the message then names the machine that answered.
+        if (obj->is_connected() && obj->m_push_count > 0) {
+            p->plater->pop_warning_and_go_to_device_page(from_u8(obj->get_dev_name()), Plater::PrinterWarningType::NO_FILAMENT_SYSTEM,
+                                                         _L("Sync printer information"));
+            return;
+        }
         auto printer_name = p->plater->get_selected_printer_name_in_combox();
         p->plater->pop_warning_and_go_to_device_page(printer_name, Plater::PrinterWarningType::NOT_CONNECTED, _L("Sync printer information"));
         return;
@@ -9404,27 +9412,6 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
                         }
                     }
 
-                    // Geometry-only import discards slicer overrides while preserving explicit
-                    // extruder assignments. Prusa 3MF is the established exception: its model
-                    // configuration is intentionally retained.
-                    if (!load_config && en_3mf_file_type != En3mfType::From_Prusa) {
-                        for (ModelObject *model_object : model.objects) {
-                            const bool has_extruder = model_object->config.has("extruder");
-                            const int  extruder_id  = has_extruder ? model_object->config.extruder() : -1;
-                            model_object->config.reset();
-                            if (has_extruder)
-                                model_object->config.set("extruder", extruder_id);
-
-                            for (ModelVolume *model_volume : model_object->volumes) {
-                                const bool volume_has_extruder = model_volume->config.has("extruder");
-                                const int  volume_extruder_id  = volume_has_extruder ? model_volume->config.extruder() : -1;
-                                model_volume->config.reset();
-                                if (volume_has_extruder)
-                                    model_volume->config.set("extruder", volume_extruder_id);
-                            }
-                        }
-                    }
-
                     // 1. add extruder for prusa model if the number of existing extruders is not enough
                     // 2. add extruder for BBS or Other model if only import geometry, by choice or by the checks above
                     if (en_3mf_file_type == En3mfType::From_Prusa || (load_model && !load_config)) {
@@ -9863,7 +9850,7 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
                             if (!isUtf8StepFile) {
                                 const auto no_warn = wxGetApp().app_config->get_bool("step_not_utf8_no_warn");
                                 if (!no_warn) {
-                                    MessageDialog dlg(nullptr, _L("Component name(s) inside step file not in UTF-8 format!") + "\n\n" + _L("Because of unsupported text encoding, garbage characters may appear!"),
+                                    MessageDialog dlg(nullptr, _L("Component name(s) inside STEP file not in UTF-8 format!") + "\n\n" + _L("Because of unsupported text encoding, garbage characters may appear!"),
                                                       wxString(SLIC3R_APP_FULL_NAME " - ") + _L("Attention!"), wxOK | wxICON_INFORMATION);
                                     dlg.show_dsa_button(_L("Remember my choice."));
                                     dlg.ShowModal();
@@ -10015,7 +10002,7 @@ std::vector<size_t> Plater::priv::load_files(const std::vector<fs::path>& input_
             }
 
              if (!is_project_file && model.looks_like_multipart_object()) {
-               MessageDialog msg_dlg(q, _L("This file contains several objects positioned at multiple heights.\nInstead of considering them as multiple objects, should \nthe file be loaded as a single object with multiple parts\?") + "\n",
+               MessageDialog msg_dlg(q, _L("This file contains several objects positioned at multiple heights.\nInstead of considering them as multiple objects, should the file be loaded as a single object with multiple parts\?") + "\n",
                     _L("Multi-part object detected"), wxICON_WARNING | wxYES | wxNO);
                 if (msg_dlg.ShowModal() == wxID_YES) {
                     model.convert_multipart_object(filaments_cnt);
@@ -21723,7 +21710,7 @@ void Plater::config_change_notification(const DynamicPrintConfig &config, const 
         if (seq_print && view3d_canvas && view3d_canvas->is_initialized() && view3d_canvas->is_rendering_enabled()) {
             NotificationManager* notify_manager = get_notification_manager();
             if (seq_print->value == PrintSequence::ByObject) {
-                std::string info_text = _u8L("Print By Object: \nWe suggest using auto-arrange to avoid collisions when printing.");
+                std::string info_text = _u8L("Print By Object:\nWe suggest using auto-arrange to avoid collisions when printing.");
                 notify_manager->bbl_show_seqprintinfo_notification(info_text);
             }
             else
@@ -22604,6 +22591,9 @@ void Plater::pop_warning_and_go_to_device_page(wxString printer_name, PrinterWar
         content = _L("There are no filaments on the printer. Please load the filaments on the printer first.");
     } else if (type == PrinterWarningType::EMPTY_FILAMENT) {
         content = _L("The filaments on the printer are all unknown types. Please go to the printer screen or software device page to set the filament type.");
+    } else if (type == PrinterWarningType::NO_FILAMENT_SYSTEM) {
+        // TRN %s is the connected printer's name.
+        content = wxString::Format(_L("%s is connected, but no filament system (AMS, CFS or other multi-material unit) was found on it, so there are no filaments to synchronize."), printer_name);
     }
     MessageDialog dlg(this, content, title, wxOK | wxFORWARD | wxICON_WARNING, _L("Device Page"));
     auto          result = dlg.ShowModal();

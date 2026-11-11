@@ -2440,7 +2440,7 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                 print_object.model_object(),
                 ""
             };
-        } else if (effective_max_z > this->config().printable_height + EPSILON) {
+        } else if (compensated_max_z > this->config().printable_height + EPSILON) {
             return StringObjectException{
                 last_layer_below_max ?
                 Slic3r::format(_u8L("While the object %1% itself fits the build volume, its last layer exceeds the maximum build volume height."), print_object.model_object()->name) +
@@ -4951,7 +4951,8 @@ std::vector<std::set<int>> Print::get_physical_unprintable_filaments(const std::
     auto get_unprintable_extruder_id = [&](unsigned int filament_idx) -> int {
         // filament_printable may be shorter than the filament count; get_at() clamps.
         int status = m_config.filament_printable.get_at(filament_idx);
-        for (int i = 0; i < extruder_num; ++i) {
+        // An int has bits for the first 32 extruders only.
+        for (int i = 0; i < std::min(extruder_num, 32); ++i) {
             if (!(status >> i & 1)) {
                 return i;
             }

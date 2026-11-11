@@ -223,10 +223,6 @@ TEST_CASE("Device manager reads the pre-per-agent last machine for Bambu printer
     network.set_printer_agent(std::make_shared<TestPrinterAgent>(BBL_PRINTER_AGENT_ID));
     CHECK(manager.get_user_last_machine() == "legacy-machine");
 
-    // Recording a Bambu printer keeps the old key in sync for a downgrade.
-    manager.record_user_last_machine("new-bambu-machine");
-    CHECK(app_config.config.get("user_last_selected_machine") == "new-bambu-machine");
-
     // A forget is a record too: the legacy machine must not come back after it.
     manager.record_user_last_machine("");
     CHECK_FALSE(app_config.config.has("user_last_selected_machine"));

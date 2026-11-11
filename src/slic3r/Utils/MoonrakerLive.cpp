@@ -23,7 +23,9 @@ using json = nlohmann::json;
 
 constexpr int SUBSCRIBE_ID = 1;
 // Moonraker pushes proc stats every second, so a quiet socket means a dead link.
-constexpr auto READ_TIMEOUT = std::chrono::seconds(5);
+// Moonraker sends process statistics about once a second, so this much silence means the link is gone. It is
+// generous on purpose: a quiet but healthy printer must not be reported as unreachable.
+constexpr auto READ_TIMEOUT = std::chrono::seconds(15);
 // Coalesce bursts of status deltas into at most a few repaints per second.
 constexpr auto EMIT_INTERVAL = std::chrono::milliseconds(250);
 
@@ -119,6 +121,7 @@ bool MoonrakerLiveClient::session()
         split_host_port(m_base_url, host, port);
 
         boost::asio::io_context              ioc;
+        tcp::resolver                        resolver{ioc};
         websocket::stream<beast::tcp_stream> ws{ioc};
         // Every step on the socket is asynchronous and is run to its end here. A time limit set with
         // expires_after only acts on asynchronous operations, and the destructor joins this thread from the
@@ -135,10 +138,17 @@ bool MoonrakerLiveClient::session()
                 ioc.restart();
                 ioc.run_for(std::chrono::milliseconds(100));
                 if (m_stop && !step_done) {
+                    // Closing the socket (and stopping a name lookup) ends the pending operation with "aborted".
+                    // The wait for that is bounded too, so stopping cannot hang whatever the operation does.
                     beast::error_code ignored;
+                    resolver.cancel();
                     beast::get_lowest_layer(ws).socket().close(ignored);
-                    ioc.restart();
-                    ioc.run(); // the operation ends with "aborted"
+                    for (int i = 0; i < 10 && !step_done; ++i) {
+                        ioc.restart();
+                        ioc.run_for(std::chrono::milliseconds(100));
+                    }
+                    if (!step_done)
+                        BOOST_LOG_TRIVIAL(warning) << "Printer panel: an operation on the link to " << m_base_url << " did not end when it was closed";
                     break;
                 }
             }
@@ -148,8 +158,15 @@ bool MoonrakerLiveClient::session()
             if (step_error)
                 throw std::runtime_error(std::string(what) + ": " + step_error.message());
         };
+        // The name lookup is asynchronous as well: a resolver that does not answer must not hold this thread.
+        tcp::resolver::results_type endpoints;
+        resolver.async_resolve(host, port, [&](const beast::error_code &ec, tcp::resolver::results_type found) {
+            endpoints = std::move(found);
+            step(ec);
+        });
+        finish("looking up the printer's address");
         beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(10));
-        beast::get_lowest_layer(ws).async_connect(tcp::resolver{ioc}.resolve(host, port), step);
+        beast::get_lowest_layer(ws).async_connect(endpoints, step);
         finish("connecting");
         beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(10));
         ws.async_handshake(host + ":" + port, "/websocket", step);

@@ -21137,12 +21137,13 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
                 facts = U1Jobs::read_gcode_facts(sliced);
             }
         }
-        if (facts.printer_model.empty() && facts.nozzles.empty()) {
+        // Each fact the file does not give is taken from the configuration on its own.
+        if (facts.printer_model.empty())
             if (const auto *model = full_config.option<ConfigOptionString>("printer_model"))
                 facts.printer_model = model->value;
+        if (facts.nozzles.empty())
             if (const auto *nozzles = full_config.option<ConfigOptionFloats>("nozzle_diameter"))
                 facts.nozzles = nozzles->values;
-        }
         // Nothing is read here: the dialog reads when it opens, after the checks below, and again on confirming.
         read_readiness = [base_url, facts] {
             U1LanPrintHost::ReadinessRead read = U1LanPrintHost::readiness_check(base_url, facts);

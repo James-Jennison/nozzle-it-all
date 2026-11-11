@@ -121,11 +121,17 @@ wxColour filament_colour(const std::string &color)
 wxString printer_safe_name(wxString name)
 {
     static const wxString forbidden = "#*;\\/:\"<>|";
-    name.Trim(true).Trim(false);
     for (wxUniCharRef c : name)
-        if (forbidden.find(c) != wxString::npos)
+        if (forbidden.find(c) != wxString::npos || wxUniChar(c).GetValue() < 0x20 || wxUniChar(c).GetValue() == 0x7F)
             c = '_';
-    if (name.IsEmpty() || name.Lower() == ".gcode")
+    name.Trim(true).Trim(false);
+    // No hidden or relative names, and nothing longer than a printer's file system takes with the job's
+    // identifier added to it.
+    while (name.StartsWith("."))
+        name.erase(0, 1);
+    if (name.length() > 180)
+        name = name.Left(174) + ".gcode";
+    if (name.IsEmpty() || name.Lower() == "gcode")
         return {};
     if (!name.Lower().EndsWith(".gcode"))
         name += ".gcode";
@@ -655,8 +661,9 @@ void U1SendDialog::begin_name_edit()
 
 void U1SendDialog::end_name_edit(bool keep)
 {
-    // Hiding the field takes the focus from it, which arrives here again.
-    if (m_ending_name_edit || !m_name_edit->IsShown())
+    // Hiding the field takes the focus from it, which arrives here again. Nothing is touched once the dialog
+    // is being torn down.
+    if (m_ending_name_edit || IsBeingDeleted() || !m_name_edit->IsShown())
         return;
     m_ending_name_edit = true;
     if (keep)

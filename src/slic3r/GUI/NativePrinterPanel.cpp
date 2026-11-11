@@ -425,14 +425,24 @@ void NativePrinterPanel::refresh_job_identity(const PP::Snapshot &s)
         Layout();
         return;
     }
-    if (job->state == U1Jobs::State::Printing) {
-        job->progress = s.progress;
-        if (s.job_state == PP::JobState::Complete)
-            U1Jobs::save(*job, U1Jobs::State::Completed, "The printer reported the job complete.");
-        else if (s.job_state == PP::JobState::Cancelled)
-            U1Jobs::save(*job, U1Jobs::State::Cancelled, "The printer reported the job cancelled.");
-        else if (s.job_state == PP::JobState::Error)
-            U1Jobs::save(*job, U1Jobs::State::Failed, "The printer reported an error during the job.");
+    if (job->state == U1Jobs::State::Printing && s.job_state != PP::JobState::Printing && s.job_state != PP::JobState::Paused) {
+        // Re-read and write under the journal's lock, so a send on another thread is never overwritten.
+        const PP::JobState outcome = s.job_state;
+        const auto         updated = U1Jobs::update(
+            job->id,
+            [outcome](U1Jobs::Job &record) -> std::optional<U1Jobs::State> {
+                if (record.state != U1Jobs::State::Printing)
+                    return std::nullopt;
+                switch (outcome) {
+                case PP::JobState::Complete: return U1Jobs::State::Completed;
+                case PP::JobState::Cancelled: return U1Jobs::State::Cancelled;
+                case PP::JobState::Error: return U1Jobs::State::Failed;
+                default: return std::nullopt;
+                }
+            },
+            "Outcome reported by the printer while the Printer tab was open.");
+        if (updated)
+            job = updated;
     }
     // TRN %1% is a short job id, %2% a short file checksum, %3% how many Start commands were sent.
     wxString text = GUI::format_wxstr(_L("Job %1% · file SHA-256 %2%… verified on the printer · Starts sent: %3%"), job->id.substr(0, 8),

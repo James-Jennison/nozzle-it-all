@@ -7,6 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -53,16 +54,23 @@ public:
     std::string get_host() const override { return m_base_url; }
 
     /// Reads the printer once for a job whose Start outcome is open. Marks the
-    /// job Printing when the printer is running exactly its file. Returns the
+    /// job Printing when the printer is running this job's own file. Returns the
     /// printer's print state ("printing", "standby", ...), empty when unreachable.
     static std::string reconcile(U1Jobs::Job &job, const std::string &base_url);
+    /// The refusal as a sentence for the user.
+    static wxString    describe(const U1Jobs::Blocker &blocker);
 
 private:
-    enum class StartOutcome { Accepted, Rejected, Unknown };
-    /// Sends the Start once. Unknown means it may or may not have run.
+    enum class StartOutcome {
+        Accepted,
+        Rejected, ///< the printer answered and refused
+        NotSent,  ///< the request never left this computer
+        Unknown   ///< sent; it may or may not have run
+    };
+    /// Sends the Start once.
     StartOutcome start_print(const std::string &path, wxString &detail) const;
-    /// Empty when the job may go ahead, otherwise why not.
-    wxString     blockers(const boost::filesystem::path &file, const nlohmann::json &status, bool start) const;
+    /// SHA-256 of *path* as stored on the printer, fetched in ranges. False when it could not be read whole.
+    bool         read_back_sha256(const std::string &path, std::uintmax_t expected_bytes, std::string &sha256) const;
 
     std::string          m_base_url;
     U1PrintTask::Options m_options;

@@ -2,23 +2,27 @@
 
 #include "libslic3r/Utils.hpp"
 
-#include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/nowide/cstdio.hpp>
 #include <boost/nowide/fstream.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <mutex>
+#include <set>
 
 #ifdef _WIN32
 #include <io.h>
 #else
+#include <fcntl.h>
 #include <unistd.h>
 #endif
 
@@ -30,7 +34,12 @@ namespace {
 using json   = nlohmann::json;
 namespace fs = boost::filesystem;
 
+// Guards every read-modify-write of the records within this process.
 std::mutex s_mutex;
+// Printers this process is sending to right now.
+std::mutex            s_sending_mutex;
+std::set<std::string> s_sending;
+fs::path              s_test_dir;
 
 const std::pair<State, const char *> STATE_NAMES[] = {
     {State::Uploading, "UPLOADING"},   {State::Verifying, "VERIFYING"}, {State::Starting, "STARTING"},
@@ -38,14 +47,32 @@ const std::pair<State, const char *> STATE_NAMES[] = {
     {State::Uploaded, "UPLOADED"},     {State::Completed, "COMPLETED"}, {State::Cancelled, "CANCELLED"},
     {State::Failed, "FAILED"}};
 
-fs::path journal_dir() { return fs::path(data_dir()) / "u1_jobs"; }
+fs::path journal_dir() { return s_test_dir.empty() ? fs::path(data_dir()) / "u1_jobs" : s_test_dir; }
+
+bool is_hex(const std::string &s, size_t length)
+{
+    return s.size() == length && std::all_of(s.begin(), s.end(), [](unsigned char c) { return std::isxdigit(c) != 0; });
+}
+
+bool is_job_id(const std::string &s)
+{
+    if (s.size() != 36)
+        return false;
+    for (size_t i = 0; i < s.size(); ++i) {
+        const bool dash = i == 8 || i == 13 || i == 18 || i == 23;
+        if (dash ? s[i] != '-' : std::isxdigit(static_cast<unsigned char>(s[i])) == 0)
+            return false;
+    }
+    return true;
+}
 
 json to_json(const Job &job)
 {
     json events = json::array();
     for (const auto &event : job.events)
         events.push_back({{"state", event.first}, {"at", event.second}});
-    return {{"jobId", job.id},
+    return {{"format", 1},
+            {"jobId", job.id},
             {"printer", job.printer},
             {"sha256", job.sha256},
             {"uploadedSha256", job.uploaded_sha256},
@@ -62,32 +89,56 @@ json to_json(const Job &job)
             {"events", events}};
 }
 
+// A record is trusted only when everything a safety decision reads is present and well formed.
 std::optional<Job> from_json(const json &doc)
 {
-    if (!doc.is_object() || !doc.contains("jobId"))
+    try {
+        if (!doc.is_object())
+            return std::nullopt;
+        Job job;
+        job.id          = doc.at("jobId").get<std::string>();
+        job.printer     = doc.at("printer").get<std::string>();
+        job.sha256      = doc.at("sha256").get<std::string>();
+        job.remote_path = doc.at("remotePath").get<std::string>();
+        job.start_sent  = doc.at("startSent").get<bool>();
+        const std::string state = doc.at("state").get<std::string>();
+        bool              known = false;
+        for (const auto &entry : STATE_NAMES)
+            if (state == entry.second) {
+                job.state = entry.first;
+                known     = true;
+            }
+        if (!known || !is_job_id(job.id) || job.printer.empty() || job.remote_path.empty() || !is_hex(job.sha256, 64))
+            return std::nullopt;
+        job.uploaded_sha256         = doc.value("uploadedSha256", std::string());
+        job.message                 = doc.value("message", std::string());
+        job.bytes                   = doc.value("bytes", std::uintmax_t(0));
+        job.start                   = doc.value("start", false);
+        job.recovered_from_lost_ack = doc.value("recoveredFromLostAck", false);
+        job.toolhead_map            = doc.value("toolheadMap", std::vector<int>());
+        job.created_ms              = doc.value("createdAt", 0LL);
+        job.progress                = doc.value("progress", 0.);
+        for (const auto &event : doc.value("events", json::array()))
+            job.events.emplace_back(event.value("state", std::string()), event.value("at", 0LL));
+        return job;
+    } catch (const std::exception &) {
         return std::nullopt;
-    Job job;
-    job.id                      = doc.value("jobId", "");
-    job.printer                 = doc.value("printer", "");
-    job.sha256                  = doc.value("sha256", "");
-    job.uploaded_sha256         = doc.value("uploadedSha256", "");
-    job.remote_path             = doc.value("remotePath", "");
-    job.message                 = doc.value("message", "");
-    job.bytes                   = doc.value("bytes", std::uintmax_t(0));
-    job.start                   = doc.value("start", false);
-    job.start_sent              = doc.value("startSent", false);
-    job.recovered_from_lost_ack = doc.value("recoveredFromLostAck", false);
-    job.toolhead_map            = doc.value("toolheadMap", std::vector<int>());
-    job.created_ms              = doc.value("createdAt", 0LL);
-    job.progress                = doc.value("progress", 0.);
-    const std::string state     = doc.value("state", "FAILED");
-    job.state                   = State::Failed;
-    for (const auto &entry : STATE_NAMES)
-        if (state == entry.second)
-            job.state = entry.first;
-    for (const auto &event : doc.value("events", json::array()))
-        job.events.emplace_back(event.value("state", ""), event.value("at", 0LL));
-    return job;
+    }
+}
+
+void sync_directory(const fs::path &dir)
+{
+#ifndef _WIN32
+    // The rename is only durable once the directory entry is on disk.
+    const int fd = ::open(dir.string().c_str(), O_RDONLY);
+    if (fd >= 0) {
+        ::fsync(fd);
+        ::close(fd);
+    }
+#else
+    // NTFS journals the rename itself; there is no directory handle to flush here.
+    (void) dir;
+#endif
 }
 
 // Writes *text* so that the file is either the old or the new content, never a mix.
@@ -95,7 +146,8 @@ bool write_durably(const fs::path &target, const std::string &text)
 {
     boost::system::error_code ec;
     fs::create_directories(target.parent_path(), ec);
-    const fs::path tmp = target.parent_path() / ("." + target.filename().string() + ".tmp");
+    // A temp name of its own for every write: two writers can never share one.
+    const fs::path tmp = target.parent_path() / ("." + target.filename().string() + "." + new_id() + ".tmp");
     FILE *file = boost::nowide::fopen(tmp.string().c_str(), "wb");
     if (file == nullptr)
         return false;
@@ -106,10 +158,76 @@ bool write_durably(const fs::path &target, const std::string &text)
     ok = ok && ::fsync(fileno(file)) == 0;
 #endif
     ok = std::fclose(file) == 0 && ok;
-    if (!ok)
+    if (ok) {
+        fs::rename(tmp, target, ec);
+        ok = !ec;
+    }
+    if (!ok) {
+        fs::remove(tmp, ec);
         return false;
-    fs::rename(tmp, target, ec);
-    return !ec;
+    }
+    sync_directory(target.parent_path());
+    return true;
+}
+
+std::optional<Job> read_record(const fs::path &path)
+{
+    boost::nowide::ifstream in(path.string());
+    if (!in)
+        return std::nullopt;
+    return from_json(json::parse(in, nullptr, false));
+}
+
+// Caller holds s_mutex.
+bool save_locked(Job &job, State state, const std::string &message, const std::string &event)
+{
+    Job next = job;
+    if (!event.empty())
+        next.events.emplace_back(event, now_ms());
+    if (next.events.empty() || next.events.back().first != state_name(state))
+        next.events.emplace_back(state_name(state), now_ms());
+    next.state = state;
+    if (!message.empty())
+        next.message = message;
+    if (!write_durably(journal_dir() / (next.id + ".json"), to_json(next).dump(2))) {
+        BOOST_LOG_TRIVIAL(error) << "U1 jobs: could not write the record for job " << job.id << " (" << state_name(state) << ")";
+        return false;
+    }
+    job = std::move(next);
+    return true;
+}
+
+std::vector<Job> load_all_locked(std::vector<std::string> *unreadable)
+{
+    std::vector<Job>          jobs;
+    boost::system::error_code ec;
+    for (fs::directory_iterator it(journal_dir(), ec), end; !ec && it != end; it.increment(ec)) {
+        const fs::path &path = it->path();
+        if (path.extension() != ".json" || boost::starts_with(path.filename().string(), "."))
+            continue;
+        if (auto job = read_record(path); job && job->id + ".json" == path.filename().string())
+            jobs.push_back(std::move(*job));
+        else if (unreadable != nullptr)
+            unreadable->push_back(path.string());
+    }
+    std::sort(jobs.begin(), jobs.end(), [](const Job &a, const Job &b) { return a.created_ms < b.created_ms; });
+    return jobs;
+}
+
+std::string host_of(const std::string &key)
+{
+    if (!key.empty() && key.front() == '[') { // [v6]:port
+        const auto close = key.find(']');
+        return close == std::string::npos ? key : key.substr(0, close + 1);
+    }
+    const auto colon = key.rfind(':');
+    return colon == std::string::npos || key.find(':') != colon ? key : key.substr(0, colon);
+}
+
+std::string port_of(const std::string &key)
+{
+    const std::string host = host_of(key);
+    return key.size() > host.size() + 1 ? key.substr(host.size() + 1) : std::string();
 }
 
 } // namespace
@@ -129,6 +247,12 @@ long long now_ms()
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
+void set_journal_dir_for_tests(const fs::path &dir)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    s_test_dir = dir;
+}
+
 std::string printer_key(const std::string &address)
 {
     std::string key = address;
@@ -143,18 +267,15 @@ std::string printer_key(const std::string &address)
 bool same_printer(const std::string &a, const std::string &b)
 {
     const std::string ka = printer_key(a), kb = printer_key(b);
+    if (ka.empty() || kb.empty())
+        return false;
     if (ka == kb)
         return true;
-    // "host" and "host:7125" are the same U1: its web proxy and Moonraker's own port.
-    const auto host = [](const std::string &key) {
-        const auto colon = key.rfind(':');
-        return colon == std::string::npos || key.find(']') > colon ? key : key.substr(0, colon);
-    };
-    const bool a_has_port = host(ka) != ka, b_has_port = host(kb) != kb;
-    return a_has_port != b_has_port && host(ka) == host(kb);
+    const auto u1_port = [](const std::string &port) { return port.empty() || port == "80" || port == "7125"; };
+    return host_of(ka) == host_of(kb) && u1_port(port_of(ka)) && u1_port(port_of(kb));
 }
 
-std::string remote_name(const std::string &requested, const std::string &sha256)
+std::string remote_name(const std::string &requested, const std::string &sha256, const std::string &job_id)
 {
     const fs::path path(requested);
     std::string    ext  = path.extension().string();
@@ -168,44 +289,53 @@ std::string remote_name(const std::string &requested, const std::string &sha256)
         base.resize(60);
     if (base.empty())
         base = "print";
-    return base + "-" + sha256.substr(0, 24) + ext;
+    return base + "-" + sha256.substr(0, 24) + "-" + job_id.substr(0, 8) + ext;
+}
+
+bool is_job_file(const Job &job, const std::string &reported)
+{
+    if (reported.empty() || job.remote_path.empty())
+        return false;
+    const auto leaf = [](const std::string &path) {
+        const auto slash = path.find_last_of('/');
+        return slash == std::string::npos ? path : path.substr(slash + 1);
+    };
+    // The name is unique to the job, so matching the leaf cannot pick up another job.
+    return reported == job.remote_path || leaf(reported) == leaf(job.remote_path);
 }
 
 bool save(Job &job, State state, const std::string &message)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    if (job.events.empty() || job.events.back().first != state_name(state))
-        job.events.emplace_back(state_name(state), now_ms());
-    job.state = state;
-    if (!message.empty())
-        job.message = message;
-    const bool ok = write_durably(journal_dir() / (job.id + ".json"), to_json(job).dump(2));
-    if (!ok)
-        BOOST_LOG_TRIVIAL(error) << "U1 jobs: could not write the record for job " << job.id;
-    return ok;
+    return save_locked(job, state, message, {});
 }
 
-std::vector<Job> load_all()
+std::optional<Job> update(const std::string &id, const std::function<std::optional<State>(Job &)> &change, const std::string &message,
+                          const std::string &event)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    std::vector<Job>            jobs;
-    boost::system::error_code   ec;
-    for (fs::directory_iterator it(journal_dir(), ec), end; !ec && it != end; it.increment(ec)) {
-        if (it->path().extension() != ".json")
-            continue;
-        boost::nowide::ifstream in(it->path().string());
-        if (auto job = from_json(json::parse(in, nullptr, false)))
-            jobs.push_back(std::move(*job));
-    }
-    std::sort(jobs.begin(), jobs.end(), [](const Job &a, const Job &b) { return a.created_ms < b.created_ms; });
-    return jobs;
+    if (!is_job_id(id))
+        return std::nullopt;
+    std::optional<Job> job = read_record(journal_dir() / (id + ".json"));
+    if (!job)
+        return std::nullopt;
+    const std::optional<State> next = change(*job);
+    if (next && !save_locked(*job, *next, message, event))
+        return std::nullopt;
+    return job;
 }
 
-std::optional<Job> find(const std::string &printer, const std::string &remote_path)
+std::vector<Job> load_all(std::vector<std::string> *unreadable)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    return load_all_locked(unreadable);
+}
+
+std::optional<Job> find(const std::string &printer, const std::string &reported_filename)
 {
     std::optional<Job> found;
     for (Job &job : load_all())
-        if (job.remote_path == remote_path && same_printer(job.printer, printer))
+        if (is_job_file(job, reported_filename) && same_printer(job.printer, printer))
             found = std::move(job);
     return found;
 }
@@ -216,6 +346,157 @@ std::optional<Job> unresolved(const std::string &printer)
         if (job.unresolved() && same_printer(job.printer, printer))
             return std::move(job);
     return std::nullopt;
+}
+
+// ---------------------------------------------------------------------------
+
+struct PrinterLock::Impl
+{
+    boost::interprocess::file_lock file;
+    bool                           file_locked = false;
+};
+
+PrinterLock::PrinterLock(const std::string &printer) : m_impl(std::make_unique<Impl>()), m_key(host_of(printer_key(printer)))
+{
+    {
+        std::lock_guard<std::mutex> lock(s_sending_mutex);
+        if (m_key.empty() || !s_sending.insert(m_key).second)
+            return;
+    }
+    // Another running copy of the app must be kept out as well: an OS file lock,
+    // released by the system if this process dies.
+    try {
+        std::string name = m_key;
+        for (char &c : name)
+            if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-'))
+                c = '_';
+        const fs::path            dir = journal_dir() / "locks";
+        boost::system::error_code ec;
+        fs::create_directories(dir, ec);
+        const fs::path path = dir / (name + ".lock");
+        {
+            boost::nowide::ofstream touch(path.string(), std::ios::app);
+        }
+        m_impl->file        = boost::interprocess::file_lock(path.string().c_str());
+        m_impl->file_locked = m_impl->file.try_lock();
+    } catch (const std::exception &e) {
+        BOOST_LOG_TRIVIAL(error) << "U1 jobs: could not take the printer lock: " << e.what();
+    }
+    if (!m_impl->file_locked) {
+        std::lock_guard<std::mutex> lock(s_sending_mutex);
+        s_sending.erase(m_key);
+        return;
+    }
+    m_acquired = true;
+}
+
+PrinterLock::~PrinterLock()
+{
+    if (!m_acquired)
+        return;
+    try {
+        m_impl->file.unlock();
+    } catch (const std::exception &) {}
+    std::lock_guard<std::mutex> lock(s_sending_mutex);
+    s_sending.erase(m_key);
+}
+
+bool sending_now(const std::string &printer)
+{
+    std::lock_guard<std::mutex> lock(s_sending_mutex);
+    return s_sending.count(host_of(printer_key(printer))) > 0;
+}
+
+// ---------------------------------------------------------------------------
+
+GcodeFacts read_gcode_facts(const fs::path &file)
+{
+    GcodeFacts              facts;
+    boost::nowide::ifstream in(file.string());
+    std::string             line;
+    while (std::getline(in, line)) {
+        if (line.size() < 4 || line[0] != ';')
+            continue;
+        if (boost::starts_with(line, "; printer_model = "))
+            facts.printer_model = boost::trim_copy(line.substr(18));
+        else if (boost::starts_with(line, "; nozzle_diameter = ")) {
+            std::vector<std::string> parts;
+            const std::string        value = line.substr(20);
+            boost::split(parts, value, boost::is_any_of(","));
+            facts.nozzles.clear();
+            for (const std::string &part : parts)
+                try {
+                    facts.nozzles.push_back(std::stod(boost::trim_copy(part)));
+                } catch (const std::exception &) {}
+        }
+    }
+    return facts;
+}
+
+Blocker start_blocker(const GcodeFacts &facts, const json &status, const std::vector<int> &filament_to_toolhead, bool start)
+{
+    Blocker blocker;
+    // A file that names another machine never goes to a U1. A file that names none is the user's own G-code.
+    if (!facts.printer_model.empty() && !boost::iequals(facts.printer_model, "Snapmaker U1")) {
+        blocker.kind   = Blocker::Kind::WrongModel;
+        blocker.detail = facts.printer_model;
+        return blocker;
+    }
+    if (!start)
+        return blocker;
+
+    const auto object = [&](const char *name) -> const json * {
+        if (!status.is_object())
+            return nullptr;
+        const auto it = status.find(name);
+        return it != status.end() && it->is_object() ? &*it : nullptr;
+    };
+    const json *stats = object("print_stats");
+    if (stats == nullptr || !stats->contains("state") || !(*stats)["state"].is_string()) {
+        blocker.kind = Blocker::Kind::PrinterUnreachable;
+        return blocker;
+    }
+    const std::string state = (*stats)["state"].get<std::string>();
+    if (state != "standby" && state != "complete" && state != "cancelled") {
+        blocker.kind   = Blocker::Kind::PrinterNotIdle;
+        blocker.detail = state;
+        return blocker;
+    }
+
+    const json *task   = object("print_task_config");
+    const json *loaded = task != nullptr && task->contains("filament_exist") && (*task)["filament_exist"].is_array() ? &(*task)["filament_exist"] : nullptr;
+    for (size_t filament = 0; filament < filament_to_toolhead.size(); ++filament) {
+        const int toolhead = filament_to_toolhead[filament];
+        if (toolhead < 0)
+            continue;
+        blocker.filament = int(filament);
+        blocker.toolhead = toolhead;
+        if (loaded == nullptr || size_t(toolhead) >= loaded->size() || !(*loaded)[toolhead].is_boolean()) {
+            blocker.kind = Blocker::Kind::ToolheadUnknown;
+            return blocker;
+        }
+        if (!(*loaded)[toolhead].get<bool>()) {
+            blocker.kind = Blocker::Kind::ToolheadEmpty;
+            return blocker;
+        }
+        // The file lists one nozzle per extruder it was sliced for, and filament N was sliced for
+        // extruder N. A filament beyond that list (a mixed colour) has no nozzle of its own to compare.
+        if (filament >= facts.nozzles.size())
+            continue;
+        const std::string name    = toolhead == 0 ? "extruder" : "extruder" + std::to_string(toolhead);
+        const json       *extruder = object(name.c_str());
+        if (extruder == nullptr || !extruder->contains("nozzle_diameter") || !(*extruder)["nozzle_diameter"].is_number()) {
+            blocker.kind = Blocker::Kind::NozzleUnknown;
+            return blocker;
+        }
+        blocker.sliced = facts.nozzles[filament];
+        blocker.fitted = (*extruder)["nozzle_diameter"].get<double>();
+        if (std::abs(blocker.fitted - blocker.sliced) > 0.01) {
+            blocker.kind = Blocker::Kind::NozzleMismatch;
+            return blocker;
+        }
+    }
+    return Blocker();
 }
 
 } // namespace U1Jobs

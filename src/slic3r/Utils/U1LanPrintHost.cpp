@@ -19,61 +19,27 @@
 #include <openssl/evp.h>
 
 #ifndef _WIN32
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #endif
 
+#include <algorithm>
 #include <chrono>
-#include <cmath>
-#include <mutex>
 #include <random>
-#include <set>
 #include <thread>
+#include <vector>
 
 namespace Slic3r {
 
 namespace {
 
 constexpr long QUERY_TIMEOUT_S = 5;
-// How long the printer is watched after a lost Start reply before the job is held for a person.
-constexpr int  RECONCILE_SECONDS = 20;
-
-// Printers with a send in flight; a second send to the same printer is refused, not queued behind it.
-std::mutex            s_busy_mutex;
-std::set<std::string> s_busy;
-
-struct BusyPrinter
-{
-    std::string key;
-    bool        acquired;
-    explicit BusyPrinter(std::string k) : key(std::move(k))
-    {
-        std::lock_guard<std::mutex> lock(s_busy_mutex);
-        acquired = s_busy.insert(key).second;
-    }
-    ~BusyPrinter()
-    {
-        if (acquired) {
-            std::lock_guard<std::mutex> lock(s_busy_mutex);
-            s_busy.erase(key);
-        }
-    }
-};
-
-std::string sha256_hex(const std::string &data)
-{
-    unsigned char digest[EVP_MAX_MD_SIZE];
-    unsigned int  length = 0;
-    if (EVP_Digest(data.data(), data.size(), digest, &length, EVP_sha256(), nullptr) != 1)
-        return {};
-    static const char *hex = "0123456789abcdef";
-    std::string        out;
-    for (unsigned int i = 0; i < length; ++i) {
-        out.push_back(hex[digest[i] >> 4]);
-        out.push_back(hex[digest[i] & 0x0f]);
-    }
-    return out;
-}
+// After a lost Start reply the printer is watched for as long as the Start itself may take.
+constexpr int  RECONCILE_SECONDS = 60;
+constexpr int  START_REPLY_SECONDS = 60;
+// The read-back is fetched in ranges so the file is never held in memory whole.
+constexpr size_t READBACK_CHUNK = 4 * 1024 * 1024;
 
 // print_stats, print_task_config and the four extruders in one read; null when the printer does not answer.
 nlohmann::json query_status(const std::string &base_url)
@@ -84,7 +50,7 @@ nlohmann::json query_status(const std::string &base_url)
         .timeout_max(QUERY_TIMEOUT_S)
         .on_complete([&](std::string body, unsigned) {
             const auto doc = nlohmann::json::parse(body, nullptr, false);
-            if (!doc.is_discarded() && doc.contains("result"))
+            if (!doc.is_discarded() && doc.is_object() && doc.contains("result") && doc["result"].is_object())
                 status = doc["result"].value("status", nlohmann::json());
         })
         .on_error([](std::string, std::string, unsigned) {})
@@ -92,38 +58,22 @@ nlohmann::json query_status(const std::string &base_url)
     return status;
 }
 
-std::string print_state(const nlohmann::json &status)
+std::string stats_string(const nlohmann::json &status, const char *key)
 {
-    return status.is_object() && status.contains("print_stats") ? status["print_stats"].value("state", std::string()) : std::string();
+    if (!status.is_object() || !status.contains("print_stats") || !status["print_stats"].is_object())
+        return {};
+    const auto &stats = status["print_stats"];
+    return stats.contains(key) && stats[key].is_string() ? stats[key].get<std::string>() : std::string();
 }
 
-// What the prepared G-code says it was sliced for (Orca writes its settings as trailing comments).
-struct GcodeFacts
+std::string url_path(const std::string &path)
 {
-    std::string         printer_model;
-    std::vector<double> nozzles;
-};
-
-GcodeFacts read_gcode_facts(const boost::filesystem::path &file)
-{
-    GcodeFacts              facts;
-    boost::nowide::ifstream in(file.string());
-    std::string             line;
-    while (std::getline(in, line)) {
-        if (line.size() < 4 || line[0] != ';')
-            continue;
-        if (boost::starts_with(line, "; printer_model = "))
-            facts.printer_model = boost::trim_copy(line.substr(18));
-        else if (boost::starts_with(line, "; nozzle_diameter = ")) {
-            std::vector<std::string> parts;
-            const std::string        value = line.substr(20);
-            boost::split(parts, value, boost::is_any_of(","));
-            facts.nozzles.clear();
-            for (const std::string &part : parts)
-                try { facts.nozzles.push_back(std::stod(boost::trim_copy(part))); } catch (const std::exception &) {}
-        }
-    }
-    return facts;
+    std::vector<std::string> parts;
+    boost::split(parts, path, boost::is_any_of("/"));
+    std::string encoded;
+    for (const std::string &part : parts)
+        encoded += (encoded.empty() ? "" : "/") + Http::url_encode(part);
+    return encoded;
 }
 
 std::string with_scheme(std::string host)
@@ -222,40 +172,94 @@ wxString U1LanPrintHost::get_test_failed_msg(wxString &msg) const
 std::string U1LanPrintHost::reconcile(U1Jobs::Job &job, const std::string &base_url)
 {
     const nlohmann::json status = query_status(base_url);
-    const std::string    state  = print_state(status);
-    if ((state == "printing" || state == "paused") && status["print_stats"].value("filename", std::string()) == job.remote_path) {
-        job.recovered_from_lost_ack = true;
-        U1Jobs::save(job, U1Jobs::State::Printing,
-                     "The Start reply was lost. The printer reports it is printing this exact file, so the job was bound to it without sending the Start again.");
+    const std::string    state  = stats_string(status, "state");
+    // The file name is unique to this job, and a Start is only ever sent to an idle printer, so the
+    // printer running this name can only be this job's own Start having taken effect.
+    if ((state == "printing" || state == "paused") && U1Jobs::is_job_file(job, stats_string(status, "filename"))) {
+        const auto updated = U1Jobs::update(
+            job.id,
+            [](U1Jobs::Job &record) -> std::optional<U1Jobs::State> {
+                if (!record.unresolved())
+                    return std::nullopt;
+                record.recovered_from_lost_ack = true;
+                return U1Jobs::State::Printing;
+            },
+            "The Start reply was lost. The printer reports it is printing this job's own file, so the job was bound to it without sending the Start again.",
+            "BOUND_FROM_PRINTER_STATE");
+        if (updated)
+            job = *updated;
     }
     return state;
 }
 
-wxString U1LanPrintHost::blockers(const boost::filesystem::path &file, const nlohmann::json &status, bool start) const
+wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker)
 {
-    const GcodeFacts facts = read_gcode_facts(file);
-    if (!facts.printer_model.empty() && !boost::icontains(facts.printer_model, "U1"))
-        return GUI::format_wxstr(_L("This file was sliced for %1%, but the selected printer is a Snapmaker U1."), facts.printer_model);
-    if (!start)
-        return {};
-    const std::string state = print_state(status);
-    if (state != "standby" && state != "complete" && state != "cancelled")
-        return GUI::format_wxstr(_L("The printer is %1%, so a print cannot be started now."), state.empty() ? std::string("not answering") : state);
-    const nlohmann::json loaded = status.value("print_task_config", nlohmann::json::object()).value("filament_exist", nlohmann::json::array());
-    for (size_t filament = 0; filament < m_options.filament_to_toolhead.size(); ++filament) {
-        const int toolhead = m_options.filament_to_toolhead[filament];
-        if (toolhead == U1PrintTask::UNMAPPED)
-            continue;
-        if (size_t(toolhead) < loaded.size() && loaded[toolhead].is_boolean() && !loaded[toolhead].get<bool>())
-            return GUI::format_wxstr(_L("Toolhead %1% has no filament loaded (needed for filament %2%)."), toolhead + 1, filament + 1);
-        const std::string object = toolhead == 0 ? "extruder" : "extruder" + std::to_string(toolhead);
-        const double      fitted = status.value(object, nlohmann::json::object()).value("nozzle_diameter", 0.);
-        const double      sliced = filament < facts.nozzles.size() ? facts.nozzles[filament] : (facts.nozzles.empty() ? 0. : facts.nozzles.back());
-        if (fitted > 0. && sliced > 0. && std::abs(fitted - sliced) > 0.01)
-            return GUI::format_wxstr(_L("Filament %1% was sliced for a %2% mm nozzle, but toolhead %3% has a %4% mm nozzle."), filament + 1, sliced,
-                                     toolhead + 1, fitted);
+    using Kind = U1Jobs::Blocker::Kind;
+    switch (blocker.kind) {
+    case Kind::None: return {};
+    case Kind::WrongModel: return GUI::format_wxstr(_L("This file was sliced for %1%, but the selected printer is a Snapmaker U1."), blocker.detail);
+    case Kind::PrinterUnreachable: return _L("The printer did not report its state, so a print cannot be started now.");
+    case Kind::PrinterNotIdle: return GUI::format_wxstr(_L("The printer is %1%, so a print cannot be started now."), blocker.detail);
+    case Kind::ToolheadUnknown:
+        return GUI::format_wxstr(_L("The printer did not report whether toolhead %1% has filament loaded (needed for filament %2%)."), blocker.toolhead + 1,
+                                 blocker.filament + 1);
+    case Kind::ToolheadEmpty:
+        return GUI::format_wxstr(_L("Toolhead %1% has no filament loaded (needed for filament %2%)."), blocker.toolhead + 1, blocker.filament + 1);
+    case Kind::NozzleUnknown: return GUI::format_wxstr(_L("The printer did not report the nozzle fitted to toolhead %1%."), blocker.toolhead + 1);
+    case Kind::NozzleMismatch:
+        return GUI::format_wxstr(_L("Filament %1% was sliced for a %2% mm nozzle, but toolhead %3% has a %4% mm nozzle."), blocker.filament + 1,
+                                 blocker.sliced, blocker.toolhead + 1, blocker.fitted);
     }
     return {};
+}
+
+bool U1LanPrintHost::read_back_sha256(const std::string &path, std::uintmax_t expected_bytes, std::string &sha256) const
+{
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (ctx == nullptr || EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) != 1) {
+        EVP_MD_CTX_free(ctx);
+        return false;
+    }
+    const std::string url    = m_base_url + "/server/files/gcodes/" + url_path(path);
+    std::uintmax_t    offset = 0;
+    bool              ok     = true;
+    // A server that ignores Range answers 200 with the whole file; that is hashed as it is.
+    while (ok && offset < expected_bytes) {
+        const std::uintmax_t last = std::min<std::uintmax_t>(expected_bytes, offset + READBACK_CHUNK) - 1;
+        std::uintmax_t       got  = 0;
+        ok                        = false;
+        Http::get(url)
+            .set_range(std::to_string(offset) + "-" + std::to_string(last))
+            .timeout_connect(QUERY_TIMEOUT_S)
+            .timeout_max(120)
+            .size_limit(size_t(expected_bytes) + 1024)
+            .on_complete([&](std::string body, unsigned status) {
+                if ((status == 206 && body.size() == size_t(last - offset + 1)) || (status == 200 && offset == 0)) {
+                    ok  = EVP_DigestUpdate(ctx, body.data(), body.size()) == 1;
+                    got = body.size();
+                }
+            })
+            .on_error([&](std::string, std::string err, unsigned status) {
+                BOOST_LOG_TRIVIAL(error) << "U1 LAN: read-back failed at byte " << offset << ": " << err << ", HTTP " << status;
+            })
+            .perform_sync();
+        offset += got;
+        if (got == 0)
+            ok = false;
+    }
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int  length = 0;
+    ok = ok && offset == expected_bytes && EVP_DigestFinal_ex(ctx, digest, &length) == 1;
+    EVP_MD_CTX_free(ctx);
+    if (!ok)
+        return false;
+    static const char *hex = "0123456789abcdef";
+    sha256.clear();
+    for (unsigned int i = 0; i < length; ++i) {
+        sha256.push_back(hex[digest[i] >> 4]);
+        sha256.push_back(hex[digest[i] & 0x0f]);
+    }
+    return true;
 }
 
 bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn, ErrorFn error_fn, InfoFn /*info_fn*/) const
@@ -265,20 +269,30 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         error_fn(wxString::FromUTF8(error));
         return false;
     }
-    const bool        start   = upload_data.post_action == PrintHostPostUploadAction::StartPrint;
-    const std::string printer = U1Jobs::printer_key(m_base_url);
+    const bool        start        = upload_data.post_action == PrintHostPostUploadAction::StartPrint;
+    const std::string printer      = U1Jobs::printer_key(m_base_url);
     const wxString    nothing_sent = " " + _L("Nothing was sent to the printer.");
 
-    // One send per printer at a time, and none while an earlier Start is still unsettled.
-    BusyPrinter busy(printer);
-    if (!busy.acquired) {
+    // One send per printer at a time, in this and in any other running copy of the app.
+    U1Jobs::PrinterLock lock(printer);
+    if (!lock.acquired()) {
         error_fn(_L("Another job is already being sent to this printer.") + nothing_sent);
         return false;
     }
+    // A record that cannot be read might be an unsettled Start. It is never guessed at.
+    std::vector<std::string> unreadable;
+    U1Jobs::load_all(&unreadable);
+    if (!unreadable.empty()) {
+        error_fn(GUI::format_wxstr(_L("A job record could not be read, so it is not known whether an earlier print is unsettled:\n%1%\n\n"
+                                      "Check the printer, then move that file out of the folder to send again."), unreadable.front()) + nothing_sent);
+        return false;
+    }
     if (auto open_job = U1Jobs::unresolved(printer)) {
-        if (reconcile(*open_job, m_base_url).empty() || open_job->unresolved()) {
-            if (open_job->state != U1Jobs::State::Held)
-                U1Jobs::save(*open_job, U1Jobs::State::Held, "The Start was sent before the app closed and was never confirmed.");
+        reconcile(*open_job, m_base_url);
+        if (open_job->unresolved()) {
+            U1Jobs::update(open_job->id, [](U1Jobs::Job &record) -> std::optional<U1Jobs::State> {
+                return record.unresolved() && record.state != U1Jobs::State::Held ? std::optional<U1Jobs::State>(U1Jobs::State::Held) : std::nullopt;
+            }, "The Start was sent and was never confirmed.");
             error_fn(_L("An earlier Start on this printer was never confirmed. Check the printer, then press Print again and say whether it started.") +
                      nothing_sent);
             return false;
@@ -295,17 +309,18 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     job.created_ms   = U1Jobs::now_ms();
     boost::system::error_code size_error;
     job.bytes = boost::filesystem::file_size(upload_data.source_path, size_error);
-    if (job.sha256.empty() || size_error) {
+    if (job.sha256.empty() || size_error || job.bytes == 0) {
         error_fn(_L("The prepared file could not be read.") + nothing_sent);
         return false;
     }
-    if (const wxString why = blockers(upload_data.source_path, query_status(m_base_url), start); !why.empty()) {
-        error_fn(why + nothing_sent);
+    const U1Jobs::GcodeFacts facts = U1Jobs::read_gcode_facts(upload_data.source_path);
+    if (const auto blocker = U1Jobs::start_blocker(facts, query_status(m_base_url), m_options.filament_to_toolhead, start)) {
+        error_fn(describe(blocker) + nothing_sent);
         return false;
     }
 
-    const std::string folder = upload_data.upload_path.parent_path().generic_string();
-    const std::string filename = U1Jobs::remote_name(upload_data.upload_path.filename().string(), job.sha256);
+    const std::string folder   = upload_data.upload_path.parent_path().generic_string();
+    const std::string filename = U1Jobs::remote_name(upload_data.upload_path.filename().string(), job.sha256, job.id);
     const std::string path     = folder.empty() ? filename : folder + "/" + filename;
     job.remote_path            = path;
     if (!U1Jobs::save(job, U1Jobs::State::Uploading)) {
@@ -316,6 +331,7 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
                                << " to " << m_base_url;
 
     bool res = true;
+    std::string upload_error;
     // No timeout_max: the U1 accepts uploads at ~1.25 MB/s, so a large job
     // legitimately takes minutes. Stalls are the user's to cancel.
     Http::post(m_base_url + "/server/files/upload")
@@ -328,7 +344,7 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         })
         .on_error([&](std::string body, std::string err, unsigned status) {
             BOOST_LOG_TRIVIAL(error) << "U1 LAN: upload failed: " << err << ", HTTP " << status << ", body: " << body;
-            U1Jobs::save(job, U1Jobs::State::Failed, "The upload failed: " + err + ". Nothing was started.");
+            upload_error = err.empty() ? "HTTP " + std::to_string(status) : err;
             error_fn(format_error(body, err, status));
             res = false;
         })
@@ -339,24 +355,23 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         })
         .perform_sync();
     if (!res) {
-        if (job.state == U1Jobs::State::Uploading)
+        if (upload_error.empty())
             U1Jobs::save(job, U1Jobs::State::Cancelled, "Cancelled during the upload. Nothing was started.");
+        else
+            U1Jobs::save(job, U1Jobs::State::Failed, "The upload failed: " + upload_error + ". Nothing was started.");
         return false;
     }
 
     // Read the file back: a Start is only offered for bytes that match the prepared file.
     U1Jobs::save(job, U1Jobs::State::Verifying);
-    std::vector<std::string> parts;
-    boost::split(parts, path, boost::is_any_of("/"));
-    std::string encoded;
-    for (const std::string &part : parts)
-        encoded += (encoded.empty() ? "" : "/") + Http::url_encode(part);
-    Http::get(m_base_url + "/server/files/gcodes/" + encoded)
-        .timeout_connect(QUERY_TIMEOUT_S)
-        .on_complete([&](std::string body, unsigned) { job.uploaded_sha256 = sha256_hex(body); })
-        .on_error([&](std::string, std::string err, unsigned) { BOOST_LOG_TRIVIAL(error) << "U1 LAN: read-back failed: " << err; })
-        .perform_sync();
-    if (job.uploaded_sha256 != job.sha256) {
+    std::string read_back;
+    if (!read_back_sha256(path, job.bytes, read_back)) {
+        U1Jobs::save(job, U1Jobs::State::Failed, "The uploaded file could not be read back from the printer. Nothing was started.");
+        error_fn(_L("The uploaded file could not be read back from the printer to check it, so the print was not started."));
+        return false;
+    }
+    job.uploaded_sha256 = read_back;
+    if (read_back != job.sha256) {
         U1Jobs::save(job, U1Jobs::State::Failed, "The file on the printer does not match the prepared file. Nothing was started.");
         error_fn(_L("The file on the printer does not match the prepared file, so the print was not started."));
         return false;
@@ -367,13 +382,14 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     }
 
     // Re-check the printer immediately before the Start, then record the Start as sent before sending it.
-    if (const wxString why = blockers(upload_data.source_path, query_status(m_base_url), true); !why.empty()) {
+    if (const auto blocker = U1Jobs::start_blocker(facts, query_status(m_base_url), m_options.filament_to_toolhead, true)) {
         U1Jobs::save(job, U1Jobs::State::Failed, "The printer changed before the Start. The file is on the printer; nothing was started.");
-        error_fn(why + " " + _L("The file is on the printer; nothing was started."));
+        error_fn(describe(blocker) + " " + _L("The file is on the printer; nothing was started."));
         return false;
     }
     job.start_sent = true;
     if (!U1Jobs::save(job, U1Jobs::State::Starting)) {
+        // Nothing has been sent and the record on disk still says so.
         job.start_sent = false;
         error_fn(_L("The job record could not be written, so the Start was not sent. The file is on the printer."));
         return false;
@@ -381,8 +397,14 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     wxString detail;
     switch (start_print(path, detail)) {
     case StartOutcome::Accepted:
+        // If this write fails the record stays "Starting": the next send reconciles it against the printer.
         U1Jobs::save(job, U1Jobs::State::Printing, "The printer accepted the Start.");
         return true;
+    case StartOutcome::NotSent:
+        job.start_sent = false;
+        U1Jobs::save(job, U1Jobs::State::Failed, "The Start request never left this computer. The file is on the printer; nothing was started.");
+        error_fn(detail);
+        return false;
     case StartOutcome::Rejected:
         U1Jobs::save(job, U1Jobs::State::Failed, "The printer refused the Start. The file is on the printer; nothing was started.");
         error_fn(detail);
@@ -391,7 +413,7 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     }
 
     // The Start may or may not have run. It is never sent again: the printer's own state decides.
-    U1Jobs::save(job, U1Jobs::State::StartUnconfirmed, GUI::into_u8(detail));
+    U1Jobs::save(job, U1Jobs::State::StartUnconfirmed, "The Start was sent and no reply came back: " + GUI::into_u8(detail));
     std::string seen;
     for (int i = 0; i < RECONCILE_SECONDS; ++i) {
         const std::string state = reconcile(job, m_base_url);
@@ -433,53 +455,59 @@ U1LanPrintHost::StartOutcome U1LanPrintHost::start_print(const std::string &path
         host = host.substr(0, colon);
     }
 
-    // Until the request has been written the printer cannot have started anything.
-    bool sent = false;
+    // Until the whole request has been written the printer cannot have started anything: a partial
+    // websocket frame is not a request. After that, anything short of a reply is "unknown".
+    bool written = false;
     try {
         boost::asio::io_context            ioc;
         websocket::stream<beast::tcp_stream> ws{ioc};
         beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(10));
         beast::get_lowest_layer(ws).connect(tcp::resolver{ioc}.resolve(host, port));
         ws.handshake(host + ":" + port, "/websocket");
-        sent = true;
         ws.write(boost::asio::buffer(request.dump()));
+        written = true;
 
-        // Blocking reads ignore the stream's expiry, so bound each one at the socket: a printer
-        // that goes silent must end in "unknown", not in a thread that waits for ever.
-        const auto native = beast::get_lowest_layer(ws).socket().native_handle();
+        // Blocking reads ignore the stream's expiry. Wait for data with select(), so a silent printer
+        // ends at the deadline, and bound a frame that stalls part-way with a socket timeout; such a
+        // stall ends the wait as "unknown" rather than reading on from a half-read frame.
+        auto &socket = beast::get_lowest_layer(ws).socket();
+        const auto native = socket.native_handle();
 #ifdef _WIN32
-        const DWORD read_timeout = 5000;
-        ::setsockopt(native, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&read_timeout), sizeof(read_timeout));
+        const DWORD stall_timeout = 15000;
+        ::setsockopt(native, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char *>(&stall_timeout), sizeof(stall_timeout));
 #else
-        const timeval read_timeout{5, 0};
-        ::setsockopt(native, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout));
+        const timeval stall_timeout{15, 0};
+        ::setsockopt(native, SOL_SOCKET, SO_RCVTIMEO, &stall_timeout, sizeof(stall_timeout));
 #endif
         beast::get_lowest_layer(ws).expires_never();
 
         // Moonraker also pushes status notifications on this socket; wait for
         // our reply. The printer scans metadata before starting, so allow time.
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(START_REPLY_SECONDS);
         for (;;) {
             if (std::chrono::steady_clock::now() > deadline)
                 throw std::runtime_error("no reply within 60 s");
+            fd_set readable;
+            FD_ZERO(&readable);
+            FD_SET(native, &readable);
+            timeval slice{1, 0};
+            const int ready = ::select(int(native) + 1, &readable, nullptr, nullptr, &slice);
+            if (ready == 0)
+                continue;
+            if (ready < 0)
+                throw std::runtime_error("the connection failed while waiting for the reply");
             beast::flat_buffer buffer;
-            beast::error_code  read_error;
-            ws.read(buffer, read_error);
-            if (read_error == boost::asio::error::would_block || read_error == boost::asio::error::try_again ||
-                read_error == boost::asio::error::timed_out)
-                continue; // nothing arrived in this slice; the deadline above decides
-            if (read_error)
-                throw beast::system_error(read_error);
+            ws.read(buffer);
             const auto reply = nlohmann::json::parse(beast::buffers_to_string(buffer.data()), nullptr, false);
-            if (reply.is_discarded() || reply.value("id", -1) != request_id)
+            if (reply.is_discarded() || !reply.is_object() || reply.value("id", -1) != request_id)
                 continue;
             beast::error_code ignored;
-            beast::get_lowest_layer(ws).socket().shutdown(tcp::socket::shutdown_both, ignored);
+            socket.shutdown(tcp::socket::shutdown_both, ignored);
 
             BOOST_LOG_TRIVIAL(warning) << "U1 LAN: start_local_print reply " << reply.dump();
             if (reply.contains("error")) {
                 detail = GUI::format_wxstr(_L("The file was uploaded, but the print could not be started: %s"),
-                                           reply["error"].value("message", std::string("unknown error")));
+                                           reply["error"].is_object() ? reply["error"].value("message", std::string("unknown error")) : std::string("unknown error"));
                 return StartOutcome::Rejected;
             }
             const auto result = reply.value("result", nlohmann::json::object());
@@ -490,10 +518,10 @@ U1LanPrintHost::StartOutcome U1LanPrintHost::start_print(const std::string &path
             return StartOutcome::Accepted;
         }
     } catch (const std::exception &e) {
-        BOOST_LOG_TRIVIAL(error) << "U1 LAN: start_local_print failed (request sent: " << sent << "): " << e.what();
-        if (!sent) {
+        BOOST_LOG_TRIVIAL(error) << "U1 LAN: start_local_print failed (request written: " << written << "): " << e.what();
+        if (!written) {
             detail = GUI::format_wxstr(_L("The file was uploaded, but the printer could not be reached to start it: %s"), e.what());
-            return StartOutcome::Rejected;
+            return StartOutcome::NotSent;
         }
         detail = wxString::FromUTF8(e.what());
         return StartOutcome::Unknown;

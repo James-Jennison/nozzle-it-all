@@ -65,7 +65,12 @@ public:
     /// be sent (and, with the second argument true, started) with a given filament -> toolhead map; empty when
     /// nothing stands in the way. It judges the state read here, so it only informs: upload() reads the
     /// printer again and decides for itself.
-    static std::function<wxString(const std::vector<int> &, bool)> readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts);
+    struct ReadinessRead
+    {
+        std::function<wxString(const std::vector<int> &, bool)> check;
+        bool answered = false; ///< the printer returned a status with its print state
+    };
+    static ReadinessRead readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts);
 
 private:
     enum class StartOutcome {

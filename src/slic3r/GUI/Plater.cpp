@@ -21112,16 +21112,31 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     std::vector<U1PrintTask::Filament> filaments;
     std::vector<double>                filament_grams;
     // What the G-code will say it was sliced for, so the dialog can show a refusal before anything is exported.
-    std::function<U1SendDialog::Readiness()> read_readiness;
+    std::function<U1SendDialog::ReadinessRead()> read_readiness;
     if (print != nullptr) {
         const DynamicPrintConfig full_config = print->full_print_config();
-        U1Jobs::GcodeFacts       facts;
-        if (const auto *model = full_config.option<ConfigOptionString>("printer_model"))
-            facts.printer_model = model->value;
-        if (const auto *nozzles = full_config.option<ConfigOptionFloats>("nozzle_diameter"))
-            facts.nozzles = nozzles->values;
+        // Read from the sliced file with the parser the send uses, so the dialog and the send judge the same
+        // facts. The print configuration stands in only when there is no sliced file to read.
+        U1Jobs::GcodeFacts facts;
+        if (plate->is_slice_result_valid()) {
+            const std::string sliced = plate->get_tmp_gcode_path();
+            boost::system::error_code ec;
+            if (!sliced.empty() && fs::exists(sliced, ec)) {
+                wxBusyCursor wait;
+                facts = U1Jobs::read_gcode_facts(sliced);
+            }
+        }
+        if (facts.printer_model.empty() && facts.nozzles.empty()) {
+            if (const auto *model = full_config.option<ConfigOptionString>("printer_model"))
+                facts.printer_model = model->value;
+            if (const auto *nozzles = full_config.option<ConfigOptionFloats>("nozzle_diameter"))
+                facts.nozzles = nozzles->values;
+        }
         // Nothing is read here: the dialog reads when it opens, after the checks below, and again on confirming.
-        read_readiness = [base_url, facts] { return U1LanPrintHost::readiness_check(base_url, facts); };
+        read_readiness = [base_url, facts] {
+            U1LanPrintHost::ReadinessRead read = U1LanPrintHost::readiness_check(base_url, facts);
+            return U1SendDialog::ReadinessRead{std::move(read.check), read.answered};
+        };
         const auto *colors = full_config.option<ConfigOptionStrings>("filament_colour");
         const auto *types  = full_config.option<ConfigOptionStrings>("filament_type");
         const size_t count = std::max(colors ? colors->values.size() : 0, types ? types->values.size() : 0);

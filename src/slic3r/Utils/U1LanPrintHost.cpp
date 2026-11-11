@@ -191,11 +191,15 @@ std::string U1LanPrintHost::reconcile(U1Jobs::Job &job, const std::string &base_
     return state;
 }
 
-std::function<wxString(const std::vector<int> &, bool)> U1LanPrintHost::readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts)
+U1LanPrintHost::ReadinessRead U1LanPrintHost::readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts)
 {
-    return [status = query_status(base_url), facts = std::move(facts)](const std::vector<int> &filament_to_toolhead, bool start) {
+    ReadinessRead read;
+    nlohmann::json status = query_status(base_url);
+    read.answered = status.is_object() && status.contains("print_stats") && status["print_stats"].is_object() && status["print_stats"].contains("state");
+    read.check = [status = std::move(status), facts = std::move(facts)](const std::vector<int> &filament_to_toolhead, bool start) {
         return describe(U1Jobs::start_blocker(facts, status, filament_to_toolhead, start));
     };
+    return read;
 }
 
 wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker)

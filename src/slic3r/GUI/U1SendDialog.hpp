@@ -16,6 +16,7 @@
 class CheckBox;
 class Button;
 class Label;
+class TextInput;
 
 namespace Slic3r {
 namespace GUI {
@@ -33,13 +34,18 @@ public:
     /// Why the file cannot be sent (second argument false) or started (true)
     /// with a filament -> toolhead map; empty when nothing stands in the way.
     using Readiness = std::function<wxString(const std::vector<int> &, bool)>;
+    struct ReadinessRead
+    {
+        Readiness check;
+        bool      answered = false; ///< the printer returned its state for this read
+    };
 
     /// *plate_filaments* is indexed by slicer filament; entries the plate does
     /// not use have present == false and get no card. *filament_grams* is
     /// indexed the same way; a missing or zero weight is simply not shown.
     /// *read_readiness* reads the printer and returns its Readiness. The dialog
-    /// calls it when it opens, when the user asks, and again when Start Print or
-    /// Upload is pressed; it shows the reason, disables the button it applies
+    /// calls it once it is on screen, when the user asks, and again when Start
+    /// Print or Upload is pressed; it shows the reason, disables the button it applies
     /// to, and does not close on a refusal. It only informs: the send itself
     /// reads the printer again and decides.
     U1SendDialog(wxWindow                               *parent,
@@ -52,10 +58,11 @@ public:
                  const wxBitmap                           &thumbnail,
                  const std::vector<double>                &filament_grams,
                  const wxString                           &printer_address,
-                 std::function<Readiness()>                read_readiness = {});
+                 std::function<ReadinessRead()>            read_readiness = {});
 
-    /// The name the file gets on the printer: *default_name* with characters a
-    /// printer cannot take replaced, ending in .gcode.
+    /// The base of the name the file gets on the printer: the export's name, or
+    /// what the user typed over it, with characters a printer cannot take
+    /// replaced, ending in .gcode. The send adds the job's identifier to it.
     boost::filesystem::path filename() const;
     bool                    start_print() const { return m_start_print; }
     U1PrintTask::Options    options() const;
@@ -72,6 +79,9 @@ private:
     void refresh_readiness();
     /// Sizes the dialog to its content, limited to the screen it is on.
     void fit_to_screen();
+    /// The file name is changed where it is shown: a click turns it into a text field.
+    void begin_name_edit();
+    void end_name_edit(bool keep);
     std::vector<int> mapping() const;
 
     struct Row
@@ -80,11 +90,15 @@ private:
         U1FilamentCard *card;
     };
 
-    boost::filesystem::path            m_default_name;
     std::vector<U1PrintTask::Filament> m_plate_filaments;
     std::vector<U1PrintTask::Filament> m_toolheads;
     std::vector<Row>                   m_rows;
-    std::function<Readiness()>         m_read_readiness;
+    std::function<ReadinessRead()>     m_read_readiness;
+    bool                               m_checking          = false; ///< the first read has not happened yet
+    wxString                           m_name;                      ///< file name as shown and sent, already made safe
+    ::Label                           *m_name_label        = nullptr;
+    ::TextInput                       *m_name_edit         = nullptr;
+    bool                               m_ending_name_edit  = false;
     Readiness                          m_readiness;
     wxString                           m_checked_at;
     ::Label                           *m_mapping_note      = nullptr;

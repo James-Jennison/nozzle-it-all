@@ -11,6 +11,7 @@
 #include "Widgets/DialogButtons.hpp"
 #include "Widgets/Label.hpp"
 #include "Widgets/StateColor.hpp"
+#include "Widgets/TextInput.hpp"
 
 #include "libslic3r/Utils.hpp"
 
@@ -43,6 +44,7 @@
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/string.h>
+#include <wx/textctrl.h>
 #include <wx/toplevel.h>
 #include <wx/utils.h>
 #include <wx/window.h>
@@ -84,6 +86,22 @@ wxColour filament_colour(const std::string &color)
 {
     const wxColour parsed(wxString::FromUTF8(color));
     return !color.empty() && parsed.IsOk() ? parsed : wxColour(0xB0, 0xB0, 0xB0);
+}
+
+// A file name the printer can take: characters its file system or Moonraker's API refuse are replaced, and it
+// ends in .gcode. Empty when nothing usable is left.
+wxString printer_safe_name(wxString name)
+{
+    static const wxString forbidden = "#*;\\/:\"<>|";
+    name.Trim(true).Trim(false);
+    for (wxUniCharRef c : name)
+        if (forbidden.find(c) != wxString::npos)
+            c = '_';
+    if (name.IsEmpty() || name.Lower() == ".gcode")
+        return {};
+    if (!name.Lower().EndsWith(".gcode"))
+        name += ".gcode";
+    return name;
 }
 
 // Black or white, whichever reads better on *background*.
@@ -287,14 +305,16 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                            const wxBitmap                           &thumbnail,
                            const std::vector<double>                &filament_grams,
                            const wxString                           &printer_address,
-                           std::function<Readiness()>                read_readiness)
+                           std::function<ReadinessRead()>            read_readiness)
     : DPIDialog(parent, wxID_ANY, _L("Print on Snapmaker U1"), wxDefaultPosition, wxDefaultSize,
                 wxCAPTION | wxCLOSE_BOX)
-    , m_default_name(default_name)
     , m_plate_filaments(plate_filaments)
     , m_toolheads(printer.toolheads)
     , m_read_readiness(std::move(read_readiness))
+    , m_name(printer_safe_name(from_path(default_name.filename())))
 {
+    if (m_name.IsEmpty())
+        m_name = "print.gcode";
     SetBackgroundColour(*wxWHITE);
     SetFont(Label::Body_14);
 
@@ -365,8 +385,31 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     details->Add(new Label(model, estimate), 0);
     model_row->Add(details, 1, wxALIGN_CENTER_VERTICAL);
     // The file name spans the section, so it is shortened only when the whole section is too narrow for it.
-    model->content()->Add(line(model, wxString::Format(_L("File name: %s"), from_path(filename())), 180, wxST_ELLIPSIZE_MIDDLE), 0,
-                          wxEXPAND | wxBOTTOM, FromDIP(6));
+    // A click on it swaps in a text field holding the same name.
+    auto *name_row = new wxBoxSizer(wxHORIZONTAL);
+    name_row->Add(new Label(model, _L("File name:")), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
+    m_name_label = new Label(model, m_name, wxST_ELLIPSIZE_MIDDLE, wxSize(FromDIP(120), -1));
+    m_name_label->SetCursor(wxCursor(wxCURSOR_IBEAM));
+    m_name_label->SetToolTip(m_name + "\n" + _L("Click to change the name. On the printer the job's identifier is added to it."));
+    m_name_label->Bind(wxEVT_LEFT_UP, [this](wxMouseEvent &) { begin_name_edit(); });
+    name_row->Add(m_name_label, 1, wxALIGN_CENTER_VERTICAL);
+    m_name_edit = new ::TextInput(model, m_name, wxEmptyString, wxEmptyString, wxDefaultPosition, wxSize(FromDIP(120), -1), wxTE_PROCESS_ENTER);
+    m_name_edit->Hide();
+    // Enter keeps the new name. It must not reach the dialog's default button, which is Start Print.
+    m_name_edit->GetTextCtrl()->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent &) { end_name_edit(true); });
+    m_name_edit->GetTextCtrl()->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent &event) {
+        end_name_edit(true);
+        event.Skip();
+    });
+    name_row->Add(m_name_edit, 1, wxALIGN_CENTER_VERTICAL);
+    model->content()->Add(name_row, 0, wxEXPAND | wxBOTTOM, FromDIP(6));
+    // Escape leaves the field with the old name instead of closing the dialog.
+    Bind(wxEVT_CHAR_HOOK, [this](wxKeyEvent &event) {
+        if (event.GetKeyCode() == WXK_ESCAPE && m_name_edit->IsShown())
+            end_name_edit(false);
+        else
+            event.Skip();
+    });
     model->content()->Add(model_row, 0, wxEXPAND);
     first_row->Add(model, 1, wxEXPAND | wxRIGHT, gap);
 
@@ -462,8 +505,16 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     print->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { on_confirm(true); });
 
     SetSizer(top);
-    refresh_readiness();
+    // The printer is read once the dialog is on screen, so a slow printer shows a dialog that says it is
+    // checking instead of nothing at all. Until then neither button can be pressed.
+    m_checking = static_cast<bool>(m_read_readiness);
     update_state(); // sizes the dialog to its content, within the screen
+    if (m_checking)
+        CallAfter([this] {
+            Update();
+            refresh_readiness();
+            update_state();
+        });
     CenterOnParent();
     wxGetApp().UpdateDlgDarkUI(this);
 }
@@ -495,9 +546,12 @@ void U1SendDialog::refresh_readiness()
 {
     if (!m_read_readiness)
         return;
-    wxBusyCursor wait;
-    m_readiness  = m_read_readiness();
-    m_checked_at = wxDateTime::Now().FormatISOTime(); // 24-hour, so the status stays on one line
+    wxBusyCursor  wait;
+    ReadinessRead read = m_read_readiness();
+    m_readiness = std::move(read.check);
+    // The time says when the printer last answered; a read it did not answer has none.
+    m_checked_at = read.answered ? wxDateTime::Now().FormatISOTime() : wxString(); // 24-hour, so the status stays short
+    m_checking   = false;
 }
 
 void U1SendDialog::update_state()
@@ -510,18 +564,20 @@ void U1SendDialog::update_state()
     const std::vector<int> filament_to_toolhead = mapping();
     const wxString         no_upload = m_readiness ? m_readiness(filament_to_toolhead, false) : wxString();
     const wxString         no_start  = m_readiness ? m_readiness(filament_to_toolhead, true) : wxString();
-    m_upload->Enable(no_upload.IsEmpty());
-    m_print->Enable(no_start.IsEmpty());
+    m_upload->Enable(!m_checking && no_upload.IsEmpty());
+    m_print->Enable(!m_checking && no_start.IsEmpty());
     m_print->SetToolTip(no_start);
     m_upload->SetToolTip(no_upload);
     // Without a check the dialog only knows that the printer answered.
-    wxString status = !no_start.IsEmpty() ? no_start : m_readiness ? _L("Online • Ready") : _L("Online. Readiness is checked when the file is sent.");
+    wxString status = m_checking ? _L("Checking the printer…") : !no_start.IsEmpty() ? no_start : m_readiness ? _L("Online • Ready") :
+                                                                                       _L("Online. Readiness is checked when the file is sent.");
     if (m_readiness && !m_checked_at.IsEmpty())
         // TRN %1$s is the printer's status or the reason a print cannot start, %2$s a time of day.
         status = wxString::Format(_L("%1$s (checked at %2$s)"), status, m_checked_at);
     // The green that reads on a light dialog is too dim on a dark one.
     const wxColour ready_colour = wxGetApp().dark_mode() ? wxColour(0x4C, 0xC9, 0x6E) : wxColour(0x17, 0x82, 0x3B);
-    m_status->SetForegroundColour(no_start.IsEmpty() ? ready_colour : StateColor::darkModeColorFor(warning_colour()));
+    m_status->SetForegroundColour(m_checking ? StateColor::darkModeColorFor(wxColour("#6B6B6B")) :
+                                  no_start.IsEmpty() ? ready_colour : StateColor::darkModeColorFor(warning_colour()));
 
     if (m_laid_out && note == m_mapping_note->GetLabel() && status == m_status->GetLabel())
         return;
@@ -535,18 +591,37 @@ void U1SendDialog::update_state()
 
 boost::filesystem::path U1SendDialog::filename() const
 {
-    // The name Orca gave the export, with characters a printer's file system or Moonraker's API cannot
-    // take replaced, and the .gcode ending the printer expects.
-    static const wxString forbidden = "#*;\\/:\"<>|";
-    wxString name = from_path(m_default_name.filename()).Strip(wxString::both);
-    for (wxUniCharRef c : name)
-        if (forbidden.find(c) != wxString::npos)
-            c = '_';
-    if (name.IsEmpty())
-        name = "print";
-    if (!name.Lower().EndsWith(".gcode"))
-        name += ".gcode";
-    return boost::filesystem::path(into_u8(name));
+    return boost::filesystem::path(into_u8(m_name));
+}
+
+void U1SendDialog::begin_name_edit()
+{
+    if (m_name_edit->IsShown())
+        return;
+    m_name_label->Hide();
+    m_name_edit->GetTextCtrl()->ChangeValue(m_name);
+    m_name_edit->Show();
+    m_name_label->GetContainingSizer()->Layout();
+    m_name_edit->GetTextCtrl()->SetFocus();
+    // The ending is fixed, so the part worth typing over is what comes before it.
+    m_name_edit->GetTextCtrl()->SetSelection(0, long(m_name.length()) - (m_name.Lower().EndsWith(".gcode") ? 6 : 0));
+}
+
+void U1SendDialog::end_name_edit(bool keep)
+{
+    // Hiding the field takes the focus from it, which arrives here again.
+    if (m_ending_name_edit || !m_name_edit->IsShown())
+        return;
+    m_ending_name_edit = true;
+    if (keep)
+        if (const wxString typed = printer_safe_name(m_name_edit->GetTextCtrl()->GetValue()); !typed.IsEmpty())
+            m_name = typed;
+    m_name_label->SetLabel(m_name);
+    m_name_label->SetToolTip(m_name + "\n" + _L("Click to change the name. On the printer the job's identifier is added to it."));
+    m_name_edit->Hide();
+    m_name_label->Show();
+    m_name_label->GetContainingSizer()->Layout();
+    m_ending_name_edit = false;
 }
 
 U1PrintTask::Options U1SendDialog::options() const
@@ -568,6 +643,7 @@ U1PrintTask::Options U1SendDialog::options() const
 
 void U1SendDialog::on_confirm(bool start_print)
 {
+    end_name_edit(true); // a name still being typed counts as typed
     std::string error;
     if (!U1PrintTask::validate(options(), error)) {
         MessageDialog(this, wxString::FromUTF8(error), _L("Send to Snapmaker U1"), wxOK | wxICON_WARNING).ShowModal();
@@ -610,6 +686,7 @@ void U1SendDialog::on_confirm(bool start_print)
 
 void U1SendDialog::on_dpi_changed(const wxRect & /*suggested_rect*/)
 {
+    m_name_edit->Rescale();
     for (const Row &row : m_rows) {
         row.card->SetMinSize(FromDIP(U1FilamentCard::CARD_SIZE));
         row.card->Refresh();

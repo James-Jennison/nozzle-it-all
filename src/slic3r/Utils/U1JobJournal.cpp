@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -126,18 +127,22 @@ std::optional<Job> from_json(const json &doc)
     }
 }
 
-void sync_directory(const fs::path &dir)
+// False when the directory entry could not be forced to disk.
+bool sync_directory(const fs::path &dir)
 {
 #ifndef _WIN32
     // The rename is only durable once the directory entry is on disk.
     const int fd = ::open(dir.string().c_str(), O_RDONLY);
-    if (fd >= 0) {
-        ::fsync(fd);
-        ::close(fd);
-    }
+    if (fd < 0)
+        return false;
+    // A file system that has no directory sync (EINVAL) has nothing more to offer; any other failure is one.
+    const bool ok = ::fsync(fd) == 0 || errno == EINVAL;
+    ::close(fd);
+    return ok;
 #else
     // NTFS journals the rename itself; there is no directory handle to flush here.
     (void) dir;
+    return true;
 #endif
 }
 
@@ -166,8 +171,9 @@ bool write_durably(const fs::path &target, const std::string &text)
         fs::remove(tmp, ec);
         return false;
     }
-    sync_directory(target.parent_path());
-    return true;
+    // The record may now be newer on disk than in memory. Callers treat that as "not written" and
+    // send nothing, and a record that says a Start was sent holds the printer: both are the safe side.
+    return sync_directory(target.parent_path());
 }
 
 std::optional<Job> read_record(const fs::path &path)

@@ -68,6 +68,8 @@ private:
     void confirm_stop();
     void report_error(const std::string &what, const std::string &error);
     void apply_colors();
+    /// Prototype: asks the NIA bridge (when configured) which job this file is.
+    void refresh_job_identity(const std::string &filename);
 
     // Defers a callback from the client thread to the GUI thread, dropped if
     // this panel or its client is gone by then.
@@ -81,6 +83,9 @@ private:
     bool                                 m_compact           = false;
     bool                                 m_camera_running    = false;
     std::string                          m_host;
+    std::string                          m_identity_file;       ///< file the identity line describes
+    long long                            m_identity_asked_ms = 0;
+    bool                                 m_identity_known    = false;
 
     PrinterPanel::Capabilities m_caps;
     PrinterPanel::Snapshot     m_snapshot;
@@ -101,6 +106,7 @@ private:
     // Job
     wxStaticText *m_job_name      = nullptr;
     wxStaticText *m_job_detail    = nullptr;
+    wxStaticText *m_job_identity  = nullptr; ///< prototype: the NIA bridge's record of this exact job
     wxStaticText *m_job_percent   = nullptr;
     wxGauge      *m_job_progress  = nullptr;
     wxStaticText *m_job_remaining = nullptr;

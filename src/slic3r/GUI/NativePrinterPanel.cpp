@@ -12,6 +12,7 @@
 #include "libslic3r/DeviceWorkspaceState.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/U1PrintTask.hpp"
+#include "slic3r/Utils/NiaBridgePrintHost.hpp"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/log/trivial.hpp>
@@ -26,9 +27,11 @@
 #include <wx/slider.h>
 #include <wx/stattext.h>
 #include <wx/tglbtn.h>
+#include <wx/time.h>
 
 #include <algorithm>
 #include <ctime>
+#include <thread>
 
 namespace Slic3r::GUI {
 
@@ -237,6 +240,9 @@ void NativePrinterPanel::build()
     m_job_percent = label(job, wxEmptyString, 2.0);
     name->Add(m_job_name, 0, wxEXPAND);
     name->Add(m_job_detail, 0, wxTOP, FromDIP(2));
+    m_job_identity = label(job, wxEmptyString);
+    name->Add(m_job_identity, 0, wxTOP, FromDIP(2));
+    m_job_identity->Hide();
     top->Add(name, 1, wxALIGN_CENTER_VERTICAL);
     top->Add(m_job_percent, 0, wxALIGN_CENTER_VERTICAL);
     job->body()->Add(top, 0, wxEXPAND);
@@ -401,6 +407,50 @@ void NativePrinterPanel::connect()
     Layout();
 }
 
+void NativePrinterPanel::refresh_job_identity(const std::string &filename)
+{
+    if (NiaBridgePrintHost::bridge_url().empty())
+        return;
+    if (filename != m_identity_file) {
+        m_identity_file     = filename;
+        m_identity_known    = false;
+        m_identity_asked_ms = 0;
+        m_job_identity->Hide();
+        Layout();
+    }
+    const long long now = wxGetLocalTimeMillis().GetValue();
+    if (filename.empty() || m_identity_known || now - m_identity_asked_ms < 3000)
+        return;
+    m_identity_asked_ms = now;
+
+    // The lookup blocks, so it runs off the GUI thread; the reply is dropped
+    // if the panel is gone or has moved to another printer by then.
+    const auto          lifetime   = m_lifetime;
+    const std::uint64_t generation = m_client_generation;
+    std::thread([lifetime, generation, host = m_host, filename] {
+        const auto job = NiaBridgePrintHost::lookup_job("http://" + host, filename);
+        wxGetApp().CallAfter([lifetime, generation, filename, job] {
+            NativePrinterPanel *self = lifetime->load();
+            if (self == nullptr || self->m_client_generation != generation || self->m_identity_file != filename)
+                return;
+            if (job) {
+                // TRN %1% is a short job id, %2% a short file checksum, %3% how many Start commands were sent.
+                wxString text = GUI::format_wxstr(_L("NIA job %1% · file SHA-256 %2%… verified on the printer · Starts sent: %3%"),
+                                                  job->value("jobId", std::string()).substr(0, 8),
+                                                  job->value("sha256", std::string()).substr(0, 12), job->value("startsSent", 0));
+                if (job->value("recoveredFromLostAck", false))
+                    text += "  ·  " + _L("Start confirmed from printer state after a lost reply");
+                self->m_job_identity->SetLabel(text);
+                self->m_identity_known = true;
+            } else {
+                self->m_job_identity->SetLabel(_L("Not a job the NIA bridge started."));
+            }
+            self->m_job_identity->Show();
+            self->Layout();
+        });
+    }).detach();
+}
+
 void NativePrinterPanel::disconnect()
 {
     ++m_client_generation; // drop callbacks still in flight
@@ -493,6 +543,7 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
         m_job_name->SetLabel(_L("No active print"));
         m_job_detail->SetLabel(m_client ? _L("Send a job from the slicer to start printing.") : wxString());
     }
+    refresh_job_identity(s.filename);
     m_job_percent->SetLabel(s.filename.empty() ? wxString() : wxString::Format("%.0f%%", s.progress * 100.));
     m_job_progress->SetValue(static_cast<int>(s.progress * 1000.));
     m_job_remaining->SetLabel(running && s.remaining ? wxString::FromUTF8(PP::format_duration(*s.remaining)) : wxString("-"));
@@ -670,7 +721,7 @@ void NativePrinterPanel::apply_colors()
             child->SetForegroundColour(p.text);
         }
     }
-    for (auto *muted : {m_job_detail, m_nozzle_label})
+    for (auto *muted : {m_job_detail, m_job_identity, m_nozzle_label})
         if (muted)
             muted->SetForegroundColour(p.muted);
     m_link_label->SetForegroundColour(m_client ? m_link_label->GetForegroundColour() : p.muted);

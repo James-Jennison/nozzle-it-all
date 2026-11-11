@@ -203,6 +203,7 @@
 #include "wxExtensions.hpp"
 #include "../Utils/PrintHost.hpp"
 #include "../Utils/U1LanPrintHost.hpp"
+#include "../Utils/NiaBridgePrintHost.hpp"
 #include "../Utils/NozzleSession.hpp"
 #include "U1FilamentSync.hpp"
 #include "U1SendDialog.hpp"
@@ -21129,11 +21130,19 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
         return;
 
     PrintHostJob upload_job;
-    upload_job.printhost               = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
+    // Prototype: with NIA_BRIDGE_URL set, the confirmed job goes to the local NIA
+    // bridge, which owns upload verification and the at-most-once Start. The
+    // intent id is minted here, once per confirmed dialog.
+    const std::string nia_bridge = NiaBridgePrintHost::bridge_url();
+    if (!nia_bridge.empty())
+        upload_job.printhost = std::make_unique<NiaBridgePrintHost>(nia_bridge, base_url,
+                                                                    boost::uuids::to_string(boost::uuids::random_generator()()), dlg.options());
+    else
+        upload_job.printhost = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
     upload_job.upload_data.use_3mf     = false;
     upload_job.upload_data.upload_path = dlg.filename();
     upload_job.upload_data.post_action = dlg.start_print() ? PrintHostPostUploadAction::StartPrint : PrintHostPostUploadAction::None;
-    upload_job.switch_to_device_tab    = false;
+    upload_job.switch_to_device_tab    = !nia_bridge.empty() && dlg.start_print();
     // Exports the G-code, then hands the job to the upload queue, which shows
     // progress and lets the user cancel.
     p->export_gcode(fs::path(), false, std::move(upload_job));

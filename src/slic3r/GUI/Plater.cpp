@@ -8413,6 +8413,17 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
                 auto result = MessageDialog(this->q, _L("Previously unsaved items have been detected. Do you want to restore them\?"), wxString(SLIC3R_APP_FULL_NAME) + " - " + _L("Restore"), wxYES_NO | wxYES_DEFAULT | wxCENTRE).ShowModal();
                 if (result == wxID_YES) {
                     this->q->load_project(from_path(last_backup), from_path(originfile));
+                    // A backup holds only what changed; the rest is read from the project it was made from. When
+                    // that fails (a backup cut short, or object files the original names differently) nothing is
+                    // loaded and the window is left empty. Open the project as it was last saved instead, and say so.
+                    boost::system::error_code ec;
+                    if (this->model.objects.empty() && !originfile.empty() && fs::exists(originfile, ec)) {
+                        BOOST_LOG_TRIVIAL(warning) << "restore from " << last_backup << " loaded nothing; reopening " << originfile;
+                        this->q->load_project(from_path(originfile), "<loadall>");
+                        MessageDialog(this->q, _L("The unsaved changes could not be restored. The project was opened as it was last saved."),
+                                      wxString(SLIC3R_APP_FULL_NAME) + " - " + _L("Restore"), wxOK | wxICON_WARNING).ShowModal();
+                        return;
+                    }
                     Slic3r::backup_soon();
                     return;
                 }

@@ -1,4 +1,5 @@
 #include "NativePrinterPanel.hpp"
+#include "NIATheme.hpp"
 
 #include "GUI_App.hpp"
 #include "GUI.hpp"
@@ -73,13 +74,11 @@ struct NativePrinterPanel::Palette
 
 NativePrinterPanel::Palette NativePrinterPanel::palette() const
 {
-    if (wxGetApp().dark_mode())
-        return {wxColour(0x16, 0x18, 0x1B), wxColour(0x1F, 0x22, 0x26), wxColour(0x34, 0x38, 0x3E), wxColour(0x2A, 0x2E, 0x33),
-                wxColour(0xE8, 0xEA, 0xED), wxColour(0x9A, 0xA0, 0xA6), wxColour(0x6C, 0xA6, 0xFF), wxColour(0xFF, 0x6B, 0x6B),
-                wxColour(0x4A, 0xD6, 0x8C), wxColour(0xFF, 0xC1, 0x4D)};
-    return {wxColour(0xF3, 0xF4, 0xF6), wxColour(0xFF, 0xFF, 0xFF), wxColour(0xDD, 0xE0, 0xE4), wxColour(0xF1, 0xF3, 0xF5),
-            wxColour(0x1F, 0x23, 0x28), wxColour(0x5F, 0x66, 0x6D), wxColour(0x25, 0x63, 0xEB), wxColour(0xC6, 0x28, 0x28),
-            wxColour(0x16, 0x7D, 0x4A), wxColour(0x9A, 0x5B, 0x00)};
+    // The tab uses the same NIA tokens as the rest of the app, so it changes with them.
+    const bool dark = wxGetApp().dark_mode();
+    return {NIATheme::background(dark), NIATheme::surface(dark),    NIATheme::line(dark),   NIATheme::surface_raised(dark),
+            NIATheme::text(dark),       NIATheme::text_muted(dark), NIATheme::accent(dark), NIATheme::danger(dark),
+            NIATheme::ready(dark),      NIATheme::heat(dark)};
 }
 
 namespace {
@@ -602,7 +601,7 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
         tile.swatch->SetBackgroundColour(t.color.empty() ? p.muted : wxColour(wxString::FromUTF8(t.color)));
         tile.detail->SetLabel(t.material.empty() ? (m_caps.toolhead_materials ? _L("Empty") : temp_text(t.heater)) :
                                                    wxString::FromUTF8(t.material));
-        tile.panel->SetBackgroundColour(t.active ? p.accent.ChangeLightness(wxGetApp().dark_mode() ? 45 : 185) : p.tile);
+        tile.panel->SetBackgroundColour(t.active ? NIATheme::accent_soft(wxGetApp().dark_mode()) : p.tile);
         tile.panel->Refresh();
     }
     if (m_material_note)

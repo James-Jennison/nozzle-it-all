@@ -487,7 +487,7 @@ void U1SendDialog::refresh_readiness()
         return;
     wxBusyCursor wait;
     m_readiness  = m_read_readiness();
-    m_checked_at = wxDateTime::Now().FormatTime();
+    m_checked_at = wxDateTime::Now().FormatISOTime(); // 24-hour, so the status stays on one line
 }
 
 void U1SendDialog::update_state()

@@ -344,19 +344,29 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     auto           *details           = new wxBoxSizer(wxVERTICAL);
     // The project's own name; its folder would only widen the dialog, and is in the tooltip.
     const wxString  displayed_project = project_name.empty() ? from_path(default_name.stem()) : project_name.AfterLast('/').AfterLast('\\');
-    details->Add(line(model, wxString::Format(_L("File name: %s"), from_path(filename())), 270, wxST_ELLIPSIZE_MIDDLE), 0, wxBOTTOM, FromDIP(3));
     // TRN %1$s is a project name, %2$d a plate number.
-    details->Add(line(model, wxString::Format(_L("Project: %1$s, plate %2$d"), displayed_project, plate_number), 270, wxST_ELLIPSIZE_END), 0, wxBOTTOM, FromDIP(3));
+    details->Add(line(model, wxString::Format(_L("Project: %1$s, plate %2$d"), displayed_project, plate_number), 180, wxST_ELLIPSIZE_END), 0,
+                 wxEXPAND | wxBOTTOM, FromDIP(3));
     double total_grams = 0.;
     for (size_t i = 0; i < plate_filaments.size() && i < filament_grams.size(); ++i)
         if (plate_filaments[i].present)
             total_grams += filament_grams[i];
-    details->Add(new Label(model, estimated_time.empty() ? _L("Estimated time unavailable") :
-                                                           wxString::Format(_L("Estimated time: %s"), estimated_time)),
-                 0, wxBOTTOM, FromDIP(3));
-    if (total_grams > 0.)
-        details->Add(new Label(model, wxString::Format(_L("Estimated material: %.2f g"), total_grams)), 0);
+    // Time and material share a line, which leaves the file name a line of its own across the section.
+    wxString estimate;
+    if (!estimated_time.empty() && total_grams > 0.)
+        // TRN %1$s is a print duration such as "2h 44m 2s", %2$.2f a weight in grams.
+        estimate = wxString::Format(_L("Estimated: %1$s, %2$.2f g"), estimated_time, total_grams);
+    else if (!estimated_time.empty())
+        estimate = wxString::Format(_L("Estimated time: %s"), estimated_time);
+    else if (total_grams > 0.)
+        estimate = wxString::Format(_L("Estimated material: %.2f g"), total_grams);
+    else
+        estimate = _L("Estimated time unavailable");
+    details->Add(new Label(model, estimate), 0);
     model_row->Add(details, 1, wxALIGN_CENTER_VERTICAL);
+    // The file name spans the section, so it is shortened only when the whole section is too narrow for it.
+    model->content()->Add(line(model, wxString::Format(_L("File name: %s"), from_path(filename())), 180, wxST_ELLIPSIZE_MIDDLE), 0,
+                          wxEXPAND | wxBOTTOM, FromDIP(6));
     model->content()->Add(model_row, 0, wxEXPAND);
     first_row->Add(model, 1, wxEXPAND | wxRIGHT, gap);
 

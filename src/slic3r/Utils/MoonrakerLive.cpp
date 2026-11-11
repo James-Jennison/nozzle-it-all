@@ -9,7 +9,11 @@
 #include <boost/log/trivial.hpp>
 #include <nlohmann/json.hpp>
 
+#include <boost/asio/io_context.hpp>
+
 #include <chrono>
+#include <stdexcept>
+#include <string>
 
 namespace Slic3r {
 
@@ -116,22 +120,59 @@ bool MoonrakerLiveClient::session()
 
         boost::asio::io_context              ioc;
         websocket::stream<beast::tcp_stream> ws{ioc};
+        // Every step on the socket is asynchronous and is run to its end here. A time limit set with
+        // expires_after only acts on asynchronous operations, and the destructor joins this thread from the
+        // GUI thread: a blocking read on a printer that has gone silent would hang the whole window for as long
+        // as the silence lasts. finish() also looks at m_stop every 100 ms and closes the socket when it is set.
+        beast::error_code step_error;
+        bool              step_done = false;
+        const auto step = [&](const beast::error_code &ec, auto &&...) {
+            step_error = ec;
+            step_done  = true;
+        };
+        const auto finish = [&](const char *what) {
+            while (!step_done) {
+                ioc.restart();
+                ioc.run_for(std::chrono::milliseconds(100));
+                if (m_stop && !step_done) {
+                    beast::error_code ignored;
+                    beast::get_lowest_layer(ws).socket().close(ignored);
+                    ioc.restart();
+                    ioc.run(); // the operation ends with "aborted"
+                    break;
+                }
+            }
+            step_done = false;
+            if (m_stop)
+                throw std::runtime_error("stopped");
+            if (step_error)
+                throw std::runtime_error(std::string(what) + ": " + step_error.message());
+        };
         beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(10));
-        beast::get_lowest_layer(ws).connect(tcp::resolver{ioc}.resolve(host, port));
-        ws.handshake(host + ":" + port, "/websocket");
+        beast::get_lowest_layer(ws).async_connect(tcp::resolver{ioc}.resolve(host, port), step);
+        finish("connecting");
+        beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(10));
+        ws.async_handshake(host + ":" + port, "/websocket", step);
+        finish("opening the websocket");
 
         const json subscribe = {{"jsonrpc", "2.0"},
                                 {"method", "printer.objects.subscribe"},
                                 {"params", {{"objects", PrinterPanel::subscription(caps)}}},
                                 {"id", SUBSCRIBE_ID}};
-        ws.write(boost::asio::buffer(subscribe.dump()));
+        const std::string subscribe_text = subscribe.dump();
+        beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(10));
+        ws.async_write(boost::asio::buffer(subscribe_text), step);
+        finish("subscribing");
 
         auto last_emit = std::chrono::steady_clock::now() - EMIT_INTERVAL;
         bool dirty     = false;
         while (!m_stop) {
+            // A printer that sends nothing for READ_TIMEOUT is treated as gone: the read fails, this session
+            // ends, and run() reports the link as lost and tries again.
             beast::get_lowest_layer(ws).expires_after(READ_TIMEOUT);
             beast::flat_buffer buffer;
-            ws.read(buffer);
+            ws.async_read(buffer, step);
+            finish("reading");
             const json msg = json::parse(beast::buffers_to_string(buffer.data()), nullptr, false);
             if (msg.is_discarded())
                 continue;
@@ -167,10 +208,10 @@ bool MoonrakerLiveClient::session()
                 dirty     = false;
             }
         }
-        beast::error_code ignored;
-        ws.close(websocket::close_code::normal, ignored);
+        // No closing handshake: it would wait on the printer. Dropping the stream closes the socket.
     } catch (const std::exception &e) {
-        BOOST_LOG_TRIVIAL(warning) << "Printer panel: link to " << m_base_url << " dropped: " << e.what();
+        if (!m_stop)
+            BOOST_LOG_TRIVIAL(warning) << "Printer panel: link to " << m_base_url << " dropped: " << e.what();
         if (m_callbacks.link && !m_stop)
             m_callbacks.link(Link::Unreachable, e.what());
     }

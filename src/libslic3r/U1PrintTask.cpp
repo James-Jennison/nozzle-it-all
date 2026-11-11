@@ -109,7 +109,11 @@ std::vector<int> suggest_mapping(const std::vector<Filament> &plate_filaments, c
                 continue;
             const bool same_type = !want.type.empty() && upper(want.type) == have.type;
             const long dist      = color_distance(normalize_color(want.color), have.color);
-            if (best == UNMAPPED || (same_type && !best_type) || (same_type == best_type && dist < best_dist)) {
+            // Equally good toolheads (filaments that look alike) go to the one with the filament's own number,
+            // so four like filaments spread over the four toolheads instead of all landing on the first.
+            const bool own_number = t == i % size_t(PHYSICAL_EXTRUDER_COUNT);
+            if (best == UNMAPPED || (same_type && !best_type) || (same_type == best_type && dist < best_dist) ||
+                (same_type == best_type && dist == best_dist && own_number)) {
                 best      = int(t);
                 best_type = same_type;
                 best_dist = dist;

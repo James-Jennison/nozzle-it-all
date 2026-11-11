@@ -73,7 +73,8 @@ PrinterState parse_printer_state(const nlohmann::json &print_task_config);
 
 /// Suggests a toolhead for each plate filament: a loaded toolhead with the same
 /// type and the closest color, else any loaded toolhead with the closest color,
-/// else the same index. Filaments the plate does not use stay UNMAPPED.
+/// else the same index. Among equally good toolheads the one with the filament's
+/// own index wins. Filaments the plate does not use stay UNMAPPED.
 std::vector<int> suggest_mapping(const std::vector<Filament> &plate_filaments, const std::vector<Filament> &toolheads);
 
 /// Builds the filament report the slicer's Sync Filament flow consumes

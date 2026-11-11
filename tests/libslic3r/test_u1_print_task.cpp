@@ -118,6 +118,15 @@ TEST_CASE("U1 suggested mapping prefers matching type, then closest color", "[U1
                                {true, "", "", "TPU", "", "#EE0000"}}; // no TPU loaded -> closest color, T0
     CHECK(U1PrintTask::suggest_mapping(plate, toolheads) == std::vector<int>{2, U1PrintTask::UNMAPPED, 1, 0});
 
+    // Filaments and toolheads that all look alike: each filament keeps its own number.
+    const std::vector<F> alike(4, F{true, "", "", "PLA", "", "#26A69A"});
+    CHECK(U1PrintTask::suggest_mapping(alike, alike) == std::vector<int>{0, 1, 2, 3});
+    // A tie between two toolheads goes to the filament's own number; a closer color still wins outright.
+    const std::vector<F> pairs = {{true, "", "", "PLA", "", "#FFFFFF"}, {true, "", "", "PLA", "", "#FFFFFF"},
+                                  {true, "", "", "PLA", "", "#000000"}, {false, "", "", "", "", ""}};
+    CHECK(U1PrintTask::suggest_mapping({{true, "", "", "PLA", "", "#FFFFFF"}, {true, "", "", "PLA", "", "#FFFFFF"},
+                                        {true, "", "", "PLA", "", "#FFFFFF"}}, pairs) == std::vector<int>{0, 1, 0});
+
     // Nothing loaded: fall back to the same index.
     const std::vector<F> none(4);
     CHECK(U1PrintTask::suggest_mapping({{true, "", "", "PLA", "", "#FFFFFF"}, {true, "", "", "PLA", "", "#000000"}}, none) ==

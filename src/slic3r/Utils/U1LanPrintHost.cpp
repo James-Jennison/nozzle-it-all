@@ -21,8 +21,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <random>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace Slic3r {
@@ -187,6 +189,13 @@ std::string U1LanPrintHost::reconcile(U1Jobs::Job &job, const std::string &base_
             job = *updated;
     }
     return state;
+}
+
+std::function<wxString(const std::vector<int> &, bool)> U1LanPrintHost::readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts)
+{
+    return [status = query_status(base_url), facts = std::move(facts)](const std::vector<int> &filament_to_toolhead, bool start) {
+        return describe(U1Jobs::start_blocker(facts, status, filament_to_toolhead, start));
+    };
 }
 
 wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker)

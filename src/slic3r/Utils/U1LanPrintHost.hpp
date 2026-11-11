@@ -8,8 +8,10 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Slic3r {
 
@@ -59,6 +61,11 @@ public:
     static std::string reconcile(U1Jobs::Job &job, const std::string &base_url);
     /// The refusal as a sentence for the user.
     static wxString    describe(const U1Jobs::Blocker &blocker);
+    /// Reads the printer once and returns a check for the send dialog: why a file with these *facts* must not
+    /// be sent (and, with the second argument true, started) with a given filament -> toolhead map; empty when
+    /// nothing stands in the way. It judges the state read here, so it only informs: upload() reads the
+    /// printer again and decides for itself.
+    static std::function<wxString(const std::vector<int> &, bool)> readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts);
 
 private:
     enum class StartOutcome {

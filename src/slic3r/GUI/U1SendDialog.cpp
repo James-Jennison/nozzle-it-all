@@ -259,11 +259,13 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                            const wxString                           &estimated_time,
                            const wxBitmap                           &thumbnail,
                            const std::vector<double>                &filament_grams,
-                           const wxString                           &printer_address)
+                           const wxString                           &printer_address,
+                           std::function<wxString(const std::vector<int> &, bool)> readiness)
     : DPIDialog(parent, wxID_ANY, _L("Print on Snapmaker U1"), wxDefaultPosition, wxDefaultSize,
                 wxCAPTION | wxCLOSE_BOX)
     , m_plate_filaments(plate_filaments)
     , m_toolheads(printer.toolheads)
+    , m_readiness(std::move(readiness))
 {
     SetBackgroundColour(*wxWHITE);
     SetFont(Label::Body_14);
@@ -334,9 +336,8 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     if (!printer_address.empty())
         // TRN %s is the printer's network address.
         device_text->Add(new Label(device, wxString::Format(_L("LAN: %s"), printer_address)), 0, wxBOTTOM, FromDIP(6));
-    auto *ready = new Label(device, Label::Body_14, _L("Online • Ready"));
-    ready->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#17823B")));
-    device_text->Add(ready, 0);
+    m_status = new Label(device, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(520), -1));
+    device_text->Add(m_status, 0, wxEXPAND);
     device_row->Add(device_text, 1, wxALIGN_CENTER_VERTICAL);
     device->content()->Add(device_row, 0, wxEXPAND);
 
@@ -354,7 +355,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
         if (!f.present)
             continue;
         auto *card = new U1FilamentCard(mapping, int(i + 1), f, i < filament_grams.size() ? filament_grams[i] : 0., printer.toolheads,
-                                        suggested[i] >= 0 ? suggested[i] : 0, [this] { update_mapping_note(); });
+                                        suggested[i] >= 0 ? suggested[i] : 0, [this] { update_state(); });
         cards->Add(card, 0, wxRIGHT | wxBOTTOM, FromDIP(14));
         m_rows.push_back({i, card});
     }
@@ -363,19 +364,21 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
 
     // Print preparation
     Section *preparation  = add_section(_L("Print preparation"));
-    auto    *options_grid = new wxFlexGridSizer(2, FromDIP(8), FromDIP(10));
+    auto    *options_grid = new wxFlexGridSizer(4, FromDIP(8), FromDIP(10)); // two options side by side
     options_grid->AddGrowableCol(1);
+    options_grid->AddGrowableCol(3);
     auto add_check = [&](const wxString &label, const wxString &help, bool value) {
         auto *check = new ::CheckBox(preparation);
         check->SetValue(value);
         options_grid->Add(check, 0, wxALIGN_TOP);
         auto *copy = new wxBoxSizer(wxVERTICAL);
         copy->Add(new Label(preparation, Label::Head_14, label));
-        copy->Add(new Label(preparation, help, LB_AUTO_WRAP, wxSize(FromDIP(480), -1)), 0, wxTOP, FromDIP(2));
-        options_grid->Add(copy, 1, wxEXPAND);
+        copy->Add(new Label(preparation, help, LB_AUTO_WRAP, wxSize(FromDIP(230), -1)), 0, wxTOP, FromDIP(2));
+        options_grid->Add(copy, 1, wxEXPAND | wxRIGHT, FromDIP(12));
         return check;
     };
-    m_bed_level = add_check(_L("Bed leveling"), _L("Measure the build plate before this print."), printer.bed_level);
+    // Bed leveling starts ticked whatever the printer last used: a print should be leveled unless someone decides otherwise.
+    m_bed_level = add_check(_L("Bed leveling"), _L("Measure the build plate before this print."), true);
     m_flow_calibrate = add_check(_L("Flow calibration"), _L("Calibrate only the toolheads used by this print."),
                                  printer.flow_calibrate);
     m_shaper_calibrate = add_check(_L("Input shaper calibration"), _L("Measure vibration compensation before printing."),
@@ -410,33 +413,54 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
 
     auto *buttons = new DialogButtons(this, {"Cancel", "Upload without starting", "Start Print"}, _L("Start Print"));
     auto *cancel = buttons->GetCANCEL();
-    auto *upload = buttons->GetButtonFromIndex(1);
-    auto *print  = buttons->GetButtonFromIndex(2);
+    auto *upload = m_upload = buttons->GetButtonFromIndex(1);
+    auto *print  = m_print  = buttons->GetButtonFromIndex(2);
     top->Add(buttons, 0, wxEXPAND);
 
     cancel->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { EndModal(wxID_CANCEL); });
     upload->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { on_confirm(false); });
     print->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { on_confirm(true); });
 
-    update_mapping_note();
     SetSizerAndFit(top);
+    update_state();
     CenterOnParent();
     wxGetApp().UpdateDlgDarkUI(this);
 }
 
-void U1SendDialog::update_mapping_note()
+std::vector<int> U1SendDialog::mapping() const
+{
+    std::vector<int> filament_to_toolhead(m_plate_filaments.size(), U1PrintTask::UNMAPPED);
+    for (const Row &row : m_rows)
+        filament_to_toolhead[row.filament] = row.card->selection();
+    return filament_to_toolhead;
+}
+
+void U1SendDialog::update_state()
 {
     wxString note;
     for (const Row &row : m_rows)
         if (const wxString problem = row.card->problem(); !problem.IsEmpty())
             note += (note.IsEmpty() ? wxString() : "\n") + problem;
-    const bool resize = note.IsEmpty() != m_mapping_note->GetLabel().IsEmpty() || note.Freq('\n') != m_mapping_note->GetLabel().Freq('\n');
+
+    const std::vector<int> filament_to_toolhead = mapping();
+    const wxString         no_upload = m_readiness ? m_readiness(filament_to_toolhead, false) : wxString();
+    const wxString         no_start  = m_readiness ? m_readiness(filament_to_toolhead, true) : wxString();
+    m_upload->Enable(no_upload.IsEmpty());
+    m_print->Enable(no_start.IsEmpty());
+    m_print->SetToolTip(no_start);
+    m_upload->SetToolTip(no_upload);
+    // Without a check the dialog only knows that the printer answered.
+    const wxString status = !no_start.IsEmpty() ? no_start : m_readiness ? _L("Online • Ready") : _L("Online");
+    m_status->SetForegroundColour(StateColor::darkModeColorFor(no_start.IsEmpty() ? wxColour(0x17, 0x82, 0x3B) : warning_colour()));
+
+    if (note == m_mapping_note->GetLabel() && status == m_status->GetLabel())
+        return;
     m_mapping_note->SetLabel(note);
     m_mapping_note->Show(!note.IsEmpty());
-    if (resize && GetSizer() != nullptr) {
-        GetSizer()->SetSizeHints(this);
-        Layout();
-    }
+    m_status->SetLabel(status);
+    GetSizer()->SetSizeHints(this);
+    Layout();
+    Refresh();
 }
 
 boost::filesystem::path U1SendDialog::filename() const
@@ -447,13 +471,10 @@ boost::filesystem::path U1SendDialog::filename() const
 U1PrintTask::Options U1SendDialog::options() const
 {
     U1PrintTask::Options options;
-    options.filament_to_toolhead.assign(m_plate_filaments.size(), U1PrintTask::UNMAPPED);
+    options.filament_to_toolhead = mapping();
     std::set<int> used_toolheads;
-    for (const Row &row : m_rows) {
-        const int toolhead                         = row.card->selection();
-        options.filament_to_toolhead[row.filament] = toolhead;
-        used_toolheads.insert(toolhead);
-    }
+    for (const Row &row : m_rows)
+        used_toolheads.insert(row.card->selection());
     options.bed_level         = m_bed_level->GetValue();
     options.flow_calibrate    = m_flow_calibrate->GetValue();
     options.shaper_calibrate  = m_shaper_calibrate->GetValue();

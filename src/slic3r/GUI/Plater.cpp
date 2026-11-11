@@ -21111,8 +21111,19 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     const Print             *print = plate != nullptr ? plate->fff_print() : nullptr;
     std::vector<U1PrintTask::Filament> filaments;
     std::vector<double>                filament_grams;
+    // What the G-code will say it was sliced for, so the dialog can show a refusal before anything is exported.
+    std::function<wxString(const std::vector<int> &, bool)> readiness;
     if (print != nullptr) {
         const DynamicPrintConfig full_config = print->full_print_config();
+        U1Jobs::GcodeFacts       facts;
+        if (const auto *model = full_config.option<ConfigOptionString>("printer_model"))
+            facts.printer_model = model->value;
+        if (const auto *nozzles = full_config.option<ConfigOptionFloats>("nozzle_diameter"))
+            facts.nozzles = nozzles->values;
+        {
+            wxBusyCursor wait;
+            readiness = U1LanPrintHost::readiness_check(base_url, std::move(facts));
+        }
         const auto *colors = full_config.option<ConfigOptionStrings>("filament_colour");
         const auto *types  = full_config.option<ConfigOptionStrings>("filament_type");
         const size_t count = std::max(colors ? colors->values.size() : 0, types ? types->values.size() : 0);
@@ -21249,7 +21260,7 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     const wxString project_name = get_project_filename();
     const wxString estimated_time = print != nullptr ? wxString::FromUTF8(print->print_statistics().estimated_normal_print_time) : wxString();
     U1SendDialog dlg(this, default_output_file, filaments, *printer, project_name,
-                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host));
+                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host), readiness);
     if (dlg.ShowModal() != wxID_OK)
         return;
 

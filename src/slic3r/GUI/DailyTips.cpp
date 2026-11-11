@@ -1,4 +1,5 @@
 #include "DailyTips.hpp"
+#include "libslic3r/Color.hpp"
 #include "slic3r/GUI/Widgets/Label.hpp"
 #include <string>
 #include <functional>
@@ -227,7 +228,7 @@ void DailyTipsDataRenderer::render_text(const ImVec2& start_pos, const ImVec2& s
         ImVec2 link_start_pos = ImGui::GetCursorScreenPos();
         imgui.text(first_part_text);
 
-        ImColor HyperColor = ImColor(0, 150, 136, (int)(255 * m_fade_opacity)).Value; // ORCA match color of hyperlinks
+        ImColor HyperColor = ImColor(SLIC3R_ACCENT_R, SLIC3R_ACCENT_G, SLIC3R_ACCENT_B, (int)(255 * m_fade_opacity)).Value; // ORCA match color of hyperlinks
         ImVec2 wiki_part_rect_min = ImVec2(link_start_pos.x + first_part_size.x, link_start_pos.y);
         ImVec2 wiki_part_rect_max = wiki_part_rect_min + wiki_part_size;
         ImGui::PushStyleColor(ImGuiCol_Text, HyperColor.Value);
@@ -516,7 +517,7 @@ void DailyTipsPanel::render_controller_buttons(const ImVec2& pos, const ImVec2& 
         button_text = ImGui::PrevArrowBtnIcon;
         if (ImGui::IsMouseHoveringRect(prev_button_pos, prev_button_pos + button_size, true))
         {
-            button_text_color = ImColor(0, 150, 136, (int)(255 * m_fade_opacity));
+            button_text_color = ImColor(SLIC3R_ACCENT_R, SLIC3R_ACCENT_G, SLIC3R_ACCENT_B, (int)(255 * m_fade_opacity));
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                 retrieve_data_from_hint_database(HintDataNavigation::Prev);
         }
@@ -531,7 +532,7 @@ void DailyTipsPanel::render_controller_buttons(const ImVec2& pos, const ImVec2& 
         button_text = ImGui::NextArrowBtnIcon;
         if (ImGui::IsMouseHoveringRect(next_button_pos, next_button_pos + button_size, true))
         {
-            button_text_color = ImColor(0, 150, 136, (int)(255 * m_fade_opacity));
+            button_text_color = ImColor(SLIC3R_ACCENT_R, SLIC3R_ACCENT_G, SLIC3R_ACCENT_B, (int)(255 * m_fade_opacity));
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                 retrieve_data_from_hint_database(HintDataNavigation::Next);
         }

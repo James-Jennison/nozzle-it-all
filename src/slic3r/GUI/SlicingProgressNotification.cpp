@@ -1,4 +1,5 @@
 #include "SlicingProgressNotification.hpp"
+#include "libslic3r/Color.hpp"
 #include <imgui.h>
 #include "slic3r/GUI/NotificationManager.hpp"
 #include <algorithm>
@@ -384,7 +385,7 @@ void Slic3r::GUI::NotificationManager::SlicingProgressNotification::render_bar(c
 
 	ImGuiWrapper& imgui = *wxGetApp().imgui();
 
-	ImColor progress_color = ImColor(0, 150, 136, (int)(255 * m_current_fade_opacity));
+	ImColor progress_color = ImColor(SLIC3R_ACCENT_R, SLIC3R_ACCENT_G, SLIC3R_ACCENT_B, (int)(255 * m_current_fade_opacity));
 	ImColor bg_color = ImColor(217, 217, 217, (int)(255 * m_current_fade_opacity));
 
 	ImVec2 lineStart = pos;

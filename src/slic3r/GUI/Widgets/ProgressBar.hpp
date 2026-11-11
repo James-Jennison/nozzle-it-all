@@ -2,6 +2,7 @@
 #define slic3r_GUI_ProgressBar_hpp_
 
 #include <wx/event.h>
+#include "libslic3r/Color.hpp"
 #include <wx/gdicmn.h>
 #include <wx/colour.h>
 #include <wx/string.h>
@@ -34,7 +35,7 @@ public:
     double   m_radius                     = {7};
     double   m_proportion                 = {0};
     wxColour m_progress_background_colour = {233, 233, 233};
-    wxColour m_progress_colour            = {0, 150, 136};
+    wxColour m_progress_colour            = {SLIC3R_ACCENT_R, SLIC3R_ACCENT_G, SLIC3R_ACCENT_B};
     wxColour m_progress_colour_disable    = {255, 111, 0};
     wxString m_disable_text;
     

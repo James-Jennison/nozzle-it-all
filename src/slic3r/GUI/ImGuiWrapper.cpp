@@ -234,7 +234,7 @@ bool get_data_from_svg(const std::string &filename, unsigned int max_size_px, Th
 {
     bool compression_enabled = false;
 
-    NSVGimage *image = nsvgParseFromFile(filename.c_str(), "px", 96.0f);
+    NSVGimage *image = BitmapCache::nsvgParseFromFileWithReplace(filename.c_str(), "px", 96.0f, BitmapCache::brand_replaces(wxGetApp().dark_mode()));
     if (image == nullptr) { return false; }
 
     float scale = (float) max_size_px / std::max(image->width, image->height);
@@ -3660,7 +3660,7 @@ void ImGuiWrapper::sub_title(const std::string &label)
 
 bool IMTexture::load_from_svg_file(const std::string& filename, unsigned width, unsigned height, ImTextureID& texture_id)
 {
-    NSVGimage* image = nsvgParseFromFile(filename.c_str(), "px", 96.0f);
+    NSVGimage* image = BitmapCache::nsvgParseFromFileWithReplace(filename.c_str(), "px", 96.0f, BitmapCache::brand_replaces(wxGetApp().dark_mode()));
     if (image == nullptr) {
         return false;
     }

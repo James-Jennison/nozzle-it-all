@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "slic3r/GUI/BitmapCache.hpp"
 #include "libslic3r/Exception.hpp"
+#include "libslic3r/libslic3r.h"
 #include <cstddef>
 #include "libslic3r/Utils.hpp"
 #include "slic3r/GUI/Widgets/PopupWindow.hpp"
@@ -473,6 +474,13 @@ wxBitmap create_scaled_bitmap(  const std::string& bmp_name_in,
 
     std::string bmp_name = bmp_name_in;
     boost::replace_last(bmp_name, ".png", "");
+#if NOZZLE_BRANDING
+    // Pictures that carry OrcaSlicer's mark have a Nozzle It All Desktop counterpart.
+    if (bmp_name == "OrcaSlicer")
+        bmp_name = SLIC3R_APP_ICON_BASE;
+    else if (bmp_name == "exclamation")
+        bmp_name = SLIC3R_APP_ICON_BASE "_exclamation";
+#endif
 
     bool dark_mode =
 #ifdef _WIN32

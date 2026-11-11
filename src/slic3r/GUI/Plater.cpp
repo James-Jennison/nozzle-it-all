@@ -203,7 +203,7 @@
 #include "wxExtensions.hpp"
 #include "../Utils/PrintHost.hpp"
 #include "../Utils/U1LanPrintHost.hpp"
-#include "../Utils/NiaBridgePrintHost.hpp"
+#include "../Utils/U1JobJournal.hpp"
 #include "../Utils/NozzleSession.hpp"
 #include "U1FilamentSync.hpp"
 #include "U1SendDialog.hpp"
@@ -21125,24 +21125,39 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
                     filaments[extruder - 1].present = true;
     }
 
+    // An earlier Start whose reply was lost keeps this printer held. Ask the printer first; if it
+    // does not show that job, only a person can say what happened. Neither answer sends anything.
+    if (auto open_job = U1Jobs::unresolved(base_url)) {
+        {
+            wxBusyCursor wait;
+            U1LanPrintHost::reconcile(*open_job, base_url);
+        }
+        if (open_job->unresolved()) {
+            MessageDialog ask(this,
+                              GUI::format_wxstr(_L("An earlier Start for \"%1%\" was sent to this printer but never confirmed, and it was not sent again.\n\n"
+                                                   "Did that print start?\n\nYes: record it as started.\nNo: record that nothing started, so a new print can be sent.\n"
+                                                   "Cancel: decide later."), open_job->remote_path),
+                              _L("Send to Snapmaker U1"), wxYES_NO | wxCANCEL | wxICON_WARNING);
+            const int answer = ask.ShowModal();
+            if (answer == wxID_YES)
+                U1Jobs::save(*open_job, U1Jobs::State::Printing, "Recorded as started by the user.");
+            else if (answer == wxID_NO)
+                U1Jobs::save(*open_job, U1Jobs::State::Failed, "Recorded as not started by the user.");
+            if (answer != wxID_NO)
+                return;
+        }
+    }
+
     U1SendDialog dlg(this, default_output_file, filaments, *printer);
     if (dlg.ShowModal() != wxID_OK)
         return;
 
     PrintHostJob upload_job;
-    // Prototype: with NIA_BRIDGE_URL set, the confirmed job goes to the local NIA
-    // bridge, which owns upload verification and the at-most-once Start. The
-    // intent id is minted here, once per confirmed dialog.
-    const std::string nia_bridge = NiaBridgePrintHost::bridge_url();
-    if (!nia_bridge.empty())
-        upload_job.printhost = std::make_unique<NiaBridgePrintHost>(nia_bridge, base_url,
-                                                                    boost::uuids::to_string(boost::uuids::random_generator()()), dlg.options());
-    else
-        upload_job.printhost = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
+    upload_job.printhost               = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
     upload_job.upload_data.use_3mf     = false;
     upload_job.upload_data.upload_path = dlg.filename();
     upload_job.upload_data.post_action = dlg.start_print() ? PrintHostPostUploadAction::StartPrint : PrintHostPostUploadAction::None;
-    upload_job.switch_to_device_tab    = !nia_bridge.empty() && dlg.start_print();
+    upload_job.switch_to_device_tab    = dlg.start_print(); // follow the job on the Printer tab
     // Exports the G-code, then hands the job to the upload queue, which shows
     // progress and lets the user cancel.
     p->export_gcode(fs::path(), false, std::move(upload_job));

@@ -2,6 +2,7 @@
 #define slic3r_U1LanPrintHost_hpp_
 
 #include "PrintHost.hpp"
+#include "U1JobJournal.hpp"
 #include "libslic3r/U1PrintTask.hpp"
 
 #include <nlohmann/json.hpp>
@@ -15,6 +16,12 @@ namespace Slic3r {
 /// HTTP upload, then server.files.start_local_print (websocket JSON-RPC) with the filament ->
 /// toolhead map and print options. No Flutter, MQTT or cloud involved, and no
 /// overall time limit on the upload, so large multi-color jobs are fine.
+///
+/// A send is one job with an identity (U1Jobs). The upload is read back and
+/// compared by SHA-256 before a Start is offered. The Start is recorded on disk
+/// before it is sent, sent once and never repeated: when its reply is lost the
+/// printer's state decides whether the job is running, and otherwise the
+/// printer stays held until a person says what happened.
 class U1LanPrintHost : public PrintHost
 {
 public:
@@ -45,8 +52,17 @@ public:
     }
     std::string get_host() const override { return m_base_url; }
 
+    /// Reads the printer once for a job whose Start outcome is open. Marks the
+    /// job Printing when the printer is running exactly its file. Returns the
+    /// printer's print state ("printing", "standby", ...), empty when unreachable.
+    static std::string reconcile(U1Jobs::Job &job, const std::string &base_url);
+
 private:
-    bool start_print(const std::string &path, ErrorFn error_fn) const;
+    enum class StartOutcome { Accepted, Rejected, Unknown };
+    /// Sends the Start once. Unknown means it may or may not have run.
+    StartOutcome start_print(const std::string &path, wxString &detail) const;
+    /// Empty when the job may go ahead, otherwise why not.
+    wxString     blockers(const boost::filesystem::path &file, const nlohmann::json &status, bool start) const;
 
     std::string          m_base_url;
     U1PrintTask::Options m_options;

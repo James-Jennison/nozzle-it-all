@@ -12,7 +12,7 @@
 #include "libslic3r/DeviceWorkspaceState.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/U1PrintTask.hpp"
-#include "slic3r/Utils/NiaBridgePrintHost.hpp"
+#include "slic3r/Utils/U1JobJournal.hpp"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/log/trivial.hpp>
@@ -31,7 +31,7 @@
 
 #include <algorithm>
 #include <ctime>
-#include <thread>
+#include <optional>
 
 namespace Slic3r::GUI {
 
@@ -407,48 +407,41 @@ void NativePrinterPanel::connect()
     Layout();
 }
 
-void NativePrinterPanel::refresh_job_identity(const std::string &filename)
+void NativePrinterPanel::refresh_job_identity(const PP::Snapshot &s)
 {
-    if (NiaBridgePrintHost::bridge_url().empty())
+    // The job this app sent under this exact name to this printer, if any. Looked up when the
+    // file or its state changes; the record also takes the outcome the printer reports.
+    const bool changed = s.filename != m_identity_file || s.job_state != m_identity_state;
+    if (!changed)
         return;
-    if (filename != m_identity_file) {
-        m_identity_file     = filename;
-        m_identity_known    = false;
-        m_identity_asked_ms = 0;
-        m_job_identity->Hide();
+    m_identity_file  = s.filename;
+    m_identity_state = s.job_state;
+    std::optional<U1Jobs::Job> job;
+    if (!s.filename.empty())
+        job = U1Jobs::find(m_host, s.filename);
+    if (!job) {
+        m_job_identity->Show(!s.filename.empty());
+        m_job_identity->SetLabel(_L("Not a job sent from this app."));
         Layout();
-    }
-    const long long now = wxGetLocalTimeMillis().GetValue();
-    if (filename.empty() || m_identity_known || now - m_identity_asked_ms < 3000)
         return;
-    m_identity_asked_ms = now;
-
-    // The lookup blocks, so it runs off the GUI thread; the reply is dropped
-    // if the panel is gone or has moved to another printer by then.
-    const auto          lifetime   = m_lifetime;
-    const std::uint64_t generation = m_client_generation;
-    std::thread([lifetime, generation, host = m_host, filename] {
-        const auto job = NiaBridgePrintHost::lookup_job("http://" + host, filename);
-        wxGetApp().CallAfter([lifetime, generation, filename, job] {
-            NativePrinterPanel *self = lifetime->load();
-            if (self == nullptr || self->m_client_generation != generation || self->m_identity_file != filename)
-                return;
-            if (job) {
-                // TRN %1% is a short job id, %2% a short file checksum, %3% how many Start commands were sent.
-                wxString text = GUI::format_wxstr(_L("NIA job %1% · file SHA-256 %2%… verified on the printer · Starts sent: %3%"),
-                                                  job->value("jobId", std::string()).substr(0, 8),
-                                                  job->value("sha256", std::string()).substr(0, 12), job->value("startsSent", 0));
-                if (job->value("recoveredFromLostAck", false))
-                    text += wxString::FromUTF8("  ·  ") + _L("Start confirmed from printer state after a lost reply");
-                self->m_job_identity->SetLabel(text);
-                self->m_identity_known = true;
-            } else {
-                self->m_job_identity->SetLabel(_L("Not a job the NIA bridge started."));
-            }
-            self->m_job_identity->Show();
-            self->Layout();
-        });
-    }).detach();
+    }
+    if (job->state == U1Jobs::State::Printing) {
+        job->progress = s.progress;
+        if (s.job_state == PP::JobState::Complete)
+            U1Jobs::save(*job, U1Jobs::State::Completed, "The printer reported the job complete.");
+        else if (s.job_state == PP::JobState::Cancelled)
+            U1Jobs::save(*job, U1Jobs::State::Cancelled, "The printer reported the job cancelled.");
+        else if (s.job_state == PP::JobState::Error)
+            U1Jobs::save(*job, U1Jobs::State::Failed, "The printer reported an error during the job.");
+    }
+    // TRN %1% is a short job id, %2% a short file checksum, %3% how many Start commands were sent.
+    wxString text = GUI::format_wxstr(_L("Job %1% · file SHA-256 %2%… verified on the printer · Starts sent: %3%"), job->id.substr(0, 8),
+                                      job->sha256.substr(0, 12), job->start_sent ? 1 : 0);
+    if (job->recovered_from_lost_ack)
+        text += wxString::FromUTF8("  ·  ") + _L("Start confirmed from printer state after a lost reply");
+    m_job_identity->SetLabel(text);
+    m_job_identity->Show();
+    Layout();
 }
 
 void NativePrinterPanel::disconnect()
@@ -543,7 +536,7 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
         m_job_name->SetLabel(_L("No active print"));
         m_job_detail->SetLabel(m_client ? _L("Send a job from the slicer to start printing.") : wxString());
     }
-    refresh_job_identity(s.filename);
+    refresh_job_identity(s);
     m_job_percent->SetLabel(s.filename.empty() ? wxString() : wxString::Format("%.0f%%", s.progress * 100.));
     m_job_progress->SetValue(static_cast<int>(s.progress * 1000.));
     m_job_remaining->SetLabel(running && s.remaining ? wxString::FromUTF8(PP::format_duration(*s.remaining)) : wxString("-"));

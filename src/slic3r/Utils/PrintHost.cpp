@@ -1,5 +1,5 @@
 #include "PrintHost.hpp"
-#include "NiaBridgePrintHost.hpp"
+#include "U1LanPrintHost.hpp"
 
 #include "libslic3r/Config.hpp"
 #include <string>
@@ -496,7 +496,7 @@ void PrintHostJobQueue::priv::perform_job(PrintHostJob the_job)
         if (the_job.switch_to_device_tab) {
             const auto mainframe = GUI::wxGetApp().mainframe;
             // The U1's Device page is the native Printer tab; other hosts use the Device tab.
-            mainframe->request_select_tab(dynamic_cast<const NiaBridgePrintHost *>(the_job.printhost.get()) != nullptr ? TAB_ID_NATIVE_DEVICE :
+            mainframe->request_select_tab(dynamic_cast<const U1LanPrintHost *>(the_job.printhost.get()) != nullptr ? TAB_ID_NATIVE_DEVICE :
                                                                                                                          TAB_ID_MONITOR);
         }
     }

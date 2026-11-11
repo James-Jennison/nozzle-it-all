@@ -831,8 +831,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/MoonrakerLive.hpp
     Utils/SemanticPaintClient.cpp
     Utils/SemanticPaintClient.hpp
-    Utils/NiaBridgePrintHost.cpp
-    Utils/NiaBridgePrintHost.hpp
+    Utils/U1JobJournal.cpp
+    Utils/U1JobJournal.hpp
     Utils/U1LanPrintHost.cpp
     Utils/U1LanPrintHost.hpp
     Utils/Moonraker.hpp

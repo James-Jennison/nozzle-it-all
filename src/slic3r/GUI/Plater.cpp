@@ -21110,6 +21110,7 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     PartPlate               *plate = get_partplate_list().get_curr_plate();
     const Print             *print = plate != nullptr ? plate->fff_print() : nullptr;
     std::vector<U1PrintTask::Filament> filaments;
+    std::vector<double>                filament_grams;
     if (print != nullptr) {
         const DynamicPrintConfig full_config = print->full_print_config();
         const auto *colors = full_config.option<ConfigOptionStrings>("filament_colour");
@@ -21129,10 +21130,15 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
         }
         bool marked = false;
         if (plate->is_slice_result_valid() && plate->get_slice_result() != nullptr) {
+            // Weight per filament, for display: extruded volume (mm3) times the filament's density (g/cm3).
+            const auto *densities = full_config.option<ConfigOptionFloats>("filament_density");
+            filament_grams.assign(count, 0.);
             for (const auto &used : plate->get_slice_result()->print_statistics.total_volumes_per_extruder)
                 if (used.first < filaments.size() && used.second > 0.) {
                     filaments[used.first].present = true;
                     marked                         = true;
+                    if (densities != nullptr && used.first < densities->values.size())
+                        filament_grams[used.first] = used.second * densities->values[used.first] * 0.001;
                 }
         }
         if (!marked)
@@ -21238,7 +21244,7 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     const wxString project_name = get_project_filename();
     const wxString estimated_time = print != nullptr ? wxString::FromUTF8(print->print_statistics().estimated_normal_print_time) : wxString();
     U1SendDialog dlg(this, default_output_file, filaments, *printer, project_name,
-                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail);
+                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host));
     if (dlg.ShowModal() != wxID_OK)
         return;
 

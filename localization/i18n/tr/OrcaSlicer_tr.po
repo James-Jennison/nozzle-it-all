@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Orca Slicer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 10:23-0800\n"
+"POT-Creation-Date: 2026-11-11 13:23-0800\n"
 "PO-Revision-Date: 2026-08-21 23:18+0300\n"
 "Last-Translator: GlauTech\n"
 "Language-Team: \n"
@@ -9950,6 +9950,9 @@ msgstr "Önceki kaydedilmemiş proje algılandı, geri yüklemek istiyor musunuz
 
 msgid "Restore"
 msgstr "Geri Yükleme"
+
+msgid "The unsaved changes could not be restored. The project was opened as it was last saved."
+msgstr ""
 
 msgid "The current heatbed temperature is relatively high. The nozzle may clog when printing this filament in a closed environment. Please open the front door and/or remove the upper glass."
 msgstr "Mevcut sıcak yatak sıcaklığı oldukça yüksek. Bu filamenti kapalı bir muhafaza içinde bastırırken nozzle tıkanabilir. Lütfen ön kapağı açın ve/veya üst camı çıkarın."
@@ -25176,8 +25179,10 @@ msgstr ""
 msgid "Estimated time unavailable"
 msgstr ""
 
-#, c-format, boost-format
-msgid "File name: %s"
+msgid "File name:"
+msgstr ""
+
+msgid "Click to change the name. On the printer the job's identifier is added to it."
 msgstr ""
 
 #. TRN %1$s is the printer's model, %2$s its network address.
@@ -25213,6 +25218,9 @@ msgid "Capture a timelapse with the printer camera."
 msgstr ""
 
 msgid "Start Print"
+msgstr ""
+
+msgid "Checking the printer…"
 msgstr ""
 
 msgid "Online • Ready"

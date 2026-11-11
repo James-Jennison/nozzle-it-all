@@ -6,6 +6,7 @@
 #include "I18N.hpp"
 #include "libslic3r/U1PrintTask.hpp"
 #include "MsgDialog.hpp"
+#include "NIATheme.hpp"
 #include "Widgets/Button.hpp"
 #include "Widgets/CheckBox.hpp"
 #include "Widgets/DialogButtons.hpp"
@@ -63,9 +64,36 @@ namespace GUI {
 
 namespace {
 
-wxColour border_colour() { return wxColour(0xDB, 0xDB, 0xDB); }
-wxColour warning_colour() { return wxColour(0xD0, 0x1B, 0x1B); }
-wxColour outline_colour() { return wxColour(0x9A, 0x9A, 0x9A); }
+// The dialog's colours for the theme in use. The Nozzle It All Desktop build takes them from the NIA theme:
+// that build switches off Orca's automatic recolouring, so a screen that does not set its own colours stays
+// light in a dark app. The Orca build keeps Orca's colours and its recolouring.
+struct Theme
+{
+    wxColour window;  ///< behind the sections
+    wxColour surface; ///< sections and cards
+    wxColour tile;    ///< behind a picture
+    wxColour line;    ///< a section's outline
+    wxColour outline; ///< a card's outline, the chevron
+    wxColour text;
+    wxColour muted;
+    wxColour ready;
+    wxColour danger;
+    wxColour focus;
+};
+
+Theme theme()
+{
+    const bool dark = wxGetApp().dark_mode();
+#if NOZZLE_BRANDING
+    return {NIATheme::background(dark), NIATheme::surface(dark), NIATheme::surface_raised(dark), NIATheme::line(dark), NIATheme::line_strong(dark),
+            NIATheme::text(dark),       NIATheme::text_muted(dark), NIATheme::ready(dark),      NIATheme::danger(dark), NIATheme::focus(dark)};
+#else
+    const auto orca = [](unsigned char r, unsigned char g, unsigned char b) { return StateColor::darkModeColorFor(wxColour(r, g, b)); };
+    return {orca(0xFF, 0xFF, 0xFF), orca(0xFF, 0xFF, 0xFF), orca(0xF1, 0xF1, 0xF1), orca(0xDB, 0xDB, 0xDB), wxColour(0x9A, 0x9A, 0x9A),
+            orca(0x26, 0x2E, 0x30), wxColour(0x6B, 0x6B, 0x6B), dark ? wxColour(0x4C, 0xC9, 0x6E) : wxColour(0x17, 0x82, 0x3B),
+            orca(0xD0, 0x1B, 0x1B), wxColour(0x00, 0x96, 0x88)};
+#endif
+}
 
 wxString describe(const U1PrintTask::Filament &f)
 {
@@ -116,7 +144,8 @@ class Section : public wxPanel
 public:
     Section(wxWindow *parent, const wxString &name) : wxPanel(parent)
     {
-        SetBackgroundColour(parent->GetBackgroundColour());
+        SetBackgroundStyle(wxBG_STYLE_PAINT);
+        SetBackgroundColour(theme().surface); // what the labels inside it are drawn on
         Bind(wxEVT_PAINT, &Section::on_paint, this);
         Bind(wxEVT_SIZE, [this](wxSizeEvent &event) { Refresh(); event.Skip(); });
         const int pad = FromDIP(12);
@@ -135,10 +164,13 @@ public:
 private:
     void on_paint(wxPaintEvent &)
     {
-        wxPaintDC dc(this);
-        wxGCDC    gc(dc);
-        gc.SetPen(wxPen(StateColor::darkModeColorFor(border_colour()), FromDIP(2)));
-        gc.SetBrush(*wxTRANSPARENT_BRUSH);
+        wxAutoBufferedPaintDC dc(this);
+        const Theme           colours = theme();
+        dc.SetBackground(wxBrush(colours.window));
+        dc.Clear();
+        wxGCDC gc(dc);
+        gc.SetPen(wxPen(colours.line, FromDIP(2)));
+        gc.SetBrush(wxBrush(colours.surface));
         const wxSize size = GetClientSize();
         gc.DrawRoundedRectangle(FromDIP(1), FromDIP(1), size.x - FromDIP(2), size.y - FromDIP(2), FromDIP(8));
     }
@@ -225,7 +257,8 @@ private:
     void on_paint(wxPaintEvent &)
     {
         wxAutoBufferedPaintDC dc(this);
-        const wxColour        surface = StateColor::darkModeColorFor(*wxWHITE);
+        const Theme           colours = theme();
+        const wxColour        surface = colours.surface;
         dc.SetBackground(wxBrush(GetParent()->GetBackgroundColour()));
         dc.Clear();
         wxGCDC       gc(dc);
@@ -242,7 +275,7 @@ private:
         gc.DrawRectangle(edge, band, size.x - 2 * edge, size.y - band - radius);
         gc.DrawRoundedRectangle(edge, size.y - 3 * radius, size.x - 2 * edge, 3 * radius - edge, radius);
         gc.SetBrush(*wxTRANSPARENT_BRUSH);
-        gc.SetPen(wxPen(warn ? warning_colour() : StateColor::darkModeColorFor(HasFocus() ? wxColour(0x00, 0x96, 0x88) : outline_colour()),
+        gc.SetPen(wxPen(warn ? colours.danger : HasFocus() ? colours.focus : colours.outline,
                         FromDIP(warn || HasFocus() ? 2 : 1)));
         gc.DrawRoundedRectangle(edge, edge, size.x - 2 * edge, size.y - 2 * edge, radius);
 
@@ -252,7 +285,7 @@ private:
             const wxSize extent = gc.GetTextExtent(text);
             gc.DrawText(text, (size.x - extent.x) / 2, y - extent.y / 2);
         };
-        const wxColour ink = StateColor::darkModeColorFor(wxColour("#262E30"));
+        const wxColour ink = colours.text;
         // TRN %1$d is a filament's number, %2$s its material, e.g. "1 · PLA".
         centered(m_filament.type.empty() ? wxString::Format("%d", m_number) : wxString::Format(_L("%1$d · %2$s"), m_number, wxString::FromUTF8(m_filament.type)),
                  band / 2 + edge, Label::Head_14, text_on(band_colour));
@@ -264,14 +297,14 @@ private:
         const bool loaded = chosen && m_toolheads[m_selection].present;
         const wxColour chip = loaded ? filament_colour(m_toolheads[m_selection].color) : surface;
         const int      d = FromDIP(28), cx = size.x / 2, cy = band + FromDIP(42);
-        gc.SetPen(wxPen(StateColor::darkModeColorFor(outline_colour()), FromDIP(1), loaded ? wxPENSTYLE_SOLID : wxPENSTYLE_SHORT_DASH));
+        gc.SetPen(wxPen(colours.outline, FromDIP(1), loaded ? wxPENSTYLE_SOLID : wxPENSTYLE_SHORT_DASH));
         gc.SetBrush(wxBrush(chip));
         gc.DrawEllipse(cx - d / 2, cy - d / 2, d, d);
         centered(chosen ? wxString::Format("%d", m_selection + 1) : wxString("?"), cy, Label::Head_14, loaded ? text_on(chip) : ink);
 
         // A chevron beside the chip shows that the toolhead can be changed.
         const int w = FromDIP(4), x = cx + d / 2 + FromDIP(12), y = cy - w / 2;
-        gc.SetPen(wxPen(StateColor::darkModeColorFor(outline_colour()), FromDIP(2)));
+        gc.SetPen(wxPen(colours.outline, FromDIP(2)));
         gc.DrawLine(x - w, y, x, y + w);
         gc.DrawLine(x, y + w, x + w, y);
 
@@ -283,7 +316,7 @@ private:
                 what = _L("unknown");
             gc.SetFont(Label::Body_12);
             what = wxControl::Ellipsize(what, gc, wxELLIPSIZE_END, size.x - FromDIP(10));
-            centered(what, cy + d / 2 + FromDIP(13), Label::Body_12, warn ? warning_colour() : ink);
+            centered(what, cy + d / 2 + FromDIP(13), Label::Body_12, warn ? colours.danger : ink);
         }
     }
 
@@ -315,14 +348,15 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
 {
     if (m_name.IsEmpty())
         m_name = "print.gcode";
-    SetBackgroundColour(*wxWHITE);
+    const Theme colours = theme();
+    SetBackgroundColour(colours.window);
     SetFont(Label::Body_14);
 
     const int gap = FromDIP(10);
     auto     *top = new wxBoxSizer(wxVERTICAL);
     // Everything but the buttons scrolls, so they stay reachable on a screen too small for the whole dialog.
     m_scroll = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL);
-    m_scroll->SetBackgroundColour(*wxWHITE);
+    m_scroll->SetBackgroundColour(colours.window);
     m_scroll->SetScrollRate(0, FromDIP(12));
     auto *sections = new wxBoxSizer(wxVERTICAL);
 
@@ -337,11 +371,11 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
         wxBitmap tile(box);
         {
             wxMemoryDC dc(tile);
-            dc.SetBackground(wxBrush(StateColor::darkModeColorFor(*wxWHITE)));
+            dc.SetBackground(wxBrush(colours.surface));
             dc.Clear();
             wxGCDC gc(dc);
             gc.SetPen(*wxTRANSPARENT_PEN);
-            gc.SetBrush(wxBrush(StateColor::darkModeColorFor(wxColour(0xF1, 0xF1, 0xF1))));
+            gc.SetBrush(wxBrush(colours.tile));
             gc.DrawRoundedRectangle(0, 0, box.x, box.y, FromDIP(10));
             gc.DrawBitmap(wxBitmap(image), (box.x - image.GetWidth()) / 2, (box.y - image.GetHeight()) / 2, true);
         }
@@ -444,11 +478,11 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     // Filaments
     auto *mapping_section = new Section(m_scroll, _L("Filaments"));
     auto *hint            = new Label(mapping_section, Label::Body_12, _L("Click a filament to change the toolhead it prints from."));
-    hint->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#6B6B6B")));
+    hint->SetForegroundColour(colours.muted);
     mapping_section->header()->Add(hint, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, gap);
     auto *cards = new wxWrapSizer(wxHORIZONTAL, wxREMOVE_LEADING_SPACES); // not the default, which stretches the last card
     m_mapping_note = new Label(mapping_section, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(520), -1));
-    m_mapping_note->SetForegroundColour(warning_colour());
+    m_mapping_note->SetForegroundColour(colours.danger);
     const std::vector<int> suggested = U1PrintTask::suggest_mapping(plate_filaments, printer.toolheads);
     for (size_t i = 0; i < plate_filaments.size(); ++i) {
         const U1PrintTask::Filament &f = plate_filaments[i];
@@ -505,6 +539,19 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     print->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { on_confirm(true); });
 
     SetSizer(top);
+    // Plain text takes the theme's text colour and the colour of what it sits on. The labels given a colour of
+    // their own above (the hint, the note, the status) keep it.
+    std::function<void(wxWindow *)> colour_text = [&](wxWindow *window) {
+        for (wxWindow *child : window->GetChildren()) {
+            if (dynamic_cast<wxStaticText *>(child) != nullptr) {
+                child->SetBackgroundColour(window->GetBackgroundColour());
+                if (child != hint && child != m_mapping_note && child != m_status)
+                    child->SetForegroundColour(colours.text);
+            }
+            colour_text(child);
+        }
+    };
+    colour_text(m_scroll);
     // The printer is read once the dialog is on screen, so a slow printer shows a dialog that says it is
     // checking instead of nothing at all. Until then neither button can be pressed.
     m_checking = static_cast<bool>(m_read_readiness);
@@ -574,10 +621,8 @@ void U1SendDialog::update_state()
     if (m_readiness && !m_checked_at.IsEmpty())
         // TRN %1$s is the printer's status or the reason a print cannot start, %2$s a time of day.
         status = wxString::Format(_L("%1$s (checked at %2$s)"), status, m_checked_at);
-    // The green that reads on a light dialog is too dim on a dark one.
-    const wxColour ready_colour = wxGetApp().dark_mode() ? wxColour(0x4C, 0xC9, 0x6E) : wxColour(0x17, 0x82, 0x3B);
-    m_status->SetForegroundColour(m_checking ? StateColor::darkModeColorFor(wxColour("#6B6B6B")) :
-                                  no_start.IsEmpty() ? ready_colour : StateColor::darkModeColorFor(warning_colour()));
+    const Theme colours = theme();
+    m_status->SetForegroundColour(m_checking ? colours.muted : no_start.IsEmpty() ? colours.ready : colours.danger);
 
     if (m_laid_out && note == m_mapping_note->GetLabel() && status == m_status->GetLabel())
         return;

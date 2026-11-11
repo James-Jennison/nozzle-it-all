@@ -11,7 +11,6 @@
 #include "Widgets/DialogButtons.hpp"
 #include "Widgets/Label.hpp"
 #include "Widgets/StateColor.hpp"
-#include "Widgets/TextInput.hpp"
 
 #include "libslic3r/Utils.hpp"
 
@@ -27,7 +26,9 @@
 #include <wx/dcclient.h>
 #include <wx/dcgraph.h>
 #include <wx/datetime.h>
+#include <wx/control.h>
 #include <wx/dcmemory.h>
+#include <wx/display.h>
 #include <wx/defs.h>
 #include <wx/event.h>
 #include <wx/font.h>
@@ -36,8 +37,11 @@
 #include <wx/menu.h>
 #include <wx/panel.h>
 #include <wx/pen.h>
+#include <wx/scrolwin.h>
+#include <wx/settings.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>
+#include <wx/stattext.h>
 #include <wx/string.h>
 #include <wx/toplevel.h>
 #include <wx/utils.h>
@@ -88,7 +92,7 @@ wxColour text_on(const wxColour &background)
     return background.GetLuminance() > 0.6 ? wxColour("#262E30") : *wxWHITE;
 }
 
-// A section of the dialog: a rounded outline with its name on the left and its content on the right.
+// A section of the dialog: a rounded outline with its name on top and its content below.
 class Section : public wxPanel
 {
 public:
@@ -97,14 +101,18 @@ public:
         SetBackgroundColour(parent->GetBackgroundColour());
         Bind(wxEVT_PAINT, &Section::on_paint, this);
         Bind(wxEVT_SIZE, [this](wxSizeEvent &event) { Refresh(); event.Skip(); });
-        auto *row  = new wxBoxSizer(wxHORIZONTAL);
-        auto *head = new Label(this, Label::Head_14, name, 0, wxSize(FromDIP(150), -1));
-        row->Add(head, 0, wxALL, FromDIP(16));
+        const int pad = FromDIP(12);
+        auto     *box = new wxBoxSizer(wxVERTICAL);
+        m_header      = new wxBoxSizer(wxHORIZONTAL);
+        m_header->Add(new Label(this, Label::Head_14, name), 0, wxALIGN_CENTER_VERTICAL);
+        box->Add(m_header, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, pad);
         m_content = new wxBoxSizer(wxVERTICAL);
-        row->Add(m_content, 1, wxEXPAND | wxTOP | wxRIGHT | wxBOTTOM, FromDIP(16));
-        SetSizer(row);
+        box->Add(m_content, 1, wxEXPAND | wxALL, pad);
+        SetSizer(box);
     }
     wxBoxSizer *content() const { return m_content; }
+    /// The row holding the section's name; more can be added to its right.
+    wxBoxSizer *header() const { return m_header; }
 
 private:
     void on_paint(wxPaintEvent &)
@@ -116,6 +124,7 @@ private:
         const wxSize size = GetClientSize();
         gc.DrawRoundedRectangle(FromDIP(1), FromDIP(1), size.x - FromDIP(2), size.y - FromDIP(2), FromDIP(8));
     }
+    wxBoxSizer *m_header  = nullptr;
     wxBoxSizer *m_content = nullptr;
 };
 
@@ -126,6 +135,9 @@ private:
 class U1FilamentCard : public wxWindow
 {
 public:
+    static constexpr int CARD_WIDTH = 104, CARD_HEIGHT = 118;
+    static inline const wxSize CARD_SIZE{CARD_WIDTH, CARD_HEIGHT};
+
     U1FilamentCard(wxWindow *parent, int number, const U1PrintTask::Filament &filament, double grams,
                    const std::vector<U1PrintTask::Filament> &toolheads, int selection, std::function<void()> on_change)
         : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS)
@@ -133,7 +145,7 @@ public:
         , m_on_change(std::move(on_change))
     {
         SetBackgroundStyle(wxBG_STYLE_PAINT);
-        SetMinSize(FromDIP(wxSize(100, 126)));
+        SetMinSize(FromDIP(CARD_SIZE));
         SetCursor(wxCursor(wxCURSOR_HAND));
         Bind(wxEVT_PAINT, &U1FilamentCard::on_paint, this);
         Bind(wxEVT_LEFT_UP, [this](wxMouseEvent &) { choose(); });
@@ -223,26 +235,38 @@ private:
             gc.DrawText(text, (size.x - extent.x) / 2, y - extent.y / 2);
         };
         const wxColour ink = StateColor::darkModeColorFor(wxColour("#262E30"));
-        centered(m_filament.type.empty() ? wxString::Format("%d", m_number) : wxString::FromUTF8(m_filament.type), band / 2 + edge, Label::Head_14,
-                 text_on(band_colour));
+        // TRN %1$d is a filament's number, %2$s its material, e.g. "1 · PLA".
+        centered(m_filament.type.empty() ? wxString::Format("%d", m_number) : wxString::Format(_L("%1$d · %2$s"), m_number, wxString::FromUTF8(m_filament.type)),
+                 band / 2 + edge, Label::Head_14, text_on(band_colour));
         if (m_grams > 0.)
-            centered(wxString::Format("%.2f g", m_grams), band + FromDIP(16), Label::Body_13, ink);
+            centered(wxString::Format("%.2f g", m_grams), band + FromDIP(13), Label::Body_13, ink);
 
         // The toolhead: its number on the color loaded there, hollow when the toolhead is empty.
         const bool chosen = m_selection >= 0 && size_t(m_selection) < m_toolheads.size();
         const bool loaded = chosen && m_toolheads[m_selection].present;
         const wxColour chip = loaded ? filament_colour(m_toolheads[m_selection].color) : surface;
-        const int      d = FromDIP(32), cx = size.x / 2, cy = band + FromDIP(50);
+        const int      d = FromDIP(28), cx = size.x / 2, cy = band + FromDIP(42);
         gc.SetPen(wxPen(StateColor::darkModeColorFor(outline_colour()), FromDIP(1), loaded ? wxPENSTYLE_SOLID : wxPENSTYLE_SHORT_DASH));
         gc.SetBrush(wxBrush(chip));
         gc.DrawEllipse(cx - d / 2, cy - d / 2, d, d);
         centered(chosen ? wxString::Format("%d", m_selection + 1) : wxString("?"), cy, Label::Head_14, loaded ? text_on(chip) : ink);
 
-        // A chevron shows that the toolhead can be changed.
-        const int w = FromDIP(5), y = cy + d / 2 + FromDIP(8);
+        // A chevron beside the chip shows that the toolhead can be changed.
+        const int w = FromDIP(4), x = cx + d / 2 + FromDIP(12), y = cy - w / 2;
         gc.SetPen(wxPen(StateColor::darkModeColorFor(outline_colour()), FromDIP(2)));
-        gc.DrawLine(cx - w, y, cx, y + w);
-        gc.DrawLine(cx, y + w, cx + w, y);
+        gc.DrawLine(x - w, y, x, y + w);
+        gc.DrawLine(x, y + w, x + w, y);
+
+        // What is loaded there, in words, so a different material is seen without hovering.
+        if (chosen) {
+            const U1PrintTask::Filament &have = m_toolheads[m_selection];
+            wxString what = !have.present ? _L("empty") : wxString::FromUTF8(have.type + (have.sub_type.empty() ? "" : " " + have.sub_type));
+            if (what.IsEmpty())
+                what = _L("unknown");
+            gc.SetFont(Label::Body_12);
+            what = wxControl::Ellipsize(what, gc, wxELLIPSIZE_END, size.x - FromDIP(10));
+            centered(what, cy + d / 2 + FromDIP(13), Label::Body_12, warn ? warning_colour() : ink);
+        }
     }
 
     const int                                m_number;
@@ -266,6 +290,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                            std::function<Readiness()>                read_readiness)
     : DPIDialog(parent, wxID_ANY, _L("Print on Snapmaker U1"), wxDefaultPosition, wxDefaultSize,
                 wxCAPTION | wxCLOSE_BOX)
+    , m_default_name(default_name)
     , m_plate_filaments(plate_filaments)
     , m_toolheads(printer.toolheads)
     , m_read_readiness(std::move(read_readiness))
@@ -273,19 +298,20 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     SetBackgroundColour(*wxWHITE);
     SetFont(Label::Body_14);
 
-    const int gap = FromDIP(16);
+    const int gap = FromDIP(10);
     auto     *top = new wxBoxSizer(wxVERTICAL);
-    auto add_section = [&](const wxString &name) {
-        auto *section = new Section(this, name);
-        top->Add(section, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, gap);
-        return section;
-    };
+    // Everything but the buttons scrolls, so they stay reachable on a screen too small for the whole dialog.
+    m_scroll = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL);
+    m_scroll->SetBackgroundColour(*wxWHITE);
+    m_scroll->SetScrollRate(0, FromDIP(12));
+    auto *sections = new wxBoxSizer(wxVERTICAL);
+
     // A picture centered on a rounded gray tile.
     auto picture = [&](wxWindow *owner, wxImage image) -> wxWindow * {
         if (!image.IsOk() || image.GetWidth() <= 0 || image.GetHeight() <= 0)
             return nullptr;
-        const wxSize box   = FromDIP(wxSize(120, 100));
-        const int    inset = FromDIP(8);
+        const wxSize box   = FromDIP(wxSize(84, 70));
+        const int    inset = FromDIP(6);
         const double scale = std::min(double(box.x - 2 * inset) / image.GetWidth(), double(box.y - 2 * inset) / image.GetHeight());
         image.Rescale(std::max(1, int(image.GetWidth() * scale)), std::max(1, int(image.GetHeight() * scale)), wxIMAGE_QUALITY_HIGH);
         wxBitmap tile(box);
@@ -296,101 +322,109 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
             wxGCDC gc(dc);
             gc.SetPen(*wxTRANSPARENT_PEN);
             gc.SetBrush(wxBrush(StateColor::darkModeColorFor(wxColour(0xF1, 0xF1, 0xF1))));
-            gc.DrawRoundedRectangle(0, 0, box.x, box.y, FromDIP(14));
+            gc.DrawRoundedRectangle(0, 0, box.x, box.y, FromDIP(10));
             gc.DrawBitmap(wxBitmap(image), (box.x - image.GetWidth()) / 2, (box.y - image.GetHeight()) / 2, true);
         }
         return new wxStaticBitmap(owner, wxID_ANY, tile);
     };
+    // One line of text that is cut with an ellipsis when it is longer than *width*; the whole text is in the tooltip.
+    auto line = [&](wxWindow *owner, const wxString &text, int width, long ellipsize) {
+        auto *label = new Label(owner, text, ellipsize, wxSize(FromDIP(width), -1));
+        label->SetToolTip(text);
+        return label;
+    };
 
-    // Model information
-    Section *model = add_section(_L("Model information"));
-    auto    *model_row = new wxBoxSizer(wxHORIZONTAL);
+    // Model information and the printer, side by side
+    auto *first_row = new wxBoxSizer(wxHORIZONTAL);
+    auto *model     = new Section(m_scroll, _L("Model information"));
+    auto *model_row = new wxBoxSizer(wxHORIZONTAL);
     if (thumbnail.IsOk())
         if (wxWindow *tile = picture(model, thumbnail.ConvertToImage()))
             model_row->Add(tile, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
     auto           *details           = new wxBoxSizer(wxVERTICAL);
     // The project's own name; its folder would only widen the dialog, and is in the tooltip.
     const wxString  displayed_project = project_name.empty() ? from_path(default_name.stem()) : project_name.AfterLast('/').AfterLast('\\');
-    auto *printer_filename = new Label(model, wxString::Format(_L("File name: %s"), from_path(default_name.filename())));
-    details->Add(printer_filename, 0, wxBOTTOM, FromDIP(6));
+    details->Add(line(model, wxString::Format(_L("File name: %s"), from_path(filename())), 270, wxST_ELLIPSIZE_MIDDLE), 0, wxBOTTOM, FromDIP(3));
     // TRN %1$s is a project name, %2$d a plate number.
-    auto *project = new Label(model, wxString::Format(_L("Project: %1$s, plate %2$d"), displayed_project, plate_number));
-    if (!project_name.empty())
-        project->SetToolTip(project_name);
-    details->Add(project, 0, wxBOTTOM, FromDIP(6));
-    details->Add(new Label(model, estimated_time.empty() ? _L("Estimated time unavailable") :
-                                                           wxString::Format(_L("Estimated time: %s"), estimated_time)),
-                 0, wxBOTTOM, FromDIP(6));
+    details->Add(line(model, wxString::Format(_L("Project: %1$s, plate %2$d"), displayed_project, plate_number), 270, wxST_ELLIPSIZE_END), 0, wxBOTTOM, FromDIP(3));
     double total_grams = 0.;
     for (size_t i = 0; i < plate_filaments.size() && i < filament_grams.size(); ++i)
         if (plate_filaments[i].present)
             total_grams += filament_grams[i];
+    details->Add(new Label(model, estimated_time.empty() ? _L("Estimated time unavailable") :
+                                                           wxString::Format(_L("Estimated time: %s"), estimated_time)),
+                 0, wxBOTTOM, FromDIP(3));
     if (total_grams > 0.)
         details->Add(new Label(model, wxString::Format(_L("Estimated material: %.2f g"), total_grams)), 0);
     model_row->Add(details, 1, wxALIGN_CENTER_VERTICAL);
     model->content()->Add(model_row, 0, wxEXPAND);
+    first_row->Add(model, 1, wxEXPAND | wxRIGHT, gap);
 
-    // Printer
-    Section *device     = add_section(_L("Printer"));
-    auto    *device_row = new wxBoxSizer(wxHORIZONTAL);
+    auto *device     = new Section(m_scroll, _L("Printer"));
+    auto *device_row = new wxBoxSizer(wxHORIZONTAL);
     const boost::filesystem::path cover = boost::filesystem::path(resources_dir()) / "profiles" / "Snapmaker" / "Snapmaker U1_cover.png";
     wxImage cover_image;
     if (boost::filesystem::exists(cover) && cover_image.LoadFile(from_path(cover), wxBITMAP_TYPE_PNG))
         if (wxWindow *tile = picture(device, cover_image))
             device_row->Add(tile, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
     auto *device_text = new wxBoxSizer(wxVERTICAL);
-    device_text->Add(new Label(device, Label::Head_14, "Snapmaker U1"), 0, wxBOTTOM, FromDIP(6));
-    if (!printer_address.empty())
-        // TRN %s is the printer's network address.
-        device_text->Add(new Label(device, wxString::Format(_L("LAN: %s"), printer_address)), 0, wxBOTTOM, FromDIP(6));
-    m_status = new Label(device, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(520), -1));
+    // TRN %1$s is the printer's model, %2$s its network address.
+    device_text->Add(new Label(device, printer_address.empty() ? wxString("Snapmaker U1") : wxString::Format(_L("%1$s at %2$s"), "Snapmaker U1", printer_address)),
+                     0, wxBOTTOM, FromDIP(3));
+    m_status = new Label(device, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(250), -1));
     device_text->Add(m_status, 0, wxEXPAND);
     device_row->Add(device_text, 1, wxALIGN_CENTER_VERTICAL);
+    device->content()->Add(device_row, 0, wxEXPAND);
     if (m_read_readiness) {
         auto *again = new Button(device, _L("Check again"), "", 0, 0);
-        again->SetStyle(ButtonStyle::Regular, ButtonType::Choice);
+        again->SetStyle(ButtonStyle::Regular, ButtonType::Compact);
         again->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
             refresh_readiness();
             update_state();
         });
-        device_row->Add(again, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, gap);
+        device->header()->AddStretchSpacer(1);
+        device->header()->Add(again, 0, wxALIGN_CENTER_VERTICAL);
     }
-    device->content()->Add(device_row, 0, wxEXPAND);
+    first_row->Add(device, 1, wxEXPAND);
+    sections->Add(first_row, 0, wxEXPAND | wxBOTTOM, gap);
 
     // Filaments
-    Section *mapping = add_section(_L("Filaments"));
-    mapping->content()->Add(new Label(mapping, _L("Each filament prints from the toolhead shown under it. Click a filament to change its toolhead."),
-                                      LB_AUTO_WRAP, wxSize(FromDIP(520), -1)),
-                            0, wxEXPAND | wxBOTTOM, FromDIP(12));
+    auto *mapping_section = new Section(m_scroll, _L("Filaments"));
+    auto *hint            = new Label(mapping_section, Label::Body_12, _L("Click a filament to change the toolhead it prints from."));
+    hint->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#6B6B6B")));
+    mapping_section->header()->Add(hint, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, gap);
     auto *cards = new wxWrapSizer(wxHORIZONTAL, wxREMOVE_LEADING_SPACES); // not the default, which stretches the last card
-    m_mapping_note = new Label(mapping, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(520), -1));
+    m_mapping_note = new Label(mapping_section, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(520), -1));
     m_mapping_note->SetForegroundColour(warning_colour());
     const std::vector<int> suggested = U1PrintTask::suggest_mapping(plate_filaments, printer.toolheads);
     for (size_t i = 0; i < plate_filaments.size(); ++i) {
         const U1PrintTask::Filament &f = plate_filaments[i];
         if (!f.present)
             continue;
-        auto *card = new U1FilamentCard(mapping, int(i + 1), f, i < filament_grams.size() ? filament_grams[i] : 0., printer.toolheads,
+        auto *card = new U1FilamentCard(mapping_section, int(i + 1), f, i < filament_grams.size() ? filament_grams[i] : 0., printer.toolheads,
                                         suggested[i] >= 0 ? suggested[i] : 0, [this] { update_state(); });
-        cards->Add(card, 0, wxRIGHT | wxBOTTOM, FromDIP(14));
+        cards->Add(card, 0, wxRIGHT | wxBOTTOM, FromDIP(10));
         m_rows.push_back({i, card});
     }
-    mapping->content()->Add(cards, 0, wxEXPAND);
-    mapping->content()->Add(m_mapping_note, 0, wxEXPAND);
+    mapping_section->content()->Add(cards, 0, wxEXPAND);
+    mapping_section->content()->Add(m_mapping_note, 0, wxEXPAND);
+    sections->Add(mapping_section, 0, wxEXPAND | wxBOTTOM, gap);
 
-    // Print preparation
-    Section *preparation  = add_section(_L("Print preparation"));
-    auto    *options_grid = new wxFlexGridSizer(4, FromDIP(8), FromDIP(10)); // two options side by side
-    options_grid->AddGrowableCol(1);
-    options_grid->AddGrowableCol(3);
+    // Print preparation: one row; what each option does is in its tooltip
+    auto *preparation = new Section(m_scroll, _L("Print preparation"));
+    auto *options_row = new wxWrapSizer(wxHORIZONTAL, wxREMOVE_LEADING_SPACES);
     auto add_check = [&](const wxString &label, const wxString &help, bool value) {
         auto *check = new ::CheckBox(preparation);
         check->SetValue(value);
-        options_grid->Add(check, 0, wxALIGN_TOP);
-        auto *copy = new wxBoxSizer(wxVERTICAL);
-        copy->Add(new Label(preparation, Label::Head_14, label));
-        copy->Add(new Label(preparation, help, LB_AUTO_WRAP, wxSize(FromDIP(230), -1)), 0, wxTOP, FromDIP(2));
-        options_grid->Add(copy, 1, wxEXPAND | wxRIGHT, FromDIP(12));
+        check->SetToolTip(help);
+        auto *text = new Label(preparation, label);
+        text->SetToolTip(help);
+        // Clicking the words ticks the box, as people expect of a checkbox's label.
+        text->Bind(wxEVT_LEFT_UP, [check](wxMouseEvent &) { check->SetValue(!check->GetValue()); });
+        auto *pair = new wxBoxSizer(wxHORIZONTAL);
+        pair->Add(check, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
+        pair->Add(text, 0, wxALIGN_CENTER_VERTICAL);
+        options_row->Add(pair, 0, wxRIGHT | wxBOTTOM, FromDIP(18));
         return check;
     };
     // Bed leveling starts ticked whatever the printer last used: a print should be leveled unless someone decides otherwise.
@@ -401,31 +435,11 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                                    printer.shaper_calibrate);
     m_time_lapse = add_check(_L("Timelapse"), _L("Capture a timelapse with the printer camera."),
                              printer.time_lapse_camera);
-    preparation->content()->Add(options_grid, 0, wxEXPAND);
+    preparation->content()->Add(options_row, 0, wxEXPAND);
+    sections->Add(preparation, 0, wxEXPAND);
 
-    auto *advanced_button = new Button(this, _L("Advanced"), "", 0, 0);
-    advanced_button->SetStyle(ButtonStyle::Regular, ButtonType::Choice);
-    top->Add(advanced_button, 0, wxLEFT | wxRIGHT | wxTOP, gap);
-    auto *advanced_panel = new wxPanel(this);
-    advanced_panel->SetBackgroundColour(*wxWHITE);
-    auto *advanced_sizer = new wxBoxSizer(wxVERTICAL);
-    advanced_sizer->Add(new Label(advanced_panel, _L("File name on the printer")), 0, wxBOTTOM, FromDIP(6));
-    m_filename = new ::TextInput(advanced_panel, from_path(default_name.filename()), wxEmptyString, wxEmptyString,
-                                 wxDefaultPosition, wxSize(FromDIP(620), -1), wxTE_PROCESS_ENTER);
-    m_filename->GetTextCtrl()->Bind(wxEVT_TEXT, [this, printer_filename](wxCommandEvent &event) {
-        printer_filename->SetLabel(wxString::Format(_L("File name: %s"), event.GetString()));
-        Layout();
-        event.Skip();
-    });
-    advanced_sizer->Add(m_filename, 0, wxEXPAND);
-    advanced_panel->SetSizer(advanced_sizer);
-    advanced_panel->Hide();
-    top->Add(advanced_panel, 0, wxEXPAND | wxALL, gap);
-    advanced_button->Bind(wxEVT_BUTTON, [this, advanced_panel](wxCommandEvent &) {
-        advanced_panel->Show(!advanced_panel->IsShown());
-        GetSizer()->SetSizeHints(this);
-        Layout();
-    });
+    m_scroll->SetSizer(sections);
+    top->Add(m_scroll, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(12));
 
     auto *buttons = new DialogButtons(this, {"Cancel", "Upload without starting", "Start Print"}, _L("Start Print"));
     auto *cancel = buttons->GetCANCEL();
@@ -437,11 +451,26 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     upload->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { on_confirm(false); });
     print->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { on_confirm(true); });
 
-    SetSizerAndFit(top);
+    SetSizer(top);
     refresh_readiness();
-    update_state();
+    update_state(); // sizes the dialog to its content, within the screen
     CenterOnParent();
     wxGetApp().UpdateDlgDarkUI(this);
+}
+
+void U1SendDialog::fit_to_screen()
+{
+    // The sections take the height they need unless the screen is smaller; then they scroll.
+    const wxSize    content = m_scroll->GetSizer()->GetMinSize();
+    const int       index   = wxDisplay::GetFromWindow(GetParent() != nullptr ? GetParent() : this);
+    const wxDisplay display(index == wxNOT_FOUND ? 0u : unsigned(index));
+    const int       screen  = display.GetClientArea().GetHeight();
+    const int    limit   = std::max(FromDIP(200), screen - FromDIP(160)); // leaves room for the buttons and the window frame
+    const bool   scrolls = content.y > limit;
+    m_scroll->SetMinSize(wxSize(content.x + (scrolls ? wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_scroll) : 0), std::min(content.y, limit)));
+    GetSizer()->SetSizeHints(this);
+    Layout();
+    m_scroll->FitInside();
 }
 
 std::vector<int> U1SendDialog::mapping() const
@@ -480,21 +509,34 @@ void U1SendDialog::update_state()
     if (m_readiness && !m_checked_at.IsEmpty())
         // TRN %1$s is the printer's status or the reason a print cannot start, %2$s a time of day.
         status = wxString::Format(_L("%1$s (checked at %2$s)"), status, m_checked_at);
-    m_status->SetForegroundColour(StateColor::darkModeColorFor(no_start.IsEmpty() ? wxColour(0x17, 0x82, 0x3B) : warning_colour()));
+    // The green that reads on a light dialog is too dim on a dark one.
+    const wxColour ready_colour = wxGetApp().dark_mode() ? wxColour(0x4C, 0xC9, 0x6E) : wxColour(0x17, 0x82, 0x3B);
+    m_status->SetForegroundColour(no_start.IsEmpty() ? ready_colour : StateColor::darkModeColorFor(warning_colour()));
 
-    if (note == m_mapping_note->GetLabel() && status == m_status->GetLabel())
+    if (m_laid_out && note == m_mapping_note->GetLabel() && status == m_status->GetLabel())
         return;
     m_mapping_note->SetLabel(note);
     m_mapping_note->Show(!note.IsEmpty());
     m_status->SetLabel(status);
-    GetSizer()->SetSizeHints(this);
-    Layout();
+    m_laid_out = true;
+    fit_to_screen();
     Refresh();
 }
 
 boost::filesystem::path U1SendDialog::filename() const
 {
-    return boost::filesystem::path(into_u8(m_filename->GetTextCtrl()->GetValue()));
+    // The name Orca gave the export, with characters a printer's file system or Moonraker's API cannot
+    // take replaced, and the .gcode ending the printer expects.
+    static const wxString forbidden = "#*;\\/:\"<>|";
+    wxString name = from_path(m_default_name.filename()).Strip(wxString::both);
+    for (wxUniCharRef c : name)
+        if (forbidden.find(c) != wxString::npos)
+            c = '_';
+    if (name.IsEmpty())
+        name = "print";
+    if (!name.Lower().EndsWith(".gcode"))
+        name += ".gcode";
+    return boost::filesystem::path(into_u8(name));
 }
 
 U1PrintTask::Options U1SendDialog::options() const
@@ -516,17 +558,6 @@ U1PrintTask::Options U1SendDialog::options() const
 
 void U1SendDialog::on_confirm(bool start_print)
 {
-    static const wxString forbidden = "#*;\\/:\"<>|";
-    const wxString name = m_filename->GetTextCtrl()->GetValue().Strip(wxString::both);
-    if (name.IsEmpty() || name.find_first_of(forbidden) != wxString::npos) {
-        MessageDialog(this, _L("Please enter a file name without the characters #, *, ;, \\, /, :, \", <, >, or |."),
-                      _L("Send to Snapmaker U1"), wxOK | wxICON_WARNING)
-            .ShowModal();
-        return;
-    }
-    if (!name.Lower().EndsWith(".gcode"))
-        m_filename->GetTextCtrl()->ChangeValue(name + ".gcode");
-
     std::string error;
     if (!U1PrintTask::validate(options(), error)) {
         MessageDialog(this, wxString::FromUTF8(error), _L("Send to Snapmaker U1"), wxOK | wxICON_WARNING).ShowModal();
@@ -569,14 +600,13 @@ void U1SendDialog::on_confirm(bool start_print)
 
 void U1SendDialog::on_dpi_changed(const wxRect & /*suggested_rect*/)
 {
-    m_filename->Rescale();
     for (const Row &row : m_rows) {
-        row.card->SetMinSize(FromDIP(wxSize(100, 126)));
+        row.card->SetMinSize(FromDIP(U1FilamentCard::CARD_SIZE));
         row.card->Refresh();
     }
     for (::CheckBox *check : {m_bed_level, m_flow_calibrate, m_shaper_calibrate, m_time_lapse})
         check->Rescale();
-    GetSizer()->SetSizeHints(this);
+    fit_to_screen();
     Refresh();
 }
 

@@ -491,6 +491,8 @@ set(SLIC3R_GUI_SOURCES
     GUI/PlaterFilamentComboBox.hpp
     GUI/U1FilamentSync.cpp
     GUI/U1FilamentSync.hpp
+    Utils/FilamentProfilesClient.cpp
+    Utils/FilamentProfilesClient.hpp
     GUI/SemanticPaintDialog.cpp
     GUI/SemanticPaintDialog.hpp
     GUI/U1SendDialog.cpp

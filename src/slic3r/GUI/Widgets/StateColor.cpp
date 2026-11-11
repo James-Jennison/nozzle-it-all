@@ -194,11 +194,18 @@ void StateColor::SetDarkMode(bool dark) { gDarkMode = dark; }
 
 inline wxColour darkModeColorFor2(wxColour const &color)
 {
+#if NOZZLE_BRANDING
+    // Product and user colours are semantic data. NIA shell surfaces apply
+    // explicit NIATheme tokens at their call sites; never recolour arbitrary
+    // values globally merely because they equal an Orca chrome literal.
+    return color;
+#else
     if (!gDarkMode)
         return color;
     auto iter = gDarkColors.find(color);
     if (iter != gDarkColors.end()) return iter->second;
     return color;
+#endif
 }
 
 std::map<wxColour, wxColour> revert(std::map<wxColour, wxColour> const & map)
@@ -210,10 +217,14 @@ std::map<wxColour, wxColour> revert(std::map<wxColour, wxColour> const & map)
 
 wxColour StateColor::lightModeColorFor(wxColour const &color)
 {
+#if NOZZLE_BRANDING
+    return color;
+#else
     static std::map<wxColour, wxColour> gLightColors = revert(gDarkColors);
     auto iter = gLightColors.find(color);
     if (iter != gLightColors.end()) return iter->second;
     return color;
+#endif
 }
 
 wxColour StateColor::darkModeColorFor(wxColour const &color) { return darkModeColorFor2(color); }

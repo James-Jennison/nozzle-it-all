@@ -1,4 +1,5 @@
 #include "MainFrame.hpp"
+#include "NIATheme.hpp"
 
 #include <wx/event.h>
 #include "slic3r/GUI/Event.hpp"
@@ -9,6 +10,7 @@
 #include <wx/filehistory.h>
 #include "slic3r/GUI/BBLTopbar.hpp"
 #include "libslic3r/Format/bbs_3mf.hpp"
+#include "libslic3r/Format/ProjectStrategy.hpp"
 #include <boost/lexical_cast.hpp>
 #include <optional>
 #include "slic3r/GUI/GLToolbar.hpp"
@@ -465,7 +467,7 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
     m_topbar         = new BBLTopbar(this);
 #else
     auto panel_topbar = new wxPanel(this, wxID_ANY);
-    panel_topbar->SetBackgroundColour(wxColour(38, 46, 48));
+    panel_topbar->SetBackgroundColour(NOZZLE_BRANDING ? NIATheme::background(wxGetApp().dark_mode()) : wxColour(38, 46, 48));
     auto sizer_tobar = new wxBoxSizer(wxVERTICAL);
     panel_topbar->SetSizer(sizer_tobar);
     panel_topbar->Layout();
@@ -509,7 +511,7 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
     default:
     case GUI_App::EAppMode::Editor:
         m_taskbar_icon = std::make_unique<OrcaSlicerTaskBarIcon>(wxTBI_DOCK);
-        m_taskbar_icon->SetIcon(wxIcon(Slic3r::var("OrcaSlicer-mac_256px.ico"), wxBITMAP_TYPE_ICO), "OrcaSlicer");
+        m_taskbar_icon->SetIcon(wxIcon(Slic3r::var(std::string(SLIC3R_APP_ICON_BASE) + ".ico"), wxBITMAP_TYPE_ICO), SLIC3R_APP_FULL_NAME);
         break;
     case GUI_App::EAppMode::GCodeViewer:
         break;
@@ -2379,8 +2381,8 @@ wxBoxSizer* MainFrame::create_side_tools()
 
     auto slice_panel = new wxPanel(this,wxID_ANY,wxDefaultPosition,wxDefaultSize);
     auto print_panel = new wxPanel(this,wxID_ANY,wxDefaultPosition,wxDefaultSize);
-    slice_panel->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#3B4446")));
-    print_panel->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#3B4446")));
+    slice_panel->SetBackgroundColour(NOZZLE_BRANDING ? NIATheme::background(wxGetApp().dark_mode()) : StateColor::darkModeColorFor(wxColour("#3B4446")));
+    print_panel->SetBackgroundColour(NOZZLE_BRANDING ? NIATheme::background(wxGetApp().dark_mode()) : StateColor::darkModeColorFor(wxColour("#3B4446")));
 
     m_slice_btn = new SideButton(slice_panel, _L("Slice plate"), "");
     m_slice_option_btn = new SideButton(slice_panel, "", "sidebutton_dropdown", 0, 14);
@@ -2726,6 +2728,9 @@ bool MainFrame::get_enable_print_status()
 
 void MainFrame::update_side_button_style()
 {
+    if (m_slice_btn == nullptr || m_slice_option_btn == nullptr || m_print_btn == nullptr || m_print_option_btn == nullptr)
+        return;
+
     // BBS
     int em = em_unit();
 
@@ -2736,9 +2741,15 @@ void MainFrame::update_side_button_style()
     m_slice_btn->SetExtraSize(wxSize(FromDIP(38), FromDIP(10)));
     m_slice_btn->SetBottomColour(wxColour(0x3B4446));*/
     StateColor m_btn_bg_enable = StateColor(
+#if NOZZLE_BRANDING
+        std::pair<wxColour, int>(NIATheme::accent(wxGetApp().dark_mode()), StateColor::Pressed),
+        std::pair<wxColour, int>(NIATheme::focus(wxGetApp().dark_mode()), StateColor::Hovered),
+        std::pair<wxColour, int>(NIATheme::accent(wxGetApp().dark_mode()), StateColor::Normal)
+#else
         std::pair<wxColour, int>(wxColour(0, 137, 123), StateColor::Pressed),
         std::pair<wxColour, int>(wxColour(48, 221, 112), StateColor::Hovered),
         std::pair<wxColour, int>(wxColour(0, 150, 136), StateColor::Normal)
+#endif
     );
 
     // m_publish_btn->SetMinSize(wxSize(FromDIP(125), FromDIP(24)));
@@ -2771,7 +2782,7 @@ void MainFrame::update_side_button_style()
     m_print_option_btn->SetMinSize(wxSize(FromDIP(24), FromDIP(24)));
 
     // Keep panel backgrounds in sync with SideButton's darkModeColorFor(#3B4446) bottom strip
-    auto bg = StateColor::darkModeColorFor(wxColour("#3B4446"));
+    auto bg = NOZZLE_BRANDING ? NIATheme::background(wxGetApp().dark_mode()) : StateColor::darkModeColorFor(wxColour("#3B4446"));
     m_slice_btn->GetParent()->SetBackgroundColour(bg);
     m_print_btn->GetParent()->SetBackgroundColour(bg);
 }
@@ -2914,6 +2925,13 @@ void MainFrame::on_sys_color_changed()
         dialog->on_sys_color_changed();
 
     // BBS
+    update_side_button_style();
+    if (m_topbar != nullptr) {
+        m_topbar->SetBackgroundColour(NOZZLE_BRANDING ? NIATheme::background(wxGetApp().dark_mode()) : wxColour(38, 46, 48));
+        m_topbar->Refresh();
+    }
+    if (auto* tabbook = dynamic_cast<Tabbook*>(m_tabpanel))
+        tabbook->GetBtnsListCtrl()->RefreshTheme();
     m_tabpanel->Rescale();
     m_param_panel->msw_rescale();
 
@@ -3013,7 +3031,12 @@ wxMenu* MainFrame::generate_help_menu()
     //        //TODO
     //    });
     // Check New Version
-    append_menu_item(helpMenu, wxID_ANY, _L("Check for Updates"), _L("Check for Updates"),
+    append_menu_item(helpMenu, wxID_ANY,
+#if NOZZLE_BRANDING
+        _L("Check for Nozzle It All Desktop Updates"), _L("The Nozzle It All Desktop update channel is not available yet"),
+#else
+        _L("Check for Updates"), _L("Check for Updates"),
+#endif
         [](wxCommandEvent&) {
             wxGetApp().check_new_version_sf(true, 1);
         }, "", nullptr, []() {
@@ -3193,6 +3216,12 @@ void MainFrame::init_menubar_as_editor()
         append_menu_item(import_menu, wxID_ANY, _L("Import Configs") + dots /*+ "\t" + ctrl + "I"*/, _L("Load configs"),
             [this](wxCommandEvent&) { load_config_file(); }, "menu_import", nullptr,
             [](){return true; }, this);
+#if NOZZLE_BRANDING
+        append_menu_item(import_menu, wxID_ANY, _L("Import settings from another slicer on next launch") + dots,
+            _L("Back up current settings and choose Orca-family settings to import after restarting"),
+            [](wxCommandEvent&) { wxGetApp().schedule_nia_settings_import(); }, "menu_import", nullptr,
+            [](){return true; }, this);
+#endif
 
         append_submenu(fileMenu, import_menu, wxID_ANY, _L("Import"), "");
 

@@ -197,6 +197,10 @@ const std::string BBL_CREATION_DATE_TAG             = "CreationDate";
 const std::string BBL_APPLICATION_TAG               = "Application";
 // OrcaSlicer version tag
 const std::string ORCASLICER_TAG                    = "OrcaSlicer";
+// NIA product metadata is additive. Application and OrcaSlicer remain the established
+// compatibility identifiers so older Orca/Bambu readers keep their existing behavior.
+const std::string NIA_PRODUCT_VERSION_TAG           = "NozzleItAll";
+const std::string NIA_ENGINE_VERSION_TAG            = "NozzleItAllEngine";
 const std::string BBL_MAKERLAB_TAG                  = "MakerLab";
 const std::string BBL_MAKERLAB_VERSION_TAG          = "MakerLabVersion";
 
@@ -7270,10 +7274,20 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
                     // popup, and no version marker survives to seed a later re-save.
                     metadata_item_map.erase(BBL_APPLICATION_TAG);
                     metadata_item_map.erase(ORCASLICER_TAG);
+                    metadata_item_map.erase(NIA_PRODUCT_VERSION_TAG);
+                    metadata_item_map.erase(NIA_ENGINE_VERSION_TAG);
                     metadata_item_map.erase(BBS_3MF_VERSION);
                     metadata_item_map.erase(BBS_3MF_VERSION1);
                 } else {
                     metadata_item_map[BBL_APPLICATION_TAG] = (boost::format("%1%-%2%") % "BambuStudio" % SLIC3R_VERSION).str();
+#if NOZZLE_BRANDING
+                    metadata_item_map[NIA_PRODUCT_VERSION_TAG] = NIA_DESKTOP_VERSION;
+                    metadata_item_map[NIA_ENGINE_VERSION_TAG]  = SoftFever_VERSION;
+#else
+                    // Do not carry NIA identity through a project re-saved by an upstream build.
+                    metadata_item_map.erase(NIA_PRODUCT_VERSION_TAG);
+                    metadata_item_map.erase(NIA_ENGINE_VERSION_TAG);
+#endif
                 }
             }
             // The Bambu 3MF version marker is part of the slicer identity: omit it for a minimal

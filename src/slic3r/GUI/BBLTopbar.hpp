@@ -23,6 +23,7 @@ class CenteredTitle : public wxControl
 public:
     CenteredTitle(wxWindow* parent);
     void SetTitle(const wxString& title);
+    void Rescale();
 
     wxSize DoGetBestSize() const override;
 
@@ -33,6 +34,9 @@ protected:
 
 private:
     wxString m_title;
+#if NOZZLE_BRANDING
+    wxBitmap m_brand_mark;
+#endif
 };
 
 class BBLTopbar : public wxAuiToolBar

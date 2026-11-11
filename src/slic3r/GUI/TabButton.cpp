@@ -1,4 +1,5 @@
 #include "TabButton.hpp"
+#include "NIATheme.hpp"
 #include "Widgets/Label.hpp"
 
 #include "slic3r/GUI/Widgets/StaticBox.hpp"
@@ -26,10 +27,12 @@ EVT_PAINT(TabButton::paintEvent)
 
 END_EVENT_TABLE()
 
-static wxColour BORDER_HOVER_COL = wxColour(0, 150, 136);
+static wxColour BORDER_HOVER_COL = NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::focus(false) : wxColour(0, 150, 136);
 
-const static wxColour TAB_BUTTON_BG    = wxColour("#FEFFFF");
-const static wxColour TAB_BUTTON_SEL   = wxColour("#BFE1DE"); // ORCA
+const static wxColour TAB_BUTTON_BG =
+    NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::background(false) : wxColour("#FEFFFF");
+const static wxColour TAB_BUTTON_SEL =
+    NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::surface_raised(false) : wxColour("#BFE1DE");
 
 TabButton::TabButton()
     : paddingSize(18, 16) // ORCA reduce / match left margin buttons on sidebars
@@ -37,13 +40,15 @@ TabButton::TabButton()
 {
     background_color = StateColor(
         std::make_pair(TAB_BUTTON_SEL, (int) StateColor::Checked),
-        std::make_pair(wxColour("#FEFFFF"), (int) StateColor::Hovered),
-        std::make_pair(wxColour("#FEFFFF"), (int) StateColor::Normal));
+        std::make_pair(NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::surface_raised(false) : wxColour("#FEFFFF"),
+                       (int) StateColor::Hovered),
+        std::make_pair(TAB_BUTTON_BG, (int) StateColor::Normal));
 
     border_color = StateColor(
-        std::make_pair(TAB_BUTTON_SEL, (int) StateColor::Checked), // ORCA use same color for border to prevent 1px blank border
+        std::make_pair(NOZZLE_BRANDING ? Slic3r::GUI::NIATheme::accent(false) : TAB_BUTTON_SEL,
+                       (int) StateColor::Checked),
         std::make_pair(BORDER_HOVER_COL, (int) StateColor::Hovered),
-        std::make_pair(wxColour("#FEFFFF"), (int)StateColor::Normal));
+        std::make_pair(TAB_BUTTON_BG, (int)StateColor::Normal));
 }
 
 TabButton::TabButton(wxWindow *parent, wxString text, ScalableBitmap &bmp, long style, int iconSize)
@@ -55,6 +60,9 @@ TabButton::TabButton(wxWindow *parent, wxString text, ScalableBitmap &bmp, long 
 bool TabButton::Create(wxWindow *parent, wxString text, ScalableBitmap &bmp, long style, int iconSize)
 {
     StaticBox::Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, style);
+#if NOZZLE_BRANDING
+    SetCornerRadius(FromDIP(12));
+#endif
     newtag_img = ScalableBitmap(this, "monitor_hms_new",7);
     state_handler.attach({&text_color, &border_color});
     state_handler.update_binds();

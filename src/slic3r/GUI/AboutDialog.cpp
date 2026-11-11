@@ -7,8 +7,11 @@
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "MainFrame.hpp"
+#include "NIATheme.hpp"
 #include "format.hpp"
 #include "Widgets/Button.hpp"
+#include "Widgets/HyperLink.hpp"
+#include "Widgets/StaticLine.hpp"
 #include "libslic3r_version.h"
 
 #include "slic3r/GUI/GUI_Utils.hpp"
@@ -232,6 +235,12 @@ AboutDialog::AboutDialog()
         wxDefaultSize, /*wxCAPTION*/wxDEFAULT_DIALOG_STYLE)
 {
     SetFont(wxGetApp().normal_font());
+
+#if NOZZLE_BRANDING
+    build_nozzle_layout();
+    return;
+#endif
+
 	SetBackgroundColour(*wxWHITE);
 
     wxPanel* m_panel = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(FromDIP(560), FromDIP(125)), wxTAB_TRAVERSAL);
@@ -247,10 +256,14 @@ AboutDialog::AboutDialog()
     main_sizer->Add(m_panel, 1, wxEXPAND | wxALL, 0);
     main_sizer->Add(ver_sizer, 0, wxEXPAND | wxALL, 0);
 
-	bool is_dark = wxGetApp().app_config->get("dark_color_mode") == "1";
-
-    // logo
+    // The branded build uses its own application mark. The upstream build keeps the
+    // wide Orca artwork that this dialog was originally laid out around.
+#if NOZZLE_BRANDING
+    m_logo_bitmap = ScalableBitmap(this, SLIC3R_APP_ICON_BASE, 125);
+#else
+    const bool is_dark = wxGetApp().app_config->get("dark_color_mode") == "1";
     m_logo_bitmap = ScalableBitmap(this, is_dark ? "OrcaSlicer_about_dark" : "OrcaSlicer_about", 125);
+#endif
     m_logo = new wxStaticBitmap(this, wxID_ANY, m_logo_bitmap.bmp(), wxDefaultPosition,wxDefaultSize, 0);
     m_logo->SetSizer(vesizer);
 
@@ -263,10 +276,19 @@ AboutDialog::AboutDialog()
         // _build_string_font.SetStyle(wxFONTSTYLE_ITALIC);
 
         vesizer->Add(0, 0, 1, wxEXPAND, FromDIP(5));
-        auto          version_string = std::string(SoftFever_VERSION); // _L("Orca Slicer ") + " " + std::string(SoftFever_VERSION);
-        wxStaticText* version = new wxStaticText(this, wxID_ANY, version_string.c_str(), wxDefaultPosition, wxDefaultSize);
-        // TRN %s is the commit the application was built from
-        wxStaticText* credits_string = new wxStaticText(this, wxID_ANY, wxString::Format(_L("Build %s"), build_commit_label), wxDefaultPosition, wxDefaultSize);
+#if NOZZLE_BRANDING
+        // TRN %s is the Nozzle It All Desktop product version.
+        const wxString version_string = wxString::Format(_L("Version %s"), wxString::FromUTF8(NIA_DESKTOP_VERSION));
+        // TRN The first %s is the OrcaSlicer engine version; the second is the source commit.
+        const wxString build_string = wxString::Format(_L("Engine: OrcaSlicer %s | Build %s"),
+                                                       wxString::FromUTF8(SoftFever_VERSION), build_commit_label);
+#else
+        const wxString version_string = wxString::FromUTF8(SoftFever_VERSION);
+        // TRN %s is the commit the application was built from.
+        const wxString build_string = wxString::Format(_L("Build %s"), build_commit_label);
+#endif
+        wxStaticText* version = new wxStaticText(this, wxID_ANY, version_string, wxDefaultPosition, wxDefaultSize);
+        wxStaticText* credits_string = new wxStaticText(this, wxID_ANY, build_string, wxDefaultPosition, wxDefaultSize);
         credits_string->SetFont(_build_string_font);
         wxFont version_font = GetFont();
         version_font = version_font.Scaled(1.85f); // SetPointSize(20) not works on macOS because it uses a 72 PPI reference
@@ -335,7 +357,11 @@ AboutDialog::AboutDialog()
 
     copyright_hor_sizer->Add(copyright_ver_sizer, 0, wxLEFT, FromDIP(20));
 
+#if NOZZLE_BRANDING
+    wxStaticText *html_text = new wxStaticText(this, wxID_ANY, _L("Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."), wxDefaultPosition, wxDefaultSize);
+#else
     wxStaticText *html_text = new wxStaticText(this, wxID_ANY, _L("Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved"), wxDefaultPosition, wxDefaultSize);
+#endif
     html_text->SetForegroundColour(wxColour(107, 107, 107));
 
     copyright_ver_sizer->Add(html_text, 0, wxALL , 0);
@@ -354,7 +380,11 @@ AboutDialog::AboutDialog()
               (boost::format(
               "<html>"
               "<body bgcolor= \"" + bgr_clr_str + "\" >"
+#if NOZZLE_BRANDING
+              "<p style=\"text-align:left\"><a style=\"color:#009789\" href=\"https://nozzleitall.com\">https://nozzleitall.com</a></p>"
+#else
               "<p style=\"text-align:left\"><a style=\"color:#009789\" href=\"https://www.orcaslicer.com\">https://www.orcaslicer.com</ a></p>"
+#endif
               "</body>"
               "</html>")
             ).str());
@@ -378,16 +408,159 @@ AboutDialog::AboutDialog()
     button_portions->Bind(wxEVT_BUTTON, &AboutDialog::onCopyrightBtn, this);
 
     wxGetApp().UpdateDlgDarkUI(this);
-	SetSizer(main_sizer);
-    Layout();
-    Fit();
+	SetSizerAndFit(main_sizer);
     CenterOnParent();
 }
+
+#if NOZZLE_BRANDING
+void AboutDialog::build_nozzle_layout()
+{
+    const bool     dark       = wxGetApp().dark_mode();
+    const wxColour background = NIATheme::background(dark);
+    const wxColour surface    = NIATheme::surface(dark);
+    const wxColour text       = NIATheme::text(dark);
+    const wxColour muted      = NIATheme::text_muted(dark);
+    const int      content_w  = FromDIP(560);
+
+    SetBackgroundColour(background);
+    SetForegroundColour(text);
+
+    auto *main_sizer = new wxBoxSizer(wxVERTICAL);
+    auto *card       = new wxPanel(this);
+    m_nia_card       = card;
+    card->SetBackgroundColour(surface);
+    auto *card_sizer = new wxBoxSizer(wxVERTICAL);
+    m_nia_labels.clear();
+
+    auto add_label = [this, card, text, muted, content_w](wxSizer *sizer, const wxString &label,
+                                                                   const wxFont &font, bool secondary,
+                                                                   int flags, int border) {
+        auto *control = new Label(card, label, wxALIGN_LEFT, wxSize(content_w, -1));
+        control->SetFont(font);
+        control->SetForegroundColour(secondary ? muted : text);
+        control->SetBackgroundColour(card->GetBackgroundColour());
+        control->SetWindowStyleFlag(control->GetWindowStyleFlag() | LB_AUTO_WRAP);
+        sizer->Add(control, 0, flags, border);
+        m_nia_labels.emplace_back(control, secondary);
+        return control;
+    };
+
+    auto *brand = new wxBoxSizer(wxHORIZONTAL);
+    m_logo_bitmap = ScalableBitmap(card, SLIC3R_APP_ICON_BASE, 84);
+    m_logo        = new wxStaticBitmap(card, wxID_ANY, m_logo_bitmap.bmp());
+    m_logo->SetBackgroundColour(surface);
+    brand->Add(m_logo, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(20));
+
+    auto *identity = new wxBoxSizer(wxVERTICAL);
+    add_label(identity, _L("Nozzle It All"), Label::Head_24, false, 0, 0);
+    add_label(identity, _L("FOR DESKTOP"), Label::Head_10, true, wxTOP, FromDIP(2));
+    // TRN %s is the Nozzle It All for Desktop product version.
+    add_label(identity, wxString::Format(_L("Version %s"), wxString::FromUTF8(NIA_DESKTOP_VERSION)), Label::Body_13,
+              true, wxTOP, FromDIP(10));
+    // TRN The first %s is the OrcaSlicer engine version; the second is the source commit.
+    add_label(identity,
+              wxString::Format(_L("Engine: OrcaSlicer %s | Build %s"), wxString::FromUTF8(SoftFever_VERSION),
+                               build_commit_label),
+              Label::Body_11, true, wxTOP, FromDIP(3));
+    brand->Add(identity, 1, wxALIGN_CENTER_VERTICAL);
+    card_sizer->Add(brand, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+
+    auto *rule = new StaticLine(card);
+    m_nia_rule = rule;
+    rule->SetLineColour(NIATheme::line(dark));
+    card_sizer->Add(rule, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, FromDIP(24));
+
+    add_label(card_sizer, _L("A focused workshop for slicing, filament mapping, and connected printer control."),
+              Label::Head_14, false, wxLEFT | wxRIGHT, FromDIP(28));
+    add_label(card_sizer,
+              _L("Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."),
+              Label::Body_12, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+
+    add_label(card_sizer, _L("Open-source lineage"), Label::Head_12, false,
+              wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+    add_label(card_sizer,
+              _L("Built on OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r, SuperSlicer, CuraSlicer, and the work of their contributors. Nozzle It All is independently built and is not endorsed by those projects or their vendors."),
+              Label::Body_11, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+    add_label(card_sizer, _L("Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."), Label::Body_11,
+              true, wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+
+    auto *footer = new wxBoxSizer(wxHORIZONTAL);
+    auto *site   = new HyperLink(card, _L("nozzleitall.com"), "https://nozzleitall.com");
+    m_nia_site   = site;
+    site->SetForegroundColour(NIATheme::accent(dark));
+    site->SetBackgroundColour(surface);
+    footer->Add(site, 0, wxALIGN_CENTER_VERTICAL);
+    footer->AddStretchSpacer();
+
+    auto *license = new Button(card, _L("License Info"));
+    m_nia_license = license;
+    license->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+    license->Bind(wxEVT_BUTTON, &AboutDialog::onCopyrightBtn, this);
+    footer->Add(license, 0, wxALIGN_CENTER_VERTICAL);
+    card_sizer->Add(footer, 0, wxEXPAND | wxALL, FromDIP(28));
+
+    card->SetSizer(card_sizer);
+    main_sizer->Add(card, 1, wxEXPAND | wxALL, FromDIP(12));
+
+    SetMinSize(wxSize(FromDIP(640), FromDIP(520)));
+    SetSizerAndFit(main_sizer);
+    apply_nozzle_theme();
+    CenterOnParent();
+}
+
+void AboutDialog::apply_nozzle_theme()
+{
+    if (m_nia_card == nullptr)
+        return;
+    const bool dark = wxGetApp().dark_mode();
+    const wxColour background = NIATheme::background(dark);
+    const wxColour surface = NIATheme::surface(dark);
+    const wxColour text = NIATheme::text(dark);
+    const wxColour muted = NIATheme::text_muted(dark);
+    wxGetApp().UpdateDlgDarkUI(this);
+    SetBackgroundColour(background);
+    SetForegroundColour(text);
+    m_nia_card->SetBackgroundColour(surface);
+    for (wxWindow *child : m_nia_card->GetChildren())
+        if (child != m_nia_license)
+            child->SetBackgroundColour(surface);
+    for (const auto& [label, secondary] : m_nia_labels)
+        label->SetForegroundColour(secondary ? muted : text);
+    if (m_nia_rule != nullptr)
+        m_nia_rule->SetLineColour(NIATheme::line(dark));
+    if (m_nia_site != nullptr) {
+        m_nia_site->SetBackgroundColour(surface);
+        m_nia_site->SetForegroundColour(NIATheme::accent(dark));
+    }
+    if (m_nia_license != nullptr) {
+        m_nia_license->SetBackgroundColour(NIATheme::surface_raised(dark));
+        m_nia_license->SetForegroundColour(text);
+    }
+    Layout();
+    Fit();
+    Refresh();
+}
+
+void AboutDialog::on_sys_color_changed()
+{
+    apply_nozzle_theme();
+}
+#endif
 
 void AboutDialog::on_dpi_changed(const wxRect &suggested_rect)
 {
     m_logo_bitmap.msw_rescale();
     m_logo->SetBitmap(m_logo_bitmap.bmp());
+
+#if NOZZLE_BRANDING
+    apply_nozzle_theme();
+    if (GetSizer() != nullptr)
+        GetSizer()->SetSizeHints(this);
+    Layout();
+    Fit();
+    Refresh();
+    return;
+#endif
 
     const wxFont& font = GetFont();
     const int fs = font.GetPointSize() - 1;

@@ -1,5 +1,6 @@
 #include "PluginsDialog.hpp"
 
+#include "libslic3r/libslic3r.h"
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
@@ -968,7 +969,7 @@ void PluginsDialog::prompt_for_missing_plugins()
     }
 
     const int result = wxMessageBox(
-        wxString::Format(_L("The following installed plugins were not found on disk:\n%s\n\nRemove them from OrcaSlicer?"), names),
+        wxString::Format(_L("The following installed plugins were not found on disk:\n%s\n\nRemove them from %s?"), names, SLIC3R_APP_FULL_NAME),
         _L("Missing Plugins"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING, this);
     restore_z_order();
 

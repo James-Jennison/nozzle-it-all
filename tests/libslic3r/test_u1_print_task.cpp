@@ -75,16 +75,22 @@ TEST_CASE("U1 start_local_print body only carries options that were set", "[U1Pr
 TEST_CASE("U1 printer state is read from print_task_config", "[U1PrintTask]")
 {
     const json cfg = {{"filament_exist", {true, true, false, true}},
+                      {"filament_vendor", {"Polymaker", "NONE", "", "Snapmaker"}},
                       {"filament_type", {"PLA", "petg", "NONE", "PLA"}},
+                      {"filament_sub_type", {"Matte", "NONE", "", "Basic"}},
                       {"filament_color_rgba", {"FF0000FF", "00ff00ff", "FFFFFFFF", "bogus"}},
                       {"auto_bed_leveling", true},
                       {"time_lapse_camera", false}};
     const U1PrintTask::PrinterState state = U1PrintTask::parse_printer_state(cfg);
     REQUIRE(state.toolheads.size() == 4);
     CHECK(state.toolheads[0].present);
+    CHECK(state.toolheads[0].vendor == "Polymaker");
+    CHECK(state.toolheads[0].sub_type == "Matte");
     CHECK(state.toolheads[0].color == "#FF0000");
     CHECK(state.toolheads[1].type == "PETG");
     CHECK(state.toolheads[1].color == "#00FF00");
+    CHECK(state.toolheads[1].vendor.empty());
+    CHECK(state.toolheads[1].sub_type.empty());
     CHECK_FALSE(state.toolheads[2].present);
     CHECK(state.toolheads[2].type.empty());
     CHECK(state.toolheads[3].color.empty());
@@ -101,18 +107,20 @@ TEST_CASE("U1 printer state is read from print_task_config", "[U1PrintTask]")
 TEST_CASE("U1 suggested mapping prefers matching type, then closest color", "[U1PrintTask]")
 {
     using F = U1PrintTask::Filament;
-    const std::vector<F> toolheads{{true, "PLA", "#FF0000"}, {true, "PETG", "#FFFFFF"},
-                                   {true, "PLA", "#FFFFFF"}, {false, "", ""}};
+    const std::vector<F> toolheads{{true, "", "", "PLA", "", "#FF0000"},
+                                   {true, "", "", "PETG", "", "#FFFFFF"},
+                                   {true, "", "", "PLA", "", "#FFFFFF"},
+                                   {false, "", "", "", "", ""}};
 
-    const std::vector<F> plate{{true, "PLA", "#FAFAFA"},  // white PLA -> T2, not the white PETG in T1
-                               {false, "PLA", "#000000"}, // unused
-                               {true, "PETG", "#101010"}, // only PETG -> T1 despite color
-                               {true, "TPU", "#EE0000"}}; // no TPU loaded -> closest color, T0
+    const std::vector<F> plate{{true, "", "", "PLA", "", "#FAFAFA"},  // white PLA -> T2, not the white PETG in T1
+                               {false, "", "", "PLA", "", "#000000"}, // unused
+                               {true, "", "", "PETG", "", "#101010"}, // only PETG -> T1 despite color
+                               {true, "", "", "TPU", "", "#EE0000"}}; // no TPU loaded -> closest color, T0
     CHECK(U1PrintTask::suggest_mapping(plate, toolheads) == std::vector<int>{2, U1PrintTask::UNMAPPED, 1, 0});
 
     // Nothing loaded: fall back to the same index.
     const std::vector<F> none(4);
-    CHECK(U1PrintTask::suggest_mapping({{true, "PLA", "#FFFFFF"}, {true, "PLA", "#000000"}}, none) ==
+    CHECK(U1PrintTask::suggest_mapping({{true, "", "", "PLA", "", "#FFFFFF"}, {true, "", "", "PLA", "", "#000000"}}, none) ==
           std::vector<int>{0, 1});
 }
 

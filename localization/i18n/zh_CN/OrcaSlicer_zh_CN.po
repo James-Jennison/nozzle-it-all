@@ -39886,3 +39886,705 @@ msgstr ""
 #~ "%1%\n"
 #~ "\n"
 #~ "如果仍要保存，这些预设将不会保留这些设置的插件引用。在其他计算机上，Orca Slicer 将无法确定要提供哪些插件，这些设置也可能无法正常工作。"
+
+#, c-format, boost-format
+msgid "%s will terminate because it ran out of memory. This may be a bug; please report the issue to our team."
+msgstr ""
+
+#, c-format, boost-format
+msgid "%s will terminate because of a localization error. Please report the specific scenario in which this happened."
+msgstr ""
+
+#, boost-format
+msgid "%1% encountered an unhandled exception: %2%"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"An interrupted settings import could not be recovered safely. No new import was attempted.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import recovery failed"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"An interrupted settings import was recovered.\n"
+"\n"
+"Recovered settings: %s"
+msgstr ""
+
+msgid "Settings import recovered"
+msgstr ""
+
+msgid "No importable Orca-family settings were found."
+msgstr ""
+
+msgid "Import existing settings"
+msgstr ""
+
+msgid "Choose the settings source to import."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Import settings from %s on this launch?\n"
+"\n"
+"Source: %s\n"
+"\n"
+"Your current Nozzle It All Desktop settings will be backed up and replaced. The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Nozzle It All Desktop found settings from %s. Copy those settings into its own data directory?\n"
+"\n"
+"Source: %s\n"
+"\n"
+"The source will not be changed. Recognized credential fields, browser caches, updater state, and uninspected file formats will not be copied."
+msgstr ""
+
+msgid "None."
+msgstr ""
+
+msgid "No existing settings directory needs a backup."
+msgstr ""
+
+msgid "Your current settings will be retained in a timestamped backup beside the Nozzle It All Desktop data directory. The exact path will be shown after import."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Some source files were sanitized before import, and some could not be imported safely.\n"
+"\n"
+"Source: %s\n"
+"\n"
+"Target to replace: %s\n"
+"\n"
+"Sanitized and copied files:\n"
+"%s\n"
+"\n"
+"Skipped files:\n"
+"%s\n"
+"\n"
+"%s\n"
+"\n"
+"Continue with this exact prepared import?"
+msgstr ""
+
+msgid "Confirm partial settings import"
+msgstr ""
+
+msgid "Settings import cleanup failed"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The settings import could not be completed. No source data was changed.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import failed"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Settings were imported with the warnings you approved. Your previous settings remain available at the backup path below.\n"
+"\n"
+"Migration report: %s\n"
+"\n"
+"Backup: %s"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Settings were copied successfully.\n"
+"\n"
+"Migration report: %s"
+msgstr ""
+
+msgid "Settings imported with warnings"
+msgstr ""
+
+msgid "Settings imported"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The settings import could not be scheduled.\n"
+"\n"
+"%s"
+msgstr ""
+
+msgid "Settings import is scheduled. Restart Nozzle It All Desktop normally to choose the source and review the backup-and-replace confirmation."
+msgstr ""
+
+msgid "Nozzle It All Desktop updates"
+msgstr ""
+
+msgid "The Nozzle It All Desktop update channel is not available yet. No update request was sent."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Switching Nozzle It All Desktop to language %s failed."
+msgstr ""
+
+msgid "Nozzle It All Desktop - Switching language failed"
+msgstr ""
+
+msgid "Nozzle It All Desktop GUI initialization failed"
+msgstr ""
+
+msgid "AI auto-paint"
+msgstr ""
+
+msgid "Let Claude suggest a filament for each part of the surface"
+msgstr ""
+
+#. TRN %s is the Nozzle It All Desktop product version.
+#. TRN %s is the Nozzle It All for Desktop product version.
+#, c-format, boost-format
+msgid "Version %s"
+msgstr ""
+
+#. TRN The first %s is the OrcaSlicer engine version; the second is the source commit.
+#, c-format, boost-format
+msgid "Engine: OrcaSlicer %s | Build %s"
+msgstr ""
+
+msgid "Nozzle It All Desktop is a fork of OrcaSlicer that adds native Snapmaker U1 and Moonraker printer tools. All upstream credits below remain."
+msgstr ""
+
+msgid "Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."
+msgstr ""
+
+msgid "Nozzle It All"
+msgstr ""
+
+msgid "FOR DESKTOP"
+msgstr ""
+
+msgid "A focused workshop for slicing, filament mapping, and connected printer control."
+msgstr ""
+
+msgid "Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."
+msgstr ""
+
+msgid "Open-source lineage"
+msgstr ""
+
+msgid "Built on OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r, SuperSlicer, CuraSlicer, and the work of their contributors. Nozzle It All is independently built and is not endorsed by those projects or their vendors."
+msgstr ""
+
+msgid "nozzleitall.com"
+msgstr ""
+
+msgid "DESKTOP"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Nozzle It All Desktop — %s"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Failed to install the plug-in. The plug-in file may be in use. Please restart %s and try again. Also check whether it is blocked or has been deleted by anti-virus software."
+msgstr ""
+
+msgid "Check for Nozzle It All Desktop Updates"
+msgstr ""
+
+msgid "The Nozzle It All Desktop update channel is not available yet"
+msgstr ""
+
+msgid "Import settings from another slicer on next launch"
+msgstr ""
+
+msgid "Back up current settings and choose Orca-family settings to import after restarting"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Another virtual camera is running.\n"
+"%s supports only a single virtual camera.\n"
+"Do you want to stop this virtual camera?"
+msgstr ""
+
+#, c-format, boost-format
+msgid "The .gcode.3mf file contains no G-code data. Please slice it with %s and export a new .gcode.3mf file."
+msgstr ""
+
+msgid "About Nozzle It All Desktop"
+msgstr ""
+
+msgid "Synchronize filament list from the printer"
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"There are unknown or incompatible filaments mapped to generic presets.\n"
+"Please update or restart %s to check for updated system presets."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Importing to %s failed. Please download the file and import it manually."
+msgstr ""
+
+msgid "No Snapmaker U1 address is known yet. Enter its IP address in the printer settings (Connection > Hostname, IP or URL)."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"Could not reach the Snapmaker U1 at %s on the local network.\n"
+"\n"
+"%s"
+msgstr ""
+
+#, c-format, boost-format
+msgid "%s can't connect to %s. Please check that the printer is powered on and connected to the network."
+msgstr ""
+
+#. TRN The first %s is a URL scheme, for example "prusaslicer"; the second is a website name.
+#, c-format, boost-format
+msgid "Associate %s:// with %s so the application can open models from %s"
+msgstr ""
+
+msgid "Allow only one Nozzle It All Desktop instance"
+msgstr ""
+
+msgid "If this is enabled, when starting Nozzle It All Desktop and another instance is already running, that instance will be reactivated instead."
+msgstr ""
+
+msgid "On a computer with two GPUs, run Nozzle It All Desktop on the discrete GPU instead of the one that drives the display. Some Wayland systems cannot show frames rendered on the other GPU, or fail to open the window at all. Turn this off if the 3D view stays empty; if Nozzle It All Desktop no longer starts, start it once with DRI_PRIME=0 in the environment to get back here."
+msgstr ""
+
+#, c-format, boost-format
+msgid "If enabled, %s will re-slice automatically whenever slicing-related settings change."
+msgstr ""
+
+#, c-format, boost-format
+msgid "If enabled, %s will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."
+msgstr ""
+
+msgid "Associate files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "Associate 3MF files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open 3MF files."
+msgstr ""
+
+msgid "Associate DRC files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open DRC files."
+msgstr ""
+
+msgid "Associate STL files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STL files."
+msgstr ""
+
+msgid "Associate STEP files to Nozzle It All Desktop"
+msgstr ""
+
+msgid "If enabled, this sets Nozzle It All Desktop as the default application to open STEP files."
+msgstr ""
+
+msgid "Associate web links to Nozzle It All Desktop"
+msgstr ""
+
+msgid ""
+"Route print jobs for non-Bambu printers through printer plug-in agents instead of the classic print-host upload flow.\n"
+"When disabled, the application uses the legacy print-host behavior."
+msgstr ""
+
+#, c-format, boost-format
+msgid "The printer must be on the same LAN as %s."
+msgstr ""
+
+#, c-format, boost-format
+msgid "%s recalculates flushing volumes whenever filament colors or filaments change. You can disable automatic calculation in Preferences."
+msgstr ""
+
+msgid "Cloud agent is not available. Please restart Nozzle It All Desktop and try again."
+msgstr ""
+
+msgid "Welcome to Nozzle It All Desktop"
+msgstr ""
+
+msgid "Nozzle It All Desktop will be set up in several steps. Let's start!"
+msgstr ""
+
+msgid "empty"
+msgstr ""
+
+msgid "Print on Snapmaker U1"
+msgstr ""
+
+msgid "Online • Ready"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Project: %s"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Plate %d"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Printer file: %s"
+msgstr ""
+
+msgid "Estimated duration unavailable"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Estimated normal-mode duration: %s"
+msgstr ""
+
+msgid "Filament and toolhead mapping"
+msgstr ""
+
+msgid "Confirm that each sliced filament is mapped to the loaded material you intend to use."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Toolhead %d"
+msgstr ""
+
+msgid "Print preparation"
+msgstr ""
+
+msgid "Measure the build plate before this print."
+msgstr ""
+
+msgid "Flow calibration"
+msgstr ""
+
+msgid "Calibrate only the toolheads used by this print."
+msgstr ""
+
+msgid "Input shaper calibration"
+msgstr ""
+
+msgid "Measure vibration compensation before printing."
+msgstr ""
+
+msgid "Capture a timelapse with the printer camera."
+msgstr ""
+
+msgid "File name on the printer"
+msgstr ""
+
+msgid "Start Print"
+msgstr ""
+
+msgid "Please enter a file name without the characters #, *, ;, \\, /, :, \", <, >, or |."
+msgstr ""
+
+msgid "Send to Snapmaker U1"
+msgstr ""
+
+#, c-format, boost-format
+msgid "Filament %d is %s, but toolhead %d has %s loaded."
+msgstr ""
+
+msgid "The filament types do not match:"
+msgstr ""
+
+msgid "The print will use the temperatures and speeds sliced for the original filament. Continue anyway?"
+msgstr ""
+
+msgid "3D Filament Profiles API key"
+msgstr ""
+
+msgid "Connect 3D Filament Profiles"
+msgstr ""
+
+msgid "A 3D Filament Profiles API key is already stored in the operating-system keychain. Enter a new key only to replace it."
+msgstr ""
+
+msgid "Enter your personal API key. It will be stored only in the operating-system keychain."
+msgstr ""
+
+msgid "Save securely"
+msgstr ""
+
+msgid "Enter an API key before saving."
+msgstr ""
+
+msgid "3D Filament Profiles"
+msgstr ""
+
+msgid "A 3D Filament Profiles API key is already stored. Replace it with the new key you entered?"
+msgstr ""
+
+msgid "Replace stored API key?"
+msgstr ""
+
+msgid "The API key could not be stored in the operating-system keychain."
+msgstr ""
+
+msgid "Map Snapmaker U1 filaments"
+msgstr ""
+
+msgid "Map the material in each toolhead"
+msgstr ""
+
+msgid "Review every loaded toolhead. Applying expands the project to the U1's fixed T0-T3 slots; empty toolheads keep their current project slot."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Report source: %s"
+msgstr ""
+
+msgid "RFID / printer report"
+msgstr ""
+
+msgid "Filament preset"
+msgstr ""
+
+msgid "Empty toolhead"
+msgstr ""
+
+#, boost-format
+msgid "Toolhead T%1%: empty toolhead"
+msgstr ""
+
+msgid "Keep current project slot"
+msgstr ""
+
+msgid "RFID tag"
+msgstr ""
+
+msgid "Printer setting"
+msgstr ""
+
+msgid "invalid color; current project color will be kept"
+msgstr ""
+
+msgid "material identity unresolved; choose a compatible preset explicitly"
+msgstr ""
+
+#, boost-format
+msgid "%1%: %2% %3% (%4%)"
+msgstr ""
+
+#, boost-format
+msgid "Filament preset for toolhead T%1%. Printer report: %2%"
+msgstr ""
+
+msgid "Select a matching filament preset"
+msgstr ""
+
+#, boost-format
+msgid "Manual override — %1%"
+msgstr ""
+
+msgid "Configure API key"
+msgstr ""
+
+msgid "Find RFID products in 3D Filament Profiles"
+msgstr ""
+
+msgid "Generic presets are never selected automatically for an RFID-tagged product."
+msgstr ""
+
+msgid "Apply mappings"
+msgstr ""
+
+msgid "At least one loaded toolhead has no material family in the printer report. Apply the selected presets as explicit manual overrides for those unresolved toolheads?"
+msgstr ""
+
+msgid "Confirm unresolved material overrides"
+msgstr ""
+
+msgid "3D Filament Profiles results are catalog candidates, not proof of the RFID identity. Apply the selected catalog products as explicit overrides for the corresponding U1 reports?"
+msgstr ""
+
+msgid "Confirm catalog overrides"
+msgstr ""
+
+msgid "Searching 3D Filament Profiles…"
+msgstr ""
+
+msgid "The 3D Filament Profiles API key is unavailable."
+msgstr ""
+
+#, boost-format
+msgid "Catalog lookup could not start for toolhead T%1%."
+msgstr ""
+
+#, boost-format
+msgid "Catalog lookup failed for toolhead T%1%: %2%"
+msgstr ""
+
+#, boost-format
+msgid "%1% (record %2%)"
+msgstr ""
+
+#, boost-format
+msgid "%1% — 3D Filament Profiles"
+msgstr ""
+
+#, boost-format
+msgid "Found %1% matching catalog products. Review each selection before applying."
+msgstr ""
+
+#, boost-format
+msgid "Found %1% catalog products. Toolheads %2% are still unmapped; choose a matching preset in those rows."
+msgstr ""
+
+msgid "selected printer RFID / device report"
+msgstr ""
+
+msgid "direct Snapmaker U1 LAN report"
+msgstr ""
+
+msgid "The direct Snapmaker U1 report and the selected printer report disagree about loaded toolheads or filament identity. Refresh the printer on the Device page and review its RFID data before synchronizing."
+msgstr ""
+
+msgid "Sync filaments"
+msgstr ""
+
+msgid "The printer reported loaded filament trays, but their physical U1 toolhead assignment is ambiguous. Refresh the printer on the Device page and try again."
+msgstr ""
+
+msgid "The configured U1 LAN address and the selected printer refer to different devices. Select the matching U1 or correct its LAN address before synchronizing filaments."
+msgstr ""
+
+msgid "No Snapmaker U1 connection is available. Configure the printer LAN address or select the printer on the Device page, then try again."
+msgstr ""
+
+msgid "The selected printer could not be verified as a Snapmaker U1. Select the U1 on the Device page or configure its LAN address before synchronizing filaments."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The printer reports no loaded filaments.\n"
+"\n"
+"The direct U1 query also reported: %s"
+msgstr ""
+
+msgid "The printer reports no loaded filaments."
+msgstr ""
+
+msgid "This project has more than the Snapmaker U1's four physical filament slots. Synchronization was not applied because removing the additional project slots would lose data."
+msgstr ""
+
+#, boost-format
+msgid "The compatible filament presets could not be refreshed: %1%"
+msgstr ""
+
+#, boost-format
+msgid ""
+"\n"
+"\n"
+"%1% failed: %2%"
+msgstr ""
+
+#, boost-format
+msgid "Removing catalog-created preset %1%"
+msgstr ""
+
+msgid "Restoring the previous complete preset selection"
+msgstr ""
+
+msgid "Restoring the previous project filament count"
+msgstr ""
+
+msgid "Restoring the previous project filament state"
+msgstr ""
+
+msgid "Refreshing the restored project controls"
+msgstr ""
+
+msgid "Persisting the restored preset selections"
+msgstr ""
+
+#, boost-format
+msgid "The filament mappings could not be applied: %1%%2%"
+msgstr ""
+
+msgid "The reviewed Snapmaker U1 filament mappings were applied."
+msgstr ""
+
+#, boost-format
+msgid "The reviewed Snapmaker U1 filament mappings were applied. The printer reported an invalid color for toolheads %1%; their existing project colors were kept."
+msgstr ""
+
+#, c-format, boost-format
+msgid "Please make sure no instances of %s are running"
+msgstr ""
+
+msgid "Delete all stored logs except the current-session logs?"
+msgstr ""
+
+msgid "This cannot be undone. Export the logs first if you may need them."
+msgstr ""
+
+msgid "Clear stored logs"
+msgstr ""
+
+msgid "The current-session log could not be identified. No logs were deleted."
+msgstr ""
+
+msgid "Some stored logs could not be deleted. The current-session logs were preserved."
+msgstr ""
+
+#, boost-format
+msgid "Printing can only be started from the \"gcodes\" storage, but \"%1%\" is selected. Choose \"gcodes\" under \"Upload to storage\", or use Upload only."
+msgstr ""
+
+#, boost-format
+msgid ""
+"The following settings refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the preset won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+#, boost-format
+msgid ""
+"The following settings refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the project won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+#, boost-format
+msgid ""
+"The presets being saved refer to plugins this application can't identify on this computer:\n"
+"\n"
+"%1%\n"
+"\n"
+"If you save anyway, the presets won't keep the plugin references for these settings. On another computer, the application won't know which plugins to offer, and the settings may not work there."
+msgstr ""
+
+#, c-format, boost-format
+msgid ""
+"The following installed plugins were not found on disk:\n"
+"%s\n"
+"\n"
+"Remove them from %s?"
+msgstr ""
+
+#, boost-format
+msgid "You can return to %1%. This window will close automatically."
+msgstr ""
+
+#, boost-format
+msgid "Something went wrong. Please return to %1% and try again."
+msgstr ""
+
+#, boost-format
+msgid "You can return to %1%. If your browser does not redirect automatically, use the button below."
+msgstr ""

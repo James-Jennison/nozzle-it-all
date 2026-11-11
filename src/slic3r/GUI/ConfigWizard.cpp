@@ -1509,7 +1509,7 @@ void PageTemperatures::apply_custom_config(DynamicPrintConfig& config)
 
 ConfigWizardIndex::ConfigWizardIndex(wxWindow *parent)
     : wxPanel(parent)
-    , bg(ScalableBitmap(parent, "OrcaSlicer_192px_transparent.png", 192))
+    , bg(ScalableBitmap(parent, NOZZLE_BRANDING ? "nozzle-it-all-desktop_256px.png" : "OrcaSlicer_192px_transparent.png", 192))
     , bullet_black(ScalableBitmap(parent, "bullet_black.png"))
     , bullet_blue(ScalableBitmap(parent, "bullet_blue.png"))
     , bullet_white(ScalableBitmap(parent, "bullet_white.png"))

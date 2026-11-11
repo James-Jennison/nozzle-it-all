@@ -114,6 +114,7 @@
 #include <wx/font.h>
 #include <wx/aui/framemanager.h>
 #include <wx/gdicmn.h>
+#include <wx/image.h>
 #include <wx/anybutton.h>
 #include <wx/dcclient.h>
 #include <wx/dcbuffer.h>
@@ -6352,6 +6353,14 @@ void Sidebar::load_ams_list(MachineObject* obj)
 
 void Sidebar::sync_ams_list(bool is_from_big_sync_btn)
 {
+    // Keep every Sidebar entry point, including native commands and dialogs,
+    // behind the U1's explicit per-toolhead mapping review. The legacy AMS
+    // path mutates filament selections immediately and must not handle a U1.
+    if (u1_filament_sync_available()) {
+        sync_filaments_from_u1(this);
+        return;
+    }
+
     wxBusyCursor cursor;
     // Force load ams list
     auto obj = wxGetApp().getDeviceManager()->get_selected_machine();
@@ -6478,7 +6487,7 @@ void Sidebar::sync_ams_list(bool is_from_big_sync_btn)
     wxGetApp().app_config ->set("ams_filament_ids", p->ams_list_device, ams_filament_ids);
     if (!unknowns.empty()) {
         MessageDialog dlg(this,
-            _L("There are some unknown or incompatible filaments mapped to generic preset.\nPlease update Orca Slicer or restart Orca Slicer to check if there is an update to system presets.") + detail,
+            wxString::Format(_L("There are unknown or incompatible filaments mapped to generic presets.\nPlease update or restart %s to check for updated system presets."), SLIC3R_APP_FULL_NAME) + detail,
             _L("Sync filaments with AMS"), wxOK);
         dlg.ShowModal();
     }
@@ -16522,7 +16531,7 @@ void Plater::import_model_id(wxString download_info)
             unused_filename.clear();
         }
         if (unused_filename.empty()) {
-            msg = _L("Importing to Orca Slicer failed. Please download the file and manually import it.");
+            msg = wxString::Format(_L("Importing to %s failed. Please download the file and import it manually."), SLIC3R_APP_FULL_NAME);
             return;
         }
         filename = from_u8(unused_filename);
@@ -16581,7 +16590,7 @@ void Plater::import_model_id(wxString download_info)
                         error);
 
                     if (retry_count == max_retries) {
-                        msg = _L("Importing to Orca Slicer failed. Please download the file and manually import it.");
+                        msg = wxString::Format(_L("Importing to %s failed. Please download the file and import it manually."), SLIC3R_APP_FULL_NAME);
                         cont = false;
                     }
                 })
@@ -16604,7 +16613,7 @@ void Plater::import_model_id(wxString download_info)
                         }
                         boost::system::error_code ec;
                         fs::remove(tmp_path, ec);
-                        msg = _L("Importing to Orca Slicer failed. Please download the file and manually import it.");
+                        msg = wxString::Format(_L("Importing to %s failed. Please download the file and import it manually."), SLIC3R_APP_FULL_NAME);
                 }).perform_sync();
 
                 // for break while
@@ -21108,6 +21117,13 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
         const size_t count = std::max(colors ? colors->values.size() : 0, types ? types->values.size() : 0);
         filaments.resize(count);
         for (size_t i = 0; i < count; ++i) {
+            if (i < wxGetApp().preset_bundle->filament_presets.size()) {
+                const std::string &preset_name = wxGetApp().preset_bundle->filament_presets[i];
+                if (const Preset *preset = wxGetApp().preset_bundle->filaments.find_preset(preset_name, false))
+                    filaments[i].name = Preset::remove_suffix_modified(preset->name);
+                else
+                    filaments[i].name = Preset::remove_suffix_modified(preset_name);
+            }
             filaments[i].type  = types && i < types->values.size() ? boost::trim_copy(types->values[i]) : std::string();
             filaments[i].color = colors && i < colors->values.size() ? colors->values[i] : std::string();
         }
@@ -21203,7 +21219,26 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
         }
     }
 
-    U1SendDialog dlg(this, default_output_file, filaments, *printer);
+    wxBitmap thumbnail;
+    if (plate != nullptr && plate->thumbnail_data.is_valid()) {
+        const ThumbnailData &data = plate->thumbnail_data;
+        wxImage              image(data.width, data.height);
+        image.InitAlpha();
+        for (unsigned int row = 0; row < data.height; ++row) {
+            const unsigned int source_row = (data.height - 1 - row) * data.width;
+            for (unsigned int column = 0; column < data.width; ++column) {
+                const unsigned char *pixel = data.pixels.data() + 4 * (source_row + column);
+                image.SetRGB(column, row, pixel[0], pixel[1], pixel[2]);
+                image.SetAlpha(column, row, pixel[3]);
+            }
+        }
+        thumbnail = wxBitmap(image);
+    }
+
+    const wxString project_name = get_project_filename();
+    const wxString estimated_time = print != nullptr ? wxString::FromUTF8(print->print_statistics().estimated_normal_print_time) : wxString();
+    U1SendDialog dlg(this, default_output_file, filaments, *printer, project_name,
+                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail);
     if (dlg.ShowModal() != wxID_OK)
         return;
 
@@ -22663,7 +22698,8 @@ void Plater::pop_warning_and_go_to_device_page(wxString printer_name, PrinterWar
                                        printer_name);
         } else {
             content = wxString::Format(
-                _L("OrcaSlicer can't connect to %s. Please check if the printer is powered on and connected to the network."), printer_name);
+                _L("%s can't connect to %s. Please check that the printer is powered on and connected to the network."),
+                SLIC3R_APP_FULL_NAME, printer_name);
         }
     } else if (type == PrinterWarningType::INCONSISTENT) {
         content = wxString::Format(_L("The currently connected printer on the device page is not %s. Please switch to %s before syncing."), printer_name, printer_name);

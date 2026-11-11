@@ -12,6 +12,7 @@
 #include <vector>
 #include <utility>
 #include <wx/init.h>
+#include <wx/event.h>
 #include "libslic3r/Exception.hpp"
 #include <boost/log/trivial.hpp>
 #include <ostream>
@@ -73,10 +74,20 @@ int GUI_Run(GUI_InitParams &params)
         }
     } catch (const Slic3r::Exception &ex) {
         BOOST_LOG_TRIVIAL(error) << ex.what() << std::endl;
+#if NOZZLE_BRANDING
+        wxMessageBox(boost::nowide::widen(ex.what()), _L("Nozzle It All Desktop GUI initialization failed"), wxICON_STOP);
+#else
         wxMessageBox(boost::nowide::widen(ex.what()), _L("Orca Slicer GUI initialization failed"), wxICON_STOP);
+#endif
     } catch (const std::exception &ex) {
         BOOST_LOG_TRIVIAL(error) << ex.what() << std::endl;
-        wxMessageBox(format_wxstr(_L("Fatal error, exception: %1%"), ex.what()), _L("Orca Slicer GUI initialization failed"), wxICON_STOP);
+        wxMessageBox(format_wxstr(_L("Fatal error, exception: %1%"), ex.what()),
+#if NOZZLE_BRANDING
+                     _L("Nozzle It All Desktop GUI initialization failed"),
+#else
+                     _L("Orca Slicer GUI initialization failed"),
+#endif
+                     wxICON_STOP);
     }
     // error
     return 1;

@@ -1,4 +1,5 @@
 #include "BBLTopbar.hpp"
+#include "NIATheme.hpp"
 #include "wx/artprov.h"
 #include "wx/aui/framemanager.h"
 #include "wx/display.h"
@@ -61,25 +62,75 @@ CenteredTitle::CenteredTitle(wxWindow* parent)
 {
     SetBackgroundStyle(wxBG_STYLE_PAINT);
     Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE);
+#if NOZZLE_BRANDING
+    m_brand_mark = create_scaled_bitmap(SLIC3R_APP_ICON_BASE, this, 20);
+#endif
     Bind(wxEVT_PAINT, [this](wxPaintEvent&) {
         wxBufferedPaintDC dc(this);
-        dc.SetBackground(wxBrush(wxColour(38, 46, 48)));
+        const bool dark = wxGetApp().dark_mode();
+        dc.SetBackground(wxBrush(NOZZLE_BRANDING ? NIATheme::background(dark) : wxColour(38, 46, 48)));
         dc.Clear();
 
-        dc.SetTextForeground(*wxWHITE);
+        wxRect rect = GetClientRect();
+        dc.SetTextForeground(NOZZLE_BRANDING ? NIATheme::text(dark) : *wxWHITE);
+        int title_left = rect.x + FromDIP(4);
+#if NOZZLE_BRANDING
+        const wxString brand = _L("Nozzle It All");
+        const wxString tag   = _L("DESKTOP");
+        dc.SetFont(Label::Head_12);
+        const int brand_width = dc.GetTextExtent(brand).x;
+        dc.SetFont(Label::Body_9);
+        const int tag_width = dc.GetTextExtent(tag).x;
+        const int mark_width = m_brand_mark.IsOk() ? m_brand_mark.GetWidth() + FromDIP(8) : 0;
+        const int lockup_width = mark_width + brand_width + FromDIP(8) + tag_width;
+        const int lockup_x = rect.x + FromDIP(8);
+        const bool show_lockup = rect.width >= lockup_width + FromDIP(140);
+        int underline_right = lockup_x;
+        if (show_lockup) {
+            const int mark_y = rect.y + (rect.height - m_brand_mark.GetHeight()) / 2;
+            if (m_brand_mark.IsOk())
+                dc.DrawBitmap(m_brand_mark, lockup_x, mark_y, true);
+
+            dc.SetFont(Label::Head_12);
+            const int brand_x = lockup_x + mark_width;
+            dc.DrawText(brand, brand_x, rect.y + (rect.height - dc.GetTextExtent(brand).y) / 2);
+
+            dc.SetFont(Label::Body_9);
+            dc.SetTextForeground(NIATheme::text_muted(dark));
+            const int tag_x = brand_x + brand_width + FromDIP(8);
+            dc.DrawText(tag, tag_x, rect.y + (rect.height - dc.GetTextExtent(tag).y) / 2);
+            underline_right = tag_x + tag_width;
+            title_left = underline_right + FromDIP(20);
+        }
+
+        dc.SetTextForeground(NIATheme::text(dark));
+        dc.SetFont(Label::Body_12);
+#endif
 
         wxFontMetrics fm = dc.GetFontMetrics();
         int textHeight = fm.ascent + fm.descent;
 
-        wxRect   rect       = GetClientRect();
-        wxString ellipsized = wxControl::Ellipsize(m_title, dc, wxELLIPSIZE_END, wxMax(0, rect.GetWidth() - FromDIP(8)));
+#if NOZZLE_BRANDING
+        const int title_right = rect.GetRight() - FromDIP(8);
+        wxRect title_rect(title_left, rect.y, wxMax(0, title_right - title_left), rect.height);
+#else
+        // Preserve upstream's exact symmetric centering in non-branded builds.
+        wxRect title_rect = rect;
+#endif
+        wxString ellipsized = wxControl::Ellipsize(m_title, dc, wxELLIPSIZE_END, title_rect.GetWidth());
 
         int y = rect.y + (rect.height - textHeight) / 2 + 1;
-        int x = rect.x + ((ellipsized != m_title)                      // is ellipsized
-            ? FromDIP(4)                                               // align to left when clipped
-            : (rect.width - dc.GetTextExtent(m_title).GetWidth()) / 2); // centered when has available space
+        int x = title_rect.x + ((ellipsized != m_title) // is ellipsized
+            ? 0                                         // align to the safe title region when clipped
+            : (title_rect.width - dc.GetTextExtent(m_title).GetWidth()) / 2);
 
         dc.DrawText(ellipsized, x, y);
+#if NOZZLE_BRANDING
+        if (show_lockup) {
+            dc.SetPen(wxPen(NIATheme::accent(dark), FromDIP(2)));
+            dc.DrawLine(lockup_x, rect.height - FromDIP(2), underline_right, rect.height - FromDIP(2));
+        }
+#endif
     });
 
     // repaint for Ellipsize
@@ -100,6 +151,20 @@ CenteredTitle::CenteredTitle(wxWindow* parent)
 
 void CenteredTitle::SetTitle(const wxString& title) {
     m_title = title;
+#if NOZZLE_BRANDING
+    SetName(wxString::Format(_L("Nozzle It All Desktop — %s"), title));
+#else
+    SetName(title);
+#endif
+    SetToolTip(title);
+    Refresh();
+}
+
+void CenteredTitle::Rescale()
+{
+#if NOZZLE_BRANDING
+    m_brand_mark = create_scaled_bitmap(SLIC3R_APP_ICON_BASE, this, 20);
+#endif
     Refresh();
 }
 
@@ -119,17 +184,23 @@ public:
 
 void BBLTopbarArt::DrawBackground(wxDC& dc, wxWindow* wnd, const wxRect& rect)
 {
-    dc.SetBrush(wxBrush(wxColour(38, 46, 48)));
+    const bool dark = wxGetApp().dark_mode();
+    dc.SetBrush(wxBrush(NOZZLE_BRANDING ? NIATheme::background(dark) : wxColour(38, 46, 48)));
     wxRect clipRect = rect;
     clipRect.y -= 8;
     clipRect.height += 8;
     dc.SetClippingRegion(clipRect);
     dc.DrawRectangle(rect);
+#if NOZZLE_BRANDING
+    dc.SetPen(wxPen(NIATheme::accent(dark), wnd->FromDIP(2)));
+    dc.DrawLine(rect.x, rect.GetBottom() - wnd->FromDIP(1), rect.GetRight(), rect.GetBottom() - wnd->FromDIP(1));
+#endif
     dc.DestroyClippingRegion();
 }
 
 void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& item, const wxRect& rect)
 {
+    const bool dark = wxGetApp().dark_mode();
     int textWidth = 0, textHeight = 0;
     wxFontMetrics fm;
 
@@ -181,19 +252,19 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
     {
         if (item.GetState() & wxAUI_BUTTON_STATE_PRESSED)
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(NOZZLE_BRANDING ? NIATheme::accent(dark) : StateColor::darkModeColorFor("#009688")));
+            dc.SetBrush(wxBrush(NOZZLE_BRANDING ? NIATheme::accent(dark) : StateColor::darkModeColorFor("#009688")));
             dc.DrawRectangle(rect);
         }
         else if ((item.GetState() & wxAUI_BUTTON_STATE_HOVER) || item.IsSticky())
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(NOZZLE_BRANDING ? NIATheme::accent(dark) : StateColor::darkModeColorFor("#009688")));
+            dc.SetBrush(wxBrush(NOZZLE_BRANDING ? NIATheme::accent(dark) : StateColor::darkModeColorFor("#009688")));
 
             // draw an even lighter background for checked item hovers (since
             // the hover background is the same color as the check background)
             if (item.GetState() & wxAUI_BUTTON_STATE_CHECKED)
-                dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+                dc.SetBrush(wxBrush(NOZZLE_BRANDING ? NIATheme::accent(dark) : StateColor::darkModeColorFor("#009688")));
 
             dc.DrawRectangle(rect);
         }
@@ -201,8 +272,8 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
         {
             // it's important to put this code in an else statement after the
             // hover, otherwise hovers won't draw properly for checked items
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(NOZZLE_BRANDING ? NIATheme::accent(dark) : StateColor::darkModeColorFor("#009688")));
+            dc.SetBrush(wxBrush(NOZZLE_BRANDING ? NIATheme::accent(dark) : StateColor::darkModeColorFor("#009688")));
             dc.DrawRectangle(rect);
         }
     }
@@ -566,8 +637,10 @@ void BBLTopbar::Rescale() {
     item->SetBitmap(create_scaled_bitmap("calib_sf", this, TOPBAR_ICON_SIZE));
     item->SetDisabledBitmap(create_scaled_bitmap("calib_sf_inactive", this, TOPBAR_ICON_SIZE));
 
-    if (m_title_ctrl)
+    if (m_title_ctrl) {
+        m_title_ctrl->Rescale();
         m_title_ctrl->SetTitle(m_titleText);
+    }
 
     /*item = this->FindTool(ID_MODEL_STORE);
     item->SetBitmap(create_scaled_bitmap("topbar_store", this, TOPBAR_ICON_SIZE));

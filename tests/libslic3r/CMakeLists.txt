@@ -10,6 +10,8 @@ add_executable(${_TEST_NAME}_tests
     test_u1_print_task.cpp
     test_printer_snapshot.cpp
     test_device_workspace_state.cpp
+    test_nia_settings_migration.cpp
+    test_nia_update_policy.cpp
     test_3mf.cpp
     test_amf.cpp
     # Round-trip seam metadata and active/dormant volume settings in both formats.

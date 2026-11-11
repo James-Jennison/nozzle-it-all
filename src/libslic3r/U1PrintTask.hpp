@@ -49,7 +49,10 @@ struct Options
 struct Filament
 {
     bool        present = false; ///< Loaded in the toolhead / used by this plate.
+    std::string name;            ///< Friendly slicer preset name; presentation only.
+    std::string vendor;          ///< Printer-reported vendor; presentation only.
     std::string type;            ///< e.g. "PLA", upper-case.
+    std::string sub_type;        ///< e.g. "Matte" or "95A"; presentation only.
     std::string color;           ///< "#RRGGBB", upper-case; empty when unknown.
 };
 

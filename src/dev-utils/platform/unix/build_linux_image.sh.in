@@ -185,6 +185,11 @@ echo -n "[9/9] Generating Linux app..."
     fi
 
     cp -Rf ../resources "$APPDIR/resources"
+    if [ ! -f "${REPO_ROOT}/LICENSE.txt" ]; then
+        echo "Error: project license is missing: ${REPO_ROOT}/LICENSE.txt"
+        exit 1
+    fi
+    cp -f "${REPO_ROOT}/LICENSE.txt" "$APPDIR/LICENSE.txt"
 
     ORIGINAL_BINARY_LOCATION=""
     if [ -f "src/${CONFIG}/@SLIC3R_APP_CMD@" ]; then
@@ -447,6 +452,9 @@ EOF
 # } &> $ROOT/Build.log # Capture all command output
 echo "done"
 
+PACKAGE_ARTIFACT_KIND="appdir-executable"
+PACKAGE_ARTIFACT_PATH="$(realpath "$APPDIR/bin/@SLIC3R_APP_CMD@")"
+
 if [[ -n "$BUILD_IMAGE" ]]
 then
 echo -n "Creating Appimage for distribution..."
@@ -459,9 +467,23 @@ echo -n "Creating Appimage for distribution..."
         popd > /dev/null
         mv package_appimage/"@SLIC3R_APP_KEY@_Linux_V@SoftFever_VERSION@.AppImage" "@SLIC3R_APP_KEY@_Linux_V@SoftFever_VERSION@.AppImage"
         rm -fR package_appimage
+        PACKAGE_ARTIFACT_KIND="appimage"
+        PACKAGE_ARTIFACT_PATH="$(realpath "@SLIC3R_APP_KEY@_Linux_V@SoftFever_VERSION@.AppImage")"
     else
         popd > /dev/null
     fi
 # } &> $ROOT/Build.log # Capture all command output
 echo "done"
 fi
+
+PACKAGE_ARTIFACT_SHA256="$(sha256sum "$PACKAGE_ARTIFACT_PATH" | awk '{print $1}')"
+cat > "$ROOT/package-output.json" << EOF
+{
+  "schema_version": 1,
+  "artifact_kind": "$PACKAGE_ARTIFACT_KIND",
+  "artifact_path": "$PACKAGE_ARTIFACT_PATH",
+  "artifact_sha256": "$PACKAGE_ARTIFACT_SHA256",
+  "configuration": "$CONFIG"
+}
+EOF
+echo "Package output record: $ROOT/package-output.json"

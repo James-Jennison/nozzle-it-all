@@ -717,6 +717,10 @@ std::vector<std::string> PluginAuditManager::default_denied_filenames()
         GCODEVIEWER_APP_KEY ".conf",
         SLIC3R_APP_KEY ".ini",
         GCODEVIEWER_APP_KEY ".ini",
+        // A branded build may share or migrate an existing Orca data directory. Keep the
+        // legacy host-owned configuration names protected as well as the active product names.
+        "orcaslicer.conf",
+        "orcaslicer.ini",
         secret_constants::USER_SECRET_FILENAME,
         ".install_state.json",
     };

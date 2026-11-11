@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Orca Slicer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 07:06-0800\n"
+"POT-Creation-Date: 2026-11-11 09:35-0800\n"
 "PO-Revision-Date: \n"
 "Last-Translator: Jakub Hencl\n"
 "Language-Team: \n"
@@ -25376,6 +25376,11 @@ msgstr ""
 msgid "Filament %d: %s"
 msgstr ""
 
+#. TRN %1$d is a filament's number, %2$s its material, e.g. "1 · PLA".
+#, c-format, boost-format
+msgid "%1$d · %2$s"
+msgstr ""
+
 msgid "Print on Snapmaker U1"
 msgstr ""
 
@@ -25402,15 +25407,15 @@ msgstr ""
 msgid "Estimated material: %.2f g"
 msgstr ""
 
-#. TRN %s is the printer's network address.
+#. TRN %1$s is the printer's model, %2$s its network address.
 #, c-format, boost-format
-msgid "LAN: %s"
+msgid "%1$s at %2$s"
 msgstr ""
 
 msgid "Check again"
 msgstr ""
 
-msgid "Each filament prints from the toolhead shown under it. Click a filament to change its toolhead."
+msgid "Click a filament to change the toolhead it prints from."
 msgstr ""
 
 msgid "Print preparation"
@@ -25434,9 +25439,6 @@ msgstr ""
 msgid "Capture a timelapse with the printer camera."
 msgstr ""
 
-msgid "File name on the printer"
-msgstr ""
-
 msgid "Start Print"
 msgstr ""
 
@@ -25449,9 +25451,6 @@ msgstr ""
 #. TRN %1$s is the printer's status or the reason a print cannot start, %2$s a time of day.
 #, c-format, boost-format
 msgid "%1$s (checked at %2$s)"
-msgstr ""
-
-msgid "Please enter a file name without the characters #, *, ;, \\, /, :, \", <, >, or |."
 msgstr ""
 
 msgid "The filament types do not match:"

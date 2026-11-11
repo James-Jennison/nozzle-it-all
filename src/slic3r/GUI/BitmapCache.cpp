@@ -286,6 +286,18 @@ wxBitmap* BitmapCache::load_png(const std::string &bitmap_name, unsigned width, 
     return this->insert(bitmap_key, wxImage_to_wxBitmap_with_alpha(std::move(image)));
 }
 
+std::map<std::string, std::string> BitmapCache::brand_replaces(bool dark_mode)
+{
+#if NOZZLE_BRANDING
+    // Orca's accent in an icon becomes NIA violet, as StateColor does for colours set in code.
+    const char *accent = dark_mode ? "#8B5CF6" : "#6D28D9";
+    return {{"\"#009688\"", std::string("\"") + accent + "\""}, {"#009688", accent}};
+#else
+    (void) dark_mode;
+    return {};
+#endif
+}
+
 NSVGimage* BitmapCache::nsvgParseFromFileWithReplace(const char* filename, const char* units, float dpi, const std::map<std::string, std::string>& replaces)
 {
     std::string str;
@@ -362,6 +374,9 @@ wxBitmap* BitmapCache::load_svg(const std::string &bitmap_name, unsigned target_
 
     if (strstr(bitmap_name.c_str(), "toggle_on") != NULL && dark_mode) // ORCA only replace color of toggle button
         replaces["#009688"] = "#00675b";
+
+    for (const auto &brand : brand_replaces(dark_mode))
+        replaces[brand.first] = brand.second;
 
     if (!new_color.empty())
         replaces["\"#009688\""] = "\"" + new_color + "\"";

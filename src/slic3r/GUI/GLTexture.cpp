@@ -11,6 +11,7 @@
 #include "GUI_App.hpp"
 #include "GUI.hpp"
 #include "GLModel.hpp"
+#include "BitmapCache.hpp"
 
 #include <cassert>
 #include <atomic>
@@ -358,7 +359,7 @@ bool GLTexture::load_from_svg_files_as_sprites_array(const std::vector<std::stri
         if (!boost::algorithm::iends_with(filename, ".svg"))
             continue;
 
-        NSVGimage* image = nsvgParseFromFile(filename.c_str(), "px", 96.0f);
+        NSVGimage* image = BitmapCache::nsvgParseFromFileWithReplace(filename.c_str(), "px", 96.0f, BitmapCache::brand_replaces(wxGetApp().dark_mode()));
         if (image == nullptr)
             continue;
 
@@ -954,7 +955,7 @@ bool GLTexture::load_from_svg(const std::string& filename, bool use_mipmaps, boo
 {
     const bool compression_enabled = compress && OpenGLManager::are_compressed_textures_supported();
 
-    NSVGimage* image = nsvgParseFromFile(filename.c_str(), "px", 96.0f);
+    NSVGimage* image = BitmapCache::nsvgParseFromFileWithReplace(filename.c_str(), "px", 96.0f, BitmapCache::brand_replaces(wxGetApp().dark_mode()));
     if (image == nullptr) {
         reset();
         return false;

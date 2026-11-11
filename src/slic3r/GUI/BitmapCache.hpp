@@ -44,6 +44,8 @@ public:
 	// Parses SVG file from a file, returns SVG image as paths.
 	// And makes replases befor parsing
 	// replace_map containes old_value->new_value
+	/// Colour replacements that give an icon the build's accent; empty for OrcaSlicer itself.
+	static std::map<std::string, std::string> brand_replaces(bool dark_mode);
 	static NSVGimage* nsvgParseFromFileWithReplace(const char* filename, const char* units, float dpi, const std::map<std::string, std::string>& replaces);
 	// Load svg from resources/icons. bitmap_key is given without the .svg suffix. SVG will be rasterized to provided height/width.
     wxBitmap* 		load_svg(const std::string &bitmap_key, unsigned width = 0, unsigned height = 0, const bool grayscale = false, const bool dark_mode = false, const std::string& new_color = "", const float scale_in_center = 0.f);

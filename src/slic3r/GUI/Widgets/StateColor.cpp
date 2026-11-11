@@ -210,6 +210,10 @@ static bool apply_nia_dark_palette()
         {"#262E30", "#EEF2F4"}, // text
         {"#323A3D", "#EEF2F4"},
         {"#000000", "#EEF2F4"},
+        {"#009688", "#8B5CF6"}, // Orca's accent -> NIA violet
+        {"#26A69A", "#A78BFA"}, // accent, hovered
+        {"#BFE1DE", "#2B1D4A"}, // checked item background -> soft accent
+        {"#E5F0EE", "#221835"}, // focused background
     };
     for (const auto &tone : tones) {
         const auto found = gDarkColors.find(wxColour(tone.first));
@@ -219,6 +223,15 @@ static bool apply_nia_dark_palette()
     return true;
 }
 static const bool gNiaDarkPaletteApplied = apply_nia_dark_palette();
+
+// In the light theme Orca shows its colours as written. The NIA build replaces the accent and its tints
+// there too, so the accent is violet in both themes.
+static const std::map<wxColour, wxColour> gNiaLightColors{
+    {"#009688", "#6D28D9"}, // Orca's accent -> NIA violet
+    {"#26A69A", "#7C3AED"}, // accent, hovered
+    {"#BFE1DE", "#DDD6FE"}, // checked item background
+    {"#E5F0EE", "#EDE9FE"}, // focused background -> soft accent
+};
 #endif
 
 void StateColor::SetDarkMode(bool dark) { gDarkMode = dark; }
@@ -230,8 +243,14 @@ inline wxColour darkModeColorFor2(wxColour const &color)
     // The mapping is on again for that build, with its main dark tones taken from the NIA theme (see
     // apply_nia_dark_palette). A colour that must never be mapped, such as a filament's own colour, goes
     // through colorForStatesNoDark or is painted directly, as in Orca.
-    if (!gDarkMode)
+    if (!gDarkMode) {
+#if NOZZLE_BRANDING
+        const auto light = gNiaLightColors.find(color);
+        if (light != gNiaLightColors.end())
+            return light->second;
+#endif
         return color;
+    }
     auto iter = gDarkColors.find(color);
     if (iter != gDarkColors.end()) return iter->second;
     return color;

@@ -21137,9 +21137,14 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
                 if (used.first < filaments.size() && used.second > 0.) {
                     filaments[used.first].present = true;
                     marked                         = true;
-                    if (densities != nullptr && used.first < densities->values.size())
-                        filament_grams[used.first] = used.second * densities->values[used.first] * 0.001;
                 }
+            // Summed the way the Preview legend sums it (model, wipe tower, support, flush), so both show the same weights.
+            const auto &statistics = plate->get_slice_result()->print_statistics;
+            for (const auto *volumes : {&statistics.model_volumes_per_extruder, &statistics.wipe_tower_volumes_per_extruder,
+                                        &statistics.support_volumes_per_extruder, &statistics.flush_per_filament})
+                for (const auto &used : *volumes)
+                    if (used.first < filament_grams.size() && densities != nullptr && used.first < densities->values.size())
+                        filament_grams[used.first] += used.second * densities->values[used.first] * 0.001;
         }
         if (!marked)
             for (int extruder : plate->get_extruders(true))

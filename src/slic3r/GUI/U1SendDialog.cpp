@@ -341,7 +341,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     mapping->content()->Add(new Label(mapping, _L("Each filament prints from the toolhead shown under it. Click a filament to change its toolhead."),
                                       LB_AUTO_WRAP, wxSize(FromDIP(520), -1)),
                             0, wxEXPAND | wxBOTTOM, FromDIP(12));
-    auto *cards = new wxWrapSizer(wxHORIZONTAL);
+    auto *cards = new wxWrapSizer(wxHORIZONTAL, wxREMOVE_LEADING_SPACES); // not the default, which stretches the last card
     m_mapping_note = new Label(mapping, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(520), -1));
     m_mapping_note->SetForegroundColour(warning_colour());
     const std::vector<int> suggested = U1PrintTask::suggest_mapping(plate_filaments, printer.toolheads);

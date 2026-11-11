@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Orca Slicer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 09:35-0800\n"
+"POT-Creation-Date: 2026-11-11 10:23-0800\n"
 "PO-Revision-Date: 2026-10-30 19:59-0300\n"
 "Last-Translator: Alexandre Folle de Menezes\n"
 "Language-Team: Portuguese, Brazilian\n"
@@ -23904,16 +23904,14 @@ msgstr ""
 msgid "Model information"
 msgstr ""
 
-#, c-format, boost-format
-msgid "File name: %s"
-msgstr ""
-
 #. TRN %1$s is a project name, %2$d a plate number.
 #, c-format, boost-format
 msgid "Project: %1$s, plate %2$d"
 msgstr ""
 
-msgid "Estimated time unavailable"
+#. TRN %1$s is a print duration such as "2h 44m 2s", %2$.2f a weight in grams.
+#, c-format, boost-format
+msgid "Estimated: %1$s, %2$.2f g"
 msgstr ""
 
 #, c-format, boost-format
@@ -23922,6 +23920,13 @@ msgstr ""
 
 #, c-format, boost-format
 msgid "Estimated material: %.2f g"
+msgstr ""
+
+msgid "Estimated time unavailable"
+msgstr ""
+
+#, c-format, boost-format
+msgid "File name: %s"
 msgstr ""
 
 #. TRN %1$s is the printer's model, %2$s its network address.

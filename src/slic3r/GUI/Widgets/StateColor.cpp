@@ -5,6 +5,7 @@
 #include <map>
 #include <tuple>
 #include <wx/string.h>
+#include <utility>
 
 static bool gDarkMode = false;
 
@@ -190,22 +191,50 @@ std::map<wxColour, wxColour> const & StateColor::GetDarkMap()
     return gDarkColors;
 }
 
+#if NOZZLE_BRANDING
+// The dark tones of the main surfaces come from the NIA theme (NIATheme.hpp: surface, raised surface, lines,
+// text), so stock dialogs and controls sit with the screens that set NIA colours themselves. Everything else
+// keeps Orca's dark value.
+static bool apply_nia_dark_palette()
+{
+    static const std::pair<const char *, const char *> tones[] = {
+        {"#FFFFFF", "#14191D"}, // window background -> surface
+        {"#F8F8F8", "#1E2429"}, // title bars -> raised surface
+        {"#F1F1F1", "#1E2429"},
+        {"#F4F4F4", "#1E2429"},
+        {"#E8E8E8", "#1E2429"},
+        {"#DFDFDF", "#1E2429"}, // button background
+        {"#D4D4D4", "#2A3138"}, // button background, hovered
+        {"#EEEEEE", "#2A3138"}, // separator lines
+        {"#DBDBDB", "#4A545B"}, // input borders
+        {"#262E30", "#EEF2F4"}, // text
+        {"#323A3D", "#EEF2F4"},
+        {"#000000", "#EEF2F4"},
+    };
+    for (const auto &tone : tones) {
+        const auto found = gDarkColors.find(wxColour(tone.first));
+        if (found != gDarkColors.end())
+            found->second = wxColour(tone.second);
+    }
+    return true;
+}
+static const bool gNiaDarkPaletteApplied = apply_nia_dark_palette();
+#endif
+
 void StateColor::SetDarkMode(bool dark) { gDarkMode = dark; }
 
 inline wxColour darkModeColorFor2(wxColour const &color)
 {
-#if NOZZLE_BRANDING
-    // Product and user colours are semantic data. NIA shell surfaces apply
-    // explicit NIATheme tokens at their call sites; never recolour arbitrary
-    // values globally merely because they equal an Orca chrome literal.
-    return color;
-#else
+    // The Nozzle It All Desktop build once returned the colour unchanged here and left every screen to set its
+    // own dark colours. Only a few screens did, so every other dialog and control stayed light in a dark app.
+    // The mapping is on again for that build, with its main dark tones taken from the NIA theme (see
+    // apply_nia_dark_palette). A colour that must never be mapped, such as a filament's own colour, goes
+    // through colorForStatesNoDark or is painted directly, as in Orca.
     if (!gDarkMode)
         return color;
     auto iter = gDarkColors.find(color);
     if (iter != gDarkColors.end()) return iter->second;
     return color;
-#endif
 }
 
 std::map<wxColour, wxColour> revert(std::map<wxColour, wxColour> const & map)
@@ -217,14 +246,10 @@ std::map<wxColour, wxColour> revert(std::map<wxColour, wxColour> const & map)
 
 wxColour StateColor::lightModeColorFor(wxColour const &color)
 {
-#if NOZZLE_BRANDING
-    return color;
-#else
     static std::map<wxColour, wxColour> gLightColors = revert(gDarkColors);
     auto iter = gLightColors.find(color);
     if (iter != gLightColors.end()) return iter->second;
     return color;
-#endif
 }
 
 wxColour StateColor::darkModeColorFor(wxColour const &color) { return darkModeColorFor2(color); }

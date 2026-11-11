@@ -21112,7 +21112,7 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     std::vector<U1PrintTask::Filament> filaments;
     std::vector<double>                filament_grams;
     // What the G-code will say it was sliced for, so the dialog can show a refusal before anything is exported.
-    std::function<wxString(const std::vector<int> &, bool)> readiness;
+    std::function<U1SendDialog::Readiness()> read_readiness;
     if (print != nullptr) {
         const DynamicPrintConfig full_config = print->full_print_config();
         U1Jobs::GcodeFacts       facts;
@@ -21120,10 +21120,8 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
             facts.printer_model = model->value;
         if (const auto *nozzles = full_config.option<ConfigOptionFloats>("nozzle_diameter"))
             facts.nozzles = nozzles->values;
-        {
-            wxBusyCursor wait;
-            readiness = U1LanPrintHost::readiness_check(base_url, std::move(facts));
-        }
+        // Nothing is read here: the dialog reads when it opens, after the checks below, and again on confirming.
+        read_readiness = [base_url, facts] { return U1LanPrintHost::readiness_check(base_url, facts); };
         const auto *colors = full_config.option<ConfigOptionStrings>("filament_colour");
         const auto *types  = full_config.option<ConfigOptionStrings>("filament_type");
         const size_t count = std::max(colors ? colors->values.size() : 0, types ? types->values.size() : 0);
@@ -21260,7 +21258,7 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     const wxString project_name = get_project_filename();
     const wxString estimated_time = print != nullptr ? wxString::FromUTF8(print->print_statistics().estimated_normal_print_time) : wxString();
     U1SendDialog dlg(this, default_output_file, filaments, *printer, project_name,
-                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host), readiness);
+                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host), read_readiness);
     if (dlg.ShowModal() != wxID_OK)
         return;
 

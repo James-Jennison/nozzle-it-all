@@ -26,6 +26,7 @@
 #include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
 #include <wx/dcgraph.h>
+#include <wx/datetime.h>
 #include <wx/dcmemory.h>
 #include <wx/defs.h>
 #include <wx/event.h>
@@ -39,6 +40,7 @@
 #include <wx/statbmp.h>
 #include <wx/string.h>
 #include <wx/toplevel.h>
+#include <wx/utils.h>
 #include <wx/window.h>
 #include <wx/wrapsizer.h>
 
@@ -172,14 +174,15 @@ private:
             // TRN %1$d is a toolhead number, %2$s what is loaded in it ("Snapmaker PLA Basic", "empty").
             menu.AppendRadioItem(int(wxID_HIGHEST + 1 + t), wxString::Format(_L("Toolhead %1$d (%2$s)"), int(t + 1), describe(m_toolheads[t])))
                 ->Check(int(t) == m_selection);
-        menu.Bind(wxEVT_MENU, [this](wxCommandEvent &event) {
-            m_selection = event.GetId() - (wxID_HIGHEST + 1);
-            update_tooltip();
-            Refresh();
-            if (m_on_change)
-                m_on_change();
-        });
-        PopupMenu(&menu, 0, GetClientSize().y);
+        // The choice comes back from the call itself, so nothing outlives the menu.
+        const int chosen = GetPopupMenuSelectionFromUser(menu, 0, GetClientSize().y) - (wxID_HIGHEST + 1);
+        if (chosen < 0 || size_t(chosen) >= m_toolheads.size() || chosen == m_selection)
+            return;
+        m_selection = chosen;
+        update_tooltip();
+        Refresh();
+        if (m_on_change)
+            m_on_change();
     }
 
     void update_tooltip()
@@ -260,12 +263,12 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                            const wxBitmap                           &thumbnail,
                            const std::vector<double>                &filament_grams,
                            const wxString                           &printer_address,
-                           std::function<wxString(const std::vector<int> &, bool)> readiness)
+                           std::function<Readiness()>                read_readiness)
     : DPIDialog(parent, wxID_ANY, _L("Print on Snapmaker U1"), wxDefaultPosition, wxDefaultSize,
                 wxCAPTION | wxCLOSE_BOX)
     , m_plate_filaments(plate_filaments)
     , m_toolheads(printer.toolheads)
-    , m_readiness(std::move(readiness))
+    , m_read_readiness(std::move(read_readiness))
 {
     SetBackgroundColour(*wxWHITE);
     SetFont(Label::Body_14);
@@ -279,6 +282,8 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     };
     // A picture centered on a rounded gray tile.
     auto picture = [&](wxWindow *owner, wxImage image) -> wxWindow * {
+        if (!image.IsOk() || image.GetWidth() <= 0 || image.GetHeight() <= 0)
+            return nullptr;
         const wxSize box   = FromDIP(wxSize(120, 100));
         const int    inset = FromDIP(8);
         const double scale = std::min(double(box.x - 2 * inset) / image.GetWidth(), double(box.y - 2 * inset) / image.GetHeight());
@@ -301,7 +306,8 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     Section *model = add_section(_L("Model information"));
     auto    *model_row = new wxBoxSizer(wxHORIZONTAL);
     if (thumbnail.IsOk())
-        model_row->Add(picture(model, thumbnail.ConvertToImage()), 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
+        if (wxWindow *tile = picture(model, thumbnail.ConvertToImage()))
+            model_row->Add(tile, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
     auto           *details           = new wxBoxSizer(wxVERTICAL);
     // The project's own name; its folder would only widen the dialog, and is in the tooltip.
     const wxString  displayed_project = project_name.empty() ? from_path(default_name.stem()) : project_name.AfterLast('/').AfterLast('\\');
@@ -330,7 +336,8 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     const boost::filesystem::path cover = boost::filesystem::path(resources_dir()) / "profiles" / "Snapmaker" / "Snapmaker U1_cover.png";
     wxImage cover_image;
     if (boost::filesystem::exists(cover) && cover_image.LoadFile(from_path(cover), wxBITMAP_TYPE_PNG))
-        device_row->Add(picture(device, cover_image), 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
+        if (wxWindow *tile = picture(device, cover_image))
+            device_row->Add(tile, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
     auto *device_text = new wxBoxSizer(wxVERTICAL);
     device_text->Add(new Label(device, Label::Head_14, "Snapmaker U1"), 0, wxBOTTOM, FromDIP(6));
     if (!printer_address.empty())
@@ -339,6 +346,15 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     m_status = new Label(device, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(520), -1));
     device_text->Add(m_status, 0, wxEXPAND);
     device_row->Add(device_text, 1, wxALIGN_CENTER_VERTICAL);
+    if (m_read_readiness) {
+        auto *again = new Button(device, _L("Check again"), "", 0, 0);
+        again->SetStyle(ButtonStyle::Regular, ButtonType::Choice);
+        again->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+            refresh_readiness();
+            update_state();
+        });
+        device_row->Add(again, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, gap);
+    }
     device->content()->Add(device_row, 0, wxEXPAND);
 
     // Filaments
@@ -422,6 +438,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     print->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { on_confirm(true); });
 
     SetSizerAndFit(top);
+    refresh_readiness();
     update_state();
     CenterOnParent();
     wxGetApp().UpdateDlgDarkUI(this);
@@ -433,6 +450,15 @@ std::vector<int> U1SendDialog::mapping() const
     for (const Row &row : m_rows)
         filament_to_toolhead[row.filament] = row.card->selection();
     return filament_to_toolhead;
+}
+
+void U1SendDialog::refresh_readiness()
+{
+    if (!m_read_readiness)
+        return;
+    wxBusyCursor wait;
+    m_readiness  = m_read_readiness();
+    m_checked_at = wxDateTime::Now().FormatTime();
 }
 
 void U1SendDialog::update_state()
@@ -450,7 +476,10 @@ void U1SendDialog::update_state()
     m_print->SetToolTip(no_start);
     m_upload->SetToolTip(no_upload);
     // Without a check the dialog only knows that the printer answered.
-    const wxString status = !no_start.IsEmpty() ? no_start : m_readiness ? _L("Online • Ready") : _L("Online");
+    wxString status = !no_start.IsEmpty() ? no_start : m_readiness ? _L("Online • Ready") : _L("Online. Readiness is checked when the file is sent.");
+    if (m_readiness && !m_checked_at.IsEmpty())
+        // TRN %1$s is the printer's status or the reason a print cannot start, %2$s a time of day.
+        status = wxString::Format(_L("%1$s (checked at %2$s)"), status, m_checked_at);
     m_status->SetForegroundColour(StateColor::darkModeColorFor(no_start.IsEmpty() ? wxColour(0x17, 0x82, 0x3B) : warning_colour()));
 
     if (note == m_mapping_note->GetLabel() && status == m_status->GetLabel())
@@ -474,7 +503,8 @@ U1PrintTask::Options U1SendDialog::options() const
     options.filament_to_toolhead = mapping();
     std::set<int> used_toolheads;
     for (const Row &row : m_rows)
-        used_toolheads.insert(row.card->selection());
+        if (row.card->selection() >= 0)
+            used_toolheads.insert(row.card->selection());
     options.bed_level         = m_bed_level->GetValue();
     options.flow_calibrate    = m_flow_calibrate->GetValue();
     options.shaper_calibrate  = m_shaper_calibrate->GetValue();
@@ -522,6 +552,17 @@ void U1SendDialog::on_confirm(bool start_print)
                 .ShowModal() != wxID_YES)
         return;
 
+    // The printer is read once more at the moment of confirming, so the dialog never closes on a state it
+    // showed minutes ago. The send still reads the printer itself afterwards; this only saves a wasted export.
+    if (m_read_readiness) {
+        refresh_readiness();
+        update_state();
+        if (const wxString refusal = m_readiness ? m_readiness(mapping(), start_print) : wxString(); !refusal.IsEmpty()) {
+            MessageDialog(this, refusal, _L("Send to Snapmaker U1"), wxOK | wxICON_WARNING).ShowModal();
+            return;
+        }
+    }
+
     m_start_print = start_print;
     EndModal(wxID_OK);
 }
@@ -529,8 +570,10 @@ void U1SendDialog::on_confirm(bool start_print)
 void U1SendDialog::on_dpi_changed(const wxRect & /*suggested_rect*/)
 {
     m_filename->Rescale();
-    for (const Row &row : m_rows)
+    for (const Row &row : m_rows) {
+        row.card->SetMinSize(FromDIP(wxSize(100, 126)));
         row.card->Refresh();
+    }
     for (::CheckBox *check : {m_bed_level, m_flow_calibrate, m_shaper_calibrate, m_time_lapse})
         check->Rescale();
     GetSizer()->SetSizeHints(this);

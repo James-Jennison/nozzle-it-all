@@ -127,6 +127,16 @@ TEST_CASE("U1 suggested mapping prefers matching type, then closest color", "[U1
     CHECK(U1PrintTask::suggest_mapping({{true, "", "", "PLA", "", "#FFFFFF"}, {true, "", "", "PLA", "", "#FFFFFF"},
                                         {true, "", "", "PLA", "", "#FFFFFF"}}, pairs) == std::vector<int>{0, 1, 0});
 
+    // The own-number preference never picks an empty toolhead or one with another material over a match.
+    std::vector<F> second_empty = alike;
+    second_empty[1].present = false;
+    CHECK(U1PrintTask::suggest_mapping(alike, second_empty) == std::vector<int>{0, 0, 2, 3});
+    std::vector<F> second_petg = alike;
+    second_petg[1].type = "PETG";
+    CHECK(U1PrintTask::suggest_mapping(alike, second_petg) == std::vector<int>{0, 0, 2, 3});
+    // More filaments than toolheads: the own number wraps around.
+    CHECK(U1PrintTask::suggest_mapping(std::vector<F>(5, F{true, "", "", "PLA", "", "#26A69A"}), alike) == std::vector<int>{0, 1, 2, 3, 0});
+
     // Nothing loaded: fall back to the same index.
     const std::vector<F> none(4);
     CHECK(U1PrintTask::suggest_mapping({{true, "", "", "PLA", "", "#FFFFFF"}, {true, "", "", "PLA", "", "#000000"}}, none) ==

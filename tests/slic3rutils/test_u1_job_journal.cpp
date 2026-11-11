@@ -1,6 +1,7 @@
 #include <catch2/catch_all.hpp>
 
 #include "slic3r/Utils/U1JobJournal.hpp"
+#include "libslic3r/U1PrintTask.hpp"
 
 #include <boost/filesystem.hpp>
 #include <boost/nowide/fstream.hpp>
@@ -301,4 +302,22 @@ TEST_CASE("A Start is refused unless the printer shows it is ready for this file
         // A filament beyond the sliced nozzle list has no nozzle of its own to compare.
         CHECK(U1Jobs::start_blocker({"Snapmaker U1", {0.4}}, idle_u1(), {0, 3}, true).kind == Kind::None);
     }
+}
+
+TEST_CASE("The toolheads suggested for like filaments pass the readiness rules", "[U1Jobs]")
+{
+    using Kind = U1Jobs::Blocker::Kind;
+    // The idle printer of these tests has toolhead 3 empty. Four filaments that look alike must not be
+    // suggested onto it, and the suggestion must be one the Start check accepts as far as loading goes.
+    const nlohmann::json status = idle_u1();
+    const auto           state  = U1PrintTask::parse_printer_state(status["print_task_config"]);
+    REQUIRE(state.toolheads.size() == 4);
+    REQUIRE_FALSE(state.toolheads[2].present);
+    const std::vector<U1PrintTask::Filament> plate(4, U1PrintTask::Filament{true, "", "", "PLA", "", "#26A69A"});
+    const std::vector<int>                   suggested = U1PrintTask::suggest_mapping(plate, state.toolheads);
+    for (int toolhead : suggested)
+        CHECK(toolhead != 2);
+    const auto blocker = U1Jobs::start_blocker({"Snapmaker U1", {}}, status, suggested, true);
+    CHECK(blocker.kind != Kind::ToolheadEmpty);
+    CHECK(blocker.kind != Kind::ToolheadUnknown);
 }

@@ -1465,7 +1465,6 @@ if (WIN32 AND DEFINED ENV{ORCA_SIGN_KMS_KEY})
 endif ()
 
 if (WIN32)
-    set(CPACK_WIX_UPGRADE_GUID "058245e8-20e0-4a95-9ab7-1acfe17ad511")
     set(CPACK_GENERATOR NSIS)
     include(CPack)
 elseif (UNIX AND NOT APPLE)

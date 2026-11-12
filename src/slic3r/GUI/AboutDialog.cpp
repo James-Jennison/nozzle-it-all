@@ -482,7 +482,7 @@ void AboutDialog::build_nozzle_layout()
               Label::Body_13, true, wxTOP, FromDIP(14), content_w);
     // What is being built and is not in this build yet. An item moves to the sentence above when it lands.
     add_label(body,
-              _L("In development: job history, several printers at once, more printer controls, spool tracking, AI assistance, model discovery, and a phone companion."),
+              _L("In development: importing a preset bundle from a link, job history, several printers at once, more printer controls, spool tracking, AI assistance, model discovery, and a phone companion."),
               Label::Body_13, true, wxTOP, FromDIP(10), content_w);
 
     add_label(body, _L("Open-source lineage"), Label::Head_12, false,

@@ -8834,10 +8834,12 @@ void GLGizmoTextureDisplacement::on_render_input_window(float x, float y, float 
         ImGui::SetCursorPosY(row_y + (row_h - icon_h) * .5f); // center vertically
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(int(m_imgui->scaled(.5f)), style.ItemSpacing.y));
         GLGizmoUtils::render_tooltip_button(m_imgui, m_parent, shortcut, x, y);
+#if ORCA_ONLINE_SERVICES
         ImGui::SameLine();
         GLGizmoUtils::render_wiki_guide_button(m_parent, scale, "https://www.orcaslicer.com/wiki/print_prepare/prepare_texture_displacement");
         ImGui::SameLine();
         GLGizmoUtils::render_video_guide_button(m_parent, scale, "https://www.youtube.com/watch?v=D7w3tG1kdvE");
+#endif
         ImGui::PopStyleVar(1);
 
         ImGui::SameLine(x0 + panel_w - button_w * 2 - style.ItemSpacing.x);

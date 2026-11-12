@@ -775,6 +775,7 @@ PublishSettingsDialog::PublishSettingsDialog(wxWindow* parent,
     video_btn->SetStyle(ButtonStyle::Confirm, ButtonType::Circle);
     video_btn->SetCanFocus(false);
     video_btn->Bind(wxEVT_LEFT_DOWN, ([video_url](auto& e) {wxLaunchDefaultBrowser(video_url);}));
+    video_btn->Show(ORCA_ONLINE_SERVICES);
 
     links_sizer->Add(wiki_btn , 0, wxLEFT, FromDIP(10));
     links_sizer->Add(video_btn, 0, wxLEFT, FromDIP(10));

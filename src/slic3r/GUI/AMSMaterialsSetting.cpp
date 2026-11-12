@@ -230,6 +230,7 @@ void AMSMaterialsSetting::create()
     m_wiki_ctrl->SetStyle(ButtonStyle::Confirm, ButtonType::Circle);
     m_wiki_ctrl->SetCanFocus(false);
     m_wiki_ctrl->Bind(wxEVT_LEFT_DOWN, ([wiki_url](auto& e) {wxLaunchDefaultBrowser(wiki_url);}));
+    m_wiki_ctrl->Show(ORCA_ONLINE_SERVICES);
 
     m_button_confirm = new Button(this, _L("Confirm"));
     m_button_confirm->SetStyle(ButtonStyle::Confirm, ButtonType::Choice);
@@ -1147,7 +1148,7 @@ bool AMSMaterialsSetting::Show(bool show)
         //m_clr_picker->set_color(m_clr_picker->GetParent()->GetBackgroundColour());
 
         m_ratio_text->Show();
-        m_wiki_ctrl->Show();
+        m_wiki_ctrl->Show(ORCA_ONLINE_SERVICES);
         m_k_param->Show();
         m_input_k_val->Show();
         Layout();

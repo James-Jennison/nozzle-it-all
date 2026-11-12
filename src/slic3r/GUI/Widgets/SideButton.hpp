@@ -75,6 +75,8 @@ private:
 
     StateHandler    state_handler;
     StateColor      text_color;
+    bool            text_color_per_state{false};       ///< set through SetForegroundColor(StateColor)
+    bool            background_color_per_state{false}; ///< set through SetBackgroundColor(StateColor)
     StateColor      border_color;
     StateColor      background_color;
     wxColour        bottom_color;

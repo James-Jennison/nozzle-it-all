@@ -108,6 +108,9 @@ void SideButton::SetLabel(const wxString& label)
 
 bool SideButton::SetForegroundColour(wxColour const &color)
 {
+    // The theme pass sets one colour on every window. A button that was given a colour per state keeps it.
+    if (text_color_per_state)
+        return true;
     text_color = StateColor(color);
     state_handler.update_binds();
     return true;
@@ -115,6 +118,8 @@ bool SideButton::SetForegroundColour(wxColour const &color)
 
 bool SideButton::SetBackgroundColour(wxColour const& color)
 {
+    if (background_color_per_state)
+        return true;
     background_color = StateColor(color);
     state_handler.update_binds();
     return true;
@@ -142,6 +147,7 @@ void SideButton::SetBorderColor(StateColor const &color)
 void SideButton::SetForegroundColor(StateColor const &color)
 {
     text_color = color;
+    text_color_per_state = true;
     state_handler.update_binds();
     Refresh();
 }
@@ -149,6 +155,7 @@ void SideButton::SetForegroundColor(StateColor const &color)
 void SideButton::SetBackgroundColor(StateColor const &color)
 {
     background_color = color;
+    background_color_per_state = true;
     state_handler.update_binds();
     Refresh();
 }

@@ -6,6 +6,8 @@
 	"setting_id": "NIA3aabf981e277a",
 	"instantiation": "true",
 	"printer_model": "Elegoo Centauri Carbon (COSMOS)",
+	"host_type": "moonraker",
+	"printer_agent": "moonraker",
 	"change_filament_gcode": "M600",
 	"machine_end_gcode": "PRINT_END",
 	"machine_pause_gcode": "PAUSE",

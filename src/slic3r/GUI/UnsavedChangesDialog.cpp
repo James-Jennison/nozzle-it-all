@@ -1028,6 +1028,7 @@ void UnsavedChangesDialog::build(Preset::Type type, PresetCollection *dependent_
         wiki_btn->SetStyle(ButtonStyle::Confirm, ButtonType::Circle);
         wiki_btn->SetCanFocus(false);
         wiki_btn->Bind(wxEVT_LEFT_DOWN, ([wiki_url](auto& e) {wxLaunchDefaultBrowser(wiki_url);}));
+        wiki_btn->Show(ORCA_ONLINE_SERVICES);
 
         m_sizer_button->Add(wiki_btn, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, FromDIP(22));
     }

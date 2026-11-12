@@ -300,6 +300,7 @@ StepMeshDialog::StepMeshDialog(wxWindow* parent, Slic3r::Step& file, double line
     wiki_btn->SetStyle(ButtonStyle::Confirm, ButtonType::Circle);
     wiki_btn->SetCanFocus(false);
     wiki_btn->Bind(wxEVT_LEFT_DOWN, ([wiki_url](auto& e) {wxLaunchDefaultBrowser(wiki_url);}));
+    wiki_btn->Show(ORCA_ONLINE_SERVICES);
     bSizer_button->Add(wiki_btn, 0, wxALIGN_LEFT | wxLEFT | wxALIGN_CENTER_VERTICAL, LEFT_RIGHT_PADING);
 
     bSizer_button->AddStretchSpacer(1);

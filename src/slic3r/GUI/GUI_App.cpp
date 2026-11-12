@@ -1170,7 +1170,7 @@ void GUI_App::post_init()
 
     // Orca: notify users upgrading from a pre-2.4.0 version that profile syncing
     // moved from Bambu Cloud to Orca Cloud.
-    if (is_editor() && m_last_config_version && m_last_config_version->valid()
+    if (ORCA_ONLINE_SERVICES && is_editor() && m_last_config_version && m_last_config_version->valid()
         && *m_last_config_version < Semver(2, 4, 0)) {
         CallAfter([] {
             const wxString wiki_url = "https://www.orcaslicer.com/wiki/user_profiles/user_profiles.html#profiles-missing-after-updating-from-bambu-cloud";
@@ -5381,6 +5381,9 @@ void GUI_App::ShowDownNetPluginDlg() {
 
 void GUI_App::ShowUserLogin(bool show, const std::string& provider)
 {
+    // Orca Cloud has no sign-in where it is not offered; closing a dialog (show == false) still works.
+    if (!ORCA_ONLINE_SERVICES && show && provider == ORCA_CLOUD_PROVIDER)
+        return;
     // Show user Login Dialog for specified cloud
     if (show) {
         try {
@@ -6039,6 +6042,8 @@ std::string GUI_App::handle_web_request(std::string cmd)
 
 void GUI_App::open_orca_cloud(const std::string& next)
 {
+    if (!ORCA_ONLINE_SERVICES)
+        return;
     // Remembered so a login while the pane is open re-seeds the same page rather than the default.
     m_cloud_open_path = next;
     // Deferred: set_cloud_mode() may create the second native webview, so this must not run inside

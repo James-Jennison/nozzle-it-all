@@ -483,6 +483,8 @@ void resolve_inactive_plugins(const std::vector<std::string>& refs)
 
 void open_missing_plugins_on_cloud(const std::vector<std::string>& local_refs)
 {
+    if (!ORCA_ONLINE_SERVICES)
+        return;
     if (local_refs.size() == 1) {
         if (const auto ref = parse_capability_ref(local_refs.front())) {
             wxLaunchDefaultBrowser(GUI::from_u8(resolve_recovery_url(*ref)), wxBROWSER_NEW_WINDOW);

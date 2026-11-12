@@ -254,6 +254,7 @@ TroubleshootDialog::TroubleshootDialog()
     wiki_btn->SetStyle(ButtonStyle::Confirm, ButtonType::Circle);
     wiki_btn->SetCanFocus(false);
     wiki_btn->Bind(wxEVT_LEFT_DOWN, ([wiki_url](auto& e) {wxLaunchDefaultBrowser(wiki_url);}));
+    wiki_btn->Show(ORCA_ONLINE_SERVICES);
 
     auto video_btn = new Button(this, "", "toolbar_video_guide", 0, 15);
     auto video_url = "https://www.youtube.com/watch?v=CFzt8W7OCx0";

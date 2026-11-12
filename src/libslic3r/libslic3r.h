@@ -36,6 +36,12 @@
 #define SLIC3R_DBUS_INTERFACE_PREFIX "com.orcaslicer.OrcaSlicer"
 #define SLIC3R_DBUS_OBJECT_PREFIX "/com/orcaslicer/OrcaSlicer"
 #endif
+// ORCA_ONLINE_SERVICES (set by CMake with NOZZLE_BRANDING): Orca Cloud and the Orca wiki are
+// OrcaSlicer's own services. A build under another name does not offer them and sends them nothing;
+// the code stays in place so upstream changes still apply.
+#ifndef ORCA_ONLINE_SERVICES
+#define ORCA_ONLINE_SERVICES (!NOZZLE_BRANDING)
+#endif
 
 // this needs to be included early for MSVC (listing it in Build.PL is not enough)
 #include <memory>

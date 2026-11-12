@@ -18,7 +18,11 @@ let searchExpandOverride = new Map();
 let selectedPluginId = "";
 let contextPluginId = "";
 let activeDetailTab = "plugin-info";
-let selectedInstallAction = "explore";
+// The plugin hub is part of Orca Cloud; without it, installing from a file is the only action.
+if (!OrcaOnlineServices())
+  delete pluginInstallActions["explore"];
+const defaultInstallAction = pluginInstallActions["explore"] ? "explore" : "install-local";
+let selectedInstallAction = defaultInstallAction;
 const fullAccessRequestPrefix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 let fullAccessRequestNumber = 0;
 let renderedPermissionsSignature = null;
@@ -202,7 +206,7 @@ function StoreSplitRatio(ratio) {
 
 function NormalizeInstallAction(action) {
   const normalized = String(action || "");
-  return pluginInstallActions[normalized] ? normalized : "explore";
+  return pluginInstallActions[normalized] ? normalized : defaultInstallAction;
 }
 
 function SetSelectedInstallAction(action, notifyNative = false) {
@@ -1732,7 +1736,7 @@ function RenderDescription(plugin) {
   }
 
   const isCloud = plugin && (plugin.source === "mine" || plugin.source === "subscribed" || plugin.source === "orphaned");
-  if (isCloud && String(plugin?.sharing_token || "")) {
+  if (OrcaOnlineServices() && isCloud && String(plugin?.sharing_token || "")) {
     const link = document.createElement("a");
     link.href = "#";
     link.className = "plugin-cloud-link";

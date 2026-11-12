@@ -456,7 +456,7 @@ void WebViewPanel::apply_cloud_layout(bool cloud_on)
 
 void WebViewPanel::load_cloud_url(const wxString& url)
 {
-    if (url.empty())
+    if (url.empty() || !ORCA_ONLINE_SERVICES)
         return;
     // Track the origin of whatever the pane is told to load (Start URL, Complete URL, sign-out or
     // the plain cloud fallback), so navigation policy has the right origin from the first load on.
@@ -543,6 +543,8 @@ void WebViewPanel::cloud_signed_out(const wxString& signout_url)
 
 void WebViewPanel::set_cloud_mode(bool on, const wxString& url, const wxString& page_url)
 {
+    if (!ORCA_ONLINE_SERVICES)
+        on = false; // the cloud pane is never created
     if (on) {
         // load_cloud_url records the origin from whatever it loads, including the plain cloud
         // fallback used when `url` is empty.

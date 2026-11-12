@@ -313,7 +313,7 @@ wxBoxSizer *PreferencesDialog::create_item_label(wxString label, wxString toolti
     sizer->AddSpacer(FromDIP(DESIGN_LEFT_MARGIN));
 
     wxString url;
-    if(!wiki_url.IsEmpty())
+    if(ORCA_ONLINE_SERVICES && !wiki_url.IsEmpty())
         url = "https://www.orcaslicer.com/wiki/" + wiki_url;
 
     auto label_ctrl = new WikiLabel(m_parent, label, url, wxDefaultPosition, DESIGN_TITLE_SIZE);
@@ -1837,8 +1837,10 @@ void PreferencesDialog::create_items()
         "filaments_area_preferred_count", 8, 99, [this](int value) {m_filament_height_timer.StartOnce(500);});
     g_sizer->Add(item_filament_area_height); 
 
+#if ORCA_ONLINE_SERVICES
     auto item_shared_profiles  = create_item_checkbox(_L("Show shared profiles notification"), _L("Show a notification with a link to browse shared profiles when the selected printer is changed."), "show_shared_profiles_notification");
     g_sizer->Add(item_shared_profiles);
+#endif
 
     //// GENERAL > Features
     g_sizer->Add(create_item_title(_L("Features")), 1, wxEXPAND);
@@ -2247,7 +2249,11 @@ void PreferencesDialog::create_items()
     auto item_region           = create_item_region_combobox(_L("Login region"), "");
     g_sizer->Add(item_region);
  
+#if ORCA_ONLINE_SERVICES
     auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features, including Orca Cloud profile syncing. Users who prefer to work entirely offline can enable this option.\n\nNote: When Stealth Mode is enabled, your user profiles will not be backed up to Orca Cloud."), "stealth_mode");
+#else
+    auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features and online preset updates. Users who prefer to work entirely offline can enable this option."), "stealth_mode");
+#endif
     g_sizer->Add(item_stealth_mode);
 
     auto item_hide_login_side_panel = create_item_checkbox(_L("Hide login side panel"), _L("Hide the login side panel on the home page."), "hide_login_side_panel");
@@ -2262,7 +2268,11 @@ void PreferencesDialog::create_items()
     //// ONLINE > Cloud Providers
     g_sizer->Add(create_item_title(_L("Cloud Providers")), 1, wxEXPAND);
 
+#if ORCA_ONLINE_SERVICES
     auto item_bambu_cloud     = create_item_bambu_cloud(_L("Enable Bambu Cloud"), _L("Allow logging into Bambu Cloud alongside Orca Cloud. When enabled, a Bambu login section appears on the homepage."));
+#else
+    auto item_bambu_cloud     = create_item_bambu_cloud(_L("Enable Bambu Cloud"), _L("Allow logging into Bambu Cloud. When enabled, a Bambu login section appears on the homepage."));
+#endif
     g_sizer->Add(item_bambu_cloud);
 
     //// ONLINE > Update & sync
@@ -2273,8 +2283,10 @@ void PreferencesDialog::create_items()
     g_sizer->Add(item_stable_updates);
 #endif
 
+#if ORCA_ONLINE_SERVICES
     auto item_user_sync        = create_item_checkbox(_L("Auto sync user presets (Printer/Filament/Process)"), "", "sync_user_preset");
     g_sizer->Add(item_user_sync);
+#endif
 
     if (app_config->get_stealth_mode()) {
         if (m_bambu_cloud_checkbox)      m_bambu_cloud_checkbox->Enable(false);

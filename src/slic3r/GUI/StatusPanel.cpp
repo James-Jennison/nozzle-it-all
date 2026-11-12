@@ -4914,7 +4914,8 @@ void StatusPanel::on_ams_guide(wxCommandEvent& event)
     // Orca: neutral wiki link (vendor URLs removed)
     wxString ams_wiki_url = "https://www.orcaslicer.com/wiki/";
 
-    wxLaunchDefaultBrowser(ams_wiki_url);
+    if (ORCA_ONLINE_SERVICES)
+        wxLaunchDefaultBrowser(ams_wiki_url);
 }
 
 void StatusPanel::on_ams_retry(wxCommandEvent& event)

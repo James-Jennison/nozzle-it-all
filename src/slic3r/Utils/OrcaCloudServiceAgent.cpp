@@ -570,6 +570,26 @@ std::string OrcaCloudServiceAgent::generate_uuid_for_setting_id(const std::strin
     return boost::uuids::to_string(id);
 }
 
+bool OrcaCloudServiceAgent::request_allowed(const std::string& url)
+{
+#if ORCA_ONLINE_SERVICES
+    (void) url;
+    return true;
+#else
+    // The host of scheme://[user@]host[:port]/path, compared without case or a trailing dot.
+    const size_t scheme = url.find("://");
+    const size_t begin  = scheme == std::string::npos ? 0 : scheme + 3;
+    std::string  host   = url.substr(begin, url.find_first_of("/?#", begin) - begin);
+    if (const size_t at = host.rfind('@'); at != std::string::npos)
+        host.erase(0, at + 1);
+    if (const size_t port = host.find(':'); port != std::string::npos)
+        host.erase(port);
+    while (!host.empty() && host.back() == '.')
+        host.pop_back();
+    return !(boost::algorithm::iequals(host, "orcaslicer.com") || boost::algorithm::iends_with(host, ".orcaslicer.com"));
+#endif
+}
+
 void OrcaCloudServiceAgent::configure_urls(AppConfig* app_config)
 {
     if (!app_config)
@@ -684,6 +704,9 @@ static bool parse_stored_secret(const std::string& secret, std::string& out_refr
 int OrcaCloudServiceAgent::start()
 {
     regenerate_pkce();
+    // Where Orca Cloud is not offered no stored session is read, so the agent stays signed out.
+    if (!request_allowed(auth_base_url))
+        return BAMBU_NETWORK_SUCCESS;
 
     // Attempt silent sign-in from stored refresh token
     std::string stored_secret;
@@ -992,6 +1015,9 @@ bool OrcaCloudServiceAgent::ensure_token_fresh(const std::string& reason) { retu
 // it has to stay cancellable.
 bool OrcaCloudServiceAgent::run_health_check(const std::atomic_bool* cancel)
 {
+    // Not connected, and no error is reported: there is nothing this build would reach.
+    if (!request_allowed(api_base_url))
+        return false;
     if (cancel && cancel->load())
         return false;
 
@@ -1050,6 +1076,8 @@ bool OrcaCloudServiceAgent::is_server_connected()
 // UI thread), like stop_health_check().
 int OrcaCloudServiceAgent::refresh_connection()
 {
+    if (!request_allowed(api_base_url))
+        return BAMBU_NETWORK_SUCCESS;
     if (health_check_stopped.load())
         return BAMBU_NETWORK_ERR_CANCELED;
     bool expected = false;
@@ -2241,6 +2269,10 @@ int OrcaCloudServiceAgent::http_get(const std::string& path, std::string* respon
                                     const std::string& if_none_match, std::string* etag)
 {
     std::string url = api_base_url + path;
+    if (!request_allowed(url)) {
+        if (http_code) *http_code = 0;
+        return BAMBU_NETWORK_ERR_CONNECTION_TO_SERVER_FAILED;
+    }
     BOOST_LOG_TRIVIAL(trace) << "OrcaCloudServiceAgent: GET " << url;
 
     if (!ensure_token_fresh("http_get_" + path))
@@ -2313,6 +2345,10 @@ int OrcaCloudServiceAgent::http_get(const std::string& path, std::string* respon
 int OrcaCloudServiceAgent::http_post(const std::string& path, const std::string& body, std::string* response_body, unsigned int* http_code)
 {
     std::string url = api_base_url + path;
+    if (!request_allowed(url)) {
+        if (http_code) *http_code = 0;
+        return BAMBU_NETWORK_ERR_CONNECTION_TO_SERVER_FAILED;
+    }
     BOOST_LOG_TRIVIAL(trace) << "OrcaCloudServiceAgent: POST " << url;
 
     ensure_token_fresh("http_post_" + path);
@@ -2378,6 +2414,10 @@ int OrcaCloudServiceAgent::http_post(const std::string& path, const std::string&
 int OrcaCloudServiceAgent::http_put(const std::string& path, const std::string& body, std::string* response_body, unsigned int* http_code)
 {
     std::string url = api_base_url + path;
+    if (!request_allowed(url)) {
+        if (http_code) *http_code = 0;
+        return BAMBU_NETWORK_ERR_CONNECTION_TO_SERVER_FAILED;
+    }
     BOOST_LOG_TRIVIAL(trace) << "OrcaCloudServiceAgent: PUT " << url;
 
     ensure_token_fresh("http_put_" + path);
@@ -2440,6 +2480,10 @@ int OrcaCloudServiceAgent::http_put(const std::string& path, const std::string& 
 int OrcaCloudServiceAgent::http_delete(const std::string& path, std::string* response_body, unsigned int* http_code, const std::string& required_user_id)
 {
     std::string url = api_base_url + path;
+    if (!request_allowed(url)) {
+        if (http_code) *http_code = 0;
+        return BAMBU_NETWORK_ERR_CONNECTION_TO_SERVER_FAILED;
+    }
     BOOST_LOG_TRIVIAL(trace) << "OrcaCloudServiceAgent: DELETE " << url;
 
     ensure_token_fresh("http_delete_" + path);
@@ -2524,6 +2568,10 @@ bool OrcaCloudServiceAgent::http_post_token(const std::string& body,
         url          = custom_url.empty() ? (auth_base_url + auth_constants::TOKEN_PATH) : custom_url;
         headers_copy = extra_headers;
     }
+    if (!request_allowed(url)) {
+        if (http_code) *http_code = 0;
+        return false;
+    }
 
     // Add auth headers
     {
@@ -2598,6 +2646,10 @@ bool OrcaCloudServiceAgent::http_post_auth(const std::string& path,
                                            unsigned int* http_code)
 {
     std::string url = auth_base_url + path + "?scope=local";
+    if (!request_allowed(url)) {
+        if (http_code) *http_code = 0;
+        return false;
+    }
     std::string token;
     std::map<std::string, std::string> headers_copy;
     {
@@ -3167,6 +3219,8 @@ int OrcaCloudServiceAgent::request_web_session_handoff(std::string& token_hash, 
     http_code = 0;
 
     const std::string url = api_base_url + ORCA_WEB_SESSION_HANDOFF_PATH;
+    if (!request_allowed(url))
+        return BAMBU_NETWORK_ERR_CONNECTION_TO_SERVER_FAILED;
     BOOST_LOG_TRIVIAL(trace) << "OrcaCloudServiceAgent: POST " << ORCA_WEB_SESSION_HANDOFF_PATH;
 
     // Refresh the desktop token the usual way before minting (newest access token).

@@ -438,6 +438,9 @@ void HintDatabase::load_hints_from_file(const boost::filesystem::path& path)
 			}
 			if (dict.find("documentation_link") != dict.end()) {
 				documentation_link = dict["documentation_link"];
+				// Every link in hints.ini is an Orca wiki page.
+				if (!ORCA_ONLINE_SERVICES && documentation_link.find("orcaslicer.com") != std::string::npos)
+					documentation_link.clear();
 			}
 			if (dict.find("image") != dict.end()) {
 				img_url = dict["image"];

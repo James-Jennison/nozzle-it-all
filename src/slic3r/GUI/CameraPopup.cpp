@@ -163,7 +163,7 @@ CameraPopup::CameraPopup(wxWindow *parent)
     vcamera_guide_link->Wrap(-1);
     vcamera_guide_link->SetForegroundColour(wxColour(0x1F, 0x8E, 0xEA));
     auto text_size = vcamera_guide_link->GetTextExtent(text);
-    vcamera_guide_link->Bind(wxEVT_LEFT_DOWN, [url](wxMouseEvent& e) {wxLaunchDefaultBrowser(url); });
+    vcamera_guide_link->Bind(wxEVT_LEFT_DOWN, [url](wxMouseEvent& e) { if (ORCA_ONLINE_SERVICES) wxLaunchDefaultBrowser(url); });
 
     link_underline = new wxPanel(m_panel, wxID_ANY, wxDefaultPosition, wxSize(-1, 1), wxTAB_TRAVERSAL);
     link_underline->SetBackgroundColour(wxColour(0x1F, 0x8E, 0xEA));
@@ -365,7 +365,7 @@ void CameraPopup::sync_vcamera_state(bool show_vcamera)
     is_vcamera_show = show_vcamera;
     if (is_vcamera_show) {
         m_switch_vcamera->SetValue(true);
-        vcamera_guide_link->Show();
+        vcamera_guide_link->Show(ORCA_ONLINE_SERVICES);
         link_underline->Show();
     }
     else {
@@ -395,7 +395,7 @@ void CameraPopup::check_func_supported(MachineObject *obj2)
         m_text_vcamera->Show();
         m_switch_vcamera->Show();
         if (is_vcamera_show) {
-            vcamera_guide_link->Show();
+            vcamera_guide_link->Show(ORCA_ONLINE_SERVICES);
             link_underline->Show();
         }
     } else {
@@ -525,7 +525,8 @@ void CameraPopup::OnLeftUp(wxMouseEvent &event)
         auto h_rect = vcamera_guide_link->ClientToScreen(wxPoint(0, 0));
         if (mouse_pos.x > h_rect.x && mouse_pos.y > h_rect.y && mouse_pos.x < (h_rect.x + vcamera_guide_link->GetSize().x) && mouse_pos.y < (h_rect.y + vcamera_guide_link->GetSize().y)) {
             auto url = wxString(L"https://www.orcaslicer.com/wiki/"); // Orca: neutral wiki link (vendor URL removed)
-            wxLaunchDefaultBrowser(url);
+            if (ORCA_ONLINE_SERVICES)
+                wxLaunchDefaultBrowser(url);
         }
     }
 }

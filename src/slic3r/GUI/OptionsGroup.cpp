@@ -1403,6 +1403,8 @@ void ExtruderOptionsGroup::on_change_OG(const t_config_option_key& opt_id, const
 
 wxString OptionsGroup::get_url(const std::string& path_end)
 {
+    if (!ORCA_ONLINE_SERVICES)
+        return {}; // no wiki page is offered, so no setting carries a link
     // BBS
     wxString str = from_u8(path_end);
     auto pos     = str.find(L'#');
@@ -1416,7 +1418,11 @@ wxString OptionsGroup::get_url(const std::string& path_end)
     return wxString::Format(L"https://www.orcaslicer.com/wiki/%s", from_u8(path_end));
 }
 
-bool OptionsGroup::launch_browser(const std::string& path_end) { return wxLaunchDefaultBrowser(OptionsGroup::get_url(path_end)); }
+bool OptionsGroup::launch_browser(const std::string& path_end)
+{
+    const wxString url = OptionsGroup::get_url(path_end);
+    return !url.empty() && wxLaunchDefaultBrowser(url);
+}
 
 //-------------------------------------------------------------------------------------------
 // ogStaticText

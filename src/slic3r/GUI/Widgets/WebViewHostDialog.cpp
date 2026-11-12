@@ -155,7 +155,9 @@ std::string WebViewHostDialog::document_start_injector(const std::string& markup
 
 std::string WebViewHostDialog::localized_strings_script(const nlohmann::json& strings)
 {
-    return "window.ORCA_UI_STRINGS = " + strings.dump(-1, ' ', false, nlohmann::json::error_handler_t::ignore) + ";";
+    // The pages read this through OrcaOnlineServices() in resources/web/include/i18n.js.
+    const char* services = ORCA_ONLINE_SERVICES ? "" : "window.ORCA_ONLINE_SERVICES = false;";
+    return "window.ORCA_UI_STRINGS = " + strings.dump(-1, ' ', false, nlohmann::json::error_handler_t::ignore) + ";" + services;
 }
 
 WebViewHostDialog::WebViewHostDialog(wxWindow* parent,

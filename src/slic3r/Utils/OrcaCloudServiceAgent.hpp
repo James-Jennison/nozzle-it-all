@@ -157,6 +157,9 @@ public:
 
     // Configuration
     void configure_urls(AppConfig* app_config);
+    // False for an address on OrcaSlicer's servers in a build that does not offer Orca Cloud
+    // (ORCA_ONLINE_SERVICES off); every request this agent sends is checked against it first.
+    static bool request_allowed(const std::string& url);
     void set_api_base_url(const std::string& url);
     void set_auth_base_url(const std::string& url);
     void set_cloud_base_url(const std::string& url);

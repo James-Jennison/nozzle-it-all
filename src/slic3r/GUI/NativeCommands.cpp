@@ -635,10 +635,12 @@ std::vector<NativeCommand> build_command_catalog()
         Slic3r::GUI::about();
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
+#if ORCA_ONLINE_SERVICES
     add_with_icon("open_wiki", L("Open Wiki"), L("Help"), "link_wiki_img", [](const std::string&) {
         wxLaunchDefaultBrowser("https://www.orcaslicer.com/wiki/", wxBROWSER_NEW_WINDOW);
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
+#endif
     add("open_youtube", L("Open YouTube Channel"), L("Help"), [](const std::string&) {
         wxLaunchDefaultBrowser("https://www.youtube.com/@OfficialOrcaSlicer/videos", wxBROWSER_NEW_WINDOW);
         return AppActionRunResult{AppActionRunResult::Level::Success};
@@ -653,10 +655,12 @@ std::vector<NativeCommand> build_command_catalog()
         wxGetApp().refresh_plugins();
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
+#if ORCA_ONLINE_SERVICES
     add("install_plugin", L("Install Plugin"), L("Plugins"), [](const std::string&) {
         open_plugin_hub();
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
+#endif
     add("install_local_plugin", L("Install Local Plugin"), L("Plugins"), [](const std::string&) {
         wxGetApp().install_local_plugin();
         return AppActionRunResult{AppActionRunResult::Level::Success};

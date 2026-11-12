@@ -4745,12 +4745,14 @@ void GLGizmoTextureDisplacement::render_texture_library_popup(const ImVec2 &pane
             end_grid(origin, count);
         }
 
+#if ORCA_ONLINE_SERVICES
         ImGui::Dummy(ImVec2(0.f, spacing));
         const std::string download_label = _u8L("Explore more texture libraries");
         if (ImGui::Button(download_label.c_str(), ImVec2(grid_w, frame_h)))
             download_clicked = true;
         if (ImGui::IsItemHovered())
             panel_tooltip(_u8L("Opens OrcaCloud in the Home page to browse for plugins."));
+#endif
     }
 
     const Section &user = sections.back();

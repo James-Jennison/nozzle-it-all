@@ -3,6 +3,13 @@
 // (WebViewHostDialog::localized_strings_script). The English in the markup and in the T() calls is the
 // fallback for a page opened outside the app.
 
+// False in a build that does not offer OrcaSlicer's own online services (Orca Cloud, the Orca wiki):
+// the hosting window then sets window.ORCA_ONLINE_SERVICES = false beside the strings. Such a page
+// hides every element marked data-orca-service (see TranslatePage).
+function OrcaOnlineServices() {
+  return !(typeof ORCA_ONLINE_SERVICES !== "undefined" && ORCA_ONLINE_SERVICES === false);
+}
+
 // The string for `key`, else `fallback`. Each further argument fills the next %s.
 function T(key, fallback, ...args) {
   const strings = (typeof ORCA_UI_STRINGS !== "undefined" && ORCA_UI_STRINGS) || {};
@@ -39,6 +46,12 @@ function AppendTemplate(node, template, ...nodes) {
 // data-i18n-aria-label the key for that attribute. Translating again is harmless, so a page can call
 // this after adding markup.
 function TranslatePage() {
+  if (!OrcaOnlineServices() && !document.getElementById("orca-services-off")) {
+    const style = document.createElement("style");
+    style.id = "orca-services-off";
+    style.textContent = "[data-orca-service]{display:none !important}";
+    document.head.appendChild(style);
+  }
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     const textNode = Array.from(el.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && n.nodeValue.trim());
     const text = T(el.dataset.i18n, textNode ? textNode.nodeValue.trim() : "");

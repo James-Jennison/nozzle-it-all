@@ -405,6 +405,47 @@ TEST_CASE("Logging out leaves a secret this instance could not read alone", "[Or
     CHECK(fs::exists(secret_file(dir.path())));
 }
 
+TEST_CASE("A request to OrcaSlicer's servers is allowed only where Orca Cloud is offered", "[OrcaCloudServiceAgent]")
+{
+    const bool offered = ORCA_ONLINE_SERVICES;
+    for (const char* url : {"https://api.orcaslicer.com/api/v1/health", "https://auth.orcaslicer.com", "https://cloud.orcaslicer.com/app/plugins",
+                            "https://ORCASLICER.com", "https://user@api.orcaslicer.com.:443/x", "api.orcaslicer.com/x"}) {
+        INFO(url);
+        CHECK(OrcaCloudServiceAgent::request_allowed(url) == offered);
+    }
+    // Any other address is never refused: a test server on this machine, or a host that only looks alike.
+    for (const char* url : {"http://127.0.0.1:8080/api/v1/health", "https://orcaslicer.com.example.org/", "https://notorcaslicer.com/",
+                            "https://example.org/?next=https://api.orcaslicer.com"}) {
+        INFO(url);
+        CHECK(OrcaCloudServiceAgent::request_allowed(url));
+    }
+}
+
+#if !ORCA_ONLINE_SERVICES
+TEST_CASE("An agent on OrcaSlicer's own addresses reads no saved session and reaches no server", "[OrcaCloudServiceAgent]")
+{
+    ScopedTemporaryDir dir("orca-off");
+    make_file_backed_agent(dir.path())
+        ->persist_user_secret(nlohmann::json{{"refresh_token", "stored-refresh-token"}, {"user_id", "test-user-id"}}.dump());
+
+    // The addresses are left at their defaults, as in the application.
+    auto agent = make_file_backed_agent(dir.path());
+    REQUIRE(agent->start() == BAMBU_NETWORK_SUCCESS);
+    CHECK_FALSE(agent->is_user_login());
+    CHECK(agent->get_access_token().empty());
+
+    CHECK(agent->connect_server() == BAMBU_NETWORK_ERR_CONNECTION_TO_SERVER_FAILED);
+    CHECK_FALSE(agent->is_server_connected());
+    CHECK(agent->refresh_connection() == BAMBU_NETWORK_SUCCESS);
+    CHECK_FALSE(agent->is_server_connected());
+
+    unsigned int http_code = 123;
+    std::string  body;
+    CHECK(agent->get_user_print_info(&http_code, &body) != BAMBU_NETWORK_SUCCESS);
+    CHECK(http_code == 0);
+}
+#endif
+
 TEST_CASE("Orca cloud flat session resolves display name consistently", "[OrcaCloudServiceAgent]")
 {
     CHECK(resolved_display_name(flat_session_json({

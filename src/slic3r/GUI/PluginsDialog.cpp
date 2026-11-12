@@ -530,6 +530,8 @@ void refresh_plugin_metadata_blocking(bool fetch_cloud)
 
 void open_plugin_hub()
 {
+    if (!ORCA_ONLINE_SERVICES)
+        return; // the hub is part of Orca Cloud
     std::string cloud_base_url = "https://cloud.orcaslicer.com";
 
     if (wxGetApp().getAgent()) {
@@ -1529,7 +1531,7 @@ void PluginsDialog::open_plugin_folder(const PluginDescriptor& plugin)
 
 void PluginsDialog::open_plugin_on_cloud(const std::string& sharing_token)
 {
-    if (sharing_token.empty())
+    if (sharing_token.empty() || !ORCA_ONLINE_SERVICES)
         return;
 
     if (!wxGetApp().getAgent())

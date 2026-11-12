@@ -6502,7 +6502,7 @@ void SelectMachineDialog::UpdateStatusCheckWarning_ExtensionTool(MachineObject* 
                 {
                     show_status(PrintDialogStatus::PrintStatusToolHeadCoolingFanWarning,
                                 { _L("Install toolhead enhanced cooling fan to prevent filament softening.")},
-                                "https://www.orcaslicer.com/wiki/"); // Orca: neutral wiki link (vendor URL removed)
+                                ORCA_ONLINE_SERVICES ? "https://www.orcaslicer.com/wiki/" : ""); // Orca: neutral wiki link (vendor URL removed)
                     return;
                 }
             }
@@ -7161,6 +7161,7 @@ void PrinterInfoBox::Create()
     m_button_question = new ScalableButton(this, wxID_ANY, "icon_qusetion", wxEmptyString, wxDefaultSize, wxDefaultPosition, wxBU_EXACTFIT | wxNO_BORDER, true);
     m_button_question->Bind(wxEVT_BUTTON, &PrinterInfoBox::OnBtnQuestionClicked, this);
     m_button_question->SetToolTip(_L("Click here if you can't connect to the printer"));
+    m_button_question->Show(ORCA_ONLINE_SERVICES);
     m_button_question->SetMinSize(wxSize(FromDIP(18), FromDIP(18)));
     m_button_question->SetMaxSize(wxSize(FromDIP(18), FromDIP(18)));
 
@@ -7245,7 +7246,8 @@ void PrinterInfoBox::Create()
 
 void PrinterInfoBox::OnBtnQuestionClicked(wxCommandEvent& event)
 {
-    wxLaunchDefaultBrowser(wxT("https://www.orcaslicer.com/wiki/")); // Orca: neutral wiki link (vendor URL removed)
+    if (ORCA_ONLINE_SERVICES)
+        wxLaunchDefaultBrowser(wxT("https://www.orcaslicer.com/wiki/")); // Orca: neutral wiki link (vendor URL removed)
 }
 
 

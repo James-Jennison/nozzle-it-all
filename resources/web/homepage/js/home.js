@@ -135,7 +135,8 @@ function HandleStudio( pVal )
       $("#BambuCloudSection").hide();
     }
 
-    if (providers.indexOf("orca") >= 0) {
+    // Without Orca's own services the board holds only the Bambu account, so it shows for that alone.
+    if (OrcaOnlineServices() ? providers.indexOf("orca") >= 0 : providers.indexOf("bbl") >= 0) {
       $("#LeftBoard").show();
     } else {
       $("#LeftBoard").hide();
@@ -184,6 +185,8 @@ function SetCloudMode( bOn )
 
 function GotoCloud()
 {
+	if( !OrcaOnlineServices() )
+		return;
 	SetCloudMode(true);
 	SendSimpleCommand("homepage_open_cloud");
 }

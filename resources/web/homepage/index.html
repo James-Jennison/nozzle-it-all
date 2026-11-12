@@ -24,7 +24,7 @@
 	<div id="LoginArea">
 
 		<!-- Orca Cloud account -->
-		<div id="OrcaAccount" class="AccountRow" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false"
+		<div id="OrcaAccount" data-orca-service class="AccountRow" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false"
 			 onClick="OnAccountRowClick('orca')">
 			<span class="AccountAvatar">
 				<img id="UserAvatarIcon" class="AccountAvatarImg" alt="" onerror="OnAvatarLoadError(this)" />
@@ -90,11 +90,11 @@
 			<div data-i18n="recent">Recent</div>
 			<div class="NavArrow icon16"></div>
 		</div>
-		<div menu="orca_cloud" class="BtnItem" onClick="GotoCloud()">
+		<div menu="orca_cloud" data-orca-service class="BtnItem" onClick="GotoCloud()">
 			<div>OrcaCloud</div>
 			<div class="NavArrow icon16"></div>
 		</div>
-		<div class="BtnItem" onClick="OpenUrlInLocalBrowser('https://orcaslicer.com/wiki')">
+		<div data-orca-service class="BtnItem" onClick="OpenUrlInLocalBrowser('https://orcaslicer.com/wiki')">
 			<div>Wiki</div>
 			<div class="ShortcutIcon icon16"></div>
 		</div>

@@ -257,7 +257,10 @@ TEST_CASE("Native command catalog includes the Help and developer-mode commands"
     const Slic3r::GUI::NativeCommand* first = find("help_keyboard_shortcuts");
     REQUIRE(first != nullptr);
     for (const char* key : {"help_setup_wizard", "help_open_config_folder", "help_migrate_filament_presets", "help_troubleshoot", "help_network_test",
-                            "help_benchmark_3d_scene", "help_tip_of_the_day", "help_check_updates", "help_about", "open_wiki",
+                            "help_benchmark_3d_scene", "help_tip_of_the_day", "help_check_updates", "help_about",
+#if ORCA_ONLINE_SERVICES
+                            "open_wiki",
+#endif
                             "open_youtube"}) {
         const Slic3r::GUI::NativeCommand* c = find(key);
         REQUIRE(c != nullptr);

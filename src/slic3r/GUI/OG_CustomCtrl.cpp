@@ -381,7 +381,7 @@ void OG_CustomCtrl::OnMotion(wxMouseEvent& event)
     CtrlLine* focusedLine = nullptr;
     // BBS
 
-    bool suppress_hyperlinks = false;
+    bool suppress_hyperlinks = !ORCA_ONLINE_SERVICES;
 
     for (CtrlLine& line : ctrl_lines) {
         if (!line.is_visible) continue;
@@ -830,7 +830,7 @@ void OG_CustomCtrl::CtrlLine::render(wxDC& dc, wxCoord h_pos, wxCoord v_pos)
     Field* field = og_line.get_options().empty() ? nullptr :
                    ctrl->opt_group->get_field(og_line.get_options().front().opt_id);
 
-    bool suppress_hyperlinks = false;
+    bool suppress_hyperlinks = !ORCA_ONLINE_SERVICES;
     if (draw_just_act_buttons) {
         //BBS: GUI refactor
         if (field && field->undo_bitmap()) {

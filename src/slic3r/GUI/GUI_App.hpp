@@ -636,6 +636,9 @@ public:
     void            add_pending_vendor_preset(const std::pair<std::string, std::map<std::string, std::string>>& preset_data);
     void            load_pending_vendors();
 
+    // Asks for a link to a shared preset bundle or a bundle file, downloads it once and imports it.
+    void            import_preset_bundle_from_link();
+
     void            sync_preset(Preset* preset, bool force = false);
     void            start_sync_user_preset(bool with_progress_dlg = false);
     void            stop_sync_user_preset();

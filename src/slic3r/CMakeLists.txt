@@ -817,6 +817,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/IPrinterAgent.hpp
     Utils/ICameraSignalingChannel.hpp
     Utils/OrcaCloudServiceAgent.cpp
+    Utils/PresetBundleLink.cpp
+    Utils/PresetBundleLink.hpp
     Utils/OrcaCloudServiceAgent.hpp
     Utils/OrcaPrinterAgent.cpp
     Utils/OrcaPrinterAgent.hpp

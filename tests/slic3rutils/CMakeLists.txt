@@ -28,6 +28,7 @@ add_executable(${_TEST_NAME}_tests
     test_network_versions.cpp
     test_nia_theme.cpp
     test_orca_cloud_agent.cpp
+    test_preset_bundle_link.cpp
     test_action_source.cpp
     test_option_state_registry.cpp
     test_plugin_host_api.cpp

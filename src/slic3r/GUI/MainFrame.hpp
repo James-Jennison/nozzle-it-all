@@ -422,6 +422,7 @@ public:
     void        export_config();
     // Query user for the config file and open it.
     void        load_config_file();
+    void        import_config_files(std::vector<std::string> files, bool remember_directory);
     // Open a config file. Return true if loaded.
     bool        load_config_file(const std::string &path);
 

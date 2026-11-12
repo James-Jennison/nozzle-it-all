@@ -2768,6 +2768,37 @@ PresetsConfigSubstitutions PresetBundle::update_subscribed_presets(
     const BundleMetadata& remote_metadata,
     ForwardCompatibilitySubstitutionRule substitution_rule)
 {
+    return store_downloaded_bundle(config, bundle_presets, remote_metadata, substitution_rule, BundleType::Subscribed);
+}
+
+// A bundle downloaded once at the user's request is kept as a local bundle: nothing refreshes it
+// and it is removed like any other local bundle.
+PresetsConfigSubstitutions PresetBundle::import_downloaded_bundle(
+    AppConfig& config,
+    const std::map<std::string, std::map<std::string, std::string>>& bundle_presets,
+    const BundleMetadata& remote_metadata,
+    ForwardCompatibilitySubstitutionRule substitution_rule)
+{
+    return store_downloaded_bundle(config, bundle_presets, remote_metadata, substitution_rule, BundleType::Local);
+}
+
+PresetsConfigSubstitutions PresetBundle::store_downloaded_bundle(
+    AppConfig& config,
+    const std::map<std::string, std::map<std::string, std::string>>& bundle_presets,
+    const BundleMetadata& remote_metadata,
+    ForwardCompatibilitySubstitutionRule substitution_rule,
+    BundleType stored_as)
+{
+    const bool subscribed = stored_as == BundleType::Subscribed;
+    if (!subscribed) {
+        // The id of a bundle the user downloaded names a folder: it must be one plain path component,
+        // and must not be the id of a bundle that is kept in step with a server.
+        // The caller holds the bundles lock, as for a subscribed bundle.
+        const auto taken = bundles.m_bundles.find(remote_metadata.id);
+        if (!is_single_path_component(remote_metadata.id) ||
+            (taken != bundles.m_bundles.end() && (taken->second.bundle_type == BundleType::Subscribed || taken->second.is_subscribed)))
+            throw Slic3r::RuntimeError("The bundle's id cannot be used for a local bundle");
+    }
     PresetsConfigSubstitutions substitutions;
     std::string errors_cumulative;
     bool process_added = false, filament_added = false, machine_added = false;
@@ -2788,12 +2819,12 @@ PresetsConfigSubstitutions PresetBundle::update_subscribed_presets(
     merged_metadata.description = remote_metadata.description;
     merged_metadata.author = remote_metadata.author;
     merged_metadata.updated_time = remote_metadata.updated_time;
-    merged_metadata.bundle_type = BundleType::Subscribed;
-    merged_metadata.is_subscribed = true;
+    merged_metadata.bundle_type = stored_as;
+    merged_metadata.is_subscribed = subscribed;
     merged_metadata.update_available = false;
     merged_metadata.unauthorized = false;
 
-    const PresetOrigin subscribed_origin(PresetOrigin::Kind::SubscribedBundle, remote_metadata.id);
+    const PresetOrigin subscribed_origin(subscribed ? PresetOrigin::Kind::SubscribedBundle : PresetOrigin::Kind::LocalBundle, remote_metadata.id);
 
     std::unordered_set<std::string> remote_prints;
     std::unordered_set<std::string> remote_filaments;
@@ -2855,7 +2886,7 @@ PresetsConfigSubstitutions PresetBundle::update_subscribed_presets(
 
     // Create the subscribed directory base path
     boost::filesystem::path user_folder(Slic3r::data_dir() + "/" + PRESET_USER_DIR);
-    boost::filesystem::path subscribed_base(user_folder / user_id / PRESET_SUBSCRIBED_DIR);
+    boost::filesystem::path subscribed_base(user_folder / user_id / (subscribed ? PRESET_SUBSCRIBED_DIR : PRESET_LOCAL_DIR));
 
     // Ensure subscribed directory exists
     boost::system::error_code ec;
@@ -2866,7 +2897,10 @@ PresetsConfigSubstitutions PresetBundle::update_subscribed_presets(
         return substitutions;
     }
 
-    dir_user_presets_subscribed = subscribed_base;
+    if (subscribed)
+        dir_user_presets_subscribed = subscribed_base;
+    else
+        dir_user_presets_local = subscribed_base;
 
     // Create bundle directory
     boost::filesystem::path bundle_dir(subscribed_base / remote_metadata.id);

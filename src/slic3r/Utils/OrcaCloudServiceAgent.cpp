@@ -3433,6 +3433,16 @@ int OrcaCloudServiceAgent::get_shared_bundle(const std::string& bundle_id,
         return result != 0 ? result : http_code;
     }
 
+    return parse_shared_bundle(response_body, bundle_id, presets, bundle_metadata);
+}
+
+int OrcaCloudServiceAgent::parse_shared_bundle(const std::string& response_body, const std::string& bundle_id,
+                                               std::map<std::string, std::map<std::string, std::string>>* presets,
+                                               BundleMetadata* bundle_metadata)
+{
+    if (!presets || !bundle_metadata)
+        return -1;
+
     // Parse JSON response
     try {
         auto json = nlohmann::json::parse(response_body);

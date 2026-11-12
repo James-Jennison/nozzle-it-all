@@ -1,3 +1,4 @@
+#include "slic3r/Utils/PresetBundleLink.hpp"
 #include "CloudProvider.hpp"
 #include "ExportPresetBundleDialog.hpp"
 #include "ICloudServiceAgent.hpp"
@@ -165,6 +166,7 @@
 #include <wx/filedlg.h>
 #include <wx/progdlg.h>
 #include <wx/busyinfo.h>
+#include <wx/textdlg.h>
 #include <wx/dir.h>
 #include <wx/wupdlock.h>
 #include <wx/filefn.h>
@@ -7733,6 +7735,107 @@ bool GUI_App::check_preset_parent_available(const std::pair<std::string, std::ma
     else if (preset_data.second.at(BBL_JSON_KEY_TYPE) == PRESET_IOT_FILAMENT_TYPE)
         return preset_bundle->filaments.find_preset2(inherits_name) != nullptr;
     return true;
+}
+
+void GUI_App::import_preset_bundle_from_link()
+{
+    if (!mainframe || !preset_bundle || !app_config)
+        return;
+    wxTextEntryDialog ask(mainframe,
+                          _L("Enter the link to a shared preset bundle, or to a bundle file.\n\n"
+                             "The bundle is downloaded once from that address. It is not updated automatically."),
+                          _L("Import Preset Bundle from Link"));
+    if (ask.ShowModal() != wxID_OK)
+        return;
+    const PresetBundleLink link = resolve_preset_bundle_link(into_u8(ask.GetValue()));
+    auto failed = [this](const wxString& text) {
+        MessageDialog(mainframe, text, _L("Import Preset Bundle from Link"), wxOK | wxICON_WARNING).ShowModal();
+    };
+    if (link.kind == PresetBundleLink::Kind::Invalid) {
+        failed(_L("This is not a link to a preset bundle.\n\nUse the bundle's share link (https://cloud.orcaslicer.com/b/...), "
+                  "or an https link to a .orca_bundle, .orca_printer, .orca_filament, .zip or .json file."));
+        return;
+    }
+
+    std::string body, error;
+    bool        received = false;
+    {
+        wxBusyCursor busy;
+        Http::get(link.request_url)
+            .timeout_connect(10)
+            .timeout_max(60)
+            .size_limit(32 * 1024 * 1024)
+            .on_complete([&](std::string answer, unsigned status) {
+                received = status == 200;
+                if (received)
+                    body = std::move(answer);
+                else
+                    error = "HTTP " + std::to_string(status);
+            })
+            .on_error([&](std::string, std::string reason, unsigned status) {
+                error = status != 0 ? "HTTP " + std::to_string(status) : reason;
+            })
+            .perform_sync();
+    }
+    if (!received) {
+        failed(format_wxstr(_L("The bundle could not be downloaded (%1%). Nothing was imported."), error));
+        return;
+    }
+
+    if (link.kind == PresetBundleLink::Kind::File) {
+        namespace fs = boost::filesystem;
+        boost::system::error_code ec;
+        const fs::path folder = fs::path(data_dir()) / "cache" / ("link-import." + std::to_string(get_current_pid()));
+        fs::create_directories(folder, ec);
+        const fs::path file = folder / link.file_name;
+        {
+            boost::nowide::ofstream out(file.string(), std::ios::binary | std::ios::trunc);
+            out.write(body.data(), std::streamsize(body.size()));
+            if (!out.good())
+                ec = boost::system::errc::make_error_code(boost::system::errc::io_error);
+        }
+        if (ec)
+            failed(_L("The downloaded bundle could not be stored. Nothing was imported."));
+        else
+            mainframe->import_config_files({file.string()}, false);
+        fs::remove_all(folder, ec);
+        return;
+    }
+
+    std::map<std::string, std::map<std::string, std::string>> presets;
+    BundleMetadata                                             metadata;
+    if (OrcaCloudServiceAgent::parse_shared_bundle(body, link.token, &presets, &metadata) != 0 || presets.empty() || metadata.id.empty()) {
+        failed(_L("The link did not answer with a preset bundle. Nothing was imported."));
+        return;
+    }
+    try {
+        // As for a bundle Orca keeps in step: load the vendors the bundle's presets inherit from.
+        for (const auto& preset : presets) {
+            if (!check_preset_parent_available(preset))
+                add_pending_vendor_preset(preset);
+        }
+        load_pending_vendors();
+
+        preset_bundle->bundles.WriteLock();
+        try {
+            preset_bundle->import_downloaded_bundle(*app_config, presets, metadata, ForwardCompatibilitySubstitutionRule::Enable);
+        } catch (...) {
+            preset_bundle->bundles.WriteUnlock();
+            throw;
+        }
+        preset_bundle->bundles.WriteUnlock();
+    } catch (const std::exception& e) {
+        BOOST_LOG_TRIVIAL(error) << "Import of a preset bundle from a link failed: " << e.what();
+        mainframe->update_side_preset_ui();
+        failed(_L("The bundle could not be imported completely. See the log for the presets that were refused."));
+        return;
+    }
+    mainframe->update_side_preset_ui();
+    MessageDialog(mainframe,
+                  format_wxstr(_L("Preset bundle \"%1%\" (version %2%) was imported with %3% presets.\n\n"
+                                  "It is kept as a local bundle and can be removed in Preset Bundle."),
+                               metadata.name, metadata.version, presets.size()),
+                  _L("Import Preset Bundle from Link"), wxOK).ShowModal();
 }
 
 void GUI_App::add_pending_vendor_preset(const std::pair<std::string, std::map<std::string, std::string>>& preset_data)

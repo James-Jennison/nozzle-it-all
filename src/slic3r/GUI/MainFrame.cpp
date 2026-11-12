@@ -3238,6 +3238,10 @@ void MainFrame::init_menubar_as_editor()
             [this](wxCommandEvent&) { load_config_file(); }, "menu_import", nullptr,
             [](){return true; }, this);
 #if NOZZLE_BRANDING
+        append_menu_item(import_menu, wxID_ANY, _L("Import Preset Bundle from Link") + dots,
+            _L("Download a shared preset bundle once from a link and import it"),
+            [](wxCommandEvent&) { wxGetApp().import_preset_bundle_from_link(); }, "menu_import", nullptr,
+            [](){return true; }, this);
         append_menu_item(import_menu, wxID_ANY, _L("Import settings from another slicer on next launch") + dots,
             _L("Back up current settings and choose Orca-family settings to import after restarting"),
             [](wxCommandEvent&) { wxGetApp().schedule_nia_settings_import(); }, "menu_import", nullptr,
@@ -4177,7 +4181,12 @@ void MainFrame::load_config_file()
         cfiles.push_back(into_u8(file));
         m_last_config = file;
     }
-    bool update = false;
+    import_config_files(std::move(cfiles), true);
+}
+
+// Imports preset and bundle files and reports the result; shared by the file dialog and the link import.
+void MainFrame::import_config_files(std::vector<std::string> cfiles, bool remember_directory)
+{
     wxGetApp().preset_bundle->import_presets(cfiles, [this](std::string const & name) {
             ConfigsOverwriteConfirmDialog dlg(this, from_u8(name), false);
             int           res = dlg.ShowModal();
@@ -4187,7 +4196,8 @@ void MainFrame::load_config_file()
         ForwardCompatibilitySubstitutionRule::Enable,
         *wxGetApp().app_config);
     if (!cfiles.empty()) {
-        wxGetApp().app_config->update_config_dir(get_dir_name(cfiles.back()));
+        if (remember_directory)
+            wxGetApp().app_config->update_config_dir(get_dir_name(cfiles.back()));
         wxGetApp().load_current_presets();
         BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << " presets has been import,and size is" << cfiles.size();
         NetworkAgent* agent = wxGetApp().getAgent();

@@ -160,6 +160,11 @@ public:
     // False for an address on OrcaSlicer's servers in a build that does not offer Orca Cloud
     // (ORCA_ONLINE_SERVICES off); every request this agent sends is checked against it first.
     static bool request_allowed(const std::string& url);
+    // Reads the answer of the bundle endpoints (a bundle with its "shared_profiles") into presets and
+    // metadata. No request is made; 0 on success.
+    static int parse_shared_bundle(const std::string& response_body, const std::string& bundle_id,
+                                   std::map<std::string, std::map<std::string, std::string>>* presets,
+                                   BundleMetadata* bundle_metadata);
     void set_api_base_url(const std::string& url);
     void set_auth_base_url(const std::string& url);
     void set_cloud_base_url(const std::string& url);

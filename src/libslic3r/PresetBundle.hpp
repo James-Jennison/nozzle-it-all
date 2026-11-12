@@ -316,6 +316,11 @@ public:
                                                          const std::map<std::string, std::map<std::string, std::string>>& bundle_presets,
                                                          const BundleMetadata& remote_metadata,
                                                          ForwardCompatibilitySubstitutionRule rule);
+    // Stores a bundle downloaded once at the user's request as a local bundle.
+    PresetsConfigSubstitutions import_downloaded_bundle(AppConfig& config,
+                                                        const std::map<std::string, std::map<std::string, std::string>>& bundle_presets,
+                                                        const BundleMetadata& remote_metadata,
+                                                        ForwardCompatibilitySubstitutionRule rule);
 
     PresetsConfigSubstitutions import_presets(std::vector<std::string>& files,
                                               std::function<int(std::string const&)> override_confirm,
@@ -961,6 +966,11 @@ private:
     int m_selection_export_blockers = 0;
 
     // Helper function: save preset to bundle directory with common logic
+    PresetsConfigSubstitutions store_downloaded_bundle(AppConfig& config,
+                                                       const std::map<std::string, std::map<std::string, std::string>>& bundle_presets,
+                                                       const BundleMetadata& remote_metadata,
+                                                       ForwardCompatibilitySubstitutionRule rule,
+                                                       BundleType stored_as);
     bool save_preset_to_bundle_dir(Preset& preset, PresetCollection* collection,
                                    const std::string& bundle_id, const std::string& type_subdir,
                                    const std::string& bundle_base_dir);

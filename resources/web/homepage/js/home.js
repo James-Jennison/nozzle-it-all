@@ -135,8 +135,10 @@ function HandleStudio( pVal )
       $("#BambuCloudSection").hide();
     }
 
-    // Without Orca's own services the board holds only the Bambu account, so it shows for that alone.
-    if (OrcaOnlineServices() ? providers.indexOf("orca") >= 0 : providers.indexOf("bbl") >= 0) {
+    // Without Orca's own services the account area holds only the Bambu account, if that is enabled.
+    $("#LoginArea").toggle(OrcaOnlineServices() || providers.indexOf("bbl") >= 0);
+
+    if (providers.indexOf("orca") >= 0) {
       $("#LeftBoard").show();
     } else {
       $("#LeftBoard").hide();

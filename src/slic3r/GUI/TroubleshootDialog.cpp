@@ -197,11 +197,14 @@ TroubleshootDialog::TroubleshootDialog()
 
     auto build = new Button(this, wxString(build_commit_label));
     build->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+#if !NOZZLE_BRANDING
+    // The branded build's commits are not in OrcaSlicer's repository, so there the chip only shows the id.
     auto hash_url = "https://github.com/OrcaSlicer/OrcaSlicer/commit/" + wxString(build_commit_hash);
     build->SetToolTip(hash_url);
     build->Bind(wxEVT_BUTTON, [hash_url](wxCommandEvent &e) {
          wxLaunchDefaultBrowser(hash_url);
     });
+#endif
 
     // SYSTEM INFO
     auto sys_info_lines = [this](bool show_sys) {
@@ -326,6 +329,11 @@ TroubleshootDialog::TroubleshootDialog()
             return out;
         };
 
+#if NOZZLE_BRANDING
+        // Issues with the branded build belong to its own project, not to OrcaSlicer.
+        (void) encodeStr;
+        wxLaunchDefaultBrowser("https://github.com/James-Jennison/nozzle-it-all/issues");
+#else
         wxString url = "https://github.com/OrcaSlicer/OrcaSlicer/issues/new?template=bug_report.yml";
         wxString os = GetOStype();
         if(!os.IsEmpty())
@@ -333,6 +341,7 @@ TroubleshootDialog::TroubleshootDialog()
         url += "&version="     + encodeStr(wxString(SoftFever_VERSION));
         url += "&os_version="  + encodeStr(GetOSinfo());
         wxLaunchDefaultBrowser(url);
+#endif
     });
 
     auto pack_btn = new Button(this, _L("Pack") + "...");

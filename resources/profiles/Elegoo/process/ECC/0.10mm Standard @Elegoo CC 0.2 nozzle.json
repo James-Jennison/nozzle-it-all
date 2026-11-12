@@ -11,6 +11,8 @@
 	"elefant_foot_compensation": "0.15",
 	"enable_prime_tower": "1",
 	"compatible_printers": [
-		"Elegoo Centauri Carbon 0.2 nozzle"
+		"Elegoo Centauri Carbon 0.2 nozzle",
+		"Elegoo Centauri Carbon 0.2 nozzle - Cosmos",
+		"Elegoo Centauri Carbon 0.2 nozzle - Cosmos AFC"
 	]
 }

@@ -12,6 +12,8 @@
 	"min_width_top_surface": "50%",
 	"enable_prime_tower": "1",
 	"compatible_printers": [
-		"Elegoo Centauri Carbon 0.4 nozzle"
+		"Elegoo Centauri Carbon 0.4 nozzle",
+		"Elegoo Centauri Carbon 0.4 nozzle - Cosmos",
+		"Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC"
 	]
 }

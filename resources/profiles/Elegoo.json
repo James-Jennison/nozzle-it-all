@@ -1,6 +1,6 @@
 {
 	"name": "Elegoo",
-	"version": "02.04.00.13",
+	"version": "02.04.00.14",
 	"force_update": "0",
 	"description": "Elegoo configurations",
 	"machine_model_list": [
@@ -2263,6 +2263,14 @@
 			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.4 nozzle.json"
 		},
 		{
+			"name": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC.json"
+		},
+		{
+			"name": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.4 nozzle - Cosmos.json"
+		},
+		{
 			"name": "Elegoo Centauri Carbon 2 0.4 nozzle",
 			"sub_path": "machine/ECC2/Elegoo Centauri Carbon 2 0.4 nozzle.json"
 		},
@@ -2319,12 +2327,36 @@
 			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.2 nozzle.json"
 		},
 		{
+			"name": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos AFC",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.2 nozzle - Cosmos AFC.json"
+		},
+		{
+			"name": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.2 nozzle - Cosmos.json"
+		},
+		{
 			"name": "Elegoo Centauri Carbon 0.6 nozzle",
 			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.6 nozzle.json"
 		},
 		{
+			"name": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos AFC",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.6 nozzle - Cosmos AFC.json"
+		},
+		{
+			"name": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.6 nozzle - Cosmos.json"
+		},
+		{
 			"name": "Elegoo Centauri Carbon 0.8 nozzle",
 			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.8 nozzle.json"
+		},
+		{
+			"name": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos AFC",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.8 nozzle - Cosmos AFC.json"
+		},
+		{
+			"name": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon 0.8 nozzle - Cosmos.json"
 		},
 		{
 			"name": "Elegoo Centauri Carbon 2 0.2 nozzle",

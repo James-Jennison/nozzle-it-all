@@ -477,8 +477,13 @@ void AboutDialog::build_nozzle_layout()
     add_label(body, _L("A focused workshop for slicing, filament mapping, and connected printer control."),
               Label::Head_14, false, 0, 0, content_w);
     add_label(body,
-              _L("Nozzle It All Desktop is built on the OrcaSlicer engine and adds printer tools of its own: a send that checks the printer and starts each print once, a native Printer tab, and filament sync from the printer."),
+              // What this build does. Brought up to date when a phase of the plan is accepted.
+              _L("Nozzle It All Desktop is built on the OrcaSlicer engine and adds printer tools of its own: a send that checks the printer and starts each print once, a native Printer tab, filament sync from the printer, and Elegoo Centauri Carbon printers running COSMOS."),
               Label::Body_13, true, wxTOP, FromDIP(14), content_w);
+    // What is being built and is not in this build yet. An item moves to the sentence above when it lands.
+    add_label(body,
+              _L("In development: job history, several printers at once, more printer controls, spool tracking, AI assistance, model discovery, and a phone companion."),
+              Label::Body_13, true, wxTOP, FromDIP(10), content_w);
 
     add_label(body, _L("Open-source lineage"), Label::Head_12, false,
               wxTOP, FromDIP(14), content_w);

@@ -478,8 +478,8 @@ wxBitmap create_scaled_bitmap(  const std::string& bmp_name_in,
     // Pictures that carry OrcaSlicer's mark have a Nozzle It All Desktop counterpart.
     if (bmp_name == "OrcaSlicer")
         bmp_name = SLIC3R_APP_ICON_BASE;
-    else if (bmp_name == "exclamation")
-        bmp_name = SLIC3R_APP_ICON_BASE "_exclamation";
+    else if (bmp_name == "exclamation" || bmp_name == "info" || bmp_name == "question")
+        bmp_name = SLIC3R_APP_ICON_BASE "_" + bmp_name;
 #endif
 
     bool dark_mode =

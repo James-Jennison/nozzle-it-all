@@ -2667,7 +2667,15 @@ std::vector<unsigned char> ImGuiWrapper::load_svg(const std::string& bitmap_name
 {
     std::vector<unsigned char> empty_vector;
 
+    #if NOZZLE_BRANDING
+    // The picture that carries OrcaSlicer's mark has a Nozzle It All Desktop counterpart, in the NIA accent.
+    const std::string file_name = bitmap_name == "notification_slicing_complete" ? SLIC3R_APP_ICON_BASE "_" + bitmap_name : bitmap_name;
+    std::map<std::string, std::string> replaces = BitmapCache::brand_replaces(true);
+    replaces["\"#808080\""] = "\"#FFFFFF\"";
+    NSVGimage* image = BitmapCache::nsvgParseFromFileWithReplace(Slic3r::var(file_name + ".svg").c_str(), "px", 96.0f, replaces);
+#else
     NSVGimage* image = BitmapCache::nsvgParseFromFileWithReplace(Slic3r::var(bitmap_name + ".svg").c_str(), "px", 96.0f, { { "\"#808080\"", "\"#FFFFFF\"" } });
+#endif
     if (image == nullptr)
         return empty_vector;
 

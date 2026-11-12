@@ -16,6 +16,7 @@
 #include <map>
 #include <ios>
 #include "libslic3r/AppConfig.hpp"
+#include "libslic3r/libslic3r.h"
 #include "libslic3r/Preset.hpp"
 #include "libslic3r/Config.hpp"
 #include <set>
@@ -305,7 +306,9 @@ void PresetUpdater::priv::set_download_prefs(AppConfig *app_config)
 	auto profile_update_url = app_config->profile_update_url();
 	// Dev builds keep the profiles from their own source tree; an over-the-air bundle would replace them.
 	const bool dev_build = boost::algorithm::icontains(std::string(SoftFever_VERSION), "dev");
-	if (!profile_update_url.empty() && !dev_build)
+	// Where OrcaSlicer's online services are not offered, built-in presets come with the build only:
+	// nothing is asked of OrcaSlicer's update server and no downloaded bundle is installed.
+	if (ORCA_ONLINE_SERVICES && !profile_update_url.empty() && !dev_build)
 		enabled_config_update = true;
 	else
 		enabled_config_update = false;
@@ -1701,7 +1704,13 @@ void PresetUpdater::priv::check_new_vendors(const std::set<std::string>& system_
 void PresetUpdater::check_new_vendors(const std::set<std::string>& system_vendors,
                                        std::function<void(std::vector<std::string>, bool)> callback)
 {
+#if ORCA_ONLINE_SERVICES
     p->check_new_vendors(system_vendors, std::move(callback));
+#else
+    // No request to OrcaSlicer's update server: the setup guide lists the vendors the build ships.
+    (void) system_vendors;
+    GUI::wxGetApp().CallAfter([callback = std::move(callback)]() { callback({}, false); });
+#endif
 }
 
 void PresetUpdater::slic3r_update_notify()

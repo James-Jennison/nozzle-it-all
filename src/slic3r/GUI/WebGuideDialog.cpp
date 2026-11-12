@@ -154,7 +154,7 @@ static json guide_strings()
         {"stealth_mode_desc", _u8L("This disables all cloud features, including Orca Cloud profile syncing. Users who prefer to work entirely offline can enable this option.")},
         {"stealth_mode_note", _u8L("Note: When Stealth Mode is enabled, your user profiles will not be backed up to Orca Cloud.")},
 #else
-        {"stealth_mode_desc", _u8L("This disables all cloud features and online preset updates. Users who prefer to work entirely offline can enable this option.")},
+        {"stealth_mode_desc", _u8L("This disables all cloud features and online updates. Users who prefer to work entirely offline can enable this option.")},
         {"stealth_mode_note", _u8L("Note: When Stealth Mode is enabled, printers that connect through Bambu Cloud are not reachable.")},
 #endif
         {"enable_stealth_mode", _u8L("Enable Stealth Mode.")},

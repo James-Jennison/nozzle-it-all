@@ -2252,7 +2252,7 @@ void PreferencesDialog::create_items()
 #if ORCA_ONLINE_SERVICES
     auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features, including Orca Cloud profile syncing. Users who prefer to work entirely offline can enable this option.\n\nNote: When Stealth Mode is enabled, your user profiles will not be backed up to Orca Cloud."), "stealth_mode");
 #else
-    auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features and online preset updates. Users who prefer to work entirely offline can enable this option."), "stealth_mode");
+    auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features and online updates. Users who prefer to work entirely offline can enable this option."), "stealth_mode");
 #endif
     g_sizer->Add(item_stealth_mode);
 
@@ -2300,8 +2300,10 @@ void PreferencesDialog::create_items()
         {_L("Filament & Color"), _L("Color only")});
     g_sizer->Add(item_filament_sync_mode);
 
+#if ORCA_ONLINE_SERVICES
     auto item_system_sync      = create_item_checkbox(_L("Update built-in presets automatically."), "", "sync_system_preset");
     g_sizer->Add(item_system_sync);
+#endif
 
     auto item_token_storage    = create_item_checkbox(_L("Use encrypted file for token storage"),
                                                       _L("Store authentication tokens in an encrypted file instead of the system keychain. (Requires restart)"),

@@ -7758,7 +7758,8 @@ void GUI_App::import_preset_bundle_from_link()
     }
 
     // The user sees where the request goes and what a bundle can carry before anything is sent.
-    if (MessageDialog(mainframe,
+    // The system's own dialog: it makes No the default answer, which the application's dialog does not.
+    if (wxMessageDialog(mainframe,
                       format_wxstr(_L("Download this bundle from %1%?\n\n"
                                       "A preset bundle is someone else's settings. Printer presets in it can contain G-code "
                                       "that your printer runs at the start and end of a print. Import a bundle only from a source you trust, "
@@ -7850,7 +7851,7 @@ void GUI_App::import_preset_bundle_from_link()
     already_here = preset_bundle->bundles.m_bundles.count(metadata.id) != 0;
     preset_bundle->bundles.ReadUnlock();
     if (already_here &&
-        MessageDialog(mainframe,
+        wxMessageDialog(mainframe,
                       format_wxstr(_L("The bundle \"%1%\" is already imported. Replace it with the downloaded version %2%?\n\n"
                                       "Presets that are no longer in the bundle are removed."),
                                    metadata.name, metadata.version),

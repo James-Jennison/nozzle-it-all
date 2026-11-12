@@ -17,6 +17,14 @@
 			"sub_path": "machine/ECC/Elegoo Centauri Carbon.json"
 		},
 		{
+			"name": "Elegoo Centauri Carbon (COSMOS AFC)",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon (COSMOS AFC).json"
+		},
+		{
+			"name": "Elegoo Centauri Carbon (COSMOS)",
+			"sub_path": "machine/ECC/Elegoo Centauri Carbon (COSMOS).json"
+		},
+		{
 			"name": "Elegoo Centauri Carbon 2",
 			"sub_path": "machine/ECC2/Elegoo Centauri Carbon 2.json"
 		},

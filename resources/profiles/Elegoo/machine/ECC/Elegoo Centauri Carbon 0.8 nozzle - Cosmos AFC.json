@@ -5,6 +5,7 @@
 	"from": "system",
 	"setting_id": "NIA7639aef1e6e90",
 	"instantiation": "true",
+	"printer_model": "Elegoo Centauri Carbon (COSMOS AFC)",
 	"change_filament_gcode": "T[next_extruder] PURGE_LENGTH=[flush_length]\n; FLUSH_START\n; EXTERNAL_PURGE {flush_length_1+flush_length_2+flush_length_3+flush_length_4}\n; FLUSH_END",
 	"cooling_tube_length": "0",
 	"cooling_tube_retraction": "0",

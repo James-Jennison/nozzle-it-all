@@ -477,7 +477,7 @@ void AboutDialog::build_nozzle_layout()
     add_label(body, _L("A focused workshop for slicing, filament mapping, and connected printer control."),
               Label::Head_14, false, 0, 0, content_w);
     add_label(body,
-              _L("Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."),
+              _L("Nozzle It All Desktop is built on the OrcaSlicer engine and adds printer tools of its own: a send that checks the printer and starts each print once, a native Printer tab, and filament sync from the printer."),
               Label::Body_13, true, wxTOP, FromDIP(14), content_w);
 
     add_label(body, _L("Open-source lineage"), Label::Head_12, false,

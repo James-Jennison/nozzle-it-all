@@ -476,10 +476,10 @@ wxBitmap create_scaled_bitmap(  const std::string& bmp_name_in,
     boost::replace_last(bmp_name, ".png", "");
 #if NOZZLE_BRANDING
     // Pictures that carry OrcaSlicer's mark have a Nozzle It All Desktop counterpart.
-    // The app's own mark is Tippy, taken from the artwork: the whole figure where there is room for it, the
-    // head alone in small places such as the title bar.
+    // The app's own mark is Tippy: the artwork where there is room for it, and below about 40 px (the title
+    // bar) a drawn mark, his eyes over the gold tip, because the artwork does not survive that size.
     if (bmp_name == "OrcaSlicer" || bmp_name == SLIC3R_APP_ICON_BASE)
-        bmp_name = px_cnt >= 40 ? SLIC3R_APP_ICON_BASE : SLIC3R_APP_ICON_BASE "_head";
+        bmp_name = px_cnt >= 40 ? SLIC3R_APP_ICON_BASE : SLIC3R_APP_ICON_BASE "_mark";
     else if (bmp_name == "exclamation" || bmp_name == "info" || bmp_name == "question")
         bmp_name = SLIC3R_APP_ICON_BASE "_" + bmp_name;
 #endif

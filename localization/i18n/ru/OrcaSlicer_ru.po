@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: OrcaSlicer V2.5.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 15:49-0800\n"
+"POT-Creation-Date: 2026-11-11 19:10-0800\n"
 "PO-Revision-Date: 2026-02-25 13:38+0300\n"
 "Last-Translator: Felix14_v2\n"
 "Language-Team: Felix14_v2 (ДС/ТГ: @felix14_v2, почта: aleks111001@list.ru), Andylg <andylg@yandex.ru>\n"
@@ -4615,10 +4615,7 @@ msgstr ""
 msgid "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved"
 msgstr "Copyright(C) 2026 OrcaSlicer Pte Ltd. Все права защищены"
 
-msgid "Nozzle It All"
-msgstr ""
-
-msgid "FOR DESKTOP"
+msgid "Nozzle It All Desktop"
 msgstr ""
 
 msgid "A focused workshop for slicing, filament mapping, and connected printer control."
@@ -5028,6 +5025,9 @@ msgstr "Упорядочить AMS"
 
 msgid "AMS ID will be reset. If you want a specific ID sequence, disconnect all AMS before resetting and connect them in the desired order after resetting."
 msgstr "Идентификатор AMS будет сброшен. Если нужна конкретная последовательность ID, перед сбросом отключите все AMS и затем подключите повторно в нужной последовательности."
+
+msgid "Nozzle It All"
+msgstr ""
 
 msgid "DESKTOP"
 msgstr ""

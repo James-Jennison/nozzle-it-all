@@ -432,36 +432,36 @@ void AboutDialog::build_nozzle_layout()
     auto *card_sizer = new wxBoxSizer(wxVERTICAL);
     m_nia_labels.clear();
 
-    auto add_label = [this, card, text, muted, content_w](wxSizer *sizer, const wxString &label,
-                                                                   const wxFont &font, bool secondary,
-                                                                   int flags, int border) {
-        auto *control = new Label(card, label, wxALIGN_LEFT, wxSize(content_w, -1));
+    // Plain static text wrapped to the card's width: each paragraph is laid out once, at its full height.
+    auto add_label = [this, card, text, muted](wxSizer *sizer, const wxString &label, const wxFont &font, bool secondary,
+                                               int flags, int border, int width) {
+        auto *control = new wxStaticText(card, wxID_ANY, label);
         control->SetFont(font);
         control->SetForegroundColour(secondary ? muted : text);
         control->SetBackgroundColour(card->GetBackgroundColour());
-        control->SetWindowStyleFlag(control->GetWindowStyleFlag() | LB_AUTO_WRAP);
+        control->Wrap(width);
         sizer->Add(control, 0, flags, border);
         m_nia_labels.emplace_back(control, secondary);
         return control;
     };
+    const int logo_px = 112, identity_w = content_w - FromDIP(logo_px + 24);
 
     auto *brand = new wxBoxSizer(wxHORIZONTAL);
-    m_logo_bitmap = ScalableBitmap(card, SLIC3R_APP_ICON_BASE, 84);
+    m_logo_bitmap = ScalableBitmap(card, SLIC3R_APP_ICON_BASE, logo_px);
     m_logo        = new wxStaticBitmap(card, wxID_ANY, m_logo_bitmap.bmp());
     m_logo->SetBackgroundColour(surface);
-    brand->Add(m_logo, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(20));
+    brand->Add(m_logo, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(24));
 
     auto *identity = new wxBoxSizer(wxVERTICAL);
-    add_label(identity, _L("Nozzle It All"), Label::Head_24, false, 0, 0);
-    add_label(identity, _L("FOR DESKTOP"), Label::Head_10, true, wxTOP, FromDIP(2));
+    add_label(identity, _L("Nozzle It All Desktop"), Label::Head_24, false, 0, 0, identity_w);
     // TRN %s is the Nozzle It All for Desktop product version.
-    add_label(identity, wxString::Format(_L("Version %s"), wxString::FromUTF8(NIA_DESKTOP_VERSION)), Label::Body_13,
-              true, wxTOP, FromDIP(10));
+    add_label(identity, wxString::Format(_L("Version %s"), wxString::FromUTF8(NIA_DESKTOP_VERSION)), Label::Body_14,
+              false, wxTOP, FromDIP(8), identity_w);
     // TRN The first %s is the OrcaSlicer engine version; the second is the source commit.
     add_label(identity,
               wxString::Format(_L("Engine: OrcaSlicer %s | Build %s"), wxString::FromUTF8(SoftFever_VERSION),
                                build_commit_label),
-              Label::Body_11, true, wxTOP, FromDIP(3));
+              Label::Body_12, true, wxTOP, FromDIP(4), identity_w);
     brand->Add(identity, 1, wxALIGN_CENTER_VERTICAL);
     card_sizer->Add(brand, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
 
@@ -471,18 +471,18 @@ void AboutDialog::build_nozzle_layout()
     card_sizer->Add(rule, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, FromDIP(24));
 
     add_label(card_sizer, _L("A focused workshop for slicing, filament mapping, and connected printer control."),
-              Label::Head_14, false, wxLEFT | wxRIGHT, FromDIP(28));
+              Label::Head_14, false, wxLEFT | wxRIGHT, FromDIP(28), content_w);
     add_label(card_sizer,
               _L("Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."),
-              Label::Body_12, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+              Label::Body_13, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
 
     add_label(card_sizer, _L("Open-source lineage"), Label::Head_12, false,
-              wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+              wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
     add_label(card_sizer,
               _L("Built on OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r, SuperSlicer, CuraSlicer, and the work of their contributors. Nozzle It All is independently built and is not endorsed by those projects or their vendors."),
-              Label::Body_11, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
-    add_label(card_sizer, _L("Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."), Label::Body_11,
-              true, wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+              Label::Body_12, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
+    add_label(card_sizer, _L("Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."), Label::Body_12,
+              true, wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
 
     auto *footer = new wxBoxSizer(wxHORIZONTAL);
     auto *site   = new HyperLink(card, _L("nozzleitall.com"), "https://nozzleitall.com");
@@ -502,7 +502,6 @@ void AboutDialog::build_nozzle_layout()
     card->SetSizer(card_sizer);
     main_sizer->Add(card, 1, wxEXPAND | wxALL, FromDIP(12));
 
-    SetMinSize(wxSize(FromDIP(640), FromDIP(520)));
     SetSizerAndFit(main_sizer);
     apply_nozzle_theme();
     CenterOnParent();

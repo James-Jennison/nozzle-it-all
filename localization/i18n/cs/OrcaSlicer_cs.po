@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Orca Slicer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 15:49-0800\n"
+"POT-Creation-Date: 2026-11-11 19:10-0800\n"
 "PO-Revision-Date: \n"
 "Last-Translator: Jakub Hencl\n"
 "Language-Team: \n"
@@ -4787,10 +4787,7 @@ msgstr ""
 msgid "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved"
 msgstr "Copyright(C) 2026 OrcaSlicer Pte Ltd Všechna práva vyhrazena"
 
-msgid "Nozzle It All"
-msgstr ""
-
-msgid "FOR DESKTOP"
+msgid "Nozzle It All Desktop"
 msgstr ""
 
 msgid "A focused workshop for slicing, filament mapping, and connected printer control."
@@ -5203,6 +5200,9 @@ msgstr "Uspořádat pořadí AMS"
 
 msgid "AMS ID will be reset. If you want a specific ID sequence, disconnect all AMS before resetting and connect them in the desired order after resetting."
 msgstr "ID AMS bude resetováno. Pokud chcete konkrétní pořadí ID, odpojte před resetem všechny AMS a po resetu je připojte v požadovaném pořadí."
+
+msgid "Nozzle It All"
+msgstr ""
 
 msgid "DESKTOP"
 msgstr ""

@@ -90,7 +90,7 @@ private:
     StaticLine* m_nia_rule{nullptr};
     HyperLink* m_nia_site{nullptr};
     Button* m_nia_license{nullptr};
-    std::vector<std::pair<Label*, bool>> m_nia_labels;
+    std::vector<std::pair<wxStaticText*, bool>> m_nia_labels;
 #endif
     void onLinkClicked(wxHtmlLinkEvent &event);
     void onCloseDialog(wxEvent &);

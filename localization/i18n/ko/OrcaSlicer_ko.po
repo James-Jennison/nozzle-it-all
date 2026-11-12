@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Orca Slicer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 15:49-0800\n"
+"POT-Creation-Date: 2026-11-11 19:10-0800\n"
 "PO-Revision-Date: 2025-06-02 17:12+0900\n"
 "Last-Translator: crwusiz <crwusiz@gmail.com>\n"
 "Language-Team: \n"
@@ -4773,10 +4773,7 @@ msgstr ""
 msgid "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved"
 msgstr "Copyright(C) 2026 OrcaSlicer Pte Ltd 모든 권리 보유"
 
-msgid "Nozzle It All"
-msgstr ""
-
-msgid "FOR DESKTOP"
+msgid "Nozzle It All Desktop"
 msgstr ""
 
 msgid "A focused workshop for slicing, filament mapping, and connected printer control."
@@ -5191,6 +5188,9 @@ msgstr "AMS 순서 정렬"
 
 msgid "AMS ID will be reset. If you want a specific ID sequence, disconnect all AMS before resetting and connect them in the desired order after resetting."
 msgstr "AMS ID가 재설정됩니다. 특정 ID 순서를 원하시면 재설정 전에 모든 AMS 연결을 해제하고, 재설정 후 원하는 순서대로 다시 연결하세요."
+
+msgid "Nozzle It All"
+msgstr ""
 
 msgid "DESKTOP"
 msgstr ""

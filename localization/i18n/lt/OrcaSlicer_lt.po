@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 15:49-0800\n"
+"POT-Creation-Date: 2026-11-11 19:10-0800\n"
 "PO-Revision-Date: 2026-07-02 14:13+0300\n"
 "Last-Translator: Gintaras Kučinskas <sharanchius@gmail.com>\n"
 "Language-Team: \n"
@@ -4749,10 +4749,7 @@ msgstr ""
 msgid "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved"
 msgstr "Autorių teisės (C) 2026 OrcaSlicer Pte Ltd. Visos teisės saugomos"
 
-msgid "Nozzle It All"
-msgstr ""
-
-msgid "FOR DESKTOP"
+msgid "Nozzle It All Desktop"
 msgstr ""
 
 msgid "A focused workshop for slicing, filament mapping, and connected printer control."
@@ -5161,6 +5158,9 @@ msgstr "Tvarkyti AMS eiliškumą"
 
 msgid "AMS ID will be reset. If you want a specific ID sequence, disconnect all AMS before resetting and connect them in the desired order after resetting."
 msgstr "AMS ID bus nustatyti iš naujo. Jei norite tam tikros ID sekos, prieš nustatymą iš naujo atjunkite visus AMS įrenginius, o po jo prijunkite juos norima tvarka."
+
+msgid "Nozzle It All"
+msgstr ""
 
 msgid "DESKTOP"
 msgstr ""

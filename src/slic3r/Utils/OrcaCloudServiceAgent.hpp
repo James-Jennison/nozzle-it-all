@@ -447,7 +447,7 @@ private:
 
     // JSON helpers
     std::string map_to_json(const std::map<std::string, std::string>& map);
-    void json_to_map(const std::string& json, std::map<std::string, std::string>& map);
+    static void json_to_map(const std::string& json, std::map<std::string, std::string>& map);
 
     // Refresh token lock
     std::string token_lock_path() const;

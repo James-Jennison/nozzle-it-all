@@ -1517,6 +1517,11 @@ std::string header_slic3r_generated()
 	return std::string(SLIC3R_APP_NAME " " SoftFever_VERSION);
 }
 
+std::string header_gcode_generated()
+{
+	return std::string("OrcaSlicer " SoftFever_VERSION);
+}
+
 std::string header_gcodeviewer_generated()
 {
 	return std::string(GCODEVIEWER_APP_NAME " " SoftFever_VERSION);

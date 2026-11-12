@@ -464,25 +464,31 @@ void AboutDialog::build_nozzle_layout()
               Label::Body_12, true, wxTOP, FromDIP(4), identity_w);
     brand->Add(identity, 1, wxALIGN_CENTER_VERTICAL);
     card_sizer->Add(brand, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(28));
+    card_sizer->AddSpacer(FromDIP(20));
 
     auto *rule = new StaticLine(card);
     m_nia_rule = rule;
     rule->SetLineColour(NIATheme::line(dark));
-    card_sizer->Add(rule, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP | wxBOTTOM, FromDIP(24));
+    card_sizer->Add(rule, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(28));
+    card_sizer->AddSpacer(FromDIP(20));
 
-    add_label(card_sizer, _L("A focused workshop for slicing, filament mapping, and connected printer control."),
-              Label::Head_14, false, wxLEFT | wxRIGHT, FromDIP(28), content_w);
-    add_label(card_sizer,
+    // One column for the text, so every paragraph starts at the same left edge.
+    auto *body = new wxBoxSizer(wxVERTICAL);
+    add_label(body, _L("A focused workshop for slicing, filament mapping, and connected printer control."),
+              Label::Head_14, false, 0, 0, content_w);
+    add_label(body,
               _L("Nozzle It All for Desktop combines the OrcaSlicer engine with native Snapmaker U1 and Moonraker workflows."),
-              Label::Body_13, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
+              Label::Body_13, true, wxTOP, FromDIP(14), content_w);
 
-    add_label(card_sizer, _L("Open-source lineage"), Label::Head_12, false,
-              wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
-    add_label(card_sizer,
+    add_label(body, _L("Open-source lineage"), Label::Head_12, false,
+              wxTOP, FromDIP(14), content_w);
+    add_label(body,
               _L("Built on OrcaSlicer, Bambu Studio, PrusaSlicer, Slic3r, SuperSlicer, CuraSlicer, and the work of their contributors. Nozzle It All is independently built and is not endorsed by those projects or their vendors."),
-              Label::Body_12, true, wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
-    add_label(card_sizer, _L("Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."), Label::Body_12,
-              true, wxLEFT | wxRIGHT | wxTOP, FromDIP(18), content_w);
+              Label::Body_12, true, wxTOP, FromDIP(14), content_w);
+    add_label(body, _L("Copyright (C) 2026 Nozzle It All contributors. AGPL-3.0-or-later."), Label::Body_12,
+              true, wxTOP, FromDIP(14), content_w);
+
+    card_sizer->Add(body, 0, wxLEFT | wxRIGHT, FromDIP(28));
 
     auto *footer = new wxBoxSizer(wxHORIZONTAL);
     auto *site   = new HyperLink(card, _L("nozzleitall.com"), "https://nozzleitall.com");

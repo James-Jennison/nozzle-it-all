@@ -20,7 +20,20 @@ TEST_CASE("A bundle share link resolves to the public bundle address", "[PresetB
         CHECK(link.kind == PresetBundleLink::Kind::SharedBundle);
         CHECK(link.token == "3fad3c38f25f");
         CHECK(link.request_url == "https://api.orcaslicer.com/api/v1/bundles/share/3fad3c38f25f");
+        CHECK(link.host == "api.orcaslicer.com");
     }
+}
+
+TEST_CASE("The host shown to the user is the host that is asked, and a file name is never a reserved name", "[PresetBundleLink]")
+{
+    PresetBundleLink link = resolve_preset_bundle_link("https://Files.Example.org:8443/a/CON.json?x=1#frag");
+    CHECK(link.kind == PresetBundleLink::Kind::File);
+    CHECK(link.host == "files.example.org");
+    CHECK(link.request_url == "https://Files.Example.org:8443/a/CON.json?x=1");
+    CHECK(link.file_name == "link-CON.json");
+    // An encoded separator does not make a share token.
+    CHECK(resolve_preset_bundle_link("https://cloud.orcaslicer.com/b/abcd%2Fefgh").kind == PresetBundleLink::Kind::Invalid);
+    CHECK(resolve_preset_bundle_link("https://cloud.orcaslicer.com?b=abcd1234").kind == PresetBundleLink::Kind::Invalid);
 }
 
 TEST_CASE("A link to a bundle file is downloaded as it is and stored under a safe name", "[PresetBundleLink]")
@@ -28,16 +41,16 @@ TEST_CASE("A link to a bundle file is downloaded as it is and stored under a saf
     PresetBundleLink link = resolve_preset_bundle_link("https://example.org/files/My%20Printer.ORCA_BUNDLE?download=1#top");
     CHECK(link.kind == PresetBundleLink::Kind::File);
     CHECK(link.request_url == "https://example.org/files/My%20Printer.ORCA_BUNDLE?download=1");
-    CHECK(link.file_name == "My_20Printer.orca_bundle");
+    CHECK(link.file_name == "link-My_20Printer.orca_bundle");
 
     link = resolve_preset_bundle_link("https://example.org/..%2F..%2Fetc/.json");
     CHECK(link.kind == PresetBundleLink::Kind::File);
-    CHECK(link.file_name == "bundle.json");
+    CHECK(link.file_name == "link-bundle.json");
 
     // A file on OrcaSlicer's own hosts that is not a share link is still only a file.
     link = resolve_preset_bundle_link("https://cloud.orcaslicer.com/downloads/set.zip");
     CHECK(link.kind == PresetBundleLink::Kind::File);
-    CHECK(link.file_name == "set.zip");
+    CHECK(link.file_name == "link-set.zip");
 }
 
 TEST_CASE("Anything else is not taken as a bundle link", "[PresetBundleLink]")

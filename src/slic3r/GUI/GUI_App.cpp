@@ -7757,13 +7757,25 @@ void GUI_App::import_preset_bundle_from_link()
         return;
     }
 
+    // The user sees where the request goes and what a bundle can carry before anything is sent.
+    if (MessageDialog(mainframe,
+                      format_wxstr(_L("Download this bundle from %1%?\n\n"
+                                      "A preset bundle is someone else's settings. Printer presets in it can contain G-code "
+                                      "that your printer runs at the start and end of a print. Import a bundle only from a source you trust, "
+                                      "and look through its printer presets before you print with them."),
+                                   link.host),
+                      _L("Import Preset Bundle from Link"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING)
+            .ShowModal() != wxID_YES)
+        return;
+
     std::string body, error;
     bool        received = false;
     {
         wxBusyCursor busy;
         Http::get(link.request_url)
+            .redirect_https_only()
             .timeout_connect(10)
-            .timeout_max(60)
+            .timeout_max(30)
             .size_limit(32 * 1024 * 1024)
             .on_complete([&](std::string answer, unsigned status) {
                 received = status == 200;
@@ -7783,22 +7795,46 @@ void GUI_App::import_preset_bundle_from_link()
     }
 
     if (link.kind == PresetBundleLink::Kind::File) {
+        // The answer must be what the link's ending says: a JSON object, or an archive.
+        const bool   is_json   = boost::algorithm::ends_with(link.file_name, ".json");
+        const size_t first     = body.find_first_not_of(" \t\r\n\xEF\xBB\xBF");
+        const bool   plausible = is_json ? (first != std::string::npos && body[first] == '{') : boost::algorithm::starts_with(body, "PK\x03\x04");
+        if (!plausible) {
+            failed(_L("The link did not answer with a preset bundle. Nothing was imported."));
+            return;
+        }
         namespace fs = boost::filesystem;
         boost::system::error_code ec;
         const fs::path folder = fs::path(data_dir()) / "cache" / ("link-import." + std::to_string(get_current_pid()));
+        // The downloaded copy is removed on every way out of this block.
+        struct RemoveFolder
+        {
+            fs::path folder;
+            ~RemoveFolder()
+            {
+                boost::system::error_code ignored;
+                fs::remove_all(folder, ignored);
+            }
+        } remove_folder{folder};
         fs::create_directories(folder, ec);
         const fs::path file = folder / link.file_name;
-        {
+        if (!ec) {
             boost::nowide::ofstream out(file.string(), std::ios::binary | std::ios::trunc);
             out.write(body.data(), std::streamsize(body.size()));
+            out.close();
             if (!out.good())
                 ec = boost::system::errc::make_error_code(boost::system::errc::io_error);
         }
-        if (ec)
+        if (ec) {
             failed(_L("The downloaded bundle could not be stored. Nothing was imported."));
-        else
+            return;
+        }
+        try {
             mainframe->import_config_files({file.string()}, false);
-        fs::remove_all(folder, ec);
+        } catch (const std::exception& e) {
+            BOOST_LOG_TRIVIAL(error) << "Import of a preset bundle file from a link failed: " << e.what();
+            failed(_L("The downloaded bundle could not be imported."));
+        }
         return;
     }
 
@@ -7808,6 +7844,19 @@ void GUI_App::import_preset_bundle_from_link()
         failed(_L("The link did not answer with a preset bundle. Nothing was imported."));
         return;
     }
+    // A bundle of this id that is already here is replaced only when the user says so.
+    bool already_here = false;
+    preset_bundle->bundles.ReadLock();
+    already_here = preset_bundle->bundles.m_bundles.count(metadata.id) != 0;
+    preset_bundle->bundles.ReadUnlock();
+    if (already_here &&
+        MessageDialog(mainframe,
+                      format_wxstr(_L("The bundle \"%1%\" is already imported. Replace it with the downloaded version %2%?\n\n"
+                                      "Presets that are no longer in the bundle are removed."),
+                                   metadata.name, metadata.version),
+                      _L("Import Preset Bundle from Link"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION)
+                .ShowModal() != wxID_YES)
+        return;
     try {
         // As for a bundle Orca keeps in step: load the vendors the bundle's presets inherit from.
         for (const auto& preset : presets) {
@@ -7827,7 +7876,8 @@ void GUI_App::import_preset_bundle_from_link()
     } catch (const std::exception& e) {
         BOOST_LOG_TRIVIAL(error) << "Import of a preset bundle from a link failed: " << e.what();
         mainframe->update_side_preset_ui();
-        failed(_L("The bundle could not be imported completely. See the log for the presets that were refused."));
+        failed(_L("The bundle could not be imported completely. See the log for the presets that were refused.\n\n"
+                  "What was imported is listed in Preset Bundle and can be removed there."));
         return;
     }
     mainframe->update_side_preset_ui();

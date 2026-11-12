@@ -64,6 +64,7 @@ PresetBundleLink resolve_preset_bundle_link(const std::string& text)
     if (is_token(token)) {
         link.kind        = PresetBundleLink::Kind::SharedBundle;
         link.token       = token;
+        link.host        = "api.orcaslicer.com";
         link.request_url = "https://api.orcaslicer.com/api/v1/bundles/share/" + token;
         return link;
     }
@@ -77,7 +78,9 @@ PresetBundleLink resolve_preset_bundle_link(const std::string& text)
         if (name.empty() || name.size() > 80)
             name = "bundle";
         link.kind        = PresetBundleLink::Kind::File;
-        link.file_name   = name + boost::algorithm::to_lower_copy(std::string(extension));
+        // The prefix keeps the name clear of the device names Windows reserves (CON, NUL, COM1 ...).
+        link.file_name   = "link-" + name + boost::algorithm::to_lower_copy(std::string(extension));
+        link.host        = host;
         link.request_url = url.substr(0, url.find('#'));
         return link;
     }

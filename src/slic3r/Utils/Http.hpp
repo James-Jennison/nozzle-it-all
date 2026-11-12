@@ -104,6 +104,8 @@ public:
 	Http& timeout_connect(long timeout);
     // Sets a maximum total request timeout in seconds
     Http& timeout_max(long timeout);
+    // A redirect is followed only to an https address.
+    Http& redirect_https_only();
 	// Sets a maximum size of the data that can be received.
 	// A value of zero sets the default limit, which is is 5MB.
 	Http& size_limit(size_t sizeLimit);

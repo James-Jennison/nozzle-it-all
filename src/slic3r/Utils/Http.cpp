@@ -580,6 +580,18 @@ Http& Http::timeout_max(long timeout)
     return *this;
 }
 
+Http& Http::redirect_https_only()
+{
+    if (p) {
+#if LIBCURL_VERSION_NUM >= 0x075500
+        ::curl_easy_setopt(p->curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
+#else
+        ::curl_easy_setopt(p->curl, CURLOPT_REDIR_PROTOCOLS, (long) CURLPROTO_HTTPS);
+#endif
+    }
+    return *this;
+}
+
 Http& Http::size_limit(size_t sizeLimit)
 {
 	if (p) { p->limit = sizeLimit; }

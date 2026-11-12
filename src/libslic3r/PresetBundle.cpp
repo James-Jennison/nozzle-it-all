@@ -2798,6 +2798,13 @@ PresetsConfigSubstitutions PresetBundle::store_downloaded_bundle(
         if (!is_single_path_component(remote_metadata.id) ||
             (taken != bundles.m_bundles.end() && (taken->second.bundle_type == BundleType::Subscribed || taken->second.is_subscribed)))
             throw Slic3r::RuntimeError("The bundle's id cannot be used for a local bundle");
+        // Nor the id of a subscribed bundle that is on disk and was not loaded.
+        boost::system::error_code exists_ec;
+        std::string               folder_of_user = config.get("preset_folder");
+        if (folder_of_user.empty())
+            folder_of_user = DEFAULT_USER_FOLDER_NAME;
+        if (boost::filesystem::exists(boost::filesystem::path(Slic3r::data_dir()) / PRESET_USER_DIR / folder_of_user / PRESET_SUBSCRIBED_DIR / remote_metadata.id, exists_ec))
+            throw Slic3r::RuntimeError("The bundle's id belongs to a subscribed bundle");
     }
     PresetsConfigSubstitutions substitutions;
     std::string errors_cumulative;

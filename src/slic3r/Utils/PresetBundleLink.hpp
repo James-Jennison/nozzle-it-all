@@ -15,6 +15,7 @@ struct PresetBundleLink
 
     Kind        kind{Kind::Invalid};
     std::string request_url; // the one address that is downloaded
+    std::string host;        // the host of request_url, lower case, for showing to the user
     std::string token;       // SharedBundle: the share token
     std::string file_name;   // File: a safe name for the downloaded copy, with the link's extension
 };

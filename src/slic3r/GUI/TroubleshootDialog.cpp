@@ -301,7 +301,9 @@ TroubleshootDialog::TroubleshootDialog()
         return info;
     };
 
-    auto info_desc_1 = create_info_line(_L("We need information for diagnosing source of the issue. Check wiki page for detailed guide."));
+    auto info_desc_1 = create_info_line(ORCA_ONLINE_SERVICES
+        ? _L("We need information for diagnosing source of the issue. Check wiki page for detailed guide.")
+        : _L("We need information for diagnosing source of the issue."));
     auto info_desc_2 = create_info_line(_L("Pack button collects project file and logs of current session onto a ZIP archive."));
     auto info_desc_3 = create_info_line(_L("Any additional visual examples like images or screen recordings might be helpful while reporting the issue."));
     wxBoxSizer *info_desc_sizer = new wxBoxSizer(wxVERTICAL);

@@ -2,6 +2,8 @@
 #include "slic3r/GUI/Widgets/StateColor.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/Utils/MacDarkMode.hpp"
+#include "slic3r/Utils/OrcaCloudServiceAgent.hpp"
+#include "libslic3r/libslic3r.h"
 
 #include <algorithm>
 #include <boost/log/trivial.hpp>
@@ -406,6 +408,18 @@ wxWebView* WebView::CreateWebView(wxWindow * parent, wxString const & url)
         });
 #endif
         webView->EnableContextMenu(true);
+#if !ORCA_ONLINE_SERVICES
+        // No embedded page is taken to OrcaSlicer's servers where its online services are not offered,
+        // whatever link or script asks for it.
+        webView->Bind(wxEVT_WEBVIEW_NAVIGATING, [](wxWebViewEvent& event) {
+            if (Slic3r::OrcaCloudServiceAgent::request_allowed(event.GetURL().ToStdString(wxConvUTF8)))
+                event.Skip();
+            else {
+                BOOST_LOG_TRIVIAL(info) << "Embedded page navigation refused: OrcaSlicer's online services are not offered.";
+                event.Veto();
+            }
+        });
+#endif
     } else {
         BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": failed. Use fake web view.";
         webView = new FakeWebView;

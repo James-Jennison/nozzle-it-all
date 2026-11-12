@@ -576,13 +576,16 @@ bool OrcaCloudServiceAgent::request_allowed(const std::string& url)
     (void) url;
     return true;
 #else
-    // The host of scheme://[user@]host[:port]/path, compared without case or a trailing dot.
+    // The host of scheme://[user[:password]@]host[:port]/path, compared without case or a trailing dot.
+    // A bracketed IPv6 literal is never one of OrcaSlicer's names; it is cut at its bracket, not at a colon.
     const size_t scheme = url.find("://");
     const size_t begin  = scheme == std::string::npos ? 0 : scheme + 3;
-    std::string  host   = url.substr(begin, url.find_first_of("/?#", begin) - begin);
+    std::string  host   = url.substr(begin, url.find_first_of("/?#\\", begin) - begin);
     if (const size_t at = host.rfind('@'); at != std::string::npos)
         host.erase(0, at + 1);
-    if (const size_t port = host.find(':'); port != std::string::npos)
+    if (!host.empty() && host.front() == '[')
+        host.erase(std::min(host.find(']'), host.size() - 1) + 1);
+    else if (const size_t port = host.find(':'); port != std::string::npos)
         host.erase(port);
     while (!host.empty() && host.back() == '.')
         host.pop_back();
@@ -598,6 +601,9 @@ void OrcaCloudServiceAgent::configure_urls(AppConfig* app_config)
     // Read token storage preference
     m_use_encrypted_token_file = app_config->get_bool(SETTING_USE_ENCRYPTED_TOKEN_FILE);
 
+#if ORCA_ONLINE_SERVICES
+    // Where Orca Cloud is not offered the addresses stay at OrcaSlicer's own, which request_allowed()
+    // refuses: no configured address can turn the service back on or stand in front of it.
     std::string api_url = app_config->get(CONFIG_ORCA_API_URL);
     if (!api_url.empty()) {
         api_base_url = api_url;
@@ -612,6 +618,7 @@ void OrcaCloudServiceAgent::configure_urls(AppConfig* app_config)
     if (!cloud_url.empty()) {
         cloud_base_url = cloud_url;
     }
+#endif
 
     std::string pub_key = app_config->get(CONFIG_ORCA_PUB_KEY);
     if (!pub_key.empty()) {

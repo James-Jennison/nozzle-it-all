@@ -409,13 +409,18 @@ TEST_CASE("A request to OrcaSlicer's servers is allowed only where Orca Cloud is
 {
     const bool offered = ORCA_ONLINE_SERVICES;
     for (const char* url : {"https://api.orcaslicer.com/api/v1/health", "https://auth.orcaslicer.com", "https://cloud.orcaslicer.com/app/plugins",
-                            "https://ORCASLICER.com", "https://user@api.orcaslicer.com.:443/x", "api.orcaslicer.com/x"}) {
+                            "https://ORCASLICER.com", "https://user@api.orcaslicer.com.:443/x", "api.orcaslicer.com/x",
+                            "https://example.org:443@api.orcaslicer.com/x", "https://user:pw@cloud.orcaslicer.com:8443",
+                            "http://www.orcaslicer.com/wiki?x=1", "https://orcaslicer.com#top", "ftp://api.orcaslicer.com/x",
+                            "https://api.orcaslicer.com\\@example.org/"}) {
         INFO(url);
         CHECK(OrcaCloudServiceAgent::request_allowed(url) == offered);
     }
     // Any other address is never refused: a test server on this machine, or a host that only looks alike.
     for (const char* url : {"http://127.0.0.1:8080/api/v1/health", "https://orcaslicer.com.example.org/", "https://notorcaslicer.com/",
-                            "https://example.org/?next=https://api.orcaslicer.com"}) {
+                            "https://example.org/?next=https://api.orcaslicer.com", "https://api.orcaslicer.com@example.org/",
+                            "https://[::1]:443/x", "https://[2001:db8::1]/orcaslicer.com", "https://example.org/#@api.orcaslicer.com",
+                            "file:///home/user/orcaslicer.com/index.html", ""}) {
         INFO(url);
         CHECK(OrcaCloudServiceAgent::request_allowed(url));
     }

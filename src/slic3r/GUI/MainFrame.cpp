@@ -2759,6 +2759,27 @@ void MainFrame::update_side_button_style()
     // m_publish_btn->SetBackgroundColour(wxColour(59,68,70));
     // m_publish_btn->SetTextColor(StateColor::darkModeColorFor("#FFFFFE"));
 
+#if NOZZLE_BRANDING
+    {
+        // Slice and Print in NIA colours with a label that reads in every state: white on the violet fill,
+        // muted text on a raised surface when the button is unavailable. None of these values is a key of the
+        // dark colour map, so they are shown as written in both themes.
+        const bool     dark = wxGetApp().dark_mode();
+        const wxColour fill(dark ? "#7C3AED" : "#6D28D9"), fill_hover(dark ? "#8B5CF6" : "#7C3AED");
+        const StateColor side_bg(std::pair<wxColour, int>(NIATheme::surface_raised(dark), StateColor::Disabled),
+                                 std::pair<wxColour, int>(fill, StateColor::Pressed),
+                                 std::pair<wxColour, int>(fill_hover, StateColor::Hovered),
+                                 std::pair<wxColour, int>(fill, StateColor::Normal));
+        const StateColor side_text(std::pair<wxColour, int>(NIATheme::text_muted(dark), StateColor::Disabled),
+                                   std::pair<wxColour, int>(wxColour("#FEFEFE"), StateColor::Normal));
+        for (SideButton *button : {m_slice_btn, m_slice_option_btn, m_print_btn, m_print_option_btn}) {
+            button->SetBackgroundColor(side_bg);
+            button->SetBorderColor(side_bg);
+            button->SetForegroundColor(side_text);
+        }
+    }
+#endif
+
     m_slice_btn->SetTextLayout(SideButton::EHorizontalOrientation::HO_Left, FromDIP(15));
     m_slice_btn->SetCornerRadius(FromDIP(12));
     m_slice_btn->SetExtraSize(wxSize(FromDIP(38), FromDIP(10)));

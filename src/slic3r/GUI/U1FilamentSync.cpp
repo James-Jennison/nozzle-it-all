@@ -669,7 +669,8 @@ wxImage recolored_plate(const ThumbnailData& lit, const ThumbnailData& flat, con
                         out[4 * at + channel] = static_cast<unsigned char>(sum[channel] / count);
             }
     }
-    wxImage image(int(w), int(h));
+    wxImage image;
+    image.Create(int(w), int(h));
     image.InitAlpha();
     for (unsigned row = 0; row < h; ++row) {
         const size_t source = size_t(h - 1 - row) * w; // the picture is stored bottom row first
@@ -688,7 +689,7 @@ class U1SyncDialog final : public DPIDialog
 {
 public:
     U1SyncDialog(wxWindow* parent, const std::vector<Slot>& slots, const std::vector<std::string>& automatic, PresetBundle& bundle)
-        : DPIDialog(parent ? parent : static_cast<wxWindow*>(wxGetApp().mainframe), wxID_ANY, _L("Synchronize filaments from the printer"),
+        : DPIDialog(parent, wxID_ANY, _L("Synchronize filaments from the printer"),
                     wxDefaultPosition, wxDefaultSize, wxCAPTION | wxCLOSE_BOX)
         , m_slots(slots)
         , m_bundle(bundle)

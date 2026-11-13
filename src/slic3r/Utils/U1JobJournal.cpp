@@ -87,6 +87,8 @@ json to_json(const Job &job)
             {"toolheadMap", job.toolhead_map},
             {"createdAt", job.created_ms},
             {"progress", job.progress},
+            {"startedAt", job.started_ms},
+            {"endedAt", job.ended_ms},
             {"events", events}};
 }
 
@@ -119,6 +121,8 @@ std::optional<Job> from_json(const json &doc)
         job.toolhead_map            = doc.value("toolheadMap", std::vector<int>());
         job.created_ms              = doc.value("createdAt", 0LL);
         job.progress                = doc.value("progress", 0.);
+        job.started_ms              = doc.value("startedAt", 0LL);
+        job.ended_ms                = doc.value("endedAt", 0LL);
         for (const auto &event : doc.value("events", json::array()))
             job.events.emplace_back(event.value("state", std::string()), event.value("at", 0LL));
         return job;
@@ -344,6 +348,90 @@ std::optional<Job> find(const std::string &printer, const std::string &reported_
         if (is_job_file(job, reported_filename) && same_printer(job.printer, printer))
             found = std::move(job);
     return found;
+}
+
+std::vector<Job> printing()
+{
+    std::vector<Job> jobs = load_all();
+    jobs.erase(std::remove_if(jobs.begin(), jobs.end(), [](const Job &job) { return job.state != State::Printing; }), jobs.end());
+    return jobs;
+}
+
+namespace {
+
+std::optional<State> outcome_named(const std::string &state)
+{
+    if (state == "complete" || state == "completed")
+        return State::Completed;
+    if (state == "cancelled")
+        return State::Cancelled;
+    // Moonraker's history names the ways a job can end without finishing.
+    if (state == "error" || state == "klippy_shutdown" || state == "klippy_disconnect" || state == "server_exit" || state == "interrupted")
+        return State::Failed;
+    return std::nullopt;
+}
+
+long long epoch_ms(const json &entry, const char *key)
+{
+    if (!entry.contains(key) || !entry[key].is_number())
+        return 0;
+    const double seconds = entry[key].get<double>();
+    return seconds > 0. ? static_cast<long long>(seconds * 1000.) : 0;
+}
+
+} // namespace
+
+std::optional<State> outcome_from_status(const Job &job, const json &status)
+{
+    if (!status.is_object() || !status.contains("print_stats") || !status["print_stats"].is_object())
+        return std::nullopt;
+    const json &stats = status["print_stats"];
+    if (!stats.contains("filename") || !stats["filename"].is_string() || !stats.contains("state") || !stats["state"].is_string())
+        return std::nullopt;
+    if (!is_job_file(job, stats["filename"].get<std::string>()))
+        return std::nullopt;
+    return outcome_named(stats["state"].get<std::string>());
+}
+
+std::optional<PrinterRecord> record_from_history(const Job &job, const json &history)
+{
+    if (!history.is_object() || !history.contains("jobs") || !history["jobs"].is_array())
+        return std::nullopt;
+    for (const json &entry : history["jobs"]) {
+        if (!entry.is_object() || !entry.contains("filename") || !entry["filename"].is_string() ||
+            !is_job_file(job, entry["filename"].get<std::string>()))
+            continue;
+        PrinterRecord record;
+        record.started_ms = epoch_ms(entry, "start_time");
+        if (entry.contains("status") && entry["status"].is_string())
+            record.outcome = outcome_named(entry["status"].get<std::string>());
+        // An end time belongs to an ended job only.
+        if (record.outcome)
+            record.ended_ms = epoch_ms(entry, "end_time");
+        return record;
+    }
+    return std::nullopt;
+}
+
+std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &record, const std::string &message)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    std::optional<Job> job = is_job_id(id) ? read_record(journal_dir() / (id + ".json")) : std::nullopt;
+    if (!job)
+        return std::nullopt;
+    const bool takes_outcome = record.outcome && job->state == State::Printing;
+    const bool takes_start   = record.started_ms > 0 && job->started_ms == 0;
+    const bool takes_end     = record.ended_ms > 0 && job->ended_ms == 0 && (takes_outcome || job->state != State::Printing);
+    if (!takes_outcome && !takes_start && !takes_end)
+        return std::nullopt;
+    if (takes_start)
+        job->started_ms = record.started_ms;
+    if (takes_end)
+        job->ended_ms = record.ended_ms;
+    if (!save_locked(*job, takes_outcome ? *record.outcome : job->state, takes_outcome ? message : job->message,
+                     takes_outcome ? std::string() : std::string("times from the printer's history")))
+        return std::nullopt;
+    return job;
 }
 
 std::optional<Job> unresolved(const std::string &printer)

@@ -837,6 +837,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/SemanticPaintClient.hpp
     Utils/U1JobJournal.cpp
     Utils/U1JobJournal.hpp
+    Utils/U1JobWatcher.cpp
+    Utils/U1JobWatcher.hpp
     Utils/U1LanPrintHost.cpp
     Utils/U1LanPrintHost.hpp
     Utils/Moonraker.hpp

@@ -56,6 +56,10 @@ struct Job
     std::vector<int> toolhead_map;
     long long   created_ms = 0;
     double      progress = 0.;
+    /// When the print began and ended, by the printer's own job history. 0 while unknown: a time is
+    /// never taken from this computer's clock.
+    long long   started_ms = 0;
+    long long   ended_ms = 0;
     /// State changes and decisions in order, with the time each was recorded.
     std::vector<std::pair<std::string, long long>> events;
 
@@ -99,6 +103,28 @@ std::optional<Job> update(const std::string &id, const std::function<std::option
 std::vector<Job> load_all(std::vector<std::string> *unreadable = nullptr);
 /// Newest job sent to *printer* whose file *reported_filename* is.
 std::optional<Job> find(const std::string &printer, const std::string &reported_filename);
+/// Jobs recorded as printing: the ones whose outcome is still to be read from the printer.
+std::vector<Job> printing();
+
+/// What a printer's own record says about a job.
+struct PrinterRecord
+{
+    std::optional<State> outcome; ///< Completed, Cancelled or Failed; empty while the printer still shows it running
+    long long started_ms = 0;     ///< 0 when the record gives no time
+    long long ended_ms   = 0;
+};
+/// Reads *status* (Moonraker print_stats, as U1LanPrintHost queries it). An outcome is returned only when
+/// the printer shows this job's own file as complete, cancelled or failed. Another file, no file or a
+/// state it does not name gives nothing: the job's outcome is then unknown, not assumed.
+std::optional<State> outcome_from_status(const Job &job, const nlohmann::json &status);
+/// Finds this job in Moonraker's job history (the "result" of server/history/list) by its file name,
+/// which is unique to the job. Empty when the history does not list it.
+std::optional<PrinterRecord> record_from_history(const Job &job, const nlohmann::json &history);
+/// Writes what the printer's record says into job *id*, under the journal's lock. Only a job still
+/// recorded as printing takes an outcome; times are filled in when they are not known yet.
+/// Returns the record when something was written.
+std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &record, const std::string &message);
+
 /// A job on *printer* whose Start outcome is still open.
 std::optional<Job> unresolved(const std::string &printer);
 

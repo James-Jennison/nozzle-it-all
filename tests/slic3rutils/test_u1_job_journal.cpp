@@ -321,3 +321,104 @@ TEST_CASE("The toolheads suggested for like filaments pass the readiness rules",
     CHECK(blocker.kind != Kind::ToolheadEmpty);
     CHECK(blocker.kind != Kind::ToolheadUnknown);
 }
+
+TEST_CASE("A job's outcome is taken from the printer only when it names that job's file", "[U1Jobs]")
+{
+    U1Jobs::Job job = new_job();
+    const auto  stats = [](const std::string &state, const std::string &file) {
+        return nlohmann::json{{"print_stats", {{"state", state}, {"filename", file}}}};
+    };
+    CHECK(U1Jobs::outcome_from_status(job, stats("complete", job.remote_path)) == U1Jobs::State::Completed);
+    CHECK(U1Jobs::outcome_from_status(job, stats("cancelled", job.remote_path)) == U1Jobs::State::Cancelled);
+    CHECK(U1Jobs::outcome_from_status(job, stats("error", "gcodes/" + job.remote_path)) == U1Jobs::State::Failed);
+    // Still running, another job's file, no file, no answer: nothing is known.
+    CHECK_FALSE(U1Jobs::outcome_from_status(job, stats("printing", job.remote_path)));
+    CHECK_FALSE(U1Jobs::outcome_from_status(job, stats("paused", job.remote_path)));
+    CHECK_FALSE(U1Jobs::outcome_from_status(job, stats("complete", "someone-elses.gcode")));
+    CHECK_FALSE(U1Jobs::outcome_from_status(job, stats("standby", "")));
+    CHECK_FALSE(U1Jobs::outcome_from_status(job, nlohmann::json()));
+    CHECK_FALSE(U1Jobs::outcome_from_status(job, nlohmann::json{{"print_stats", {{"state", 3}}}}));
+}
+
+TEST_CASE("The printer's job history gives a job its times and its outcome", "[U1Jobs]")
+{
+    U1Jobs::Job          job     = new_job();
+    const nlohmann::json history = {{"count", 3},
+                                    {"jobs",
+                                     {{{"filename", "other.gcode"}, {"status", "completed"}, {"start_time", 10.0}, {"end_time", 20.0}},
+                                      {{"filename", job.remote_path}, {"status", "completed"}, {"start_time", 1763000000.5}, {"end_time", 1763003600.25}},
+                                      {{"filename", 7}}}}};
+    const auto record = U1Jobs::record_from_history(job, history);
+    REQUIRE(record);
+    CHECK(record->outcome == U1Jobs::State::Completed);
+    CHECK(record->started_ms == 1763000000500LL);
+    CHECK(record->ended_ms == 1763003600250LL);
+
+    // A job the history still lists as running has a start and no end, whatever the entry carries.
+    const nlohmann::json running = {{"jobs", {{{"filename", job.remote_path}, {"status", "in_progress"}, {"start_time", 5.0}, {"end_time", 9.0}}}}};
+    const auto           open    = U1Jobs::record_from_history(job, running);
+    REQUIRE(open);
+    CHECK_FALSE(open->outcome);
+    CHECK(open->started_ms == 5000);
+    CHECK(open->ended_ms == 0);
+
+    const nlohmann::json shutdown = {{"jobs", {{{"filename", job.remote_path}, {"status", "klippy_shutdown"}, {"end_time", nullptr}}}}};
+    const auto           failed   = U1Jobs::record_from_history(job, shutdown);
+    REQUIRE(failed);
+    CHECK(failed->outcome == U1Jobs::State::Failed);
+    CHECK(failed->ended_ms == 0);
+
+    CHECK_FALSE(U1Jobs::record_from_history(job, nlohmann::json{{"jobs", nlohmann::json::array()}}));
+    CHECK_FALSE(U1Jobs::record_from_history(job, nlohmann::json()));
+}
+
+TEST_CASE("Only a job recorded as printing takes an outcome, and a known time is not replaced", "[U1Jobs]")
+{
+    ScratchJournal scratch;
+    U1Jobs::Job    job = new_job();
+    job.start_sent     = true;
+    REQUIRE(U1Jobs::save(job, U1Jobs::State::Printing));
+    REQUIRE(U1Jobs::printing().size() == 1);
+
+    // Nothing known: nothing written.
+    CHECK_FALSE(U1Jobs::record_outcome(job.id, {}, "nothing"));
+
+    // A start time alone is kept while the job runs; an end time is not taken without an outcome.
+    U1Jobs::PrinterRecord running;
+    running.started_ms = 1000;
+    running.ended_ms   = 2000;
+    auto written       = U1Jobs::record_outcome(job.id, running, "running");
+    REQUIRE(written);
+    CHECK(written->state == U1Jobs::State::Printing);
+    CHECK(written->started_ms == 1000);
+    CHECK(written->ended_ms == 0);
+
+    U1Jobs::PrinterRecord done;
+    done.outcome    = U1Jobs::State::Completed;
+    done.started_ms = 1500;
+    done.ended_ms   = 9000;
+    written         = U1Jobs::record_outcome(job.id, done, "Outcome read from the printer.");
+    REQUIRE(written);
+    CHECK(written->state == U1Jobs::State::Completed);
+    CHECK(written->started_ms == 1000);
+    CHECK(written->ended_ms == 9000);
+    CHECK(written->message == "Outcome read from the printer.");
+    CHECK(U1Jobs::printing().empty());
+
+    // A later, different reading changes nothing.
+    U1Jobs::PrinterRecord other;
+    other.outcome  = U1Jobs::State::Failed;
+    other.ended_ms = 9999;
+    CHECK_FALSE(U1Jobs::record_outcome(job.id, other, "late"));
+    const auto jobs = U1Jobs::load_all();
+    REQUIRE(jobs.size() == 1);
+    CHECK(jobs[0].state == U1Jobs::State::Completed);
+    CHECK(jobs[0].ended_ms == 9000);
+
+    // A held job is never settled by the watcher's reading.
+    U1Jobs::Job held = new_job("192.168.1.51");
+    held.start_sent  = true;
+    REQUIRE(U1Jobs::save(held, U1Jobs::State::Held));
+    CHECK_FALSE(U1Jobs::record_outcome(held.id, done, "no"));
+    CHECK(U1Jobs::unresolved("192.168.1.51"));
+}

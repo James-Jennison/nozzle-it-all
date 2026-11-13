@@ -69,6 +69,8 @@ class wxProgressDialog;
 
 namespace Slic3r {
 
+class U1JobWatcher;
+
 namespace GUI
 {
 
@@ -546,6 +548,8 @@ public:
     LazyPage<WebViewPanel>* m_home_page { nullptr };
     LazyPage<PrinterWebView>* m_printer_view_page{nullptr};
     LazyPage<NativeDevicePage>* m_native_device_page{nullptr};
+    // Records how U1 jobs ended whichever tab shows. shared_ptr: the type is only forward-declared here.
+    std::shared_ptr<U1JobWatcher> m_u1_job_watcher;
     void update_native_device_tab();
     // The selected printer has a native view (NativeDevicePage).
     bool wants_native_printer_view() const;

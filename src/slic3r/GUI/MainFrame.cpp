@@ -158,6 +158,7 @@
 #include "slic3r/GUI/Widgets/SideButton.hpp"
 #include "slic3r/plugin/host/PluginPages.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
+#include "slic3r/Utils/U1JobWatcher.hpp"
 #include <wx/defs.h>
 #include <cassert>
 #include <wx/display.h>
@@ -1340,6 +1341,7 @@ void MainFrame::shutdown()
 {
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "MainFrame::shutdown enter";
     m_idle.stop();
+    m_u1_job_watcher.reset(); // joins its thread
     if (ProjectPanel* project = ProjectPanel::if_built())
         project->shutdown();
     m_plugin_pages.shutdown();
@@ -1649,6 +1651,9 @@ void MainFrame::init_tabpanel() {
     // Plugin pages are appended after the built-in tabs; their ids are namespaced
     // (plugin.<plugin_key>.<name>) so they can't collide with the built-in TAB_ID_* constants.
     m_plugin_pages.initialize(m_tabpanel);
+
+    // From here on a U1 job's outcome is recorded whichever tab shows, including jobs sent before a restart.
+    m_u1_job_watcher = std::make_shared<U1JobWatcher>();
 
     if (m_plater) {
         // load initial config

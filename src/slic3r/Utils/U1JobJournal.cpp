@@ -212,7 +212,8 @@ bool save_locked(Job &job, State state, const std::string &message, const std::s
     Job next = job;
     if (!event.empty())
         next.events.emplace_back(event, now_ms());
-    if (next.events.empty() || next.events.back().first != state_name(state))
+    // A state is listed when it is entered, not again each time something else about the job is noted.
+    if (job.events.empty() || job.state != state || (event.empty() && job.events.back().first != state_name(state)))
         next.events.emplace_back(state_name(state), now_ms());
     next.state = state;
     if (!message.empty())

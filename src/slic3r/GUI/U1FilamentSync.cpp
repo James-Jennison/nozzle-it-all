@@ -50,6 +50,7 @@
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/DialogButtons.hpp"
 #include "Widgets/TextInput.hpp"
+#include "libslic3r/FilamentMixer.hpp"
 #include "libslic3r/GCode/ThumbnailData.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/PrintConfig.hpp"
@@ -149,7 +150,9 @@ std::string normalize_u1_filament_color(const std::string& reported_color)
     if ((color.size() != 6 && color.size() != 8) ||
         !std::all_of(color.begin(), color.end(), [](unsigned char value) { return std::isxdigit(value) != 0; }))
         return {};
-    if (color.size() == 8 && !boost::iequals(color.substr(6), "FF"))
+    // The alpha says how see-through the filament is (a U1 reports E3 for some spools); the project
+    // color is the RGB part. Fully transparent is how "no color" is reported.
+    if (color.size() == 8 && color.compare(6, 2, "00") == 0)
         return {};
     color.resize(6);
     boost::to_upper(color);
@@ -1900,8 +1903,35 @@ bool sync_filaments_from_u1(wxWindow* parent)
             if (target[from] < 0)
                 continue;
             const auto first = std::find(target.begin(), target.begin() + long(from), target[from]);
-            if (first != target.begin() + long(from))
-                wxGetApp().sidebar().change_filament(from, size_t(first - target.begin()));
+            if (first == target.begin() + long(from))
+                continue;
+            const size_t to = size_t(first - target.begin());
+            // A mixed filament names its components by number, and removing a filament leaves a hole
+            // in every mix that uses it. The mix is pointed at the filament that stays; where it
+            // already uses that one too, both filaments are kept.
+            auto* is_mixed   = bundle.project_config.option<ConfigOptionBools>("filament_is_mixed");
+            auto* components = bundle.project_config.option<ConfigOptionStrings>("filament_mixed_components");
+            bool  keep_both  = false;
+            std::vector<std::pair<size_t, std::string>> repointed;
+            if (is_mixed != nullptr && components != nullptr)
+                for (size_t m = 0; m < is_mixed->values.size() && m < components->values.size(); ++m) {
+                    if (!is_mixed->values[m])
+                        continue;
+                    std::vector<unsigned int> parts = parse_mixed_components(components->values[m]);
+                    if (std::find(parts.begin(), parts.end(), unsigned(from + 1)) == parts.end())
+                        continue;
+                    if (std::find(parts.begin(), parts.end(), unsigned(to + 1)) != parts.end()) {
+                        keep_both = true;
+                        break;
+                    }
+                    std::replace(parts.begin(), parts.end(), unsigned(from + 1), unsigned(to + 1));
+                    repointed.emplace_back(m, format_mixed_components(parts));
+                }
+            if (keep_both)
+                continue;
+            for (const auto& [m, text] : repointed)
+                components->values[m] = text;
+            wxGetApp().sidebar().change_filament(from, to);
         }
     }
 
@@ -1922,7 +1952,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
     }
     if (!invalid_colors.empty())
         MessageDialog(parent,
-                      format_wxstr(_L("The printer reported an invalid color for toolheads %1%; the project colors of their filaments were kept."),
+                      format_wxstr(_L("The printer reported no usable color for %1%. The project colors of the filaments mapped there were kept."),
                                    invalid_colors),
                       _L("Sync filaments"), wxOK | wxICON_WARNING)
             .ShowModal();

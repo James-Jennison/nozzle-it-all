@@ -95,12 +95,13 @@ TEST_CASE("U1 solid colors replace every rendered project color representation",
     REQUIRE(config.option<ConfigOptionStrings>("filament_colour")->values[3] == "#112233");
 }
 
-TEST_CASE("U1 reported colors accept opaque RGB or RGBA and reject malformed or transparent values", "[U1FilamentSync]")
+TEST_CASE("U1 reported colors accept RGB or RGBA and reject malformed or fully transparent values", "[U1FilamentSync]")
 {
     CHECK(normalize_u1_filament_color("#dd0000ff") == "#DD0000");
     CHECK(normalize_u1_filament_color("112233") == "#112233");
     CHECK(normalize_u1_filament_color("112233FF") == "#112233");
-    CHECK(normalize_u1_filament_color("11223344").empty());
+    CHECK(normalize_u1_filament_color("11223344") == "#112233");
+    CHECK(normalize_u1_filament_color("08ABFBE3") == "#08ABFB");
     CHECK(normalize_u1_filament_color("11223300").empty());
     CHECK(normalize_u1_filament_color("#12GG56").empty());
     CHECK(normalize_u1_filament_color("#12345").empty());

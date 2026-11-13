@@ -8,16 +8,21 @@
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/Label.hpp"
 #include "format.hpp"
+#include "slic3r/Utils/Http.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
 
 #include <boost/filesystem/path.hpp>
+#include <nlohmann/json.hpp>
 
 #include <wx/datetime.h>
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
 
+#include <algorithm>
 #include <array>
+#include <thread>
+#include <utility>
 #include <vector>
 
 namespace Slic3r::GUI {
@@ -55,7 +60,10 @@ wxString leaf(const std::string &path) { return from_u8(boost::filesystem::path(
 
 } // namespace
 
-U1JobHistoryPanel::U1JobHistoryPanel(wxWindow *parent) : wxScrolledWindow(parent, wxID_ANY)
+U1JobHistoryPanel::U1JobHistoryPanel(wxWindow *parent)
+    : wxScrolledWindow(parent, wxID_ANY)
+    , m_alive(std::make_shared<std::atomic<bool>>(true))
+    , m_reading(std::make_shared<std::atomic<bool>>(false))
 {
     SetScrollRate(0, FromDIP(12));
     auto *outer = new wxBoxSizer(wxVERTICAL);
@@ -65,20 +73,59 @@ U1JobHistoryPanel::U1JobHistoryPanel(wxWindow *parent) : wxScrolledWindow(parent
     outer->Add(m_rows, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(12));
     SetSizer(outer);
     m_timer.SetOwner(this);
-    Bind(wxEVT_TIMER, [this](wxTimerEvent &) { rebuild(false); });
+    Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
+        rebuild(false);
+        read_printer_history();
+    });
     on_sys_color_changed();
+}
+
+U1JobHistoryPanel::~U1JobHistoryPanel() { m_alive->store(false); }
+
+void U1JobHistoryPanel::read_printer_history()
+{
+    const std::string host = resolve_printer_lan_host();
+    if (host.empty() || m_reading->exchange(true))
+        return;
+    std::thread([host, alive = m_alive, reading = m_reading, panel = this] {
+        nlohmann::json history;
+        Http::get("http://" + host + "/server/history/list?limit=50&order=desc")
+            .timeout_connect(5)
+            .timeout_max(5)
+            .on_complete([&history](std::string body, unsigned) {
+                const auto doc = nlohmann::json::parse(body, nullptr, false);
+                if (!doc.is_discarded() && doc.is_object() && doc.contains("result"))
+                    history = doc["result"];
+            })
+            .on_error([](std::string, std::string, unsigned) {})
+            .perform_sync();
+        // No answer, or a printer without a job history: nothing is known and nothing is stored.
+        if (history.is_object())
+            U1Jobs::remember_external(host, U1Jobs::external_from_history(history, U1Jobs::history(host)));
+        reading->store(false);
+        wxGetApp().CallAfter([alive, panel] {
+            if (alive->load() && !wxGetApp().is_closing())
+                panel->rebuild(false);
+        });
+    }).detach();
 }
 
 void U1JobHistoryPanel::set_active(bool active)
 {
     if (active) {
         rebuild(false);
+        read_printer_history();
         m_timer.Start(REFRESH_MS);
     } else
         m_timer.Stop();
 }
 
-void U1JobHistoryPanel::reload() { rebuild(true); }
+void U1JobHistoryPanel::reload()
+{
+    rebuild(true);
+    if (m_timer.IsRunning())
+        read_printer_history();
+}
 
 void U1JobHistoryPanel::on_sys_color_changed()
 {
@@ -97,6 +144,9 @@ void U1JobHistoryPanel::rebuild(bool force)
     for (const U1Jobs::Job &job : jobs)
         shown += "|" + job.id + ":" + U1Jobs::state_name(job.state) + ":" + job.assessment + ":" + std::to_string(job.started_ms) + ":" +
                  std::to_string(job.ended_ms);
+    const std::vector<U1Jobs::ExternalPrint> outside = host.empty() ? std::vector<U1Jobs::ExternalPrint>() : U1Jobs::external_prints(host);
+    for (const U1Jobs::ExternalPrint &print : outside)
+        shown += "|x" + print.printer_job_id + ":" + print.status + ":" + print.assessment + ":" + std::to_string(print.ended_ms);
     if (!force && shown == m_shown)
         return;
     m_shown = shown;
@@ -105,9 +155,10 @@ void U1JobHistoryPanel::rebuild(bool force)
     m_rows->Clear(true);
     m_empty->SetForegroundColour(NIATheme::text_muted(dark));
     m_empty->SetLabel(host.empty() ? _L("No printer address is set for the selected printer.") :
-                      jobs.empty() ? _L("No job has been sent to this printer from this app yet.") :
-                                     _L("Jobs sent to this printer from this app, newest first."));
+                      jobs.empty() && outside.empty() ? _L("No job has been sent to this printer from this app yet.") :
+                                                        _L("Prints on this printer, newest first."));
 
+    std::vector<std::pair<long long, wxWindow *>> rows; // newest first once sorted
     for (const U1Jobs::Job &job : jobs) {
         auto *row = new wxPanel(this);
         row->SetBackgroundColour(NIATheme::surface(dark));
@@ -194,8 +245,75 @@ void U1JobHistoryPanel::rebuild(bool force)
         line->Add(verdict_col, 0, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
 
         row->SetSizer(line);
-        m_rows->Add(row, 0, wxEXPAND | wxBOTTOM, FromDIP(8));
+        rows.emplace_back(job.started_ms > 0 ? job.started_ms : job.created_ms, row);
     }
+
+    for (const U1Jobs::ExternalPrint &print : outside) {
+        auto *row = new wxPanel(this);
+        row->SetBackgroundColour(NIATheme::surface(dark));
+        auto *line = new wxBoxSizer(wxHORIZONTAL);
+        auto *text = new wxBoxSizer(wxVERTICAL);
+        auto *name = new wxStaticText(row, wxID_ANY, leaf(print.file_name), wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
+        name->SetFont(Label::Head_14);
+        name->SetForegroundColour(NIATheme::text(dark));
+        text->Add(name, 0, wxEXPAND);
+        auto *from = new wxStaticText(row, wxID_ANY, _L("Not sent from this app: started at the printer or from another program."));
+        from->SetForegroundColour(NIATheme::heat(dark));
+        text->Add(from, 0, wxTOP, FromDIP(2));
+        wxString times;
+        if (print.started_ms > 0 && print.ended_ms > 0)
+            times = format_wxstr(_L("Started %1% · ended %2% (printer's record)"), when(print.started_ms), when(print.ended_ms));
+        else if (print.started_ms > 0)
+            times = format_wxstr(_L("Started %1% (printer's record)"), when(print.started_ms));
+        auto *time_line = new wxStaticText(row, wxID_ANY, times);
+        time_line->SetForegroundColour(NIATheme::text_muted(dark));
+        text->Add(time_line, 0, wxTOP, FromDIP(2));
+        line->Add(text, 1, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
+
+        const bool finished = print.status == "completed";
+        const bool running  = print.status == "in_progress";
+        auto *machine_col   = new wxBoxSizer(wxVERTICAL);
+        auto *machine_title = new wxStaticText(row, wxID_ANY, _L("Printer reported"));
+        machine_title->SetForegroundColour(NIATheme::text_muted(dark));
+        auto *machine = new wxStaticText(row, wxID_ANY, finished ? _L("Finished") : running ? _L("Printing") :
+                                                        print.status == "cancelled" ? _L("Cancelled") : _L("Failed"));
+        machine->SetFont(Label::Head_14);
+        machine->SetForegroundColour(finished ? NIATheme::ready(dark) : running || print.status == "cancelled" ? NIATheme::text(dark) :
+                                                                                                                  NIATheme::danger(dark));
+        machine_col->Add(machine_title);
+        machine_col->Add(machine, 0, wxTOP, FromDIP(2));
+        line->Add(machine_col, 0, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
+
+        auto *verdict_col   = new wxBoxSizer(wxVERTICAL);
+        auto *verdict_title = new wxStaticText(row, wxID_ANY, _L("Your result"));
+        verdict_title->SetForegroundColour(NIATheme::text_muted(dark));
+        auto *verdict = new ::ComboBox(row, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(FromDIP(130), -1), 0, nullptr, wxCB_READONLY);
+        verdict->Append(_L("Not judged"));
+        verdict->Append(_L("Success"));
+        verdict->Append(_L("Partial"));
+        verdict->Append(_L("Failed"));
+        int selected = 0;
+        for (size_t i = 0; i < VERDICTS.size(); ++i)
+            if (print.assessment == VERDICTS[i])
+                selected = int(i);
+        verdict->SetSelection(selected);
+        const std::string printer_job_id = print.printer_job_id;
+        verdict->Bind(wxEVT_COMBOBOX, [this, verdict, host, printer_job_id](wxCommandEvent &event) {
+            const int choice = verdict->GetSelection();
+            if (choice >= 0 && choice < int(VERDICTS.size()) && !U1Jobs::set_external_assessment(host, printer_job_id, VERDICTS[size_t(choice)]))
+                show_error(this, _L("Your result could not be saved."));
+            event.Skip();
+        });
+        verdict_col->Add(verdict_title);
+        verdict_col->Add(verdict, 0, wxTOP, FromDIP(2));
+        line->Add(verdict_col, 0, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
+        row->SetSizer(line);
+        rows.emplace_back(print.started_ms, row);
+    }
+
+    std::stable_sort(rows.begin(), rows.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+    for (const auto &entry : rows)
+        m_rows->Add(entry.second, 0, wxEXPAND | wxBOTTOM, FromDIP(8));
     FitInside();
     Layout();
     Thaw();

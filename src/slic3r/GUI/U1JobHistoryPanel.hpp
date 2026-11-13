@@ -1,6 +1,8 @@
 #ifndef slic3r_GUI_U1JobHistoryPanel_hpp_
 #define slic3r_GUI_U1JobHistoryPanel_hpp_
 
+#include <atomic>
+#include <memory>
 #include <string>
 
 #include <wx/scrolwin.h>
@@ -12,12 +14,14 @@ class wxStaticText;
 namespace Slic3r::GUI {
 
 /// History side of the Printer tab: every job this app sent to the selected printer, newest first,
-/// read from the job journal. Each row shows what the machine reported and, apart from it, the
-/// person's own verdict, which is chosen here. Reads the journal only; talks to no printer.
+/// read from the job journal, together with the prints the printer's own history lists that were
+/// started elsewhere, labelled as such. Each row shows what the machine reported and, apart from it,
+/// the person's own verdict, which is chosen here. It reads the printer's history; it sends no command.
 class U1JobHistoryPanel final : public wxScrolledWindow
 {
 public:
     explicit U1JobHistoryPanel(wxWindow *parent);
+    ~U1JobHistoryPanel() override;
 
     /// Rebuilds the list for the selected printer. Call when shown and when the printer changes.
     void reload();
@@ -27,11 +31,16 @@ public:
 
 private:
     void rebuild(bool force);
+    /// Asks the printer for its own job history on a worker thread and remembers the prints in it
+    /// that were not sent from this app. One read request; no command.
+    void read_printer_history();
 
     wxBoxSizer  *m_rows{nullptr};
     wxStaticText *m_empty{nullptr};
     wxTimer      m_timer;
     std::string  m_shown; ///< what the rows were built from, to skip rebuilding an unchanged list
+    std::shared_ptr<std::atomic<bool>> m_alive;   ///< false once this panel is gone
+    std::shared_ptr<std::atomic<bool>> m_reading; ///< a read of the printer's history is under way
 };
 
 } // namespace Slic3r::GUI

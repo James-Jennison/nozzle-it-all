@@ -466,3 +466,45 @@ TEST_CASE("A job keeps where it came from and the person's own verdict, apart fr
     CHECK(U1Jobs::set_assessment(job.id, ""));
     CHECK(U1Jobs::history("192.168.1.50")[1].assessment.empty());
 }
+
+TEST_CASE("Prints the printer lists that this app did not send are kept apart and remembered", "[U1Jobs]")
+{
+    ScratchJournal scratch;
+    U1Jobs::Job    ours = new_job();
+    REQUIRE(U1Jobs::save(ours, U1Jobs::State::Completed));
+
+    const nlohmann::json history = {{"jobs",
+                                     {{{"job_id", "00000A"}, {"filename", ours.remote_path}, {"status", "completed"}, {"start_time", 100.0}, {"end_time", 200.0}},
+                                      {{"job_id", "00000B"}, {"filename", "benchy.gcode"}, {"status", "completed"}, {"start_time", 300.0}, {"end_time", 400.0}},
+                                      {{"job_id", "00000C"}, {"filename", "vase.gcode"}, {"status", "in_progress"}, {"start_time", 500.0}, {"end_time", 999.0}},
+                                      {{"filename", "no-id.gcode"}}}}};
+    const auto outside = U1Jobs::external_from_history(history, U1Jobs::load_all());
+    REQUIRE(outside.size() == 2);
+    CHECK(outside[0].printer_job_id == "00000B");
+    CHECK(outside[0].ended_ms == 400000);
+    CHECK(outside[1].file_name == "vase.gcode");
+    CHECK(outside[1].ended_ms == 0); // still running: no end
+
+    REQUIRE(U1Jobs::remember_external("192.168.1.50", outside));
+    REQUIRE(U1Jobs::set_external_assessment("192.168.1.50:7125", "00000B", "failed"));
+    CHECK_FALSE(U1Jobs::set_external_assessment("192.168.1.50", "00000B", "meh"));
+    CHECK_FALSE(U1Jobs::set_external_assessment("192.168.1.50", "nope", "success"));
+
+    // The running print ends; the printer has forgotten the older one. Both stay, the verdict too.
+    U1Jobs::ExternalPrint ended = outside[1];
+    ended.status   = "cancelled";
+    ended.ended_ms = 600000;
+    REQUIRE(U1Jobs::remember_external("192.168.1.50", {ended}));
+    const auto kept = U1Jobs::external_prints("192.168.1.50");
+    REQUIRE(kept.size() == 2);
+    CHECK(kept[0].printer_job_id == "00000C"); // newest first
+    CHECK(kept[0].status == "cancelled");
+    CHECK(kept[0].ended_ms == 600000);
+    CHECK(kept[1].assessment == "failed");
+
+    // Another printer has its own list, and the job records are not disturbed.
+    CHECK(U1Jobs::external_prints("192.168.1.51").empty());
+    std::vector<std::string> unreadable;
+    CHECK(U1Jobs::load_all(&unreadable).size() == 1);
+    CHECK(unreadable.empty());
+}

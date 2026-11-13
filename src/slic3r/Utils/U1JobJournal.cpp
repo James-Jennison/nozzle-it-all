@@ -480,6 +480,132 @@ std::vector<Job> history(const std::string &printer)
     return jobs;
 }
 
+namespace {
+
+bool is_verdict(const std::string &text) { return text.empty() || text == "success" || text == "partial" || text == "failed"; }
+
+// One file per printer host, beside the job records but in a folder the job list does not read.
+fs::path external_file(const std::string &printer)
+{
+    std::string name = host_of(printer_key(printer));
+    for (char &c : name)
+        if (std::isalnum(static_cast<unsigned char>(c)) == 0 && c != '.' && c != '-')
+            c = '_';
+    return journal_dir() / "external" / (name + ".json");
+}
+
+std::vector<ExternalPrint> read_external(const fs::path &path)
+{
+    std::vector<ExternalPrint> prints;
+    boost::nowide::ifstream    in(path.string());
+    if (!in)
+        return prints;
+    const json doc = json::parse(in, nullptr, false);
+    if (!doc.is_object() || !doc.contains("prints") || !doc["prints"].is_array())
+        return prints;
+    for (const json &entry : doc["prints"]) {
+        if (!entry.is_object())
+            continue;
+        ExternalPrint print;
+        print.printer_job_id = entry.value("printerJobId", std::string());
+        print.file_name      = entry.value("fileName", std::string());
+        print.status         = entry.value("status", std::string());
+        print.started_ms     = entry.value("startedAt", 0LL);
+        print.ended_ms       = entry.value("endedAt", 0LL);
+        print.assessment     = entry.value("assessment", std::string());
+        if (!print.printer_job_id.empty() && is_verdict(print.assessment))
+            prints.push_back(std::move(print));
+    }
+    return prints;
+}
+
+bool write_external(const fs::path &path, std::vector<ExternalPrint> prints)
+{
+    std::stable_sort(prints.begin(), prints.end(), [](const ExternalPrint &a, const ExternalPrint &b) { return a.started_ms > b.started_ms; });
+    json list = json::array();
+    for (const ExternalPrint &print : prints)
+        list.push_back({{"printerJobId", print.printer_job_id},
+                        {"fileName", print.file_name},
+                        {"status", print.status},
+                        {"startedAt", print.started_ms},
+                        {"endedAt", print.ended_ms},
+                        {"assessment", print.assessment}});
+    return write_durably(path, json{{"format", 1}, {"prints", list}}.dump(2));
+}
+
+} // namespace
+
+std::vector<ExternalPrint> external_from_history(const json &history, const std::vector<Job> &jobs)
+{
+    std::vector<ExternalPrint> prints;
+    if (!history.is_object() || !history.contains("jobs") || !history["jobs"].is_array())
+        return prints;
+    for (const json &entry : history["jobs"]) {
+        if (!entry.is_object() || !entry.contains("filename") || !entry["filename"].is_string() || !entry.contains("job_id") ||
+            !entry["job_id"].is_string())
+            continue;
+        const std::string file = entry["filename"].get<std::string>();
+        if (std::any_of(jobs.begin(), jobs.end(), [&file](const Job &job) { return is_job_file(job, file); }))
+            continue;
+        ExternalPrint print;
+        print.printer_job_id = entry["job_id"].get<std::string>();
+        print.file_name      = file;
+        print.status         = entry.contains("status") && entry["status"].is_string() ? entry["status"].get<std::string>() : std::string();
+        print.started_ms     = epoch_ms(entry, "start_time");
+        print.ended_ms       = print.status == "in_progress" ? 0 : epoch_ms(entry, "end_time");
+        if (!print.printer_job_id.empty())
+            prints.push_back(std::move(print));
+    }
+    return prints;
+}
+
+bool remember_external(const std::string &printer, const std::vector<ExternalPrint> &seen)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    const fs::path              path   = external_file(printer);
+    std::vector<ExternalPrint>  stored = read_external(path);
+    bool                        changed = false;
+    for (const ExternalPrint &print : seen) {
+        auto it = std::find_if(stored.begin(), stored.end(), [&print](const ExternalPrint &old) { return old.printer_job_id == print.printer_job_id; });
+        if (it == stored.end()) {
+            stored.push_back(print);
+            changed = true;
+        } else if (it->file_name != print.file_name || it->status != print.status || it->started_ms != print.started_ms ||
+                   it->ended_ms != print.ended_ms) {
+            const std::string verdict = it->assessment;
+            *it                       = print;
+            it->assessment            = verdict;
+            changed                   = true;
+        }
+    }
+    return !changed || write_external(path, std::move(stored));
+}
+
+std::vector<ExternalPrint> external_prints(const std::string &printer)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    std::vector<ExternalPrint>  prints = read_external(external_file(printer));
+    std::stable_sort(prints.begin(), prints.end(), [](const ExternalPrint &a, const ExternalPrint &b) { return a.started_ms > b.started_ms; });
+    return prints;
+}
+
+bool set_external_assessment(const std::string &printer, const std::string &printer_job_id, const std::string &assessment)
+{
+    if (!is_verdict(assessment))
+        return false;
+    std::lock_guard<std::mutex> lock(s_mutex);
+    const fs::path              path   = external_file(printer);
+    std::vector<ExternalPrint>  stored = read_external(path);
+    for (ExternalPrint &print : stored)
+        if (print.printer_job_id == printer_job_id) {
+            if (print.assessment == assessment)
+                return true;
+            print.assessment = assessment;
+            return write_external(path, std::move(stored));
+        }
+    return false;
+}
+
 std::optional<Job> unresolved(const std::string &printer)
 {
     for (Job &job : load_all())

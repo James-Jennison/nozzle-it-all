@@ -146,6 +146,26 @@ std::optional<Job> set_assessment(const std::string &id, const std::string &asse
 /// Every job sent to *printer*, newest first.
 std::vector<Job> history(const std::string &printer);
 
+/// A print the printer's own history lists that no job of this app accounts for: started at the
+/// printer's screen, from its web interface or from another program.
+struct ExternalPrint
+{
+    std::string printer_job_id; ///< the printer's own id for the entry
+    std::string file_name;
+    std::string status;         ///< the printer's word: in_progress, completed, cancelled, error, ...
+    long long   started_ms = 0;
+    long long   ended_ms   = 0;
+    std::string assessment;     ///< the person's verdict, as on Job
+};
+/// The entries of *history* (the "result" of server/history/list) that are not a file of any of *jobs*.
+std::vector<ExternalPrint> external_from_history(const nlohmann::json &history, const std::vector<Job> &jobs);
+/// Keeps *seen* for *printer* on disk, so such prints stay listed after the printer forgets them.
+/// What the printer says replaces what was stored; a verdict already given is kept.
+bool remember_external(const std::string &printer, const std::vector<ExternalPrint> &seen);
+/// Every remembered outside print of *printer*, newest first.
+std::vector<ExternalPrint> external_prints(const std::string &printer);
+bool set_external_assessment(const std::string &printer, const std::string &printer_job_id, const std::string &assessment);
+
 /// A job on *printer* whose Start outcome is still open.
 std::optional<Job> unresolved(const std::string &printer);
 

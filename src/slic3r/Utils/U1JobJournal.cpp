@@ -419,6 +419,9 @@ std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &re
     std::optional<Job> job = is_job_id(id) ? read_record(journal_dir() / (id + ".json")) : std::nullopt;
     if (!job)
         return std::nullopt;
+    // A job whose Start is still open, or that never started, is not this function's to touch.
+    if (job->state != State::Printing && job->state != State::Completed && job->state != State::Cancelled && job->state != State::Failed)
+        return std::nullopt;
     const bool takes_outcome = record.outcome && job->state == State::Printing;
     const bool takes_start   = record.started_ms > 0 && job->started_ms == 0;
     const bool takes_end     = record.ended_ms > 0 && job->ended_ms == 0 && (takes_outcome || job->state != State::Printing);

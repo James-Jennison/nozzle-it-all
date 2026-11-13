@@ -592,6 +592,20 @@ struct SyncChoice
     bool choose_presets{false};
 };
 
+// The project slots that hold ordinary filaments, in order. Mixed filaments normally follow them, but a
+// project can list one in between (a U1 project reopened with fewer filaments than toolheads is topped
+// up behind its mixed filament), so a filament is always addressed by its own slot, never by counting.
+std::vector<size_t> physical_slots(const PresetBundle& bundle)
+{
+    const auto* colours = bundle.project_config.option<ConfigOptionStrings>("filament_colour");
+    const size_t total  = std::min(bundle.filament_presets.size(), colours != nullptr ? colours->values.size() : size_t(0));
+    std::vector<size_t> result;
+    for (size_t i = 0; i < total; ++i)
+        if (!bundle.is_mixed_filament(i))
+            result.push_back(i);
+    return result;
+}
+
 wxColour colour_from_hex(const std::string& hex, const wxColour& fallback)
 {
     wxColour colour(from_u8(hex.size() > 7 ? hex.substr(0, 7) : hex));
@@ -703,7 +717,8 @@ public:
         SetFont(Label::Body_14);
 
         // The project's physical filaments and their colors; mixed filaments follow them and are not mapped.
-        m_physical = std::min(bundle.num_physical_filaments(), bundle.filament_presets.size());
+        m_index    = physical_slots(bundle);
+        m_physical = m_index.size();
         const auto* colours = bundle.project_config.option<ConfigOptionStrings>("filament_colour");
         for (size_t i = 0; i < bundle.filament_presets.size(); ++i)
             m_before.push_back(colour_from_hex(colours != nullptr && i < colours->values.size() ? colours->values[i] : std::string(), *wxWHITE));
@@ -728,9 +743,9 @@ public:
         auto* grid = new wxFlexGridSizer(2, int(m_physical) + 1, em / 2, em / 2);
         grid->Add(text(m_map_panel, _L("Project:"), true), 0, wxALIGN_CENTER_VERTICAL);
         for (size_t i = 0; i < m_physical; ++i) {
-            const Preset* preset = preset_named(bundle, bundle.filament_presets[i]);
+            const Preset* preset = preset_named(bundle, bundle.filament_presets[m_index[i]]);
             const wxString type  = preset != nullptr ? from_u8(preset->config.opt_string("filament_type", 0u)) : wxString();
-            grid->Add(chip(m_map_panel, wxString::Format("%d %s", int(i + 1), type), m_before[i]), 0, wxEXPAND);
+            grid->Add(chip(m_map_panel, wxString::Format("%d %s", int(m_index[i] + 1), type), m_before[m_index[i]]), 0, wxEXPAND);
         }
         grid->Add(text(m_map_panel, _L("Toolhead:"), true), 0, wxALIGN_CENTER_VERTICAL);
         for (size_t i = 0; i < m_physical; ++i) {
@@ -963,7 +978,8 @@ private:
     // The loaded toolhead closest to a project filament: the same material first, then the nearest color.
     int best_toolhead(size_t filament) const
     {
-        const Preset*     preset   = preset_named(m_bundle, m_bundle.filament_presets[filament]);
+        const Preset*     preset   = preset_named(m_bundle, m_bundle.filament_presets[m_index[filament]]);
+        const wxColour&   own      = m_before[m_index[filament]];
         const std::string material = preset != nullptr ? canonical_material(preset->config.opt_string("filament_type", 0u)) : std::string();
         int    best = -1;
         double best_distance = 0.0;
@@ -971,8 +987,8 @@ private:
             if (!m_slots[t].present)
                 continue;
             const wxColour colour = slot_colour(t);
-            const double   dr = double(colour.Red()) - m_before[filament].Red(), dg = double(colour.Green()) - m_before[filament].Green(),
-                           db = double(colour.Blue()) - m_before[filament].Blue();
+            const double   dr = double(colour.Red()) - own.Red(), dg = double(colour.Green()) - own.Green(),
+                           db = double(colour.Blue()) - own.Blue();
             const bool same_material = !material.empty() && boost::iequals(canonical_material(m_slots[t].type, m_slots[t].sub_type), material);
             const double distance    = dr * dr + dg * dg + db * db + (same_material ? 0.0 : 1e9);
             if (best < 0 || distance < best_distance) {
@@ -1033,13 +1049,14 @@ private:
         if (plate == nullptr)
             return;
         std::vector<wxColour> after = m_before;
-        for (size_t i = 0; i < m_before.size(); ++i) {
+        // Mapping: each filament takes its chosen toolhead. Overwriting: the k-th filament takes toolhead k.
+        for (size_t k = 0; k < m_index.size() && m_index[k] < after.size(); ++k) {
             if (m_mode_mapping) {
-                if (i < m_combos.size())
-                    if (const int toolhead = toolhead_of(i); toolhead >= 0)
-                        after[i] = slot_colour(size_t(toolhead));
-            } else if (i < m_slots.size() && m_slots[i].present && !m_slots[i].color.empty()) {
-                after[i] = slot_colour(i);
+                if (k < m_combos.size())
+                    if (const int toolhead = toolhead_of(k); toolhead >= 0)
+                        after[m_index[k]] = slot_colour(size_t(toolhead));
+            } else if (k < m_slots.size() && m_slots[k].present && !m_slots[k].color.empty()) {
+                after[m_index[k]] = slot_colour(k);
             }
         }
         recompute_mixed_slot_colors(after, m_bundle.project_config);
@@ -1054,6 +1071,7 @@ private:
 
     const std::vector<Slot>& m_slots;
     PresetBundle&            m_bundle;
+    std::vector<size_t>      m_index; // the project slot of each ordinary filament
     size_t                   m_physical{0};
     std::vector<wxColour>    m_before;
     bool                     m_mode_mapping{true};
@@ -1746,7 +1764,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
         if (bundle.num_physical_filaments() != count || bundle.filament_presets.size() < count)
             throw std::runtime_error("The project did not take the expected number of filaments.");
         bundle.update_compatible(PresetSelectCompatibleType::Always);
-        for (size_t f = 0; f < target.size() && f < count; ++f) {
+        for (size_t f = 0; f < target.size() && f < bundle.filament_presets.size(); ++f) {
             if (target[f] < 0 || !used[size_t(target[f])])
                 continue;
             const size_t       i           = size_t(target[f]);
@@ -1865,16 +1883,34 @@ bool sync_filaments_from_u1(wxWindow* parent)
     const SyncChoice choice = ask.choice();
 
     // Per project filament, the toolhead it takes its preset and color from.
+    // It is indexed by project slot; a mixed filament's slot stays -1.
+    const std::vector<size_t> own_slots = physical_slots(bundle);
+    const bool mixed_last = own_slots.empty() || own_slots.back() + 1 == own_slots.size();
     std::vector<int> target;
-    size_t           count = 4; // overwriting: the U1's four toolheads, project filament i being toolhead i
+    size_t           count = 4; // overwriting: the U1's four toolheads, the k-th project filament being toolhead k
     if (choice.mapping) {
-        target = choice.toolhead_for_filament;
-        count  = bundle.num_physical_filaments();
+        count = own_slots.size();
+        target.assign(own_slots.empty() ? size_t(0) : own_slots.back() + 1, -1);
+        for (size_t k = 0; k < own_slots.size() && k < choice.toolhead_for_filament.size(); ++k)
+            target[own_slots[k]] = choice.toolhead_for_filament[k];
         if (!choice.add_unused && std::all_of(target.begin(), target.end(), [](int toolhead) { return toolhead < 0; }))
             return false; // every filament was left as it is
-    } else {
+    } else if (mixed_last) {
         for (size_t i = 0; i < slots.size(); ++i)
             target.push_back(slots[i].present ? int(i) : -1);
+    } else if (own_slots.size() >= count) {
+        target.assign(own_slots[count - 1] + 1, -1);
+        for (size_t k = 0; k < count; ++k)
+            target[own_slots[k]] = slots[k].present ? int(k) : -1;
+        count = own_slots.size();
+    } else {
+        // A filament would have to be added, and one is always added behind the last ordinary filament.
+        MessageDialog(parent,
+                      _L("This project lists a mixed filament before one of its ordinary filaments, and it has fewer filaments than the printer has toolheads. "
+                         "Remove the mixed filaments or use Mapping, then synchronize again."),
+                      _L("Sync filaments"), wxOK | wxICON_WARNING)
+            .ShowModal();
+        return false;
     }
 
     // The presets are picked as OrcaSlicer picks them; the mapping dialog is for choosing them by hand,
@@ -1898,8 +1934,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
     // Project filaments that now are the same toolhead's filament become one, last to first so that the
     // indices still to be merged stay valid.
     if (choice.mapping && choice.merge_same) {
-        const size_t mapped = std::min(choice.toolhead_for_filament.size(), bundle.num_physical_filaments());
-        for (size_t from = mapped; from-- > 1;) {
+        for (size_t from = target.size(); from-- > 1;) {
             if (target[from] < 0)
                 continue;
             const auto first = std::find(target.begin(), target.begin() + long(from), target[from]);

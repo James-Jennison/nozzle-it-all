@@ -1659,7 +1659,9 @@ bool sync_filaments_from_u1(wxWindow* parent)
         return false;
     }
 
-    if (bundle.filament_presets.size() > 4) {
+    // Counted in the project's own filaments: on a tool changer the preset list always has one entry per
+    // toolhead, whatever the project uses.
+    if (bundle.num_physical_filaments() > 4) {
         MessageDialog(parent,
                       _L("This project has more than the Snapmaker U1's four physical filament slots. Synchronization was not applied because removing the additional project slots would lose data."),
                       _L("Sync filaments"), wxOK | wxICON_WARNING)
@@ -1678,7 +1680,8 @@ bool sync_filaments_from_u1(wxWindow* parent)
     }
     // Applies one choice per loaded toolhead as a single change: either all of it lands or the project is
     // put back as it was and the reason is shown. `target` names, per project filament, the toolhead whose
-    // preset and color it takes (-1 leaves the filament as it is); the project ends up with `count` filaments.
+    // preset and color it takes (-1 leaves the filament as it is); the project ends up with `count` physical
+    // filaments, the missing ones added the way the sidebar adds one.
     const auto apply = [&](const std::function<std::optional<MappingChoice>(size_t)>& choice_for, const std::vector<int>& target,
                            const size_t count) -> bool {
     Plater* plater = wxGetApp().plater();
@@ -1686,6 +1689,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
     for (const int toolhead : target)
         if (toolhead >= 0 && size_t(toolhead) < slots.size() && slots[size_t(toolhead)].present)
             used[size_t(toolhead)] = true;
+    const size_t original_physical = bundle.num_physical_filaments();
     const std::optional<PresetBundle::Selection> original_selection = bundle.selection();
     const std::vector<std::string> original_presets = bundle.filament_presets;
     const DynamicPrintConfig original_project_config = bundle.project_config;
@@ -1730,13 +1734,13 @@ bool sync_filaments_from_u1(wxWindow* parent)
                     throw std::runtime_error((boost::format("The selected preset for toolhead T%1% is no longer compatible.") % i).str());
             }
 
-        if (original_presets.size() != count) {
-            // The count callback only follows the project; the project's own lists are grown here.
-            if (bundle.filament_presets.size() < count)
-                bundle.set_num_filaments(static_cast<unsigned int>(count));
-            plater->on_filament_count_change(count);
+        while (bundle.num_physical_filaments() < count) {
+            const size_t before = bundle.num_physical_filaments();
+            plater->sidebar().add_custom_filament(wxColour(0xCE, 0xCE, 0xCE));
+            if (bundle.num_physical_filaments() == before)
+                break;
         }
-        if (bundle.filament_presets.size() != count)
+        if (bundle.num_physical_filaments() != count || bundle.filament_presets.size() < count)
             throw std::runtime_error("The project did not take the expected number of filaments.");
         bundle.update_compatible(PresetSelectCompatibleType::Always);
         for (size_t f = 0; f < target.size() && f < count; ++f) {
@@ -1770,6 +1774,18 @@ bool sync_filaments_from_u1(wxWindow* parent)
         auto append_recovery_error = [&](const wxString& operation, const std::exception& rollback_exception) {
             recovery_error += format_wxstr(_L("\n\n%1% failed: %2%"), operation, from_u8(rollback_exception.what()));
         };
+
+        // Filaments added above go first, last one first, through the sidebar's own removal.
+        try {
+            while (bundle.num_physical_filaments() > original_physical) {
+                const size_t before = bundle.num_physical_filaments();
+                plater->sidebar().delete_filament(before - 1);
+                if (bundle.num_physical_filaments() == before)
+                    break;
+            }
+        } catch (const std::exception& rollback_exception) {
+            append_recovery_error(_L("Removing the filaments added for the toolheads"), rollback_exception);
+        }
 
         // Preset cleanup is independent of project restoration: attempt every deletion even if another rollback step fails.
         bool removed_all_created_presets = true;
@@ -1850,7 +1866,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
     size_t           count = 4; // overwriting: the U1's four toolheads, project filament i being toolhead i
     if (choice.mapping) {
         target = choice.toolhead_for_filament;
-        count  = bundle.filament_presets.size();
+        count  = bundle.num_physical_filaments();
         if (!choice.add_unused && std::all_of(target.begin(), target.end(), [](int toolhead) { return toolhead < 0; }))
             return false; // every filament was left as it is
     } else {
@@ -1876,13 +1892,6 @@ bool sync_filaments_from_u1(wxWindow* parent)
                       target, count))
         return false;
 
-    // Loaded toolheads no project filament was mapped to join the list as new filaments, through the
-    // same call as the sidebar's "Add one filament". A toolhead without a known preset is not added.
-    if (choice.mapping && choice.add_unused && bundle.num_mixed_filaments() == 0)
-        for (size_t i = 0; i < slots.size(); ++i)
-            if (slots[i].present && !applied[i].empty() && std::find(target.begin(), target.end(), int(i)) == target.end())
-                wxGetApp().sidebar().add_custom_filament(colour_from_hex(slots[i].color, wxColour(0xCE, 0xCE, 0xCE)), applied[i]);
-
     // Project filaments that now are the same toolhead's filament become one, last to first so that the
     // indices still to be merged stay valid.
     if (choice.mapping && choice.merge_same) {
@@ -1895,6 +1904,13 @@ bool sync_filaments_from_u1(wxWindow* parent)
                 wxGetApp().sidebar().change_filament(from, size_t(first - target.begin()));
         }
     }
+
+    // Loaded toolheads no project filament was mapped to join the list as new filaments, through the
+    // same call as the sidebar's "Add one filament". A toolhead without a known preset is not added.
+    if (choice.mapping && choice.add_unused && bundle.num_mixed_filaments() == 0)
+        for (size_t i = 0; i < slots.size(); ++i)
+            if (slots[i].present && !applied[i].empty() && std::find(target.begin(), target.end(), int(i)) == target.end())
+                wxGetApp().sidebar().add_custom_filament(colour_from_hex(slots[i].color, wxColour(0xCE, 0xCE, 0xCE)), applied[i]);
 
     wxString invalid_colors;
     for (size_t i = 0; i < slots.size(); ++i) {

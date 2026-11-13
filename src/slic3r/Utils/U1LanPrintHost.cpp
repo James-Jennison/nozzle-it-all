@@ -318,6 +318,9 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     job.start        = start;
     job.toolhead_map = m_options.filament_to_toolhead;
     job.created_ms   = U1Jobs::now_ms();
+    job.origin       = m_origin;
+    if (job.origin.file_name.empty())
+        job.origin.file_name = upload_data.upload_path.filename().string();
     boost::system::error_code size_error;
     job.bytes = boost::filesystem::file_size(upload_data.source_path, size_error);
     if (job.sha256.empty() || size_error || job.bytes == 0) {

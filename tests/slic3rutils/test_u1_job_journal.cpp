@@ -422,3 +422,47 @@ TEST_CASE("Only a job recorded as printing takes an outcome, and a known time is
     CHECK_FALSE(U1Jobs::record_outcome(held.id, done, "no"));
     CHECK(U1Jobs::unresolved("192.168.1.51"));
 }
+
+TEST_CASE("A job keeps where it came from and the person's own verdict, apart from the machine's state", "[U1Jobs]")
+{
+    ScratchJournal scratch;
+    U1Jobs::Job    job          = new_job();
+    job.origin.file_name        = "bracket.gcode";
+    job.origin.project          = "/home/user/bracket.3mf";
+    job.origin.project_saved_ms = 1763000000000LL;
+    job.origin.project_changed  = true;
+    job.origin.plate            = 2;
+    job.origin.plate_name       = "lids";
+    job.start_sent              = true;
+    REQUIRE(U1Jobs::save(job, U1Jobs::State::Completed));
+
+    auto judged = U1Jobs::set_assessment(job.id, "partial");
+    REQUIRE(judged);
+    CHECK(judged->state == U1Jobs::State::Completed);
+    CHECK_FALSE(U1Jobs::set_assessment(job.id, "great"));
+
+    const auto jobs = U1Jobs::history("192.168.1.50:7125");
+    REQUIRE(jobs.size() == 1);
+    CHECK(jobs[0].assessment == "partial");
+    CHECK(jobs[0].state == U1Jobs::State::Completed);
+    CHECK(jobs[0].origin.file_name == "bracket.gcode");
+    CHECK(jobs[0].origin.project == "/home/user/bracket.3mf");
+    CHECK(jobs[0].origin.project_saved_ms == 1763000000000LL);
+    CHECK(jobs[0].origin.project_changed);
+    CHECK(jobs[0].origin.plate == 2);
+    CHECK(jobs[0].origin.plate_name == "lids");
+
+    // Newest first, this printer only.
+    U1Jobs::Job later = new_job();
+    later.created_ms  = job.created_ms + 5000;
+    REQUIRE(U1Jobs::save(later, U1Jobs::State::Printing));
+    U1Jobs::Job elsewhere = new_job("192.168.1.99");
+    REQUIRE(U1Jobs::save(elsewhere, U1Jobs::State::Printing));
+    const auto both = U1Jobs::history("192.168.1.50");
+    REQUIRE(both.size() == 2);
+    CHECK(both[0].id == later.id);
+
+    // A record written before these fields existed still loads.
+    CHECK(U1Jobs::set_assessment(job.id, ""));
+    CHECK(U1Jobs::history("192.168.1.50")[1].assessment.empty());
+}

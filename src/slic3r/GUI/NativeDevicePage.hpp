@@ -12,6 +12,7 @@ namespace Slic3r::GUI {
 
 class DirectLanPage;
 class NativePrinterPanel;
+class U1JobHistoryPanel;
 
 /// "Printer" tab for Moonraker/Klipper printers: the native monitor-first printer
 /// panel (job, telemetry, quick controls, materials) with a live camera view. It
@@ -39,6 +40,10 @@ public:
     wxWindow* web_page() const { return m_web_page; }
     /// Switches between the native panel (false) and the hosted web interface (true).
     void show_web(bool web);
+    /// The three sides of the page. The switch above them is always shown; its Web interface
+    /// button only while a web page is hosted.
+    enum class View { Monitor, History, Web };
+    void show_view(View view);
 
 private:
     NativePrinterPanel* m_panel{nullptr};
@@ -50,10 +55,13 @@ private:
 
     wxPanel*              m_switch_bar{nullptr};
     ::Button*             m_btn_monitor{nullptr};
+    ::Button*             m_btn_history{nullptr};
     ::Button*             m_btn_web{nullptr};
     wxWindow*             m_web_page{nullptr};
     std::function<void()> m_before_web_show;
     bool                  m_web{false};
+    U1JobHistoryPanel*    m_history{nullptr};
+    bool                  m_history_shown{false};
 };
 
 } // namespace Slic3r::GUI

@@ -89,6 +89,14 @@ json to_json(const Job &job)
             {"progress", job.progress},
             {"startedAt", job.started_ms},
             {"endedAt", job.ended_ms},
+            {"assessment", job.assessment},
+            {"origin",
+             {{"fileName", job.origin.file_name},
+              {"project", job.origin.project},
+              {"projectSavedAt", job.origin.project_saved_ms},
+              {"projectChanged", job.origin.project_changed},
+              {"plate", job.origin.plate},
+              {"plateName", job.origin.plate_name}}},
             {"events", events}};
 }
 
@@ -123,6 +131,16 @@ std::optional<Job> from_json(const json &doc)
         job.progress                = doc.value("progress", 0.);
         job.started_ms              = doc.value("startedAt", 0LL);
         job.ended_ms                = doc.value("endedAt", 0LL);
+        job.assessment              = doc.value("assessment", std::string());
+        if (doc.contains("origin") && doc["origin"].is_object()) {
+            const json &origin          = doc["origin"];
+            job.origin.file_name        = origin.value("fileName", std::string());
+            job.origin.project          = origin.value("project", std::string());
+            job.origin.project_saved_ms = origin.value("projectSavedAt", 0LL);
+            job.origin.project_changed  = origin.value("projectChanged", false);
+            job.origin.plate            = origin.value("plate", 0);
+            job.origin.plate_name       = origin.value("plateName", std::string());
+        }
         for (const auto &event : doc.value("events", json::array()))
             job.events.emplace_back(event.value("state", std::string()), event.value("at", 0LL));
         return job;
@@ -437,6 +455,31 @@ std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &re
     return job;
 }
 
+std::optional<Job> set_assessment(const std::string &id, const std::string &assessment)
+{
+    if (!assessment.empty() && assessment != "success" && assessment != "partial" && assessment != "failed")
+        return std::nullopt;
+    std::lock_guard<std::mutex> lock(s_mutex);
+    std::optional<Job> job = is_job_id(id) ? read_record(journal_dir() / (id + ".json")) : std::nullopt;
+    if (!job)
+        return std::nullopt;
+    if (job->assessment == assessment)
+        return job;
+    job->assessment = assessment;
+    if (!save_locked(*job, job->state, job->message, "judged: " + (assessment.empty() ? std::string("not judged") : assessment)))
+        return std::nullopt;
+    return job;
+}
+
+std::vector<Job> history(const std::string &printer)
+{
+    std::vector<Job> jobs = load_all();
+    jobs.erase(std::remove_if(jobs.begin(), jobs.end(), [&printer](const Job &job) { return !same_printer(job.printer, printer); }), jobs.end());
+    std::stable_sort(jobs.begin(), jobs.end(), [](const Job &a, const Job &b) { return a.created_ms > b.created_ms; });
+    return jobs;
+}
+
+std::optional<Job> unresolved(const std::string &printer)
 std::optional<Job> unresolved(const std::string &printer)
 {
     for (Job &job : load_all())

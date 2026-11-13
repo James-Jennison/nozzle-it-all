@@ -5,6 +5,7 @@
 #include "U1JobJournal.hpp"
 #include "libslic3r/U1PrintTask.hpp"
 
+#include <utility>
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
@@ -31,6 +32,9 @@ public:
     /// *base_url* is the Moonraker root, e.g. "http://192.168.1.113".
     U1LanPrintHost(std::string base_url, U1PrintTask::Options options);
     ~U1LanPrintHost() override = default;
+
+    /// The project and plate this send comes from; written into the job's record.
+    void set_origin(U1Jobs::Origin origin) { m_origin = std::move(origin); }
 
     /// Reads print_task_config from the printer. Tries *host* as given (port 80
     /// through the printer's web proxy), then Moonraker's own port 7125. On
@@ -86,6 +90,7 @@ private:
 
     std::string          m_base_url;
     U1PrintTask::Options m_options;
+    U1Jobs::Origin       m_origin;
 };
 
 } // namespace Slic3r

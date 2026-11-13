@@ -89,6 +89,7 @@
 #include <slic3r/plugin/PluginDescriptor.hpp>
 #include <slic3r/plugin/PluginManager.hpp>
 #include <slic3r/plugin/PluginResolver.hpp>
+#include <ctime>
 #include <utility>
 #include <sstream>
 #include <unordered_map>
@@ -21290,7 +21291,26 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
         return;
 
     PrintHostJob upload_job;
-    upload_job.printhost               = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
+    auto u1_host = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
+    {
+        // What this job is a print of: project file, its saved state, and the plate.
+        U1Jobs::Origin origin;
+        origin.file_name = dlg.filename().filename().string();
+        const wxString project_file = get_project_filename(".3mf");
+        boost::system::error_code file_error;
+        if (!project_file.empty() && boost::filesystem::exists(into_path(project_file), file_error)) {
+            origin.project = into_u8(project_file);
+            const std::time_t written = boost::filesystem::last_write_time(into_path(project_file), file_error);
+            if (!file_error)
+                origin.project_saved_ms = static_cast<long long>(written) * 1000;
+        }
+        origin.project_changed = is_project_dirty();
+        origin.plate           = get_partplate_list().get_curr_plate_index() + 1;
+        if (PartPlate *plate = get_partplate_list().get_curr_plate())
+            origin.plate_name = plate->get_plate_name();
+        u1_host->set_origin(std::move(origin));
+    }
+    upload_job.printhost               = std::move(u1_host);
     upload_job.upload_data.use_3mf     = false;
     upload_job.upload_data.upload_path = dlg.filename();
     upload_job.upload_data.post_action = dlg.start_print() ? PrintHostPostUploadAction::StartPrint : PrintHostPostUploadAction::None;

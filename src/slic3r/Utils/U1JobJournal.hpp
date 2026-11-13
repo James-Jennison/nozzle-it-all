@@ -40,6 +40,17 @@ enum class State {
     Failed
 };
 
+/// Where a job came from: the project and plate that were sliced, and which state of the project.
+struct Origin
+{
+    std::string file_name;          ///< the name the user gave the print, before the job's own suffix
+    std::string project;            ///< path of the project file; empty for a project never saved
+    long long   project_saved_ms = 0; ///< when that file was last written; 0 when there is none
+    bool        project_changed = false; ///< the project had changes that were not in the file
+    int         plate = 0;          ///< 1-based; 0 when unknown
+    std::string plate_name;
+};
+
 struct Job
 {
     std::string id;              ///< UUID minted when the send is confirmed
@@ -52,6 +63,10 @@ struct Job
     bool        start = false;
     bool        start_sent = false;
     bool        recovered_from_lost_ack = false;
+    Origin      origin;
+    /// The person's own verdict on the print, apart from what the machine reported:
+    /// "success", "partial", "failed", or empty while not judged.
+    std::string assessment;
     State       state = State::Uploading;
     std::vector<int> toolhead_map;
     long long   created_ms = 0;
@@ -124,6 +139,12 @@ std::optional<PrinterRecord> record_from_history(const Job &job, const nlohmann:
 /// recorded as printing takes an outcome; times are filled in when they are not known yet.
 /// Returns the record when something was written.
 std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &record, const std::string &message);
+
+/// Records the person's verdict ("success", "partial", "failed", or empty to clear it) on job *id*.
+/// The job's state, which is the machine's, is not touched. Any other text is refused.
+std::optional<Job> set_assessment(const std::string &id, const std::string &assessment);
+/// Every job sent to *printer*, newest first.
+std::vector<Job> history(const std::string &printer);
 
 /// A job on *printer* whose Start outcome is still open.
 std::optional<Job> unresolved(const std::string &printer);

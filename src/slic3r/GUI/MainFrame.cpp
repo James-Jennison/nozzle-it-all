@@ -25,6 +25,7 @@
 #include "slic3r/GUI/Monitor.hpp"
 #include "slic3r/GUI/PrinterWebView.hpp"
 #include "slic3r/GUI/NativeDevicePage.hpp"
+#include "slic3r/GUI/U1JobBar.hpp"
 #include "slic3r/GUI/MultiMachinePage.hpp"
 #include "slic3r/GUI/CalibrationPanel.hpp"
 #include "slic3r/GUI/ReleaseNote.hpp"
@@ -651,6 +652,13 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
 
 
     sizer->Add(m_main_sizer, 1, wxEXPAND);
+    // Names the job now printing on every tab; hidden while nothing sent from here is printing.
+    m_u1_job_bar = new U1JobBar(this, [this] {
+        if (NativeDevicePage* native = m_native_device_page != nullptr ? m_native_device_page->get() : nullptr)
+            native->show_web(false);
+        request_select_tab(merged_printer_tab() ? TAB_ID_MONITOR : TAB_ID_NATIVE_DEVICE);
+    });
+    sizer->Add(m_u1_job_bar, 0, wxEXPAND);
     SetSizerAndFit(sizer);
     // initialize layout from config
     update_layout();
@@ -1653,7 +1661,13 @@ void MainFrame::init_tabpanel() {
     m_plugin_pages.initialize(m_tabpanel);
 
     // From here on a U1 job's outcome is recorded whichever tab shows, including jobs sent before a restart.
-    m_u1_job_watcher = std::make_shared<U1JobWatcher>();
+    m_u1_job_watcher = std::make_shared<U1JobWatcher>(U1JobWatcher::ChangeFn(), [this](const std::vector<U1JobWatcher::Active>& active) {
+        // On the watcher's thread: hand a copy to the main thread, which checks the frame is still up.
+        wxGetApp().CallAfter([this, active] {
+            if (!wxGetApp().is_closing() && wxGetApp().mainframe == this && m_u1_job_bar != nullptr)
+                m_u1_job_bar->set_active(active);
+        });
+    });
 
     if (m_plater) {
         // load initial config
@@ -3019,6 +3033,8 @@ void MainFrame::on_dpi_changed(const wxRect& suggested_rect)
 void MainFrame::on_sys_color_changed()
 {
     wxBusyCursor wait;
+    if (m_u1_job_bar != nullptr)
+        m_u1_job_bar->on_sys_color_changed();
 
     // update label colors in respect to the system mode
     wxGetApp().init_label_colours();

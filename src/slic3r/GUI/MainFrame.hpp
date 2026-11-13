@@ -99,6 +99,7 @@ class Plater;
 class DesignPanel;
 #endif
 class NativeDevicePage;
+class U1JobBar;
 class MainFrame;
 class WebViewPanel;
 class ParamsDialog;
@@ -550,6 +551,7 @@ public:
     LazyPage<NativeDevicePage>* m_native_device_page{nullptr};
     // Records how U1 jobs ended whichever tab shows. shared_ptr: the type is only forward-declared here.
     std::shared_ptr<U1JobWatcher> m_u1_job_watcher;
+    U1JobBar* m_u1_job_bar{nullptr};
     void update_native_device_tab();
     // The selected printer has a native view (NativeDevicePage).
     bool wants_native_printer_view() const;

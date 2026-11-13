@@ -484,6 +484,8 @@ set(SLIC3R_GUI_SOURCES
     GUI/NativeDevicePage.hpp
     GUI/U1JobHistoryPanel.cpp
     GUI/U1JobHistoryPanel.hpp
+    GUI/U1JobBar.cpp
+    GUI/U1JobBar.hpp
     GUI/DirectLanPage.hpp
     GUI/FilamentDropDown.cpp
     GUI/FilamentDropDown.hpp

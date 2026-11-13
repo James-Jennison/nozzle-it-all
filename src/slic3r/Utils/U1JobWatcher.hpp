@@ -7,6 +7,7 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 namespace Slic3r {
 
@@ -26,7 +27,18 @@ public:
     /// *on_change* runs on the watcher's thread each time a record was written.
     using ChangeFn = std::function<void(const U1Jobs::Job &)>;
 
-    explicit U1JobWatcher(ChangeFn on_change = {});
+    /// A job the journal lists as printing, with what the printer said about it in this pass.
+    struct Active
+    {
+        U1Jobs::Job job;
+        bool        reachable = false; ///< the printer answered
+        bool        paused    = false;
+        double      progress  = -1.;   ///< 0..1; negative when the printer did not give one for this job's file
+    };
+    /// Runs on the watcher's thread after every pass, with the jobs still printing (empty when none).
+    using ActiveFn = std::function<void(const std::vector<Active> &)>;
+
+    explicit U1JobWatcher(ChangeFn on_change = {}, ActiveFn on_active = {});
     ~U1JobWatcher();
 
     U1JobWatcher(const U1JobWatcher &)            = delete;
@@ -36,12 +48,13 @@ public:
     void look_now();
 
     /// One pass over the journal. Public for the worker and for tests of a live simulator.
-    static void look_once(const ChangeFn &on_change);
+    static void look_once(const ChangeFn &on_change, const ActiveFn &on_active = {});
 
 private:
     void run();
 
     ChangeFn                m_on_change;
+    ActiveFn                m_on_active;
     std::mutex              m_mutex;
     std::condition_variable m_wake;
     bool                    m_stop{false};

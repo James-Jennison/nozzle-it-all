@@ -480,7 +480,6 @@ std::vector<Job> history(const std::string &printer)
 }
 
 std::optional<Job> unresolved(const std::string &printer)
-std::optional<Job> unresolved(const std::string &printer)
 {
     for (Job &job : load_all())
         if (job.unresolved() && same_printer(job.printer, printer))

@@ -689,7 +689,7 @@ class U1SyncDialog final : public DPIDialog
 {
 public:
     U1SyncDialog(wxWindow* parent, const std::vector<Slot>& slots, const std::vector<std::string>& automatic, PresetBundle& bundle)
-        : DPIDialog(parent, wxID_ANY, _L("Synchronize filaments from the printer"),
+        : DPIDialog(wxGetTopLevelParent(parent), wxID_ANY, _L("Synchronize filaments from the printer"),
                     wxDefaultPosition, wxDefaultSize, wxCAPTION | wxCLOSE_BOX)
         , m_slots(slots)
         , m_bundle(bundle)
@@ -1730,8 +1730,12 @@ bool sync_filaments_from_u1(wxWindow* parent)
                     throw std::runtime_error((boost::format("The selected preset for toolhead T%1% is no longer compatible.") % i).str());
             }
 
-        if (original_presets.size() != count)
+        if (original_presets.size() != count) {
+            // The count callback only follows the project; the project's own lists are grown here.
+            if (bundle.filament_presets.size() < count)
+                bundle.set_num_filaments(static_cast<unsigned int>(count));
             plater->on_filament_count_change(count);
+        }
         if (bundle.filament_presets.size() != count)
             throw std::runtime_error("The project did not take the expected number of filaments.");
         bundle.update_compatible(PresetSelectCompatibleType::Always);
@@ -1847,14 +1851,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
     if (choice.mapping) {
         target = choice.toolhead_for_filament;
         count  = bundle.filament_presets.size();
-        if (choice.add_unused && bundle.num_mixed_filaments() == 0)
-            for (size_t i = 0; i < slots.size() && count < 4; ++i)
-                if (slots[i].present && std::find(target.begin(), target.end(), int(i)) == target.end()) {
-                    target.resize(count, -1);
-                    target.push_back(int(i));
-                    ++count;
-                }
-        if (std::all_of(target.begin(), target.end(), [](int toolhead) { return toolhead < 0; }))
+        if (!choice.add_unused && std::all_of(target.begin(), target.end(), [](int toolhead) { return toolhead < 0; }))
             return false; // every filament was left as it is
     } else {
         for (size_t i = 0; i < slots.size(); ++i)
@@ -1866,13 +1863,25 @@ bool sync_filaments_from_u1(wxWindow* parent)
     bool needs_review = choice.choose_presets;
     for (const int toolhead : target)
         needs_review = needs_review || (toolhead >= 0 && automatic[size_t(toolhead)].empty());
+    // The preset a toolhead's filament has once applied, for the filaments added below.
+    std::vector<std::string> applied = automatic;
     if (needs_review) {
         U1FilamentMappingDialog mapping(parent, slots, report_source, bundle);
         if (mapping.ShowModal() != wxID_OK || !apply([&mapping](size_t i) { return mapping.selection(i); }, target, count))
             return false;
+        for (size_t i = 0; i < slots.size(); ++i)
+            if (const std::optional<MappingChoice> chosen = mapping.selection(i); chosen && !chosen->preset_name.empty())
+                applied[i] = chosen->preset_name;
     } else if (!apply([&automatic](size_t i) { return std::optional<MappingChoice>(MappingChoice{automatic[i], std::nullopt, false}); },
                       target, count))
         return false;
+
+    // Loaded toolheads no project filament was mapped to join the list as new filaments, through the
+    // same call as the sidebar's "Add one filament". A toolhead without a known preset is not added.
+    if (choice.mapping && choice.add_unused && bundle.num_mixed_filaments() == 0)
+        for (size_t i = 0; i < slots.size(); ++i)
+            if (slots[i].present && !applied[i].empty() && std::find(target.begin(), target.end(), int(i)) == target.end())
+                wxGetApp().sidebar().add_custom_filament(colour_from_hex(slots[i].color, wxColour(0xCE, 0xCE, 0xCE)), applied[i]);
 
     // Project filaments that now are the same toolhead's filament become one, last to first so that the
     // indices still to be merged stay valid.

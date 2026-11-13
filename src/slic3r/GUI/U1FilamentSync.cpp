@@ -18,29 +18,39 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/format.hpp>
 #include <nlohmann/json.hpp>
+#include <wx/bitmap.h>
+#include <wx/dcmemory.h>
+#include <wx/image.h>
+#include <wx/panel.h>
 #include <wx/sizer.h>
+#include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/utils.h>
 
+#include "3DScene.hpp"
 #include "CreatePresetsDialog.hpp"
 #include "DeviceManager.hpp"
 #include "DeviceCore/DevFilaSystem.h"
 #include "DeviceCore/DevManager.h"
+#include "FilamentBitmapUtils.hpp"
 #include "GUI_App.hpp"
 #include "GUI_Utils.hpp"
 #include "I18N.hpp"
 #include "MsgDialog.hpp"
 #include "NIATheme.hpp"
 #include "NativePrinterPanel.hpp"
+#include "PartPlate.hpp"
 #include "Plater.hpp"
 #include "format.hpp"
 #include "GUI.hpp"
 #include "Tab.hpp"
 #include "Widgets/Label.hpp"
 #include "Widgets/Button.hpp"
+#include "Widgets/CheckBox.hpp"
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/DialogButtons.hpp"
 #include "Widgets/TextInput.hpp"
+#include "libslic3r/GCode/ThumbnailData.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "slic3r/Utils/FilamentProfilesClient.hpp"
@@ -565,6 +575,508 @@ std::string automatic_preset(const PresetBundle& bundle, const Slot& slot)
     }
     return best != nullptr ? best->name : std::string();
 }
+
+// What the user chose in U1SyncDialog.
+struct SyncChoice
+{
+    // Mapping keeps the project's filaments and gives each the type and color of a toolhead;
+    // overwriting replaces the project's filaments with the four toolheads.
+    bool mapping{true};
+    // Per physical project filament: the toolhead it takes its type and color from, -1 to leave it.
+    std::vector<int> toolhead_for_filament;
+    bool add_unused{false};
+    bool merge_same{true};
+    bool choose_presets{false};
+};
+
+wxColour colour_from_hex(const std::string& hex, const wxColour& fallback)
+{
+    wxColour colour(from_u8(hex.size() > 7 ? hex.substr(0, 7) : hex));
+    return colour.IsOk() ? colour : fallback;
+}
+
+// The color the 3D scene draws a filament color with; the flat plate picture holds these.
+wxColour scene_colour(const wxColour& colour)
+{
+    const ColorRGBA adjusted = adjust_color_for_rendering(
+        ColorRGBA{colour.Red() / 255.0f, colour.Green() / 255.0f, colour.Blue() / 255.0f, 1.0f});
+    return wxColour(int(adjusted[0] * 255.0f), int(adjusted[1] * 255.0f), int(adjusted[2] * 255.0f));
+}
+
+// The plate picture with filaments recolored, as OrcaSlicer's own sync dialog draws it: `flat` is the
+// same view without lighting, with 255 minus the filament index in its alpha; each lit pixel keeps its
+// shading and takes the new color of its filament. Pixels blended across two filaments (edges) take the
+// average of their recolored neighbors.
+wxImage recolored_plate(const ThumbnailData& lit, const ThumbnailData& flat, const std::vector<wxColour>& before,
+                        const std::vector<wxColour>& after)
+{
+    if (!lit.is_valid() || lit.width == 0 || lit.height == 0)
+        return wxImage();
+    const unsigned w = lit.width, h = lit.height;
+    const bool recolor = flat.is_valid() && flat.width == w && flat.height == h && before.size() == after.size();
+    std::vector<unsigned char> out(lit.pixels.begin(), lit.pixels.end());
+    std::vector<char>          edge(size_t(w) * h, 0);
+    if (recolor) {
+        std::vector<wxColour> flat_before, flat_after;
+        for (const wxColour& colour : before)
+            flat_before.push_back(scene_colour(colour));
+        for (const wxColour& colour : after)
+            flat_after.push_back(scene_colour(colour));
+        for (size_t at = 0; at < size_t(w) * h; ++at) {
+            const unsigned char* lit_px  = lit.pixels.data() + 4 * at;
+            const unsigned char* flat_px = flat.pixels.data() + 4 * at;
+            if (lit_px[3] == 0)
+                continue;
+            const bool plain = std::any_of(flat_before.begin(), flat_before.end(), [flat_px](const wxColour& colour) {
+                return colour.Red() == flat_px[0] && colour.Green() == flat_px[1] && colour.Blue() == flat_px[2];
+            });
+            if (!plain) {
+                edge[at] = 1;
+                continue;
+            }
+            const size_t filament = size_t(255 - flat_px[3]);
+            if (filament >= flat_after.size() || before[filament] == after[filament])
+                continue;
+            const wxColour& to       = flat_after[filament];
+            const int       lit_sum  = lit_px[0] + lit_px[1] + lit_px[2];
+            const int       flat_sum = flat_px[0] + flat_px[1] + flat_px[2];
+            const int       target[3] = {to.Red(), to.Green(), to.Blue()};
+            for (int channel = 0; channel < 3; ++channel)
+                out[4 * at + channel] = static_cast<unsigned char>(
+                    lit_sum >= flat_sum || flat_sum == 0 ? std::clamp(target[channel] + (lit_px[channel] - flat_px[channel]), 0, 255) :
+                                                           std::clamp(int(target[channel] * (lit_sum / float(flat_sum))), 0, 255));
+        }
+        for (unsigned row = 0; row < h; ++row)
+            for (unsigned column = 0; column < w; ++column) {
+                const size_t at = size_t(row) * w + column;
+                if (!edge[at])
+                    continue;
+                int sum[3] = {0, 0, 0}, count = 0;
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        const int y = int(row) + dy, x = int(column) + dx;
+                        if ((dx == 0 && dy == 0) || y < 0 || x < 0 || y >= int(h) || x >= int(w))
+                            continue;
+                        const size_t near = size_t(y) * w + size_t(x);
+                        if (edge[near] || lit.pixels[4 * near + 3] == 0)
+                            continue;
+                        for (int channel = 0; channel < 3; ++channel)
+                            sum[channel] += out[4 * near + channel];
+                        ++count;
+                    }
+                if (count > 0)
+                    for (int channel = 0; channel < 3; ++channel)
+                        out[4 * at + channel] = static_cast<unsigned char>(sum[channel] / count);
+            }
+    }
+    wxImage image(int(w), int(h));
+    image.InitAlpha();
+    for (unsigned row = 0; row < h; ++row) {
+        const size_t source = size_t(h - 1 - row) * w; // the picture is stored bottom row first
+        for (unsigned column = 0; column < w; ++column) {
+            const unsigned char* px = out.data() + 4 * (source + column);
+            image.SetRGB(int(column), int(row), px[0], px[1], px[2]);
+            image.SetAlpha(int(column), int(row), px[3]);
+        }
+    }
+    return image;
+}
+
+// Asks before anything changes, as OrcaSlicer's "Synchronize AMS Filament Information" does: mapping or
+// overwriting, a toolhead per project filament, and the plate before and after.
+class U1SyncDialog final : public DPIDialog
+{
+public:
+    U1SyncDialog(wxWindow* parent, const std::vector<Slot>& slots, const std::vector<std::string>& automatic, PresetBundle& bundle)
+        : DPIDialog(parent ? parent : static_cast<wxWindow*>(wxGetApp().mainframe), wxID_ANY, _L("Synchronize filaments from the printer"),
+                    wxDefaultPosition, wxDefaultSize, wxCAPTION | wxCLOSE_BOX)
+        , m_slots(slots)
+        , m_bundle(bundle)
+    {
+        const int  em   = wxGetApp().em_unit();
+        const bool dark = wxGetApp().dark_mode();
+        SetBackgroundColour(NIATheme::background(dark));
+        SetFont(Label::Body_14);
+
+        // The project's physical filaments and their colors; mixed filaments follow them and are not mapped.
+        m_physical = std::min(bundle.num_physical_filaments(), bundle.filament_presets.size());
+        const auto* colours = bundle.project_config.option<ConfigOptionStrings>("filament_colour");
+        for (size_t i = 0; i < bundle.filament_presets.size(); ++i)
+            m_before.push_back(colour_from_hex(colours != nullptr && i < colours->values.size() ? colours->values[i] : std::string(), *wxWHITE));
+        recompute_mixed_slot_colors(m_before, bundle.project_config);
+
+        auto* root = new wxBoxSizer(wxVERTICAL);
+
+        auto* modes  = new wxBoxSizer(wxHORIZONTAL);
+        m_mapping    = new ::Button(this, _L("Mapping"));
+        m_overwrite  = new ::Button(this, _L("Overwriting"));
+        m_mapping->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { set_mode(true); });
+        m_overwrite->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { set_mode(false); });
+        modes->AddStretchSpacer();
+        modes->Add(m_mapping, 0, wxRIGHT, em);
+        modes->Add(m_overwrite);
+        modes->AddStretchSpacer();
+        root->Add(modes, 0, wxEXPAND | wxALL, em);
+
+        // Mapping: one column per project filament, the toolhead it takes its type and color from below it.
+        m_map_panel = new wxPanel(this);
+        m_map_panel->SetBackgroundColour(GetBackgroundColour());
+        auto* grid = new wxFlexGridSizer(2, int(m_physical) + 1, em / 2, em / 2);
+        grid->Add(text(m_map_panel, _L("Project:"), true), 0, wxALIGN_CENTER_VERTICAL);
+        for (size_t i = 0; i < m_physical; ++i) {
+            const Preset* preset = preset_named(bundle, bundle.filament_presets[i]);
+            const wxString type  = preset != nullptr ? from_u8(preset->config.opt_string("filament_type", 0u)) : wxString();
+            grid->Add(chip(m_map_panel, wxString::Format("%d %s", int(i + 1), type), m_before[i]), 0, wxEXPAND);
+        }
+        grid->Add(text(m_map_panel, _L("Toolhead:"), true), 0, wxALIGN_CENTER_VERTICAL);
+        for (size_t i = 0; i < m_physical; ++i) {
+            auto* combo = new ::ComboBox(m_map_panel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(9 * em, -1), 0, nullptr, wxCB_READONLY);
+            // TRN first choice in a list of toolheads: this project filament keeps its type and color
+            combo->Append(_L("Leave as is"));
+            std::vector<int> toolheads{-1};
+            for (size_t t = 0; t < m_slots.size(); ++t)
+                if (m_slots[t].present) {
+                    combo->Append(wxString::Format("T%d %s", int(t), from_u8(m_slots[t].type)), swatch(slot_colour(t)));
+                    toolheads.push_back(int(t));
+                }
+            const int best = best_toolhead(i);
+            const auto at  = std::find(toolheads.begin(), toolheads.end(), best);
+            combo->SetSelection(at != toolheads.end() ? int(at - toolheads.begin()) : 0);
+            combo->Bind(wxEVT_COMBOBOX, [this](wxCommandEvent& event) {
+                update_pictures();
+                event.Skip();
+            });
+            grid->Add(combo, 0, wxEXPAND);
+            m_combos.push_back(combo);
+            m_combo_toolheads.push_back(std::move(toolheads));
+        }
+        m_map_panel->SetSizer(grid);
+        root->Add(m_map_panel, 0, wxLEFT | wxRIGHT | wxBOTTOM, em);
+
+        // Overwriting: the four toolheads as the printer reports them, and the preset each one gets.
+        m_over_panel = new wxPanel(this);
+        m_over_panel->SetBackgroundColour(GetBackgroundColour());
+        auto* over = new wxBoxSizer(wxHORIZONTAL);
+        over->Add(text(m_over_panel, _L("Printer:"), true), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, em / 2);
+        for (size_t t = 0; t < m_slots.size(); ++t)
+            over->Add(chip(m_over_panel,
+                           m_slots[t].present ? wxString::Format("T%d %s", int(t), from_u8(m_slots[t].type)) :
+                                                // TRN %d is a toolhead number
+                                                wxString::Format(_L("T%d empty"), int(t)),
+                           m_slots[t].present ? slot_colour(t) : NIATheme::surface_raised(dark)),
+                      0, wxRIGHT, em / 2);
+        m_over_panel->SetSizer(over);
+        root->Add(m_over_panel, 0, wxLEFT | wxRIGHT | wxBOTTOM, em);
+
+        m_tip = new wxStaticText(this, wxID_ANY, wxEmptyString);
+        m_tip->SetForegroundColour(NIATheme::text_muted(dark));
+        m_tip->SetMinSize(wxSize(52 * em, -1));
+        m_tip->SetMaxSize(wxSize(52 * em, -1));
+        root->Add(m_tip, 0, wxLEFT | wxRIGHT | wxBOTTOM, em);
+
+        // The plate before and after.
+        auto* pictures = new wxBoxSizer(wxHORIZONTAL);
+        auto* left     = new wxBoxSizer(wxVERTICAL);
+        auto* right    = new wxBoxSizer(wxVERTICAL);
+        m_picture_before = new wxStaticBitmap(this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxSize(FromDIP(110), FromDIP(110)));
+        m_picture_after  = new wxStaticBitmap(this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxSize(FromDIP(300), FromDIP(300)));
+        m_after_title    = text(this, wxEmptyString, false);
+        left->Add(text(this, _L("Original"), false), 0, wxALIGN_CENTER | wxBOTTOM, em / 2);
+        left->Add(m_picture_before, 0, wxALIGN_CENTER);
+        right->Add(m_after_title, 0, wxALIGN_CENTER | wxBOTTOM, em / 2);
+        right->Add(m_picture_after, 0, wxALIGN_CENTER);
+        m_previous = new ::Button(this, "<");
+        m_next     = new ::Button(this, ">");
+        m_previous->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+        m_next->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+        m_previous->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { set_plate(m_plate - 1); });
+        m_next->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { set_plate(m_plate + 1); });
+        pictures->Add(m_previous, 0, wxALIGN_CENTER_VERTICAL);
+        pictures->AddStretchSpacer();
+        pictures->Add(left, 0, wxALIGN_TOP | wxRIGHT, 2 * em);
+        pictures->Add(right, 0, wxALIGN_TOP);
+        pictures->AddStretchSpacer();
+        pictures->Add(m_next, 0, wxALIGN_CENTER_VERTICAL);
+        root->Add(pictures, 0, wxEXPAND | wxLEFT | wxRIGHT, em);
+
+        Plater* plater = wxGetApp().plater();
+        m_plate_count  = plater != nullptr ? plater->get_partplate_list().get_plate_count() : 0;
+        m_plate        = plater != nullptr ? plater->get_partplate_list().get_curr_plate_index() : 0;
+        auto* plates   = new wxBoxSizer(wxHORIZONTAL);
+        m_plate_combo  = new ::ComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(6 * em, -1), 0, nullptr, wxCB_READONLY);
+        for (int i = 0; i < m_plate_count; ++i)
+            m_plate_combo->Append(wxString::Format("%02d", i + 1));
+        m_plate_combo->Bind(wxEVT_COMBOBOX, [this](wxCommandEvent& event) {
+            set_plate(m_plate_combo->GetSelection());
+            event.Skip();
+        });
+        plates->AddStretchSpacer();
+        plates->Add(text(this, _L_CONTEXT("Plate", "Sync_AMS"), false), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, em / 2);
+        plates->Add(m_plate_combo, 0, wxALIGN_CENTER_VERTICAL);
+        plates->AddStretchSpacer();
+        root->Add(plates, 0, wxEXPAND | wxALL, em);
+
+        // The preset each loaded toolhead's filament gets.
+        wxString presets;
+        bool     all_known = true;
+        for (size_t t = 0; t < m_slots.size(); ++t) {
+            if (!m_slots[t].present)
+                continue;
+            const Preset* preset = t < automatic.size() && !automatic[t].empty() ? preset_named(bundle, automatic[t]) : nullptr;
+            all_known            = all_known && preset != nullptr;
+            // TRN toolhead number, what the printer reports there (vendor, material), then the preset chosen for it
+            presets += format_wxstr(_L("T%1%: %2% %3% -> %4%"), int(t), from_u8(m_slots[t].vendor), from_u8(m_slots[t].type),
+                                    preset != nullptr ? from_u8(preset->label(false)) : _L("chosen after confirming")) +
+                       "\n";
+        }
+        presets.Trim();
+        auto* preset_lines = new wxStaticText(this, wxID_ANY, presets);
+        preset_lines->SetForegroundColour(NIATheme::text_muted(dark));
+        root->Add(preset_lines, 0, wxLEFT | wxRIGHT, em);
+        m_choose_presets = option(root, _L("Let me choose the filament preset for each toolhead."), !all_known);
+        if (!all_known)
+            m_choose_presets->Disable(); // a toolhead without a known preset is always asked about
+
+        m_advanced = new wxPanel(this);
+        m_advanced->SetBackgroundColour(GetBackgroundColour());
+        auto* advanced = new wxBoxSizer(wxVERTICAL);
+        const size_t capacity = u1_physical_filament_capacity(bundle.printers.get_edited_preset().config);
+        m_can_add             = bundle.num_mixed_filaments() == 0 && m_physical < capacity;
+        m_add_unused = option(advanced, _L("Add unused toolhead filaments to filaments list."), false, m_advanced);
+        m_merge_same = option(advanced, _L("Automatically merge the same colors in the model after mapping."), true, m_advanced);
+        if (!m_can_add)
+            m_add_unused->Disable();
+        m_advanced->SetSizer(advanced);
+        root->Add(m_advanced, 0, wxEXPAND);
+
+        m_undone = new wxStaticText(this, wxID_ANY, wxEmptyString);
+        m_undone->SetForegroundColour(NIATheme::text(dark));
+        m_undone->SetMinSize(wxSize(52 * em, -1));
+        m_undone->SetMaxSize(wxSize(52 * em, -1));
+        root->Add(m_undone, 0, wxALL, em);
+
+        auto* buttons = new DialogButtons(this, {"Synchronize now", "Cancel"}, _L("Synchronize now"));
+        buttons->GetFIRST()->SetId(wxID_OK);
+        buttons->GetFIRST()->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(wxID_OK); });
+        buttons->GetCANCEL()->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(wxID_CANCEL); });
+        root->Add(buttons, 0, wxEXPAND);
+
+        // With nothing loaded there is nothing to map to; with nothing in the project to recolor, overwriting is the plain case.
+        set_mode(m_physical > 0);
+        if (m_plate_count > 0)
+            m_plate_combo->SetSelection(std::clamp(m_plate, 0, m_plate_count - 1));
+        m_previous->Show(m_plate_count > 1);
+        m_next->Show(m_plate_count > 1);
+        SetSizerAndFit(root);
+        CenterOnParent();
+        wxGetApp().UpdateDlgDarkUI(this);
+        set_mode(m_mode_mapping); // the dark-mode pass restyles the two mode buttons
+    }
+
+    SyncChoice choice() const
+    {
+        SyncChoice result;
+        result.mapping        = m_mode_mapping;
+        result.add_unused     = m_mode_mapping && m_can_add && m_add_unused->GetValue();
+        result.merge_same     = m_mode_mapping && m_merge_same->GetValue();
+        result.choose_presets = m_choose_presets->GetValue();
+        for (size_t i = 0; i < m_combos.size(); ++i)
+            result.toolhead_for_filament.push_back(toolhead_of(i));
+        return result;
+    }
+
+private:
+    void on_dpi_changed(const wxRect&) override
+    {
+        for (::ComboBox* combo : m_combos)
+            combo->Rescale();
+        m_plate_combo->Rescale();
+        if (GetSizer() != nullptr)
+            GetSizer()->SetSizeHints(this);
+        Refresh();
+    }
+
+    wxStaticText* text(wxWindow* parent, const wxString& label, bool muted)
+    {
+        const bool dark = wxGetApp().dark_mode();
+        auto* control   = new wxStaticText(parent, wxID_ANY, label);
+        control->SetForegroundColour(muted ? NIATheme::text_muted(dark) : NIATheme::text(dark));
+        return control;
+    }
+
+    // A filament as a filled label: its number and material on its color.
+    wxWindow* chip(wxWindow* parent, const wxString& label, const wxColour& colour)
+    {
+        auto* panel = new wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE);
+        panel->SetBackgroundColour(colour);
+        auto* caption = new wxStaticText(panel, wxID_ANY, label, wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE_HORIZONTAL);
+        caption->SetBackgroundColour(colour);
+        caption->SetForegroundColour(colour.GetLuminance() > 0.55 ? *wxBLACK : *wxWHITE);
+        auto* sizer = new wxBoxSizer(wxVERTICAL);
+        sizer->Add(caption, 0, wxEXPAND | wxALL, FromDIP(4));
+        panel->SetSizer(sizer);
+        // The app-wide dark pass recolors plain panels; these carry a filament color and keep it.
+        m_chips.emplace_back(panel, colour);
+        m_chips.emplace_back(caption, colour);
+        return panel;
+    }
+
+    wxBitmap swatch(const wxColour& colour)
+    {
+        const int size = FromDIP(14);
+        wxBitmap  bitmap(size, size);
+        wxMemoryDC dc(bitmap);
+        dc.SetBrush(wxBrush(colour));
+        dc.SetPen(wxPen(NIATheme::line(wxGetApp().dark_mode())));
+        dc.DrawRectangle(0, 0, size, size);
+        dc.SelectObject(wxNullBitmap);
+        return bitmap;
+    }
+
+    // A check box with its label, added to `sizer`.
+    ::CheckBox* option(wxSizer* sizer, const wxString& label, bool value, wxWindow* parent = nullptr)
+    {
+        if (parent == nullptr)
+            parent = this;
+        const int em = wxGetApp().em_unit();
+        auto* row    = new wxBoxSizer(wxHORIZONTAL);
+        auto* box    = new ::CheckBox(parent);
+        box->SetValue(value);
+        row->Add(box, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, em / 2);
+        row->Add(text(parent, label, false), 0, wxALIGN_CENTER_VERTICAL);
+        sizer->Add(row, 0, wxLEFT | wxRIGHT | wxTOP, em);
+        return box;
+    }
+
+    wxColour slot_colour(size_t toolhead) const { return colour_from_hex(m_slots[toolhead].color, wxColour(0xCE, 0xCE, 0xCE)); }
+
+    int toolhead_of(size_t filament) const
+    {
+        const int selected = m_combos[filament]->GetSelection();
+        return selected >= 0 && size_t(selected) < m_combo_toolheads[filament].size() ? m_combo_toolheads[filament][size_t(selected)] : -1;
+    }
+
+    // The loaded toolhead closest to a project filament: the same material first, then the nearest color.
+    int best_toolhead(size_t filament) const
+    {
+        const Preset*     preset   = preset_named(m_bundle, m_bundle.filament_presets[filament]);
+        const std::string material = preset != nullptr ? canonical_material(preset->config.opt_string("filament_type", 0u)) : std::string();
+        int    best = -1;
+        double best_distance = 0.0;
+        for (size_t t = 0; t < m_slots.size(); ++t) {
+            if (!m_slots[t].present)
+                continue;
+            const wxColour colour = slot_colour(t);
+            const double   dr = double(colour.Red()) - m_before[filament].Red(), dg = double(colour.Green()) - m_before[filament].Green(),
+                           db = double(colour.Blue()) - m_before[filament].Blue();
+            const bool same_material = !material.empty() && boost::iequals(canonical_material(m_slots[t].type, m_slots[t].sub_type), material);
+            const double distance    = dr * dr + dg * dg + db * db + (same_material ? 0.0 : 1e9);
+            if (best < 0 || distance < best_distance) {
+                best          = int(t);
+                best_distance = distance;
+            }
+        }
+        return best;
+    }
+
+    void set_mode(bool mapping)
+    {
+        m_mode_mapping = mapping;
+        m_mapping->SetStyle(mapping ? ButtonStyle::Confirm : ButtonStyle::Regular, ButtonType::Choice);
+        m_overwrite->SetStyle(mapping ? ButtonStyle::Regular : ButtonStyle::Confirm, ButtonType::Choice);
+        m_map_panel->Show(mapping);
+        m_over_panel->Show(!mapping);
+        m_advanced->Show(mapping);
+        m_after_title->SetLabel(mapping ? _L("After mapping") : _L("After overwriting"));
+        m_tip->SetLabel(mapping ?
+                            _L("Each project filament takes the type and color of the toolhead chosen for it. The toolhead a filament prints from is chosen when the print is sent.") :
+                            _L("The project's filaments are replaced by the printer's four toolheads, in toolhead order. An empty toolhead leaves its project filament as it is."));
+        m_undone->SetLabel((mapping ?
+                                _L("After being synced, the project's filament presets and colors will be replaced with the mapped filament types and colors. This action cannot be undone.") :
+                                _L("After being synced, the project's filament presets and colors will be replaced with those of the printer's toolheads. This action cannot be undone.")) +
+                           "\n\n" + _L("Are you sure to synchronize the filaments?"));
+        m_tip->Wrap(-1);
+        m_tip->Wrap(m_tip->GetMinSize().GetWidth());
+        m_undone->Wrap(-1);
+        m_undone->Wrap(m_undone->GetMinSize().GetWidth());
+        for (auto& [window, colour] : m_chips)
+            window->SetBackgroundColour(colour);
+        update_pictures();
+        if (GetSizer() != nullptr) {
+            Layout();
+            GetSizer()->SetSizeHints(this);
+        }
+        Refresh();
+    }
+
+    void set_plate(int plate)
+    {
+        if (m_plate_count <= 0)
+            return;
+        m_plate = std::clamp(plate, 0, m_plate_count - 1);
+        m_plate_combo->SetSelection(m_plate);
+        m_previous->Enable(m_plate > 0);
+        m_next->Enable(m_plate + 1 < m_plate_count);
+        update_pictures();
+    }
+
+    void update_pictures()
+    {
+        Plater* plater = wxGetApp().plater();
+        if (plater == nullptr || m_plate_count <= 0 || m_picture_after == nullptr)
+            return;
+        PartPlate* plate = plater->get_partplate_list().get_plate(m_plate);
+        if (plate == nullptr)
+            return;
+        std::vector<wxColour> after = m_before;
+        for (size_t i = 0; i < m_before.size(); ++i) {
+            if (m_mode_mapping) {
+                if (i < m_combos.size())
+                    if (const int toolhead = toolhead_of(i); toolhead >= 0)
+                        after[i] = slot_colour(size_t(toolhead));
+            } else if (i < m_slots.size() && m_slots[i].present && !m_slots[i].color.empty()) {
+                after[i] = slot_colour(i);
+            }
+        }
+        recompute_mixed_slot_colors(after, m_bundle.project_config);
+        const auto show = [](wxStaticBitmap* target, wxImage image, int size) {
+            if (!image.IsOk())
+                return;
+            target->SetBitmap(wxBitmap(image.Rescale(size, size, wxIMAGE_QUALITY_BOX_AVERAGE)));
+        };
+        show(m_picture_before, recolored_plate(plate->thumbnail_data, plate->no_light_thumbnail_data, m_before, m_before), FromDIP(110));
+        show(m_picture_after, recolored_plate(plate->thumbnail_data, plate->no_light_thumbnail_data, m_before, after), FromDIP(300));
+    }
+
+    const std::vector<Slot>& m_slots;
+    PresetBundle&            m_bundle;
+    size_t                   m_physical{0};
+    std::vector<wxColour>    m_before;
+    bool                     m_mode_mapping{true};
+    bool                     m_can_add{false};
+    int                      m_plate{0};
+    int                      m_plate_count{0};
+
+    ::Button*                      m_mapping{nullptr};
+    ::Button*                      m_overwrite{nullptr};
+    ::Button*                      m_previous{nullptr};
+    ::Button*                      m_next{nullptr};
+    wxPanel*                       m_map_panel{nullptr};
+    wxPanel*                       m_over_panel{nullptr};
+    wxPanel*                       m_advanced{nullptr};
+    wxStaticText*                  m_tip{nullptr};
+    wxStaticText*                  m_undone{nullptr};
+    wxStaticText*                  m_after_title{nullptr};
+    wxStaticBitmap*                m_picture_before{nullptr};
+    wxStaticBitmap*                m_picture_after{nullptr};
+    ::ComboBox*                    m_plate_combo{nullptr};
+    ::CheckBox*                    m_choose_presets{nullptr};
+    ::CheckBox*                    m_add_unused{nullptr};
+    ::CheckBox*                    m_merge_same{nullptr};
+    std::vector<::ComboBox*>       m_combos;
+    std::vector<std::vector<int>>  m_combo_toolheads;
+    std::vector<std::pair<wxWindow*, wxColour>> m_chips;
+};
 
 class U1FilamentMappingDialog final : public DPIDialog
 {
@@ -1164,12 +1676,15 @@ bool sync_filaments_from_u1(wxWindow* parent)
         return false;
     }
     // Applies one choice per loaded toolhead as a single change: either all of it lands or the project is
-    // put back as it was and the reason is shown.
-    const auto apply = [&](const std::function<std::optional<MappingChoice>(size_t)>& choice_for) -> bool {
+    // put back as it was and the reason is shown. `target` names, per project filament, the toolhead whose
+    // preset and color it takes (-1 leaves the filament as it is); the project ends up with `count` filaments.
+    const auto apply = [&](const std::function<std::optional<MappingChoice>(size_t)>& choice_for, const std::vector<int>& target,
+                           const size_t count) -> bool {
     Plater* plater = wxGetApp().plater();
-    // The U1 has four fixed physical toolheads. Project slots intentionally
-    // retain the same physical indices even when occupancy is sparse.
-    constexpr size_t count = 4;
+    std::vector<bool> used(slots.size(), false);
+    for (const int toolhead : target)
+        if (toolhead >= 0 && size_t(toolhead) < slots.size() && slots[size_t(toolhead)].present)
+            used[size_t(toolhead)] = true;
     const std::optional<PresetBundle::Selection> original_selection = bundle.selection();
     const std::vector<std::string> original_presets = bundle.filament_presets;
     const DynamicPrintConfig original_project_config = bundle.project_config;
@@ -1182,7 +1697,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
     std::vector<std::string> created_presets;
     try {
         for (size_t i = 0; i < slots.size(); ++i) {
-            if (!slots[i].present)
+            if (!used[i])
                 continue;
             const std::optional<MappingChoice> choice = choice_for(i);
             if (!choice)
@@ -1208,7 +1723,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
         bundle.update_compatible(PresetSelectCompatibleType::Always);
         // Validate every resolved name after compatibility has been recalculated and before the first project mutation.
         for (size_t i = 0; i < slots.size(); ++i)
-            if (slots[i].present && !keep_current[i]) {
+            if (used[i] && !keep_current[i]) {
                 const Preset* preset = preset_named(bundle, selected[i]);
                 if (preset == nullptr || !preset->is_compatible)
                     throw std::runtime_error((boost::format("The selected preset for toolhead T%1% is no longer compatible.") % i).str());
@@ -1217,25 +1732,27 @@ bool sync_filaments_from_u1(wxWindow* parent)
         if (original_presets.size() != count)
             plater->on_filament_count_change(count);
         if (bundle.filament_presets.size() != count)
-            throw std::runtime_error("The project did not expose four physical filament slots.");
+            throw std::runtime_error("The project did not take the expected number of filaments.");
         bundle.update_compatible(PresetSelectCompatibleType::Always);
-        for (size_t i = 0; i < slots.size(); ++i) {
-            if (!slots[i].present)
+        for (size_t f = 0; f < target.size() && f < count; ++f) {
+            if (target[f] < 0 || !used[size_t(target[f])])
                 continue;
-            const std::string& preset_name = keep_current[i] ? bundle.filament_presets[i] : selected[i];
+            const size_t       i           = size_t(target[f]);
+            const std::string& preset_name = keep_current[i] ? bundle.filament_presets[f] : selected[i];
             const Preset* preset = preset_named(bundle, preset_name);
             if (preset == nullptr || !preset->is_compatible)
                 throw std::runtime_error((boost::format("The selected preset for toolhead T%1% became incompatible after exposing the U1 slots.") % i).str());
             if (keep_current[i] && !u1_current_preset_matches_reported_material(*preset, slots[i]))
                 throw std::runtime_error((boost::format("The current project preset for toolhead T%1% no longer matches the reported material.") % i).str());
         }
-        for (size_t i = 0; i < slots.size() && i < bundle.filament_presets.size(); ++i) {
-            if (!slots[i].present)
+        for (size_t f = 0; f < target.size() && f < bundle.filament_presets.size(); ++f) {
+            if (target[f] < 0 || !used[size_t(target[f])])
                 continue;
+            const size_t i = size_t(target[f]);
             if (!keep_current[i])
-                bundle.set_filament_preset(i, selected[i]);
+                bundle.set_filament_preset(f, selected[i]);
             if (!slots[i].color.empty())
-                set_u1_filament_color(bundle.project_config, i, slots[i].color);
+                set_u1_filament_color(bundle.project_config, f, slots[i].color);
         }
 
         plater->update_filament_colors_in_full_config();
@@ -1309,56 +1826,80 @@ bool sync_filaments_from_u1(wxWindow* parent)
     return true;
     };
 
-    // As in OrcaSlicer, synchronising picks the presets itself and says what it picked. The mapping
-    // dialog is for changing that, and for a toolhead no preset could be picked for.
+    // The preset each loaded toolhead gets without asking; empty where none could be picked.
     std::vector<std::string> automatic(slots.size());
-    bool all_automatic = true;
     for (size_t i = 0; i < slots.size(); ++i)
-        if (slots[i].present) {
+        if (slots[i].present)
             automatic[i] = automatic_preset(bundle, slots[i]);
-            all_automatic = all_automatic && !automatic[i].empty();
-        }
-    const auto review = [&]() {
-        U1FilamentMappingDialog mapping(parent, slots, report_source, bundle);
-        return mapping.ShowModal() == wxID_OK && apply([&mapping](size_t i) { return mapping.selection(i); });
-    };
-    bool reviewed = !all_automatic;
-    if (all_automatic) {
-        if (!apply([&automatic](size_t i) { return std::optional<MappingChoice>(MappingChoice{automatic[i], std::nullopt, false}); }))
-            return false;
-    } else if (!review())
+
+    // Nothing changes before the user has seen what would change and said so.
+    if (Plater* plater = wxGetApp().plater())
+        plater->update_all_plate_thumbnails(true); // the plate pictures the dialog recolors
+    U1SyncDialog ask(parent, slots, automatic, bundle);
+    if (ask.ShowModal() != wxID_OK)
         return false;
+    const SyncChoice choice = ask.choice();
+
+    // Per project filament, the toolhead it takes its preset and color from.
+    std::vector<int> target;
+    size_t           count = 4; // overwriting: the U1's four toolheads, project filament i being toolhead i
+    if (choice.mapping) {
+        target = choice.toolhead_for_filament;
+        count  = bundle.filament_presets.size();
+        if (choice.add_unused && bundle.num_mixed_filaments() == 0)
+            for (size_t i = 0; i < slots.size() && count < 4; ++i)
+                if (slots[i].present && std::find(target.begin(), target.end(), int(i)) == target.end()) {
+                    target.resize(count, -1);
+                    target.push_back(int(i));
+                    ++count;
+                }
+        if (std::all_of(target.begin(), target.end(), [](int toolhead) { return toolhead < 0; }))
+            return false; // every filament was left as it is
+    } else {
+        for (size_t i = 0; i < slots.size(); ++i)
+            target.push_back(slots[i].present ? int(i) : -1);
+    }
+
+    // The presets are picked as OrcaSlicer picks them; the mapping dialog is for choosing them by hand,
+    // and for a toolhead no preset could be picked for.
+    bool needs_review = choice.choose_presets;
+    for (const int toolhead : target)
+        needs_review = needs_review || (toolhead >= 0 && automatic[size_t(toolhead)].empty());
+    if (needs_review) {
+        U1FilamentMappingDialog mapping(parent, slots, report_source, bundle);
+        if (mapping.ShowModal() != wxID_OK || !apply([&mapping](size_t i) { return mapping.selection(i); }, target, count))
+            return false;
+    } else if (!apply([&automatic](size_t i) { return std::optional<MappingChoice>(MappingChoice{automatic[i], std::nullopt, false}); },
+                      target, count))
+        return false;
+
+    // Project filaments that now are the same toolhead's filament become one, last to first so that the
+    // indices still to be merged stay valid.
+    if (choice.mapping && choice.merge_same) {
+        const size_t mapped = std::min(choice.toolhead_for_filament.size(), bundle.num_physical_filaments());
+        for (size_t from = mapped; from-- > 1;) {
+            if (target[from] < 0)
+                continue;
+            const auto first = std::find(target.begin(), target.begin() + long(from), target[from]);
+            if (first != target.begin() + long(from))
+                wxGetApp().sidebar().change_filament(from, size_t(first - target.begin()));
+        }
+    }
 
     wxString invalid_colors;
     for (size_t i = 0; i < slots.size(); ++i) {
-        if (!slots[i].present || !slots[i].color_invalid)
+        if (!slots[i].present || !slots[i].color_invalid || std::find(target.begin(), target.end(), int(i)) == target.end())
             continue;
         if (!invalid_colors.empty())
             invalid_colors += ", ";
         invalid_colors += wxString::Format("T%d", int(i));
     }
-    const auto summary = [&]() {
-        wxString text = _L("Filaments synchronized from the printer:") + "\n\n";
-        for (size_t i = 0; i < slots.size(); ++i) {
-            if (!slots[i].present) {
-                text += format_wxstr(_L("T%1%: empty (unchanged)"), int(i)) + "\n";
-                continue;
-            }
-            const Preset* preset = i < bundle.filament_presets.size() ? preset_named(bundle, bundle.filament_presets[i]) : nullptr;
-            // TRN toolhead number, then what the printer reports (vendor, material, colour), then the preset chosen for it
-            text += format_wxstr(_L("T%1%: %2% %3% %4% -> %5%"), int(i), from_u8(slots[i].vendor), from_u8(slots[i].type),
-                                 from_u8(slots[i].color), preset != nullptr ? from_u8(preset->label(false)) : wxString()) + "\n";
-        }
-        if (!invalid_colors.empty())
-            text += "\n" + format_wxstr(_L("The printer reported an invalid color for toolheads %1%; their existing project colors were kept."),
-                                        invalid_colors);
-        return text;
-    };
-    MessageDialog done(parent, summary(), _L("Sync filaments"), wxOK | wxICON_INFORMATION);
-    if (!reviewed)
-        done.AddButton(wxID_EDIT, _L("Change…"));
-    if (done.ShowModal() == wxID_EDIT && review())
-        MessageDialog(parent, summary(), _L("Sync filaments"), wxOK | wxICON_INFORMATION).ShowModal();
+    if (!invalid_colors.empty())
+        MessageDialog(parent,
+                      format_wxstr(_L("The printer reported an invalid color for toolheads %1%; the project colors of their filaments were kept."),
+                                   invalid_colors),
+                      _L("Sync filaments"), wxOK | wxICON_WARNING)
+            .ShowModal();
     return true;
 }
 

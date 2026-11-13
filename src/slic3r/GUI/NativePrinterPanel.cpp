@@ -47,12 +47,9 @@ std::string resolve_printer_lan_host()
     if (bundle == nullptr)
         return {};
 
-    std::string address;
-    if (const DynamicPrintConfig *physical = bundle->physical_printers.get_selected_printer_config())
-        address = physical->opt_string("print_host");
-    const DynamicPrintConfig &printer = bundle->printers.get_edited_preset().config;
-    if (address.empty())
-        address = printer.opt_string("print_host");
+    // One entry says where the printer is: the Connection settings of the selected printer preset.
+    // The send (Plater::send_gcode_u1_lan) and the filament sync read the same entry.
+    const std::string address = bundle->printers.get_edited_preset().config.opt_string("print_host");
 
     // Accept "http://host[:port]/..." or a bare host; LAN addresses only.
     std::string host = address;

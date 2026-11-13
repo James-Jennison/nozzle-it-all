@@ -170,7 +170,7 @@ constexpr std::array<ShortcutInfo, size_t(Shortcut::Count)> shortcut_table = {{
 #endif
     SHORTCUT(GoToPrepare,       "go_to_prepare",      L("Go to the Prepare tab"),                                GLOBAL, {}),
     SHORTCUT(GoToPreview,       "go_to_preview",      L("Go to the Preview tab"),                                GLOBAL, {}),
-    SHORTCUT(GoToDevice,        "go_to_device",       L("Go to the Device tab"),                                 GLOBAL, {}),
+    SHORTCUT(GoToDevice,        "go_to_device",       NOZZLE_BRANDING ? L("Go to the Printer tab") : L("Go to the Device tab"),                                 GLOBAL, {}),
     SHORTCUT(GoToMultiDevice,   "go_to_multi_device", L("Go to the Multi-device tab"),                           GLOBAL, {}),
     SHORTCUT(GoToProject,       "go_to_project",      L("Go to the Project tab"),                                GLOBAL, {}),
     SHORTCUT(GoToCalibration,   "go_to_calibration",  L("Go to the Calibration tab"),                            GLOBAL, {}),

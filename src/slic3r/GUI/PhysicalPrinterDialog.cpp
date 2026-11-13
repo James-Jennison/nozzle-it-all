@@ -374,7 +374,7 @@ void PhysicalPrinterDialog::build_printhost_settings(ConfigOptionsGroup* m_optgr
         ConfigOptionDef def;
         def.type     = coBool;
         def.width    = Field::def_width_wider();
-        def.label    = L("View print host webui in Device tab");
+        def.label    = NOZZLE_BRANDING ? L("View print host webui in Printer tab") : L("View print host webui in Device tab");
         def.tooltip  = L("Replace the BambuLab's device tab with print host webui");
         def.set_default_value(new ConfigOptionBool(false));
 

@@ -1608,7 +1608,7 @@ void MainFrame::init_tabpanel() {
         //BBS add pages
     m_monitor_page = new LazyPage<MonitorPanel>(m_tabpanel, TAB_ID_MONITOR, 20);
     m_lazy_pages.push_back(m_monitor_page);
-    m_tabpanel->AddPage(TAB_ID_MONITOR, m_monitor_page, _L("Device"), "tab_monitor_active");
+    m_tabpanel->AddPage(TAB_ID_MONITOR, m_monitor_page, device_tab_label(), "tab_monitor_active");
 
     m_printer_view_page = new LazyPage<PrinterWebView>(m_tabpanel, TAB_ID_MONITOR_WEB, 50, [this](wxWindow* parent) {
         auto* view = new PrinterWebView(parent);
@@ -1664,20 +1664,75 @@ void MainFrame::init_tabpanel() {
     }
 }
 
+wxString MainFrame::device_tab_label() { return merged_printer_tab() ? _L("Printer") : _L("Device"); }
+
+wxString MainFrame::device_web_tab_label() { return merged_printer_tab() ? _L("Printer (Web)") : _L("Device (Web)"); }
+
+bool MainFrame::wants_native_printer_view() const
+{
+    PresetBundle* bundle = wxGetApp().preset_bundle;
+    if (bundle == nullptr || bundle->use_bbl_device_tab())
+        return false;
+    const auto& cfg = bundle->printers.get_edited_preset().config;
+    const auto* host_type = cfg.option<ConfigOptionEnum<PrintHostType>>("host_type");
+    const std::string model = cfg.opt_string("printer_model");
+    const bool is_u1 = boost::icontains(model, "Snapmaker") && boost::icontains(model, "U1");
+    return is_u1 || (host_type != nullptr && host_type->value == htMoonraker && !cfg.opt_string("print_host").empty());
+}
+
+void MainFrame::sync_native_web_host()
+{
+    NativeDevicePage* native = m_native_device_page != nullptr ? m_native_device_page->get() : nullptr;
+    if (native == nullptr || m_printer_view_page == nullptr)
+        return;
+    if (m_web_in_native) {
+        if (native->web_page() == m_printer_view_page)
+            return;
+        // A page is re-parented only while the book does not list it.
+        if (int idx = m_tabpanel->FindPage(m_printer_view_page); idx != wxNOT_FOUND) {
+            m_printer_view_page->Show(false);
+            m_tabpanel->RemovePage(idx);
+        }
+        native->host_web_page(m_printer_view_page, [this] {
+            // As selecting Orca's web Device tab does: with printer agents the address may come
+            // from the selected discovered machine.
+            if (wxGetApp().app_config->get_bool("use_printer_agents"))
+                load_printer_url();
+        });
+    } else if (native->web_page() == m_printer_view_page) {
+        native->release_web_page();
+        m_printer_view_page->Reparent(m_tabpanel);
+        m_printer_view_page->Show(false);
+    }
+}
+
+void MainFrame::follow_job_on_native_view()
+{
+    if (!merged_printer_tab()) {
+        request_select_tab(TAB_ID_NATIVE_DEVICE);
+        return;
+    }
+    wxGetApp().CallAfter([this] {
+        if (wxGetApp().is_closing())
+            return;
+        if (NativeDevicePage* native = m_native_device_page != nullptr ? m_native_device_page->get() : nullptr)
+            native->show_web(false);
+        select_tab(wxString(TAB_ID_MONITOR));
+    });
+}
+
 // SoftFever
 void MainFrame::update_native_device_tab()
 {
     if (m_native_device_page == nullptr || m_tabpanel == nullptr)
         return;
-    PresetBundle* bundle = wxGetApp().preset_bundle;
-    bool want = false;
-    if (bundle != nullptr && !bundle->use_bbl_device_tab()) {
-        const auto& cfg = bundle->printers.get_edited_preset().config;
-        const auto* host_type = cfg.option<ConfigOptionEnum<PrintHostType>>("host_type");
-        const std::string model = cfg.opt_string("printer_model");
-        const bool is_u1 = boost::icontains(model, "Snapmaker") && boost::icontains(model, "U1");
-        want = is_u1 || (host_type != nullptr && host_type->value == htMoonraker && !cfg.opt_string("print_host").empty());
+    if (merged_printer_tab()) {
+        // show_device() has placed the page; only the connection follows the printer here.
+        if (NativeDevicePage* page = m_native_device_page->get(); page != nullptr && m_native_device_page->in_book())
+            page->reload();
+        return;
     }
+    const bool want = wants_native_printer_view();
     int idx = m_tabpanel->FindPage(m_native_device_page);
     if (!want) {
         if (idx != wxNOT_FOUND) {
@@ -1703,6 +1758,42 @@ void MainFrame::show_device(bool should_use_native) {
     auto idx = -1;
 
     const bool use_printer_agents = wxGetApp().app_config->get_bool("use_printer_agents");
+
+    if (merged_printer_tab()) {
+        auto remove_page = [this](wxWindow* page) {
+            if (int at = m_tabpanel->FindPage(page); at != wxNOT_FOUND) {
+                page->Show(false);
+                m_tabpanel->RemovePage(at);
+            }
+        };
+        m_web_in_native = wants_native_printer_view();
+        if (m_web_in_native) {
+            // One Printer tab: the native page takes the Device tab's id, so every way to the
+            // Device tab leads to it, and it hosts the web Device page behind its switch.
+            remove_page(m_monitor_page);
+            remove_page(m_printer_view_page);
+            if (!use_printer_agents) {
+                // As for any printer whose Device tab is its web page.
+                remove_page(m_calibration_page);
+                remove_page(m_multi_machine_page);
+            }
+            // Now if the native page is built, otherwise when it is.
+            m_native_device_page->when_built([this](NativeDevicePage&) { sync_native_web_host(); });
+            if (m_tabpanel->FindPage(m_native_device_page) == wxNOT_FOUND) {
+                m_native_device_page->Show(false);
+                m_tabpanel->InsertPage(m_tabpanel->PositionAfter({TAB_ID_PREVIEW}), TAB_ID_MONITOR, m_native_device_page,
+                                       device_tab_label(), "tab_monitor_active");
+            }
+            fit_tab_labels();
+            m_plugin_pages.relayout();
+            if (m_prebuild_started)
+                m_idle.start();
+            return;
+        }
+        // Orca's device view, unchanged: give the web page back to the book first.
+        sync_native_web_host();
+        remove_page(m_native_device_page);
+    }
 
     // The web Device page is the extra tab printer-agents mode shows alongside the native one.
     // Printers that drive the native Bambu device tab have nothing to put in it, so they don't
@@ -1743,7 +1834,7 @@ void MainFrame::show_device(bool should_use_native) {
             }
             m_monitor_page->Show(false);
             m_tabpanel->InsertPage(m_tabpanel->PositionAfter({TAB_ID_PREVIEW}), TAB_ID_MONITOR, m_monitor_page,
-                                   _L("Device"), "tab_monitor_active");
+                                   device_tab_label(), "tab_monitor_active");
         }
 
         if (wxGetApp().is_enable_multi_machine()) {
@@ -1765,7 +1856,7 @@ void MainFrame::show_device(bool should_use_native) {
         if (want_web_device_tab) {
             // Without the native Device tab the web page takes its id, so every way to the Device tab leads here
             const char*    id    = want_native_device_tabs ? TAB_ID_MONITOR_WEB : TAB_ID_MONITOR;
-            const wxString label = want_native_device_tabs ? _L("Device (Web)") : _L("Device");
+            const wxString label = want_native_device_tabs ? device_web_tab_label() : device_tab_label();
             idx = m_tabpanel->FindPage(m_printer_view_page);
             if (idx != wxNOT_FOUND && m_tabpanel->FindPageByName(id) != idx) {
                 m_printer_view_page->Show(false);
@@ -1807,7 +1898,7 @@ void MainFrame::show_device(bool should_use_native) {
         // Insert monitor page
         m_monitor_page->Show(false);
         m_tabpanel->InsertPage(m_tabpanel->PositionAfter({TAB_ID_PREVIEW}), TAB_ID_MONITOR, m_monitor_page,
-                               _L("Device"), "tab_monitor_active");
+                               device_tab_label(), "tab_monitor_active");
 
         if (wxGetApp().is_enable_multi_machine()) {
             // TODO: change the bitmap
@@ -1844,7 +1935,7 @@ void MainFrame::show_device(bool should_use_native) {
         }
         m_printer_view_page->Show(false);
         m_tabpanel->InsertPage(m_tabpanel->PositionAfter({TAB_ID_PREVIEW}), TAB_ID_MONITOR, m_printer_view_page,
-                               _L("Device"), "tab_monitor_active");
+                               device_tab_label(), "tab_monitor_active");
     }
     fit_tab_labels(); // ORCA on printer change
     m_plugin_pages.relayout(); // re-sync plugin tabs against the native tabs just mutated above

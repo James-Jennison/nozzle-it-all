@@ -1120,7 +1120,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
         break;
     case U1ReportSource::Conflict:
         MessageDialog(parent,
-                      _L("The direct Snapmaker U1 report and the selected printer report disagree about loaded toolheads or filament identity. Refresh the printer on the Device page and review its RFID data before synchronizing."),
+                      _L("The direct Snapmaker U1 report and the selected printer report disagree about loaded toolheads or filament identity. Refresh the printer on the Printer tab and review its RFID data before synchronizing."),
                       _L("Sync filaments"), wxOK | wxICON_WARNING)
             .ShowModal();
         return false;
@@ -1131,13 +1131,13 @@ bool sync_filaments_from_u1(wxWindow* parent)
     if (!any_loaded) {
         wxString detail;
         if (agent_ambiguous)
-            detail = _L("The printer reported loaded filament trays, but their physical U1 toolhead assignment is ambiguous. Refresh the printer on the Device page and try again.");
+            detail = _L("The printer reported loaded filament trays, but their physical U1 toolhead assignment is ambiguous. Refresh the printer on the Printer tab and try again.");
         else if (!host.empty() && selected_machine_available && !reports_same_printer && !direct_has_loaded)
             detail = _L("The configured U1 LAN address and the selected printer refer to different devices. Select the matching U1 or correct its LAN address before synchronizing filaments.");
         else if (host.empty() && !selected_machine_available)
-            detail = _L("No Snapmaker U1 connection is available. Configure the printer LAN address or select the printer on the Device page, then try again.");
+            detail = _L("No Snapmaker U1 connection is available. Configure the printer LAN address or select the printer on the Printer tab, then try again.");
         else if (host.empty() && !selected_machine_is_u1)
-            detail = _L("The selected printer could not be verified as a Snapmaker U1. Select the U1 on the Device page or configure its LAN address before synchronizing filaments.");
+            detail = _L("The selected printer could not be verified as a Snapmaker U1. Select the U1 on the Printer tab or configure its LAN address before synchronizing filaments.");
         else if (!host.empty() && !error.empty())
             detail = format_wxstr(_L("The printer reports no loaded filaments.\n\nThe direct U1 query also reported: %s"), error);
         else

@@ -556,7 +556,7 @@ void PrintHostSendDialog::init()
     });
     checkbox_sizer->Add(checkbox, 0, wxALL | wxALIGN_CENTER, FromDIP(2));
 
-    auto checkbox_text = new wxStaticText(this, wxID_ANY, _L("Switch to Device tab after upload."), wxDefaultPosition, wxDefaultSize, 0);
+    auto checkbox_text = new wxStaticText(this, wxID_ANY, (NOZZLE_BRANDING ? _L("Switch to Printer tab after upload.") : _L("Switch to Device tab after upload.")), wxDefaultPosition, wxDefaultSize, 0);
     checkbox_sizer->Add(checkbox_text, 0, wxALL | wxALIGN_CENTER, FromDIP(2));
     checkbox_text->SetFont(::Label::Body_13);
     checkbox_text->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#323A3D")));
@@ -765,7 +765,7 @@ void FlashforgePrintHostSendDialog::init()
         });
         checkbox_sizer->Add(checkbox, 0, wxALL | wxALIGN_CENTER, FromDIP(2));
 
-        auto checkbox_text = new wxStaticText(this, wxID_ANY, _L("Switch to Device tab after upload."));
+        auto checkbox_text = new wxStaticText(this, wxID_ANY, (NOZZLE_BRANDING ? _L("Switch to Printer tab after upload.") : _L("Switch to Device tab after upload.")));
         checkbox_text->SetFont(::Label::Body_13);
         checkbox_text->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#323A3D")));
         checkbox_sizer->Add(checkbox_text, 0, wxALL | wxALIGN_CENTER, FromDIP(2));
@@ -1691,7 +1691,7 @@ void ElegooPrintHostSendDialog::init() {
         });
         checkbox_sizer->Add(checkbox, 0, wxALL | wxALIGN_CENTER, FromDIP(2));
 
-        auto checkbox_text = new wxStaticText(this, wxID_ANY, _L("Switch to Device tab after upload."), wxDefaultPosition, wxDefaultSize, 0);
+        auto checkbox_text = new wxStaticText(this, wxID_ANY, (NOZZLE_BRANDING ? _L("Switch to Printer tab after upload.") : _L("Switch to Device tab after upload.")), wxDefaultPosition, wxDefaultSize, 0);
         checkbox_sizer->Add(checkbox_text, 0, wxALL | wxALIGN_CENTER, FromDIP(2));
         checkbox_text->SetFont(::Label::Body_13);
         checkbox_text->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#323A3D")));

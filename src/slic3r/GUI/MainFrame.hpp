@@ -497,6 +497,15 @@ public:
 
     //SoftFever
     void show_device(bool should_use_native);
+    // True where the Device and Printer tabs are one tab named Printer: a printer with a native
+    // view shows it there, with the printer's web interface behind a switch in the page; every
+    // other printer shows Orca's device view there, unchanged.
+    static constexpr bool merged_printer_tab() { return NOZZLE_BRANDING != 0; }
+    // Label of the tab that holds TAB_ID_MONITOR, and of the web page beside it.
+    static wxString device_tab_label();
+    static wxString device_web_tab_label();
+    // Selects the tab that follows a job sent to a printer with a native view. Any thread.
+    void follow_job_on_native_view();
     void fit_tab_labels(); // ORCA
     // True while either of the two tabs backed by m_plater is selected.
     bool is_prepare_or_preview_tab() const;
@@ -538,6 +547,11 @@ public:
     LazyPage<PrinterWebView>* m_printer_view_page{nullptr};
     LazyPage<NativeDevicePage>* m_native_device_page{nullptr};
     void update_native_device_tab();
+    // The selected printer has a native view (NativeDevicePage).
+    bool wants_native_printer_view() const;
+    // Moves the web Device page into the native page or back under the book, as m_web_in_native says.
+    void sync_native_web_host();
+    bool m_web_in_native{false};
     PluginPages           m_plugin_pages;
     wxLogWindow*          m_log_window { nullptr };
     // BBS

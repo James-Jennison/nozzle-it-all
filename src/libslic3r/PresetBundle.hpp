@@ -466,6 +466,9 @@ public:
     // (zero-based, old -> new) for the caller to re-point a model with remap_model_filament_slots(); empty when
     // nothing moved.
     std::map<int, int> move_new_filaments_before_mixed(size_t first_new);
+    // Where restoring the saved selections moved mixed slots (see above), for the GUI to re-point the model on
+    // the plate; the GUI takes it and clears it.
+    std::map<int, int> restored_filament_relocations;
     void         update_num_filaments(unsigned int to_del_flament_id);
 
     void get_ams_cobox_infos(AMSComboInfo &combox_info);

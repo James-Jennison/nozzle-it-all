@@ -4002,6 +4002,7 @@ void PresetBundle::update_selections(AppConfig &config)
         this->filament_presets.emplace_back(remove_ini_suffix(f_name));
     }
 
+    const size_t saved_filament_count = this->filament_presets.size();
     update_filament_count();
 
     std::vector<std::string> filament_colors;
@@ -4067,6 +4068,15 @@ void PresetBundle::update_selections(AppConfig &config)
     // exist.
     this->update_compatible(PresetSelectCompatibleType::Always);
     this->update_multi_material_filament_presets();
+    // A tool changer's list was topped up above, behind any mixed filament the saved list ends with.
+    this->restored_filament_relocations.clear();
+    if (this->filament_presets.size() > saved_filament_count) {
+        auto &multi_colours = project_config.option<ConfigOptionStrings>("filament_multi_colour")->values;
+        const auto &colours = project_config.option<ConfigOptionStrings>("filament_colour")->values;
+        for (size_t i = multi_colours.size(); i < colours.size(); ++i)
+            multi_colours.push_back(colours[i]);
+        this->restored_filament_relocations = this->move_new_filaments_before_mixed(saved_filament_count);
+    }
 
     std::string first_visible_filament_name;
     for (auto & fp : filament_presets) {
@@ -4164,6 +4174,7 @@ void PresetBundle::load_selections(AppConfig &config, const PresetPreferences& p
         this->filament_presets.emplace_back(remove_ini_suffix(f_name));
     }
 
+    const size_t saved_filament_count = this->filament_presets.size();
     update_filament_count();
 
     // Load data from AppConfig to ProjectConfig when Studio is initialized.
@@ -4228,6 +4239,15 @@ void PresetBundle::load_selections(AppConfig &config, const PresetPreferences& p
     // exist.
     this->update_compatible(PresetSelectCompatibleType::Always);
     this->update_multi_material_filament_presets();
+    // A tool changer's list was topped up above, behind any mixed filament the saved list ends with.
+    this->restored_filament_relocations.clear();
+    if (this->filament_presets.size() > saved_filament_count) {
+        auto &multi_colours = project_config.option<ConfigOptionStrings>("filament_multi_colour")->values;
+        const auto &colours = project_config.option<ConfigOptionStrings>("filament_colour")->values;
+        for (size_t i = multi_colours.size(); i < colours.size(); ++i)
+            multi_colours.push_back(colours[i]);
+        this->restored_filament_relocations = this->move_new_filaments_before_mixed(saved_filament_count);
+    }
 
     if (initial_printer != nullptr && (preferred_printer == nullptr || initial_printer == preferred_printer)) {
         // Don't run the following code, as we want to activate default filament / SLA material profiles when installing and selecting a new printer.

@@ -50,7 +50,6 @@
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/DialogButtons.hpp"
 #include "Widgets/TextInput.hpp"
-#include "libslic3r/FilamentMixer.hpp"
 #include "libslic3r/GCode/ThumbnailData.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/PrintConfig.hpp"
@@ -862,9 +861,15 @@ public:
         const size_t capacity = u1_physical_filament_capacity(bundle.printers.get_edited_preset().config);
         m_can_add             = bundle.num_mixed_filaments() == 0 && m_physical < capacity;
         m_add_unused = option(advanced, _L("Add unused toolhead filaments to filaments list."), false, m_advanced);
-        m_merge_same = option(advanced, _L("Automatically merge the same colors in the model after mapping."), true, m_advanced);
+        // Removing a filament while the project has a mixed filament can leave the mix without a
+        // component, and on a tool changer the list is topped up again behind the mix at the next
+        // start. With a mixed filament in the project the sync changes presets and colors only.
+        m_can_merge  = bundle.num_mixed_filaments() == 0;
+        m_merge_same = option(advanced, _L("Automatically merge the same colors in the model after mapping."), m_can_merge, m_advanced);
         if (!m_can_add)
             m_add_unused->Disable();
+        if (!m_can_merge)
+            m_merge_same->Disable();
         m_advanced->SetSizer(advanced);
         root->Add(m_advanced, 0, wxEXPAND);
 
@@ -897,7 +902,7 @@ public:
         SyncChoice result;
         result.mapping        = m_mode_mapping;
         result.add_unused     = m_mode_mapping && m_can_add && m_add_unused->GetValue();
-        result.merge_same     = m_mode_mapping && m_merge_same->GetValue();
+        result.merge_same     = m_mode_mapping && m_can_merge && m_merge_same->GetValue();
         result.choose_presets = m_choose_presets->GetValue();
         for (size_t i = 0; i < m_combos.size(); ++i)
             result.toolhead_for_filament.push_back(toolhead_of(i));
@@ -1076,6 +1081,7 @@ private:
     std::vector<wxColour>    m_before;
     bool                     m_mode_mapping{true};
     bool                     m_can_add{false};
+    bool                     m_can_merge{false};
     int                      m_plate{0};
     int                      m_plate_count{0};
 
@@ -1933,7 +1939,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
 
     // Project filaments that now are the same toolhead's filament become one, last to first so that the
     // indices still to be merged stay valid.
-    if (choice.mapping && choice.merge_same) {
+    if (choice.mapping && choice.merge_same && bundle.num_mixed_filaments() == 0) {
         for (size_t from = target.size(); from-- > 1;) {
             if (target[from] < 0)
                 continue;
@@ -1941,31 +1947,6 @@ bool sync_filaments_from_u1(wxWindow* parent)
             if (first == target.begin() + long(from))
                 continue;
             const size_t to = size_t(first - target.begin());
-            // A mixed filament names its components by number, and removing a filament leaves a hole
-            // in every mix that uses it. The mix is pointed at the filament that stays; where it
-            // already uses that one too, both filaments are kept.
-            auto* is_mixed   = bundle.project_config.option<ConfigOptionBools>("filament_is_mixed");
-            auto* components = bundle.project_config.option<ConfigOptionStrings>("filament_mixed_components");
-            bool  keep_both  = false;
-            std::vector<std::pair<size_t, std::string>> repointed;
-            if (is_mixed != nullptr && components != nullptr)
-                for (size_t m = 0; m < is_mixed->values.size() && m < components->values.size(); ++m) {
-                    if (!is_mixed->values[m])
-                        continue;
-                    std::vector<unsigned int> parts = parse_mixed_components(components->values[m]);
-                    if (std::find(parts.begin(), parts.end(), unsigned(from + 1)) == parts.end())
-                        continue;
-                    if (std::find(parts.begin(), parts.end(), unsigned(to + 1)) != parts.end()) {
-                        keep_both = true;
-                        break;
-                    }
-                    std::replace(parts.begin(), parts.end(), unsigned(from + 1), unsigned(to + 1));
-                    repointed.emplace_back(m, format_mixed_components(parts));
-                }
-            if (keep_both)
-                continue;
-            for (const auto& [m, text] : repointed)
-                components->values[m] = text;
             wxGetApp().sidebar().change_filament(from, to);
         }
     }

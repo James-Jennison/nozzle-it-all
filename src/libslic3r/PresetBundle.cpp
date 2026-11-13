@@ -4438,6 +4438,74 @@ void PresetBundle::set_num_filaments(unsigned int n, std::string new_color)
     update_multi_material_filament_presets();
 }
 
+std::map<int, int> PresetBundle::move_new_filaments_before_mixed(size_t first_new)
+{
+    const auto *colours = project_config.option<ConfigOptionStrings>("filament_colour");
+    if (colours == nullptr)
+        return {};
+    const size_t count = colours->values.size();
+    if (first_new == 0 || first_new >= count || filament_presets.size() != count)
+        return {};
+    // The run of mixed slots that ends where the new slots begin.
+    size_t first_mixed = first_new;
+    while (first_mixed > 0 && is_mixed_filament(first_mixed - 1))
+        --first_mixed;
+    if (first_mixed == first_new)
+        return {};
+    for (size_t i = first_new; i < count; ++i)
+        if (is_mixed_filament(i))
+            return {}; // not slots this function was told about
+
+    const auto rotate = [first_mixed, first_new, count](auto &values) {
+        if (values.size() == count)
+            std::rotate(values.begin() + first_mixed, values.begin() + first_new, values.end());
+    };
+    rotate(filament_presets);
+    rotate(ams_multi_color_filment);
+    for (const char *key : {"filament_colour", "filament_multi_colour", "filament_colour_type", "filament_mixed_components",
+                            "filament_mixed_sublayer_ratios", "filament_mixed_gradient_range", "filament_mixed_gradient_curve"})
+        if (auto *opt = project_config.option<ConfigOptionStrings>(key))
+            rotate(opt->values);
+    for (const char *key : {"filament_map", "filament_nozzle_map", "filament_volume_map"})
+        if (auto *opt = project_config.option<ConfigOptionInts>(key))
+            rotate(opt->values);
+    for (const char *key : {"filament_is_mixed", "filament_mixed_gradient", "filament_mixed_gradient_per_part"})
+        if (auto *opt = project_config.option<ConfigOptionBools>(key))
+            rotate(opt->values);
+
+    // A new slot takes the preset of the ordinary filament before it, not of a mixed one.
+    const size_t added = count - first_new;
+    if (first_mixed > 0)
+        for (size_t i = first_mixed; i < first_mixed + added; ++i)
+            filament_presets[i] = filament_presets[first_mixed - 1];
+
+    // old slot of the filament now at each position
+    std::vector<size_t> from(count);
+    for (size_t i = 0; i < count; ++i)
+        from[i] = i < first_mixed ? i : i < first_mixed + added ? first_new + (i - first_mixed) : i - added;
+    // Purge volumes follow their filaments.
+    if (auto *vector = project_config.option<ConfigOptionFloats>("flush_volumes_vector"); vector != nullptr && vector->values.size() == 2 * count) {
+        const std::vector<double> old = vector->values;
+        for (size_t i = 0; i < count; ++i) {
+            vector->values[2 * i]     = old[2 * from[i]];
+            vector->values[2 * i + 1] = old[2 * from[i] + 1];
+        }
+    }
+    if (auto *matrix = project_config.option<ConfigOptionFloats>("flush_volumes_matrix");
+        matrix != nullptr && !matrix->values.empty() && matrix->values.size() % (count * count) == 0) {
+        const std::vector<double> old = matrix->values;
+        for (size_t nozzle = 0; nozzle < old.size() / (count * count); ++nozzle)
+            for (size_t i = 0; i < count; ++i)
+                for (size_t j = 0; j < count; ++j)
+                    matrix->values[nozzle * count * count + i * count + j] = old[nozzle * count * count + from[i] * count + from[j]];
+    }
+
+    std::map<int, int> moved;
+    for (size_t old_slot = first_mixed; old_slot < first_new; ++old_slot)
+        moved.emplace(int(old_slot), int(old_slot + added));
+    return moved;
+}
+
 void PresetBundle::update_num_filaments(unsigned int to_del_flament_id)
 {
     unsigned old_filament_count = this->filament_presets.size();
@@ -6521,8 +6589,24 @@ void PresetBundle::load_config_file_config(const std::string &name_or_path, bool
 	this->update_compatible(PresetSelectCompatibleType::Never);
     this->update_multi_material_filament_presets();
     // The call above does not resize the colour and map arrays, which must match filament_presets.
-    if (printer_technology == ptFFF && this->filament_presets.size() > this->project_config.option<ConfigOptionStrings>("filament_colour")->values.size())
+    if (printer_technology == ptFFF && this->filament_presets.size() > this->project_config.option<ConfigOptionStrings>("filament_colour")->values.size()) {
+        const size_t slots_before = this->project_config.option<ConfigOptionStrings>("filament_colour")->values.size();
         this->set_num_filaments(this->filament_presets.size());
+        // The added filaments belong in front of the project's mixed ones. That renumbers the mixed slots, so it is
+        // done only for a caller that takes the relocations and re-points the model it is loading.
+        if (published_config != nullptr) {
+            const std::map<int, int> moved = this->move_new_filaments_before_mixed(slots_before);
+            if (!moved.empty()) {
+                std::map<int, int> &relocations = published_config->mixed_slot_relocations;
+                // A slot relocated earlier in this load now goes on to where its target went.
+                for (auto &relocation : relocations)
+                    if (const auto it = moved.find(relocation.second); it != moved.end())
+                        relocation.second = it->second;
+                for (const auto &entry : moved)
+                    relocations.emplace(entry.first, entry.second); // an earlier relocation of the same slot wins
+            }
+        }
+    }
 
     // A "published" 3MF project overlays the author-selected published keys onto the user's
     // currently-selected (edited) process preset. Keys that cannot be applied are collected for

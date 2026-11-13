@@ -9051,6 +9051,93 @@ TEST_CASE("Restoring a selection undoes an import that failed part-way", "[Prese
     CHECK(project_preset_count(bundle) == 0);
 }
 
+TEST_CASE("Filaments added to fill a tool changer go in front of the project's mixed filament", "[Preset][Bundle][Mixed]")
+{
+    const size_t tool_count = 4;
+    auto project = [tool_count] {
+        DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+        config.opt<ConfigOptionStrings>("filament_colour")->values = { "#FF0000", "#00FF00", "#808000" };
+        config.option<ConfigOptionBools>("filament_is_mixed", true)->values = { false, false, true };
+        config.option<ConfigOptionStrings>("filament_mixed_components", true)->values = { "", "", "1,2" };
+        config.opt<ConfigOptionFloats>("nozzle_diameter")->values = std::vector<double>(tool_count, 0.4);
+        config.option<ConfigOptionBool>("single_extruder_multi_material")->value = false;
+        Preset::normalize(config);
+        return config;
+    };
+    const auto mixed_flags = [](const PresetBundle &bundle) {
+        std::vector<bool> flags;
+        for (size_t i = 0; i < bundle.project_config.opt<ConfigOptionStrings>("filament_colour")->values.size(); ++i)
+            flags.push_back(bundle.is_mixed_filament(i));
+        return flags;
+    };
+
+    SECTION("a loader that re-points its model gets the mixed filament last and is told where it went") {
+        PresetBundle    bundle;
+        PublishedConfig published;
+        bundle.load_config_model("test.3mf", project(), Semver(), &published);
+
+        const auto &colors = bundle.project_config.opt<ConfigOptionStrings>("filament_colour")->values;
+        REQUIRE(colors.size() == tool_count);
+        REQUIRE(bundle.filament_presets.size() == tool_count);
+        CHECK(mixed_flags(bundle) == std::vector<bool>{ false, false, false, true });
+        CHECK(colors[0] == "#FF0000");
+        CHECK(colors[1] == "#00FF00");
+        CHECK(colors[3] == "#808000");
+        CHECK(bundle.project_config.opt<ConfigOptionStrings>("filament_mixed_components")->values[3] == "1,2");
+        CHECK(bundle.num_physical_filaments() == 3);
+        CHECK(published.mixed_slot_relocations == std::map<int, int>{ { 2, 3 } });
+        const size_t head_count = bundle.project_config.opt<ConfigOptionFloats>("flush_multiplier")->values.size();
+        CHECK(bundle.project_config.opt<ConfigOptionFloats>("flush_volumes_matrix")->values.size() == tool_count * tool_count * head_count);
+    }
+
+    SECTION("a loader that cannot re-point a model keeps every slot number") {
+        PresetBundle bundle;
+        bundle.load_config_model("test.3mf", project());
+        REQUIRE(bundle.project_config.opt<ConfigOptionStrings>("filament_colour")->values.size() == tool_count);
+        CHECK(mixed_flags(bundle) == std::vector<bool>{ false, false, true, false });
+    }
+
+    SECTION("two filaments added behind two mixed ones; purge volumes follow their filaments") {
+        PresetBundle bundle;
+        bundle.load_config_model("test.3mf", project());   // slots: red, green, mixed, added
+        auto &flags = bundle.project_config.option<ConfigOptionBools>("filament_is_mixed")->values;
+        flags[3]    = true;                                  // make it: red, green, mixed, mixed
+        bundle.project_config.option<ConfigOptionStrings>("filament_colour")->values[3] = "#123456";
+        bundle.set_num_filaments(6);
+        auto &matrix = bundle.project_config.option<ConfigOptionFloats>("flush_volumes_matrix")->values;
+        const size_t heads = matrix.size() / 36;
+        REQUIRE(heads >= 1);
+        for (size_t i = 0; i < matrix.size(); ++i)
+            matrix[i] = double(i);
+        const std::vector<double> before = matrix;
+
+        const std::map<int, int> moved = bundle.move_new_filaments_before_mixed(4);
+        CHECK(moved == std::map<int, int>{ { 2, 4 }, { 3, 5 } });
+        CHECK(mixed_flags(bundle) == std::vector<bool>{ false, false, false, false, true, true });
+        const auto &colors = bundle.project_config.opt<ConfigOptionStrings>("filament_colour")->values;
+        CHECK(colors[4] == "#808000");
+        CHECK(colors[5] == "#123456");
+        CHECK(bundle.filament_presets[2] == bundle.filament_presets[1]);
+        // from red (0) to the first mixed filament: was row 0, column 2; is row 0, column 4
+        CHECK(matrix[0 * 6 + 4] == before[0 * 6 + 2]);
+        // from the second mixed filament to the first added one: was row 3, column 4; is row 5, column 2
+        CHECK(matrix[5 * 6 + 2] == before[3 * 6 + 4]);
+
+        // Already in order: nothing moves a second time.
+        CHECK(bundle.move_new_filaments_before_mixed(4).empty());
+    }
+
+    SECTION("no mixed filament: nothing moves") {
+        PresetBundle bundle;
+        DynamicPrintConfig config = project();
+        config.option<ConfigOptionBools>("filament_is_mixed")->values = { false, false, false };
+        PublishedConfig published;
+        bundle.load_config_model("test.3mf", std::move(config), Semver(), &published);
+        CHECK(published.mixed_slot_relocations.empty());
+        CHECK(mixed_flags(bundle) == std::vector<bool>{ false, false, false, false });
+    }
+}
+
 TEST_CASE("A selection is not taken while project presets are loaded", "[Preset][Bundle]")
 {
     // Restoring drops every project-embedded preset, which would lose those of the project loaded now.

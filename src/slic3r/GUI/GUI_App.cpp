@@ -9928,8 +9928,14 @@ void GUI_App::load_current_presets(bool active_preset_combox/*= false*/, bool ch
             // exactly that on the next start - and losing the project's mixes to it is worse than
             // carrying a filament the printer has no nozzle for until the count is next changed.
             const size_t target = nozzle_diameter->values.size() + preset_bundle->num_mixed_filaments();
-            if (target > preset_bundle->filament_presets.size())
+            if (target > preset_bundle->filament_presets.size()) {
+                const size_t slots_before = preset_bundle->project_config.option<ConfigOptionStrings>("filament_colour")->values.size();
                 preset_bundle->set_num_filaments(target);
+                // set_num_filaments() appends, which would leave the new ordinary filaments behind the mixed ones.
+                const std::map<int, int> moved = preset_bundle->move_new_filaments_before_mixed(slots_before);
+                if (!moved.empty() && this->plater() != nullptr)
+                    remap_model_filament_slots(this->plater()->model(), moved);
+            }
         }
     }
 	this->plater()->set_printer_technology(printer_technology);

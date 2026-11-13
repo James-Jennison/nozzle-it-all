@@ -460,6 +460,12 @@ public:
     // slots live. A caller adding physical filaments has to add num_mixed_filaments() on top and
     // then move the new slots ahead of the mixed tail, as Sidebar::add_custom_filament does.
     void            set_num_filaments(unsigned int n, std::string new_col = "");
+    // Slots [first_new, end) were just appended by set_num_filaments() and nothing refers to them yet. When the
+    // slots right before them are mixed filaments, moves the new ones in front of those, so ordinary filaments
+    // stay ahead of mixed ones as the rest of the application expects. Returns where each mixed slot went
+    // (zero-based, old -> new) for the caller to re-point a model with remap_model_filament_slots(); empty when
+    // nothing moved.
+    std::map<int, int> move_new_filaments_before_mixed(size_t first_new);
     void         update_num_filaments(unsigned int to_del_flament_id);
 
     void get_ams_cobox_infos(AMSComboInfo &combox_info);

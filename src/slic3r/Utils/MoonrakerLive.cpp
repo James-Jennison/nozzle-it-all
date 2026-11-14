@@ -310,7 +310,7 @@ void MoonrakerLiveClient::resume_guarded(const std::string &shown_file, std::fun
         BOOST_LOG_TRIVIAL(warning) << "Printer panel: POST " << base << "/printer/print/resume (guarded, sent once)";
         Http::post(base + "/printer/print/resume")
             .header("Content-Type", "application/json")
-            .set_post_body("{}")
+            .set_post_body(std::string("{}"))
             .timeout_connect(5)
             .timeout_max(30)
             .on_complete([done, result](std::string, unsigned) mutable {

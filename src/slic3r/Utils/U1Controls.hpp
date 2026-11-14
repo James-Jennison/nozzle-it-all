@@ -36,7 +36,8 @@ struct ResumeCheck
 /// decision depends on that the printer does not report is a refusal, never a pass.
 ResumeCheck check_resume(const nlohmann::json &status, const std::string &shown_file);
 
-/// True when both name the same file; Moonraker may report a path with or without its folder.
+/// True when both are the same non-empty name, folder included. Both come from the printer's own
+/// print_stats.filename, so nothing less than equality is the same print.
 bool same_file(const std::string &a, const std::string &b);
 
 /// The controls a person can send besides Pause, Resume and Stop, in the three groups the Printer tab shows.

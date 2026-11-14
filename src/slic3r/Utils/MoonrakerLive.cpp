@@ -286,7 +286,8 @@ void MoonrakerLiveClient::send_once(const std::string &script, SentFn done) cons
         .on_complete([done](std::string, unsigned) { done(Sent::Accepted, {}); })
         .on_error([done](std::string body, std::string error, unsigned status) {
             const auto reply = json::parse(body, nullptr, false);
-            if (status >= 400) {
+            // Only a 4xx is the printer's refusal. After a 5xx the script may have run or be running.
+            if (status >= 400 && status < 500) {
                 done(Sent::Rejected, !reply.is_discarded() && reply.is_object() && reply.contains("error") && reply["error"].is_object() ?
                                          reply["error"].value("message", error) : "HTTP " + std::to_string(status));
                 return;

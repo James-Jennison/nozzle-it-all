@@ -22,9 +22,10 @@ TEST_CASE("A Resume is sent only to a printer that says it is paused on the prin
     CHECK(paused.refusal == ResumeRefusal::None);
     CHECK(paused.printer_state == "paused");
 
-    // Moonraker may name the file with its folder.
-    CHECK(U1Controls::check_resume(stats("paused", "jobs/bracket-0123-abcd.gcode"), shown));
-    CHECK(U1Controls::check_resume(stats("paused", "bracket-0123-abcd.gcode"), "jobs/" + shown));
+    // The same name in another folder is another print.
+    CHECK(U1Controls::check_resume(stats("paused", "jobs/bracket-0123-abcd.gcode"), shown).refusal == ResumeRefusal::OtherFile);
+    CHECK(U1Controls::check_resume(stats("paused", "bracket-0123-abcd.gcode"), "jobs/" + shown).refusal == ResumeRefusal::OtherFile);
+    CHECK(U1Controls::check_resume(stats("paused", "jobs/bracket-0123-abcd.gcode"), "jobs/" + shown));
 
     for (const char *state : {"printing", "standby", "complete", "cancelled", "error", ""}) {
         const auto check = U1Controls::check_resume(stats(state, "bracket-0123-abcd.gcode"), shown);

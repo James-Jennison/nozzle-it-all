@@ -3,17 +3,7 @@
 namespace Slic3r {
 namespace U1Controls {
 
-namespace {
-
-std::string leaf(const std::string &path)
-{
-    const size_t slash = path.find_last_of('/');
-    return slash == std::string::npos ? path : path.substr(slash + 1);
-}
-
-} // namespace
-
-bool same_file(const std::string &a, const std::string &b) { return !a.empty() && !b.empty() && leaf(a) == leaf(b); }
+bool same_file(const std::string &a, const std::string &b) { return !a.empty() && a == b; }
 
 ResumeCheck check_resume(const nlohmann::json &status, const std::string &shown_file)
 {

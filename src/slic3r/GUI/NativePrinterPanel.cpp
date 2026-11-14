@@ -850,6 +850,10 @@ void NativePrinterPanel::run_action(U1Controls::Action action)
         return;
     }
     const std::string shown_file = m_snapshot.filename;
+    // What the question is about: this connection to this printer, and for a nozzle this heater.
+    const std::uint64_t asked_generation = m_client_generation;
+    const std::string   heater           = action == Action::SetNozzleTemperature ? m_caps.extruders[size_t(tool)] :
+                                           action == Action::SetBedTemperature    ? std::string("heater_bed") : std::string();
     if (judgement.risk != Risk::Light) {
         wxString question;
         switch (action) {
@@ -882,8 +886,13 @@ void NativePrinterPanel::run_action(U1Controls::Action action)
         if (dlg.ShowModal() != wxID_YES || !m_client)
             return;
         // The printer may have changed while the question was open: what was confirmed must still be what is sent.
+        // A new connection, even to the same address, is not the printer state that was asked about.
         const U1Controls::Judgement now = U1Controls::judge(action, printer_facts(), target);
-        if (!now || now.risk != judgement.risk || m_snapshot.filename != shown_file || m_action_in_flight) {
+        const bool same_nozzle = action != Action::SetNozzleTemperature ||
+                                 (m_nozzle_choice->GetSelection() == tool && tool < int(m_caps.extruders.size()) &&
+                                  m_caps.extruders[size_t(tool)] == heater);
+        if (m_client_generation != asked_generation || !now || now.risk != judgement.risk || m_snapshot.filename != shown_file ||
+            m_action_in_flight || !same_nozzle) {
             refresh_actions();
             show_error(this, _L("The printer's state changed while the question was open, so nothing was sent."), false);
             return;
@@ -891,8 +900,8 @@ void NativePrinterPanel::run_action(U1Controls::Action action)
     }
     const std::string script = action == Action::HomeAll              ? PP::Commands::home_all() :
                                action == Action::MotorsOff            ? PP::Commands::motors_off() :
-                               action == Action::SetNozzleTemperature ? PP::Commands::set_heater(m_caps.extruders[size_t(tool)], target) :
-                               action == Action::SetBedTemperature    ? PP::Commands::set_heater("heater_bed", target) :
+                               action == Action::SetNozzleTemperature ? PP::Commands::set_heater(heater, target) :
+                               action == Action::SetBedTemperature    ? PP::Commands::set_heater(heater, target) :
                                action == Action::HeatersOff           ? PP::Commands::heaters_off() :
                                action == Action::LoadFilament         ? PP::Commands::load_filament() :
                                                                         PP::Commands::unload_filament();
@@ -934,7 +943,7 @@ void NativePrinterPanel::action_finished(U1Controls::Action action, MoonrakerLiv
         BOOST_LOG_TRIVIAL(error) << "Printer panel: control unanswered: " << detail;
         // TRN %1% is a control's name.
         show_error(this,
-                   GUI::format_wxstr(_L("\"%1%\" was sent once and no answer came back in time. It was not sent again. "
+                   GUI::format_wxstr(_L("\"%1%\" was sent once and the printer gave no usable answer. It was not sent again. "
                                         "The printer may still be carrying it out; check what it reports before doing anything else."),
                                      action_name(action)),
                    false);
@@ -1074,7 +1083,7 @@ void NativePrinterPanel::apply_colors()
         if (muted)
             muted->SetForegroundColour(p.muted);
     m_link_label->SetForegroundColour(m_client ? m_link_label->GetForegroundColour() : p.muted);
-    m_stop_button->SetForegroundColour(p.danger);
+    m_stop_button->SetForegroundColour(m_stop_button->IsEnabled() ? p.danger : p.muted);
     for (auto &tile : m_material_tiles) {
         // The tiles' texts are not the card's own children, so the loop above does not reach them.
         tile.name->SetBackgroundColour(tile.panel->GetBackgroundColour());
@@ -1143,8 +1152,10 @@ void NativePrinterPanel::confirm_resume()
     if (!fault.empty())
         // TRN %1% is the fault as the printer words it.
         question += "\n\n" + GUI::format_wxstr(_L("The printer reports: %1%"), fault);
+    const std::uint64_t asked_generation = m_client_generation;
     MessageDialog dlg(this, question, _L("Resume print"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
-    if (dlg.ShowModal() != wxID_YES || !m_client || m_resume_in_flight)
+    // A new connection made while the question was open is not what was asked about.
+    if (dlg.ShowModal() != wxID_YES || !m_client || m_resume_in_flight || m_client_generation != asked_generation)
         return;
     m_resume_in_flight = true;
     m_pause_button->Enable(false);

@@ -3,6 +3,7 @@
 
 #include "slic3r/Utils/FleetStatus.hpp"
 
+#include <wx/image.h>
 #include <wx/scrolwin.h>
 #include <wx/timer.h>
 
@@ -15,6 +16,7 @@
 #include <vector>
 
 class wxBoxSizer;
+class wxStaticBitmap;
 class wxStaticText;
 class Button;
 
@@ -23,7 +25,8 @@ namespace Slic3r::GUI {
 /// The Printers side of the Printer tab: one card for every printer preset that has an address, sorted into
 /// Needs attention, Printing, Ready and Offline by what each printer answers (Fleet::classify), with a filter
 /// per group. While it shows, every printer is read every few seconds on a worker thread this panel owns:
-/// one read request each, never a command. Opening a card shows that printer on the Monitor side; it does
+/// one read request each, never a command, and where the printer lists a camera one still picture from it,
+/// shown small on the card. Opening a card shows that printer on the Monitor side; it does
 /// not change the printer selected for slicing.
 class FleetPanel final : public wxScrolledWindow
 {
@@ -62,6 +65,11 @@ private:
     std::string   m_shown;      ///< what the cards were built from, to skip rebuilding an unchanged list
     std::map<std::string, Fleet::Reading> m_readings; ///< by address; absent until the first read
     std::vector<::Button *>               m_filter_buttons;
+    std::map<std::string, wxImage>          m_snapshots; ///< by address: the camera's last still picture, scaled for the card
+    std::map<std::string, wxStaticBitmap *> m_pictures;  ///< the cards' picture windows, owned by the cards
+    /// By address: where each printer's camera serves a still picture; empty when it lists none. Filled and read
+    /// only by the worker thread, one pass at a time.
+    std::shared_ptr<std::map<std::string, std::string>> m_camera_urls;
 
     std::shared_ptr<std::atomic<bool>> m_alive;   ///< false once this panel is gone
     std::shared_ptr<std::atomic<bool>> m_reading; ///< a pass over the printers is under way

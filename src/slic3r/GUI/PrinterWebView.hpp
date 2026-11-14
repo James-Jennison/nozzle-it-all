@@ -27,8 +27,12 @@
 #include <wx/tbarbase.h>
 #include "wx/textctrl.h"
 #include <wx/timer.h>
+#include <atomic>
+#include <map>
 #include <memory>
+#include <string>
 #include "Lazy.hpp"
+#include "slic3r/Utils/MjpegStream.hpp"
 #include "libslic3r/PrintConfig.hpp"
 
 
@@ -59,6 +63,12 @@ private:
     friend class PrinterWebViewHandler;
 
     void SendAPIKey();
+    // The camera replacement in the page (inject_mjpeg_fetch_workaround) asks for a camera stream to be read
+    // here and handed in picture by picture. Only a stream on the printer the page came from is read.
+    void start_page_camera(const std::string &id, const std::string &address);
+    void stop_page_camera(const std::string &id);
+    void stop_page_cameras();
+    void watch_page_cameras();
     void create_browser();
     void reset_browser();
 
@@ -75,6 +85,15 @@ private:
     bool m_url_loaded{false};
     std::unique_ptr<PrinterWebViewHandler> m_handler;
     bool m_reset_on_show{false};
+
+    struct PageCamera
+    {
+        std::unique_ptr<MjpegStream> stream;
+        wxLongLong                   vouched; ///< when the page last said it still reads this stream
+    };
+    std::map<std::string, PageCamera>  m_page_cameras; ///< by the name the page gave the stream
+    std::shared_ptr<std::atomic<bool>> m_alive{std::make_shared<std::atomic<bool>>(true)};
+    wxTimer                            m_camera_watch;
 
     // DECLARE_EVENT_TABLE()
 };

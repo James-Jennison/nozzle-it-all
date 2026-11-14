@@ -611,6 +611,8 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
     m_pause_button->Enable(running && m_client && !resume_settling);
     m_adjust_button->Enable(m_client != nullptr);
     m_stop_button->Enable(running && m_client);
+    // The warning colour only while there is a print to stop; otherwise it would hide that the button is disabled.
+    m_stop_button->SetForegroundColour(m_stop_button->IsEnabled() ? p.danger : p.muted);
 
     // Telemetry: the active toolhead's nozzle.
     const PP::Toolhead *active = nullptr;
@@ -657,6 +659,10 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
         tile.detail->SetLabel(t.material.empty() ? (m_caps.toolhead_materials ? _L("Empty") : temp_text(t.heater)) :
                                                    wxString::FromUTF8(t.material));
         tile.panel->SetBackgroundColour(t.active ? NIATheme::accent_soft(wxGetApp().dark_mode()) : p.tile);
+        for (wxStaticText *text : {tile.name, tile.detail}) {
+            text->SetBackgroundColour(tile.panel->GetBackgroundColour());
+            text->SetForegroundColour(p.text);
+        }
         tile.panel->Refresh();
     }
     if (m_material_note)
@@ -1068,8 +1074,11 @@ void NativePrinterPanel::apply_colors()
     m_link_label->SetForegroundColour(m_client ? m_link_label->GetForegroundColour() : p.muted);
     m_stop_button->SetForegroundColour(p.danger);
     for (auto &tile : m_material_tiles) {
+        // The tiles' texts are not the card's own children, so the loop above does not reach them.
         tile.name->SetBackgroundColour(tile.panel->GetBackgroundColour());
         tile.detail->SetBackgroundColour(tile.panel->GetBackgroundColour());
+        tile.name->SetForegroundColour(p.text);
+        tile.detail->SetForegroundColour(p.text);
     }
     wxGetApp().UpdateDarkUIWin(this);
     unpin_text_sizes(this);

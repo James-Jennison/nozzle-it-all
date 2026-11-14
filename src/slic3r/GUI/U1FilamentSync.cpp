@@ -2134,10 +2134,18 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
 
     // Loaded toolheads no project filament was mapped to join the list as new filaments, through the
     // same call as the sidebar's "Add one filament". A toolhead without a known preset is not added.
-    if (choice.mapping && choice.add_unused && bundle.num_mixed_filaments() == 0)
+    if (choice.mapping && choice.add_unused && bundle.num_mixed_filaments() == 0) {
+        bool added = false;
         for (size_t i = 0; i < slots.size(); ++i)
-            if (slots[i].present && !applied[i].empty() && std::find(target.begin(), target.end(), int(i)) == target.end())
+            if (slots[i].present && !applied[i].empty() && std::find(target.begin(), target.end(), int(i)) == target.end()) {
                 wxGetApp().sidebar().add_custom_filament(colour_from_hex(slots[i].color, wxColour(0xCE, 0xCE, 0xCE)), applied[i]);
+                added = true;
+            }
+        // The new filament's selector is created before its preset is set; without this it keeps showing the
+        // preset the filament was created with.
+        if (added)
+            wxGetApp().sidebar().update_all_preset_comboboxes();
+    }
 
     // What the project holds now, for the record of a sync.
     {

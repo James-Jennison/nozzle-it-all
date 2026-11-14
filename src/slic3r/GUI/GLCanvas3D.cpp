@@ -98,6 +98,7 @@
 #include "MainFrame.hpp"
 #include "WipeTowerDialog.hpp"
 #include "GUI_App.hpp"
+#include "LinuxDisplayBackend.hpp"
 #include "Shortcuts.hpp"
 #include "GUI_ObjectList.hpp"
 #include "GUI_Colors.hpp"
@@ -2790,11 +2791,27 @@ void GLCanvas3D::_render_frame(bool scene_dirty, bool only_init)
     // belongs to: on Mesa/X11 that is a fatal BadMatch, not the no-op it is on other platforms. Draws
     // already issued before this point cannot be redirected - only this swap is protected.
     if (m_canvas->IsShownOnScreen() && _set_current()) {
-        m_canvas->SwapBuffers();
+        const bool presented = m_canvas->SwapBuffers();
         m_frame_profiler.mark("swap");
-        if (!overlay_tick)
-            m_render_stats.increment_fps_counter();
-        m_presented_signature = signature;
+        if (presented) {
+            if (!overlay_tick)
+                m_render_stats.increment_fps_counter();
+            m_presented_signature = signature;
+        } else {
+            // The frame was drawn and not shown, so the next one must not be taken for a repeat of it.
+            m_presented_signature.reset();
+#ifdef __WXGTK__
+            // On Wayland wx refuses the swap from the moment the canvas is mapped until the compositor's
+            // first frame callback for it (src/unix/glegl.cpp, wxGLCanvasEGL::SwapBuffers, m_readyToDraw). That
+            // callback is requested on the canvas's subsurface, whose state the compositor applies only
+            // when the window's own surface is committed, and wx repaints the canvas when it arrives.
+            // A window with nothing else to redraw never commits, so the canvas stayed blank until the
+            // pointer moved. Asking the window for one redraw makes that commit happen.
+            if (is_running_on_wayland())
+                if (wxWindow* top = wxGetTopLevelParent(m_canvas))
+                    top->Refresh();
+#endif
+        }
     }
     else {
         if (m_canvas->IsShownOnScreen()) {

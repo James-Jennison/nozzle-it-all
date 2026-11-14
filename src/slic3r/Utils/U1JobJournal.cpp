@@ -72,6 +72,10 @@ json to_json(const Job &job)
     json events = json::array();
     for (const auto &event : job.events)
         events.push_back({{"state", event.first}, {"at", event.second}});
+    json filaments = json::array();
+    for (const Origin::Filament &filament : job.origin.filaments)
+        filaments.push_back({{"used", filament.used}, {"name", filament.name}, {"type", filament.type}, {"color", filament.color},
+                             {"grams", filament.grams}});
     return {{"format", 1},
             {"jobId", job.id},
             {"printer", job.printer},
@@ -96,7 +100,10 @@ json to_json(const Job &job)
               {"projectSavedAt", job.origin.project_saved_ms},
               {"projectChanged", job.origin.project_changed},
               {"plate", job.origin.plate},
-              {"plateName", job.origin.plate_name}}},
+              {"plateName", job.origin.plate_name},
+              {"reprintOf", job.origin.reprint_of},
+              {"filaments", filaments},
+              {"estimatedTime", job.origin.estimated_time}}},
             {"events", events}};
 }
 
@@ -140,6 +147,18 @@ std::optional<Job> from_json(const json &doc)
             job.origin.project_changed  = origin.value("projectChanged", false);
             job.origin.plate            = origin.value("plate", 0);
             job.origin.plate_name       = origin.value("plateName", std::string());
+            job.origin.reprint_of       = origin.value("reprintOf", std::string());
+            job.origin.estimated_time   = origin.value("estimatedTime", std::string());
+            if (origin.contains("filaments") && origin["filaments"].is_array())
+                for (const json &entry : origin["filaments"]) {
+                    Origin::Filament filament;
+                    filament.used  = entry.value("used", false);
+                    filament.name  = entry.value("name", std::string());
+                    filament.type  = entry.value("type", std::string());
+                    filament.color = entry.value("color", std::string());
+                    filament.grams = entry.value("grams", 0.);
+                    job.origin.filaments.push_back(std::move(filament));
+                }
         }
         for (const auto &event : doc.value("events", json::array()))
             job.events.emplace_back(event.value("state", std::string()), event.value("at", 0LL));
@@ -478,6 +497,55 @@ std::vector<Job> history(const std::string &printer)
     jobs.erase(std::remove_if(jobs.begin(), jobs.end(), [&printer](const Job &job) { return !same_printer(job.printer, printer); }), jobs.end());
     std::stable_sort(jobs.begin(), jobs.end(), [](const Job &a, const Job &b) { return a.created_ms > b.created_ms; });
     return jobs;
+}
+
+fs::path kept_file(const Job &job) { return journal_dir() / "files" / (job.sha256 + ".gcode"); }
+
+std::optional<Job> get(const std::string &id)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    return is_job_id(id) ? read_record(journal_dir() / (id + ".json")) : std::nullopt;
+}
+
+bool keep_file(const Job &job, const fs::path &prepared)
+{
+    if (!is_hex(job.sha256, 64))
+        return false;
+    boost::system::error_code ec;
+    const fs::path            target = kept_file(job);
+    fs::create_directories(target.parent_path(), ec);
+    if (!fs::exists(target, ec)) {
+        // Copied under another name first, so a file with a job's name is always a whole one.
+        const fs::path part = target.parent_path() / ("." + job.id + ".part");
+        fs::copy_file(prepared, part, fs::copy_options::overwrite_existing, ec);
+        if (!ec)
+            fs::rename(part, target, ec);
+        if (ec) {
+            boost::system::error_code ignored;
+            fs::remove(part, ignored);
+            BOOST_LOG_TRIVIAL(warning) << "U1 jobs: the prepared file of job " << job.id << " could not be kept: " << ec.message();
+            return false;
+        }
+    }
+    // The newest jobs keep their files. A file sent again is one file with several jobs.
+    std::lock_guard<std::mutex> lock(s_mutex);
+    std::vector<Job>            jobs = load_all_locked(nullptr);
+    std::set<std::string>       keep = {target.filename().string()};
+    size_t                      kept = 1;
+    for (auto it = jobs.rbegin(); it != jobs.rend() && kept < KEPT_FILES; ++it) {
+        if (it->id == job.id || !fs::exists(kept_file(*it), ec))
+            continue;
+        keep.insert(kept_file(*it).filename().string());
+        ++kept;
+    }
+    for (fs::directory_iterator it(target.parent_path(), ec), end; !ec && it != end; it.increment(ec)) {
+        const fs::path &path = it->path();
+        if (path.extension() == ".gcode" && keep.count(path.filename().string()) == 0) {
+            boost::system::error_code ignored;
+            fs::remove(path, ignored);
+        }
+    }
+    return true;
 }
 
 namespace {

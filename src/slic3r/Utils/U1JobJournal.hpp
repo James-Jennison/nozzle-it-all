@@ -49,6 +49,19 @@ struct Origin
     bool        project_changed = false; ///< the project had changes that were not in the file
     int         plate = 0;          ///< 1-based; 0 when unknown
     std::string plate_name;
+    /// The job whose prepared file was sent again to make this one; empty for a job sliced and sent.
+    std::string reprint_of;
+    /// What the plate was sliced with, as the send dialog showed it; indexed by slicer filament.
+    struct Filament
+    {
+        bool        used = false;
+        std::string name;
+        std::string type;
+        std::string color;
+        double      grams = 0.;
+    };
+    std::vector<Filament> filaments;
+    std::string           estimated_time;
 };
 
 struct Job
@@ -145,6 +158,17 @@ std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &re
 std::optional<Job> set_assessment(const std::string &id, const std::string &assessment);
 /// Every job sent to *printer*, newest first.
 std::vector<Job> history(const std::string &printer);
+
+/// How many jobs keep their prepared file on this computer, so they can be printed again.
+constexpr size_t KEPT_FILES = 10;
+/// Where job's prepared file is kept. The file may not be there: it is kept only once the upload was
+/// verified, and only for the newest KEPT_FILES jobs.
+boost::filesystem::path kept_file(const Job &job);
+/// Copies *prepared* (whose SHA-256 is job.sha256) to kept_file(job), then removes the kept files of
+/// all but the newest KEPT_FILES jobs that have one. A failure leaves the job as it was.
+bool keep_file(const Job &job, const boost::filesystem::path &prepared);
+/// Job *id*, when its record is readable.
+std::optional<Job> get(const std::string &id);
 
 /// A print the printer's own history lists that no job of this app accounts for: started at the
 /// printer's screen, from its web interface or from another program.

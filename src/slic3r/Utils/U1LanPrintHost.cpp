@@ -390,6 +390,9 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         error_fn(_L("The file on the printer does not match the prepared file, so the print was not started."));
         return false;
     }
+    // The bytes now proven to be on the printer are kept here too, so this job can be printed again.
+    // Not being able to keep them changes nothing about this send.
+    U1Jobs::keep_file(job, upload_data.source_path);
     if (!start) {
         U1Jobs::save(job, U1Jobs::State::Uploaded, "Uploaded and verified. No Start was requested.");
         return true;

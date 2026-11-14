@@ -508,3 +508,60 @@ TEST_CASE("Prints the printer lists that this app did not send are kept apart an
     CHECK(U1Jobs::load_all(&unreadable).size() == 1);
     CHECK(unreadable.empty());
 }
+
+TEST_CASE("The newest jobs keep their prepared file, and a job sent again is recorded as such", "[U1Jobs]")
+{
+    ScratchJournal scratch;
+    const fs::path prepared = scratch.dir / "prepared.tmp";
+    scratch.write("prepared.tmp", "G28\nG1 X10\n");
+
+    // Twelve jobs, each with its own file contents by name: only the newest ten keep a file.
+    std::vector<U1Jobs::Job> jobs;
+    for (int i = 0; i < 12; ++i) {
+        U1Jobs::Job job = new_job();
+        job.sha256      = std::string(62, 'a') + (i < 10 ? "0" : "") + std::to_string(i);
+        job.created_ms  = 1763000000000LL + i * 1000;
+        job.origin.filaments = {{true, "Generic PLA", "PLA", "#FF0000", 12.5}, {false, "", "", "", 0.}};
+        job.origin.estimated_time = "1h 2m";
+        REQUIRE(U1Jobs::save(job, U1Jobs::State::Completed));
+        REQUIRE(U1Jobs::keep_file(job, prepared));
+        jobs.push_back(job);
+    }
+    CHECK_FALSE(fs::exists(U1Jobs::kept_file(jobs[0])));
+    CHECK_FALSE(fs::exists(U1Jobs::kept_file(jobs[1])));
+    for (int i = 2; i < 12; ++i)
+        CHECK(fs::exists(U1Jobs::kept_file(jobs[i])));
+    // The source is copied, not moved, and the records are still all there.
+    CHECK(fs::exists(prepared));
+    CHECK(U1Jobs::history("192.168.1.50").size() == 12);
+
+    // Sent again: a new job with the same bytes. It shares the kept file and names the job it came from.
+    U1Jobs::Job again       = new_job();
+    again.sha256            = jobs[5].sha256;
+    again.created_ms        = 1763000100000LL;
+    again.origin            = jobs[5].origin;
+    again.origin.reprint_of = jobs[5].id;
+    REQUIRE(U1Jobs::save(again, U1Jobs::State::Printing));
+    REQUIRE(U1Jobs::keep_file(again, prepared));
+    CHECK(U1Jobs::kept_file(again) == U1Jobs::kept_file(jobs[5]));
+    CHECK(fs::exists(U1Jobs::kept_file(again)));
+    CHECK_FALSE(fs::exists(U1Jobs::kept_file(jobs[2]))); // the eleventh newest job with a file
+
+    const auto read = U1Jobs::get(again.id);
+    REQUIRE(read);
+    CHECK(read->origin.reprint_of == jobs[5].id);
+    CHECK(read->origin.estimated_time == "1h 2m");
+    REQUIRE(read->origin.filaments.size() == 2);
+    CHECK(read->origin.filaments[0].used);
+    CHECK(read->origin.filaments[0].color == "#FF0000");
+    CHECK(read->origin.filaments[0].grams == Catch::Approx(12.5));
+    CHECK_FALSE(read->origin.filaments[1].used);
+    CHECK_FALSE(U1Jobs::get("not-a-job"));
+
+    // A file that cannot be copied is reported and nothing else changes.
+    U1Jobs::Job lost = new_job();
+    lost.sha256      = std::string(64, 'b');
+    REQUIRE(U1Jobs::save(lost, U1Jobs::State::Completed));
+    CHECK_FALSE(U1Jobs::keep_file(lost, scratch.dir / "missing.tmp"));
+    CHECK(fs::exists(U1Jobs::kept_file(again)));
+}

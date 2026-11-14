@@ -21094,6 +21094,91 @@ void Plater::reslice_SLA_until_step(SLAPrintObjectStep step, const ModelObject &
     // and let the background processing start.
     this->p->restart_background_process(state | priv::UPDATE_BACKGROUND_PROCESS_FORCE_RESTART);
 }
+// True when nothing sent earlier to the printer at *base_url* stands in the way of a new send: no send in
+// flight and no Start whose outcome is open. An open Start is put to the printer and then to the person;
+// neither answer sends anything.
+static bool u1_printer_clear_to_send(wxWindow *parent, const std::string &base_url)
+{
+    // A send still in flight (it may be watching the printer after a lost reply) settles first.
+    if (U1Jobs::sending_now(base_url)) {
+        show_error(parent, _L("A job is still being sent to this printer. Wait for it to finish, then press Print again."), false);
+        return false;
+    }
+    // An earlier Start whose reply was lost keeps this printer held. Ask the printer first; if it
+    // does not show that job, only a person can say what happened. Neither answer sends anything.
+    if (auto open_job = U1Jobs::unresolved(base_url)) {
+        std::string printer_state;
+        {
+            wxBusyCursor wait;
+            printer_state = U1LanPrintHost::reconcile(*open_job, base_url);
+        }
+        if (open_job->unresolved()) {
+            if (printer_state.empty()) {
+                show_error(parent, _L("An earlier Start on this printer was never confirmed, and the printer cannot be reached to check it. "
+                                    "Nothing was sent. Try again when the printer answers."), false);
+                return false;
+            }
+            // TRN %1% is a short job id, %2% the file name on the printer, %3% what the printer reports (standby, complete, ...).
+            MessageDialog ask(parent,
+                              GUI::format_wxstr(_L("Job %1% was sent a Start that was never confirmed, and the Start was not sent again.\n"
+                                                   "File on the printer: %2%\nThe printer now reports: %3%, and is not printing that file.\n\n"
+                                                   "Did that print start?\n\n"
+                                                   "Yes: record it as started.\n"
+                                                   "No: record that nothing started, so a new print can be sent.\n"
+                                                   "Cancel: decide later. The printer stays held and nothing can be sent to it from here."),
+                                                open_job->id.substr(0, 8), open_job->remote_path, printer_state),
+                              _L("Send to Snapmaker U1"), wxYES_NO | wxCANCEL | wxICON_WARNING);
+            const int answer = ask.ShowModal();
+            if (answer != wxID_YES && answer != wxID_NO)
+                return false;
+            const bool started = answer == wxID_YES;
+            // The dialog may have been open for a long time. Read the printer again: the answer is
+            // recorded against what the printer reports now, and a printer that turns out to be
+            // running the job's file settles it without the answer.
+            {
+                wxBusyCursor wait;
+                printer_state = U1LanPrintHost::reconcile(*open_job, base_url);
+            }
+            if (!open_job->unresolved()) {
+                show_info(parent, _L("The printer now reports that it is printing that job, so it was recorded as started. Nothing was sent."),
+                          _L("Send to Snapmaker U1"));
+                return false;
+            }
+            if (printer_state.empty()) {
+                show_error(parent, _L("The printer cannot be reached to check it, so the answer was not recorded and the printer stays held. "
+                                    "Nothing was sent."), false);
+                return false;
+            }
+            const auto settled = U1Jobs::update(
+                open_job->id,
+                [started](U1Jobs::Job &record) -> std::optional<U1Jobs::State> {
+                    if (!record.unresolved())
+                        return std::nullopt;
+                    return started ? U1Jobs::State::Printing : U1Jobs::State::Failed;
+                },
+                started ? "Recorded as started by the user. The printer reported " + printer_state + " at that time." :
+                          "Recorded as not started by the user. The printer reported " + printer_state + " and was not printing this file.",
+                started ? "USER_SAID_STARTED" : "USER_SAID_NOT_STARTED");
+            if (!settled || settled->unresolved()) {
+                show_error(parent, _L("The answer could not be recorded, so the printer stays held. Nothing was sent."), false);
+                return false;
+            }
+            // Another part of the app settled the job while the question was open: the answer was not used.
+            const std::string answer_event    = started ? "USER_SAID_STARTED" : "USER_SAID_NOT_STARTED";
+            const bool        answer_recorded = std::any_of(settled->events.begin(), settled->events.end(),
+                                                            [&](const auto &event) { return event.first == answer_event; });
+            if (!answer_recorded) {
+                show_info(parent, GUI::format_wxstr(_L("That job was settled in the meantime (%1%), so your answer was not recorded. Nothing was sent."),
+                                                  U1Jobs::state_name(settled->state)), _L("Send to Snapmaker U1"));
+                return false;
+            }
+            if (started)
+                return false;
+        }
+    }
+    return true;
+}
+
 void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
 {
     // Where to reach the printer: the address typed into the printer settings.
@@ -21189,83 +21274,8 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
                     filaments[extruder - 1].present = true;
     }
 
-    // A send still in flight (it may be watching the printer after a lost reply) settles first.
-    if (U1Jobs::sending_now(base_url)) {
-        show_error(this, _L("A job is still being sent to this printer. Wait for it to finish, then press Print again."), false);
+    if (!u1_printer_clear_to_send(this, base_url))
         return;
-    }
-    // An earlier Start whose reply was lost keeps this printer held. Ask the printer first; if it
-    // does not show that job, only a person can say what happened. Neither answer sends anything.
-    if (auto open_job = U1Jobs::unresolved(base_url)) {
-        std::string printer_state;
-        {
-            wxBusyCursor wait;
-            printer_state = U1LanPrintHost::reconcile(*open_job, base_url);
-        }
-        if (open_job->unresolved()) {
-            if (printer_state.empty()) {
-                show_error(this, _L("An earlier Start on this printer was never confirmed, and the printer cannot be reached to check it. "
-                                    "Nothing was sent. Try again when the printer answers."), false);
-                return;
-            }
-            // TRN %1% is a short job id, %2% the file name on the printer, %3% what the printer reports (standby, complete, ...).
-            MessageDialog ask(this,
-                              GUI::format_wxstr(_L("Job %1% was sent a Start that was never confirmed, and the Start was not sent again.\n"
-                                                   "File on the printer: %2%\nThe printer now reports: %3%, and is not printing that file.\n\n"
-                                                   "Did that print start?\n\n"
-                                                   "Yes: record it as started.\n"
-                                                   "No: record that nothing started, so a new print can be sent.\n"
-                                                   "Cancel: decide later. The printer stays held and nothing can be sent to it from here."),
-                                                open_job->id.substr(0, 8), open_job->remote_path, printer_state),
-                              _L("Send to Snapmaker U1"), wxYES_NO | wxCANCEL | wxICON_WARNING);
-            const int answer = ask.ShowModal();
-            if (answer != wxID_YES && answer != wxID_NO)
-                return;
-            const bool started = answer == wxID_YES;
-            // The dialog may have been open for a long time. Read the printer again: the answer is
-            // recorded against what the printer reports now, and a printer that turns out to be
-            // running the job's file settles it without the answer.
-            {
-                wxBusyCursor wait;
-                printer_state = U1LanPrintHost::reconcile(*open_job, base_url);
-            }
-            if (!open_job->unresolved()) {
-                show_info(this, _L("The printer now reports that it is printing that job, so it was recorded as started. Nothing was sent."),
-                          _L("Send to Snapmaker U1"));
-                return;
-            }
-            if (printer_state.empty()) {
-                show_error(this, _L("The printer cannot be reached to check it, so the answer was not recorded and the printer stays held. "
-                                    "Nothing was sent."), false);
-                return;
-            }
-            const auto settled = U1Jobs::update(
-                open_job->id,
-                [started](U1Jobs::Job &record) -> std::optional<U1Jobs::State> {
-                    if (!record.unresolved())
-                        return std::nullopt;
-                    return started ? U1Jobs::State::Printing : U1Jobs::State::Failed;
-                },
-                started ? "Recorded as started by the user. The printer reported " + printer_state + " at that time." :
-                          "Recorded as not started by the user. The printer reported " + printer_state + " and was not printing this file.",
-                started ? "USER_SAID_STARTED" : "USER_SAID_NOT_STARTED");
-            if (!settled || settled->unresolved()) {
-                show_error(this, _L("The answer could not be recorded, so the printer stays held. Nothing was sent."), false);
-                return;
-            }
-            // Another part of the app settled the job while the question was open: the answer was not used.
-            const std::string answer_event    = started ? "USER_SAID_STARTED" : "USER_SAID_NOT_STARTED";
-            const bool        answer_recorded = std::any_of(settled->events.begin(), settled->events.end(),
-                                                            [&](const auto &event) { return event.first == answer_event; });
-            if (!answer_recorded) {
-                show_info(this, GUI::format_wxstr(_L("That job was settled in the meantime (%1%), so your answer was not recorded. Nothing was sent."),
-                                                  U1Jobs::state_name(settled->state)), _L("Send to Snapmaker U1"));
-                return;
-            }
-            if (started)
-                return;
-        }
-    }
 
     wxBitmap thumbnail;
     if (plate != nullptr && plate->thumbnail_data.is_valid()) {
@@ -21308,6 +21318,16 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
         origin.plate           = get_partplate_list().get_curr_plate_index() + 1;
         if (PartPlate *plate = get_partplate_list().get_curr_plate())
             origin.plate_name = plate->get_plate_name();
+        origin.estimated_time = into_u8(estimated_time);
+        for (size_t i = 0; i < filaments.size(); ++i) {
+            U1Jobs::Origin::Filament filament;
+            filament.used  = filaments[i].present;
+            filament.name  = filaments[i].name;
+            filament.type  = filaments[i].type;
+            filament.color = filaments[i].color;
+            filament.grams = i < filament_grams.size() ? filament_grams[i] : 0.;
+            origin.filaments.push_back(std::move(filament));
+        }
         u1_host->set_origin(std::move(origin));
     }
     upload_job.printhost               = std::move(u1_host);
@@ -21319,6 +21339,94 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     // Exports the G-code, then hands the job to the upload queue, which shows
     // progress and lets the user cancel.
     p->export_gcode(fs::path(), false, std::move(upload_job));
+}
+
+void Plater::reprint_u1_job(const std::string &job_id)
+{
+    const wxString title = _L("Print again");
+    const std::optional<U1Jobs::Job> old = U1Jobs::get(job_id);
+    boost::system::error_code        ec;
+    if (!old || !fs::exists(U1Jobs::kept_file(*old), ec)) {
+        show_error(this, _L("The prepared file of that job is no longer kept on this computer. Open its project, slice it and print from there."), false);
+        return;
+    }
+
+    std::string                              base_url;
+    wxString                                 error;
+    std::optional<U1PrintTask::PrinterState> printer;
+    {
+        wxBusyCursor wait;
+        printer = U1LanPrintHost::query_printer(old->printer, base_url, error);
+    }
+    if (!printer) {
+        show_error(this, GUI::format_wxstr(_L("Could not reach the Snapmaker U1 at %s on the local network.\n\n%s"), from_u8(old->printer), error), false);
+        return;
+    }
+    if (!u1_printer_clear_to_send(this, base_url))
+        return;
+
+    // The send works on its own copy: the upload queue removes the file it is given. The copy must be the
+    // bytes the earlier job sent, or nothing is sent.
+    const fs::path copy = fs::temp_directory_path() / fs::unique_path("u1-reprint-%%%%-%%%%.gcode");
+    bool           same = false;
+    {
+        wxBusyCursor wait;
+        fs::copy_file(U1Jobs::kept_file(*old), copy, ec);
+        same = !ec && NozzleSession::sha256_file_hex(copy.string()) == old->sha256;
+    }
+    if (!same) {
+        fs::remove(copy, ec);
+        show_error(this, _L("The kept file of that job is damaged or could not be read, so it was not sent. Open its project, slice it and print from there."), false);
+        return;
+    }
+
+    const U1Jobs::GcodeFacts facts = U1Jobs::read_gcode_facts(copy);
+    std::vector<U1PrintTask::Filament> filaments;
+    std::vector<double>                grams;
+    for (const U1Jobs::Origin::Filament &kept : old->origin.filaments) {
+        U1PrintTask::Filament filament;
+        filament.present = kept.used;
+        filament.name    = kept.name;
+        filament.type    = kept.type;
+        filament.color   = kept.color;
+        filaments.push_back(std::move(filament));
+        grams.push_back(kept.grams);
+    }
+    // A job recorded before filaments were kept: one card per mapped filament, so each can be given a toolhead.
+    if (filaments.empty())
+        for (int toolhead : old->toolhead_map) {
+            U1PrintTask::Filament filament;
+            filament.present = toolhead >= 0;
+            filaments.push_back(std::move(filament));
+        }
+
+    const fs::path name = old->origin.file_name.empty() ? fs::path("print.gcode") : fs::path(old->origin.file_name);
+    U1SendDialog   dlg(this, name, filaments, *printer, from_u8(old->origin.project), old->origin.plate, from_u8(old->origin.estimated_time),
+                       wxBitmap(), grams, from_u8(old->printer), [base_url, facts] {
+                         U1LanPrintHost::ReadinessRead read = U1LanPrintHost::readiness_check(base_url, facts);
+                         return U1SendDialog::ReadinessRead{std::move(read.check), read.answered};
+                     });
+    dlg.SetTitle(title);
+    if (dlg.ShowModal() != wxID_OK) {
+        fs::remove(copy, ec);
+        return;
+    }
+
+    // A new job with its own identity, through the same upload, read-back and single Start as any other.
+    U1Jobs::Origin origin = old->origin;
+    origin.file_name      = dlg.filename().filename().string();
+    origin.reprint_of     = old->id;
+    auto u1_host          = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
+    u1_host->set_origin(std::move(origin));
+    PrintHostJob upload_job;
+    upload_job.printhost               = std::move(u1_host);
+    upload_job.upload_data.use_3mf     = false;
+    upload_job.upload_data.source_path = copy;
+    upload_job.upload_data.upload_path = dlg.filename();
+    upload_job.upload_data.post_action = dlg.start_print() ? PrintHostPostUploadAction::StartPrint : PrintHostPostUploadAction::None;
+    upload_job.switch_to_device_tab    = dlg.start_print();
+    upload_job.native_device_tab       = true;
+    wxGetApp().printhost_job_queue().enqueue(std::move(upload_job));
 }
 
 void Plater::send_gcode_legacy(int plate_idx, Export3mfProgressFn proFn)

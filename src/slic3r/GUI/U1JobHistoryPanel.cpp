@@ -5,12 +5,15 @@
 #include "I18N.hpp"
 #include "NIATheme.hpp"
 #include "NativePrinterPanel.hpp"
+#include "Plater.hpp"
+#include "Widgets/Button.hpp"
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/Label.hpp"
 #include "format.hpp"
 #include "slic3r/Utils/Http.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
 
+#include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <nlohmann/json.hpp>
 
@@ -54,6 +57,14 @@ wxString machine_state(U1Jobs::State state)
     case U1Jobs::State::Failed: return _L("Failed");
     }
     return {};
+}
+
+// The job's prepared file is still kept here, and the printer is not being sent to or left open by this job.
+bool can_print_again(const U1Jobs::Job &job)
+{
+    boost::system::error_code ec;
+    return job.state != U1Jobs::State::Uploading && job.state != U1Jobs::State::Verifying && !job.unresolved() &&
+           boost::filesystem::exists(U1Jobs::kept_file(job), ec);
 }
 
 wxString leaf(const std::string &path) { return from_u8(boost::filesystem::path(path).filename().string()); }
@@ -143,7 +154,7 @@ void U1JobHistoryPanel::rebuild(bool force)
     std::string shown = host + (dark ? "|dark" : "|light");
     for (const U1Jobs::Job &job : jobs)
         shown += "|" + job.id + ":" + U1Jobs::state_name(job.state) + ":" + job.assessment + ":" + std::to_string(job.started_ms) + ":" +
-                 std::to_string(job.ended_ms);
+                 std::to_string(job.ended_ms) + (can_print_again(job) ? ":kept" : "");
     const std::vector<U1Jobs::ExternalPrint> outside = host.empty() ? std::vector<U1Jobs::ExternalPrint>() : U1Jobs::external_prints(host);
     for (const U1Jobs::ExternalPrint &print : outside)
         shown += "|x" + print.printer_job_id + ":" + print.status + ":" + print.assessment + ":" + std::to_string(print.ended_ms);
@@ -186,6 +197,9 @@ void U1JobHistoryPanel::rebuild(bool force)
                                               when(job.origin.project_saved_ms));
         } else if (job.origin.plate > 0)
             origin += wxString::FromUTF8(" · ") + _L("project not saved");
+        if (!job.origin.reprint_of.empty())
+            // TRN %1% is a short job id. Follows the plate and project a print came from.
+            origin += (origin.empty() ? "" : wxString::FromUTF8(" · ")) + format_wxstr(_L("printed again from job %1%"), job.origin.reprint_of.substr(0, 8));
         if (!origin.empty()) {
             auto *from = new wxStaticText(row, wxID_ANY, origin, wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_END);
             from->SetForegroundColour(NIATheme::text_muted(dark));
@@ -243,6 +257,20 @@ void U1JobHistoryPanel::rebuild(bool force)
         verdict_col->Add(verdict_title);
         verdict_col->Add(verdict, 0, wxTOP, FromDIP(2));
         line->Add(verdict_col, 0, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
+
+        // The same prepared file, sent as a new job after the send dialog. Without a kept file there is no button.
+        if (can_print_again(job)) {
+            auto *again = new ::Button(row, _L("Print again"));
+            again->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+            again->Bind(wxEVT_BUTTON, [id](wxCommandEvent &) {
+                // Not on the stack of the click: the send dialog is modal and the list may be rebuilt under it.
+                wxGetApp().CallAfter([id] {
+                    if (!wxGetApp().is_closing() && wxGetApp().plater() != nullptr)
+                        wxGetApp().plater()->reprint_u1_job(id);
+                });
+            });
+            line->Add(again, 0, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
+        }
 
         row->SetSizer(line);
         rows.emplace_back(job.started_ms > 0 ? job.started_ms : job.created_ms, row);

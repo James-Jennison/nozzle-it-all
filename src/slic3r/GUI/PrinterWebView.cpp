@@ -47,9 +47,9 @@ namespace GUI {
 // of one fails with "Load failed", from the page's own address too, while the same stream plays as a picture
 // element. Fluidd's and Mainsail's "MJPEG stream" camera reads the stream by fetch(), so on the printer's own
 // page the camera stays dark in this web view although it plays in Firefox or Chrome.
-// When such a fetch fails and its address looks like a camera stream, the page is given the same pictures in
-// the same format, fetched one at a time from the camera's still-picture address beside the stream. Every
-// other fetch, and a stream fetch that succeeds, is passed through untouched.
+// When a fetch whose address looks like a camera stream is answered with such a stream, or fails, the page is
+// given the same pictures in the same format, fetched one at a time from the camera's still-picture address
+// beside the stream. Every other fetch is passed through untouched.
 static void inject_mjpeg_fetch_workaround(wxWebView *webView)
 {
     webView->AddUserScript(R"JS((function () {
@@ -72,16 +72,18 @@ static void inject_mjpeg_fetch_workaround(wxWebView *webView)
     const still = stillFor(address);
     const tried = nativeFetch(input, init);
     if (!still) return tried;
-    return tried.catch(function (failure) {
-      const signal = (init && init.signal) || (input && input.signal) || undefined;
-      const one = function () {
-        still.searchParams.set('_', String(Date.now()));
-        return nativeFetch(still.href, {mode: 'cors', cache: 'no-store', signal: signal}).then(function (r) {
-          if (!r.ok) throw new Error('status ' + r.status);
-          return r.arrayBuffer();
-        });
-      };
-      // No still picture either: the page gets the failure it would have had.
+    const signal = (init && init.signal) || (input && input.signal) || undefined;
+    const one = function () {
+      still.searchParams.set('_', String(Date.now()));
+      const options = {mode: 'cors', cache: 'no-store'};
+      if (signal) options.signal = signal;
+      return nativeFetch(still.href, options).then(function (r) {
+        if (!r.ok) throw new Error('status ' + r.status);
+        return r.arrayBuffer();
+      });
+    };
+    // The same pictures in the stream's own format, fetched one at a time.
+    const instead = function () {
       return one().then(function (first) {
         const text = new TextEncoder(), boundary = 'niaframe';
         let next = first, over = false;
@@ -99,7 +101,20 @@ static void inject_mjpeg_fetch_workaround(wxWebView *webView)
           cancel: function () { over = true; }
         });
         return new Response(body, {status: 200, headers: {'Content-Type': 'multipart/x-mixed-replace;boundary=' + boundary}});
-      }, function () { throw failure; });
+      });
+    };
+    // The engine answers such a request with its headers and then fails the body ("Load failed"), so the
+    // answer's type decides, not a failure: a continuous stream is replaced before the page reads it. With no
+    // still picture to be had, the page gets the answer or the failure it would have had.
+    return tried.then(function (answer) {
+      const type = (answer.headers && answer.headers.get('content-type')) || '';
+      if (!/^multipart\/x-mixed-replace/i.test(type)) return answer;
+      return instead().then(function (replaced) {
+        try { if (answer.body) answer.body.cancel(); } catch (e) {}
+        return replaced;
+      }, function () { return answer; });
+    }, function (failure) {
+      return instead().catch(function () { throw failure; });
     });
   };
 })();)JS");

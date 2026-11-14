@@ -707,10 +707,14 @@ wxString unavailable_text(U1Controls::Action action, U1Controls::Unavailable why
 void NativePrinterPanel::build_actions(wxWindow *card, wxBoxSizer *body)
 {
     const auto add_group = [&](U1Controls::Group group, const wxString &title, bool first) {
+        // The group's name leads its row, so the card stays short enough to leave the materials in view.
         auto *heading = label(card, title, 1.0, true);
-        body->Add(heading, 0, first ? 0 : wxTOP, FromDIP(10));
+        auto *name    = new wxBoxSizer(wxHORIZONTAL); // holds the column width; the label's own is reset with the theme
+        name->Add(heading, 0, wxALIGN_CENTER_VERTICAL);
+        name->SetMinSize(FromDIP(96), -1);
         auto *row = new wxBoxSizer(wxHORIZONTAL);
-        body->Add(row, 0, wxEXPAND | wxTOP, FromDIP(6));
+        row->Add(name, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(8));
+        body->Add(row, 0, wxEXPAND | (first ? 0 : wxTOP), FromDIP(10));
         m_group_reason[int(group)] = label(card, wxEmptyString);
         body->Add(m_group_reason[int(group)], 0, wxEXPAND | wxTOP, FromDIP(4));
         return row;

@@ -130,6 +130,69 @@ TEST_CASE("U1 report preserves RFID origin and physical slot identity", "[U1Fila
     CHECK_FALSE(slots[3].present);
 }
 
+TEST_CASE("The lanes of a filament changer become slots by the tool each is mapped to", "[U1FilamentSync]")
+{
+    // Shaped as AFC writes each lane to Moonraker's lane_data: "lane" is the mapped tool as a string, and an
+    // unloaded lane has empty strings.
+    const auto lane = [](const char* tool, const char* color, const char* material) {
+        return nlohmann::json{{"color", color}, {"material", material}, {"bed_temp", 60}, {"nozzle_temp", 220}, {"scan_time", ""},
+                              {"td", ""},       {"lane", tool},         {"extruder_index", 0}, {"spool_id", nullptr}, {"weight", 1000}};
+    };
+    const nlohmann::json canvas = {{"CANVAS_1", lane("0", "#FF0000", "PLA")},
+                                   {"CANVAS_2", lane("1", "00ff00", "PETG")},
+                                   {"CANVAS_3", lane("2", "", "")},
+                                   {"CANVAS_4", lane("3", "#0000FFFF", "pla")}};
+    const std::vector<U1ReportedFilament> slots = parse_filament_lane_data(canvas);
+    REQUIRE(slots.size() == 4);
+    CHECK(slots[0].present);
+    CHECK(slots[0].type == "PLA");
+    CHECK(slots[0].color == "#FF0000");
+    CHECK_FALSE(slots[0].from_tag);
+    CHECK(slots[0].vendor.empty());
+    CHECK(slots[1].type == "PETG");
+    CHECK(slots[1].color == "#00FF00");
+    CHECK_FALSE(slots[2].present);
+    CHECK(slots[3].present);
+    CHECK(slots[3].type == "PLA");
+    CHECK(slots[3].color == "#0000FF");
+
+    // The slot is the mapped tool, not the lane's name or position.
+    const nlohmann::json swapped = {{"CANVAS_1", lane("3", "#111111", "ABS")}, {"CANVAS_4", lane("0", "#222222", "PLA")}};
+    const auto remapped = parse_filament_lane_data(swapped);
+    CHECK(remapped[0].type == "PLA");
+    CHECK(remapped[3].type == "ABS");
+    CHECK_FALSE(remapped[1].present);
+
+    // A color that cannot be read leaves the slot loaded and marks the color.
+    const auto odd = parse_filament_lane_data({{"L", lane("0", "reddish", "PLA")}});
+    CHECK(odd[0].present);
+    CHECK(odd[0].color.empty());
+    CHECK(odd[0].color_invalid);
+
+    // What is not a usable lane is left out and never shifts another: no tool, a tool that is not a whole
+    // number, one beyond T3, a second lane for a tool already taken, a lane that is not an object.
+    nlohmann::json bad = {{"A", lane("", "#111111", "PLA")},  {"B", lane("x", "#111111", "PLA")}, {"C", lane("4", "#111111", "PLA")},
+                          {"D", lane("-1", "#111111", "PLA")}, {"E", lane("1x", "#111111", "PLA")}, {"F", "not a lane"},
+                          {"G", lane("2", "#333333", "PETG")}, {"H", lane("2", "#444444", "ABS")}};
+    bad["I"]         = lane("1", "#555555", "PLA");
+    bad["I"]["lane"] = 1; // a number, not AFC's string
+    const auto filtered = parse_filament_lane_data(bad);
+    REQUIRE(filtered.size() == 4);
+    CHECK_FALSE(filtered[0].present);
+    CHECK_FALSE(filtered[1].present);
+    CHECK(filtered[2].present);
+    CHECK(filtered[2].type == "PETG");
+    CHECK_FALSE(filtered[3].present);
+
+    // No lane data at all is four empty slots.
+    for (const nlohmann::json& none : {nlohmann::json::object(), nlohmann::json(nullptr), nlohmann::json::array()}) {
+        const auto empty = parse_filament_lane_data(none);
+        REQUIRE(empty.size() == 4);
+        for (const auto& slot : empty)
+            CHECK_FALSE(slot.present);
+    }
+}
+
 TEST_CASE("U1 report selection prefers same-printer RFID identity without combining sources", "[U1FilamentSync]")
 {
     std::vector<U1ReportedFilament> direct(4);

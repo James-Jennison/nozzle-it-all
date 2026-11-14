@@ -54,6 +54,8 @@
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "slic3r/Utils/FilamentProfilesClient.hpp"
+#include "slic3r/Utils/Http.hpp"
+#include "slic3r/Utils/NetworkAgent.hpp"
 #include "slic3r/Utils/U1LanPrintHost.hpp"
 
 namespace Slic3r::GUI {
@@ -186,6 +188,50 @@ bool json_flag(const nlohmann::json& arr, size_t i, bool fallback)
     if (arr[i].is_number_integer())
         return arr[i].get<int>() != 0;
     return fallback;
+}
+
+// True while a printer with filament lanes on one nozzle (a CANVAS or other AFC unit) is being synced: the
+// dialogs then speak of slots, not toolheads. Main thread only; the sync is modal.
+bool s_lane_sync = false;
+
+std::vector<Slot> parse_lane_data_impl(const nlohmann::json& value)
+{
+    constexpr size_t capacity = 4;
+    std::vector<Slot> slots(capacity);
+    if (!value.is_object())
+        return slots;
+    std::vector<bool> seen(capacity, false);
+    for (const auto& [name, lane] : value.items()) {
+        if (!lane.is_object())
+            continue;
+        // "lane" is the tool the lane is mapped to, as a string ("0" for T0). A lane without one is not a slot
+        // a sliced file can ask for.
+        const auto tool_it = lane.find("lane");
+        if (tool_it == lane.end() || !tool_it->is_string())
+            continue;
+        std::size_t consumed = 0;
+        int         tool     = -1;
+        try {
+            tool = std::stoi(tool_it->get<std::string>(), &consumed);
+        } catch (const std::exception&) {
+            continue;
+        }
+        if (consumed != tool_it->get<std::string>().size() || tool < 0 || size_t(tool) >= capacity || seen[size_t(tool)])
+            continue;
+        seen[size_t(tool)] = true;
+        const auto text = [&lane](const char* key) {
+            const auto it = lane.find(key);
+            return it != lane.end() && it->is_string() ? boost::trim_copy(it->get<std::string>()) : std::string();
+        };
+        Slot& s = slots[size_t(tool)];
+        s.type  = boost::to_upper_copy(text("material"));
+        const std::string raw_color = text("color");
+        s.color         = normalize_u1_filament_color(raw_color);
+        s.color_invalid = !raw_color.empty() && s.color.empty();
+        // An unloaded lane has an empty material. Nothing here comes from a tag.
+        s.present = !s.type.empty();
+    }
+    return slots;
 }
 
 std::vector<Slot> parse_report_impl(const nlohmann::json& report)
@@ -746,7 +792,7 @@ public:
             const wxString type  = preset != nullptr ? from_u8(preset->config.opt_string("filament_type", 0u)) : wxString();
             grid->Add(chip(m_map_panel, wxString::Format("%d %s", int(m_index[i] + 1), type), m_before[m_index[i]]), 0, wxEXPAND);
         }
-        grid->Add(text(m_map_panel, _L("Toolhead:"), true), 0, wxALIGN_CENTER_VERTICAL);
+        grid->Add(text(m_map_panel, (s_lane_sync ? _L("Slot:") : _L("Toolhead:")), true), 0, wxALIGN_CENTER_VERTICAL);
         for (size_t i = 0; i < m_physical; ++i) {
             auto* combo = new ::ComboBox(m_map_panel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(9 * em, -1), 0, nullptr, wxCB_READONLY);
             // TRN first choice in a list of toolheads: this project filament keeps its type and color
@@ -851,7 +897,7 @@ public:
         auto* preset_lines = new wxStaticText(this, wxID_ANY, presets);
         preset_lines->SetForegroundColour(NIATheme::text_muted(dark));
         root->Add(preset_lines, 0, wxLEFT | wxRIGHT, em);
-        m_choose_presets = option(root, _L("Let me choose the filament preset for each toolhead."), !all_known);
+        m_choose_presets = option(root, (s_lane_sync ? _L("Let me choose the filament preset for each slot.") : _L("Let me choose the filament preset for each toolhead.")), !all_known);
         if (!all_known)
             m_choose_presets->Disable(); // a toolhead without a known preset is always asked about
 
@@ -860,7 +906,7 @@ public:
         auto* advanced = new wxBoxSizer(wxVERTICAL);
         const size_t capacity = u1_physical_filament_capacity(bundle.printers.get_edited_preset().config);
         m_can_add             = bundle.num_mixed_filaments() == 0 && m_physical < capacity;
-        m_add_unused = option(advanced, _L("Add unused toolhead filaments to filaments list."), false, m_advanced);
+        m_add_unused = option(advanced, (s_lane_sync ? _L("Add unused slot filaments to filaments list.") : _L("Add unused toolhead filaments to filaments list.")), false, m_advanced);
         // Removing a filament while the project has a mixed filament can leave the mix without a
         // component, and on a tool changer the list is topped up again behind the mix at the next
         // start. With a mixed filament in the project the sync changes presets and colors only.
@@ -1014,11 +1060,11 @@ private:
         m_advanced->Show(mapping);
         m_after_title->SetLabel(mapping ? _L("After mapping") : _L("After overwriting"));
         m_tip->SetLabel(mapping ?
-                            _L("Each project filament takes the type and color of the toolhead chosen for it. The toolhead a filament prints from is chosen when the print is sent.") :
-                            _L("The project's filaments are replaced by the printer's four toolheads, in toolhead order. An empty toolhead leaves its project filament as it is."));
+                            (s_lane_sync ? _L("Each project filament takes the type and color of the slot chosen for it.") : _L("Each project filament takes the type and color of the toolhead chosen for it. The toolhead a filament prints from is chosen when the print is sent.")) :
+                            (s_lane_sync ? _L("The project's filaments are replaced by the printer's slots, in slot order. An empty slot leaves its project filament as it is.") : _L("The project's filaments are replaced by the printer's four toolheads, in toolhead order. An empty toolhead leaves its project filament as it is.")));
         m_undone->SetLabel((mapping ?
                                 _L("After being synced, the project's filament presets and colors will be replaced with the mapped filament types and colors. This action cannot be undone.") :
-                                _L("After being synced, the project's filament presets and colors will be replaced with those of the printer's toolheads. This action cannot be undone.")) +
+                                (s_lane_sync ? _L("After being synced, the project's filament presets and colors will be replaced with those of the printer's slots. This action cannot be undone.") : _L("After being synced, the project's filament presets and colors will be replaced with those of the printer's toolheads. This action cannot be undone."))) +
                            "\n\n" + _L("Are you sure to synchronize the filaments?"));
         m_tip->Wrap(-1);
         m_tip->Wrap(m_tip->GetMinSize().GetWidth());
@@ -1124,13 +1170,13 @@ public:
         const bool dark = wxGetApp().dark_mode();
         SetBackgroundColour(NIATheme::background(dark));
         auto* root   = new wxBoxSizer(wxVERTICAL);
-        auto* heading = new wxStaticText(this, wxID_ANY, _L("Map the material in each toolhead"));
+        auto* heading = new wxStaticText(this, wxID_ANY, (s_lane_sync ? _L("Map the material in each slot") : _L("Map the material in each toolhead")));
         heading->SetFont(Label::Head_18);
         heading->SetForegroundColour(NIATheme::text(dark));
         root->Add(heading, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, em);
         auto* explanation = new wxStaticText(
             this, wxID_ANY,
-            _L("Review every loaded toolhead. Applying expands the project to the U1's fixed T0-T3 slots; empty toolheads keep their current project slot."));
+            (s_lane_sync ? _L("Review every loaded slot. Empty slots keep their current project filament.") : _L("Review every loaded toolhead. Applying expands the project to the U1's fixed T0-T3 slots; empty toolheads keep their current project slot.")));
         explanation->SetForegroundColour(NIATheme::text_muted(dark));
         root->Add(explanation, 0, wxALL | wxEXPAND, em);
         auto* source = new wxStaticText(this, wxID_ANY, wxString::Format(_L("Report source: %s"), report_source));
@@ -1138,7 +1184,7 @@ public:
         root->Add(source, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, em);
         auto* grid = new wxFlexGridSizer(3, em / 2, em);
         grid->AddGrowableCol(2, 1);
-        for (const wxString& label : {_L("Toolhead"), _L("RFID / printer report"), _L("Filament preset")}) {
+        for (const wxString& label : {s_lane_sync ? _L("Slot") : _L("Toolhead"), s_lane_sync ? _L("Printer report") : _L("RFID / printer report"), _L("Filament preset")}) {
             auto* column = new wxStaticText(this, wxID_ANY, label);
             column->SetFont(Label::Head_13);
             column->SetForegroundColour(NIATheme::text_muted(dark));
@@ -1148,8 +1194,8 @@ public:
             const Slot& slot = slots[i];
             grid->Add(new wxStaticText(this, wxID_ANY, wxString::Format("T%d", int(i))), 0, wxALIGN_CENTER_VERTICAL);
             if (!slot.present) {
-                auto* empty = new wxStaticText(this, wxID_ANY, _L("Empty toolhead"));
-                empty->SetName(format_wxstr(_L("Toolhead T%1%: empty toolhead"), int(i)));
+                auto* empty = new wxStaticText(this, wxID_ANY, (s_lane_sync ? _L("Empty slot") : _L("Empty toolhead")));
+                empty->SetName(format_wxstr((s_lane_sync ? _L("Slot T%1%: empty slot") : _L("Toolhead T%1%: empty toolhead")), int(i)));
                 grid->Add(empty, 0, wxALIGN_CENTER_VERTICAL);
                 grid->Add(new wxStaticText(this, wxID_ANY, _L("Keep current project slot")), 0, wxALIGN_CENTER_VERTICAL);
                 continue;
@@ -1166,7 +1212,7 @@ public:
             MappingRow& row = m_rows[i];
             row.control     = new ::ComboBox(this, wxID_ANY, "", wxDefaultPosition, wxSize(34 * em, -1), 0, nullptr,
                                               wxCB_READONLY);
-            row.control->SetName(format_wxstr(_L("Filament preset for toolhead T%1%. Printer report: %2%"), int(i), report_identity));
+            row.control->SetName(format_wxstr((s_lane_sync ? _L("Filament preset for slot T%1%. Printer report: %2%") : _L("Filament preset for toolhead T%1%. Printer report: %2%")), int(i), report_identity));
             row.control->Append(_L("Select a matching filament preset"));
             row.choices.push_back({});
             const Preset* current = i < bundle.filament_presets.size() ? preset_named(bundle, bundle.filament_presets[i]) : nullptr;
@@ -1210,7 +1256,7 @@ public:
         actions->Add(key, 0, wxRIGHT, em / 2);
         actions->Add(search, 0);
         root->Add(actions, 0, wxALL, em);
-        m_status = new wxStaticText(this, wxID_ANY, _L("Choose a preset for each toolhead, or look the RFID products up in 3D Filament Profiles."));
+        m_status = new wxStaticText(this, wxID_ANY, (s_lane_sync ? _L("Choose a preset for each slot, or look the products up in 3D Filament Profiles.") : _L("Choose a preset for each toolhead, or look the RFID products up in 3D Filament Profiles.")));
         m_status->SetForegroundColour(NIATheme::text_muted(dark));
         root->Add(m_status, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, em);
 
@@ -1239,7 +1285,7 @@ public:
                 });
                 if (unresolved_override &&
                     MessageDialog(this,
-                                  _L("At least one loaded toolhead has no material family in the printer report. Apply the selected presets as explicit manual overrides for those unresolved toolheads?"),
+                                  (s_lane_sync ? _L("At least one loaded slot has no material family in the printer report. Apply the selected presets as explicit manual overrides for those unresolved slots?") : _L("At least one loaded toolhead has no material family in the printer report. Apply the selected presets as explicit manual overrides for those unresolved toolheads?")),
                                   _L("Confirm unresolved material overrides"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING)
                             .ShowModal() != wxID_YES)
                     return;
@@ -1405,7 +1451,7 @@ private:
             // dialog here too, so a future early-return path cannot leave
             // Apply permanently disabled.
             ++m_catalog_generation;
-            m_status->SetLabel(format_wxstr(_L("Catalog lookup could not start for toolhead T%1%."), int(index)));
+            m_status->SetLabel(format_wxstr((s_lane_sync ? _L("Catalog lookup could not start for slot T%1%.") : _L("Catalog lookup could not start for toolhead T%1%.")), int(index)));
             finish_catalog_search(false);
         }
     }
@@ -1414,7 +1460,7 @@ private:
     {
         m_catalog_request.reset();
         if (!reply.ok) {
-            m_status->SetLabel(format_wxstr(_L("Catalog lookup failed for toolhead T%1%: %2%"), int(index), from_u8(reply.error)));
+            m_status->SetLabel(format_wxstr((s_lane_sync ? _L("Catalog lookup failed for slot T%1%: %2%") : _L("Catalog lookup failed for toolhead T%1%: %2%")), int(index), from_u8(reply.error)));
             finish_catalog_search(false);
             return;
         }
@@ -1468,7 +1514,8 @@ private:
                                                  int(m_catalog_found)));
             else
                 m_status->SetLabel(format_wxstr(
-                    _L("Found %1% catalog products. Toolheads %2% are still unmapped; choose a matching preset in those rows."),
+                    s_lane_sync ? _L("Found %1% catalog products. Slots %2% are still unmapped; choose a matching preset in those rows.") :
+                                  _L("Found %1% catalog products. Toolheads %2% are still unmapped; choose a matching preset in those rows."),
                     int(m_catalog_found), unmapped));
         }
         update_apply();
@@ -1491,6 +1538,7 @@ private:
 } // namespace
 
 std::vector<U1ReportedFilament> parse_u1_filament_report(const nlohmann::json& report) { return parse_report_impl(report); }
+std::vector<U1ReportedFilament> parse_filament_lane_data(const nlohmann::json& value) { return parse_lane_data_impl(value); }
 
 bool u1_catalog_preset_matches_record(const Preset& preset, const FilamentProfileRecord& record)
 {
@@ -1582,6 +1630,83 @@ U1ReportSource u1_authoritative_report_source(const std::vector<U1ReportedFilame
     return U1ReportSource::None;
 }
 
+bool lane_filament_sync_available()
+{
+    PresetBundle* bundle = wxGetApp().preset_bundle;
+    if (bundle == nullptr || bundle->is_bbl_vendor())
+        return false;
+    const DynamicPrintConfig& printer = bundle->printers.get_edited_preset().config;
+    if (u1_physical_filament_capacity(printer) != 0 || resolve_printer_lan_host().empty())
+        return false;
+    // Only printers reached the Moonraker way can have lane data. Whether this one has is known after asking it.
+    const auto* host_type = printer.option<ConfigOptionEnum<PrintHostType>>("host_type");
+    if (host_type != nullptr && host_type->value != htMoonraker && host_type->value != htOctoPrint)
+        return false;
+    // A printer agent that syncs filaments itself keeps doing so.
+    const auto agent = wxGetApp().getAgent();
+    return !(agent && agent->get_filament_sync_mode() != FilamentSyncMode::none);
+}
+
+namespace {
+
+bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& report_source);
+
+// Reads the lanes a filament changer on one nozzle (AFC: a CANVAS, a Box Turtle; recent Happy Hare) writes to
+// Moonraker's database, one read request, then runs the same review and apply as for a U1.
+bool sync_filaments_from_lanes(wxWindow* parent)
+{
+    const std::string host = resolve_printer_lan_host();
+    std::optional<nlohmann::json> value;
+    bool     answered = false;
+    wxString error;
+    {
+        wxBusyCursor wait;
+        // The address as given, then Moonraker's own port when no port was given and nothing answered there.
+        std::vector<std::string> bases{"http://" + host};
+        if (host.find(':') == std::string::npos)
+            bases.push_back("http://" + host + ":7125");
+        for (const std::string& base : bases) {
+            Http::get(base + "/server/database/item?namespace=lane_data")
+                .timeout_connect(5)
+                .timeout_max(5)
+                .on_complete([&](std::string body, unsigned) {
+                    answered       = true;
+                    const auto doc = nlohmann::json::parse(body, nullptr, false);
+                    if (!doc.is_discarded() && doc.is_object() && doc.contains("result") && doc["result"].is_object() &&
+                        doc["result"].contains("value") && doc["result"]["value"].is_object())
+                        value = doc["result"]["value"];
+                })
+                // Moonraker answers 404 when nothing ever wrote lane data: an answer, and no lanes.
+                .on_error([&](std::string, std::string err, unsigned status) {
+                    answered = answered || status != 0;
+                    if (status == 0)
+                        error = from_u8(err);
+                })
+                .perform_sync();
+            if (answered)
+                break;
+        }
+    }
+    std::vector<Slot> slots = value ? parse_lane_data_impl(*value) : std::vector<Slot>();
+    if (!std::any_of(slots.begin(), slots.end(), [](const Slot& slot) { return slot.present; })) {
+        wxString detail;
+        if (!answered)
+            // TRN %1% is a network address, %2% the error.
+            detail = format_wxstr(_L("The printer at %1% did not answer: %2%"), from_u8(host), error);
+        else if (!value)
+            detail = _L("This printer reports no filament lanes. The sync reads the lane data a filament changer such as a CANVAS on COSMOS (AFC) writes to the printer; this printer has none.");
+        else
+            detail = _L("The printer's filament lanes are all empty, or none is mapped to a tool.");
+        MessageDialog(parent, detail, _L("Sync filaments"), wxOK | wxICON_INFORMATION).ShowModal();
+        return false;
+    }
+    s_lane_sync = true;
+    struct Reset { ~Reset() { s_lane_sync = false; } } reset;
+    return sync_from_slots(parent, std::move(slots), _L("the printer's filament lanes (AFC lane data)"));
+}
+
+} // namespace
+
 bool u1_filament_sync_available()
 {
     PresetBundle* bundle = wxGetApp().preset_bundle;
@@ -1589,7 +1714,7 @@ bool u1_filament_sync_available()
         return false;
     const DynamicPrintConfig& printer = bundle->printers.get_edited_preset().config;
     if (u1_physical_filament_capacity(printer) == 0)
-        return false;
+        return lane_filament_sync_available();
     if (!resolve_printer_lan_host().empty())
         return true;
     DeviceManager* manager = wxGetApp().getDeviceManager();
@@ -1607,6 +1732,8 @@ bool u1_filament_sync_available()
 
 bool sync_filaments_from_u1(wxWindow* parent)
 {
+    if (lane_filament_sync_available())
+        return sync_filaments_from_lanes(parent);
     const std::string host = resolve_printer_lan_host();
     DeviceManager* manager = wxGetApp().getDeviceManager();
     MachineObject* selected_machine = manager != nullptr ? manager->get_selected_machine() : nullptr;
@@ -1686,11 +1813,21 @@ bool sync_filaments_from_u1(wxWindow* parent)
         return false;
     }
 
+    return sync_from_slots(parent, std::move(slots), report_source);
+}
+
+namespace {
+
+// The review and the apply, the same for a U1's toolheads and for the lanes of a filament changer.
+bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& report_source)
+{
+    PresetBundle& bundle = *wxGetApp().preset_bundle;
     // Counted in the project's own filaments: on a tool changer the preset list always has one entry per
     // toolhead, whatever the project uses.
     if (bundle.num_physical_filaments() > 4) {
         MessageDialog(parent,
-                      _L("This project has more than the Snapmaker U1's four physical filament slots. Synchronization was not applied because removing the additional project slots would lose data."),
+                      s_lane_sync ? _L("This project has more filaments than the four slots this sync handles. Synchronization was not applied because removing the additional project filaments would lose data.") :
+                                    _L("This project has more than the Snapmaker U1's four physical filament slots. Synchronization was not applied because removing the additional project slots would lose data."),
                       _L("Sync filaments"), wxOK | wxICON_WARNING)
             .ShowModal();
         return false;
@@ -1912,8 +2049,10 @@ bool sync_filaments_from_u1(wxWindow* parent)
     } else {
         // A filament would have to be added, and one is always added behind the last ordinary filament.
         MessageDialog(parent,
-                      _L("This project lists a mixed filament before one of its ordinary filaments, and it has fewer filaments than the printer has toolheads. "
-                         "Remove the mixed filaments or use Mapping, then synchronize again."),
+                      s_lane_sync ? _L("This project lists a mixed filament before one of its ordinary filaments, and it has fewer filaments than the printer has slots. "
+                                       "Remove the mixed filaments or use Mapping, then synchronize again.") :
+                                    _L("This project lists a mixed filament before one of its ordinary filaments, and it has fewer filaments than the printer has toolheads. "
+                                       "Remove the mixed filaments or use Mapping, then synchronize again."),
                       _L("Sync filaments"), wxOK | wxICON_WARNING)
             .ShowModal();
         return false;
@@ -1974,5 +2113,7 @@ bool sync_filaments_from_u1(wxWindow* parent)
             .ShowModal();
     return true;
 }
+
+} // namespace
 
 } // namespace Slic3r::GUI

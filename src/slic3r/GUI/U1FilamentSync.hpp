@@ -46,6 +46,16 @@ U1ReportSource u1_authoritative_report_source(const std::vector<U1ReportedFilame
 /// reports that identity as RFID/tag-derived (filament_official).
 std::vector<U1ReportedFilament> parse_u1_filament_report(const nlohmann::json& report);
 
+/// Converts the lanes a filament changer on one nozzle writes to Moonraker's database (namespace lane_data;
+/// AFC units such as a CANVAS on COSMOS, recent Happy Hare) to four slot records, a lane's slot being the tool
+/// it is mapped to ("lane": "0" is T0). Lanes without a tool, beyond T3 or doubly mapped are left out; an
+/// unloaded lane has no material and is an empty slot. *value* is the "value" object of the database item.
+std::vector<U1ReportedFilament> parse_filament_lane_data(const nlohmann::json& value);
+
+/// True when the edited printer is not a U1, has a LAN address reached the Moonraker way, and no printer agent
+/// syncs its filaments: its filament lanes can then be asked for. Whether it has any is known after asking.
+bool lane_filament_sync_available();
+
 /// Converts the printer-agent U1 virtual-tray protocol ids 255..252 to physical
 /// toolheads 0..3. Other or malformed ids are not U1 physical toolhead slots.
 std::optional<std::size_t> u1_virtual_tray_toolhead_index(const std::string& tray_id);
@@ -93,12 +103,15 @@ void set_u1_filament_color(DynamicPrintConfig& config, std::size_t index, const 
 std::string normalize_u1_filament_color(const std::string& color);
 
 /// True when the edited printer is a Snapmaker U1 reachable either through a configured
-/// LAN address or through the currently selected printer-agent machine.
+/// LAN address or through the currently selected printer-agent machine, or when
+/// lane_filament_sync_available() is.
 bool u1_filament_sync_available();
 
 /// Reads loaded filaments from the U1's direct endpoint or selected printer-agent state,
 /// then shows an explicit per-toolhead mapping review before applying count, preset,
 /// RFID identity and colour. Returns false without project mutation when cancelled.
+/// For a printer with filament lanes (lane_filament_sync_available()) the lanes are read instead and the same
+/// review is shown, worded for slots.
 bool sync_filaments_from_u1(wxWindow* parent);
 
 } // namespace Slic3r::GUI

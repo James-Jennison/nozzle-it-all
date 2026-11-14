@@ -43,6 +43,68 @@ namespace Slic3r {
 namespace GUI {
 
 #ifdef __linux__
+// WebKitGTK does not give a continuous camera stream (multipart/x-mixed-replace) to a page's script: fetch()
+// of one fails with "Load failed", from the page's own address too, while the same stream plays as a picture
+// element. Fluidd's and Mainsail's "MJPEG stream" camera reads the stream by fetch(), so on the printer's own
+// page the camera stays dark in this web view although it plays in Firefox or Chrome.
+// When such a fetch fails and its address looks like a camera stream, the page is given the same pictures in
+// the same format, fetched one at a time from the camera's still-picture address beside the stream. Every
+// other fetch, and a stream fetch that succeeds, is passed through untouched.
+static void inject_mjpeg_fetch_workaround(wxWebView *webView)
+{
+    webView->AddUserScript(R"JS((function () {
+  'use strict';
+  if (window.__niaCameraFetch || !window.fetch || !window.ReadableStream) return;
+  window.__niaCameraFetch = true;
+  const nativeFetch = window.fetch.bind(window);
+  // mjpg-streamer: ?action=stream -> ?action=snapshot. ustreamer, camera-streamer: /stream -> /snapshot.
+  function stillFor(address) {
+    try {
+      const url = new URL(address, location.href);
+      if (url.searchParams.get('action') === 'stream') { url.searchParams.set('action', 'snapshot'); return url; }
+      const m = /\/stream(\.mjpe?g)?$/.exec(url.pathname);
+      if (m) { url.pathname = url.pathname.slice(0, -m[0].length) + (m[1] ? '/snapshot.jpg' : '/snapshot'); return url; }
+    } catch (e) {}
+    return null;
+  }
+  window.fetch = function (input, init) {
+    const address = typeof input === 'string' ? input : (input && input.url) || String(input);
+    const still = stillFor(address);
+    const tried = nativeFetch(input, init);
+    if (!still) return tried;
+    return tried.catch(function (failure) {
+      const signal = (init && init.signal) || (input && input.signal) || undefined;
+      const one = function () {
+        still.searchParams.set('_', String(Date.now()));
+        return nativeFetch(still.href, {mode: 'cors', cache: 'no-store', signal: signal}).then(function (r) {
+          if (!r.ok) throw new Error('status ' + r.status);
+          return r.arrayBuffer();
+        });
+      };
+      // No still picture either: the page gets the failure it would have had.
+      return one().then(function (first) {
+        const text = new TextEncoder(), boundary = 'niaframe';
+        let next = first, over = false;
+        const body = new ReadableStream({
+          pull: function (controller) {
+            if (over || (signal && signal.aborted)) { controller.close(); return; }
+            const ready = next ? Promise.resolve(next) : new Promise(function (go) { setTimeout(go, 150); }).then(one);
+            next = null;
+            return ready.then(function (picture) {
+              controller.enqueue(text.encode('--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Length: ' + picture.byteLength + '\r\n\r\n'));
+              controller.enqueue(new Uint8Array(picture));
+              controller.enqueue(text.encode('\r\n'));
+            }).catch(function (e) { controller.error(e); });
+          },
+          cancel: function () { over = true; }
+        });
+        return new Response(body, {status: 200, headers: {'Content-Type': 'multipart/x-mixed-replace;boundary=' + boundary}});
+      }, function () { throw failure; });
+    });
+  };
+})();)JS");
+}
+
 // Workaround for #7210: WebKitGTK crashes on vue-resize's hidden <object> probe used by
 // older Fluidd/Mainsail pages. Swap that <object> for a <div> shim at appendChild time
 // and bridge resize events through a fake contentDocument.defaultView so vue-resize keeps
@@ -186,6 +248,7 @@ void PrinterWebView::create_browser()
 
 #ifdef __linux__
     inject_vue_resize_workaround(m_browser);
+    inject_mjpeg_fetch_workaround(m_browser);
 
     auto cookiesPath = boost::filesystem::path(data_dir() + "/cache/cookies.db");
     auto wv = static_cast<WebKitWebView*>(m_browser->GetNativeBackend());
@@ -316,6 +379,7 @@ void PrinterWebView::SendAPIKey()
 #ifdef __linux__
     // Re-inject the vue-resize/WebKitGTK workaround that RemoveAllUserScripts just cleared.
     inject_vue_resize_workaround(m_browser);
+    inject_mjpeg_fetch_workaround(m_browser);
 #endif
     add_page_strings(m_browser);
 

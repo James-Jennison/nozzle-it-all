@@ -56,6 +56,7 @@
 #include "slic3r/Utils/FilamentProfilesClient.hpp"
 #include "slic3r/Utils/Http.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
+#include "slic3r/Utils/NetworkAgentFactory.hpp"
 #include "slic3r/Utils/U1LanPrintHost.hpp"
 
 namespace Slic3r::GUI {
@@ -904,7 +905,8 @@ public:
         m_advanced = new wxPanel(this);
         m_advanced->SetBackgroundColour(GetBackgroundColour());
         auto* advanced = new wxBoxSizer(wxVERTICAL);
-        const size_t capacity = u1_physical_filament_capacity(bundle.printers.get_edited_preset().config);
+        // A filament changer's four slots can be filled up like a U1's four toolheads.
+        const size_t capacity = s_lane_sync ? 4 : u1_physical_filament_capacity(bundle.printers.get_edited_preset().config);
         m_can_add             = bundle.num_mixed_filaments() == 0 && m_physical < capacity;
         m_add_unused = option(advanced, (s_lane_sync ? _L("Add unused slot filaments to filaments list.") : _L("Add unused toolhead filaments to filaments list.")), false, m_advanced);
         // Removing a filament while the project has a mixed filament can leave the mix without a
@@ -1630,6 +1632,12 @@ U1ReportSource u1_authoritative_report_source(const std::vector<U1ReportedFilame
     return U1ReportSource::None;
 }
 
+namespace {
+// Set while a printer without lane data is handed to its printer agent's own sync, so that the sidebar does
+// not send it back here. Main thread only.
+bool s_lane_fallback = false;
+} // namespace
+
 bool lane_filament_sync_available()
 {
     PresetBundle* bundle = wxGetApp().preset_bundle;
@@ -1642,9 +1650,16 @@ bool lane_filament_sync_available()
     const auto* host_type = printer.option<ConfigOptionEnum<PrintHostType>>("host_type");
     if (host_type != nullptr && host_type->value != htMoonraker && host_type->value != htOctoPrint)
         return false;
-    // A printer agent that syncs filaments itself keeps doing so.
+    // Another brand's printer agent that syncs filaments itself keeps doing so. OrcaSlicer's Moonraker agent
+    // reads the same lane data; for its printers the lanes are read here first, so that they go through the
+    // review, and its own sync is used when the printer has no lane data (lane_sync_falls_back()).
+    if (s_lane_fallback)
+        return false;
     const auto agent = wxGetApp().getAgent();
-    return !(agent && agent->get_filament_sync_mode() != FilamentSyncMode::none);
+    if (!agent || agent->get_filament_sync_mode() == FilamentSyncMode::none)
+        return true;
+    const auto printer_agent = agent->get_printer_agent();
+    return printer_agent && printer_agent->get_agent_info().id == MOONRAKER_PRINTER_AGENT_ID;
 }
 
 namespace {
@@ -1689,6 +1704,13 @@ bool sync_filaments_from_lanes(wxWindow* parent)
     }
     std::vector<Slot> slots = value ? parse_lane_data_impl(*value) : std::vector<Slot>();
     if (!std::any_of(slots.begin(), slots.end(), [](const Slot& slot) { return slot.present; })) {
+        // No lane data, but a printer agent that syncs filaments its own way (Happy Hare, a Creality CFS): its sync runs.
+        if (const auto agent = wxGetApp().getAgent(); !value && agent && agent->get_filament_sync_mode() != FilamentSyncMode::none) {
+            s_lane_fallback = true;
+            struct Reset { ~Reset() { s_lane_fallback = false; } } reset;
+            wxGetApp().sidebar().sync_ams_list();
+            return false;
+        }
         wxString detail;
         if (!answered)
             // TRN %1% is a network address, %2% the error.

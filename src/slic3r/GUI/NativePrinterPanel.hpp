@@ -69,6 +69,8 @@ private:
     void confirm_stop();
     /// Asks, then sends one guarded Resume for the print the button was shown for.
     void confirm_resume();
+    /// After a Resume the printer took or may have taken: none is offered again for RESUME_HOLD_S while it still says paused.
+    void hold_resume();
     void resume_finished(const MoonrakerLiveClient::ResumeResult &result, const std::string &printer, const std::string &shown_file);
     void report_error(const std::string &what, const std::string &error);
     void apply_colors();
@@ -119,6 +121,8 @@ private:
     bool          m_pause_button_resumes = false; ///< what the Pause / Resume button does when pressed, as labelled
     bool          m_resume_in_flight     = false; ///< a Resume is being checked or sent; none other may start
     std::chrono::steady_clock::time_point m_resume_hold_until{}; ///< no Resume is offered again before this
+    wxTimer       m_resume_hold_timer;            ///< redraws the button when that hold ends
+    static constexpr int RESUME_HOLD_S = 10;
     wxButton     *m_adjust_button = nullptr;
     wxButton     *m_stop_button   = nullptr;
 

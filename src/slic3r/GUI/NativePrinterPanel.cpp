@@ -272,6 +272,7 @@ void NativePrinterPanel::build()
     job->body()->Add(actions, 0, wxEXPAND);
     m_left->Add(job, 0, wxEXPAND);
 
+    m_resume_hold_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { on_snapshot(PP::Snapshot(m_snapshot)); });
     m_pause_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
         if (!m_client)
             return;
@@ -389,6 +390,7 @@ void NativePrinterPanel::connect()
     ++m_client_generation;
     m_resume_in_flight  = false; // an answer for the previous printer is dropped with its generation
     m_resume_hold_until = {};
+    m_resume_hold_timer.Stop();
     // "host", "host:port", "[v6]:port" or a bare IPv6 literal.
     const bool        bare_v6 = std::count(m_host.begin(), m_host.end(), ':') > 1 && m_host.front() != '[';
     const std::string base    = "http://" + (bare_v6 ? "[" + m_host + "]" : m_host);
@@ -458,7 +460,8 @@ void NativePrinterPanel::disconnect()
 {
     ++m_client_generation;
     m_resume_in_flight  = false; // an answer for the previous printer is dropped with its generation
-    m_resume_hold_until = {}; // drop callbacks still in flight
+    m_resume_hold_until = {};
+    m_resume_hold_timer.Stop(); // drop callbacks still in flight
     m_client.reset();
     if (m_camera_running && m_camera_fn)
         m_camera_fn(false, {}, {});
@@ -557,6 +560,9 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
                                                               wxString("-"));
     // While a Resume is being checked or sent, and for a short while after the printer took one, the button
     // stays as it is: a status that still says "paused" must not offer a second Resume.
+    // Once the printer has been seen out of the pause, the Resume has had its effect and holds nothing more.
+    if (s.job_state != PP::JobState::Paused)
+        m_resume_hold_until = {};
     const bool resume_settling = m_resume_in_flight ||
                                  (s.job_state == PP::JobState::Paused && std::chrono::steady_clock::now() < m_resume_hold_until);
     if (!resume_settling) {
@@ -822,6 +828,13 @@ void NativePrinterPanel::confirm_resume()
         });
 }
 
+void NativePrinterPanel::hold_resume()
+{
+    m_resume_hold_until = std::chrono::steady_clock::now() + std::chrono::seconds(RESUME_HOLD_S);
+    // A paused printer sends no status until something changes, so the button is shown again by the clock.
+    m_resume_hold_timer.StartOnce(RESUME_HOLD_S * 1000 + 200);
+}
+
 void NativePrinterPanel::resume_finished(const MoonrakerLiveClient::ResumeResult &result, const std::string &printer, const std::string &shown_file)
 {
     using Kind = MoonrakerLiveClient::ResumeResult::Kind;
@@ -834,7 +847,7 @@ void NativePrinterPanel::resume_finished(const MoonrakerLiveClient::ResumeResult
     switch (result.kind) {
     case Kind::Accepted:
         // The printer took it. Its status follows on its own; until it does, no second Resume is offered.
-        m_resume_hold_until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        hold_resume();
         note("RESUME_ACCEPTED");
         break;
     case Kind::Refused:
@@ -855,7 +868,7 @@ void NativePrinterPanel::resume_finished(const MoonrakerLiveClient::ResumeResult
         break;
     case Kind::Unknown:
         note("RESUME_UNCONFIRMED");
-        m_resume_hold_until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        hold_resume();
         message = result.after.printer_state.empty() ?
                       _L("The Resume was sent once and no answer came back, and the printer cannot be reached now. It was not sent again. "
                          "Check the printer before doing anything else.") :

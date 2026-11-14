@@ -59,6 +59,16 @@ static void inject_mjpeg_fetch_workaround(wxWebView *webView)
     if (self.__niaCameraFetch || !self.fetch || !self.ReadableStream) return;
     self.__niaCameraFetch = true;
     const nativeFetch = self.fetch.bind(self);
+    // What happens to a replaced stream is told to the application, which writes it to its log. A worker has
+    // no way to the application of its own, so it tells the page, on a channel only this script uses.
+    let told = 0;
+    const tell = function (what) {
+      if (++told > 40) return;
+      try {
+        if (self.webkit && self.webkit.messageHandlers && self.webkit.messageHandlers.wx) self.webkit.messageHandlers.wx.postMessage('nia-camera:' + what);
+        else { if (!self.__niaTell) self.__niaTell = new BroadcastChannel('nia-camera'); self.__niaTell.postMessage(String(what)); }
+      } catch (e) {}
+    };
     // mjpg-streamer: ?action=stream -> ?action=snapshot. ustreamer, camera-streamer: /stream -> /snapshot.
     function stillFor(address) {
       try {
@@ -88,21 +98,38 @@ static void inject_mjpeg_fetch_workaround(wxWebView *webView)
       const instead = function () {
         return one().then(function (first) {
           const text = new TextEncoder(), boundary = 'niaframe';
-          let next = first, over = false;
-          const body = new ReadableStream({
+          let next = first, over = false, pictures = 0, since = Date.now();
+          const source = {
             pull: function (controller) {
-              if (over || (signal && signal.aborted)) { controller.close(); return; }
+              if (over || (signal && signal.aborted)) { try { controller.close(); } catch (e) {} return; }
               const ready = next ? Promise.resolve(next) : new Promise(function (go) { setTimeout(go, 150); }).then(one);
               next = null;
               return ready.then(function (picture) {
-                controller.enqueue(text.encode('--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Length: ' + picture.byteLength + '\r\n\r\n'));
-                controller.enqueue(new Uint8Array(picture));
-                controller.enqueue(text.encode('\r\n'));
-              }).catch(function (e) { controller.error(e); });
+                // One piece per picture: its part header, the picture, the line break that ends the part.
+                const head = text.encode('--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Length: ' + picture.byteLength + '\r\n\r\n');
+                const piece = new Uint8Array(head.length + picture.byteLength + 2);
+                piece.set(head, 0); piece.set(new Uint8Array(picture), head.length); piece.set([13, 10], head.length + picture.byteLength);
+                controller.enqueue(piece);
+                pictures++;
+                if (pictures === 1 || pictures === 2 || Date.now() - since > 5000) { tell('picture ' + pictures + ' handed over (' + picture.byteLength + ' bytes)'); since = Date.now(); }
+              }).catch(function (e) { tell('a still picture failed: ' + (e && e.message)); try { controller.error(e); } catch (x) {} });
             },
-            cancel: function () { over = true; }
-          });
-          return new Response(body, {status: 200, headers: {'Content-Type': 'multipart/x-mixed-replace;boundary=' + boundary}});
+            cancel: function (why) { over = true; tell('the reader gave the stream up after ' + pictures + ' pictures' + (why ? ': ' + why : '')); }
+          };
+          // A byte stream where the engine has them, so that a byte reader is accepted as on a real answer.
+          let body, kind = 'byte stream';
+          try { body = new ReadableStream(Object.assign({type: 'bytes'}, source)); }
+          catch (e) { kind = 'plain stream (' + (e && e.message) + ')'; body = new ReadableStream(source); }
+          const take = body.getReader.bind(body);
+          body.getReader = function (options) {
+            try { const reader = take(options); tell('reader taken' + (options && options.mode ? ', mode ' + options.mode : '') + ', ' + kind); return reader; }
+            catch (e) { tell('reader refused' + (options && options.mode ? ', mode ' + options.mode : '') + ', ' + kind + ': ' + (e && e.message)); throw e; }
+          };
+          tell('camera stream ' + address.split('?')[0] + ' replaced by stills, ' + kind);
+          const replaced = new Response(body, {status: 200, headers: {'Content-Type': 'multipart/x-mixed-replace;boundary=' + boundary}});
+          // The engine may give the caller another stream object than the one made here; then say so.
+          try { if (replaced.body !== body) tell('the answer wraps the stream in one of its own'); } catch (e) {}
+          return replaced;
         });
       };
       // The engine answers such a request with its headers and then fails the body ("Load failed"), so the
@@ -114,13 +141,20 @@ static void inject_mjpeg_fetch_workaround(wxWebView *webView)
         return instead().then(function (replaced) {
           try { if (answer.body) answer.body.cancel(); } catch (e) {}
           return replaced;
-        }, function () { return answer; });
+        }, function (e) { tell('no still picture for ' + address.split('?')[0] + ': ' + (e && e.message)); return answer; });
       }, function (failure) {
-        return instead().catch(function () { throw failure; });
+        return instead().catch(function (e) { tell('no still picture for ' + address.split('?')[0] + ': ' + (e && e.message)); throw failure; });
       });
     };
   };
   install();
+  // What the workers tell arrives here and is passed on to the application.
+  try {
+    const heard = new BroadcastChannel('nia-camera');
+    heard.onmessage = function (e) {
+      try { window.webkit.messageHandlers.wx.postMessage('nia-camera:worker: ' + e.data); } catch (x) {}
+    };
+  } catch (e) {}
   // A script added to this web view does not run in the page's workers, and Fluidd reads its camera in one.
   // A worker started from a file is started through a few lines that install the same replacement and then
   // load that file, as a module where it was asked for as one. Workers made from other sources are left alone,
@@ -488,6 +522,11 @@ void PrinterWebView::OnNewWindow(wxWebViewEvent& evt)
 
 void PrinterWebView::OnScriptMessage(wxWebViewEvent& evt)
 {
+  // What the camera replacement (inject_mjpeg_fetch_workaround) reports goes to the log and nowhere else.
+  if (const wxString text = evt.GetString(); text.StartsWith("nia-camera:")) {
+    BOOST_LOG_TRIVIAL(warning) << "Printer page camera: " << text.Mid(11).Left(300).utf8_string();
+    return;
+  }
   if (m_handler != nullptr)
     m_handler->on_script_message(evt);
 }

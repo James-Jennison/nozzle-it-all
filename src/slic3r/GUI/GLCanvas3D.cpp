@@ -2797,20 +2797,25 @@ void GLCanvas3D::_render_frame(bool scene_dirty, bool only_init)
             if (!overlay_tick)
                 m_render_stats.increment_fps_counter();
             m_presented_signature = signature;
+#ifdef __WXGTK__
+            // On Wayland the size of the buffer a frame is drawn into is fixed when Mesa hands the buffer
+            // out, which is at the first GL call after the previous swap, not at this swap. A canvas that
+            // was made current while hidden (the idle prebuild does that at 1x1) or resized since its last
+            // frame therefore presents one frame at the old size: after opening Prepare from Home that was
+            // a 1x1 frame, and the view stayed empty until something else asked for a redraw. One more
+            // frame, drawn into a buffer handed out at the current size, replaces it.
+            const wxSize size = m_canvas->GetClientSize();
+            if (size != m_presented_canvas_size) {
+                m_presented_canvas_size = size;
+                if (is_running_on_wayland()) {
+                    m_presented_signature.reset();
+                    m_dirty = true;
+                }
+            }
+#endif
         } else {
             // The frame was drawn and not shown, so the next one must not be taken for a repeat of it.
             m_presented_signature.reset();
-#ifdef __WXGTK__
-            // On Wayland wx refuses the swap from the moment the canvas is mapped until the compositor's
-            // first frame callback for it (src/unix/glegl.cpp, wxGLCanvasEGL::SwapBuffers, m_readyToDraw). That
-            // callback is requested on the canvas's subsurface, whose state the compositor applies only
-            // when the window's own surface is committed, and wx repaints the canvas when it arrives.
-            // A window with nothing else to redraw never commits, so the canvas stayed blank until the
-            // pointer moved. Asking the window for one redraw makes that commit happen.
-            if (is_running_on_wayland())
-                if (wxWindow* top = wxGetTopLevelParent(m_canvas))
-                    top->Refresh();
-#endif
         }
     }
     else {

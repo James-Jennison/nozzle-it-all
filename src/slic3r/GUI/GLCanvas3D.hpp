@@ -933,6 +933,8 @@ public:
     // Signature of the overlay on screen; empty after render(), a paint request or a frame drawn but
     // not shown, so the next frame is presented regardless.
     std::optional<size_t> m_presented_signature;
+    // Client size of the canvas at the last frame that was presented.
+    wxSize m_presented_canvas_size{0, 0};
     GLModel m_plate_shadow_mask;
     std::string m_plate_shadow_mask_key;
     // Depth-based shadow map used to cast object shadows onto other objects and themselves.

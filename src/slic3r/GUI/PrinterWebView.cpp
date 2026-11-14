@@ -49,74 +49,102 @@ namespace GUI {
 // page the camera stays dark in this web view although it plays in Firefox or Chrome.
 // When a fetch whose address looks like a camera stream is answered with such a stream, or fails, the page is
 // given the same pictures in the same format, fetched one at a time from the camera's still-picture address
-// beside the stream. Every other fetch is passed through untouched.
+// beside the stream. Every other fetch is passed through untouched. The page's workers get the same.
 static void inject_mjpeg_fetch_workaround(wxWebView *webView)
 {
     webView->AddUserScript(R"JS((function () {
   'use strict';
-  if (window.__niaCameraFetch || !window.fetch || !window.ReadableStream) return;
-  window.__niaCameraFetch = true;
-  const nativeFetch = window.fetch.bind(window);
-  // mjpg-streamer: ?action=stream -> ?action=snapshot. ustreamer, camera-streamer: /stream -> /snapshot.
-  function stillFor(address) {
-    try {
-      const url = new URL(address, location.href);
-      if (url.searchParams.get('action') === 'stream') { url.searchParams.set('action', 'snapshot'); return url; }
-      const m = /\/stream(\.mjpe?g)?$/.exec(url.pathname);
-      if (m) { url.pathname = url.pathname.slice(0, -m[0].length) + (m[1] ? '/snapshot.jpg' : '/snapshot'); return url; }
-    } catch (e) {}
-    return null;
-  }
-  window.fetch = function (input, init) {
-    const address = typeof input === 'string' ? input : (input && input.url) || String(input);
-    const still = stillFor(address);
-    const tried = nativeFetch(input, init);
-    if (!still) return tried;
-    const signal = (init && init.signal) || (input && input.signal) || undefined;
-    const one = function () {
-      still.searchParams.set('_', String(Date.now()));
-      const options = {mode: 'cors', cache: 'no-store'};
-      if (signal) options.signal = signal;
-      return nativeFetch(still.href, options).then(function (r) {
-        if (!r.ok) throw new Error('status ' + r.status);
-        return r.arrayBuffer();
-      });
-    };
-    // The same pictures in the stream's own format, fetched one at a time.
-    const instead = function () {
-      return one().then(function (first) {
-        const text = new TextEncoder(), boundary = 'niaframe';
-        let next = first, over = false;
-        const body = new ReadableStream({
-          pull: function (controller) {
-            if (over || (signal && signal.aborted)) { controller.close(); return; }
-            const ready = next ? Promise.resolve(next) : new Promise(function (go) { setTimeout(go, 150); }).then(one);
-            next = null;
-            return ready.then(function (picture) {
-              controller.enqueue(text.encode('--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Length: ' + picture.byteLength + '\r\n\r\n'));
-              controller.enqueue(new Uint8Array(picture));
-              controller.enqueue(text.encode('\r\n'));
-            }).catch(function (e) { controller.error(e); });
-          },
-          cancel: function () { over = true; }
+  // Runs in the page and, through the Worker wrapper below, in the page's workers: `self` is either.
+  const install = function () {
+    if (self.__niaCameraFetch || !self.fetch || !self.ReadableStream) return;
+    self.__niaCameraFetch = true;
+    const nativeFetch = self.fetch.bind(self);
+    // mjpg-streamer: ?action=stream -> ?action=snapshot. ustreamer, camera-streamer: /stream -> /snapshot.
+    function stillFor(address) {
+      try {
+        const url = new URL(address, self.location.href);
+        if (url.searchParams.get('action') === 'stream') { url.searchParams.set('action', 'snapshot'); return url; }
+        const m = /\/stream(\.mjpe?g)?$/.exec(url.pathname);
+        if (m) { url.pathname = url.pathname.slice(0, -m[0].length) + (m[1] ? '/snapshot.jpg' : '/snapshot'); return url; }
+      } catch (e) {}
+      return null;
+    }
+    self.fetch = function (input, init) {
+      const address = typeof input === 'string' ? input : (input && input.url) || String(input);
+      const still = stillFor(address);
+      const tried = nativeFetch(input, init);
+      if (!still) return tried;
+      const signal = (init && init.signal) || (input && input.signal) || undefined;
+      const one = function () {
+        still.searchParams.set('_', String(Date.now()));
+        const options = {mode: 'cors', cache: 'no-store'};
+        if (signal) options.signal = signal;
+        return nativeFetch(still.href, options).then(function (r) {
+          if (!r.ok) throw new Error('status ' + r.status);
+          return r.arrayBuffer();
         });
-        return new Response(body, {status: 200, headers: {'Content-Type': 'multipart/x-mixed-replace;boundary=' + boundary}});
+      };
+      // The same pictures in the stream's own format, fetched one at a time.
+      const instead = function () {
+        return one().then(function (first) {
+          const text = new TextEncoder(), boundary = 'niaframe';
+          let next = first, over = false;
+          const body = new ReadableStream({
+            pull: function (controller) {
+              if (over || (signal && signal.aborted)) { controller.close(); return; }
+              const ready = next ? Promise.resolve(next) : new Promise(function (go) { setTimeout(go, 150); }).then(one);
+              next = null;
+              return ready.then(function (picture) {
+                controller.enqueue(text.encode('--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Length: ' + picture.byteLength + '\r\n\r\n'));
+                controller.enqueue(new Uint8Array(picture));
+                controller.enqueue(text.encode('\r\n'));
+              }).catch(function (e) { controller.error(e); });
+            },
+            cancel: function () { over = true; }
+          });
+          return new Response(body, {status: 200, headers: {'Content-Type': 'multipart/x-mixed-replace;boundary=' + boundary}});
+        });
+      };
+      // The engine answers such a request with its headers and then fails the body ("Load failed"), so the
+      // answer's type decides, not a failure: a continuous stream is replaced before it is read. With no
+      // still picture to be had, the caller gets the answer or the failure it would have had.
+      return tried.then(function (answer) {
+        const type = (answer.headers && answer.headers.get('content-type')) || '';
+        if (!/^multipart\/x-mixed-replace/i.test(type)) return answer;
+        return instead().then(function (replaced) {
+          try { if (answer.body) answer.body.cancel(); } catch (e) {}
+          return replaced;
+        }, function () { return answer; });
+      }, function (failure) {
+        return instead().catch(function () { throw failure; });
       });
     };
-    // The engine answers such a request with its headers and then fails the body ("Load failed"), so the
-    // answer's type decides, not a failure: a continuous stream is replaced before the page reads it. With no
-    // still picture to be had, the page gets the answer or the failure it would have had.
-    return tried.then(function (answer) {
-      const type = (answer.headers && answer.headers.get('content-type')) || '';
-      if (!/^multipart\/x-mixed-replace/i.test(type)) return answer;
-      return instead().then(function (replaced) {
-        try { if (answer.body) answer.body.cancel(); } catch (e) {}
-        return replaced;
-      }, function () { return answer; });
-    }, function (failure) {
-      return instead().catch(function () { throw failure; });
-    });
   };
+  install();
+  // A script added to this web view does not run in the page's workers, and Fluidd reads its camera in one.
+  // A worker started from a file is started through a few lines that install the same replacement and then
+  // load that file, as a module where it was asked for as one. Workers made from other sources are left alone,
+  // and so is any worker this cannot wrap.
+  const NativeWorker = window.Worker;
+  if (!NativeWorker || window.__niaCameraWorker) return;
+  window.__niaCameraWorker = true;
+  const source = '(' + install.toString() + ')();';
+  const Wrapped = function (url, options) {
+    try {
+      const real = new URL(String(url), location.href);
+      if (real.protocol === 'http:' || real.protocol === 'https:') {
+        const module = options && options.type === 'module';
+        const boot = source + '\n' + (module ? 'import ' + JSON.stringify(real.href) + ';' : 'importScripts(' + JSON.stringify(real.href) + ');');
+        const address = URL.createObjectURL(new Blob([boot], {type: 'text/javascript'}));
+        const worker = new NativeWorker(address, options);
+        setTimeout(function () { URL.revokeObjectURL(address); }, 60000);
+        return worker;
+      }
+    } catch (e) {}
+    return new NativeWorker(url, options);
+  };
+  Wrapped.prototype = NativeWorker.prototype;
+  window.Worker = Wrapped;
 })();)JS");
 }
 

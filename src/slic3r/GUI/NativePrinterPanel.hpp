@@ -21,6 +21,9 @@ class wxGauge;
 class wxSlider;
 class wxStaticText;
 class wxToggleButton;
+class Button;
+class ComboBox;
+class SpinInput;
 
 namespace Slic3r::GUI {
 
@@ -73,6 +76,15 @@ private:
     void hold_resume();
     void resume_finished(const MoonrakerLiveClient::ResumeResult &result, const std::string &printer, const std::string &shown_file);
     void report_error(const std::string &what, const std::string &error);
+    /// Motion, Temperature and Filament: one card, each control disabled with its reason when it must not be sent.
+    void build_actions(wxWindow *card, wxBoxSizer *body);
+    void refresh_actions();
+    U1Controls::PrinterFacts printer_facts() const;
+    /// Judges, asks as much as the risk calls for, judges again, then sends the control once.
+    void run_action(U1Controls::Action action);
+    void action_finished(U1Controls::Action action, MoonrakerLiveClient::Sent sent, const std::string &detail);
+    /// Marks the fault now shown as seen. Sends nothing to the printer, so it can never resume a print.
+    void acknowledge_fault();
     void apply_colors();
     /// Shows which sent job (U1Jobs) the printer's current file is, and records its outcome.
     void refresh_job_identity(const PrinterPanel::Snapshot &snapshot);
@@ -103,10 +115,14 @@ private:
     wxWindow   *m_job_card    = nullptr;
     wxWindow   *m_camera_host = nullptr;
 
+    MoonrakerLiveClient::Link m_link = MoonrakerLiveClient::Link::Connecting;
+
     // Header
     wxStaticText *m_printer_name = nullptr;
     wxStaticText *m_link_label   = nullptr;
     wxStaticText *m_health_label = nullptr;
+    ::Button     *m_ack_button   = nullptr; ///< shown while a fault is shown that has not been acknowledged
+    wxString      m_acknowledged_fault;     ///< the fault text last acknowledged; empty when none
 
     // Job
     wxStaticText *m_job_name      = nullptr;
@@ -140,6 +156,20 @@ private:
     wxWindow        *m_material_card = nullptr;
     wxBoxSizer      *m_material_row  = nullptr;
     wxStaticText    *m_material_note = nullptr;
+
+    // Motion, Temperature, Filament
+    struct ActionButton
+    {
+        U1Controls::Action action;
+        ::Button          *button = nullptr;
+    };
+    std::vector<ActionButton> m_action_buttons;
+    wxWindow     *m_actions_card       = nullptr;
+    wxStaticText *m_group_reason[3]    = {nullptr, nullptr, nullptr}; ///< by U1Controls::Group
+    ::ComboBox   *m_nozzle_choice      = nullptr;
+    ::SpinInput  *m_nozzle_target      = nullptr;
+    ::SpinInput  *m_bed_target         = nullptr;
+    bool          m_action_in_flight   = false; ///< a confirmed control is with the printer; none other is offered meanwhile
 
     struct FanRow
     {

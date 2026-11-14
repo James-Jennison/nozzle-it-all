@@ -50,6 +50,8 @@ struct Capabilities
     bool                     toolhead_materials = false; ///< U1 print_task_config
     bool                     defect_detection = false;   ///< U1
     bool                     filament_tags = false;      ///< U1 filament_detect (RFID)
+    bool                     load_macro = false;         ///< gcode_macro LOAD_FILAMENT
+    bool                     unload_macro = false;       ///< gcode_macro UNLOAD_FILAMENT
     std::vector<Webcam>      webcams;
 };
 
@@ -138,6 +140,13 @@ std::string set_part_fan(int percent);          ///< M106
 std::string set_fan(const Control &fan, int percent);
 std::string set_light(const Control &light, bool on);
 std::string exclude_object(const std::string &name);
+std::string home_all();                         ///< G28
+std::string motors_off();                       ///< M84
+/// *heater* is a Klipper heater object: "extruder", "extruder1", "heater_bed". 0 switches it off.
+std::string set_heater(const std::string &heater, int target);
+std::string heaters_off();                      ///< TURN_OFF_HEATERS
+std::string load_filament();                    ///< the printer's LOAD_FILAMENT macro
+std::string unload_filament();                  ///< the printer's UNLOAD_FILAMENT macro
 } // namespace Commands
 
 std::string format_duration(double seconds); ///< "1 h 24 min", "12 min", "45 s"

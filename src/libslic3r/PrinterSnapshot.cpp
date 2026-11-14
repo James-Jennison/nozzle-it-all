@@ -91,6 +91,10 @@ Capabilities discover(const json &objects, const json &webcams)
                 caps.defect_detection = true;
             else if (object == "filament_detect")
                 caps.filament_tags = true;
+            else if (object == "gcode_macro LOAD_FILAMENT")
+                caps.load_macro = true;
+            else if (object == "gcode_macro UNLOAD_FILAMENT")
+                caps.unload_macro = true;
             else if (object.rfind("fan_generic ", 0) == 0) {
                 Control fan = make_control(object);
                 if (!std::regex_match(fan.name, toolhead_fan_re))
@@ -297,6 +301,15 @@ std::string set_light(const Control &light, bool on)
     return "SET_LED LED=" + light.name + " RED=" + v + " GREEN=" + v + " BLUE=" + v + " WHITE=" + v;
 }
 std::string exclude_object(const std::string &name) { return "EXCLUDE_OBJECT NAME=\"" + name + "\""; }
+std::string home_all() { return "G28"; }
+std::string motors_off() { return "M84"; }
+std::string set_heater(const std::string &heater, int target)
+{
+    return "SET_HEATER_TEMPERATURE HEATER=" + heater + " TARGET=" + std::to_string(std::clamp(target, 0, 500));
+}
+std::string heaters_off() { return "TURN_OFF_HEATERS"; }
+std::string load_filament() { return "LOAD_FILAMENT"; }
+std::string unload_filament() { return "UNLOAD_FILAMENT"; }
 
 } // namespace Commands
 

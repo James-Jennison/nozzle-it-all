@@ -45,6 +45,17 @@ public:
     void pause(ErrorFn on_error) const { post("/printer/print/pause", "{}", std::move(on_error)); }
     void cancel(ErrorFn on_error) const { post("/printer/print/cancel", "{}", std::move(on_error)); }
 
+    /// How a control sent once ended.
+    enum class Sent {
+        Accepted, ///< the printer answered that it ran
+        Rejected, ///< the printer answered and refused
+        Unknown   ///< no usable answer in time; it may be running, may have run, or may never have arrived
+    };
+    using SentFn = std::function<void(Sent, const std::string &detail)>;
+    /// Sends *script* once and reports how it ended. It is never sent again from here. A script that moves or
+    /// heats can take longer than the wait; that is Unknown, not a failure. *done* runs on an HTTP thread.
+    void send_once(const std::string &script, SentFn done) const;
+
     /// How a guarded Resume went.
     struct ResumeResult
     {

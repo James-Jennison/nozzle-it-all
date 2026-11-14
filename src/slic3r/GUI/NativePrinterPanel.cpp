@@ -8,6 +8,9 @@
 #include "MainFrame.hpp"
 #include "MsgDialog.hpp"
 #include "Plater.hpp"
+#include "Widgets/Button.hpp"
+#include "Widgets/ComboBox.hpp"
+#include "Widgets/SpinInput.hpp"
 #include "format.hpp"
 #include "libslic3r/AppConfig.hpp"
 #include "libslic3r/DeviceWorkspaceState.hpp"
@@ -34,6 +37,8 @@
 #include <chrono>
 #include <ctime>
 #include <optional>
+#include <utility>
+#include <vector>
 
 namespace Slic3r::GUI {
 
@@ -212,6 +217,12 @@ void NativePrinterPanel::build()
     header->Add(m_link_label, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(12));
     header->AddStretchSpacer();
     header->Add(m_health_label, 0, wxALIGN_CENTER_VERTICAL);
+    m_ack_button = new ::Button(this, _L("Acknowledge"));
+    m_ack_button->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+    m_ack_button->SetToolTip(_L("Marks this fault as seen. Nothing is sent to the printer."));
+    m_ack_button->Hide();
+    m_ack_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { acknowledge_fault(); });
+    header->Add(m_ack_button, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(10));
     outer->Add(header, 0, wxEXPAND | wxALL, FromDIP(12));
 
     m_columns = new wxBoxSizer(wxHORIZONTAL);
@@ -317,6 +328,12 @@ void NativePrinterPanel::build()
     controls->body()->Add(m_controls_grid, 0, wxEXPAND);
     m_right->Add(controls, 0, wxEXPAND | wxBOTTOM, FromDIP(12));
 
+    // Motion, Temperature, Filament
+    auto *actions_card = new Card(this, _L("Controls"));
+    m_actions_card     = actions_card;
+    build_actions(actions_card, actions_card->body());
+    m_right->Add(actions_card, 0, wxEXPAND | wxBOTTOM, FromDIP(12));
+
     // Material (multi-toolhead printers)
     auto *material  = new Card(this, _L("Material"));
     m_material_card = material;
@@ -390,6 +407,9 @@ void NativePrinterPanel::connect()
     ++m_client_generation;
     m_resume_in_flight  = false; // an answer for the previous printer is dropped with its generation
     m_resume_hold_until = {};
+    m_action_in_flight  = false;
+    m_link              = MoonrakerLiveClient::Link::Connecting;
+    m_acknowledged_fault.clear();
     m_resume_hold_timer.Stop();
     // "host", "host:port", "[v6]:port" or a bare IPv6 literal.
     const bool        bare_v6 = std::count(m_host.begin(), m_host.end(), ':') > 1 && m_host.front() != '[';
@@ -461,6 +481,9 @@ void NativePrinterPanel::disconnect()
     ++m_client_generation;
     m_resume_in_flight  = false; // an answer for the previous printer is dropped with its generation
     m_resume_hold_until = {};
+    m_action_in_flight  = false;
+    m_link              = MoonrakerLiveClient::Link::Connecting;
+    m_acknowledged_fault.clear();
     m_resume_hold_timer.Stop(); // drop callbacks still in flight
     m_client.reset();
     if (m_camera_running && m_camera_fn)
@@ -471,6 +494,7 @@ void NativePrinterPanel::disconnect()
 void NativePrinterPanel::on_link(MoonrakerLiveClient::Link link, const std::string &detail)
 {
     const Palette p = palette();
+    m_link = link;
     switch (link) {
     case MoonrakerLiveClient::Link::Connecting:
         m_link_label->SetLabel(GUI::format_wxstr(_L("Connecting to %s…"), m_host));
@@ -488,12 +512,20 @@ void NativePrinterPanel::on_link(MoonrakerLiveClient::Link link, const std::stri
         m_health_label->SetForegroundColour(p.muted);
         break;
     }
+    refresh_actions();
     Layout();
 }
 
 void NativePrinterPanel::on_capabilities(const PP::Capabilities &caps)
 {
     m_caps = caps;
+    // The toolheads whose nozzle can be set.
+    m_nozzle_choice->Clear();
+    for (size_t i = 0; i < caps.extruders.size(); ++i)
+        m_nozzle_choice->Append(wxString::Format("T%d", int(i) + 1));
+    if (!caps.extruders.empty())
+        m_nozzle_choice->SetSelection(0);
+    m_nozzle_choice->Show(caps.extruders.size() > 1);
     rebuild_controls();
     rebuild_materials();
 
@@ -522,12 +554,18 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
     const bool running = s.job_state == PP::JobState::Printing || s.job_state == PP::JobState::Paused;
 
     // Health lives where "printing normally" would be; no separate panel.
-    if (!s.warnings.empty()) {
-        wxString text;
-        for (const auto &w : s.warnings)
-            text += wxString::FromUTF8(text.empty() ? "" : "  ·  ") + wxString::FromUTF8(w);
-        m_health_label->SetLabel(text);
-        m_health_label->SetForegroundColour(p.danger);
+    // A fault stays shown until the printer stops reporting it. Acknowledging it only marks it as seen here.
+    wxString fault;
+    for (const auto &w : s.warnings)
+        fault += wxString::FromUTF8(fault.empty() ? "" : "  ·  ") + wxString::FromUTF8(w);
+    if (fault.empty())
+        m_acknowledged_fault.clear();
+    const bool acknowledged = !fault.empty() && fault == m_acknowledged_fault;
+    m_ack_button->Show(!fault.empty() && !acknowledged);
+    if (!fault.empty()) {
+        // TRN %1% is the fault as the printer words it.
+        m_health_label->SetLabel(acknowledged ? GUI::format_wxstr(_L("Acknowledged: %1%"), fault) : fault);
+        m_health_label->SetForegroundColour(acknowledged ? p.warning : p.danger);
     } else if (m_client) {
         const wxString state = s.job_state == PP::JobState::Printing  ? _L("Printing normally") :
                                s.job_state == PP::JobState::Paused    ? _L("Paused") :
@@ -624,7 +662,283 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
         m_material_note->SetLabel(active && s.toolheads.size() > 1 ?
                                       wxString::Format(_L("Tool %d active"), int(active - s.toolheads.data()) + 1) :
                                       wxString());
+    refresh_actions();
     Layout();
+}
+
+// ---------------------------------------------------------------------------
+// Motion, Temperature, Filament
+
+namespace {
+
+wxString action_name(U1Controls::Action action)
+{
+    switch (action) {
+    case U1Controls::Action::HomeAll: return _L("Home all");
+    case U1Controls::Action::MotorsOff: return _L("Motors off");
+    case U1Controls::Action::SetNozzleTemperature: return _L("Set nozzle");
+    case U1Controls::Action::SetBedTemperature: return _L("Set bed");
+    case U1Controls::Action::HeatersOff: return _L("Heaters off");
+    case U1Controls::Action::LoadFilament: return _L("Load");
+    case U1Controls::Action::UnloadFilament: break;
+    }
+    return _L("Unload");
+}
+
+wxString unavailable_text(U1Controls::Action action, U1Controls::Unavailable why)
+{
+    switch (why) {
+    case U1Controls::Unavailable::None: break;
+    case U1Controls::Unavailable::NotConnected: return _L("Not connected to the printer.");
+    case U1Controls::Unavailable::NotReady: return _L("The printer reports that it is not ready.");
+    case U1Controls::Unavailable::PrintActive: return _L("Not while a print is running or paused.");
+    case U1Controls::Unavailable::PrintRunning: return _L("Not while a print is running. Pause it first.");
+    case U1Controls::Unavailable::NoHeatedBed: return _L("This printer reports no heated bed.");
+    case U1Controls::Unavailable::NoMacro:
+        return action == U1Controls::Action::LoadFilament ? _L("This printer has no LOAD_FILAMENT macro. Load filament at the printer.") :
+                                                            _L("This printer has no UNLOAD_FILAMENT macro. Unload filament at the printer.");
+    }
+    return {};
+}
+
+} // namespace
+
+void NativePrinterPanel::build_actions(wxWindow *card, wxBoxSizer *body)
+{
+    const auto add_group = [&](U1Controls::Group group, const wxString &title, bool first) {
+        auto *heading = label(card, title, 1.0, true);
+        body->Add(heading, 0, first ? 0 : wxTOP, FromDIP(10));
+        auto *row = new wxBoxSizer(wxHORIZONTAL);
+        body->Add(row, 0, wxEXPAND | wxTOP, FromDIP(6));
+        m_group_reason[int(group)] = label(card, wxEmptyString);
+        body->Add(m_group_reason[int(group)], 0, wxEXPAND | wxTOP, FromDIP(4));
+        return row;
+    };
+    const auto add_button = [&](wxBoxSizer *row, U1Controls::Action action, int left = 8) {
+        auto *button = new ::Button(card, action_name(action));
+        button->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+        row->Add(button, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(left));
+        // Not on the stack of the click: a control may ask first, and the question is modal.
+        button->Bind(wxEVT_BUTTON, [this, action](wxCommandEvent &) {
+            wxGetApp().CallAfter([lifetime = m_lifetime, action] {
+                if (NativePrinterPanel *self = lifetime->load())
+                    self->run_action(action);
+            });
+        });
+        m_action_buttons.push_back({action, button});
+    };
+    const auto add_target = [&](wxBoxSizer *row, int max, int left) {
+        auto *spin = new ::SpinInput(card, "0", wxString::FromUTF8("°C"), wxDefaultPosition, wxSize(FromDIP(96), -1), 0, 0, max, 0);
+        row->Add(spin, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, FromDIP(left));
+        return spin;
+    };
+
+    auto *motion = add_group(U1Controls::Group::Motion, _L("Motion"), true);
+    add_button(motion, U1Controls::Action::HomeAll, 0);
+    add_button(motion, U1Controls::Action::MotorsOff);
+
+    auto *temperature = add_group(U1Controls::Group::Temperature, _L("Temperature"), false);
+    m_nozzle_choice = new ::ComboBox(card, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(FromDIP(64), -1), 0, nullptr, wxCB_READONLY);
+    temperature->Add(m_nozzle_choice, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(8));
+    m_nozzle_choice->Hide();
+    // The bounds only keep typing slips out; the printer enforces its own limits and its refusal is shown.
+    m_nozzle_target = add_target(temperature, 350, 0);
+    add_button(temperature, U1Controls::Action::SetNozzleTemperature);
+    m_bed_target = add_target(temperature, 120, 16);
+    add_button(temperature, U1Controls::Action::SetBedTemperature);
+    temperature->AddStretchSpacer();
+    add_button(temperature, U1Controls::Action::HeatersOff);
+
+    auto *filament = add_group(U1Controls::Group::Filament, _L("Filament"), false);
+    add_button(filament, U1Controls::Action::LoadFilament, 0);
+    add_button(filament, U1Controls::Action::UnloadFilament);
+}
+
+U1Controls::PrinterFacts NativePrinterPanel::printer_facts() const
+{
+    U1Controls::PrinterFacts facts;
+    facts.connected    = m_client != nullptr && m_link == MoonrakerLiveClient::Link::Connected;
+    facts.ready        = m_snapshot.ready;
+    facts.printing     = m_snapshot.job_state == PP::JobState::Printing;
+    facts.paused       = m_snapshot.job_state == PP::JobState::Paused;
+    facts.heated_bed   = m_caps.heated_bed;
+    facts.load_macro   = m_caps.load_macro;
+    facts.unload_macro = m_caps.unload_macro;
+    return facts;
+}
+
+void NativePrinterPanel::refresh_actions()
+{
+    if (m_actions_card == nullptr)
+        return;
+    const U1Controls::PrinterFacts facts = printer_facts();
+    const Palette p = palette();
+    std::vector<std::pair<wxString, wxString>> off[3]; // by group: control, reason
+    int                                        count[3] = {0, 0, 0};
+    for (const ActionButton &entry : m_action_buttons) {
+        const U1Controls::Judgement judgement = U1Controls::judge(entry.action, facts);
+        const int                   group     = int(U1Controls::group_of(entry.action));
+        ++count[group];
+        wxString reason = unavailable_text(entry.action, judgement.why);
+        // While a confirmed control is with the printer, nothing else that needs a question is offered.
+        if (reason.empty() && m_action_in_flight && judgement.risk != U1Controls::Risk::Light)
+            reason = _L("Waiting for the printer's answer to the last control.");
+        entry.button->Enable(reason.empty());
+        if (!reason.empty())
+            off[group].emplace_back(entry.button->GetLabel(), reason);
+    }
+    const auto usable = [&](U1Controls::Action action) {
+        for (const ActionButton &entry : m_action_buttons)
+            if (entry.action == action)
+                return entry.button->IsEnabled();
+        return false;
+    };
+    m_nozzle_target->Enable(usable(U1Controls::Action::SetNozzleTemperature));
+    m_nozzle_choice->Enable(usable(U1Controls::Action::SetNozzleTemperature));
+    m_bed_target->Enable(usable(U1Controls::Action::SetBedTemperature));
+
+    for (int group = 0; group < 3; ++group) {
+        wxString text;
+        bool     same = !off[group].empty() && int(off[group].size()) == count[group];
+        for (const auto &entry : off[group])
+            same = same && entry.second == off[group].front().second;
+        if (same)
+            text = off[group].front().second;
+        else
+            for (const auto &entry : off[group])
+                // TRN %1% is a control's name, %2% the reason it is disabled.
+                text += (text.empty() ? wxString() : wxString("\n")) + GUI::format_wxstr(_L("%1%: %2%"), entry.first, entry.second);
+        wxStaticText *line = m_group_reason[group];
+        if (line->GetLabel() != text)
+            line->SetLabel(text);
+        line->SetForegroundColour(p.muted);
+        line->Show(!text.empty());
+    }
+}
+
+void NativePrinterPanel::run_action(U1Controls::Action action)
+{
+    if (!m_client)
+        return;
+    using U1Controls::Action;
+    using U1Controls::Risk;
+    const int tool = std::max(0, m_nozzle_choice->GetSelection());
+    if (action == Action::SetNozzleTemperature && tool >= int(m_caps.extruders.size()))
+        return;
+    const int target = action == Action::SetNozzleTemperature ? m_nozzle_target->GetValue() :
+                       action == Action::SetBedTemperature    ? m_bed_target->GetValue() : 0;
+    const U1Controls::Judgement judgement = U1Controls::judge(action, printer_facts(), target);
+    if (!judgement || (m_action_in_flight && judgement.risk != Risk::Light)) {
+        refresh_actions();
+        return;
+    }
+    const std::string shown_file = m_snapshot.filename;
+    if (judgement.risk != Risk::Light) {
+        wxString question;
+        switch (action) {
+        case Action::HomeAll:
+            question = _L("Home all axes?\n\nThe toolhead and the bed move. Check that nothing is in their way and that the bed is clear.");
+            break;
+        case Action::MotorsOff:
+            question = _L("Switch the motors off?\n\nThe axes can then be moved by hand, and the printer has to home again before it prints.");
+            break;
+        case Action::SetNozzleTemperature:
+            // TRN %1% is a toolhead number, %2% a temperature.
+            question = GUI::format_wxstr(_L("Set the nozzle of toolhead %1% to %2% °C?"), tool + 1, target);
+            break;
+        case Action::SetBedTemperature:
+            // TRN %1% is a temperature.
+            question = GUI::format_wxstr(_L("Set the bed to %1% °C?"), target);
+            break;
+        case Action::HeatersOff: break;
+        case Action::LoadFilament:
+            question = _L("Load filament?\n\nThe printer runs its LOAD_FILAMENT macro, which heats the nozzle and feeds filament.");
+            break;
+        case Action::UnloadFilament:
+            question = _L("Unload filament?\n\nThe printer runs its UNLOAD_FILAMENT macro, which heats the nozzle and pulls the filament back.");
+            break;
+        }
+        if (judgement.risk == Risk::ConfirmDuringPrint)
+            // TRN %1% is the file being printed.
+            question += "\n\n" + GUI::format_wxstr(_L("The print %1% is in progress and this changes it."), from_u8(shown_file));
+        MessageDialog dlg(this, question, action_name(action), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+        if (dlg.ShowModal() != wxID_YES || !m_client)
+            return;
+        // The printer may have changed while the question was open: what was confirmed must still be what is sent.
+        const U1Controls::Judgement now = U1Controls::judge(action, printer_facts(), target);
+        if (!now || now.risk != judgement.risk || m_snapshot.filename != shown_file || m_action_in_flight) {
+            refresh_actions();
+            show_error(this, _L("The printer's state changed while the question was open, so nothing was sent."), false);
+            return;
+        }
+    }
+    const std::string script = action == Action::HomeAll              ? PP::Commands::home_all() :
+                               action == Action::MotorsOff            ? PP::Commands::motors_off() :
+                               action == Action::SetNozzleTemperature ? PP::Commands::set_heater(m_caps.extruders[size_t(tool)], target) :
+                               action == Action::SetBedTemperature    ? PP::Commands::set_heater("heater_bed", target) :
+                               action == Action::HeatersOff           ? PP::Commands::heaters_off() :
+                               action == Action::LoadFilament         ? PP::Commands::load_filament() :
+                                                                        PP::Commands::unload_filament();
+    // A control that changes a print is noted in that job's record before it leaves.
+    if (judgement.risk == Risk::ConfirmDuringPrint)
+        if (const auto job = U1Jobs::find(m_client->base_url(), shown_file))
+            U1Jobs::update(job->id, [](U1Jobs::Job &record) { return std::optional<U1Jobs::State>(record.state); }, {}, "CONTROL_SENT " + script);
+    const bool held = judgement.risk != Risk::Light;
+    if (held)
+        m_action_in_flight = true;
+    refresh_actions();
+    Layout();
+    // Sent once. The answer may arrive after this panel is gone or shows another printer.
+    m_client->send_once(script, [lifetime = m_lifetime, generation = m_client_generation.load(), action, held](MoonrakerLiveClient::Sent sent,
+                                                                                                            const std::string &detail) {
+        wxGetApp().CallAfter([lifetime, generation, action, held, sent, detail] {
+            NativePrinterPanel *self = lifetime->load();
+            if (self == nullptr || self->m_client_generation != generation)
+                return;
+            if (held)
+                self->m_action_in_flight = false;
+            self->action_finished(action, sent, detail);
+        });
+    });
+}
+
+void NativePrinterPanel::action_finished(U1Controls::Action action, MoonrakerLiveClient::Sent sent, const std::string &detail)
+{
+    refresh_actions();
+    Layout();
+    switch (sent) {
+    case MoonrakerLiveClient::Sent::Accepted: break;
+    case MoonrakerLiveClient::Sent::Rejected:
+        BOOST_LOG_TRIVIAL(error) << "Printer panel: control refused: " << detail;
+        // TRN %1% is a control's name, %2% the printer's own message.
+        show_error(this, GUI::format_wxstr(_L("The printer refused \"%1%\": %2%"), action_name(action), from_u8(detail)), false);
+        break;
+    case MoonrakerLiveClient::Sent::Unknown:
+        BOOST_LOG_TRIVIAL(error) << "Printer panel: control unanswered: " << detail;
+        // TRN %1% is a control's name.
+        show_error(this,
+                   GUI::format_wxstr(_L("\"%1%\" was sent once and no answer came back in time. It was not sent again. "
+                                        "The printer may still be carrying it out; check what it reports before doing anything else."),
+                                     action_name(action)),
+                   false);
+        break;
+    }
+}
+
+void NativePrinterPanel::acknowledge_fault()
+{
+    wxString fault;
+    for (const auto &w : m_snapshot.warnings)
+        fault += wxString::FromUTF8(fault.empty() ? "" : "  ·  ") + wxString::FromUTF8(w);
+    if (fault.empty())
+        return;
+    // Only this is done: the fault is marked as seen and, for a job sent from here, noted in its record.
+    // No request goes to the printer, so acknowledging can neither clear the fault there nor resume a print.
+    m_acknowledged_fault = fault;
+    if (m_client && !m_snapshot.filename.empty())
+        if (const auto job = U1Jobs::find(m_client->base_url(), m_snapshot.filename))
+            U1Jobs::update(job->id, [](U1Jobs::Job &record) { return std::optional<U1Jobs::State>(record.state); }, {}, "FAULT_ACKNOWLEDGED");
+    on_snapshot(PP::Snapshot(m_snapshot));
 }
 
 void NativePrinterPanel::rebuild_controls()
@@ -800,10 +1114,16 @@ void NativePrinterPanel::confirm_resume()
     if (!m_client || m_resume_in_flight || !m_pause_button_resumes)
         return;
     const std::string shown_file = m_snapshot.filename;
-    MessageDialog dlg(this,
-                      GUI::format_wxstr(_L("Resume printing %s?\n\nThe toolhead moves back to the print and continues. "
-                                           "Check that nothing is in its way."), from_u8(shown_file)),
-                      _L("Resume print"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    wxString question = GUI::format_wxstr(_L("Resume printing %s?\n\nThe toolhead moves back to the print and continues. "
+                                             "Check that nothing is in its way."), from_u8(shown_file));
+    // Resuming is its own decision. A fault the printer still reports is named in the question, acknowledged or not.
+    wxString fault;
+    for (const auto &w : m_snapshot.warnings)
+        fault += wxString::FromUTF8(fault.empty() ? "" : "  ·  ") + wxString::FromUTF8(w);
+    if (!fault.empty())
+        // TRN %1% is the fault as the printer words it.
+        question += "\n\n" + GUI::format_wxstr(_L("The printer reports: %1%"), fault);
+    MessageDialog dlg(this, question, _L("Resume print"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
     if (dlg.ShowModal() != wxID_YES || !m_client || m_resume_in_flight)
         return;
     m_resume_in_flight = true;

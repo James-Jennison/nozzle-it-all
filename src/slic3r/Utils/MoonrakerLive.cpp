@@ -275,6 +275,27 @@ void MoonrakerLiveClient::post(const std::string &path, const std::string &json_
         .perform();
 }
 
+void MoonrakerLiveClient::send_once(const std::string &script, SentFn done) const
+{
+    BOOST_LOG_TRIVIAL(warning) << "Printer panel: POST " << m_base_url << "/printer/gcode/script " << script;
+    Http::post(m_base_url + "/printer/gcode/script")
+        .header("Content-Type", "application/json")
+        .set_post_body(json{{"script", script}}.dump())
+        .timeout_connect(5)
+        .timeout_max(90)
+        .on_complete([done](std::string, unsigned) { done(Sent::Accepted, {}); })
+        .on_error([done](std::string body, std::string error, unsigned status) {
+            const auto reply = json::parse(body, nullptr, false);
+            if (status >= 400) {
+                done(Sent::Rejected, !reply.is_discarded() && reply.is_object() && reply.contains("error") && reply["error"].is_object() ?
+                                         reply["error"].value("message", error) : "HTTP " + std::to_string(status));
+                return;
+            }
+            done(Sent::Unknown, error);
+        })
+        .perform();
+}
+
 void MoonrakerLiveClient::resume_guarded(const std::string &shown_file, std::function<void()> on_sending, ResumeFn done) const
 {
     const std::string base  = m_base_url;

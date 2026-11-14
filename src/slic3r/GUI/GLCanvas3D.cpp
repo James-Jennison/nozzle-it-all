@@ -2810,7 +2810,15 @@ void GLCanvas3D::_render_frame(bool scene_dirty, bool only_init)
                 if (is_running_on_wayland()) {
                     m_presented_signature.reset();
                     m_dirty = true;
+                    m_replacing_stale_size_frame = true;
                 }
+            } else if (m_replacing_stale_size_frame) {
+                m_replacing_stale_size_frame = false;
+                // The replacement frame is on the canvas's own surface now. A compositor may not put it on
+                // screen until the window's surface is committed too (seen under Weston: the frame showed
+                // only when something else redrew), so the window is asked for one redraw.
+                if (wxWindow* top = wxGetTopLevelParent(m_canvas))
+                    top->Refresh();
             }
 #endif
         } else {

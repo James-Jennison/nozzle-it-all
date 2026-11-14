@@ -48,6 +48,7 @@
 
 #include <wx/setup.h>
 #include <wx/event.h>
+#include <wx/gdicmn.h>
 #include <utility>
 #include <vector>
 #include <string>
@@ -935,6 +936,8 @@ public:
     std::optional<size_t> m_presented_signature;
     // Client size of the canvas at the last frame that was presented.
     wxSize m_presented_canvas_size{0, 0};
+    // The frame being drawn replaces one presented at a stale size (Wayland).
+    bool m_replacing_stale_size_frame{false};
     GLModel m_plate_shadow_mask;
     std::string m_plate_shadow_mask_key;
     // Depth-based shadow map used to cast object shadows onto other objects and themselves.

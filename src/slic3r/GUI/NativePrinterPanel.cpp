@@ -611,8 +611,10 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
     m_pause_button->Enable(running && m_client && !resume_settling);
     m_adjust_button->Enable(m_client != nullptr);
     m_stop_button->Enable(running && m_client);
-    // The warning colour only while there is a print to stop; otherwise it would hide that the button is disabled.
+    // A colour set on a button stays when it is disabled, so both say here whether they can be pressed: the
+    // warning colour only while there is a print to stop.
     m_stop_button->SetForegroundColour(m_stop_button->IsEnabled() ? p.danger : p.muted);
+    m_pause_button->SetForegroundColour(m_pause_button->IsEnabled() ? p.text : p.muted);
 
     // Telemetry: the active toolhead's nozzle.
     const PP::Toolhead *active = nullptr;

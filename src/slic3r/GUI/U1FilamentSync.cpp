@@ -17,6 +17,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/format.hpp>
+#include <boost/log/trivial.hpp>
 #include <nlohmann/json.hpp>
 #include <wx/bitmap.h>
 #include <wx/dcmemory.h>
@@ -613,6 +614,7 @@ std::string automatic_preset(const PresetBundle& bundle, const Slot& slot)
     const Preset* best = nullptr;
     std::uint64_t best_rank = 0;
     bool          best_exact = false;
+    size_t        best_plain = 0;
     for (const Preset& preset : bundle.filaments.get_presets()) {
         const std::string preset_type = preset.config.opt_string("filament_type", 0u);
         if (!preset.is_compatible || preset.is_default || !boost::iequals(canonical_material(preset_type), reported_material))
@@ -621,10 +623,23 @@ std::string automatic_preset(const PresetBundle& bundle, const Slot& slot)
         // that type comes before a filled or blended one of the same family ("PLA-CF").
         const bool          exact = slot.sub_type.empty() && boost::iequals(preset_type, slot.type);
         const std::uint64_t rank  = u1_filament_preset_rank(preset, slot.vendor, slot.sub_type);
-        if (best == nullptr || (exact != best_exact ? exact : rank > best_rank)) {
+        // Among those, the plainest name: "Generic PLA @Printer" before "Generic PLA Silk @System". The rank's
+        // last three digits only prefer a short full name, which the "@..." part would decide.
+        const size_t plain = slot.sub_type.empty() ? preset.name.substr(0, preset.name.find(" @")).size() : 0;
+        const auto   better = [&] {
+            if (exact != best_exact)
+                return exact;
+            if (rank / 1000 != best_rank / 1000)
+                return rank / 1000 > best_rank / 1000;
+            if (plain != best_plain)
+                return plain < best_plain;
+            return rank > best_rank;
+        };
+        if (best == nullptr || better()) {
             best       = &preset;
             best_rank  = rank;
             best_exact = exact;
+            best_plain = plain;
         }
     }
     return best != nullptr ? best->name : std::string();
@@ -2123,6 +2138,14 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
         for (size_t i = 0; i < slots.size(); ++i)
             if (slots[i].present && !applied[i].empty() && std::find(target.begin(), target.end(), int(i)) == target.end())
                 wxGetApp().sidebar().add_custom_filament(colour_from_hex(slots[i].color, wxColour(0xCE, 0xCE, 0xCE)), applied[i]);
+
+    // What the project holds now, for the record of a sync.
+    {
+        std::string now;
+        for (const std::string& name : bundle.filament_presets)
+            now += (now.empty() ? "" : " | ") + name;
+        BOOST_LOG_TRIVIAL(warning) << "Sync filaments: the project's filament presets are now: " << now;
+    }
 
     wxString invalid_colors;
     for (size_t i = 0; i < slots.size(); ++i) {

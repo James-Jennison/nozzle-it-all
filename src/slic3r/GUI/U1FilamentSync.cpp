@@ -612,14 +612,19 @@ std::string automatic_preset(const PresetBundle& bundle, const Slot& slot)
         return {};
     const Preset* best = nullptr;
     std::uint64_t best_rank = 0;
+    bool          best_exact = false;
     for (const Preset& preset : bundle.filaments.get_presets()) {
-        if (!preset.is_compatible || preset.is_default ||
-            !boost::iequals(canonical_material(preset.config.opt_string("filament_type", 0u)), reported_material))
+        const std::string preset_type = preset.config.opt_string("filament_type", 0u);
+        if (!preset.is_compatible || preset.is_default || !boost::iequals(canonical_material(preset_type), reported_material))
             continue;
-        const std::uint64_t rank = u1_filament_preset_rank(preset, slot.vendor, slot.sub_type);
-        if (best == nullptr || rank > best_rank) {
-            best      = &preset;
-            best_rank = rank;
+        // A report that names only the family ("PLA", no subtype) is that plain material: a preset of exactly
+        // that type comes before a filled or blended one of the same family ("PLA-CF").
+        const bool          exact = slot.sub_type.empty() && boost::iequals(preset_type, slot.type);
+        const std::uint64_t rank  = u1_filament_preset_rank(preset, slot.vendor, slot.sub_type);
+        if (best == nullptr || (exact != best_exact ? exact : rank > best_rank)) {
+            best       = &preset;
+            best_rank  = rank;
+            best_exact = exact;
         }
     }
     return best != nullptr ? best->name : std::string();

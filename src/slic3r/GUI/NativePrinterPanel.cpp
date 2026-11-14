@@ -813,7 +813,7 @@ void NativePrinterPanel::confirm_resume()
         },
         // Runs on an HTTP thread, possibly after this panel is gone: it carries the panel's liveness token and
         // the connection it was started on, not the panel.
-        [lifetime = m_lifetime, generation = m_client_generation, printer, shown_file](const MoonrakerLiveClient::ResumeResult &result) {
+        [lifetime = m_lifetime, generation = m_client_generation.load(), printer, shown_file](const MoonrakerLiveClient::ResumeResult &result) {
             wxGetApp().CallAfter([lifetime, generation, result, printer, shown_file] {
                 NativePrinterPanel *self = lifetime->load();
                 if (self != nullptr && self->m_client_generation == generation)

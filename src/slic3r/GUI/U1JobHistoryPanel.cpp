@@ -111,8 +111,18 @@ void U1JobHistoryPanel::read_printer_history()
             .on_error([](std::string, std::string, unsigned) {})
             .perform_sync();
         // No answer, or a printer without a job history: nothing is known and nothing is stored.
-        if (history.is_object())
-            U1Jobs::remember_external(host, U1Jobs::external_from_history(history, U1Jobs::history(host)));
+        if (history.is_object()) {
+            const std::vector<U1Jobs::Job> jobs = U1Jobs::history(host);
+            U1Jobs::remember_external(host, U1Jobs::external_from_history(history, jobs));
+            // A job whose end was recorded from the printer's live state has no times yet: the history has them.
+            // Only times are written here, never an outcome.
+            for (const U1Jobs::Job &job : jobs)
+                if (job.state != U1Jobs::State::Printing && (job.started_ms == 0 || job.ended_ms == 0))
+                    if (auto listed = U1Jobs::record_from_history(job, history)) {
+                        listed->outcome.reset();
+                        U1Jobs::record_outcome(job.id, *listed, {});
+                    }
+        }
         reading->store(false);
         wxGetApp().CallAfter([alive, panel] {
             if (alive->load() && !wxGetApp().is_closing())

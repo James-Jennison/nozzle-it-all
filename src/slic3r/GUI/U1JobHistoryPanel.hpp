@@ -16,7 +16,8 @@ namespace Slic3r::GUI {
 /// History side of the Printer tab: every job this app sent to the selected printer, newest first,
 /// read from the job journal, together with the prints the printer's own history lists that were
 /// started elsewhere, labelled as such. Each row shows what the machine reported and, apart from it,
-/// the person's own verdict, which is chosen here. It reads the printer's history; it sends no command.
+/// the person's own verdict, which is chosen here. A job whose prepared file is still kept can be printed
+/// again, through the send dialog, as a new job. The list itself only reads the printer's history.
 class U1JobHistoryPanel final : public wxScrolledWindow
 {
 public:

@@ -30,6 +30,7 @@
 #include <wx/sizer.h>
 #include <wx/slider.h>
 #include <wx/stattext.h>
+#include <wx/textctrl.h>
 #include <wx/tglbtn.h>
 #include <wx/time.h>
 
@@ -825,6 +826,10 @@ void NativePrinterPanel::run_action(U1Controls::Action action)
     const int tool = std::max(0, m_nozzle_choice->GetSelection());
     if (action == Action::SetNozzleTemperature && tool >= int(m_caps.extruders.size()))
         return;
+    // What is typed counts even when the field has not given up the focus yet; it is clamped to the field's range,
+    // and the question shows the number that will be sent.
+    for (::SpinInput *field : {m_nozzle_target, m_bed_target})
+        field->SetValue(field->GetTextCtrl()->GetValue());
     const int target = action == Action::SetNozzleTemperature ? m_nozzle_target->GetValue() :
                        action == Action::SetBedTemperature    ? m_bed_target->GetValue() : 0;
     const U1Controls::Judgement judgement = U1Controls::judge(action, printer_facts(), target);

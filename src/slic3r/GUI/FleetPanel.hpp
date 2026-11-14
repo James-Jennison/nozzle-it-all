@@ -2,6 +2,7 @@
 #define slic3r_GUI_FleetPanel_hpp_
 
 #include "slic3r/Utils/FleetStatus.hpp"
+#include "slic3r/Utils/MjpegStream.hpp"
 
 #include <wx/image.h>
 #include <wx/scrolwin.h>
@@ -25,8 +26,8 @@ namespace Slic3r::GUI {
 /// The Printers side of the Printer tab: one card for every printer preset that has an address, sorted into
 /// Needs attention, Printing, Ready and Offline by what each printer answers (Fleet::classify), with a filter
 /// per group. While it shows, every printer is read every few seconds on a worker thread this panel owns:
-/// one read request each, never a command, and where the printer lists a camera one still picture from it,
-/// shown small on the card. Opening a card shows that printer on the Monitor side; it does
+/// one read request each, never a command. Where the printer lists a camera, its card plays the camera's
+/// MJPEG stream, small; a camera without such a stream shows a still picture renewed with the status. Opening a card shows that printer on the Monitor side; it does
 /// not change the printer selected for slicing.
 class FleetPanel final : public wxScrolledWindow
 {
@@ -65,11 +66,29 @@ private:
     std::string   m_shown;      ///< what the cards were built from, to skip rebuilding an unchanged list
     std::map<std::string, Fleet::Reading> m_readings; ///< by address; absent until the first read
     std::vector<::Button *>               m_filter_buttons;
-    std::map<std::string, wxImage>          m_snapshots; ///< by address: the camera's last still picture, scaled for the card
+    std::map<std::string, wxImage>          m_snapshots; ///< by address: the camera's last picture, scaled for the card
     std::map<std::string, wxStaticBitmap *> m_pictures;  ///< the cards' picture windows, owned by the cards
-    /// By address: where each printer's camera serves a still picture; empty when it lists none. Filled and read
-    /// only by the worker thread, one pass at a time.
-    std::shared_ptr<std::map<std::string, std::string>> m_camera_urls;
+    struct Camera
+    {
+        std::string snapshot; ///< where the camera serves a still picture; empty when it lists none
+        std::string stream;   ///< where it serves its stream; empty when it lists none
+    };
+    /// By address: each printer's first enabled camera. Filled and read only by the worker thread, one pass at a time.
+    std::shared_ptr<std::map<std::string, Camera>> m_cameras;
+    /// By address: the camera stream now being read for a card. Main thread only.
+    std::map<std::string, std::unique_ptr<MjpegStream>> m_streams;
+    /// By address: a picture from the stream is on its way to the main thread; the next ones are dropped meanwhile.
+    std::map<std::string, std::shared_ptr<std::atomic<bool>>> m_frame_pending;
+    /// The cards' texts that change while a card stays: by address, the state and the detail line.
+    struct Texts
+    {
+        wxStaticText *detail = nullptr;
+    };
+    std::map<std::string, Texts> m_texts;
+    std::string                  m_layout; ///< what decides which cards exist and in what order
+    /// Shows *image* on the card of *host*, scaled; an invalid image takes the picture away.
+    void show_picture(const std::string &host, const wxImage &image);
+    void stop_streams();
 
     std::shared_ptr<std::atomic<bool>> m_alive;   ///< false once this panel is gone
     std::shared_ptr<std::atomic<bool>> m_reading; ///< a pass over the printers is under way

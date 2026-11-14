@@ -842,6 +842,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/SemanticPaintClient.cpp
     Utils/SemanticPaintClient.hpp
     Utils/FleetStatus.cpp
+    Utils/MjpegStream.cpp
+    Utils/MjpegStream.hpp
     Utils/FleetStatus.hpp
     Utils/U1Controls.cpp
     Utils/U1Controls.hpp

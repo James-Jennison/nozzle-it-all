@@ -122,38 +122,43 @@ Fleet::Reading read_printer(const std::string &host, const std::shared_ptr<std::
     return reading;
 }
 
-/// Where the printer's first enabled camera serves a still picture, from Moonraker's list of cameras. Empty
-/// when it lists none. One read request; runs on the worker thread.
-std::string camera_snapshot_url(const std::string &host, const std::shared_ptr<std::atomic<bool>> &stop)
+/// The printer's first enabled camera, from Moonraker's list of cameras: where it serves a still picture and
+/// where its stream. Both empty when it lists none. One read request; runs on the worker thread.
+std::pair<std::string, std::string> camera_addresses(const std::string &host, const std::shared_ptr<std::atomic<bool>> &stop)
 {
-    std::string url;
+    std::pair<std::string, std::string> found;
     Http::get("http://" + host + "/server/webcams/list")
         .timeout_connect(3)
         .timeout_max(5)
         .on_progress([stop](Http::Progress, bool &cancel) { cancel = stop->load(); })
-        .on_complete([&url, &host](std::string body, unsigned) {
+        .on_complete([&found, &host](std::string body, unsigned) {
             const auto doc = nlohmann::json::parse(body, nullptr, false);
             if (doc.is_discarded() || !doc.is_object() || !doc.contains("result") || !doc["result"].is_object())
                 return;
             const auto cams = doc["result"].find("webcams");
             if (cams == doc["result"].end() || !cams->is_array())
                 return;
+            // Moonraker gives a path on the printer's web port, or a whole address.
+            const auto address = [&host](const nlohmann::json &cam, const char *key) {
+                const auto it = cam.find(key);
+                if (it == cam.end() || !it->is_string() || it->get<std::string>().empty())
+                    return std::string();
+                std::string url = it->get<std::string>();
+                if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0)
+                    url = "http://" + host.substr(0, host.find(':')) + (url.front() == '/' ? "" : "/") + url;
+                return url;
+            };
             for (const auto &cam : *cams) {
                 if (!cam.is_object() || !cam.value("enabled", true))
                     continue;
-                const auto it = cam.find("snapshot_url");
-                if (it == cam.end() || !it->is_string() || it->get<std::string>().empty())
-                    continue;
-                url = it->get<std::string>();
-                // Moonraker gives a path on the printer, or a whole address.
-                if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0)
-                    url = "http://" + host.substr(0, host.find(':')) + (url.front() == '/' ? "" : "/") + url;
-                return;
+                found = {address(cam, "snapshot_url"), address(cam, "stream_url")};
+                if (!found.first.empty() || !found.second.empty())
+                    return;
             }
         })
         .on_error([](std::string, std::string, unsigned) {})
         .perform_sync();
-    return url;
+    return found;
 }
 
 /// One still picture from a camera, as the bytes it sent. Empty when there is none. Runs on the worker thread.
@@ -179,7 +184,7 @@ FleetPanel::FleetPanel(wxWindow *parent, OpenFn open)
     , m_alive(std::make_shared<std::atomic<bool>>(true))
     , m_reading(std::make_shared<std::atomic<bool>>(false))
     , m_stop(std::make_shared<std::atomic<bool>>(false))
-    , m_camera_urls(std::make_shared<std::map<std::string, std::string>>())
+    , m_cameras(std::make_shared<std::map<std::string, Camera>>())
 {
     SetScrollRate(0, FromDIP(12));
     auto *outer = new wxBoxSizer(wxVERTICAL);
@@ -202,6 +207,28 @@ FleetPanel::~FleetPanel()
     m_stop->store(true);
     if (m_reader.joinable())
         m_reader.join();
+    stop_streams();
+}
+
+void FleetPanel::stop_streams()
+{
+    // Each stream's thread is waited for; it gives its read up within about a second.
+    m_streams.clear();
+    m_frame_pending.clear();
+}
+
+void FleetPanel::show_picture(const std::string &host, const wxImage &image)
+{
+    if (!image.IsOk() || image.GetWidth() <= 0 || image.GetHeight() <= 0) {
+        m_snapshots.erase(host); // no picture now: an old one is not left standing
+        return;
+    }
+    const wxSize box   = FromDIP(wxSize(PICTURE_W, PICTURE_H));
+    const double scale = std::min(double(box.x) / image.GetWidth(), double(box.y) / image.GetHeight());
+    wxImage &kept = m_snapshots[host];
+    kept          = image.Scale(std::max(1, int(image.GetWidth() * scale)), std::max(1, int(image.GetHeight() * scale)), wxIMAGE_QUALITY_BILINEAR);
+    if (const auto it = m_pictures.find(host); it != m_pictures.end())
+        it->second->SetBitmap(wxBitmap(kept));
 }
 
 std::vector<FleetPanel::Printer> FleetPanel::printers()
@@ -237,9 +264,15 @@ void FleetPanel::read_printers()
         return;
     if (m_reader.joinable())
         m_reader.join(); // the previous pass has finished: its flag was clear
-    m_reader = std::thread([hosts, alive = m_alive, reading = m_reading, stop = m_stop, cameras = m_camera_urls, panel = this] {
+    // A printer whose stream is playing needs no still picture.
+    std::set<std::string> playing;
+    for (const auto &[host, stream] : m_streams)
+        if (!stream->ended() && stream->frames() > 0)
+            playing.insert(host);
+    m_reader = std::thread([hosts, playing, alive = m_alive, reading = m_reading, stop = m_stop, cameras = m_cameras, panel = this] {
         std::map<std::string, Fleet::Reading> readings;
         std::map<std::string, std::string>    pictures; // by address: the bytes of a still picture, empty for none
+        std::map<std::string, std::string>    streams;  // by address: where the camera's stream is, empty for none
         for (const std::string &host : hosts) {
             if (stop->load())
                 break;
@@ -251,10 +284,13 @@ void FleetPanel::read_printers()
             std::string picture;
             if (one.moonraker && !stop->load()) {
                 auto known = cameras->find(host);
-                if (known == cameras->end())
-                    known = cameras->emplace(host, camera_snapshot_url(host, stop)).first;
-                if (!known->second.empty() && !stop->load())
-                    picture = camera_picture(known->second, stop);
+                if (known == cameras->end()) {
+                    const auto found = camera_addresses(host, stop);
+                    known            = cameras->emplace(host, Camera{found.first, found.second}).first;
+                }
+                streams.emplace(host, known->second.stream);
+                if (!known->second.snapshot.empty() && playing.count(host) == 0 && !stop->load())
+                    picture = camera_picture(known->second.snapshot, stop);
             } else
                 cameras->erase(host);
             pictures.emplace(host, std::move(picture));
@@ -262,32 +298,63 @@ void FleetPanel::read_printers()
         }
         // The panel joins this thread before it goes, so the application is still there for this call.
         if (!stop->load())
-            wxGetApp().CallAfter([alive, panel, readings = std::move(readings), pictures = std::move(pictures)] {
-                if (!alive->load() || wxGetApp().is_closing())
+            wxGetApp().CallAfter([alive, panel, readings = std::move(readings), pictures = std::move(pictures), streams = std::move(streams)] {
+                if (!alive->load() || wxGetApp().is_closing() || !panel->m_timer.IsRunning())
                     return;
                 for (const auto &[host, one] : readings)
                     panel->m_readings[host] = one;
-                const wxSize box = panel->FromDIP(wxSize(PICTURE_W, PICTURE_H));
+                // The camera streams: one per printer that lists one, started here and dropped when the printer
+                // is away, lists another address, or the stream ended (it is then started again).
+                for (auto it = panel->m_streams.begin(); it != panel->m_streams.end();) {
+                    const auto wanted = streams.find(it->first);
+                    if (wanted == streams.end() || wanted->second.empty() || wanted->second != it->second->url() || it->second->ended()) {
+                        panel->m_frame_pending.erase(it->first);
+                        it = panel->m_streams.erase(it);
+                    } else
+                        ++it;
+                }
+                for (const auto &[host, url] : streams) {
+                    if (url.empty() || panel->m_streams.count(host) != 0)
+                        continue;
+                    auto pending = std::make_shared<std::atomic<bool>>(false);
+                    panel->m_frame_pending[host] = pending;
+                    panel->m_streams[host] = std::make_unique<MjpegStream>(url, [alive, panel, host, pending](std::string jpeg) {
+                        // On the stream's thread. One picture at a time travels to the main thread.
+                        if (pending->exchange(true))
+                            return;
+                        wxGetApp().CallAfter([alive, panel, host, pending, jpeg = std::move(jpeg)] {
+                            pending->store(false);
+                            if (!alive->load() || wxGetApp().is_closing() || panel->m_streams.count(host) == 0)
+                                return;
+                            wxImage image;
+                            {
+                                wxLogNull            quiet;
+                                wxMemoryInputStream bytes(jpeg.data(), jpeg.size());
+                                image.LoadFile(bytes, wxBITMAP_TYPE_JPEG);
+                            }
+                            if (!image.IsOk())
+                                return; // a damaged picture is skipped; the last good one stays
+                            const bool had = panel->m_snapshots.count(host) != 0;
+                            panel->show_picture(host, image);
+                            if (!had)
+                                panel->rebuild(false); // the card gets its picture window
+                        });
+                    });
+                }
+                // Still pictures, for the printers whose stream is not playing.
                 for (const auto &[host, bytes] : pictures) {
+                    const auto stream = panel->m_streams.find(host);
+                    if (stream != panel->m_streams.end() && !stream->second->ended() && stream->second->frames() > 0)
+                        continue;
                     wxImage image;
                     if (!bytes.empty()) {
                         wxLogNull            quiet; // a camera may send something that is no picture
-                        wxMemoryInputStream stream(bytes.data(), bytes.size());
-                        image.LoadFile(stream, wxBITMAP_TYPE_ANY);
+                        wxMemoryInputStream stream_of(bytes.data(), bytes.size());
+                        image.LoadFile(stream_of, wxBITMAP_TYPE_ANY);
                     }
-                    if (!image.IsOk() || image.GetWidth() <= 0 || image.GetHeight() <= 0) {
-                        panel->m_snapshots.erase(host); // no picture now: an old one is not left standing
-                        continue;
-                    }
-                    const double scale = std::min(double(box.x) / image.GetWidth(), double(box.y) / image.GetHeight());
-                    panel->m_snapshots[host] = image.Scale(std::max(1, int(image.GetWidth() * scale)), std::max(1, int(image.GetHeight() * scale)),
-                                                           wxIMAGE_QUALITY_BILINEAR);
+                    panel->show_picture(host, image);
                 }
                 panel->rebuild(false);
-                // A card that stays as it is gets its new picture in place.
-                for (const auto &[host, picture] : panel->m_pictures)
-                    if (const auto it = panel->m_snapshots.find(host); it != panel->m_snapshots.end())
-                        picture->SetBitmap(wxBitmap(it->second));
             });
         reading->store(false);
     });
@@ -299,8 +366,10 @@ void FleetPanel::set_active(bool active)
         rebuild(false);
         read_printers();
         m_timer.Start(REFRESH_MS);
-    } else
+    } else {
         m_timer.Stop();
+        stop_streams(); // no camera is read while the list does not show
+    }
 }
 
 void FleetPanel::reload()
@@ -356,6 +425,23 @@ void FleetPanel::rebuild(bool force)
     if (!force && shown == m_shown)
         return;
     m_shown = shown;
+    // The same cards in the same order: only their detail lines changed (a file name, how far a print is).
+    // They are written in place, so a card and the picture playing on it are not built anew every few seconds.
+    std::string layout = std::string(dark ? "dark" : "light") + "|" + std::to_string(m_filter);
+    for (const Row &row : rows)
+        layout += "|" + row.printer.name + ":" + row.printer.host + ":" + (row.printer.selected ? "s" : "") + ":" + (row.read ? "r" : "") + ":" +
+                  std::to_string(int(row.verdict.band)) + ":" + std::to_string(int(row.verdict.reason)) + (m_snapshots.count(row.printer.host) != 0 ? ":pic" : "");
+    if (!force && layout == m_layout) {
+        for (const Row &row : rows)
+            if (const auto it = m_texts.find(row.printer.host); it != m_texts.end() && it->second.detail != nullptr && row.read) {
+                const wxString text = detail(row.reading, row.verdict, row.printer.host);
+                if (it->second.detail->GetLabel() != text)
+                    it->second.detail->SetLabel(text);
+            }
+        Layout();
+        return;
+    }
+    m_layout = layout;
 
     // The filters carry the number of printers in each group. Offline also holds what is not monitored or not read yet.
     const auto group = [](const Row &row) {
@@ -390,6 +476,7 @@ void FleetPanel::rebuild(bool force)
 
     m_rows->Clear(true);
     m_pictures.clear();
+    m_texts.clear();
     int listed = 0;
     for (const Row &row : rows) {
         if (m_filter >= 0 && group(row) != m_filter)
@@ -416,7 +503,7 @@ void FleetPanel::rebuild(bool force)
         // The camera's last still picture, for a printer that has one.
         if (const auto shot = m_snapshots.find(row.printer.host); shot != m_snapshots.end()) {
             auto *picture = new wxStaticBitmap(card, wxID_ANY, wxBitmap(shot->second));
-            picture->SetToolTip(_L("A still picture from the printer's camera, renewed every few seconds while this list shows."));
+            picture->SetToolTip(_L("The printer's camera, while this list shows."));
             line->Add(picture, 0, wxALIGN_CENTER_VERTICAL | wxTOP | wxBOTTOM | wxRIGHT, FromDIP(8));
             m_pictures[row.printer.host] = picture;
         }
@@ -428,7 +515,7 @@ void FleetPanel::rebuild(bool force)
         if (!where.empty())
             add_text(text, where, NIATheme::text_muted(dark), false);
         if (row.read)
-            add_text(text, detail(row.reading, row.verdict, row.printer.host), NIATheme::text(dark), false);
+            m_texts[row.printer.host].detail = add_text(text, detail(row.reading, row.verdict, row.printer.host), NIATheme::text(dark), false);
         line->Add(text, 1, wxALIGN_CENTER_VERTICAL | wxTOP | wxBOTTOM, FromDIP(10));
 
         auto *open = new ::Button(card, _L("Open"));

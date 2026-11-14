@@ -1092,8 +1092,11 @@ private:
         m_tip->Wrap(m_tip->GetMinSize().GetWidth());
         m_undone->Wrap(-1);
         m_undone->Wrap(m_undone->GetMinSize().GetWidth());
-        for (auto& [window, colour] : m_chips)
+        // The dark pass recolors text as well as panels; a chip's text is chosen against its filament color.
+        for (auto& [window, colour] : m_chips) {
             window->SetBackgroundColour(colour);
+            window->SetForegroundColour(colour.GetLuminance() > 0.55 ? *wxBLACK : *wxWHITE);
+        }
         update_pictures();
         if (GetSizer() != nullptr) {
             Layout();

@@ -174,6 +174,10 @@ int on_progress(void *user, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
 
 } // namespace
 
+MjpegStream::MjpegStream(std::string url, FrameFn on_frame, int max_per_second)
+    : MjpegStream(std::move(url), std::move(on_frame), max_per_second, Limits())
+{}
+
 MjpegStream::MjpegStream(std::string url, FrameFn on_frame, int max_per_second, Limits limits)
     : m_url(std::move(url)), m_on_frame(std::move(on_frame)), m_max_per_second(max_per_second < 1 ? 1 : max_per_second), m_limits(std::move(limits))
 {

@@ -29,7 +29,9 @@ public:
     };
 
     /// Starts reading *url* at once. At most *max_per_second* pictures are handed over; the others are dropped.
-    MjpegStream(std::string url, FrameFn on_frame, int max_per_second = 5, Limits limits = {});
+    MjpegStream(std::string url, FrameFn on_frame, int max_per_second = 5);
+    /// The same, kept to *limits*.
+    MjpegStream(std::string url, FrameFn on_frame, int max_per_second, Limits limits);
     /// Stops the stream and waits for its thread (the read is given up within about a second).
     ~MjpegStream();
 

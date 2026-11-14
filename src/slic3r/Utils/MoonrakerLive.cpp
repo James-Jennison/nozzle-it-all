@@ -1,5 +1,7 @@
 #include "MoonrakerLive.hpp"
 
+#include <memory>
+
 #include "Http.hpp"
 
 #include <boost/asio/connect.hpp>
@@ -271,6 +273,70 @@ void MoonrakerLiveClient::post(const std::string &path, const std::string &json_
                 on_error(message);
         })
         .perform();
+}
+
+void MoonrakerLiveClient::resume_guarded(const std::string &shown_file, std::function<void()> on_sending, ResumeFn done) const
+{
+    const std::string base  = m_base_url;
+    const std::string query = base + "/printer/objects/query?print_stats";
+    // Reads print_stats and hands the judged state on. No answer is a refusal.
+    const auto read = [query, shown_file](std::function<void(U1Controls::ResumeCheck)> then) {
+        auto answered = std::make_shared<bool>(false);
+        Http::get(query)
+            .timeout_connect(5)
+            .timeout_max(5)
+            .on_complete([then, answered, shown_file](std::string body, unsigned) {
+                *answered         = true;
+                const auto  reply = json::parse(body, nullptr, false);
+                const json  status = !reply.is_discarded() && reply.is_object() && reply.contains("result") && reply["result"].is_object() ?
+                                         reply["result"].value("status", json()) : json();
+                then(U1Controls::check_resume(status, shown_file));
+            })
+            .on_error([then, answered](std::string, std::string, unsigned) {
+                if (!*answered)
+                    then(U1Controls::ResumeCheck{});
+            })
+            .perform();
+    };
+    read([base, read, on_sending = std::move(on_sending), done = std::move(done)](U1Controls::ResumeCheck check) {
+        ResumeResult result;
+        result.check = check;
+        if (!check) {
+            done(result);
+            return;
+        }
+        if (on_sending)
+            on_sending();
+        BOOST_LOG_TRIVIAL(warning) << "Printer panel: POST " << base << "/printer/print/resume (guarded, sent once)";
+        Http::post(base + "/printer/print/resume")
+            .header("Content-Type", "application/json")
+            .set_post_body("{}")
+            .timeout_connect(5)
+            .timeout_max(30)
+            .on_complete([done, result](std::string, unsigned) mutable {
+                result.kind = ResumeResult::Kind::Accepted;
+                done(result);
+            })
+            .on_error([done, result, read](std::string body, std::string error, unsigned status) mutable {
+                const auto reply = json::parse(body, nullptr, false);
+                if (status >= 400 && status < 500) {
+                    // The printer answered and refused: nothing ran.
+                    result.kind   = ResumeResult::Kind::Rejected;
+                    result.detail = !reply.is_discarded() && reply.is_object() && reply.contains("error") && reply["error"].is_object() ?
+                                        reply["error"].value("message", error) : "HTTP " + std::to_string(status);
+                    done(result);
+                    return;
+                }
+                // It may or may not have run. The printer is asked what it shows now; the Resume is not sent again.
+                result.kind   = ResumeResult::Kind::Unknown;
+                result.detail = status != 0 ? "HTTP " + std::to_string(status) : error;
+                read([done, result](U1Controls::ResumeCheck after) mutable {
+                    result.after = after;
+                    done(result);
+                });
+            })
+            .perform();
+    });
 }
 
 } // namespace Slic3r

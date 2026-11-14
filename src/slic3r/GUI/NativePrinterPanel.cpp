@@ -31,6 +31,7 @@
 #include <wx/time.h>
 
 #include <algorithm>
+#include <chrono>
 #include <ctime>
 #include <optional>
 
@@ -274,11 +275,12 @@ void NativePrinterPanel::build()
     m_pause_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
         if (!m_client)
             return;
-        auto on_error = [this](const std::string &e) { post([e](NativePrinterPanel *self) { self->report_error("pause/resume", e); }); };
-        if (m_snapshot.job_state == PP::JobState::Paused)
-            m_client->resume(on_error);
+        // The button does what it said when it was pressed, not what a later status would make it say.
+        if (m_pause_button_resumes)
+            // Not on the stack of the click: the confirmation is modal.
+            post([](NativePrinterPanel *self) { self->confirm_resume(); });
         else
-            m_client->pause(on_error);
+            m_client->pause([this](const std::string &e) { post([e](NativePrinterPanel *self) { self->report_error("pause", e); }); });
     });
     m_adjust_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { show_adjust_dialog(); });
     m_stop_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { confirm_stop(); });
@@ -385,6 +387,8 @@ void NativePrinterPanel::connect()
     }
 
     ++m_client_generation;
+    m_resume_in_flight  = false; // an answer for the previous printer is dropped with its generation
+    m_resume_hold_until = {};
     // "host", "host:port", "[v6]:port" or a bare IPv6 literal.
     const bool        bare_v6 = std::count(m_host.begin(), m_host.end(), ':') > 1 && m_host.front() != '[';
     const std::string base    = "http://" + (bare_v6 ? "[" + m_host + "]" : m_host);
@@ -452,7 +456,9 @@ void NativePrinterPanel::refresh_job_identity(const PP::Snapshot &s)
 
 void NativePrinterPanel::disconnect()
 {
-    ++m_client_generation; // drop callbacks still in flight
+    ++m_client_generation;
+    m_resume_in_flight  = false; // an answer for the previous printer is dropped with its generation
+    m_resume_hold_until = {}; // drop callbacks still in flight
     m_client.reset();
     if (m_camera_running && m_camera_fn)
         m_camera_fn(false, {}, {});
@@ -549,8 +555,15 @@ void NativePrinterPanel::on_snapshot(const PP::Snapshot &s)
     m_job_finishes->SetLabel(running && s.remaining ? finish_clock(*s.remaining) : wxString("-"));
     m_job_layer->SetLabel(s.current_layer && s.total_layers ? wxString::Format("%d / %d", *s.current_layer, *s.total_layers) :
                                                               wxString("-"));
-    m_pause_button->SetLabel(s.job_state == PP::JobState::Paused ? _L("Resume") : _L("Pause"));
-    m_pause_button->Enable(running && m_client);
+    // While a Resume is being checked or sent, and for a short while after the printer took one, the button
+    // stays as it is: a status that still says "paused" must not offer a second Resume.
+    const bool resume_settling = m_resume_in_flight ||
+                                 (s.job_state == PP::JobState::Paused && std::chrono::steady_clock::now() < m_resume_hold_until);
+    if (!resume_settling) {
+        m_pause_button_resumes = s.job_state == PP::JobState::Paused;
+        m_pause_button->SetLabel(m_pause_button_resumes ? _L("Resume") : _L("Pause"));
+    }
+    m_pause_button->Enable(running && m_client && !resume_settling);
     m_adjust_button->Enable(m_client != nullptr);
     m_stop_button->Enable(running && m_client);
 
@@ -774,6 +787,85 @@ void NativePrinterPanel::show_adjust_dialog()
         m_client->send_gcode(PP::Commands::set_speed(speed->GetValue()), on_error);
     if (flow->GetValue() != m_snapshot.flow_percent)
         m_client->send_gcode(PP::Commands::set_flow(flow->GetValue()), on_error);
+}
+
+void NativePrinterPanel::confirm_resume()
+{
+    if (!m_client || m_resume_in_flight || !m_pause_button_resumes)
+        return;
+    const std::string shown_file = m_snapshot.filename;
+    MessageDialog dlg(this,
+                      GUI::format_wxstr(_L("Resume printing %s?\n\nThe toolhead moves back to the print and continues. "
+                                           "Check that nothing is in its way."), from_u8(shown_file)),
+                      _L("Resume print"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    if (dlg.ShowModal() != wxID_YES || !m_client || m_resume_in_flight)
+        return;
+    m_resume_in_flight = true;
+    m_pause_button->Enable(false);
+    const std::string printer = m_client->base_url();
+    m_client->resume_guarded(
+        shown_file,
+        // Written before the Resume leaves, as a Start is. A failed note does not stop the Resume: unlike a
+        // Start, a paused print is already the printer's, and the printer's state settles what happened.
+        [printer, shown_file] {
+            if (const auto job = U1Jobs::find(printer, shown_file))
+                U1Jobs::update(job->id, [](U1Jobs::Job &record) { return std::optional<U1Jobs::State>(record.state); }, {}, "RESUME_SENT");
+        },
+        // Runs on an HTTP thread, possibly after this panel is gone: it carries the panel's liveness token and
+        // the connection it was started on, not the panel.
+        [lifetime = m_lifetime, generation = m_client_generation, printer, shown_file](const MoonrakerLiveClient::ResumeResult &result) {
+            wxGetApp().CallAfter([lifetime, generation, result, printer, shown_file] {
+                NativePrinterPanel *self = lifetime->load();
+                if (self != nullptr && self->m_client_generation == generation)
+                    self->resume_finished(result, printer, shown_file);
+            });
+        });
+}
+
+void NativePrinterPanel::resume_finished(const MoonrakerLiveClient::ResumeResult &result, const std::string &printer, const std::string &shown_file)
+{
+    using Kind = MoonrakerLiveClient::ResumeResult::Kind;
+    m_resume_in_flight = false;
+    const auto note = [&](const std::string &event) {
+        if (const auto job = U1Jobs::find(printer, shown_file))
+            U1Jobs::update(job->id, [](U1Jobs::Job &record) { return std::optional<U1Jobs::State>(record.state); }, {}, event);
+    };
+    wxString message;
+    switch (result.kind) {
+    case Kind::Accepted:
+        // The printer took it. Its status follows on its own; until it does, no second Resume is offered.
+        m_resume_hold_until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        note("RESUME_ACCEPTED");
+        break;
+    case Kind::Refused:
+        switch (result.check.refusal) {
+        case U1Controls::ResumeRefusal::NotPaused:
+            // TRN %1% is the printer's own word for its state: printing, standby, complete, ...
+            message = GUI::format_wxstr(_L("The printer reports \"%1%\", not paused, so Resume was not sent."), result.check.printer_state);
+            break;
+        case U1Controls::ResumeRefusal::OtherFile:
+            message = GUI::format_wxstr(_L("The printer is paused on another print (%1%), so Resume was not sent."), from_u8(result.check.filename));
+            break;
+        default: message = _L("The printer could not be reached to check that it is paused, so Resume was not sent."); break;
+        }
+        break;
+    case Kind::Rejected:
+        note("RESUME_REJECTED");
+        message = GUI::format_wxstr(_L("The printer refused the Resume: %1%"), from_u8(result.detail));
+        break;
+    case Kind::Unknown:
+        note("RESUME_UNCONFIRMED");
+        m_resume_hold_until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        message = result.after.printer_state.empty() ?
+                      _L("The Resume was sent once and no answer came back, and the printer cannot be reached now. It was not sent again. "
+                         "Check the printer before doing anything else.") :
+                      GUI::format_wxstr(_L("The Resume was sent once and no answer came back. The printer now reports \"%1%\". "
+                                           "It was not sent again."), result.after.printer_state);
+        break;
+    }
+    on_snapshot(PP::Snapshot(m_snapshot));
+    if (!message.empty())
+        show_error(this, message, false);
 }
 
 void NativePrinterPanel::confirm_stop()

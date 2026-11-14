@@ -2,6 +2,7 @@
 #define slic3r_MoonrakerLive_hpp_
 
 #include "libslic3r/PrinterSnapshot.hpp"
+#include "U1Controls.hpp"
 
 #include <atomic>
 #include <functional>
@@ -39,11 +40,31 @@ public:
 
     const std::string &base_url() const { return m_base_url; }
 
-    /// Fire-and-forget controls. *on_error* runs on an HTTP thread.
+    /// Controls sent once without a check: harmless to send twice. *on_error* runs on an HTTP thread.
     void send_gcode(const std::string &script, ErrorFn on_error) const;
     void pause(ErrorFn on_error) const { post("/printer/print/pause", "{}", std::move(on_error)); }
-    void resume(ErrorFn on_error) const { post("/printer/print/resume", "{}", std::move(on_error)); }
     void cancel(ErrorFn on_error) const { post("/printer/print/cancel", "{}", std::move(on_error)); }
+
+    /// How a guarded Resume went.
+    struct ResumeResult
+    {
+        enum class Kind {
+            Refused,  ///< not sent: see *check*
+            Accepted, ///< sent once; the printer answered that it took it
+            Rejected, ///< sent once; the printer answered and refused
+            Unknown   ///< sent once; no usable answer. *after* is what the printer reported when asked again
+        };
+        Kind                     kind = Kind::Refused;
+        U1Controls::ResumeCheck  check;  ///< the read made just before sending
+        std::string              detail; ///< the printer's refusal, or the transport error
+        U1Controls::ResumeCheck  after;  ///< only for Unknown
+    };
+    using ResumeFn = std::function<void(const ResumeResult &)>;
+    /// Reads the printer, and only if it is paused on *shown_file* sends one Resume. The Resume is never
+    /// sent a second time: when its answer is lost the printer is read once more and that state is reported.
+    /// *on_sending* runs just before the Resume leaves, so the caller can record it first. Both callbacks run
+    /// on an HTTP thread.
+    void resume_guarded(const std::string &shown_file, std::function<void()> on_sending, ResumeFn done) const;
 
 private:
     void run();

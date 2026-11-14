@@ -1675,7 +1675,8 @@ bool lane_filament_sync_available()
         return false;
     // Another brand's printer agent that syncs filaments itself keeps doing so. OrcaSlicer's Moonraker agent
     // reads the same lane data; for its printers the lanes are read here first, so that they go through the
-    // review, and its own sync is used when the printer has no lane data (lane_sync_falls_back()).
+    // review, and its own sync is used when the printer has no lane data (s_lane_fallback, set in
+    // sync_filaments_from_lanes()): what the button did for such a printer before the lane sync existed.
     if (s_lane_fallback)
         return false;
     const auto agent = wxGetApp().getAgent();

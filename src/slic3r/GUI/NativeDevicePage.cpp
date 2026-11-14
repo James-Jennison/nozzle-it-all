@@ -80,7 +80,11 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     });
 }
 
-NativeDevicePage::~NativeDevicePage() = default;
+NativeDevicePage::~NativeDevicePage()
+{
+    // The printer opened from a card is this page's; without the page the selected printer is the one shown.
+    view_printer({}, {});
+}
 
 void NativeDevicePage::set_active(bool active)
 {

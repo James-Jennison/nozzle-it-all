@@ -36,9 +36,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <string>
-#include <thread>
 #include <utility>
 
 class wxWindow;
@@ -627,11 +628,23 @@ void PrinterWebView::OnNewWindow(wxWebViewEvent& evt)
   evt.Veto();
 }
 
-// A stream's reader takes up to a second to stop, so it is stopped off the main thread.
-static void retire(std::unique_ptr<MjpegStream> stream)
+// A stream's reader takes up to a second to stop, so it is stopped off the main thread. The stopping is
+// kept track of and waited for when the panel is destroyed: no thread of it outlives the panel.
+void PrinterWebView::retire(std::unique_ptr<MjpegStream> stream)
 {
+    m_retiring.erase(std::remove_if(m_retiring.begin(), m_retiring.end(),
+                                    [](const std::future<void> &done) { return done.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }),
+                     m_retiring.end());
     if (stream)
-        std::thread([stream = std::move(stream)]() mutable { stream.reset(); }).detach();
+        m_retiring.push_back(std::async(std::launch::async, [stream = std::move(stream)]() mutable { stream.reset(); }));
+}
+
+// "http://host:port" of an address, the port written out, for comparing where two addresses lead.
+static std::string origin_of(const wxURI &address)
+{
+    const wxString scheme = address.GetScheme().Lower();
+    const wxString port   = address.HasPort() ? address.GetPort() : wxString(scheme == "https" ? "443" : "80");
+    return (scheme + "://" + address.GetServer().Lower() + ":" + port).utf8_string();
 }
 
 // A call into the page's camera replacement. Neither argument may hold a quote: the name is checked where it
@@ -654,11 +667,18 @@ void PrinterWebView::start_page_camera(const std::string &id, const std::string 
                 m_browser->RunScriptAsync(page_call("__niaCameraFailed", id, wxString::FromUTF8(why)));
         });
     };
-    // The page may name any address; the application reads only from the printer the page itself came from.
+    // The page may name any address. The application reads only from the printer the page itself came from,
+    // follows no redirect from there, and, where the camera is not the page's own origin (another port), only
+    // a camera whose answer gives the page leave to read it, as a browser would require of it: the page gets
+    // nothing through the application that a browser would not let its script read.
     const wxURI page(m_browser->GetCurrentURL()), camera(wxString::FromUTF8(address));
-    if ((camera.GetScheme() != "http" && camera.GetScheme() != "https") || camera.GetServer().empty() ||
+    if ((camera.GetScheme() != "http" && camera.GetScheme() != "https") || camera.GetServer().empty() || camera.HasUserInfo() ||
         !camera.GetServer().IsSameAs(page.GetServer(), false))
         return refuse("the camera is not on the printer this page came from");
+    MjpegStream::Limits limits;
+    limits.redirects = false;
+    if (origin_of(camera) != origin_of(page))
+        limits.leave_for_origin = origin_of(page);
     if (m_page_cameras.count(id) != 0)
         return;
     if (m_page_cameras.size() >= 4)
@@ -677,7 +697,7 @@ void PrinterWebView::start_page_camera(const std::string &id, const std::string 
                 return;
             m_browser->RunScriptAsync(page_call("__niaCameraPicture", id, wxBase64Encode(jpeg.data(), jpeg.size())));
         });
-    }, 10);
+    }, 10, limits);
     BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the application reads " << address.substr(0, address.find('?')) << " for the page";
     if (!m_camera_watch.IsRunning())
         m_camera_watch.Start(2000);
@@ -713,7 +733,8 @@ void PrinterWebView::watch_page_cameras()
             continue;
         }
         if (ended && m_browser != nullptr)
-            m_browser->RunScriptAsync(page_call("__niaCameraFailed", camera->first, "the camera ended the stream"));
+            m_browser->RunScriptAsync(page_call("__niaCameraFailed", camera->first,
+                                                camera->second.stream->refused() ? "the camera gave this page no leave to read it" : "the camera ended the stream"));
         retire(std::move(camera->second.stream));
         camera = m_page_cameras.erase(camera);
     }

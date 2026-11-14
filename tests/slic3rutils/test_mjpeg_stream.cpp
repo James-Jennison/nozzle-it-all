@@ -9,8 +9,14 @@ using Slic3r::MjpegStream;
 
 namespace {
 
-// Something shaped like a JPEG picture: the start marker, a body, the end marker.
-std::string picture(const std::string &body) { return std::string("\xFF\xD8\xFF\xE0", 4) + body + std::string("\xFF\xD9", 2); }
+// A JPEG picture in outline: the start marker, an application segment (*inside* is its content), a
+// start-of-scan segment, the compressed data, the end marker.
+std::string picture(const std::string &body, const std::string &inside = "JF")
+{
+    const size_t length = inside.size() + 2;
+    return std::string("\xFF\xD8\xFF\xE0", 4) + char(length >> 8) + char(length & 0xFF) + inside + std::string("\xFF\xDA\x00\x02", 4) + body +
+           std::string("\xFF\xD9", 2);
+}
 
 std::string part(const std::string &jpeg)
 {
@@ -72,4 +78,39 @@ TEST_CASE("Pictures are taken out of a camera stream one by one, whole, however 
         CHECK_FALSE(MjpegStream::next_frame(buffer, frame, 100));
         CHECK(buffer.empty());
     }
+}
+
+TEST_CASE("A picture that carries a small picture inside a segment is taken whole", "[MjpegStream]")
+{
+    // A thumbnail is a whole JPEG, start and end marker included, inside an application segment.
+    const std::string thumbnail = picture("tiny"), a = picture("outer data", "Exif" + thumbnail), b = picture("next");
+    std::string       buffer = part(a) + part(b), frame;
+    REQUIRE(MjpegStream::next_frame(buffer, frame));
+    CHECK(frame == a);
+    REQUIRE(MjpegStream::next_frame(buffer, frame));
+    CHECK(frame == b);
+
+    // The same one byte at a time, and with a restart marker and fill bytes in the data.
+    const std::string c = picture(std::string("da\xFF\xD0ta\xFF\xFF\x00more", 14), "Exif" + thumbnail);
+    std::vector<std::string> got;
+    buffer.clear();
+    for (const char byte : part(c) + part(b)) {
+        buffer.push_back(byte);
+        while (MjpegStream::next_frame(buffer, frame))
+            got.push_back(frame);
+    }
+    REQUIRE(got.size() == 2);
+    CHECK(got[0] == c);
+    CHECK(got[1] == b);
+}
+
+TEST_CASE("A camera's answer gives a page leave to read it by naming its origin or everyone", "[MjpegStream]")
+{
+    const std::string origin = "http://192.168.1.50:80";
+    CHECK(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: multipart/x-mixed-replace\r\n\r\n", origin));
+    CHECK(MjpegStream::allows_origin("HTTP/1.0 200 OK\r\naccess-control-allow-origin:  HTTP://192.168.1.50:80 \r\n\r\n", origin));
+    CHECK_FALSE(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace\r\n\r\n", origin));
+    CHECK_FALSE(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: http://192.168.1.51:80\r\n\r\n", origin));
+    CHECK_FALSE(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nX-Access-Control-Allow-Origin: *\r\n\r\n", origin));
+    CHECK_FALSE(MjpegStream::allows_origin("", origin));
 }

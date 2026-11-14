@@ -33,8 +33,12 @@ namespace Slic3r::GUI {
 std::string resolve_printer_lan_host();
 
 /// The Printer tab can show a printer other than the one selected for slicing (opened from the Printers side).
-/// *host* as resolve_printer_lan_host() gives it; an empty host goes back to the selected printer. Sending a
-/// print and the filament sync always use the selected printer, never this one. Main thread only.
+/// *host* as resolve_printer_lan_host() gives it; an empty host goes back to the selected printer.
+/// What follows the printer shown: everything on the Monitor side (the status, Pause, Stop print, Resume and
+/// the Controls card go to the printer whose name the page shows, with "not the printer selected for
+/// slicing" beside it) and the History side (that printer's jobs; Print again sends a job to the printer the
+/// job was sent to, which is the one shown). What never follows it: Print and Send from the slicer and the
+/// filament sync, which use the printer selected for slicing. Main thread only.
 void view_printer(const std::string &host, const std::string &name);
 /// The address the Printer tab's Monitor and History show: the printer set with view_printer(), else the selected one.
 std::string viewed_printer_lan_host();

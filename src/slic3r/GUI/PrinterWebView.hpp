@@ -28,7 +28,9 @@
 #include "wx/textctrl.h"
 #include <wx/timer.h>
 #include <atomic>
+#include <future>
 #include <map>
+#include <vector>
 #include <memory>
 #include <string>
 #include "Lazy.hpp"
@@ -69,6 +71,7 @@ private:
     void stop_page_camera(const std::string &id);
     void stop_page_cameras();
     void watch_page_cameras();
+    void retire(std::unique_ptr<MjpegStream> stream);
     void create_browser();
     void reset_browser();
 
@@ -94,6 +97,7 @@ private:
     std::map<std::string, PageCamera>  m_page_cameras; ///< by the name the page gave the stream
     std::shared_ptr<std::atomic<bool>> m_alive{std::make_shared<std::atomic<bool>>(true)};
     wxTimer                            m_camera_watch;
+    std::vector<std::future<void>>     m_retiring; ///< streams being stopped; waited for when this panel goes
 
     // DECLARE_EVENT_TABLE()
 };

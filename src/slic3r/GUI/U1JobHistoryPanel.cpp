@@ -176,7 +176,7 @@ void U1JobHistoryPanel::rebuild(bool force)
     const std::vector<U1Jobs::Job> jobs = host.empty() ? std::vector<U1Jobs::Job>() : U1Jobs::history(host);
 
     // The rows hold a control the person may be using: rebuild only when what they show changed.
-    std::string shown = host + (dark ? "|dark" : "|light");
+    std::string shown = host + "|" + viewed_printer_name() + (dark ? "|dark" : "|light");
     for (const U1Jobs::Job &job : jobs)
         shown += "|" + job.id + ":" + U1Jobs::state_name(job.state) + ":" + job.assessment + ":" + std::to_string(job.started_ms) + ":" +
                  std::to_string(job.ended_ms) + (can_print_again(job) ? ":kept" : "");
@@ -199,9 +199,16 @@ void U1JobHistoryPanel::rebuild(bool force)
     Freeze();
     m_rows->Clear(true);
     m_empty->SetForegroundColour(NIATheme::text_muted(dark));
-    m_empty->SetLabel(host.empty() ? _L("No printer address is set for the selected printer.") :
-                      jobs.empty() && outside.empty() ? _L("No job has been sent to this printer from this app yet.") :
-                                                        _L("Prints on this printer, newest first."));
+    // A printer opened from the Printers side is named: Print again here sends to it, not to the selected one.
+    if (const std::string other = viewed_printer_name(); !other.empty())
+        // TRN %1% is a printer's name.
+        m_empty->SetLabel(jobs.empty() && outside.empty() ?
+                              format_wxstr(_L("%1% (not the printer selected for slicing): no job has been sent to it from this app yet."), from_u8(other)) :
+                              format_wxstr(_L("Prints on %1% (not the printer selected for slicing), newest first. Print again sends to this printer."), from_u8(other)));
+    else
+        m_empty->SetLabel(host.empty() ? _L("No printer address is set for the selected printer.") :
+                          jobs.empty() && outside.empty() ? _L("No job has been sent to this printer from this app yet.") :
+                                                            _L("Prints on this printer, newest first."));
 
     std::vector<std::pair<long long, wxWindow *>> rows; // newest first once sorted
     for (const U1Jobs::Job &job : jobs) {

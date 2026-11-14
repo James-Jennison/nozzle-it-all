@@ -327,6 +327,11 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         error_fn(_L("The prepared file could not be read.") + nothing_sent);
         return false;
     }
+    // A file sent again must be the earlier job's bytes; the check made when its dialog opened is not relied on.
+    if (!m_expected_sha256.empty() && job.sha256 != m_expected_sha256) {
+        error_fn(_L("The file to print again is not the file of the earlier job any more.") + nothing_sent);
+        return false;
+    }
     const U1Jobs::GcodeFacts facts = U1Jobs::read_gcode_facts(upload_data.source_path);
     if (const auto blocker = U1Jobs::start_blocker(facts, query_status(m_base_url), m_options.filament_to_toolhead, start)) {
         error_fn(describe(blocker) + nothing_sent);

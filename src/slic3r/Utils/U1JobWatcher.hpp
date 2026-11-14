@@ -5,7 +5,9 @@
 
 #include <condition_variable>
 #include <functional>
+#include <map>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -48,7 +50,9 @@ public:
     void look_now();
 
     /// One pass over the journal. Public for the worker and for tests of a live simulator.
-    static void look_once(const ChangeFn &on_change, const ActiveFn &on_active = {});
+    /// *unanswered* counts, per job, the passes in which its printer gave no answer; with it, such a printer is
+    /// asked less often.
+    static void look_once(const ChangeFn &on_change, const ActiveFn &on_active = {}, std::map<std::string, int> *unanswered = nullptr);
 
 private:
     void run();
@@ -59,6 +63,7 @@ private:
     std::condition_variable m_wake;
     bool                    m_stop{false};
     bool                    m_look{false};
+    std::map<std::string, int> m_unanswered; ///< only touched by the watcher's thread
     std::thread             m_thread;
 };
 

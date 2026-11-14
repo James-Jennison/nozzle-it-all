@@ -21411,6 +21411,16 @@ void Plater::reprint_u1_job(const std::string &job_id)
         fs::remove(copy, ec);
         return;
     }
+    // The dialog may have been open for a long time: the copy is checked again, and the send checks it once more.
+    {
+        wxBusyCursor wait;
+        same = NozzleSession::sha256_file_hex(copy.string()) == old->sha256;
+    }
+    if (!same) {
+        fs::remove(copy, ec);
+        show_error(this, _L("The kept file of that job is damaged or could not be read, so it was not sent. Open its project, slice it and print from there."), false);
+        return;
+    }
 
     // A new job with its own identity, through the same upload, read-back and single Start as any other.
     U1Jobs::Origin origin = old->origin;
@@ -21418,6 +21428,7 @@ void Plater::reprint_u1_job(const std::string &job_id)
     origin.reprint_of     = old->id;
     auto u1_host          = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
     u1_host->set_origin(std::move(origin));
+    u1_host->set_expected_sha256(old->sha256);
     PrintHostJob upload_job;
     upload_job.printhost               = std::move(u1_host);
     upload_job.upload_data.use_3mf     = false;

@@ -75,6 +75,7 @@ U1JobHistoryPanel::U1JobHistoryPanel(wxWindow *parent)
     : wxScrolledWindow(parent, wxID_ANY)
     , m_alive(std::make_shared<std::atomic<bool>>(true))
     , m_reading(std::make_shared<std::atomic<bool>>(false))
+    , m_stop(std::make_shared<std::atomic<bool>>(false))
 {
     SetScrollRate(0, FromDIP(12));
     auto *outer = new wxBoxSizer(wxVERTICAL);
@@ -91,18 +92,29 @@ U1JobHistoryPanel::U1JobHistoryPanel(wxWindow *parent)
     on_sys_color_changed();
 }
 
-U1JobHistoryPanel::~U1JobHistoryPanel() { m_alive->store(false); }
+U1JobHistoryPanel::~U1JobHistoryPanel()
+{
+    m_alive->store(false);
+    // The read is told to stop and waited for, so no thread of this panel outlives it. The request's progress
+    // callback sees the flag within about a second.
+    m_stop->store(true);
+    if (m_reader.joinable())
+        m_reader.join();
+}
 
 void U1JobHistoryPanel::read_printer_history()
 {
     const std::string host = resolve_printer_lan_host();
     if (host.empty() || m_reading->exchange(true))
         return;
-    std::thread([host, alive = m_alive, reading = m_reading, panel = this] {
+    if (m_reader.joinable())
+        m_reader.join(); // the previous read has finished: its flag was clear
+    m_reader = std::thread([host, alive = m_alive, reading = m_reading, stop = m_stop, panel = this] {
         nlohmann::json history;
         Http::get("http://" + host + "/server/history/list?limit=50&order=desc")
             .timeout_connect(5)
             .timeout_max(5)
+            .on_progress([stop](Http::Progress, bool &cancel) { cancel = stop->load(); })
             .on_complete([&history](std::string body, unsigned) {
                 const auto doc = nlohmann::json::parse(body, nullptr, false);
                 if (!doc.is_discarded() && doc.is_object() && doc.contains("result"))
@@ -111,7 +123,7 @@ void U1JobHistoryPanel::read_printer_history()
             .on_error([](std::string, std::string, unsigned) {})
             .perform_sync();
         // No answer, or a printer without a job history: nothing is known and nothing is stored.
-        if (history.is_object()) {
+        if (history.is_object() && !stop->load()) {
             const std::vector<U1Jobs::Job> jobs = U1Jobs::history(host);
             U1Jobs::remember_external(host, U1Jobs::external_from_history(history, jobs));
             // A job whose end was recorded from the printer's live state has no times yet: the history has them.
@@ -123,12 +135,15 @@ void U1JobHistoryPanel::read_printer_history()
                         U1Jobs::record_outcome(job.id, *listed, {});
                     }
         }
+        // The panel joins this thread before it goes, so the application is still there for this call. The
+        // rebuild itself runs on the main thread and checks again that the panel is.
+        if (!stop->load())
+            wxGetApp().CallAfter([alive, panel] {
+                if (alive->load() && !wxGetApp().is_closing())
+                    panel->rebuild(false);
+            });
         reading->store(false);
-        wxGetApp().CallAfter([alive, panel] {
-            if (alive->load() && !wxGetApp().is_closing())
-                panel->rebuild(false);
-        });
-    }).detach();
+    });
 }
 
 void U1JobHistoryPanel::set_active(bool active)
@@ -170,6 +185,12 @@ void U1JobHistoryPanel::rebuild(bool force)
         shown += "|x" + print.printer_job_id + ":" + print.status + ":" + print.assessment + ":" + std::to_string(print.ended_ms);
     if (!force && shown == m_shown)
         return;
+    // A row whose "Your result" list is open is not destroyed under it: the next refresh tries again.
+    if (!force)
+        for (::ComboBox *verdict : m_verdicts)
+            if (verdict->is_drop_down())
+                return;
+    m_verdicts.clear();
     m_shown = shown;
 
     Freeze();
@@ -257,6 +278,7 @@ void U1JobHistoryPanel::rebuild(bool force)
             if (job.assessment == VERDICTS[i])
                 selected = int(i);
         verdict->SetSelection(selected);
+        m_verdicts.push_back(verdict);
         const std::string id = job.id;
         verdict->Bind(wxEVT_COMBOBOX, [this, verdict, id](wxCommandEvent &event) {
             const int choice = verdict->GetSelection();
@@ -335,6 +357,7 @@ void U1JobHistoryPanel::rebuild(bool force)
             if (print.assessment == VERDICTS[i])
                 selected = int(i);
         verdict->SetSelection(selected);
+        m_verdicts.push_back(verdict);
         const std::string printer_job_id = print.printer_job_id;
         verdict->Bind(wxEVT_COMBOBOX, [this, verdict, host, printer_job_id](wxCommandEvent &event) {
             const int choice = verdict->GetSelection();

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -19,6 +20,10 @@ namespace {
 constexpr long QUERY_TIMEOUT_S = 5;
 constexpr auto FIRST_LOOK      = std::chrono::seconds(5);
 constexpr auto INTERVAL        = std::chrono::seconds(10);
+// Passes without an answer before a printer is asked less often, and the most passes skipped between two tries
+// (30 passes of 10 s: once in five minutes).
+constexpr int  BACKOFF_AFTER   = 6;
+constexpr int  MAX_SKIP        = 30;
 
 // The "result" of a Moonraker GET, or null when the printer did not answer with one.
 nlohmann::json get_result(const std::string &url)
@@ -76,14 +81,14 @@ void U1JobWatcher::run()
         }
         wait = INTERVAL;
         try {
-            look_once(m_on_change, m_on_active);
+            look_once(m_on_change, m_on_active, &m_unanswered);
         } catch (const std::exception &error) {
             BOOST_LOG_TRIVIAL(warning) << "U1 job watcher: " << error.what();
         }
     }
 }
 
-void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_active)
+void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_active, std::map<std::string, int> *unanswered)
 {
     std::vector<Active> active;
     for (const U1Jobs::Job &job : U1Jobs::printing()) {
@@ -92,12 +97,23 @@ void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_activ
             continue;
         Active entry;
         entry.job = job;
+        // A printer that has stopped answering is asked less and less often, down to once in MAX_SKIP passes.
+        int *misses = unanswered != nullptr ? &(*unanswered)[job.id] : nullptr;
+        if (misses != nullptr && *misses > BACKOFF_AFTER && *misses % std::min(MAX_SKIP, *misses - BACKOFF_AFTER + 1) != 0) {
+            ++*misses;
+            active.push_back(std::move(entry));
+            continue;
+        }
         const std::string base = "http://" + job.printer;
         const nlohmann::json answer = get_result(base + "/printer/objects/query?print_stats&virtual_sdcard&display_status");
         if (!answer.is_object()) {
+            if (misses != nullptr)
+                ++*misses;
             active.push_back(std::move(entry)); // no answer: nothing is known, nothing is written
             continue;
         }
+        if (misses != nullptr)
+            *misses = 0;
         entry.reachable             = true;
         const nlohmann::json status = answer.value("status", nlohmann::json());
         U1Jobs::PrinterRecord record;

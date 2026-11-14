@@ -35,6 +35,9 @@ public:
 
     /// The project and plate this send comes from; written into the job's record.
     void set_origin(U1Jobs::Origin origin) { m_origin = std::move(origin); }
+    /// For a file sent again: the SHA-256 the prepared file must have. upload() refuses any other bytes
+    /// before anything is sent.
+    void set_expected_sha256(std::string sha256) { m_expected_sha256 = std::move(sha256); }
 
     /// Reads print_task_config from the printer. Tries *host* as given (port 80
     /// through the printer's web proxy), then Moonraker's own port 7125. On
@@ -91,6 +94,7 @@ private:
     std::string          m_base_url;
     U1PrintTask::Options m_options;
     U1Jobs::Origin       m_origin;
+    std::string          m_expected_sha256;
 };
 
 } // namespace Slic3r

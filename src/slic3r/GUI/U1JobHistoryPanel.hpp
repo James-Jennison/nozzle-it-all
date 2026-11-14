@@ -4,10 +4,13 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <wx/scrolwin.h>
 #include <wx/timer.h>
 
+class ComboBox;
 class wxBoxSizer;
 class wxStaticText;
 
@@ -32,7 +35,7 @@ public:
 
 private:
     void rebuild(bool force);
-    /// Asks the printer for its own job history on a worker thread and remembers the prints in it
+    /// Asks the printer for its own job history on a worker thread this panel owns and remembers the prints in it
     /// that were not sent from this app. One read request; no command.
     void read_printer_history();
 
@@ -42,6 +45,9 @@ private:
     std::string  m_shown; ///< what the rows were built from, to skip rebuilding an unchanged list
     std::shared_ptr<std::atomic<bool>> m_alive;   ///< false once this panel is gone
     std::shared_ptr<std::atomic<bool>> m_reading; ///< a read of the printer's history is under way
+    std::shared_ptr<std::atomic<bool>> m_stop;    ///< the panel is going: the read gives up
+    std::thread                        m_reader;  ///< the one read under way or last finished; joined before the panel goes
+    std::vector<::ComboBox *>          m_verdicts; ///< the rows' "Your result" lists, owned by the rows
 };
 
 } // namespace Slic3r::GUI

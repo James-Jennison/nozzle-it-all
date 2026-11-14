@@ -56,7 +56,7 @@ TEST_CASE("Pictures are taken out of a camera stream one by one, whole, however 
     {
         std::string buffer = part(a).substr(0, part(a).size() - 6), frame;
         CHECK_FALSE(MjpegStream::next_frame(buffer, frame));
-        CHECK(buffer.find("first") != std::string::npos);
+        CHECK(buffer.find("fir") != std::string::npos); // what has arrived of it is still there
         buffer += part(a).substr(part(a).size() - 6);
         REQUIRE(MjpegStream::next_frame(buffer, frame));
         CHECK(frame == a);

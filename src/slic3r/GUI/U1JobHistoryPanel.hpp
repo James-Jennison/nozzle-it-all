@@ -48,6 +48,7 @@ private:
     std::shared_ptr<std::atomic<bool>> m_stop;    ///< the panel is going: the read gives up
     std::thread                        m_reader;  ///< the one read under way or last finished; joined before the panel goes
     std::vector<::ComboBox *>          m_verdicts; ///< the rows' "Your result" lists, owned by the rows
+    bool                               m_rebuild_pending{false}; ///< a forced rebuild waited for an open list to close
 };
 
 } // namespace Slic3r::GUI

@@ -3,6 +3,7 @@
 
 #include "U1JobJournal.hpp"
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <map>
@@ -51,8 +52,17 @@ public:
 
     /// One pass over the journal. Public for the worker and for tests of a live simulator.
     /// *unanswered* counts, per job, the passes in which its printer gave no answer; with it, such a printer is
-    /// asked less often.
-    static void look_once(const ChangeFn &on_change, const ActiveFn &on_active = {}, std::map<std::string, int> *unanswered = nullptr);
+    /// asked less often. *stop*, when set, ends the pass and cancels its request.
+    static void look_once(const ChangeFn &on_change, const ActiveFn &on_active = {}, std::map<std::string, int> *unanswered = nullptr,
+                          const std::atomic<bool> *stop = nullptr);
+
+    /// Passes without an answer before a printer is asked less often, and the passes between two tries after
+    /// that (30 passes of 10 s: once in five minutes).
+    static constexpr int BACKOFF_AFTER = 6;
+    static constexpr int MAX_SKIP      = 30;
+    /// Whether a printer that gave no answer in its last *misses* passes is asked in this one: always for the
+    /// first BACKOFF_AFTER misses, then once in MAX_SKIP passes.
+    static bool asks_after(int misses);
 
 private:
     void run();
@@ -62,6 +72,7 @@ private:
     std::mutex              m_mutex;
     std::condition_variable m_wake;
     bool                    m_stop{false};
+    std::atomic<bool>       m_stopping{false}; ///< set first when stopping, so a request under way gives up
     bool                    m_look{false};
     std::map<std::string, int> m_unanswered; ///< only touched by the watcher's thread
     std::thread             m_thread;

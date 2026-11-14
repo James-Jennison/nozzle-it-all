@@ -183,13 +183,16 @@ void U1JobHistoryPanel::rebuild(bool force)
     const std::vector<U1Jobs::ExternalPrint> outside = host.empty() ? std::vector<U1Jobs::ExternalPrint>() : U1Jobs::external_prints(host);
     for (const U1Jobs::ExternalPrint &print : outside)
         shown += "|x" + print.printer_job_id + ":" + print.status + ":" + print.assessment + ":" + std::to_string(print.ended_ms);
+    force = force || m_rebuild_pending;
     if (!force && shown == m_shown)
         return;
-    // A row whose "Your result" list is open is not destroyed under it: the next refresh tries again.
-    if (!force)
-        for (::ComboBox *verdict : m_verdicts)
-            if (verdict->is_drop_down())
-                return;
+    // A row whose "Your result" list is open is not destroyed under it, whoever asks: the next refresh does it.
+    for (::ComboBox *verdict : m_verdicts)
+        if (verdict->is_drop_down()) {
+            m_rebuild_pending = m_rebuild_pending || force;
+            return;
+        }
+    m_rebuild_pending = false;
     m_verdicts.clear();
     m_shown = shown;
 

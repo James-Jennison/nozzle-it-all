@@ -7,7 +7,9 @@
 #include <boost/log/trivial.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <string>
@@ -20,18 +22,16 @@ namespace {
 constexpr long QUERY_TIMEOUT_S = 5;
 constexpr auto FIRST_LOOK      = std::chrono::seconds(5);
 constexpr auto INTERVAL        = std::chrono::seconds(10);
-// Passes without an answer before a printer is asked less often, and the most passes skipped between two tries
-// (30 passes of 10 s: once in five minutes).
-constexpr int  BACKOFF_AFTER   = 6;
-constexpr int  MAX_SKIP        = 30;
 
 // The "result" of a Moonraker GET, or null when the printer did not answer with one.
-nlohmann::json get_result(const std::string &url)
+nlohmann::json get_result(const std::string &url, const std::atomic<bool> *stop)
 {
     nlohmann::json result;
     Http::get(url)
         .timeout_connect(QUERY_TIMEOUT_S)
         .timeout_max(QUERY_TIMEOUT_S)
+        // The watcher is being stopped: the request gives up instead of running to its time limit.
+        .on_progress([stop](Http::Progress, bool &cancel) { cancel = stop != nullptr && stop->load(); })
         .on_complete([&](std::string body, unsigned) {
             const auto doc = nlohmann::json::parse(body, nullptr, false);
             if (!doc.is_discarded() && doc.is_object() && doc.contains("result"))
@@ -50,6 +50,7 @@ U1JobWatcher::U1JobWatcher(ChangeFn on_change, ActiveFn on_active)
 
 U1JobWatcher::~U1JobWatcher()
 {
+    m_stopping.store(true);
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_stop = true;
@@ -81,31 +82,45 @@ void U1JobWatcher::run()
         }
         wait = INTERVAL;
         try {
-            look_once(m_on_change, m_on_active, &m_unanswered);
+            look_once(m_on_change, m_on_active, &m_unanswered, &m_stopping);
         } catch (const std::exception &error) {
             BOOST_LOG_TRIVIAL(warning) << "U1 job watcher: " << error.what();
         }
     }
 }
 
-void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_active, std::map<std::string, int> *unanswered)
+bool U1JobWatcher::asks_after(int misses)
+{
+    return misses <= BACKOFF_AFTER || (misses - BACKOFF_AFTER) % MAX_SKIP == 0;
+}
+
+void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_active, std::map<std::string, int> *unanswered,
+                             const std::atomic<bool> *stop)
 {
     std::vector<Active> active;
-    for (const U1Jobs::Job &job : U1Jobs::printing()) {
+    const std::vector<U1Jobs::Job> printing = U1Jobs::printing();
+    // A job that is no longer printing needs no counter.
+    if (unanswered != nullptr)
+        for (auto it = unanswered->begin(); it != unanswered->end();)
+            it = std::any_of(printing.begin(), printing.end(), [&](const U1Jobs::Job &job) { return job.id == it->first; }) ? std::next(it) :
+                                                                                                                           unanswered->erase(it);
+    for (const U1Jobs::Job &job : printing) {
         // A send to this printer is settling its own record right now.
         if (U1Jobs::sending_now(job.printer))
             continue;
         Active entry;
         entry.job = job;
-        // A printer that has stopped answering is asked less and less often, down to once in MAX_SKIP passes.
+        if (stop != nullptr && stop->load())
+            return;
+        // A printer that has stopped answering is asked less often: see asks_after().
         int *misses = unanswered != nullptr ? &(*unanswered)[job.id] : nullptr;
-        if (misses != nullptr && *misses > BACKOFF_AFTER && *misses % std::min(MAX_SKIP, *misses - BACKOFF_AFTER + 1) != 0) {
+        if (misses != nullptr && !asks_after(*misses)) {
             ++*misses;
             active.push_back(std::move(entry));
             continue;
         }
         const std::string base = "http://" + job.printer;
-        const nlohmann::json answer = get_result(base + "/printer/objects/query?print_stats&virtual_sdcard&display_status");
+        const nlohmann::json answer = get_result(base + "/printer/objects/query?print_stats&virtual_sdcard&display_status", stop);
         if (!answer.is_object()) {
             if (misses != nullptr)
                 ++*misses;
@@ -119,7 +134,7 @@ void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_activ
         U1Jobs::PrinterRecord record;
         record.outcome = U1Jobs::outcome_from_status(job, status);
         // The history gives the times, and the outcome of a job the printer no longer shows.
-        if (const auto listed = U1Jobs::record_from_history(job, get_result(base + "/server/history/list?limit=50&order=desc"))) {
+        if (const auto listed = U1Jobs::record_from_history(job, get_result(base + "/server/history/list?limit=50&order=desc", stop))) {
             record.started_ms = listed->started_ms;
             record.ended_ms   = listed->ended_ms;
             if (!record.outcome)
@@ -148,7 +163,7 @@ void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_activ
         }
         active.push_back(std::move(entry));
     }
-    if (on_active)
+    if (on_active && !(stop != nullptr && stop->load()))
         on_active(active);
 }
 

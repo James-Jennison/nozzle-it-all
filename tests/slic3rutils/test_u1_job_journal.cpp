@@ -1,6 +1,7 @@
 #include <catch2/catch_all.hpp>
 
 #include "slic3r/Utils/U1JobJournal.hpp"
+#include "slic3r/Utils/U1JobWatcher.hpp"
 #include "libslic3r/U1PrintTask.hpp"
 
 #include <boost/filesystem.hpp>
@@ -564,4 +565,13 @@ TEST_CASE("The newest jobs keep their prepared file, and a job sent again is rec
     REQUIRE(U1Jobs::save(lost, U1Jobs::State::Completed));
     CHECK_FALSE(U1Jobs::keep_file(lost, scratch.dir / "missing.tmp"));
     CHECK(fs::exists(U1Jobs::kept_file(again)));
+}
+
+TEST_CASE("A printer that stops answering is asked on every pass at first, then once in thirty", "[U1Jobs]")
+{
+    std::vector<int> asked;
+    for (int misses = 0; misses <= 100; ++misses)
+        if (U1JobWatcher::asks_after(misses))
+            asked.push_back(misses);
+    CHECK(asked == std::vector<int>{0, 1, 2, 3, 4, 5, 6, 36, 66, 96});
 }

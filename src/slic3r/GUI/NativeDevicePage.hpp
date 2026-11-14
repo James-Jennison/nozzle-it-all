@@ -13,6 +13,7 @@ namespace Slic3r::GUI {
 class DirectLanPage;
 class NativePrinterPanel;
 class U1JobHistoryPanel;
+class FleetPanel;
 
 /// "Printer" tab for Moonraker/Klipper printers: the native monitor-first printer
 /// panel (job, telemetry, quick controls, materials) with a live camera view. It
@@ -26,7 +27,8 @@ public:
     explicit NativeDevicePage(wxWindow* parent);
     ~NativeDevicePage() override;
 
-    /// Reconnect to the selected printer's address (call when the printer preset changes).
+    /// Reconnect to the selected printer's address (call when the printer preset changes). A printer opened
+    /// from the Printers side is left: the page follows the selection again.
     void reload();
     void set_active(bool active);
     void on_sys_color_changed();
@@ -42,7 +44,7 @@ public:
     void show_web(bool web);
     /// The three sides of the page. The switch above them is always shown; its Web interface
     /// button only while a web page is hosted.
-    enum class View { Monitor, History, Web };
+    enum class View { Monitor, History, Printers, Web };
     void show_view(View view);
 
 private:
@@ -52,6 +54,8 @@ private:
     bool                m_active{false};
 
     void apply_switch_state();
+    /// Reconnects Monitor and History to the printer now viewed.
+    void refresh();
 
     wxPanel*              m_switch_bar{nullptr};
     ::Button*             m_btn_monitor{nullptr};
@@ -62,6 +66,9 @@ private:
     bool                  m_web{false};
     U1JobHistoryPanel*    m_history{nullptr};
     bool                  m_history_shown{false};
+    ::Button*             m_btn_printers{nullptr};
+    FleetPanel*           m_fleet{nullptr};
+    bool                  m_fleet_shown{false};
 };
 
 } // namespace Slic3r::GUI

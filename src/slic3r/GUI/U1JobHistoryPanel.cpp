@@ -104,7 +104,7 @@ U1JobHistoryPanel::~U1JobHistoryPanel()
 
 void U1JobHistoryPanel::read_printer_history()
 {
-    const std::string host = resolve_printer_lan_host();
+    const std::string host = viewed_printer_lan_host();
     if (host.empty() || m_reading->exchange(true))
         return;
     if (m_reader.joinable())
@@ -172,7 +172,7 @@ void U1JobHistoryPanel::on_sys_color_changed()
 void U1JobHistoryPanel::rebuild(bool force)
 {
     const bool        dark = wxGetApp().dark_mode();
-    const std::string host = resolve_printer_lan_host();
+    const std::string host = viewed_printer_lan_host();
     const std::vector<U1Jobs::Job> jobs = host.empty() ? std::vector<U1Jobs::Job>() : U1Jobs::history(host);
 
     // The rows hold a control the person may be using: rebuild only when what they show changed.

@@ -32,6 +32,15 @@ namespace Slic3r::GUI {
 /// Empty when unknown or not a private LAN address. Returns a host, not a URL.
 std::string resolve_printer_lan_host();
 
+/// The Printer tab can show a printer other than the one selected for slicing (opened from the Printers side).
+/// *host* as resolve_printer_lan_host() gives it; an empty host goes back to the selected printer. Sending a
+/// print and the filament sync always use the selected printer, never this one. Main thread only.
+void view_printer(const std::string &host, const std::string &name);
+/// The address the Printer tab's Monitor and History show: the printer set with view_printer(), else the selected one.
+std::string viewed_printer_lan_host();
+/// The name given to view_printer(); empty while the selected printer is shown.
+std::string viewed_printer_name();
+
 /// Native "monitor first, intervene second" printer page: live camera and the
 /// current job on the left, telemetry, quick controls and materials on the
 /// right. Sections are driven by what the printer reports, so it adapts to

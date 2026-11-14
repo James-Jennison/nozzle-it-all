@@ -25,6 +25,7 @@ add_executable(${_TEST_NAME}_tests
     test_prebuild_queue.cpp
     test_staged_build.cpp
     test_u1_controls.cpp
+    test_fleet_status.cpp
     test_u1_job_journal.cpp
     test_network_versions.cpp
     test_nia_theme.cpp

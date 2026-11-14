@@ -68,6 +68,22 @@ std::string resolve_printer_lan_host()
     return bare.empty() ? std::string() : host;
 }
 
+namespace {
+std::string s_viewed_host; ///< main thread only
+std::string s_viewed_name;
+} // namespace
+
+void view_printer(const std::string &host, const std::string &name)
+{
+    // The selected printer is shown as itself, not as "another printer".
+    const bool other = !host.empty() && host != resolve_printer_lan_host();
+    s_viewed_host    = other ? host : std::string();
+    s_viewed_name    = other ? name : std::string();
+}
+
+std::string viewed_printer_lan_host() { return s_viewed_host.empty() ? resolve_printer_lan_host() : s_viewed_host; }
+std::string viewed_printer_name() { return s_viewed_host.empty() ? std::string() : s_viewed_name; }
+
 // ---------------------------------------------------------------------------
 // Visual helpers
 
@@ -391,11 +407,16 @@ void NativePrinterPanel::set_active(bool active)
 void NativePrinterPanel::connect()
 {
     disconnect();
-    m_host = resolve_printer_lan_host();
+    m_host = viewed_printer_lan_host();
 
     const DynamicPrintConfig &printer = wxGetApp().preset_bundle->printers.get_edited_preset().config;
     const std::string model = printer.has("printer_model") ? printer.opt_string("printer_model") : std::string();
-    m_printer_name->SetLabel(model.empty() ? _L("Printer") : wxString::FromUTF8(model));
+    if (const std::string other = viewed_printer_name(); !other.empty())
+        // The commands on this page go to the printer named here.
+        // TRN %1% is a printer's name.
+        m_printer_name->SetLabel(GUI::format_wxstr(_L("%1% (not the printer selected for slicing)"), from_u8(other)));
+    else
+        m_printer_name->SetLabel(model.empty() ? _L("Printer") : wxString::FromUTF8(model));
 
     if (m_host.empty()) {
         m_link_label->SetLabel(_L("No LAN address"));

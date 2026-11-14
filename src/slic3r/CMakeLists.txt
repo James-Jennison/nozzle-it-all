@@ -484,6 +484,8 @@ set(SLIC3R_GUI_SOURCES
     GUI/NativeDevicePage.hpp
     GUI/U1JobHistoryPanel.cpp
     GUI/U1JobHistoryPanel.hpp
+    GUI/FleetPanel.cpp
+    GUI/FleetPanel.hpp
     GUI/U1JobBar.cpp
     GUI/U1JobBar.hpp
     GUI/DirectLanPage.hpp
@@ -839,6 +841,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/MoonrakerLive.hpp
     Utils/SemanticPaintClient.cpp
     Utils/SemanticPaintClient.hpp
+    Utils/FleetStatus.cpp
+    Utils/FleetStatus.hpp
     Utils/U1Controls.cpp
     Utils/U1Controls.hpp
     Utils/U1JobJournal.cpp

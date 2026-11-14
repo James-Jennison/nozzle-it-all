@@ -1,6 +1,7 @@
 #include "NativeDevicePage.hpp"
 
 #include "DirectLanPage.hpp"
+#include "FleetPanel.hpp"
 #include "GUI_App.hpp"
 #include "I18N.hpp"
 #include "NIATheme.hpp"
@@ -22,7 +23,10 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     auto* bar     = new wxBoxSizer(wxHORIZONTAL);
     m_btn_monitor = new ::Button(m_switch_bar, _L("Monitor"));
     m_btn_history = new ::Button(m_switch_bar, _L("History"));
+    m_btn_printers = new ::Button(m_switch_bar, _L("Printers"));
     m_btn_web     = new ::Button(m_switch_bar, _L("Web interface"));
+    m_btn_printers->SetToolTip(_L("Every printer with an address, and what each is doing"));
+    m_btn_printers->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { show_view(View::Printers); });
     m_btn_history->SetToolTip(_L("Jobs sent to this printer from this app, and how they ended"));
     m_btn_history->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { show_view(View::History); });
     m_btn_monitor->SetToolTip(_L("Job, temperatures, controls and camera"));
@@ -31,6 +35,7 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     m_btn_web->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { show_web(true); });
     bar->Add(m_btn_monitor, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(12));
     bar->Add(m_btn_history, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
+    bar->Add(m_btn_printers, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
     bar->Add(m_btn_web, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
     m_switch_bar->SetSizer(bar);
     m_btn_web->Hide();
@@ -58,6 +63,14 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     m_history = new U1JobHistoryPanel(this);
     m_history->Hide();
     sizer->Add(m_history, 1, wxEXPAND);
+    m_fleet = new FleetPanel(this, [this](const std::string& host, const std::string& name) {
+        // Monitor and History show the opened printer; the printer selected for slicing is not touched.
+        view_printer(host, name);
+        refresh();
+        show_view(View::Monitor);
+    });
+    m_fleet->Hide();
+    sizer->Add(m_fleet, 1, wxEXPAND);
     SetSizer(sizer);
     apply_switch_state();
 
@@ -73,16 +86,27 @@ void NativeDevicePage::set_active(bool active)
 {
     m_active = active;
     // The native panel holds no connection while another side covers it.
-    m_panel->set_active(active && !m_web && !m_history_shown);
+    m_panel->set_active(active && !m_web && !m_history_shown && !m_fleet_shown);
     m_history->set_active(active && m_history_shown);
+    m_fleet->set_active(active && m_fleet_shown);
 }
 
 void NativeDevicePage::reload()
 {
+    // The selection changed: the page shows the selected printer again.
+    view_printer({}, {});
+    m_fleet->reload();
+    refresh();
+}
+
+void NativeDevicePage::refresh()
+{
     // Drop the connection to the previous printer and reconnect to the new one.
     m_panel->set_active(false);
-    m_panel->set_active(m_active && !m_web && !m_history_shown);
+    m_panel->set_active(m_active && !m_web && !m_history_shown && !m_fleet_shown);
     m_history->reload();
+    apply_switch_state();
+    m_switch_bar->Layout();
 }
 
 void NativeDevicePage::on_sys_color_changed()
@@ -91,6 +115,7 @@ void NativeDevicePage::on_sys_color_changed()
     apply_switch_state();
     m_panel->on_sys_color_changed();
     m_history->on_sys_color_changed();
+    m_fleet->on_sys_color_changed();
 }
 
 void NativeDevicePage::msw_rescale() { on_sys_color_changed(); }
@@ -107,7 +132,7 @@ void NativeDevicePage::host_web_page(wxWindow* page, std::function<void()> befor
     m_btn_web->Show();
     m_web = false;
     apply_switch_state();
-    m_panel->Show(!m_history_shown);
+    m_panel->Show(!m_history_shown && !m_fleet_shown);
     m_switch_bar->Layout();
     Layout();
 }
@@ -124,8 +149,8 @@ wxWindow* NativeDevicePage::release_web_page()
     m_web             = false;
     m_btn_web->Hide();
     apply_switch_state();
-    m_panel->Show(!m_history_shown);
-    m_panel->set_active(m_active && !m_history_shown);
+    m_panel->Show(!m_history_shown && !m_fleet_shown);
+    m_panel->set_active(m_active && !m_history_shown && !m_fleet_shown);
     m_switch_bar->Layout();
     Layout();
     return page;
@@ -141,18 +166,25 @@ void NativeDevicePage::show_view(View view)
 {
     if (view == View::Web && m_web_page == nullptr)
         view = View::Monitor;
+    // The hosted web interface is the selected printer's; it is not offered while another printer is viewed.
+    if (view == View::Web && !viewed_printer_name().empty())
+        view = View::Monitor;
     const bool web     = view == View::Web;
     const bool history = view == View::History;
-    if (web == m_web && history == m_history_shown)
+    const bool fleet   = view == View::Printers;
+    if (web == m_web && history == m_history_shown && fleet == m_fleet_shown)
         return;
     m_web           = web;
     m_history_shown = history;
+    m_fleet_shown   = fleet;
     apply_switch_state();
 
     m_panel->set_active(false);
     m_panel->Show(view == View::Monitor);
     m_history->Show(history);
     m_history->set_active(m_active && history);
+    m_fleet->Show(fleet);
+    m_fleet->set_active(m_active && fleet);
     if (m_web_page != nullptr) {
         if (web && m_before_web_show)
             m_before_web_show();
@@ -168,8 +200,10 @@ void NativeDevicePage::apply_switch_state()
     const auto style = [](::Button* button, bool chosen) {
         button->SetStyle(chosen ? ButtonStyle::Confirm : ButtonStyle::Regular, ButtonType::Window);
     };
-    style(m_btn_monitor, !m_web && !m_history_shown);
+    style(m_btn_monitor, !m_web && !m_history_shown && !m_fleet_shown);
     style(m_btn_history, m_history_shown);
+    style(m_btn_printers, m_fleet_shown);
+    m_btn_web->Show(m_web_page != nullptr && viewed_printer_name().empty());
     style(m_btn_web, m_web);
     m_switch_bar->Refresh();
 }

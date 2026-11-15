@@ -67,8 +67,12 @@ done < <(find "$APPDIR" -type f -print0)
 for target in "${targets[@]}"; do
     while IFS= read -r dep; do
         if [[ "$dep" == MISSING:* ]]; then
-            # A library that is the host's in any case need not be on the machine running the audit.
-            if ! appimage_is_host_library "${dep#MISSING:}"; then
+            # GStreamer's WebRTC library is the host's and need not be on the machine running the audit (the
+            # bundled browser engine needs it; the builder image has none). That one name is let through, and
+            # said; any other missing library is unresolved.
+            if [[ "${dep#MISSING:}" == libgstwebrtc-1.0.so.* ]] && appimage_is_host_library "${dep#MISSING:}"; then
+                echo "Note: ${dep#MISSING:} (needed by ${target#"$APPDIR"/}) is not on this machine; it is left to the host."
+            else
                 seen_unresolved["$target -> ${dep#MISSING:}"]=1
             fi
             continue

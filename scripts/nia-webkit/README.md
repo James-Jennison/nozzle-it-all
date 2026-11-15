@@ -56,3 +56,26 @@ launcher therefore puts a bundled library (`lib/orca-runtime`) on the loader pat
 of that name. With the bundle's older `libcrypto.so.3` ahead of the host's, the host's `libssl` does not load,
 GStreamer's DTLS plugin is refused, and a WebRTC camera stays at "connecting" (seen on Ubuntu 26.04 with a
 bundle built on 24.04). `NIA_BUNDLED_LIBS=1` puts every bundled library ahead, as before.
+
+A host library is taken by its name alone: its version is not compared. Before the application starts the
+launcher asks the loader (`ldd`) whether everything resolves that way, and if not puts the bundle's libraries
+ahead as before, saying so. `NIA_LAUNCH_VERBOSE=1` prints, for each bundled library, whose copy is used.
+
+## What keeps the engine honest
+
+- **The source is pinned.** `build_engine.sh` names the source package version and stops when the distribution
+  offers another; the record lists the source files' hashes.
+- **The record travels.** Packaging refuses an engine without `engine-record.txt`, or whose libraries are not
+  the ones the record names, and adds the hashes of the stripped copies it ships.
+- **An old engine stops the build.** Packaging compares the engine's source package version with the
+  distribution's own `libwebkit2gtk-4.1-0` on the build machine and stops when the engine is older
+  (`NIA_WEBKIT_ENGINE_ALLOW_OLD=1` lets a build through knowingly). Refreshing the builder image is what makes
+  this bite; do both at each upstream merge.
+- **Nothing inherited.** The launcher clears `WEBKIT_EXEC_PATH` and `WEBKIT_INJECTED_BUNDLE_PATH` and sets them
+  itself only for the bundled engine. Patch 0004 makes the engine read the first outside developer mode; who can
+  set the application's environment can already load code into it (`LD_PRELOAD`), so this opens nothing new.
+- **No process sandbox.** The engine is built without bubblewrap. wxWidgets does not switch WebKitGTK's sandbox
+  on, so the application ran web content unsandboxed with the host's engine too; with this engine it cannot be
+  switched on. A printer's page is content from the printer on the local network.
+- **The patches are global to the engine**, and matter only where WebRTC is on: the printer page's view
+  (and OrcaSlicer's own direct-LAN page, which already asked for it).

@@ -132,9 +132,11 @@ bundle_dependency_closure() {
 
         while IFS= read -r dep; do
             if [[ "$dep" == MISSING:* ]]; then
-                # A library that is left to the host in any case need not be on the build machine (the bundled
-                # browser engine needs GStreamer's WebRTC library, which the builder image does not have).
-                if appimage_is_host_library "${dep#MISSING:}"; then
+                # The bundled browser engine needs GStreamer's WebRTC library, which is left to the host and which
+                # the builder image does not have. That one name is let through, and said; any other missing
+                # dependency stops the build as before.
+                if [[ "${dep#MISSING:}" == libgstwebrtc-1.0.so.* ]] && appimage_is_host_library "${dep#MISSING:}"; then
+                    echo "Note: ${dep#MISSING:} (needed by $target) is not on the build machine; it is left to the host."
                     continue
                 fi
                 echo "Error: missing runtime dependency ${dep#MISSING:} while bundling $target"
@@ -315,6 +317,35 @@ echo -n "[9/9] Generating Linux app..."
             fi
         done
         echo "Bundling the browser engine from ${NIA_WEBKIT_ENGINE_DIR} ..."
+        ENGINE_RECORD="$NIA_WEBKIT_ENGINE_DIR/engine-record.txt"
+        if [ ! -f "$ENGINE_RECORD" ]; then
+            echo "Error: $ENGINE_RECORD is missing; the engine's build record travels with it"
+            exit 1
+        fi
+        # The files taken are the ones the engine's build recorded.
+        for engine_lib in libwebkit2gtk-4.1.so.0 libjavascriptcoregtk-4.1.so.0; do
+            engine_lib_sha="$(sha256sum "$NIA_WEBKIT_ENGINE_DIR/lib/$engine_lib" | cut -c1-64)"
+            if ! grep -qx "$engine_lib_sha  lib/$engine_lib" "$ENGINE_RECORD"; then
+                echo "Error: $NIA_WEBKIT_ENGINE_DIR/lib/$engine_lib is not the file engine-record.txt names"
+                exit 1
+            fi
+        done
+        # An engine older than the distribution's own package on the build machine is missing security fixes
+        # that package has: rebuild it (scripts/nia-webkit/README.md). NIA_WEBKIT_ENGINE_ALLOW_OLD=1 lets a
+        # build through knowingly.
+        ENGINE_VERSION="$(sed -n 's/^source package: webkit2gtk //p' "$ENGINE_RECORD" | head -n1)"
+        DISTRO_VERSION="$(dpkg-query -W -f='${Version}' libwebkit2gtk-4.1-0 2>/dev/null || true)"
+        if [ -z "$ENGINE_VERSION" ]; then
+            echo "Error: engine-record.txt does not name the engine's source package version"
+            exit 1
+        fi
+        if [ -n "$DISTRO_VERSION" ] && dpkg --compare-versions "$ENGINE_VERSION" lt "$DISTRO_VERSION"; then
+            echo "The bundled browser engine is webkit2gtk $ENGINE_VERSION; this build machine's distribution has $DISTRO_VERSION."
+            if [ "${NIA_WEBKIT_ENGINE_ALLOW_OLD:-0}" != "1" ]; then
+                echo "Error: rebuild the engine (scripts/nia-webkit/build_engine.sh), or set NIA_WEBKIT_ENGINE_ALLOW_OLD=1"
+                exit 1
+            fi
+        fi
         cp -fL "$NIA_WEBKIT_ENGINE_DIR/lib/libwebkit2gtk-4.1.so.0" "$LIB_DIR/libwebkit2gtk-4.1.so.0"
         cp -fL "$NIA_WEBKIT_ENGINE_DIR/lib/libjavascriptcoregtk-4.1.so.0" "$LIB_DIR/libjavascriptcoregtk-4.1.so.0"
         mkdir -p "$LIB_DIR/webkit2gtk-4.1/injected-bundle"
@@ -324,9 +355,11 @@ echo -n "[9/9] Generating Linux app..."
         cp -fL "$NIA_WEBKIT_ENGINE_DIR/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so" "$LIB_DIR/webkit2gtk-4.1/injected-bundle/"
         strip --strip-unneeded "$LIB_DIR"/libwebkit2gtk-4.1.so.0 "$LIB_DIR"/libjavascriptcoregtk-4.1.so.0 \
             "$LIB_DIR"/webkit2gtk-4.1/WebKit*Process "$LIB_DIR"/webkit2gtk-4.1/injected-bundle/*.so 2>/dev/null || true
-        if [ -f "$NIA_WEBKIT_ENGINE_DIR/engine-record.txt" ]; then
-            cp -f "$NIA_WEBKIT_ENGINE_DIR/engine-record.txt" "$LIB_DIR/webkit2gtk-4.1/engine-record.txt"
-        fi
+        cp -f "$ENGINE_RECORD" "$LIB_DIR/webkit2gtk-4.1/engine-record.txt"
+        {
+            echo "in this bundle, after stripping:"
+            (cd "$LIB_DIR" && sha256sum libwebkit2gtk-4.1.so.0 libjavascriptcoregtk-4.1.so.0)
+        } >> "$LIB_DIR/webkit2gtk-4.1/engine-record.txt"
     fi
 
     mapfile -d '' BUNDLE_TARGETS < <(find "$BIN_DIR" "$LIB_DIR" "$LIBEXEC_DIR" -type f -print0 2>/dev/null)
@@ -360,24 +393,50 @@ fi
 export APPDIR
 PRIVATE_LIB_DIR="\$APPDIR/lib/orca-runtime"
 # A bundled library is used only where the host has none of that name (see the "only" folders made at build
-# time). NIA_BUNDLED_LIBS=1, or a host without ldconfig, puts every bundled library ahead as before.
+# time). The host's list is ldconfig's, matched as a whole entry for this machine's architecture; without
+# ldconfig the usual library folders are looked through. NIA_BUNDLED_LIBS=1, or a machine of another
+# architecture, puts every bundled library ahead as before, and so does the check before the application
+# starts (at the end) when a library it needs does not load this way. NIA_LAUNCH_VERBOSE=1 says what was chosen.
 case "\$(uname -m)" in
     x86_64) HOST_LIB_ARCH="x86-64" ;;
     aarch64) HOST_LIB_ARCH="AArch64" ;;
     *) HOST_LIB_ARCH="" ;;
 esac
+HOST_FIRST=0
 HOST_LIB_LIST=""
-if [ -d "\$PRIVATE_LIB_DIR/only" ] && [ -n "\$HOST_LIB_ARCH" ] && [ "\${NIA_BUNDLED_LIBS:-0}" != "1" ] && command -v ldconfig >/dev/null 2>&1; then
-    HOST_LIB_LIST="\$(ldconfig -p 2>/dev/null || true)"
+if [ -d "\$PRIVATE_LIB_DIR/only" ] && [ -n "\$HOST_LIB_ARCH" ] && [ "\${NIA_BUNDLED_LIBS:-0}" != "1" ]; then
+    HOST_FIRST=1
+    if command -v ldconfig >/dev/null 2>&1; then
+        HOST_LIB_LIST="\$(ldconfig -p 2>/dev/null || true)"
+    fi
 fi
-if [ -n "\$HOST_LIB_LIST" ]; then
+LIST_TAB="\$(printf '\t')"
+LIST_NEWLINE="
+"
+host_has_library() {
+    if [ -n "\$HOST_LIB_LIST" ]; then
+        case "\$HOST_LIB_LIST" in
+            *"\$LIST_NEWLINE\$LIST_TAB\$1 (libc6,\$HOST_LIB_ARCH)"*|*"\$LIST_NEWLINE\$LIST_TAB\$1 (libc6,\$HOST_LIB_ARCH,"*) return 0 ;;
+        esac
+        return 1
+    fi
+    for host_lib_dir in /lib64 /usr/lib64 /lib/"\$(uname -m)"-linux-gnu /usr/lib/"\$(uname -m)"-linux-gnu /usr/lib /lib; do
+        if [ -e "\$host_lib_dir/\$1" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+if [ "\$HOST_FIRST" = "1" ]; then
     PRIVATE_LIB_PATH=""
     for private_dir in "\$PRIVATE_LIB_DIR"/only/*; do
         [ -d "\$private_dir" ] || continue
-        case "\$HOST_LIB_LIST" in
-            *"\${private_dir##*/} (libc6,\$HOST_LIB_ARCH"*) ;;
-            *) PRIVATE_LIB_PATH="\$PRIVATE_LIB_PATH\$private_dir:" ;;
-        esac
+        if host_has_library "\${private_dir##*/}"; then
+            if [ "\${NIA_LAUNCH_VERBOSE:-0}" = "1" ]; then echo "Launcher: \${private_dir##*/} is this computer's own" >&2; fi
+        else
+            if [ "\${NIA_LAUNCH_VERBOSE:-0}" = "1" ]; then echo "Launcher: \${private_dir##*/} is the bundle's" >&2; fi
+            PRIVATE_LIB_PATH="\$PRIVATE_LIB_PATH\$private_dir:"
+        fi
     done
     export LD_LIBRARY_PATH="\$PRIVATE_LIB_PATH\$APPDIR/bin\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 elif [ -d "\$PRIVATE_LIB_DIR" ]; then
@@ -436,6 +495,28 @@ if [ "\$USE_BUNDLED_WEBKITGTK_STACK" = "1" ]; then
         echo "On Ubuntu/Debian, install: libgstreamer-plugins-bad1.0-0" >&2
         USE_BUNDLED_WEBKITGTK_STACK=0
     fi
+fi
+# These name where the engine finds its helper programs and the code it loads. The bundled engine reads the
+# first outside developer mode (scripts/nia-webkit, patch 0004), so what the launcher was started with is never
+# passed on: they are set below for the bundled engine and absent for the host's.
+unset WEBKIT_EXEC_PATH WEBKIT_INJECTED_BUNDLE_PATH NIA_BROWSER_ENGINE
+if [ "\$USE_BUNDLED_WEBKITGTK_STACK" = "1" ] && [ -f "\$APPDIR/lib/webkit2gtk-4.1/engine-record.txt" ]; then
+    # For About: the engine in use is the one this bundle carries.
+    export NIA_BROWSER_ENGINE=bundled
+    # A WebRTC camera also needs GStreamer's ICE, DTLS and SRTP plugins from the host. Their absence does not
+    # stop the application; it is said, so that a camera that stays at "connecting" has an explanation.
+    for gst_plugin in libgstnice.so libgstdtls.so libgstsrtp.so libgstwebrtc.so; do
+        gst_plugin_found=0
+        for gst_plugin_dir in /usr/lib/"\$(uname -m)"-linux-gnu/gstreamer-1.0 /usr/lib64/gstreamer-1.0 /usr/lib/gstreamer-1.0; do
+            if [ -e "\$gst_plugin_dir/\$gst_plugin" ]; then
+                gst_plugin_found=1
+            fi
+        done
+        if [ "\$gst_plugin_found" = "0" ]; then
+            echo "Note: GStreamer plugin \$gst_plugin was not found; a printer page's WebRTC camera will not play." >&2
+            echo "On Ubuntu/Debian, install: gstreamer1.0-nice gstreamer1.0-plugins-bad" >&2
+        fi
+    done
 fi
 
 if target_missing_runtime_library "\$TARGET_BIN" "libOpenGL.so.0" || ! has_host_runtime_library "libOpenGL.so.0"; then
@@ -503,9 +584,20 @@ else
     fi
 fi
 
+# The host's copy of a library was preferred above. If the application then does not find, in the host's
+# copies, what it was built against, the bundle's libraries go ahead of the host's as they did before.
+if [ "\$HOST_FIRST" = "1" ] && command -v ldd >/dev/null 2>&1; then
+    if ldd "\$TARGET_BIN" 2>&1 | grep -q "not found"; then
+        echo "Note: this computer's own libraries do not fit the application; using the bundle's instead." >&2
+        export LD_LIBRARY_PATH="\$PRIVATE_LIB_DIR:\$LD_LIBRARY_PATH"
+    fi
+fi
+
 exec "\$@"
 EOF
     chmod a+x "$LIBEXEC_DIR/@SLIC3R_APP_CMD@-env"
+    # The launcher is generated text: a POSIX shell must at least read it.
+    sh -n "$LIBEXEC_DIR/@SLIC3R_APP_CMD@-env"
 
 cat << EOF >@SLIC3R_APP_CMD@
 #!/bin/bash

@@ -18,9 +18,6 @@
 #include "libslic3r/libslic3r.h"
 #include "slic3r/GUI/wxExtensions.hpp"
 #include "slic3r/GUI/Widgets/Label.hpp"
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
-#include <boost/system/error_code.hpp>
 #include <vector>
 #include <wx/clipbrd.h>
 #include <wx/panel.h>
@@ -33,6 +30,7 @@
 #include <wx/sizer.h>
 #include <wx/html/htmlwin.h>
 #include <wx/string.h>
+#include <wx/utils.h>
 #include <wx/colour.h>
 #include <wx/dataobj.h>
 #include <wx/statline.h>
@@ -485,9 +483,10 @@ void AboutDialog::build_nozzle_layout()
               Label::Body_13, true, wxTOP, FromDIP(14), content_w);
 #ifdef __linux__
     {
-        // Said only by a build that has it: the AppImage's own engine sits in its lib directory (scripts/nia-webkit).
-        boost::system::error_code ec;
-        if (boost::filesystem::exists(boost::filesystem::path(resources_dir()).parent_path() / "lib" / "libwebkit2gtk-4.1.so.0", ec))
+        // Said only when it is so: the launcher names the engine in use when it is the one the AppImage carries
+        // (scripts/nia-webkit); with the host's engine, by choice or for want of a library, nothing is said.
+        wxString engine;
+        if (wxGetEnv("NIA_BROWSER_ENGINE", &engine) && engine == "bundled")
             add_label(body,
                       _L("This build carries its own browser engine (WebKitGTK with WebRTC), so a printer's web interface can play a camera that needs WebRTC."),
                       Label::Body_13, true, wxTOP, FromDIP(10), content_w);

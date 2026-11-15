@@ -235,6 +235,9 @@ TEST_CASE("The prepared G-code says which commands it runs", "[U1Jobs]")
     scratch.write("a.gcode", "; M999 in a comment\nG28 ;home\n  m729 ;Clean Nozzle\r\nM729\nPRINT_START EXTRUDER=210 TOOL=0\nT1\n\nG1 X1;M8213\n");
     const auto facts = U1Jobs::read_gcode_facts(scratch.dir / "a.gcode");
     CHECK(facts.commands == std::set<std::string>{"G1", "G28", "M729", "PRINT_START", "T1"});
+    // A line number stands before the command.
+    scratch.write("n.gcode", "N1 G28\nN22 M8213 ; stock\nN3\nNOZZLE_CLEAN\nN4;x\n");
+    CHECK(U1Jobs::read_gcode_facts(scratch.dir / "n.gcode").commands == std::set<std::string>{"G28", "M8213", "NOZZLE_CLEAN"});
 }
 
 TEST_CASE("A Start is refused unless the printer shows it is ready for this file", "[U1Jobs]")

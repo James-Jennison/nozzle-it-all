@@ -428,9 +428,14 @@ CatalogPresetResult catalog_preset(PresetBundle& bundle, const FilamentProfileRe
             return {preset.name, {}};
 
     std::string unique_name = name;
+    const Preset* const selected_printer      = bundle.printers.get_preset_base(bundle.printers.get_edited_preset());
+    const std::string   selected_printer_name = selected_printer ? selected_printer->name : bundle.printers.get_edited_preset().name;
+    // A preset made for a brand a filament changer reports is named "<brand> <material> @<printer>": the same
+    // filament made earlier for another printer is not a clash, only one for this printer is.
+    const bool brand_only = s_lane_sync && record.id.empty();
     const auto name_exists = [&](const std::string& candidate) {
         return std::any_of(bundle.filaments.get_presets().begin(), bundle.filaments.get_presets().end(), [&](const Preset& preset) {
-            return boost::iequals(preset_base_name(preset.name), candidate);
+            return brand_only ? boost::iequals(preset.name, candidate + " @" + selected_printer_name) : boost::iequals(preset_base_name(preset.name), candidate);
         });
     };
     if (name_exists(unique_name)) {

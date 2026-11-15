@@ -151,7 +151,20 @@ TEST_CASE("A Start on a printer fed from AFC lanes is refused unless printer and
         auto unread = idle_carbon();
         unread.erase("configfile");
         CHECK(U1Jobs::afc_start_blocker(cosmos, unread, map, true, model).kind == Kind::PrinterUnreachable);
-        CHECK(U1Jobs::afc_start_blocker(cosmos, unread, map, false, model).kind == Kind::None);
+        // ... and it is not uploaded either: it could be started at the printer.
+        CHECK(U1Jobs::afc_start_blocker(cosmos, unread, map, false, model).kind == Kind::PrinterUnreachable);
+        // Other spellings of a stop every run reaches.
+        auto spelled = idle_carbon();
+        spelled["configfile"]["settings"]["gcode_macro spaced"] = {{"gcode", "\n{ action_emergency_stop (\"spaced\") }"}};
+        spelled["configfile"]["settings"]["gcode_macro inline"] = {{"gcode", "\nG4 P1 M112\n"}};
+        spelled["configfile"]["settings"]["gcode_macro near"]   = {{"gcode", "\nM1120\nSET_VAR NAME=my_action_emergency_stop_count\n"}};
+        U1Jobs::GcodeFacts runs = carbon;
+        runs.commands           = {"SPACED"};
+        CHECK(U1Jobs::afc_start_blocker(runs, spelled, map, true, model).detail == "SPACED\nspaced");
+        runs.commands = {"INLINE"};
+        CHECK(U1Jobs::afc_start_blocker(runs, spelled, map, true, model).kind == Kind::RefusedCommand);
+        runs.commands = {"NEAR"};
+        CHECK(U1Jobs::afc_start_blocker(runs, spelled, map, true, model).kind == Kind::None);
     }
     SECTION("a changer in bypass, or one whose lanes were not read, starts nothing")
     {

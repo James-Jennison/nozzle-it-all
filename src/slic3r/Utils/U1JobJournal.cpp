@@ -759,8 +759,17 @@ GcodeFacts read_gcode_facts(const fs::path &file)
                 facts.commands_complete = false;
                 continue;
             }
-            const size_t end     = line.find_first_of(" \t;\r", first);
-            std::string  command = line.substr(first, end == std::string::npos ? std::string::npos : end - first);
+            size_t      from    = first;
+            size_t      end     = line.find_first_of(" \t;\r", from);
+            std::string command = line.substr(from, end == std::string::npos ? std::string::npos : end - from);
+            // A line number ("N12 G1 ...") stands before the command; Klipper skips it.
+            if (command.size() > 1 && (command[0] == 'N' || command[0] == 'n') && std::all_of(command.begin() + 1, command.end(), [](unsigned char c) { return std::isdigit(c) != 0; })) {
+                from = end == std::string::npos ? std::string::npos : line.find_first_not_of(" \t", end);
+                if (from == std::string::npos || line[from] == ';' || line[from] == '\r')
+                    continue;
+                end     = line.find_first_of(" \t;\r", from);
+                command = line.substr(from, end == std::string::npos ? std::string::npos : end - from);
+            }
             boost::to_upper(command);
             facts.commands.insert(std::move(command));
             continue;
@@ -855,7 +864,8 @@ namespace {
 // inside such a block is the macro's answer to a fault of its own, not to being called.)
 size_t unconditional_stop(const std::string &body)
 {
-    static const std::string call = "action_emergency_stop(";
+    static const std::string name = "action_emergency_stop";
+    const auto word_char = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; };
     int    depth = 0;
     size_t pos   = 0;
     while (pos < body.size()) {
@@ -875,10 +885,15 @@ size_t unconditional_stop(const std::string &body)
             else if (tag == "endif" || tag == "endfor" || tag == "endmacro" || tag == "endcall" || tag == "endfilter")
                 depth = std::max(0, depth - 1);
             pos = end + 2;
-        } else if (depth == 0 && body.compare(pos, call.size(), call) == 0) {
-            return pos;
-        } else if (depth == 0 && (pos == 0 || body[pos - 1] == '\n') && boost::istarts_with(boost::trim_left_copy(body.substr(pos, 16)), "M112") ) {
-            return pos;
+        } else if (depth == 0 && body.compare(pos, name.size(), name) == 0 && (pos == 0 || !word_char(body[pos - 1]))) {
+            // The call, with or without space before its parenthesis.
+            const size_t after = body.find_first_not_of(" \t", pos + name.size());
+            if (after != std::string::npos && body[after] == '(')
+                return pos;
+            ++pos;
+        } else if (depth == 0 && (body[pos] == 'M' || body[pos] == 'm') && body.compare(pos + 1, 3, "112") == 0 && (pos == 0 || !word_char(body[pos - 1])) &&
+                   (pos + 4 == body.size() || !word_char(body[pos + 4]))) {
+            return pos; // M112 as a word, wherever on its line
         } else
             ++pos;
     }
@@ -917,13 +932,19 @@ Blocker afc_start_blocker(const GcodeFacts &facts, const json &status, const std
             const std::string command = boost::to_upper_copy(boost::trim_copy(it.key().substr(prefix.size())));
             if (facts.commands.count(command) == 0)
                 continue;
-            const bool   said  = body.compare(call, 22, "action_emergency_stop(") == 0; // an M112 line says nothing
+            const bool   said  = body.compare(call, 21, "action_emergency_stop") == 0; // an M112 says nothing
             const size_t open  = said ? body.find_first_of("\"'", call) : std::string::npos;
             const size_t close = open != std::string::npos ? body.find(body[open], open + 1) : std::string::npos;
             blocker.kind       = Blocker::Kind::RefusedCommand;
             blocker.detail     = command + "\n" + (close != std::string::npos ? body.substr(open + 1, close - open - 1) : std::string());
             return blocker;
         }
+    // A printer that answered and reports a changer, but not its configuration: the check above was not made. The
+    // file is not uploaded either, since nothing here could keep it from being started at the printer.
+    if (settings == nullptr && object("AFC") != nullptr) {
+        blocker.kind = Blocker::Kind::PrinterUnreachable;
+        return blocker;
+    }
     // The check above was made against a list of the file's commands that is not whole.
     if (settings != nullptr && !facts.commands_complete) {
         blocker.kind = Blocker::Kind::FileNotChecked;

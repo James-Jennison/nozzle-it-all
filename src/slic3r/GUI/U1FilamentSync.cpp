@@ -462,6 +462,10 @@ CatalogPresetResult catalog_preset(PresetBundle& bundle, const FilamentProfileRe
     if (!record.id.empty())
         notes += "; record " + record.id;
     notes += "; Snapmaker U1 reported " + (reported.from_tag ? std::string("RFID") : std::string("printer setting"));
+    // A preset made for a brand a filament changer's lane reports: its settings are the generic ones of the
+    // material; only the brand comes from the printer.
+    if (s_lane_sync && record.id.empty())
+        notes = "Made from the generic preset for a brand the printer's filament changer reports";
     if (!reported.vendor.empty())
         notes += "; vendor " + reported.vendor;
     if (!reported.type.empty())
@@ -793,7 +797,9 @@ wxImage recolored_plate(const ThumbnailData& lit, const ThumbnailData& flat, con
 class U1SyncDialog final : public DPIDialog
 {
 public:
-    U1SyncDialog(wxWindow* parent, const std::vector<Slot>& slots, const std::vector<std::string>& automatic, PresetBundle& bundle)
+    // *to_make* names, per toolhead, a preset the sync will make for it (empty: none).
+    U1SyncDialog(wxWindow* parent, const std::vector<Slot>& slots, const std::vector<std::string>& automatic, PresetBundle& bundle,
+                 const std::vector<std::string>& to_make = {})
         : DPIDialog(wxGetTopLevelParent(parent), wxID_ANY, _L("Synchronize filaments from the printer"),
                     wxDefaultPosition, wxDefaultSize, wxCAPTION | wxCLOSE_BOX)
         , m_slots(slots)
@@ -930,10 +936,11 @@ public:
             if (!m_slots[t].present)
                 continue;
             const Preset* preset = t < automatic.size() && !automatic[t].empty() ? preset_named(bundle, automatic[t]) : nullptr;
-            all_known            = all_known && preset != nullptr;
+            const bool    made   = t < to_make.size() && !to_make[t].empty();
+            all_known            = all_known && (preset != nullptr || made);
             // TRN toolhead number, what the printer reports there (vendor, material), then the preset chosen for it
             presets += format_wxstr(_L("T%1%: %2% %3% -> %4%"), int(t), from_u8(m_slots[t].vendor), from_u8(m_slots[t].type),
-                                    preset != nullptr ? from_u8(preset->label(false)) : _L("chosen after confirming")) +
+                                    made ? from_u8(to_make[t]) : preset != nullptr ? from_u8(preset->label(false)) : _L("chosen after confirming")) +
                        "\n";
         }
         presets.Trim();
@@ -1734,6 +1741,7 @@ bool sync_filaments_from_lanes(wxWindow* parent)
         std::optional<nlohmann::json> value;
         bool        answered = false;
         std::string error;
+        std::vector<std::string> brands; ///< per tool number, where the printer knows the spool's brand
     };
     const auto stop    = std::make_shared<std::atomic<bool>>(false);
     auto       pending = std::async(std::launch::async, [host, stop] {
@@ -1761,6 +1769,8 @@ bool sync_filaments_from_lanes(wxWindow* parent)
                         read.error = err;
                 })
                 .perform_sync();
+            if (read.value && !stop->load())
+                read.brands = U1LanPrintHost::query_afc_brands(base);
             if (read.answered || stop->load())
                 break;
         }
@@ -1781,6 +1791,9 @@ bool sync_filaments_from_lanes(wxWindow* parent)
     const bool                           answered = read.answered;
     const wxString                       error    = from_u8(read.error);
     std::vector<Slot> slots = value ? parse_lane_data_impl(*value) : std::vector<Slot>();
+    for (size_t i = 0; i < slots.size() && i < read.brands.size(); ++i)
+        if (slots[i].present && slots[i].vendor.empty())
+            slots[i].vendor = read.brands[i];
     if (!std::any_of(slots.begin(), slots.end(), [](const Slot& slot) { return slot.present; })) {
         // No lane data, but a printer agent that syncs filaments its own way (Happy Hare, a Creality CFS): its sync runs.
         // Not for a printer that did not answer at all: its sync would only wait for the same printer again.
@@ -2123,7 +2136,32 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
     // Nothing changes before the user has seen what would change and said so.
     if (Plater* plater = wxGetApp().plater())
         plater->update_all_plate_thumbnails(true); // the plate pictures the dialog recolors
-    U1SyncDialog ask(parent, slots, automatic, bundle);
+    // A slot of a filament changer whose brand the printer reports, with no preset of that brand for the material:
+    // one is made from the generic preset of the material when the sync is applied, so that the project names the
+    // filament by its brand. (A toolhead's brand without a preset goes through the mapping dialog as before.)
+    std::vector<std::optional<FilamentProfileRecord>> brand_preset(slots.size());
+    std::vector<std::string>                          to_make(slots.size());
+    for (size_t i = 0; s_lane_sync && i < slots.size(); ++i) {
+        const std::string material = canonical_material(slots[i].type, slots[i].sub_type);
+        if (!slots[i].present || slots[i].vendor.empty() || boost::iequals(slots[i].vendor, "Generic") || material.empty() || automatic[i].empty())
+            continue;
+        const Preset* chosen = preset_named(bundle, automatic[i]);
+        if (chosen != nullptr && boost::iequals(chosen->config.opt_string("filament_vendor", 0u), slots[i].vendor))
+            continue;
+        FilamentProfileRecord record;
+        record.brand    = slots[i].vendor;
+        record.material = material;
+        // The made preset is a copy of the material's generic one (catalog_preset); without that one there is nothing
+        // to copy, and the slot keeps the preset picked for it.
+        const bool has_generic = std::any_of(bundle.filaments.get_presets().begin(), bundle.filaments.get_presets().end(), [&material](const Preset& preset) {
+            return preset.is_system && preset.is_compatible && boost::iequals(preset_base_name(preset.name), "Generic " + material);
+        });
+        if (!filament_profile_record_is_usable(record) || !has_generic)
+            continue;
+        brand_preset[i] = record;
+        to_make[i]      = filament_profile_product_name(record);
+    }
+    U1SyncDialog ask(parent, slots, automatic, bundle, to_make);
     if (ask.ShowModal() != wxID_OK)
         return false;
     const SyncChoice choice = ask.choice();
@@ -2175,9 +2213,19 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
         for (size_t i = 0; i < slots.size(); ++i)
             if (const std::optional<MappingChoice> chosen = mapping.selection(i); chosen && !chosen->preset_name.empty())
                 applied[i] = chosen->preset_name;
-    } else if (!apply([&automatic](size_t i) { return std::optional<MappingChoice>(MappingChoice{automatic[i], std::nullopt, false}); },
-                      target, count))
-        return false;
+    } else {
+        if (!apply([&](size_t i) { return std::optional<MappingChoice>(MappingChoice{brand_preset[i] ? std::string() : automatic[i], brand_preset[i], false}); },
+                   target, count))
+            return false;
+        // The presets made, or found already made, under their brands.
+        for (size_t i = 0; i < slots.size(); ++i)
+            if (brand_preset[i])
+                for (const Preset& preset : bundle.filaments.get_presets())
+                    if (preset.is_compatible && boost::iequals(preset_base_name(preset.name), to_make[i]) && u1_catalog_preset_matches_record(preset, *brand_preset[i])) {
+                        applied[i] = preset.name;
+                        break;
+                    }
+    }
 
     // Project filaments that now are the same toolhead's filament become one, last to first so that the
     // indices still to be merged stay valid.

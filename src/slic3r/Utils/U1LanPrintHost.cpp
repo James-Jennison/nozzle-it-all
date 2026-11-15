@@ -91,6 +91,15 @@ nlohmann::json query_afc_status(const std::string &base_url, long timeout_s = QU
         return nlohmann::json(); // the lanes are part of what a Start depends on: half a status is none
     for (auto it = lane_status.begin(); it != lane_status.end(); ++it)
         status[it.key()] = it.value();
+    // Klipper's saved variables, where a printer's configuration may keep each lane's brand (AfcLanes::lane_brand).
+    // A printer without them, or one that does not answer this, is a printer that reports no brand: the answer is
+    // not part of what a Start depends on, and its failure is not this read's.
+    wxString *const asked_error = error;
+    error                       = nullptr;
+    const nlohmann::json saved  = read("save_variables");
+    error                       = asked_error;
+    if (saved.is_object() && saved.contains("save_variables"))
+        status["save_variables"] = saved["save_variables"];
     return status;
 }
 
@@ -163,6 +172,11 @@ std::optional<U1PrintTask::PrinterState> U1LanPrintHost::query_afc_printer(const
         error = failure;
     }
     return std::nullopt;
+}
+
+std::vector<std::string> U1LanPrintHost::query_afc_brands(const std::string &base_url)
+{
+    return AfcLanes::tool_brands(query_afc_status(base_url, 3));
 }
 
 std::optional<U1PrintTask::PrinterState> U1LanPrintHost::query_printer(const std::string &host, std::string &base_url, wxString &error)

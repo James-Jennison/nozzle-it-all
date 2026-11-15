@@ -58,6 +58,10 @@ public:
     /// when the printer does not answer or has no AFC; *error* is set only when it did not answer.
     static std::optional<U1PrintTask::PrinterState> query_afc_printer(const std::string &host, std::string &base_url, wxString &error);
 
+    /// The brand of the spool in the lane of each tool number of a printer with AFC at *base_url*, where the
+    /// printer knows it (AfcLanes::lane_brand); empty entries otherwise, and all empty when it does not answer.
+    static std::vector<std::string> query_afc_brands(const std::string &base_url);
+
     /// Reads the loaded filaments and nozzles for the slicer's Sync Filament
     /// flow (see U1PrintTask::build_filament_report). *host* as in query_printer.
     static std::optional<nlohmann::json> query_filament_report(const std::string &host, wxString &error);

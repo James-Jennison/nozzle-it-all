@@ -183,3 +183,45 @@ TEST_CASE("A Start on a printer fed from AFC lanes is refused unless printer and
         CHECK(U1Jobs::afc_start_blocker({model, {}}, status, map, true, model).kind == Kind::None);
     }
 }
+
+TEST_CASE("A lane's brand is the one the printer keeps for the spool still in it", "[AfcLanes]")
+{
+    // As the Owner's Carbon keeps them in Klipper's saved variables: one entry per lane, written when a tag is
+    // scanned or the brand is told; an entry describes the spool that was in the lane then.
+    const auto tag = [](const char *maker, const char *type, const char *color, const char *source) {
+        return nlohmann::json{{"manufacturer", maker}, {"type", type}, {"color", color}, {"uid", ""}, {"source", source}, {"tag", "046FFEA68D2681"}};
+    };
+    auto status = idle_carbon();
+    status["save_variables"] = {{"variables",
+                                 {{"canvas_tag_canvas_1", tag("ABCWavePrint", "PLA", "FFCBAC", "told")},
+                                  {"canvas_tag_canvas_2", tag("Elegoo", "PLA", "544144", "elegoo")},
+                                  {"canvas_tag_canvas_3", tag("Gryddle", "PLA", "FFFFFF", "openspool")},
+                                  {"canvas_tag_canvas_4", nlohmann::json::object()}}}};
+
+    const std::vector<std::string> brands = AfcLanes::tool_brands(status);
+    REQUIRE(brands.size() == size_t(U1PrintTask::PHYSICAL_EXTRUDER_COUNT));
+    CHECK(brands[0] == "ABCWavePrint"); // told, material and colour as the lane reports them
+    CHECK(brands[1].empty());           // a tag in Elegoo's format names no maker
+    CHECK(brands[2].empty());           // the entry is for PLA; the lane now reports PETG
+    CHECK(brands[3].empty());           // loaded without a scan
+
+    const auto state = AfcLanes::parse_printer_state(status);
+    REQUIRE(state);
+    CHECK(state->toolheads[0].vendor == "ABCWavePrint");
+    CHECK(state->toolheads[1].vendor.empty());
+
+    // Another colour in the lane: the entry is of an earlier spool.
+    status["AFC_lane CANVAS_1"]["color"] = "#000000";
+    CHECK(AfcLanes::tool_brands(status)[0].empty());
+    status["AFC_lane CANVAS_1"]["color"] = "#ffcbac";
+    CHECK(AfcLanes::tool_brands(status)[0] == "ABCWavePrint");
+    // A lane with no filament ready has no spool to name.
+    status["AFC_lane CANVAS_1"]["prep"] = false;
+    CHECK(AfcLanes::tool_brands(status)[0].empty());
+    status["AFC_lane CANVAS_1"]["prep"] = true;
+    // AFC's own brand (from Spoolman) comes first.
+    status["AFC_lane CANVAS_1"]["spool_vendor"] = "Polymaker";
+    CHECK(AfcLanes::tool_brands(status)[0] == "Polymaker");
+    // No saved variables at all: no brand, and nothing else changes.
+    CHECK(AfcLanes::tool_brands(idle_carbon()) == std::vector<std::string>(size_t(U1PrintTask::PHYSICAL_EXTRUDER_COUNT)));
+}

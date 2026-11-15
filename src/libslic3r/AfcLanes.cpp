@@ -68,6 +68,14 @@ std::string upper(std::string value)
     return value;
 }
 
+std::string trimmed(const std::string &value)
+{
+    const auto space = [](unsigned char c) { return std::isspace(c) != 0; };
+    const auto first = std::find_if_not(value.begin(), value.end(), space);
+    const auto last  = std::find_if_not(value.rbegin(), std::string::const_reverse_iterator(first), space).base();
+    return std::string(first, last);
+}
+
 // "#RRGGBB", upper case; empty for anything else.
 std::string color(std::string value)
 {
@@ -107,6 +115,42 @@ const nlohmann::json *lane_for_tool(const nlohmann::json &status, int tool)
 
 bool lane_ready(const nlohmann::json &lane) { return flag(lane, "prep") && flag(lane, "load"); }
 
+std::string lane_brand(const nlohmann::json &status, const nlohmann::json &lane)
+{
+    std::string brand = trimmed(text(lane, "spool_vendor"));
+    if (!brand.empty())
+        return brand;
+    const nlohmann::json *saved     = object(status, "save_variables");
+    const nlohmann::json *variables = saved != nullptr ? object(*saved, "variables") : nullptr;
+    std::string           name      = text(lane, "name");
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (variables == nullptr || name.empty() || !lane_ready(lane))
+        return {};
+    const nlohmann::json *entry = object(*variables, "canvas_tag_" + name);
+    if (entry == nullptr)
+        return {};
+    brand = trimmed(text(*entry, "manufacturer"));
+    // Every tag in Elegoo's format reads as "Elegoo", whoever made the spool.
+    if (brand.empty() || upper(trimmed(text(*entry, "source"))) == "ELEGOO")
+        return {};
+    // The entry describes the spool that was in the lane when it was written: it holds for this spool only while
+    // the lane still reports that material and colour.
+    const std::string material = upper(trimmed(text(lane, "material")));
+    const std::string shade    = color(trimmed(text(lane, "color")));
+    if (material.empty() || shade.empty() || upper(trimmed(text(*entry, "type"))) != material || color(trimmed(text(*entry, "color"))) != shade)
+        return {};
+    return brand;
+}
+
+std::vector<std::string> tool_brands(const nlohmann::json &status)
+{
+    std::vector<std::string> brands(U1PrintTask::PHYSICAL_EXTRUDER_COUNT);
+    for (int tool = 0; tool < U1PrintTask::PHYSICAL_EXTRUDER_COUNT; ++tool)
+        if (const nlohmann::json *lane = lane_for_tool(status, tool); lane != nullptr)
+            brands[tool] = lane_brand(status, *lane);
+    return brands;
+}
+
 std::optional<U1PrintTask::PrinterState> parse_printer_state(const nlohmann::json &status)
 {
     if (object(status, "AFC") == nullptr)
@@ -120,7 +164,7 @@ std::optional<U1PrintTask::PrinterState> parse_printer_state(const nlohmann::jso
         U1PrintTask::Filament &filament = state.toolheads[tool];
         filament.present = lane_ready(*lane);
         filament.type    = upper(text(*lane, "material"));
-        filament.vendor  = text(*lane, "spool_vendor");
+        filament.vendor  = lane_brand(status, *lane);
         filament.name    = text(*lane, "filament_name");
         filament.color   = color(text(*lane, "color"));
     }

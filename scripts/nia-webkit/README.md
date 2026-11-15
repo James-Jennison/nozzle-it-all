@@ -48,3 +48,11 @@ The engine is a web browser's and gets security fixes often. At each upstream me
 
 WebKitGTK is under the LGPL 2.1 or later and BSD licences. The source is the distribution's package named in
 `engine-record.txt`; the changes to it are the patches in this directory.
+
+## Bundled libraries and the host's plugins
+
+The engine runs on the host's GStreamer, and the host's plugins load in the application's processes. The
+launcher therefore puts a bundled library (`lib/orca-runtime`) on the loader path only where the host has none
+of that name. With the bundle's older `libcrypto.so.3` ahead of the host's, the host's `libssl` does not load,
+GStreamer's DTLS plugin is refused, and a WebRTC camera stays at "connecting" (seen on Ubuntu 26.04 with a
+bundle built on 24.04). `NIA_BUNDLED_LIBS=1` puts every bundled library ahead, as before.

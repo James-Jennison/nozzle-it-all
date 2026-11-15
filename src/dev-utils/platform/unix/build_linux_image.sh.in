@@ -332,6 +332,21 @@ echo -n "[9/9] Generating Linux app..."
     mapfile -d '' BUNDLE_TARGETS < <(find "$BIN_DIR" "$LIB_DIR" "$LIBEXEC_DIR" -type f -print0 2>/dev/null)
     bundle_dependency_closure "$PRIVATE_LIB_DIR" "${BUNDLE_TARGETS[@]}"
 
+    # One folder per bundled library name, each holding a link to that library. The launcher puts on the loader
+    # path only the folders of libraries the host lacks, so a library the host has is the host's. The host's own
+    # plugins (GStreamer, GIO, image loaders) load in this process and need the host's, often newer, versions:
+    # with the bundle's older libcrypto ahead, the host's libssl does not load, GStreamer's DTLS plugin with it,
+    # and a WebRTC camera never connects.
+    for private_lib in "$PRIVATE_LIB_DIR"/*.so*; do
+        [ -e "$private_lib" ] || continue
+        private_name="$(basename "$private_lib")"
+        private_soname="$(objdump -p "$(readlink -f "$private_lib")" 2>/dev/null | awk '$1 == "SONAME" { print $2; exit }')"
+        if [ "$private_name" = "$private_soname" ]; then
+            mkdir -p "$PRIVATE_LIB_DIR/only/$private_name"
+            ln -snf "../../$private_name" "$PRIVATE_LIB_DIR/only/$private_name/$private_name"
+        fi
+    done
+
 cat << EOF >"$LIBEXEC_DIR/@SLIC3R_APP_CMD@-env"
 #!/bin/sh
 set -e
@@ -344,7 +359,28 @@ fi
 
 export APPDIR
 PRIVATE_LIB_DIR="\$APPDIR/lib/orca-runtime"
-if [ -d "\$PRIVATE_LIB_DIR" ]; then
+# A bundled library is used only where the host has none of that name (see the "only" folders made at build
+# time). NIA_BUNDLED_LIBS=1, or a host without ldconfig, puts every bundled library ahead as before.
+case "\$(uname -m)" in
+    x86_64) HOST_LIB_ARCH="x86-64" ;;
+    aarch64) HOST_LIB_ARCH="AArch64" ;;
+    *) HOST_LIB_ARCH="" ;;
+esac
+HOST_LIB_LIST=""
+if [ -d "\$PRIVATE_LIB_DIR/only" ] && [ -n "\$HOST_LIB_ARCH" ] && [ "\${NIA_BUNDLED_LIBS:-0}" != "1" ] && command -v ldconfig >/dev/null 2>&1; then
+    HOST_LIB_LIST="\$(ldconfig -p 2>/dev/null || true)"
+fi
+if [ -n "\$HOST_LIB_LIST" ]; then
+    PRIVATE_LIB_PATH=""
+    for private_dir in "\$PRIVATE_LIB_DIR"/only/*; do
+        [ -d "\$private_dir" ] || continue
+        case "\$HOST_LIB_LIST" in
+            *"\${private_dir##*/} (libc6,\$HOST_LIB_ARCH"*) ;;
+            *) PRIVATE_LIB_PATH="\$PRIVATE_LIB_PATH\$private_dir:" ;;
+        esac
+    done
+    export LD_LIBRARY_PATH="\$PRIVATE_LIB_PATH\$APPDIR/bin\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+elif [ -d "\$PRIVATE_LIB_DIR" ]; then
     export LD_LIBRARY_PATH="\$PRIVATE_LIB_DIR:\$APPDIR/bin\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
 else
     export LD_LIBRARY_PATH="\$APPDIR/bin\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"

@@ -249,6 +249,9 @@ std::vector<Slot> parse_lane_data_impl(const nlohmann::json& value)
         const std::string raw_color = text("color");
         s.color         = normalize_u1_filament_color(raw_color);
         s.color_invalid = !raw_color.empty() && s.color.empty();
+        // The brand is there only when the printer knows the spool (AFC fills "vendor_name" from Spoolman); it then
+        // chooses among the presets of that material as a toolhead's reported brand does.
+        s.vendor = text("vendor_name");
         // An unloaded lane has an empty material. Nothing here comes from a tag.
         s.present = !s.type.empty();
     }

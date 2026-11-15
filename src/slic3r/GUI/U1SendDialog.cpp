@@ -38,6 +38,7 @@
 #include <wx/gdicmn.h>
 #include <wx/image.h>
 #include <wx/menu.h>
+#include <wx/menuitem.h>
 #include <wx/panel.h>
 #include <wx/pen.h>
 #include <wx/scrolwin.h>
@@ -240,9 +241,14 @@ private:
     {
         SetFocus();
         wxMenu menu;
-        for (size_t t = 0; t < m_toolheads.size(); ++t)
-            menu.AppendRadioItem(int(wxID_HIGHEST + 1 + t), source_label(t))
-                ->Check(int(t) == m_selection);
+        // Each entry carries the colour the printer reports for it, since two sources often read the same in words
+        // ("PLA" and "PLA"); the one in use has a tick in its colour. A bitmap on a radio item is not drawn on every
+        // platform, so these are plain items.
+        for (size_t t = 0; t < m_toolheads.size(); ++t) {
+            auto *item = new wxMenuItem(&menu, int(wxID_HIGHEST + 1 + t), source_label(t));
+            item->SetBitmap(source_swatch(m_toolheads[t], int(t) == m_selection));
+            menu.Append(item);
+        }
         // The choice comes back from the call itself, so nothing outlives the menu.
         const int chosen = GetPopupMenuSelectionFromUser(menu, 0, GetClientSize().y) - (wxID_HIGHEST + 1);
         if (chosen < 0 || size_t(chosen) >= m_toolheads.size() || chosen == m_selection)
@@ -259,6 +265,28 @@ private:
         if (m_selection >= 0 && size_t(m_selection) < m_toolheads.size())
             SetToolTip(wxString::Format(_L("Filament %d: %s"), m_number, describe(m_filament)) + "\n" +
                        source_label(size_t(m_selection)));
+    }
+
+    // A square in the source's colour (a grey outline for an empty one), with a tick when it is the one chosen.
+    wxBitmap source_swatch(const U1PrintTask::Filament &source, bool chosen) const
+    {
+        const int side = FromDIP(16);
+        wxBitmap  bitmap(side, side); // a bitmap's size is in physical pixels
+        wxMemoryDC dc(bitmap);
+        dc.SetBackground(wxBrush(wxGetApp().dark_mode() ? wxColour(0x2D, 0x2D, 0x31) : *wxWHITE));
+        dc.Clear();
+        const wxColour fill = filament_colour(source.color);
+        dc.SetPen(wxPen(wxGetApp().dark_mode() ? wxColour(0x9A, 0x9A, 0x9A) : wxColour(0x6B, 0x6B, 0x6B)));
+        dc.SetBrush(source.present ? wxBrush(fill) : *wxTRANSPARENT_BRUSH);
+        dc.DrawRoundedRectangle(1, 1, side - 2, side - 2, side / 5.0);
+        if (chosen) {
+            const bool light = source.present ? fill.GetLuminance() > 0.6 : !wxGetApp().dark_mode();
+            dc.SetPen(wxPen(light ? *wxBLACK : *wxWHITE, std::max(2, side / 8)));
+            const wxPoint tick[] = {{side * 4 / 16, side * 8 / 16}, {side * 7 / 16, side * 11 / 16}, {side * 12 / 16, side * 5 / 16}};
+            dc.DrawLines(3, tick);
+        }
+        dc.SelectObject(wxNullBitmap);
+        return bitmap;
     }
 
     // TRN %1$d is a toolhead or slot number, %2$s what is loaded in it ("Snapmaker PLA Basic", "empty").

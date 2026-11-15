@@ -156,6 +156,15 @@ TEST_CASE("The lanes of a filament changer become slots by the tool each is mapp
     CHECK(slots[3].type == "PLA");
     CHECK(slots[3].color == "#0000FF");
 
+    // A spool the printer knows (AFC with Spoolman) comes with its brand; without one the field is empty or absent.
+    nlohmann::json branded = canvas;
+    branded["CANVAS_1"]["vendor_name"] = " Polymaker ";
+    branded["CANVAS_2"]["vendor_name"] = "";
+    const auto with_brand = parse_filament_lane_data(branded);
+    CHECK(with_brand[0].vendor == "Polymaker");
+    CHECK(with_brand[1].vendor.empty());
+    CHECK_FALSE(with_brand[0].from_tag);
+
     // The slot is the mapped tool, not the lane's name or position.
     const nlohmann::json swapped = {{"CANVAS_1", lane("3", "#111111", "ABS")}, {"CANVAS_4", lane("0", "#222222", "PLA")}};
     const auto remapped = parse_filament_lane_data(swapped);

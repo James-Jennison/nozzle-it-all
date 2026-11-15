@@ -258,6 +258,9 @@ void PrinterWebView::create_browser()
     auto wv_ctx = webkit_web_view_get_context(wv);
     auto cookieManager = webkit_web_context_get_cookie_manager(wv_ctx);
     webkit_cookie_manager_set_persistent_storage(cookieManager, cookiesPath.c_str(), WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
+    // A printer's page may play its camera by WebRTC (a Snapmaker U1's does); the engine has that off unless
+    // asked, and the page then waits on "connecting". The Monitor side's camera view asks for it the same way.
+    webkit_settings_set_enable_webrtc(webkit_web_view_get_settings(wv), TRUE);
     // A page whose web process ends is blank from then on. Mainsail's stream camera can end it once it has
     // pictures to draw (see webext/nia_web_extension.c): the page is loaded again, and the relay serves that
     // printer no more in this run, so the page is back as it was before the relay, with its camera error.

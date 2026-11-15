@@ -1469,6 +1469,10 @@ void MainFrame::show_option(bool show)
             m_print_btn->Hide();
             m_slice_option_btn->Hide();
             m_print_option_btn->Hide();
+            // Their holders too: in the branded build these have the page's colour, not the tab bar's, and an
+            // empty one shows as a box on the tabs that have no Slice and Print (the Printer tab).
+            m_slice_btn->GetParent()->Hide();
+            m_print_btn->GetParent()->Hide();
             Layout();
         }
     } else {
@@ -1477,6 +1481,8 @@ void MainFrame::show_option(bool show)
             m_print_btn->Show();
             m_slice_option_btn->Show();
             m_print_option_btn->Show();
+            m_slice_btn->GetParent()->Show();
+            m_print_btn->GetParent()->Show();
             Layout();
         }
     }

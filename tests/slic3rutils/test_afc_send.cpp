@@ -29,7 +29,15 @@ nlohmann::json idle_carbon()
             {"AFC_lane CANVAS_1", lane(1, "T0", "PLA", "#FFCBAC")},
             {"AFC_lane CANVAS_2", lane(2, "T1", "pla", "#544144")},
             {"AFC_lane CANVAS_3", lane(3, "T2", "PETG", "ffffff")},
-            {"AFC_lane CANVAS_4", lane(4, "T3", "PLA", "#080A0D")}};
+            {"AFC_lane CANVAS_4", lane(4, "T3", "PLA", "#080A0D")},
+            // COSMOS answers two commands of the stock firmware's start G-code with an emergency stop; a macro that
+            // stops only on a fault of its own is an ordinary macro.
+            {"configfile",
+             {{"settings",
+               {{"gcode_macro m729", {{"gcode", "\n{ action_emergency_stop(\"Use COSMOS OrcaSlicer profile (or COSMOS start/end machine gcode).\") }"}}},
+                {"gcode_macro m8213", {{"gcode", "\n{ action_emergency_stop(\"Use COSMOS OrcaSlicer profile (or COSMOS start/end machine gcode).\") }"}}},
+                {"gcode_macro print_start", {{"gcode", "\n{% if params.TOOL is not defined %}\n{ action_emergency_stop(\"no tool\") }\n{% endif %}\nG28"}}},
+                {"extruder", {{"nozzle_diameter", 0.4}}}}}}}};
 }
 
 } // namespace
@@ -107,6 +115,25 @@ TEST_CASE("A Start on a printer fed from AFC lanes is refused unless printer and
         CHECK(U1Jobs::afc_start_blocker({"elegoo centauri carbon", {0.4}}, idle_carbon(), map, false, model).kind == Kind::None);
         CHECK(U1Jobs::afc_start_blocker({"", {}}, idle_carbon(), map, false, model).kind == Kind::None);
         CHECK(U1Jobs::afc_start_blocker({"Snapmaker U1", {0.4}}, idle_carbon(), map, false, "").kind == Kind::None);
+    }
+    SECTION("a file that runs a command the printer answers with an emergency stop is not sent, started or not")
+    {
+        U1Jobs::GcodeFacts stock = carbon;
+        stock.commands           = {"G1", "G28", "M729", "T0"};
+        for (const bool start : {true, false}) {
+            const auto blocker = U1Jobs::afc_start_blocker(stock, idle_carbon(), map, start, model);
+            CHECK(blocker.kind == Kind::RefusedCommand);
+            CHECK(blocker.detail == "M729\nUse COSMOS OrcaSlicer profile (or COSMOS start/end machine gcode).");
+        }
+        // The printer's own start macro stops only when it is called wrongly: calling it is no refusal.
+        U1Jobs::GcodeFacts cosmos = carbon;
+        cosmos.commands           = {"G1", "PRINT_START", "T0", "T3"};
+        CHECK(U1Jobs::afc_start_blocker(cosmos, idle_carbon(), map, true, model).kind == Kind::None);
+        // A Start without the printer's configuration was not checked for this, and is refused.
+        auto unread = idle_carbon();
+        unread.erase("configfile");
+        CHECK(U1Jobs::afc_start_blocker(cosmos, unread, map, true, model).kind == Kind::PrinterUnreachable);
+        CHECK(U1Jobs::afc_start_blocker(cosmos, unread, map, false, model).kind == Kind::None);
     }
     SECTION("upload only needs no printer state")
     {

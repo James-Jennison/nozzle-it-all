@@ -8,6 +8,7 @@
 #include <boost/nowide/fstream.hpp>
 #include <nlohmann/json.hpp>
 
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -226,6 +227,14 @@ TEST_CASE("The prepared G-code says what it was sliced for", "[U1Jobs]")
     CHECK(facts.printer_model == "Snapmaker U1");
     CHECK(facts.nozzles == std::vector<double>{0.4, 0.4, 0.6, 0.4});
     CHECK(U1Jobs::read_gcode_facts(scratch.dir / "missing.gcode").printer_model.empty());
+}
+
+TEST_CASE("The prepared G-code says which commands it runs", "[U1Jobs]")
+{
+    ScratchJournal scratch;
+    scratch.write("a.gcode", "; M999 in a comment\nG28 ;home\n  m729 ;Clean Nozzle\r\nM729\nPRINT_START EXTRUDER=210 TOOL=0\nT1\n\nG1 X1;M8213\n");
+    const auto facts = U1Jobs::read_gcode_facts(scratch.dir / "a.gcode");
+    CHECK(facts.commands == std::set<std::string>{"G1", "G28", "M729", "PRINT_START", "T1"});
 }
 
 TEST_CASE("A Start is refused unless the printer shows it is ready for this file", "[U1Jobs]")

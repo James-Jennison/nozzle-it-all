@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -221,6 +222,9 @@ struct GcodeFacts
 {
     std::string         printer_model;
     std::vector<double> nozzles; ///< per extruder
+    /// The commands the file runs: the first word of each line that is not a comment, upper case ("G1", "M729",
+    /// "PRINT_START"). What a printer's own configuration refuses is looked for among them.
+    std::set<std::string> commands;
 };
 GcodeFacts read_gcode_facts(const boost::filesystem::path &file);
 
@@ -237,7 +241,9 @@ struct Blocker
         NozzleMismatch,
         ChangerNotReady,    ///< AFC reports an error or is busy; detail = what it reports
         LaneUnknown,        ///< no lane answers to the tool number (toolhead) the filament is to print from
-        LaneEmpty           ///< that lane has no filament ready
+        LaneEmpty,          ///< that lane has no filament ready
+        RefusedCommand      ///< the file runs a command this printer answers with an emergency stop; detail = the command, then a
+                            ///< line break, then the printer's own message for it
     };
     Kind        kind = Kind::None;
     std::string detail;

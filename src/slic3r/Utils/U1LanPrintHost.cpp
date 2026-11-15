@@ -80,7 +80,8 @@ nlohmann::json query_afc_status(const std::string &base_url, long timeout_s = QU
             .perform_sync();
         return status;
     };
-    nlohmann::json status = read("print_stats&extruder&AFC");
+    // The configuration in full: afc_start_blocker() looks in it for commands the printer answers with an emergency stop.
+    nlohmann::json status = read("print_stats&extruder&AFC&configfile=settings");
     std::string    lanes;
     for (const std::string &name : AfcLanes::lane_names(status))
         lanes += (lanes.empty() ? "" : "&") + Http::url_encode("AFC_lane " + name);
@@ -306,6 +307,14 @@ wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker, Target target)
         case Kind::LaneEmpty:
             return GUI::format_wxstr(_L("Slot %1% has no filament ready (needed for filament %2%)."), blocker.toolhead + 1, blocker.filament + 1);
         case Kind::NozzleUnknown: return _L("The printer did not report the nozzle it has fitted.");
+        case Kind::RefusedCommand: {
+            const size_t   split   = blocker.detail.find('\n');
+            const wxString command = wxString::FromUTF8(blocker.detail.substr(0, split));
+            const wxString message = split == std::string::npos ? wxString() : wxString::FromUTF8(blocker.detail.substr(split + 1));
+            // TRN %1% is a G-code command (M729), %2% the printer's own message about it.
+            return message.empty() ? GUI::format_wxstr(_L("This file runs %1%, which this printer answers with an emergency stop. It was sliced with a printer preset whose start or end G-code is not for this printer's firmware; choose the preset for this printer and slice again."), command) :
+                                     GUI::format_wxstr(_L("This file runs %1%, which this printer answers with an emergency stop (\"%2%\"). It was sliced with a printer preset whose start or end G-code is not for this printer's firmware; choose the preset for this printer and slice again."), command, message);
+        }
         case Kind::NozzleMismatch:
             return GUI::format_wxstr(_L("This file was sliced for a %1% mm nozzle, but the printer has a %2% mm nozzle."), blocker.sliced, blocker.fitted);
         default: break;
@@ -327,6 +336,7 @@ wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker, Target target)
     case Kind::NozzleMismatch:
         return GUI::format_wxstr(_L("Filament %1% was sliced for a %2% mm nozzle, but toolhead %3% has a %4% mm nozzle."), blocker.filament + 1,
                                  blocker.sliced, blocker.toolhead + 1, blocker.fitted);
+    case Kind::RefusedCommand: break; // looked for on a printer with a filament changer only, and worded above
     }
     return {};
 }

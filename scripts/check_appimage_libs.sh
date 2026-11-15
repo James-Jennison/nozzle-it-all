@@ -67,7 +67,10 @@ done < <(find "$APPDIR" -type f -print0)
 for target in "${targets[@]}"; do
     while IFS= read -r dep; do
         if [[ "$dep" == MISSING:* ]]; then
-            seen_unresolved["$target -> ${dep#MISSING:}"]=1
+            # A library that is the host's in any case need not be on the machine running the audit.
+            if ! appimage_is_host_library "${dep#MISSING:}"; then
+                seen_unresolved["$target -> ${dep#MISSING:}"]=1
+            fi
             continue
         fi
 

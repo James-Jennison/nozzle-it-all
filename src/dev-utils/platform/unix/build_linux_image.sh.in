@@ -132,6 +132,11 @@ bundle_dependency_closure() {
 
         while IFS= read -r dep; do
             if [[ "$dep" == MISSING:* ]]; then
+                # A library that is left to the host in any case need not be on the build machine (the bundled
+                # browser engine needs GStreamer's WebRTC library, which the builder image does not have).
+                if appimage_is_host_library "${dep#MISSING:}"; then
+                    continue
+                fi
                 echo "Error: missing runtime dependency ${dep#MISSING:} while bundling $target"
                 exit 1
             fi
@@ -384,6 +389,18 @@ target_missing_runtime_library() {
 }
 
 TARGET_BIN="\$1"
+
+# The engine this bundle carries is built with WebRTC and needs the host's GStreamer WebRTC library. A host
+# without it, or a user who sets NIA_HOST_WEBKIT=1, gets the host's engine as a bundle without one would.
+if [ "\$USE_BUNDLED_WEBKITGTK_STACK" = "1" ]; then
+    if [ "\${NIA_HOST_WEBKIT:-0}" = "1" ]; then
+        USE_BUNDLED_WEBKITGTK_STACK=0
+    elif ! has_host_runtime_library "libgstwebrtc-1.0.so.0"; then
+        echo "Note: libgstwebrtc-1.0.so.0 is not installed; using the system's browser engine, in which a printer page's WebRTC camera does not play." >&2
+        echo "On Ubuntu/Debian, install: libgstreamer-plugins-bad1.0-0" >&2
+        USE_BUNDLED_WEBKITGTK_STACK=0
+    fi
+fi
 
 if target_missing_runtime_library "\$TARGET_BIN" "libOpenGL.so.0" || ! has_host_runtime_library "libOpenGL.so.0"; then
     echo "Error: missing host OpenGL runtime library libOpenGL.so.0." >&2

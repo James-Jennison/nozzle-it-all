@@ -30,6 +30,8 @@ if ! ls -d webkit2gtk-*/ >/dev/null 2>&1; then
 fi
 SRC="$(cd -- "$(ls -d webkit2gtk-*/ | head -n1)" && pwd)"
 
+# AVIF, JPEG XL and the GStreamer transcoder are off as in the distribution's own package (debian/rules): the
+# engine then needs no library the host's engine does not, apart from GStreamer's WebRTC library.
 COMPILER=()
 if command -v clang++ >/dev/null 2>&1; then
     # The distribution builds its own package with clang, which the engine's drawing library prefers.
@@ -40,7 +42,7 @@ cmake -S "$SRC" -B "$WORK/build" -GNinja -DPORT=GTK -DCMAKE_BUILD_TYPE=Release -
     "${COMPILER[@]}" \
     -DUSE_GTK4=OFF -DENABLE_DOCUMENTATION=OFF -DENABLE_INTROSPECTION=OFF -DENABLE_WEBDRIVER=OFF -DENABLE_MINIBROWSER=OFF \
     -DUSE_LIBBACKTRACE=OFF -DUSE_SYSPROF_CAPTURE=OFF -DENABLE_JOURNALD_LOG=OFF -DENABLE_BUBBLEWRAP_SANDBOX=OFF \
-    -DENABLE_SPEECH_SYNTHESIS=OFF \
+    -DENABLE_SPEECH_SYNTHESIS=OFF -DUSE_AVIF=OFF -DUSE_JPEGXL=OFF -DUSE_GSTREAMER_TRANSCODER=OFF \
     -DENABLE_WEB_RTC=ON -DENABLE_MEDIA_STREAM=ON -DUSE_GSTREAMER_WEBRTC=ON -DUSE_LIBRICE=OFF > "$WORK/cmake.log" 2>&1
 ninja -C "$WORK/build" -j"$JOBS" > "$WORK/ninja.log" 2>&1
 rm -rf "$WORK/out"

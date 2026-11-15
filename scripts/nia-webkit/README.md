@@ -8,7 +8,8 @@ host's, as OrcaSlicer does.
 ## What is built
 
 `build_engine.sh` takes the WebKitGTK source package of the distribution the application's builder image is
-based on, switches WebRTC on, and applies the patches in `patches/`:
+based on, switches WebRTC on, keeps the image formats the distribution's own package leaves out (AVIF,
+JPEG XL) out, and applies the patches in `patches/`:
 
 | Patch | Why |
 |---|---|
@@ -25,7 +26,9 @@ bundles. GTK, GStreamer and GStreamer's plugins are the host's at run time, as f
 `src/dev-utils/platform/unix/build_linux_image.sh.in` copies the two libraries to `lib/`, the helper programs
 to `lib/webkit2gtk-4.1/` and the injected bundle below it when `NIA_WEBKIT_ENGINE_DIR` names the installed
 engine. The launcher it writes puts `lib/` ahead of the host's libraries and sets `WEBKIT_EXEC_PATH` and
-`WEBKIT_INJECTED_BUNDLE_PATH`. `lib/webkit2gtk-4.1/engine-record.txt` names the source package version, the
+`WEBKIT_INJECTED_BUNDLE_PATH`. The engine needs the host's GStreamer WebRTC library
+(`libgstwebrtc-1.0.so.0`); on a host without it, or with `NIA_HOST_WEBKIT=1` set, the launcher leaves the
+bundled engine alone and the host's is used. `lib/webkit2gtk-4.1/engine-record.txt` names the source package version, the
 patches and the libraries' hashes.
 
 ## Keeping it current

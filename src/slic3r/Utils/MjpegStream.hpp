@@ -3,8 +3,11 @@
 
 #include <atomic>
 #include <functional>
+#include <future>
+#include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace Slic3r {
 
@@ -51,7 +54,8 @@ public:
     /// belong to one are removed. A buffer grown past *limit* without a complete picture is emptied.
     static bool next_frame(std::string &buffer, std::string &frame, size_t limit = 8 * 1024 * 1024);
     /// Whether an answer's header lines give *origin* leave to read it: an Access-Control-Allow-Origin line
-    /// whose value is "*" or *origin* (compared without regard to case).
+    /// whose value is "*" or *origin* (compared without regard to case, and with a scheme's own port, 80 for
+    /// http and 443 for https, the same written or left out). *headers* is one answer's header lines.
     static bool allows_origin(const std::string &headers, const std::string &origin);
 
 private:
@@ -66,6 +70,18 @@ private:
     std::atomic<bool>          m_refused{false};
     std::atomic<unsigned long> m_frames{0};
     std::thread                m_thread;
+};
+
+/// Stops streams off the calling thread: a stream's reader takes up to a second to give up, and the GUI thread
+/// is not made to wait for it. What is being stopped is waited for when this object is destroyed, so no
+/// stream handed to it outlives its owner.
+class MjpegRetirement
+{
+public:
+    void retire(std::unique_ptr<MjpegStream> stream);
+
+private:
+    std::vector<std::future<void>> m_stopping;
 };
 
 } // namespace Slic3r

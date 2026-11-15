@@ -77,6 +77,7 @@ private:
     std::shared_ptr<std::map<std::string, Camera>> m_cameras;
     /// By address: the camera stream now being read for a card. Main thread only.
     std::map<std::string, std::unique_ptr<MjpegStream>> m_streams;
+    MjpegRetirement                                     m_retired; ///< streams being stopped; waited for when this panel goes
     /// By address: a picture from the stream is on its way to the main thread; the next ones are dropped meanwhile.
     std::map<std::string, std::shared_ptr<std::atomic<bool>>> m_frame_pending;
     /// The cards' texts that change while a card stays: by address, the state and the detail line.

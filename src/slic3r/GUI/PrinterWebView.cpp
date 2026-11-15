@@ -37,7 +37,6 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <future>
 #include <memory>
 #include <string>
 #include <utility>
@@ -628,23 +627,18 @@ void PrinterWebView::OnNewWindow(wxWebViewEvent& evt)
   evt.Veto();
 }
 
-// A stream's reader takes up to a second to stop, so it is stopped off the main thread. The stopping is
-// kept track of and waited for when the panel is destroyed: no thread of it outlives the panel.
-void PrinterWebView::retire(std::unique_ptr<MjpegStream> stream)
-{
-    m_retiring.erase(std::remove_if(m_retiring.begin(), m_retiring.end(),
-                                    [](const std::future<void> &done) { return done.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }),
-                     m_retiring.end());
-    if (stream)
-        m_retiring.push_back(std::async(std::launch::async, [stream = std::move(stream)]() mutable { stream.reset(); }));
-}
+void PrinterWebView::retire(std::unique_ptr<MjpegStream> stream) { m_retiring.retire(std::move(stream)); }
 
 // "http://host:port" of an address, the port written out, for comparing where two addresses lead.
 static std::string origin_of(const wxURI &address)
 {
     const wxString scheme = address.GetScheme().Lower();
     const wxString port   = address.HasPort() ? address.GetPort() : wxString(scheme == "https" ? "443" : "80");
-    return (scheme + "://" + address.GetServer().Lower() + ":" + port).utf8_string();
+    // An IPv6 address is written in brackets in an origin, whichever way wxURI hands it over.
+    wxString server = address.GetServer().Lower();
+    if (server.Contains(":") && !server.StartsWith("["))
+        server = "[" + server + "]";
+    return (scheme + "://" + server + ":" + port).utf8_string();
 }
 
 // A call into the page's camera replacement. Neither argument may hold a quote: the name is checked where it
@@ -732,6 +726,8 @@ void PrinterWebView::watch_page_cameras()
             ++camera;
             continue;
         }
+        if (ended && camera->second.stream->refused())
+            BOOST_LOG_TRIVIAL(warning) << "Printer page camera: nothing handed to the page: the camera gave it no leave to read " << camera->second.stream->url().substr(0, camera->second.stream->url().find('?'));
         if (ended && m_browser != nullptr)
             m_browser->RunScriptAsync(page_call("__niaCameraFailed", camera->first,
                                                 camera->second.stream->refused() ? "the camera gave this page no leave to read it" : "the camera ended the stream"));

@@ -113,4 +113,10 @@ TEST_CASE("A camera's answer gives a page leave to read it by naming its origin 
     CHECK_FALSE(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: http://192.168.1.51:80\r\n\r\n", origin));
     CHECK_FALSE(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nX-Access-Control-Allow-Origin: *\r\n\r\n", origin));
     CHECK_FALSE(MjpegStream::allows_origin("", origin));
+    // A scheme's own port is the same written or left out; another port is another origin.
+    CHECK(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: http://192.168.1.50\r\n\r\n", origin));
+    CHECK(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: https://printer.local:443\r\n\r\n", "https://printer.local"));
+    CHECK(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: http://[fd00::1]:80\r\n\r\n", "http://[fd00::1]"));
+    CHECK_FALSE(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: http://192.168.1.50:8080\r\n\r\n", origin));
+    CHECK_FALSE(MjpegStream::allows_origin("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: http://[fd00::80]\r\n\r\n", "http://[fd00::]"));
 }

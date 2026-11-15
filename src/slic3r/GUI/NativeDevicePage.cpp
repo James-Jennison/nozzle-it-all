@@ -15,6 +15,8 @@ namespace Slic3r::GUI {
 
 NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
 {
+    view_printer({}, {}); // a new page shows the selected printer, whatever an earlier page was showing
+
     auto* sizer = new wxBoxSizer(wxVERTICAL);
 
     // Monitor and History always; Web interface only while a web page is hosted (host_web_page()).

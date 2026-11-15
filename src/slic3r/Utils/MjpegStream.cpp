@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <system_error>
 #include <utility>
 
 namespace Slic3r {
@@ -101,6 +102,15 @@ bool MjpegStream::allows_origin(const std::string &headers, const std::string &o
     const auto same = [](const std::string &a, const std::string &b) {
         return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](unsigned char x, unsigned char y) { return std::tolower(x) == std::tolower(y); });
     };
+    // An origin without its scheme's own port, as a browser writes it: "http://host:80" is "http://host".
+    const auto plain = [&same](std::string value) {
+        for (const auto &[scheme, port] : {std::pair<std::string, std::string>{"http://", ":80"}, {"https://", ":443"}})
+            if (value.size() > scheme.size() + port.size() && same(value.substr(0, scheme.size()), scheme) &&
+                value.compare(value.size() - port.size(), port.size(), port) == 0 &&
+                value.find(']', value.size() - port.size()) == std::string::npos) // not the end of an IPv6 address
+                value.erase(value.size() - port.size());
+        return value;
+    };
     for (size_t line = 0; line < headers.size();) {
         size_t end = headers.find('\n', line);
         if (end == std::string::npos)
@@ -109,7 +119,7 @@ bool MjpegStream::allows_origin(const std::string &headers, const std::string &o
             std::string value = headers.substr(line + name.size(), end - line - name.size());
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t\r") + 1);
-            if (value == "*" || same(value, origin))
+            if (value == "*" || same(plain(value), plain(origin)))
                 return true;
         }
         line = end + 1;
@@ -136,7 +146,13 @@ struct Reader
 size_t on_header(char *data, size_t size, size_t count, void *user)
 {
     auto *reader = static_cast<Reader *>(user);
-    if (!reader->origin->empty() && reader->headers.size() < 64 * 1024)
+    if (reader->origin->empty())
+        return size * count;
+    // Only the answer the pictures come with counts: an interim answer's lines (100 Continue and the like)
+    // are dropped when the next answer's status line arrives.
+    if (size * count >= 5 && std::equal(data, data + 5, "HTTP/"))
+        reader->headers.clear();
+    if (reader->headers.size() < 64 * 1024)
         reader->headers.append(data, size * count);
     return size * count;
 }
@@ -220,6 +236,22 @@ void MjpegStream::run()
         ::curl_easy_cleanup(curl);
     }
     m_ended.store(true);
+}
+
+void MjpegRetirement::retire(std::unique_ptr<MjpegStream> stream)
+{
+    m_stopping.erase(std::remove_if(m_stopping.begin(), m_stopping.end(),
+                                    [](const std::future<void> &done) { return done.wait_for(std::chrono::seconds(0)) == std::future_status::ready; }),
+                     m_stopping.end());
+    if (!stream)
+        return;
+    // A shared pointer, so that the stream is still held here when no thread could be started.
+    std::shared_ptr<MjpegStream> held(std::move(stream));
+    try {
+        m_stopping.push_back(std::async(std::launch::async, [held]() mutable { held.reset(); }));
+    } catch (const std::system_error &) {
+        // No thread to be had: stopped here, at the cost of the wait.
+    }
 }
 
 } // namespace Slic3r

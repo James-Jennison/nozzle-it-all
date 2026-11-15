@@ -212,7 +212,9 @@ FleetPanel::~FleetPanel()
 
 void FleetPanel::stop_streams()
 {
-    // Each stream's thread is waited for; it gives its read up within about a second.
+    // A stream gives its read up within about a second; that is not waited for on this thread.
+    for (auto &stream : m_streams)
+        m_retired.retire(std::move(stream.second));
     m_streams.clear();
     m_frame_pending.clear();
 }
@@ -309,6 +311,7 @@ void FleetPanel::read_printers()
                     const auto wanted = streams.find(it->first);
                     if (wanted == streams.end() || wanted->second.empty() || wanted->second != it->second->url() || it->second->ended()) {
                         panel->m_frame_pending.erase(it->first);
+                        panel->m_retired.retire(std::move(it->second));
                         it = panel->m_streams.erase(it);
                     } else
                         ++it;

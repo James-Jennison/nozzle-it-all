@@ -37,6 +37,7 @@ namespace {
 constexpr long QUERY_TIMEOUT_S = 5;
 // After a lost Start reply the printer is watched for as long as the Start itself may take.
 constexpr int  RECONCILE_SECONDS = 60;
+constexpr int  START_CONFIRM_SECONDS = 10; // after an accepted Start, for the printer to report the file as running
 constexpr int  START_REPLY_SECONDS = 60;
 // Connecting, the websocket handshake and writing the request each get this long.
 constexpr int  CONNECT_SECONDS = 10;
@@ -581,10 +582,35 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     }
     wxString detail;
     switch (start_print(path, detail)) {
-    case StartOutcome::Accepted:
-        // If this write fails the record stays "Starting": the next send reconciles it against the printer.
-        U1Jobs::save(job, U1Jobs::State::Printing, "The printer accepted the Start.");
-        return true;
+    case StartOutcome::Accepted: {
+        if (m_target != Target::AfcLanes) {
+            // If this write fails the record stays "Starting": the next send reconciles it against the printer.
+            U1Jobs::save(job, U1Jobs::State::Printing, "The printer accepted the Start.");
+            return true;
+        }
+        // Moonraker's own Start answers "ok" once the file is selected, whatever the file's first commands
+        // then do (a start G-code the firmware answers with a shutdown, for one). The job counts as printing
+        // only once the printer itself reports this job's file as the one it is running.
+        std::string seen = "no answer";
+        const auto  watch_until = std::chrono::steady_clock::now() + std::chrono::seconds(START_CONFIRM_SECONDS);
+        for (;;) {
+            const nlohmann::json now   = query_status(m_base_url);
+            const std::string    state = stats_string(now, "state");
+            if ((state == "printing" || state == "paused") && U1Jobs::is_job_file(job, stats_string(now, "filename"))) {
+                U1Jobs::save(job, U1Jobs::State::Printing, "The printer accepted the Start and reports it is printing this job's file.");
+                return true;
+            }
+            seen = state.empty() ? "no answer" : state;
+            if (std::chrono::steady_clock::now() >= watch_until)
+                break;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        U1Jobs::save(job, U1Jobs::State::Held, "The printer accepted the Start but did not report this job's file as running (it reported: " + seen + "). The Start was not sent again.");
+        error_fn(GUI::format_wxstr(_L("The printer accepted the Start, but it does not report that it is printing this file, and the Start was not sent again. The printer reports: %1%.\n\n"
+                                      "Check the printer. The next time you press Print you will be asked whether this job started."),
+                                   seen == "no answer" ? _L("no answer") : GUI::from_u8(seen)));
+        return false;
+    }
     case StartOutcome::NotSent:
         job.start_sent = false;
         U1Jobs::save(job, U1Jobs::State::Failed, "The Start request never left this computer. The file is on the printer; nothing was started.");

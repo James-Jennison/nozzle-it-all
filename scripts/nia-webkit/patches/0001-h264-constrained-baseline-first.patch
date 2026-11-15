@@ -1,0 +1,14 @@
+--- a/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
++++ b/Source/WebCore/platform/graphics/gstreamer/GStreamerRegistryScanner.cpp
+@@ -1233,8 +1233,10 @@
+ 
+         if (element) {
+             static constexpr std::array<std::pair<ASCIILiteral, unsigned>, 5> profiles = { {
+-                { "42c01f"_s, 0x42c01f },
++                // NIA: constrained baseline as camera-streamer offers it (42e01f) first, so that it is the one
++                // given payload type 96, which such an offer uses.
+                 { "42e01f"_s, 0x42e01f },
++                { "42c01f"_s, 0x42c01f },
+                 { "640c1f"_s, 0x640c1f },
+                 { "42001f"_s, 0x42001f },
+                 { "4d001f"_s, 0x4d001f },

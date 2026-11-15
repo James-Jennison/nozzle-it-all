@@ -78,9 +78,11 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
             m_camera->deactivate();
             return;
         }
-        // An MJPEG webcam without stream_url streams at the camera service's default path.
+        // An MJPEG webcam without stream_url streams at the camera service's default path. A WebRTC camera
+        // (a Snapmaker U1's) is shown by its ordinary stream at that path too, as on its Printers card: the
+        // printer's own page may be playing the WebRTC session, and a second one was refused (502) when tried.
         std::string mjpeg = webcam.webrtc ? std::string() : webcam.stream_url;
-        if (!webcam.webrtc && mjpeg.empty())
+        if (mjpeg.empty())
             mjpeg = "/webcam/stream.mjpg";
         m_camera->set_mjpeg_only(mjpeg);
         m_camera->activate(DeviceWorkspaceEndpoint{"native-printer", std::string(), lan_host, true}, ++m_camera_generation);

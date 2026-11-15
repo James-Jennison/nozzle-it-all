@@ -1,0 +1,13 @@
+--- a/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.cpp
++++ b/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.cpp
+@@ -581,6 +581,10 @@
+             }
+         }
+     }
++    // NIA: a peer that names no stream for its track (camera-streamer offers no a=msid) still gets one,
++    // the default stream other browsers give such a track; a page that plays event.streams[0] has it then.
++    if (mediaStreamIdsSet.isEmpty() && (gst_sdp_media_get_attribute_val(&media, "sendonly") || gst_sdp_media_get_attribute_val(&media, "sendrecv")))
++        mediaStreamIdsSet.add("default"_s);
+     Vector<String> mediaStreamIds;
+     mediaStreamIds.reserveInitialCapacity(mediaStreamIdsSet.size());
+     for (const auto& msid : mediaStreamIdsSet)

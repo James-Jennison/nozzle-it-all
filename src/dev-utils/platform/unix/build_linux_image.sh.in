@@ -292,6 +292,37 @@ echo -n "[9/9] Generating Linux app..."
     # baked into libwebkit2gtk. Bundling Ubuntu's WebKitGTK inside an AppImage
     # built with -g makes those helper paths unusable on Fedora and vice versa,
     # so rely on the host WebKitGTK runtime instead of copying the helper stack.
+    #
+    # NIA_WEBKIT_ENGINE_DIR names an engine built by scripts/nia-webkit/build_engine.sh (WebRTC on, and its
+    # helper programs found through WEBKIT_EXEC_PATH, which the launcher below sets). With it the AppImage
+    # carries that engine; without it nothing changes and the host's engine is used. The engine's libraries
+    # go into lib/, ahead of the host's on the loader path; GTK, GStreamer and its plugins stay the host's.
+    if [ -n "${NIA_WEBKIT_ENGINE_DIR:-}" ]; then
+        for engine_file in \
+            "$NIA_WEBKIT_ENGINE_DIR/lib/libwebkit2gtk-4.1.so.0" \
+            "$NIA_WEBKIT_ENGINE_DIR/lib/libjavascriptcoregtk-4.1.so.0" \
+            "$NIA_WEBKIT_ENGINE_DIR/libexec/webkit2gtk-4.1/WebKitWebProcess" \
+            "$NIA_WEBKIT_ENGINE_DIR/libexec/webkit2gtk-4.1/WebKitNetworkProcess" \
+            "$NIA_WEBKIT_ENGINE_DIR/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so"; do
+            if [ ! -e "$engine_file" ]; then
+                echo "Error: NIA_WEBKIT_ENGINE_DIR is set but $engine_file is missing"
+                exit 1
+            fi
+        done
+        echo "Bundling the browser engine from ${NIA_WEBKIT_ENGINE_DIR} ..."
+        cp -fL "$NIA_WEBKIT_ENGINE_DIR/lib/libwebkit2gtk-4.1.so.0" "$LIB_DIR/libwebkit2gtk-4.1.so.0"
+        cp -fL "$NIA_WEBKIT_ENGINE_DIR/lib/libjavascriptcoregtk-4.1.so.0" "$LIB_DIR/libjavascriptcoregtk-4.1.so.0"
+        mkdir -p "$LIB_DIR/webkit2gtk-4.1/injected-bundle"
+        for engine_file in "$NIA_WEBKIT_ENGINE_DIR"/libexec/webkit2gtk-4.1/WebKit*Process; do
+            cp -fL "$engine_file" "$LIB_DIR/webkit2gtk-4.1/"
+        done
+        cp -fL "$NIA_WEBKIT_ENGINE_DIR/lib/webkit2gtk-4.1/injected-bundle/libwebkit2gtkinjectedbundle.so" "$LIB_DIR/webkit2gtk-4.1/injected-bundle/"
+        strip --strip-unneeded "$LIB_DIR"/libwebkit2gtk-4.1.so.0 "$LIB_DIR"/libjavascriptcoregtk-4.1.so.0 \
+            "$LIB_DIR"/webkit2gtk-4.1/WebKit*Process "$LIB_DIR"/webkit2gtk-4.1/injected-bundle/*.so 2>/dev/null || true
+        if [ -f "$NIA_WEBKIT_ENGINE_DIR/engine-record.txt" ]; then
+            cp -f "$NIA_WEBKIT_ENGINE_DIR/engine-record.txt" "$LIB_DIR/webkit2gtk-4.1/engine-record.txt"
+        fi
+    fi
 
     mapfile -d '' BUNDLE_TARGETS < <(find "$BIN_DIR" "$LIB_DIR" "$LIBEXEC_DIR" -type f -print0 2>/dev/null)
     bundle_dependency_closure "$PRIVATE_LIB_DIR" "${BUNDLE_TARGETS[@]}"
@@ -363,12 +394,17 @@ fi
 
 if [ "\$USE_BUNDLED_WEBKITGTK_STACK" = "1" ]; then
     export LD_LIBRARY_PATH="\$APPDIR/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
-    export GST_PLUGIN_SYSTEM_PATH=""
-    export GST_PLUGIN_PATH="\$APPDIR/lib/gstreamer-1.0\${GST_PLUGIN_PATH:+:\$GST_PLUGIN_PATH}"
-    export GIO_EXTRA_MODULES="\$APPDIR/lib/gio/modules\${GIO_EXTRA_MODULES:+:\$GIO_EXTRA_MODULES}"
-    export XDG_DATA_DIRS="\$APPDIR/share\${XDG_DATA_DIRS:+:\$XDG_DATA_DIRS}"
-
+    # Only a bundle that carries its own GStreamer plugins and GIO modules turns the host's off; a bundle
+    # with the engine alone keeps the host's, which match the host's GStreamer the engine runs on.
+    if [ -d "\$APPDIR/lib/gstreamer-1.0" ]; then
+        export GST_PLUGIN_SYSTEM_PATH=""
+        export GST_PLUGIN_PATH="\$APPDIR/lib/gstreamer-1.0\${GST_PLUGIN_PATH:+:\$GST_PLUGIN_PATH}"
+    fi
+    if [ -d "\$APPDIR/lib/gio/modules" ]; then
+        export GIO_EXTRA_MODULES="\$APPDIR/lib/gio/modules\${GIO_EXTRA_MODULES:+:\$GIO_EXTRA_MODULES}"
+    fi
     if [ -d "\$APPDIR/share/glib-2.0/schemas" ]; then
+        export XDG_DATA_DIRS="\$APPDIR/share\${XDG_DATA_DIRS:+:\$XDG_DATA_DIRS}"
         export GSETTINGS_SCHEMA_DIR="\$APPDIR/share/glib-2.0/schemas"
     fi
 

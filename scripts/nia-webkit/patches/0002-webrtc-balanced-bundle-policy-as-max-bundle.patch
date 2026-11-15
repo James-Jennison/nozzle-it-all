@@ -1,0 +1,13 @@
+--- a/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.cpp
++++ b/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.cpp
+@@ -421,6 +421,10 @@
+         bundlePolicy = GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE;
+     } else
+         bundlePolicy = bundlePolicyFromConfiguration(configuration);
++    // NIA: webrtcbin does not implement the "balanced" policy (the default) and then bundles nothing; a
++    // peer that bundles everything on one transport, as camera-streamer does, is then not received.
++    if (bundlePolicy == GST_WEBRTC_BUNDLE_POLICY_BALANCED)
++        bundlePolicy = GST_WEBRTC_BUNDLE_POLICY_MAX_BUNDLE;
+     g_object_set(m_webrtcBin.get(), "bundle-policy", bundlePolicy, nullptr);
+ 
+     auto iceTransportPolicy = iceTransportPolicyFromConfiguration(configuration);

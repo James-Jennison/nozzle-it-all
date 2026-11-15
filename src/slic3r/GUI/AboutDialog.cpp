@@ -18,6 +18,9 @@
 #include "libslic3r/libslic3r.h"
 #include "slic3r/GUI/wxExtensions.hpp"
 #include "slic3r/GUI/Widgets/Label.hpp"
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/system/error_code.hpp>
 #include <vector>
 #include <wx/clipbrd.h>
 #include <wx/panel.h>
@@ -480,6 +483,16 @@ void AboutDialog::build_nozzle_layout()
               // What this build does. Brought up to date when a phase of the plan is accepted.
               _L("Nozzle It All Desktop is built on the OrcaSlicer engine and adds printer tools of its own: a send that checks the printer and starts each print once, one Printer tab that also holds the printer's web interface, a filament sync that lets you choose a toolhead for each filament before anything changes, a history of the jobs sent to a Snapmaker U1 with printing a job again, printer controls that ask before they move or heat and a Resume that checks the printer first, a Printers view of every saved printer with its state and live camera, Elegoo Centauri Carbon printers running COSMOS with a filament sync from the CANVAS, and importing a preset bundle from a link."),
               Label::Body_13, true, wxTOP, FromDIP(14), content_w);
+#ifdef __linux__
+    {
+        // Said only by a build that has it: the AppImage's own engine sits in its lib directory (scripts/nia-webkit).
+        boost::system::error_code ec;
+        if (boost::filesystem::exists(boost::filesystem::path(resources_dir()).parent_path() / "lib" / "libwebkit2gtk-4.1.so.0", ec))
+            add_label(body,
+                      _L("This build carries its own browser engine (WebKitGTK with WebRTC), so a printer's web interface can play a camera that needs WebRTC."),
+                      Label::Body_13, true, wxTOP, FromDIP(10), content_w);
+    }
+#endif
     // What is being built and is not in this build yet. An item moves to the sentence above when it lands.
     add_label(body,
               _L("In development: a job queue and notifications across printers, spool tracking, AI assistance, model discovery, and a phone companion."),

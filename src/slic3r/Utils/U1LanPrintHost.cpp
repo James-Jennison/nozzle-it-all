@@ -429,6 +429,15 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
                           _L("The file could not be prepared for the slots chosen.")) + nothing_sent);
             return false;
         }
+        // A file that names no tool at all (sliced with a profile whose start and filament change G-code are
+        // not AFC's) would go out unchanged and print from the slots of the filaments' own numbers.
+        if (result.tool_lines == 0) {
+            boost::system::error_code ignored;
+            boost::filesystem::remove(target, ignored);
+            error_fn(_L("The file does not say which slot each filament prints from, so it cannot be changed to other slots. "
+                        "Slice it with the printer's COSMOS AFC profile, or print each filament from the slot of its own number.") + nothing_sent);
+            return false;
+        }
         BOOST_LOG_TRIVIAL(warning) << "U1 LAN: tool numbers rewritten for the slots chosen: " << result.tool_lines << " tool lines, " << result.changed_lines << " changed";
         remapped.path           = target;
         upload_data.source_path = target;

@@ -31,6 +31,10 @@ engine. The launcher it writes puts `lib/` ahead of the host's libraries and set
 bundled engine alone and the host's is used. `lib/webkit2gtk-4.1/engine-record.txt` names the source package version, the
 patches and the libraries' hashes.
 
+For a WebRTC camera to play, the host also needs GStreamer's WebRTC plugins: on Ubuntu and Debian the
+packages `gstreamer1.0-plugins-bad` and `gstreamer1.0-nice`. Without them the engine still runs and the
+page's WebRTC camera shows its error, as with the host's engine.
+
 ## Keeping it current
 
 The engine is a web browser's and gets security fixes often. At each upstream merge into this line:

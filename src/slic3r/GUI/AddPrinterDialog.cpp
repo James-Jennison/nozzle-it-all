@@ -91,7 +91,7 @@ AddPrinterDialog::AddPrinterDialog(wxWindow *parent)
     m_search         = new ::Button(this, _L("Search the network"));
     m_search->SetStyle(ButtonStyle::Regular, ButtonType::Window);
     m_search->SetToolTip(_L("Asks every address of this computer's own local network whether a Klipper printer answers there."));
-    m_search_status = new Label(this, wxEmptyString);
+    m_search_status = new Label(this, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(270), -1));
     search_row->Add(m_search, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, gap);
     search_row->Add(m_search_status, 1, wxALIGN_CENTER_VERTICAL);
     add_row(_L("On the network"), search_row);
@@ -193,6 +193,7 @@ void AddPrinterDialog::search()
     if (PrinterDiscovery::sweep_addresses(own).empty()) {
         m_search_status->SetLabel(_L("This computer is not on a local network that can be searched. Type the printer's address."));
         Layout();
+        Fit();
         return;
     }
     m_search->Disable();

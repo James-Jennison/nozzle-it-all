@@ -189,6 +189,14 @@ void CameraRelay::deny_host(const std::string &host)
     m_hosts.erase(lower(host));
 }
 
+bool CameraRelay::had_stream(const std::string &host, int seconds)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    const auto passed = m_passed.find(lower(host));
+    return passed != m_passed.end() && passed->second.any &&
+           (passed->second.open > 0 || std::chrono::steady_clock::now() - passed->second.last < std::chrono::seconds(seconds));
+}
+
 #ifndef __linux__
 
 std::string CameraRelay::start() { return {}; }
@@ -503,6 +511,25 @@ void CameraRelay::answer(int socket)
         from = to;
     }
     BOOST_LOG_TRIVIAL(warning) << "Printer page camera: passing on " << asked.substr(0, asked.find('?'));
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        Passed &passed = m_passed[camera.host];
+        passed.any     = true;
+        ++passed.open;
+    }
+    // However this ends, the stream is counted as over, and when.
+    struct Over
+    {
+        CameraRelay *relay;
+        std::string  host;
+        ~Over()
+        {
+            std::lock_guard<std::mutex> lock(relay->m_mutex);
+            Passed &passed = relay->m_passed[host];
+            --passed.open;
+            passed.last = std::chrono::steady_clock::now();
+        }
+    } over{this, camera.host};
     if (CURL *curl = ::curl_easy_init()) {
         ::curl_easy_setopt(curl, CURLOPT_URL, asked.c_str());
         ::curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);

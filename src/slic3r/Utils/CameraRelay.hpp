@@ -37,6 +37,9 @@ public:
     /// The printer's page brought its web process down with the stream; nothing of that printer is served again
     /// in this run, so that its page comes back as it was without the relay.
     void deny_host(const std::string &host);
+    /// Whether a stream of that printer is being passed on now, or was until less than *seconds* ago: the mark
+    /// of a page that had the stream when something happened to it.
+    bool had_stream(const std::string &host, int seconds);
     void stop();
 
     /// An address taken apart. *port* is the scheme's own when none is written.
@@ -68,6 +71,13 @@ private:
     std::mutex            m_mutex;
     std::string           m_where, m_secret;
     std::set<std::string> m_hosts, m_denied;
+    struct Passed
+    {
+        int                                   open = 0; ///< streams of this printer being passed on now
+        std::chrono::steady_clock::time_point last;     ///< when one last ended
+        bool                                  any = false;
+    };
+    std::map<std::string, Passed> m_passed; ///< by printer host
     struct Listed
     {
         std::vector<std::string>              streams;

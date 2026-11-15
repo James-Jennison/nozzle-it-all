@@ -258,20 +258,24 @@ void PrinterWebView::create_browser()
     auto wv_ctx = webkit_web_view_get_context(wv);
     auto cookieManager = webkit_web_context_get_cookie_manager(wv_ctx);
     webkit_cookie_manager_set_persistent_storage(cookieManager, cookiesPath.c_str(), WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
-    // A printer's page may play its camera by WebRTC (a Snapmaker U1's does); the engine has that off unless
-    // asked, and the page then waits on "connecting". The Monitor side's camera view asks for it the same way.
-    webkit_settings_set_enable_webrtc(webkit_web_view_get_settings(wv), TRUE);
-    // A page whose web process ends is blank from then on. Mainsail's stream camera can end it once it has
-    // pictures to draw (see webext/nia_web_extension.c): the page is loaded again, and the relay serves that
-    // printer no more in this run, so the page is back as it was before the relay, with its camera error.
+    // Mainsail's stream camera can end the page's web process once it has pictures to draw (see
+    // webext/nia_web_extension.c), and the page is blank from then on. When a web process ends while the
+    // relay is passing this printer's camera on, or just was, the page is loaded again and the relay serves
+    // that printer no more in this run: the page is back as it was before the relay, with its camera error.
+    // A web process that ends at any other time is none of this code's business (one ends, reported the same
+    // way, when the view leaves one printer's page for another's) and is left to the engine.
     g_signal_connect(wv, "web-process-terminated", G_CALLBACK(+[](WebKitWebView *, WebKitWebProcessTerminationReason reason, gpointer self) {
                          auto *view = static_cast<PrinterWebView *>(self);
                          wxGetApp().CallAfter([view, reason] {
                              if (wxGetApp().is_closing() || !PrinterWebView::is_live(view))
                                  return;
                              const std::string host = wxURI(view->m_url).GetServer().utf8_string();
-                             BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the page's web process ended (reason " << int(reason) << "); the page is loaded again and the camera of "
-                                                        << host << " is no longer passed on";
+                             if (!CameraRelay::instance().had_stream(host, 3)) {
+                                 BOOST_LOG_TRIVIAL(warning) << "Printer page camera: a web process ended (reason " << int(reason) << ") with no camera of " << host << " being passed on; nothing done";
+                                 return;
+                             }
+                             BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the page's web process ended (reason " << int(reason) << ") while the camera of " << host
+                                                        << " was passed on; the page is loaded again and that camera is no longer passed on";
                              CameraRelay::instance().deny_host(host);
                              if (view->m_browser != nullptr && !view->m_url.empty())
                                  view->m_browser->LoadURL(view->m_url);

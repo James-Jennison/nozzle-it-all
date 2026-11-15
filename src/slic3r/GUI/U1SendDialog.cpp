@@ -270,8 +270,11 @@ private:
     // A square in the source's colour (a grey outline for an empty one), with a tick when it is the one chosen.
     wxBitmap source_swatch(const U1PrintTask::Filament &source, bool chosen) const
     {
+        // The bitmap is made for this window's scale; where the toolkit scales for it (GTK, macOS) the drawing below
+        // is in the same units as FromDIP, and where it does not (Windows) FromDIP is physical pixels already.
         const int side = FromDIP(16);
-        wxBitmap  bitmap(side, side); // a bitmap's size is in physical pixels
+        wxBitmap  bitmap;
+        bitmap.CreateWithDIPSize(wxSize(16, 16), GetDPIScaleFactor());
         wxMemoryDC dc(bitmap);
         dc.SetBackground(wxBrush(wxGetApp().dark_mode() ? wxColour(0x2D, 0x2D, 0x31) : *wxWHITE));
         dc.Clear();

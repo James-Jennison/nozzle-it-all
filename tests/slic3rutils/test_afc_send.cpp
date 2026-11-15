@@ -129,11 +129,41 @@ TEST_CASE("A Start on a printer fed from AFC lanes is refused unless printer and
         U1Jobs::GcodeFacts cosmos = carbon;
         cosmos.commands           = {"G1", "PRINT_START", "T0", "T3"};
         CHECK(U1Jobs::afc_start_blocker(cosmos, idle_carbon(), map, true, model).kind == Kind::None);
+        // A stop every run of the macro reaches is a refusal however the macro is written; one inside a condition is not.
+        auto longer = idle_carbon();
+        longer["configfile"]["settings"]["gcode_macro old_clean"] = {{"gcode", "\nRESPOND MSG=\"no\"\n{% if printer.idle_timeout.state == \"Printing\" %}\nG4 P1\n{% endif %}\n{ action_emergency_stop('not on this firmware') }\n"}};
+        longer["configfile"]["settings"]["gcode_macro old_stop"]  = {{"gcode", "\nG4 P1\n  M112\n"}};
+        longer["configfile"]["settings"]["gcode_macro guarded"]   = {{"gcode", "\n{%- if params.X is not defined -%}\n{ action_emergency_stop(\"no X\") }\nM112\n{%- endif -%}\nG28"}};
+        U1Jobs::GcodeFacts old = carbon;
+        old.commands           = {"G1", "OLD_CLEAN"};
+        const auto refused = U1Jobs::afc_start_blocker(old, longer, map, true, model);
+        CHECK(refused.kind == Kind::RefusedCommand);
+        CHECK(refused.detail == "OLD_CLEAN\nnot on this firmware");
+        old.commands = {"G1", "OLD_STOP"};
+        CHECK(U1Jobs::afc_start_blocker(old, longer, map, true, model).detail == "OLD_STOP\n");
+        old.commands = {"G1", "GUARDED"};
+        CHECK(U1Jobs::afc_start_blocker(old, longer, map, true, model).kind == Kind::None);
+        // A file whose commands could not be listed in full was not checked, and is not sent.
+        U1Jobs::GcodeFacts endless = cosmos;
+        endless.commands_complete  = false;
+        CHECK(U1Jobs::afc_start_blocker(endless, idle_carbon(), map, false, model).kind == Kind::FileNotChecked);
         // A Start without the printer's configuration was not checked for this, and is refused.
         auto unread = idle_carbon();
         unread.erase("configfile");
         CHECK(U1Jobs::afc_start_blocker(cosmos, unread, map, true, model).kind == Kind::PrinterUnreachable);
         CHECK(U1Jobs::afc_start_blocker(cosmos, unread, map, false, model).kind == Kind::None);
+    }
+    SECTION("a changer in bypass, or one whose lanes were not read, starts nothing")
+    {
+        auto status = idle_carbon();
+        status["AFC"]["bypass_state"] = true;
+        const auto bypass = U1Jobs::afc_start_blocker(carbon, status, map, true, model);
+        CHECK(bypass.kind == Kind::ChangerNotReady);
+        CHECK(bypass.detail == "bypass");
+        auto unread = idle_carbon();
+        unread.erase("AFC_lane CANVAS_2"); // a lane no filament of this file prints from
+        CHECK(U1Jobs::afc_start_blocker(carbon, unread, map, true, model).kind == Kind::PrinterUnreachable);
+        CHECK(U1Jobs::afc_start_blocker(carbon, unread, map, false, model).kind == Kind::None);
     }
     SECTION("upload only needs no printer state")
     {

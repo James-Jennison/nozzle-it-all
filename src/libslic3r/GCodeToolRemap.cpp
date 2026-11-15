@@ -7,6 +7,7 @@
 
 #include <cctype>
 #include <cstddef>
+#include <initializer_list>
 #include <ios>
 #include <string>
 #include <string_view>
@@ -66,8 +67,22 @@ bool names_a_tool(std::string_view code, size_t from)
         }
         if (word.size() > 5 && starts_with_word(std::string(word.substr(0, 4)), "TOOL") && word[4] == '=' && is_digit(word[5]))
             return true;
+        // A lane named outright ("LANE=CANVAS_2"): the source is chosen past the tool numbers.
+        if (word.size() > 5 && starts_with_word(std::string(word.substr(0, 4)), "LANE") && word[4] == '=')
+            return true;
         i = word_end;
     }
+    return false;
+}
+
+// Commands that choose a filament source, or change which lane answers to a tool number, without a tool number
+// this file's renumbering could follow.
+bool selects_a_source(std::string_view code)
+{
+    for (const std::string_view command : {"CHANGE_TOOL", "SET_MAP", "ACTIVATE_EXTRUDER", "TOOL_LOAD", "SET_LANE_LOADED", "AFC_SWAP_MAPPING",
+                                           "AFC_ADD_MAPPING", "AFC_REMOVE_MAPPING", "AFC_RESET_MAPPING", "AFC_ENABLE_MULTIPLE_MAPPING"})
+        if (starts_with_word(code, command))
+            return true;
     return false;
 }
 
@@ -135,7 +150,7 @@ LineResult remap_line(std::string &line, const std::vector<int> &filament_to_too
         return LineResult::Rewritten;
     }
 
-    return names_a_tool(code, 0) ? LineResult::NotUnderstood : LineResult::Unchanged;
+    return names_a_tool(code, 0) || selects_a_source(code) ? LineResult::NotUnderstood : LineResult::Unchanged;
 }
 
 bool is_identity(const std::vector<int> &filament_to_tool)

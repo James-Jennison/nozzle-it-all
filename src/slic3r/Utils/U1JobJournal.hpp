@@ -225,6 +225,8 @@ struct GcodeFacts
     /// The commands the file runs: the first word of each line that is not a comment, upper case ("G1", "M729",
     /// "PRINT_START"). What a printer's own configuration refuses is looked for among them.
     std::set<std::string> commands;
+    /// False when the file ran more different commands than are kept: what it runs is then not known in full.
+    bool commands_complete = true;
 };
 GcodeFacts read_gcode_facts(const boost::filesystem::path &file);
 
@@ -242,6 +244,7 @@ struct Blocker
         ChangerNotReady,    ///< AFC reports an error or is busy; detail = what it reports
         LaneUnknown,        ///< no lane answers to the tool number (toolhead) the filament is to print from
         LaneEmpty,          ///< that lane has no filament ready
+        FileNotChecked,     ///< the commands the file runs could not be listed in full, so they were not checked
         RefusedCommand      ///< the file runs a command this printer answers with an emergency stop; detail = the command, then a
                             ///< line break, then the printer's own message for it
     };

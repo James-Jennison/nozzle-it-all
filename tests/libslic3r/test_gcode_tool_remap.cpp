@@ -76,6 +76,13 @@ TEST_CASE("A tool named in a form that is not rewritten is refused, and so is a 
     CHECK(remapped("M104 S220 T1", map, LineResult::NotUnderstood) == "M104 S220 T1");
     CHECK(remapped("M109 T0 S220", map, LineResult::NotUnderstood) == "M109 T0 S220");
     CHECK(remapped("T0 T1", map, LineResult::NotUnderstood) == "T0 T1");
+    // A source chosen past the tool numbers, or a change to which lane answers to a number.
+    CHECK(remapped("TOOL_LOAD LANE=CANVAS_2", map, LineResult::NotUnderstood) == "TOOL_LOAD LANE=CANVAS_2");
+    CHECK(remapped("set_map lane=CANVAS_1 MAP=T3", map, LineResult::NotUnderstood) == "set_map lane=CANVAS_1 MAP=T3");
+    CHECK(remapped("ACTIVATE_EXTRUDER EXTRUDER=extruder1", map, LineResult::NotUnderstood) == "ACTIVATE_EXTRUDER EXTRUDER=extruder1");
+    CHECK(remapped("AFC_SWAP_MAPPING FROM=CANVAS_1 TO=CANVAS_2", map, LineResult::NotUnderstood) == "AFC_SWAP_MAPPING FROM=CANVAS_1 TO=CANVAS_2");
+    CHECK(remapped("TOOL_UNLOAD", map, LineResult::Unchanged) == "TOOL_UNLOAD");
+    CHECK(remapped("PRINT_END", map, LineResult::Unchanged) == "PRINT_END");
     CHECK(remapped("T1X", map, LineResult::NotUnderstood) == "T1X");
     CHECK(remapped("T12345", map, LineResult::NotUnderstood) == "T12345");
     CHECK(remapped("CHANGE_TOOL TOOL=1", map, LineResult::NotUnderstood) == "CHANGE_TOOL TOOL=1");

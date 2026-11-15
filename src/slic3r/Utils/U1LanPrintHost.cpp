@@ -88,8 +88,10 @@ nlohmann::json query_afc_status(const std::string &base_url, long timeout_s = QU
     if (lanes.empty())
         return status;
     const nlohmann::json lane_status = read(lanes);
+    // Without the lanes the status still says "this printer has a filament changer": the checked window opens for
+    // it, and afc_start_blocker() refuses a Start for want of the lanes.
     if (!lane_status.is_object())
-        return nlohmann::json(); // the lanes are part of what a Start depends on: half a status is none
+        return status;
     for (auto it = lane_status.begin(); it != lane_status.end(); ++it)
         status[it.key()] = it.value();
     // Klipper's saved variables, where a printer's configuration may keep each lane's brand (AfcLanes::lane_brand).
@@ -300,6 +302,8 @@ wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker, Target target)
         case Kind::WrongModel: return GUI::format_wxstr(_L("This file was sliced for %1%, which is not the selected printer."), blocker.detail);
         case Kind::PrinterUnreachable: return _L("The printer did not report its state and that of its filament changer, so a print cannot be started now.");
         case Kind::ChangerNotReady:
+            if (blocker.detail == "bypass")
+                return _L("The printer's filament changer is in bypass, so a print from its slots cannot be started now.");
             return blocker.detail == "error" ? _L("The printer's filament changer reports an error, so a print cannot be started now.") :
                                                GUI::format_wxstr(_L("The printer's filament changer is busy (%1%), so a print cannot be started now."), blocker.detail);
         case Kind::LaneUnknown:
@@ -307,6 +311,7 @@ wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker, Target target)
         case Kind::LaneEmpty:
             return GUI::format_wxstr(_L("Slot %1% has no filament ready (needed for filament %2%)."), blocker.toolhead + 1, blocker.filament + 1);
         case Kind::NozzleUnknown: return _L("The printer did not report the nozzle it has fitted.");
+        case Kind::FileNotChecked: return _L("This file runs more different commands than could be checked against what this printer refuses, so it is not sent.");
         case Kind::RefusedCommand: {
             const size_t   split   = blocker.detail.find('\n');
             const wxString command = wxString::FromUTF8(blocker.detail.substr(0, split));
@@ -336,6 +341,7 @@ wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker, Target target)
     case Kind::NozzleMismatch:
         return GUI::format_wxstr(_L("Filament %1% was sliced for a %2% mm nozzle, but toolhead %3% has a %4% mm nozzle."), blocker.filament + 1,
                                  blocker.sliced, blocker.toolhead + 1, blocker.fitted);
+    case Kind::FileNotChecked:
     case Kind::RefusedCommand: break; // looked for on a printer with a filament changer only, and worded above
     }
     return {};

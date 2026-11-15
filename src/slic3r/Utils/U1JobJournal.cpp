@@ -753,8 +753,12 @@ GcodeFacts read_gcode_facts(const fs::path &file)
         if (line.empty() || line[0] != ';') {
             // The command a line runs. A file has a few dozen different ones; the bound is for a file that is not G-code.
             const size_t first = line.find_first_not_of(" \t");
-            if (first == std::string::npos || line[first] == ';' || facts.commands.size() >= 4096)
+            if (first == std::string::npos || line[first] == ';')
                 continue;
+            if (facts.commands.size() >= 4096) {
+                facts.commands_complete = false;
+                continue;
+            }
             const size_t end     = line.find_first_of(" \t;\r", first);
             std::string  command = line.substr(first, end == std::string::npos ? std::string::npos : end - first);
             boost::to_upper(command);
@@ -845,6 +849,43 @@ Blocker start_blocker(const GcodeFacts &facts, const json &status, const std::ve
     return Blocker();
 }
 
+namespace {
+// Where in a macro's body an emergency stop stands that every run of the macro reaches: an action_emergency_stop
+// call, or an M112 line, outside every {% if %} / {% for %} / {% macro %} block. npos when there is none. (A stop
+// inside such a block is the macro's answer to a fault of its own, not to being called.)
+size_t unconditional_stop(const std::string &body)
+{
+    static const std::string call = "action_emergency_stop(";
+    int    depth = 0;
+    size_t pos   = 0;
+    while (pos < body.size()) {
+        if (body.compare(pos, 2, "{#") == 0) { // a comment
+            const size_t end = body.find("#}", pos);
+            if (end == std::string::npos)
+                return std::string::npos;
+            pos = end + 2;
+        } else if (body.compare(pos, 2, "{%") == 0) {
+            const size_t end = body.find("%}", pos);
+            if (end == std::string::npos)
+                return std::string::npos;
+            std::string tag = boost::trim_copy_if(body.substr(pos + 2, end - pos - 2), boost::is_any_of(" \t\r\n-"));
+            tag             = tag.substr(0, tag.find_first_of(" \t\r\n"));
+            if (tag == "if" || tag == "for" || tag == "macro" || tag == "call" || tag == "filter")
+                ++depth;
+            else if (tag == "endif" || tag == "endfor" || tag == "endmacro" || tag == "endcall" || tag == "endfilter")
+                depth = std::max(0, depth - 1);
+            pos = end + 2;
+        } else if (depth == 0 && body.compare(pos, call.size(), call) == 0) {
+            return pos;
+        } else if (depth == 0 && (pos == 0 || body[pos - 1] == '\n') && boost::istarts_with(boost::trim_left_copy(body.substr(pos, 16)), "M112") ) {
+            return pos;
+        } else
+            ++pos;
+    }
+    return std::string::npos;
+}
+} // namespace
+
 Blocker afc_start_blocker(const GcodeFacts &facts, const json &status, const std::vector<int> &filament_to_tool, bool start, const std::string &printer_model)
 {
     Blocker blocker;
@@ -869,21 +910,25 @@ Blocker afc_start_blocker(const GcodeFacts &facts, const json &status, const std
             static const std::string prefix = "gcode_macro ";
             if (!boost::starts_with(it.key(), prefix) || !it->is_object() || !it->contains("gcode") || !(*it)["gcode"].is_string())
                 continue;
-            const std::string body = boost::trim_copy((*it)["gcode"].get<std::string>());
-            static const std::string stop = "action_emergency_stop(";
-            const size_t call = body.find(stop);
-            if (body.size() < 2 || body.front() != '{' || body.back() != '}' || call == std::string::npos || body.find("{%") != std::string::npos ||
-                body.find('\n') != std::string::npos || !boost::trim_copy(body.substr(1, call - 1)).empty())
+            const std::string body = (*it)["gcode"].get<std::string>();
+            const size_t      call = unconditional_stop(body);
+            if (call == std::string::npos)
                 continue;
             const std::string command = boost::to_upper_copy(boost::trim_copy(it.key().substr(prefix.size())));
             if (facts.commands.count(command) == 0)
                 continue;
-            const size_t open  = body.find_first_of("\"'", call);
+            const bool   said  = body.compare(call, 22, "action_emergency_stop(") == 0; // an M112 line says nothing
+            const size_t open  = said ? body.find_first_of("\"'", call) : std::string::npos;
             const size_t close = open != std::string::npos ? body.find(body[open], open + 1) : std::string::npos;
             blocker.kind       = Blocker::Kind::RefusedCommand;
             blocker.detail     = command + "\n" + (close != std::string::npos ? body.substr(open + 1, close - open - 1) : std::string());
             return blocker;
         }
+    // The check above was made against a list of the file's commands that is not whole.
+    if (settings != nullptr && !facts.commands_complete) {
+        blocker.kind = Blocker::Kind::FileNotChecked;
+        return blocker;
+    }
     if (!start)
         return blocker;
 
@@ -917,6 +962,18 @@ Blocker afc_start_blocker(const GcodeFacts &facts, const json &status, const std
         blocker.detail = changer;
         return blocker;
     }
+    // In bypass the changer feeds nothing: filament comes from outside it, and a tool change would not change it.
+    if (const auto bypass = afc->find("bypass_state"); bypass != afc->end() && bypass->is_boolean() && bypass->get<bool>()) {
+        blocker.kind   = Blocker::Kind::ChangerNotReady;
+        blocker.detail = "bypass";
+        return blocker;
+    }
+    // Every lane the changer names has to have been read: a status without them says nothing about the slots.
+    for (const std::string &name : AfcLanes::lane_names(status))
+        if (object(("AFC_lane " + name).c_str()) == nullptr) {
+            blocker.kind = Blocker::Kind::PrinterUnreachable;
+            return blocker;
+        }
 
     bool any = false;
     for (size_t filament = 0; filament < filament_to_tool.size(); ++filament) {

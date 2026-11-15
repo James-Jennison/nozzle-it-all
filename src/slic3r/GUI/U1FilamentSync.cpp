@@ -2244,6 +2244,17 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
     // Loaded toolheads no project filament was mapped to join the list as new filaments, through the
     // same call as the sidebar's "Add one filament". A toolhead without a known preset is not added.
     if (choice.mapping && choice.add_unused && bundle.num_mixed_filaments() == 0) {
+        // A slot about to be added whose brand has no preset yet gets one now (the slots mapped above got theirs
+        // when the mapping was applied). Where that fails the slot is added with the preset picked for it.
+        for (size_t i = 0; i < slots.size(); ++i)
+            if (slots[i].present && brand_preset[i] && !needs_review && std::find(target.begin(), target.end(), int(i)) == target.end()) {
+                std::vector<std::string> made;
+                std::string              make_error;
+                if (const CatalogPresetResult result = catalog_preset(bundle, *brand_preset[i], slots[i], made, make_error); !result.preset_name.empty())
+                    applied[i] = result.preset_name;
+                else
+                    BOOST_LOG_TRIVIAL(warning) << "Sync filaments: no preset made for slot " << i << ": " << make_error;
+            }
         bool added = false;
         for (size_t i = 0; i < slots.size(); ++i)
             if (slots[i].present && !applied[i].empty() && std::find(target.begin(), target.end(), int(i)) == target.end()) {

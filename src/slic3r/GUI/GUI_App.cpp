@@ -1,3 +1,4 @@
+#include "slic3r/Utils/CameraRelay.hpp"
 #include "slic3r/Utils/PresetBundleLink.hpp"
 #include "CloudProvider.hpp"
 #include "ExportPresetBundleDialog.hpp"
@@ -3145,6 +3146,7 @@ bool GUI_App::OnInit()
 int GUI_App::OnExit()
 {
     stop_http_server();
+    CameraRelay::instance().stop(); // the printer page camera's relay: its streams end here, not at static teardown
     stop_sync_user_preset();
     if (m_startup_cloud_plugin_fetch_thread.joinable())
         m_startup_cloud_plugin_fetch_thread.join();

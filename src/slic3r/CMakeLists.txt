@@ -842,6 +842,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/SemanticPaintClient.cpp
     Utils/SemanticPaintClient.hpp
     Utils/FleetStatus.cpp
+    Utils/CameraRelay.cpp
+    Utils/CameraRelay.hpp
     Utils/MjpegStream.cpp
     Utils/MjpegStream.hpp
     Utils/FleetStatus.hpp
@@ -1112,6 +1114,22 @@ if (UNIX AND NOT APPLE)
     find_package(X11 REQUIRED)
     target_include_directories(libslic3r_gui SYSTEM PRIVATE ${GTK${SLIC3R_GTK}_INCLUDE_DIRS} ${LIBSECRET_INCLUDE_DIRS} ${webkit2gtk_INCLUDE_DIRS})
     target_link_libraries(libslic3r_gui ${GTK${SLIC3R_GTK}_LIBRARIES} fontconfig ${LIBSECRET_LIBRARIES} ${webkit2gtk_LIBRARIES} ${X11_LIBRARIES})
+
+    # The printer page camera's web view extension: loaded by WebKitGTK's web process, not linked into the
+    # application. Built beside the program, in src/nia-web-extensions whatever the configuration; the
+    # AppImage carries it in lib/nia-web-extensions (build_linux_image.sh.in). Without the extension API on
+    # the build machine it is left out, and the camera on the printer's own page stays as the engine has it.
+    pkg_check_modules(webkit2gtk_web_extension webkit2gtk-web-extension-4.1)
+    if (webkit2gtk_web_extension_FOUND)
+        enable_language(C)
+        add_library(nia_web_extension MODULE GUI/webext/nia_web_extension.c)
+        target_include_directories(nia_web_extension SYSTEM PRIVATE ${webkit2gtk_web_extension_INCLUDE_DIRS})
+        target_link_libraries(nia_web_extension PRIVATE ${webkit2gtk_web_extension_LIBRARIES})
+        set_target_properties(nia_web_extension PROPERTIES
+            PREFIX "lib"
+            LIBRARY_OUTPUT_DIRECTORY "$<1:${CMAKE_BINARY_DIR}/src/nia-web-extensions>")
+        add_dependencies(libslic3r_gui nia_web_extension)
+    endif ()
 
     # Propagate GDK backend detection results as compile definitions so that
     # LinuxDisplayBackend.cpp can include the right GDK headers.

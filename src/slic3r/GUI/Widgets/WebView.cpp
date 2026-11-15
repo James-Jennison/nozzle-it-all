@@ -1,6 +1,7 @@
 #include "WebView.hpp"
 #include "slic3r/GUI/Widgets/StateColor.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
+#include "slic3r/GUI/PrinterWebView.hpp"
 #include "slic3r/Utils/MacDarkMode.hpp"
 #include "slic3r/Utils/OrcaCloudServiceAgent.hpp"
 #include "libslic3r/libslic3r.h"
@@ -337,7 +338,11 @@ wxWebView* WebView::CreateWebView(wxWindow * parent, wxString const & url)
 #elif defined(__WXOSX__)
     wxWebView* webView = new WebViewWebKit;
 #else
-    auto webView = wxWebView::New();
+    // As wxWebView::New() does, with the configuration in hand first: the printer page's camera relay is
+    // attached to the web view's context before its process starts (PrinterWebView.cpp).
+    wxWebViewConfiguration configuration = wxWebView::NewConfiguration();
+    Slic3r::GUI::attach_printer_camera_relay(configuration.GetNativeConfiguration());
+    auto webView = wxWebView::New(configuration);
 #endif
     if (webView) {
         webView->SetBackgroundColour(StateColor::darkModeColorFor(*wxWHITE));

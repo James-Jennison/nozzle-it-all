@@ -202,6 +202,13 @@ echo -n "[9/9] Generating Linux app..."
     fi
     cp -fl "${ORIGINAL_BINARY_LOCATION}" "$BIN_DIR/@SLIC3R_APP_CMD@"
 
+    # The printer page camera's web view extension (src/slic3r/GUI/webext): WebKitGTK's web process loads it
+    # from <resources_dir>/../lib/nia-web-extensions. It links only what that process already has.
+    if [ -f "src/nia-web-extensions/libnia_web_extension.so" ]; then
+        mkdir -p "$LIB_DIR/nia-web-extensions"
+        cp -f "src/nia-web-extensions/libnia_web_extension.so" "$LIB_DIR/nia-web-extensions/"
+    fi
+
     # Bundle the embedded Python runtime (interpreter + stdlib) that CMake staged
     # next to the binary. OrcaSlicer resolves PYTHONHOME at <resources_dir>/../lib/python,
     # which is $APPDIR/lib/python (resources_dir is $APPDIR/resources). Staging it here,

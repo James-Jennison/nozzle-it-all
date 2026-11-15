@@ -58,6 +58,8 @@ public:
     void update_mode();
 
     bool Show(bool show = true) override;
+    /// Whether *view* is a PrinterWebView that exists now. Main thread only; for work queued with CallAfter.
+    static bool is_live(const PrinterWebView *view);
 
 private:
     friend class PrinterWebViewHandler;

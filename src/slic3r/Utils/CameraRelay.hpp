@@ -34,6 +34,9 @@ public:
     std::string start();
     /// A printer whose page the application shows; *host* without port.
     void allow_host(const std::string &host);
+    /// The printer's page brought its web process down with the stream; nothing of that printer is served again
+    /// in this run, so that its page comes back as it was without the relay.
+    void deny_host(const std::string &host);
     void stop();
 
     /// An address taken apart. *port* is the scheme's own when none is written.
@@ -64,7 +67,7 @@ private:
 
     std::mutex            m_mutex;
     std::string           m_where, m_secret;
-    std::set<std::string> m_hosts;
+    std::set<std::string> m_hosts, m_denied;
     struct Listed
     {
         std::vector<std::string>              streams;

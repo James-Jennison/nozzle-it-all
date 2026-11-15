@@ -37,6 +37,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -185,6 +186,11 @@ static void add_page_strings(wxWebView *webView)
     webView->AddUserScript(wxString::FromUTF8(WebViewHostDialog::localized_strings_script(strings)));
 }
 
+// The views that exist, for work queued to the main thread that must not touch one that is gone.
+static std::set<const PrinterWebView *> s_live_views;
+
+bool PrinterWebView::is_live(const PrinterWebView *view) { return s_live_views.count(view) != 0; }
+
 PrinterWebView::PrinterWebView(wxWindow *parent)
         : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize)
     , m_browser(nullptr)
@@ -194,6 +200,8 @@ PrinterWebView::PrinterWebView(wxWindow *parent)
     , m_url_deferred()
     , m_handler(std::make_unique<PrinterWebViewHandler>(*this))
  {
+    s_live_views.insert(this);
+
 
     wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 
@@ -222,6 +230,7 @@ PrinterWebView::PrinterWebView(wxWindow *parent)
 
 PrinterWebView::~PrinterWebView()
 {
+    s_live_views.erase(this);
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << " Start";
     SetEvtHandlerEnabled(false);
     m_handler.reset();
@@ -249,6 +258,22 @@ void PrinterWebView::create_browser()
     auto wv_ctx = webkit_web_view_get_context(wv);
     auto cookieManager = webkit_web_context_get_cookie_manager(wv_ctx);
     webkit_cookie_manager_set_persistent_storage(cookieManager, cookiesPath.c_str(), WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
+    // A page whose web process ends is blank from then on. Mainsail's stream camera can end it once it has
+    // pictures to draw (see webext/nia_web_extension.c): the page is loaded again, and the relay serves that
+    // printer no more in this run, so the page is back as it was before the relay, with its camera error.
+    g_signal_connect(wv, "web-process-terminated", G_CALLBACK(+[](WebKitWebView *, WebKitWebProcessTerminationReason reason, gpointer self) {
+                         auto *view = static_cast<PrinterWebView *>(self);
+                         wxGetApp().CallAfter([view, reason] {
+                             if (wxGetApp().is_closing() || !PrinterWebView::is_live(view))
+                                 return;
+                             const std::string host = wxURI(view->m_url).GetServer().utf8_string();
+                             BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the page's web process ended (reason " << int(reason) << "); the page is loaded again and the camera of "
+                                                        << host << " is no longer passed on";
+                             CameraRelay::instance().deny_host(host);
+                             if (view->m_browser != nullptr && !view->m_url.empty())
+                                 view->m_browser->LoadURL(view->m_url);
+                         });
+                     }), this);
 #endif
 
     m_browser->Bind(wxEVT_WEBVIEW_ERROR, &PrinterWebView::OnError, this);

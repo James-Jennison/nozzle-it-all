@@ -12,12 +12,10 @@
  * is answered with a redirect to the address itself, which this extension leaves alone, so that the page
  * gets what it would have had.
  *
- * Mainsail's stream camera is left as it is. Mainsail draws the stream's pictures in a worker on an
- * off-screen canvas, and with a stream it can read, WebKitGTK 2.52 now and then corrupts its heap doing so
- * and the whole page goes blank (seen about once in five loads on a build without this extension, with the
- * stream served under a type the engine reads). An error in the camera panel is the lesser fault, and it is
- * what Mainsail showed before; its "Adaptive MJPEG" camera plays. A page is taken for Mainsail by its title
- * when its document has loaded, or by its camera worker's file being asked for.
+ * One page is known to bring the engine down once its stream camera has pictures: Mainsail draws them in a
+ * worker on an off-screen canvas, and with software rendering WebKitGTK 2.52 now and then corrupts its heap
+ * doing so (the whole page goes blank). That is not judged here by the page's name: the application sees
+ * the web process end, reloads the page and has the relay serve that printer no more (PrinterWebView.cpp).
  */
 #include <webkit2/webkit-web-extension.h>
 
@@ -36,31 +34,6 @@ static gboolean looks_like_stream(GUri *uri)
            g_str_has_suffix(path, ".mjpg") || g_str_has_suffix(path, ".mjpeg");
 }
 
-#define LEFT_ALONE "nia-camera-left-alone"
-
-static void on_document_loaded(WebKitWebPage *page, gpointer data)
-{
-    WebKitFrame *frame   = webkit_web_page_get_main_frame(page);
-    JSCContext  *context = frame != NULL ? webkit_frame_get_js_context(frame) : NULL;
-    gboolean     mainsail = FALSE;
-    (void) data;
-    if (context != NULL) {
-        JSCValue *value = jsc_context_evaluate(context, "document.title", -1);
-        if (value != NULL && jsc_value_is_string(value)) {
-            char *title = jsc_value_to_string(value);
-            char *lower = title != NULL ? g_ascii_strdown(title, -1) : NULL;
-            mainsail    = lower != NULL && strstr(lower, "mainsail") != NULL;
-            g_free(lower);
-            g_free(title);
-        }
-        if (value != NULL)
-            g_object_unref(value);
-        g_object_unref(context);
-    }
-    /* A new document: what the last one was no longer counts. */
-    g_object_set_data(G_OBJECT(page), LEFT_ALONE, GINT_TO_POINTER(mainsail ? 1 : 0));
-}
-
 static gboolean on_send_request(WebKitWebPage *page, WebKitURIRequest *request, WebKitURIResponse *redirected, gpointer data)
 {
     const char *relay = g_getenv("NIA_CAMERA_RELAY");
@@ -74,10 +47,6 @@ static gboolean on_send_request(WebKitWebPage *page, WebKitURIRequest *request, 
     address      = webkit_uri_request_get_uri(request);
     page_address = webkit_web_page_get_uri(page);
     if (address == NULL || page_address == NULL || g_str_has_prefix(address, relay))
-        return FALSE;
-    if (strstr(address, "mjpegstreamer.worker") != NULL) /* Mainsail's camera worker */
-        g_object_set_data(G_OBJECT(page), LEFT_ALONE, GINT_TO_POINTER(1));
-    if (GPOINTER_TO_INT(g_object_get_data(G_OBJECT(page), LEFT_ALONE)) != 0)
         return FALSE;
     uri      = g_uri_parse(address, G_URI_FLAGS_NONE, NULL);
     page_uri = g_uri_parse(page_address, G_URI_FLAGS_NONE, NULL);
@@ -111,7 +80,6 @@ static void on_page_created(WebKitWebExtension *extension, WebKitWebPage *page, 
     (void) extension;
     (void) data;
     g_signal_connect(page, "send-request", G_CALLBACK(on_send_request), NULL);
-    g_signal_connect(page, "document-loaded", G_CALLBACK(on_document_loaded), NULL);
 }
 
 G_MODULE_EXPORT void webkit_web_extension_initialize(WebKitWebExtension *extension)

@@ -176,7 +176,17 @@ void CameraRelay::allow_host(const std::string &host)
     if (host.empty())
         return;
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_hosts.insert(lower(host));
+    if (m_denied.count(lower(host)) == 0)
+        m_hosts.insert(lower(host));
+}
+
+void CameraRelay::deny_host(const std::string &host)
+{
+    if (host.empty())
+        return;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_denied.insert(lower(host));
+    m_hosts.erase(lower(host));
 }
 
 #ifndef __linux__

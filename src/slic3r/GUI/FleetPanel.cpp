@@ -19,6 +19,8 @@
 #include <future>
 #include <nlohmann/json.hpp>
 
+#include <boost/log/trivial.hpp>
+
 #include <wx/bitmap.h>
 #include <wx/log.h>
 #include <wx/mstream.h>
@@ -575,6 +577,7 @@ void FleetPanel::rebuild(bool force)
         card->SetSizer(line);
         m_rows->Add(card, 0, wxEXPAND | wxTOP, FromDIP(8));
     }
+    BOOST_LOG_TRIVIAL(warning) << "Printers side: " << rows.size() << " cards";
     m_empty->SetForegroundColour(NIATheme::text_muted(dark));
     m_empty->SetLabel(rows.empty() ? _L("No printer has an address yet. Press Add printer, or enter an address in a printer's Connection settings.") :
                       listed == 0  ? _L("No printer is in this group.") : wxString());

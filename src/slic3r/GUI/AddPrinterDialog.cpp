@@ -12,6 +12,7 @@
 #include "Widgets/Label.hpp"
 #include "Widgets/TextInput.hpp"
 #include "format.hpp"
+#include "libslic3r/DeviceWorkspaceState.hpp"
 #include "libslic3r/Preset.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
@@ -287,8 +288,10 @@ void AddPrinterDialog::add()
     const auto refuse = [&](const wxString &why) { MessageDialog(this, why, title, wxOK | wxICON_WARNING).ShowModal(); };
     if (address.empty())
         return refuse(_L("Type the printer's address, or search the network and choose a printer that was found."));
-    if (address.find_first_of(" /\\?#@") != std::string::npos)
-        return refuse(_L("The address is a host name or an IP address, with a port when the printer needs one, such as 192.168.1.50 or 192.168.1.50:7125."));
+    // The same rule the Printers side and the Monitor apply to an address: a card is only made for one they take.
+    if (DeviceWorkspaceState::lan_host_from_address(address).empty())
+        return refuse(_L("This is not an address on the local network. Type the printer's IP address, with a port when the printer needs one, such as "
+                         "192.168.1.50 or 192.168.1.50:7125."));
     if (const Preset *had = preset_at(address))
         // TRN %1% is the name of a printer preset.
         return refuse(format_wxstr(_L("%1% already has this address, so this printer already has a card."), from_u8(had->name)));

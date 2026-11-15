@@ -58,7 +58,20 @@ void read_status(const nlohmann::json &status, Reading &reading);
 /// The group a printer belongs to and why. A printer that needs a person is never shown as Printing or Ready.
 Verdict classify(const Reading &reading);
 
+/// Where a printer's camera serves a still picture and where a stream this application can read (MJPEG).
+struct CameraAddresses
+{
+    std::string snapshot, stream; ///< each empty when there is none
+};
+/// The printer's first enabled camera, from the body of Moonraker's answer to /server/webcams/list. *host* is
+/// the printer's address as the preset has it. An address in the list may be a path; it is then on the
+/// printer's web port. A camera played by WebRTC (the Snapmaker U1's) cannot be read here; such a camera
+/// service also serves an MJPEG stream at /webcam/stream.mjpg, the one the Monitor side falls back on, and
+/// that is the stream given.
+CameraAddresses camera_addresses(const std::string &list_body, const std::string &host);
+
 } // namespace Fleet
+
 } // namespace Slic3r
 
 #endif // slic3r_FleetStatus_hpp_

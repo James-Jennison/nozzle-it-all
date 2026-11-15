@@ -134,29 +134,8 @@ std::pair<std::string, std::string> camera_addresses(const std::string &host, co
         .timeout_max(5)
         .on_progress([stop](Http::Progress, bool &cancel) { cancel = stop->load(); })
         .on_complete([&found, &host](std::string body, unsigned) {
-            const auto doc = nlohmann::json::parse(body, nullptr, false);
-            if (doc.is_discarded() || !doc.is_object() || !doc.contains("result") || !doc["result"].is_object())
-                return;
-            const auto cams = doc["result"].find("webcams");
-            if (cams == doc["result"].end() || !cams->is_array())
-                return;
-            // Moonraker gives a path on the printer's web port, or a whole address.
-            const auto address = [&host](const nlohmann::json &cam, const char *key) {
-                const auto it = cam.find(key);
-                if (it == cam.end() || !it->is_string() || it->get<std::string>().empty())
-                    return std::string();
-                std::string url = it->get<std::string>();
-                if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0)
-                    url = "http://" + host.substr(0, host.find(':')) + (url.front() == '/' ? "" : "/") + url;
-                return url;
-            };
-            for (const auto &cam : *cams) {
-                if (!cam.is_object() || !cam.value("enabled", true))
-                    continue;
-                found = {address(cam, "snapshot_url"), address(cam, "stream_url")};
-                if (!found.first.empty() || !found.second.empty())
-                    return;
-            }
+            const Fleet::CameraAddresses camera = Fleet::camera_addresses(body, host);
+            found                               = {camera.snapshot, camera.stream};
         })
         .on_error([](std::string, std::string, unsigned) {})
         .perform_sync();

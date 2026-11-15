@@ -80,3 +80,26 @@ TEST_CASE("A printer is sorted by what it reports, and one that needs a person i
     CHECK(int(Band::Ready) < int(Band::Offline));
     CHECK(int(Band::Offline) < int(Band::NotMonitored));
 }
+
+TEST_CASE("A card's camera is the printer's first enabled camera, by an address this application can read", "[FleetStatus]")
+{
+    using Slic3r::Fleet::camera_addresses;
+    // A camera server on its own port, whole addresses.
+    auto camera = camera_addresses(R"({"result": {"webcams": [{"name": "webcam", "enabled": true, "service": "mjpegstreamer",
+        "stream_url": "http://192.168.1.114:8080/stream", "snapshot_url": "http://192.168.1.114:8080/snapshot"}]}})", "192.168.1.114");
+    CHECK(camera.stream == "http://192.168.1.114:8080/stream");
+    CHECK(camera.snapshot == "http://192.168.1.114:8080/snapshot");
+    // Paths are on the printer's web port, whatever port the preset names for Moonraker.
+    camera = camera_addresses(R"({"result": {"webcams": [{"name": "off", "enabled": false, "stream_url": "/other/stream"},
+        {"name": "cam", "stream_url": "/webcam/?action=stream", "snapshot_url": "webcam/?action=snapshot"}]}})", "192.168.1.50:7125");
+    CHECK(camera.stream == "http://192.168.1.50/webcam/?action=stream");
+    CHECK(camera.snapshot == "http://192.168.1.50/webcam/?action=snapshot");
+    // A WebRTC camera, as a Snapmaker U1 lists it: the MJPEG stream beside it is the one a card can read.
+    camera = camera_addresses(R"({"result": {"webcams": [{"name": "u1", "enabled": true, "service": "webrtc-camerastreamer",
+        "stream_url": "/webcam/webrtc", "snapshot_url": "/webcam/snapshot.jpg"}]}})", "192.168.1.243");
+    CHECK(camera.stream == "http://192.168.1.243/webcam/stream.mjpg");
+    CHECK(camera.snapshot == "http://192.168.1.243/webcam/snapshot.jpg");
+    // No camera, or no list.
+    CHECK(camera_addresses(R"({"result": {"webcams": []}})", "192.168.1.50").stream.empty());
+    CHECK(camera_addresses("not json", "192.168.1.50").stream.empty());
+}

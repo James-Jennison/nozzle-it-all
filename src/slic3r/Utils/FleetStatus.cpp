@@ -1,5 +1,6 @@
 #include "FleetStatus.hpp"
 
+#include <nlohmann/json.hpp>
 #include <algorithm>
 
 namespace Slic3r {
@@ -55,5 +56,39 @@ Verdict classify(const Reading &reading)
     return {Band::Ready, Reason::None};
 }
 
+CameraAddresses camera_addresses(const std::string &list_body, const std::string &host)
+{
+    CameraAddresses found;
+    const auto doc = nlohmann::json::parse(list_body, nullptr, false);
+    if (doc.is_discarded() || !doc.is_object() || !doc.contains("result") || !doc["result"].is_object())
+        return found;
+    const auto cams = doc["result"].find("webcams");
+    if (cams == doc["result"].end() || !cams->is_array())
+        return found;
+    const std::string web = "http://" + host.substr(0, host.find(':'));
+    // Moonraker gives a path on the printer's web port, or a whole address.
+    const auto address = [&web](const nlohmann::json &cam, const char *key) {
+        const auto it = cam.find(key);
+        if (it == cam.end() || !it->is_string() || it->get<std::string>().empty())
+            return std::string();
+        std::string url = it->get<std::string>();
+        if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0)
+            url = web + (url.front() == '/' ? "" : "/") + url;
+        return url;
+    };
+    for (const auto &cam : *cams) {
+        if (!cam.is_object() || !cam.value("enabled", true))
+            continue;
+        found = {address(cam, "snapshot_url"), address(cam, "stream_url")};
+        const auto service = cam.find("service");
+        if (service != cam.end() && service->is_string() && service->get<std::string>().find("webrtc") != std::string::npos)
+            found.stream = web + "/webcam/stream.mjpg"; // its stream address is a WebRTC one; this is the MJPEG beside it
+        if (!found.snapshot.empty() || !found.stream.empty())
+            return found;
+    }
+    return CameraAddresses();
+}
+
 } // namespace Fleet
+
 } // namespace Slic3r

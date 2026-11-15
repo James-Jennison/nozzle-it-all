@@ -139,8 +139,9 @@ void NativeDevicePage::ask_server_kind()
             answer(true, !doc.is_discarded() && doc.is_object() && doc.contains("result") && doc["result"].is_object() &&
                              (doc["result"].contains("klippy_state") || doc["result"].contains("klippy_connected")));
         })
-        // An HTTP status means a server is there and did not know the question: not a Moonraker.
-        .on_error([answer](std::string, std::string, unsigned status) { answer(status != 0, false); })
+        // "Not found" means a server is there and does not know the question: not a Moonraker. Any other
+        // status (a Moonraker that wants a key, a server in trouble) says nothing about what it is.
+        .on_error([answer](std::string, std::string, unsigned status) { answer(status == 404 || status == 405, false); })
         .perform();
 }
 

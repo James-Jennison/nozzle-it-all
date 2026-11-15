@@ -65,7 +65,7 @@ struct CameraAddresses
 };
 /// The printer's first enabled camera, from the body of Moonraker's answer to /server/webcams/list. *host* is
 /// the printer's address as the preset has it. An address in the list may be a path; it is then on the
-/// printer's web port. A camera played by WebRTC (the Snapmaker U1's) cannot be read here; such a camera
+/// printer's web port: the preset's port, or the scheme's when the preset names Moonraker's own (7125). A camera played by WebRTC (the Snapmaker U1's) cannot be read here; such a camera
 /// service also serves an MJPEG stream at /webcam/stream.mjpg, the one the Monitor side falls back on, and
 /// that is the stream given.
 CameraAddresses camera_addresses(const std::string &list_body, const std::string &host);

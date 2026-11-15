@@ -119,9 +119,12 @@ bool CameraRelay::names(const std::string &listed, const std::string &base, cons
         return false;
     if (entry.origin() != want.origin() || entry.path != want.path)
         return false;
-    const std::vector<std::string> have = pairs_of(want.query);
+    // Compared as they mean, not as they are written: "a%3Db" in the list is "a=b" in the page's address.
+    std::vector<std::string> have = pairs_of(want.query);
+    for (std::string &pair : have)
+        pair = unescape(pair);
     for (const std::string &pair : pairs_of(entry.query))
-        if (std::find(have.begin(), have.end(), pair) == have.end())
+        if (std::find(have.begin(), have.end(), unescape(pair)) == have.end())
             return false;
     return true;
 }
@@ -372,6 +375,10 @@ void CameraRelay::stop()
         m_stop.store(true);
         std::swap(listener, m_listener);
         m_where.clear();
+        // Streams being passed on end here and now: their sockets are shut, so no write or read waits out
+        // its time limit. The threads close them.
+        for (const int socket : m_sockets)
+            ::shutdown(socket, SHUT_RDWR);
     }
     if (listener >= 0) {
         ::shutdown(listener, SHUT_RDWR);
@@ -408,14 +415,25 @@ void CameraRelay::serve()
             continue;
         }
         ++m_open;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_sockets.insert(socket);
+        }
+        // The socket is closed where it is forgotten, under the lock, so that stop() never touches a number
+        // that has been given to another file since.
+        const auto forget = [this, socket] {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_sockets.erase(socket);
+            ::close(socket);
+        };
         try {
-            answering.push_back(std::async(std::launch::async, [this, socket] {
+            answering.push_back(std::async(std::launch::async, [this, socket, forget] {
                 answer(socket);
-                ::close(socket);
+                forget();
                 --m_open;
             }));
         } catch (const std::system_error &) {
-            ::close(socket);
+            forget();
             --m_open;
         }
     }
@@ -464,9 +482,13 @@ void CameraRelay::answer(int socket)
     };
     // "GET /<secret>?u=<address>&p=<page origin> HTTP/1.1"
     const size_t line_end = request.find("\r\n");
+    if (line_end == std::string::npos)
+        return refuse("400 Bad Request");
     const std::string line = request.substr(0, line_end);
     const size_t first = line.find(' '), last = line.rfind(' ');
-    if (line.compare(0, 4, "GET ") != 0 || first == last)
+    if (first == std::string::npos || first == last)
+        return refuse("400 Bad Request");
+    if (line.compare(0, 4, "GET ") != 0)
         return refuse("405 Method Not Allowed");
     const std::string target = line.substr(first + 1, last - first - 1);
     const size_t      mark   = target.find('?');
@@ -479,7 +501,8 @@ void CameraRelay::answer(int socket)
         return refuse("403 Forbidden");
     const std::string asked = value_of(target.substr(mark + 1), "u"), page = value_of(target.substr(mark + 1), "p");
     Address           camera, printer;
-    if (asked.find_first_of("\r\n") != std::string::npos || !parse(asked, camera))
+    // The address goes back in a header and on to libcurl: printable ASCII without spaces, or it is not used.
+    if (asked.empty() || !std::all_of(asked.begin(), asked.end(), [](unsigned char c) { return c > 0x20 && c < 0x7f; }) || !parse(asked, camera))
         return refuse("400 Bad Request");
     // What is not served is sent back to its own address: the page then gets what it would have had.
     const auto back = [socket, &asked] {
@@ -503,12 +526,14 @@ void CameraRelay::answer(int socket)
     passing.stop          = &m_stop;
     passing.page_origin   = printer.origin();
     passing.camera_origin = camera.origin();
-    for (size_t from = line_end; from != std::string::npos && from + 2 < request.size();) {
-        const size_t      to     = request.find("\r\n", from + 2);
-        const std::string header = request.substr(from + 2, to == std::string::npos ? std::string::npos : to - from - 2);
-        if (lower(header.substr(0, 7)) == "accept:")
+    for (size_t from = line_end + 2; from < request.size();) {
+        size_t to = request.find("\r\n", from);
+        if (to == std::string::npos)
+            to = request.size();
+        const std::string header = request.substr(from, to - from);
+        if (header.size() >= 7 && lower(header.substr(0, 7)) == "accept:")
             passing.accept = trimmed(header.substr(7));
-        from = to;
+        from = to + 2;
     }
     BOOST_LOG_TRIVIAL(warning) << "Printer page camera: passing on " << asked.substr(0, asked.find('?'));
     {

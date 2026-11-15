@@ -65,8 +65,12 @@ CameraAddresses camera_addresses(const std::string &list_body, const std::string
     const auto cams = doc["result"].find("webcams");
     if (cams == doc["result"].end() || !cams->is_array())
         return found;
-    const std::string web = "http://" + host.substr(0, host.find(':'));
-    // Moonraker gives a path on the printer's web port, or a whole address.
+    // Moonraker gives a path on the printer's web port, or a whole address. A preset that names Moonraker's own
+    // port (7125) reaches Moonraker beside the web server, which is on the scheme's port; any other port in the
+    // preset is the web server's and is kept.
+    const size_t      colon = host.rfind(':');
+    const bool        own   = colon != std::string::npos && host.compare(colon, std::string::npos, ":7125") == 0;
+    const std::string web   = "http://" + (own ? host.substr(0, colon) : host);
     const auto address = [&web](const nlohmann::json &cam, const char *key) {
         const auto it = cam.find(key);
         if (it == cam.end() || !it->is_string() || it->get<std::string>().empty())

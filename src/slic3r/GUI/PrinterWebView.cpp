@@ -260,7 +260,8 @@ void PrinterWebView::create_browser()
     webkit_cookie_manager_set_persistent_storage(cookieManager, cookiesPath.c_str(), WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
     // Mainsail's stream camera can end the page's web process once it has pictures to draw (see
     // webext/nia_web_extension.c), and the page is blank from then on. When a web process ends while the
-    // relay is passing this printer's camera on, or just was, the page is loaded again and the relay serves
+    // relay is passing this printer's camera on, or was within the last second (the stream ends with the
+    // process, a moment before this is told), the page is loaded again and the relay serves
     // that printer no more in this run: the page is back as it was before the relay, with its camera error.
     // A web process that ends at any other time is none of this code's business (one ends, reported the same
     // way, when the view leaves one printer's page for another's) and is left to the engine.
@@ -270,7 +271,7 @@ void PrinterWebView::create_browser()
                              if (wxGetApp().is_closing() || !PrinterWebView::is_live(view))
                                  return;
                              const std::string host = wxURI(view->m_url).GetServer().utf8_string();
-                             if (!CameraRelay::instance().had_stream(host, 3)) {
+                             if (!CameraRelay::instance().had_stream(host, 1)) {
                                  BOOST_LOG_TRIVIAL(warning) << "Printer page camera: a web process ended (reason " << int(reason) << ") with no camera of " << host << " being passed on; nothing done";
                                  return;
                              }

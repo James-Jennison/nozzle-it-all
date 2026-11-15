@@ -46,6 +46,9 @@ TEST_CASE("Only what the printer's list of cameras names is passed on", "[Camera
     CHECK_FALSE(CameraRelay::names("/webcam/?action=stream", printer, "http://192.168.1.114/webcam/?action=snapshot"));
     CHECK_FALSE(CameraRelay::names("/webcam/?action=stream", printer, "http://192.168.1.115/webcam/?action=stream"));
     CHECK_FALSE(CameraRelay::names("", printer, "http://192.168.1.114/webcam/?action=stream"));
+    // Written differently, meaning the same.
+    CHECK(CameraRelay::names("/webcam/?action=stream&name=front%20cam", printer, "http://192.168.1.114/webcam/?name=front cam&action=stream"));
+    CHECK(CameraRelay::names("/webcam/?mode=a%3Db", printer, "http://192.168.1.114/webcam/?mode=a=b"));
     CHECK_FALSE(CameraRelay::names("webcam/stream", printer, "http://192.168.1.114/webcam/stream"));
 }
 

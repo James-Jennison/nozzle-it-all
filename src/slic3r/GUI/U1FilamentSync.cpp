@@ -30,6 +30,7 @@
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/utils.h>
+#include <wx/weakref.h>
 
 #include "3DScene.hpp"
 #include "CreatePresetsDialog.hpp"
@@ -1713,6 +1714,14 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
 // Moonraker's database, one read request, then runs the same review and apply as for a U1.
 bool sync_filaments_from_lanes(wxWindow* parent)
 {
+    // The wait below lets the application's events run. A second sync asked for meanwhile is not started,
+    // and a window that went away meanwhile is not used.
+    static bool running = false;
+    if (running)
+        return false;
+    running = true;
+    struct Done { ~Done() { running = false; } } done;
+    const wxWeakRef<wxWindow> still_there(parent);
     const std::string host = resolve_printer_lan_host();
     // The read runs beside the GUI thread: a printer that does not answer costs up to ten seconds, and the
     // window stays alive meanwhile. When no answer has come within half a second a small window with Cancel
@@ -1763,8 +1772,8 @@ bool sync_filaments_from_lanes(wxWindow* parent)
                 stop->store(true);
     }
     const LaneRead read = pending.get();
-    if (stop->load())
-        return false; // cancelled
+    if (stop->load() || (parent != nullptr && !still_there) || wxGetApp().is_closing())
+        return false; // cancelled, or the window the sync was asked from is gone
     const std::optional<nlohmann::json>& value    = read.value;
     const bool                           answered = read.answered;
     const wxString                       error    = from_u8(read.error);

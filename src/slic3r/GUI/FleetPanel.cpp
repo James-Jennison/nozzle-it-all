@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <system_error>
 #include <utility>
 
 namespace Slic3r::GUI {
@@ -291,11 +292,22 @@ void FleetPanel::read_printers()
             std::vector<std::pair<std::string, std::future<Read>>> batch;
             for (size_t i = first; i < std::min(hosts.size(), first + 8); ++i) {
                 const auto known = cameras->find(hosts[i]);
-                batch.emplace_back(hosts[i], std::async(std::launch::async, read_one, hosts[i],
-                                                        known == cameras->end() ? std::optional<Camera>() : std::optional<Camera>(known->second)));
+                const auto camera = known == cameras->end() ? std::optional<Camera>() : std::optional<Camera>(known->second);
+                // When no thread can be had the printer is read here, one after another, as before.
+                try {
+                    batch.emplace_back(hosts[i], std::async(std::launch::async, read_one, hosts[i], camera));
+                } catch (const std::system_error &) {
+                    batch.emplace_back(hosts[i], std::async(std::launch::deferred, read_one, hosts[i], camera));
+                }
             }
             for (auto &[host, pending] : batch) {
-                Read read = pending.get();
+                Read read;
+                // A read that threw is a printer that was not read; the others are not lost with it.
+                try {
+                    read = pending.get();
+                } catch (const std::exception &) {
+                    read.reading.has_address = true;
+                }
                 if (read.camera) {
                     (*cameras)[host] = *read.camera;
                     streams.emplace(host, read.camera->stream);

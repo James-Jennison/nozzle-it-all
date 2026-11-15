@@ -99,6 +99,11 @@ TEST_CASE("A card's camera is the printer's first enabled camera, by an address 
         "stream_url": "/webcam/webrtc", "snapshot_url": "/webcam/snapshot.jpg"}]}})", "192.168.1.243");
     CHECK(camera.stream == "http://192.168.1.243/webcam/stream.mjpg");
     CHECK(camera.snapshot == "http://192.168.1.243/webcam/snapshot.jpg");
+    // A web server on a port of its own keeps it, for a path and for the stream beside a WebRTC camera.
+    camera = camera_addresses(R"({"result": {"webcams": [{"name": "cam", "stream_url": "/webcam/?action=stream"}]}})", "192.168.1.50:8080");
+    CHECK(camera.stream == "http://192.168.1.50:8080/webcam/?action=stream");
+    camera = camera_addresses(R"({"result": {"webcams": [{"name": "u1", "service": "webrtc-camerastreamer", "stream_url": "/webcam/webrtc"}]}})", "127.0.0.1:47225");
+    CHECK(camera.stream == "http://127.0.0.1:47225/webcam/stream.mjpg");
     // No camera, or no list.
     CHECK(camera_addresses(R"({"result": {"webcams": []}})", "192.168.1.50").stream.empty());
     CHECK(camera_addresses("not json", "192.168.1.50").stream.empty());

@@ -85,6 +85,7 @@ private:
     };
     std::map<std::string, Listed> m_listed; ///< by printer origin
     int                           m_listener = -1;
+    std::set<int>                 m_sockets; ///< connections being answered, so that stop() can end them
     std::atomic<bool>             m_stop{false};
     std::atomic<int>              m_open{0};
     std::thread                   m_thread;

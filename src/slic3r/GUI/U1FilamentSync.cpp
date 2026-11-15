@@ -1771,7 +1771,8 @@ bool sync_filaments_from_lanes(wxWindow* parent)
     std::vector<Slot> slots = value ? parse_lane_data_impl(*value) : std::vector<Slot>();
     if (!std::any_of(slots.begin(), slots.end(), [](const Slot& slot) { return slot.present; })) {
         // No lane data, but a printer agent that syncs filaments its own way (Happy Hare, a Creality CFS): its sync runs.
-        if (const auto agent = wxGetApp().getAgent(); !value && agent && agent->get_filament_sync_mode() != FilamentSyncMode::none) {
+        // Not for a printer that did not answer at all: its sync would only wait for the same printer again.
+        if (const auto agent = wxGetApp().getAgent(); answered && !value && agent && agent->get_filament_sync_mode() != FilamentSyncMode::none) {
             s_lane_fallback = true;
             struct Reset { ~Reset() { s_lane_fallback = false; } } reset;
             wxGetApp().sidebar().sync_ams_list();

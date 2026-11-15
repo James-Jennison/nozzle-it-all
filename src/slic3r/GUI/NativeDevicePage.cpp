@@ -162,6 +162,8 @@ void NativeDevicePage::apply_server_kind()
 
 void NativeDevicePage::set_active(bool active)
 {
+    if (active && !m_active)
+        ask_server_kind(); // once for each address; known addresses are answered from what was learnt
     m_active = active;
     // The native panel holds no connection while another side covers it.
     m_panel->set_active(active && !m_web && !m_history_shown && !m_fleet_shown);

@@ -21179,26 +21179,30 @@ static bool u1_printer_clear_to_send(wxWindow *parent, const std::string &base_u
     return true;
 }
 
-void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
+void Plater::send_gcode_u1_lan(const fs::path &default_output_file, bool slots)
 {
     // Where to reach the printer: the address typed into the printer settings.
-    std::string host = wxGetApp().preset_bundle->printers.get_edited_preset().config.opt_string("print_host");
+    const DynamicPrintConfig &printer_config = wxGetApp().preset_bundle->printers.get_edited_preset().config;
+    std::string host = printer_config.opt_string("print_host");
     if (host.empty()) {
         show_error(this, _L("No Snapmaker U1 address is known yet. Enter its IP address in the printer settings "
                             "(Connection > Hostname, IP or URL)."), false);
         return;
     }
+    const U1LanPrintHost::Target target = slots ? U1LanPrintHost::Target::AfcLanes : U1LanPrintHost::Target::SnapmakerU1;
+    // The model the preset names: what a file for this printer says it was sliced for, and the dialog's name for it.
+    const std::string printer_model = printer_config.opt_string("printer_model");
 
     std::string                              base_url;
     wxString                                 error;
     std::optional<U1PrintTask::PrinterState> printer;
     {
         wxBusyCursor wait;
-        printer = U1LanPrintHost::query_printer(host, base_url, error);
+        printer = slots ? U1LanPrintHost::query_afc_printer(host, base_url, error) : U1LanPrintHost::query_printer(host, base_url, error);
     }
     if (!printer) {
-        show_error(this, GUI::format_wxstr(_L("Could not reach the Snapmaker U1 at %s on the local network.\n\n%s"),
-                                           from_u8(host), error), false);
+        show_error(this, slots ? GUI::format_wxstr(_L("Could not read the filament slots of the printer at %s on the local network.\n\n%s"), from_u8(host), error) :
+                                 GUI::format_wxstr(_L("Could not reach the Snapmaker U1 at %s on the local network.\n\n%s"), from_u8(host), error), false);
         return;
     }
 
@@ -21231,8 +21235,8 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
             if (const auto *nozzles = full_config.option<ConfigOptionFloats>("nozzle_diameter"))
                 facts.nozzles = nozzles->values;
         // Nothing is read here: the dialog reads when it opens, after the checks below, and again on confirming.
-        read_readiness = [base_url, facts] {
-            U1LanPrintHost::ReadinessRead read = U1LanPrintHost::readiness_check(base_url, facts);
+        read_readiness = [base_url, facts, target, printer_model] {
+            U1LanPrintHost::ReadinessRead read = U1LanPrintHost::readiness_check(base_url, facts, target, printer_model);
             return U1SendDialog::ReadinessRead{std::move(read.check), read.answered};
         };
         const auto *colors = full_config.option<ConfigOptionStrings>("filament_colour");
@@ -21296,12 +21300,14 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file)
     const wxString project_name = get_project_filename();
     const wxString estimated_time = print != nullptr ? wxString::FromUTF8(print->print_statistics().estimated_normal_print_time) : wxString();
     U1SendDialog dlg(this, default_output_file, filaments, *printer, project_name,
-                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host), read_readiness);
+                     get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host), read_readiness,
+                     slots ? (printer_model.empty() ? _L("the printer") : from_u8(printer_model)) : wxString());
     if (dlg.ShowModal() != wxID_OK)
         return;
 
     PrintHostJob upload_job;
-    auto u1_host = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
+    auto u1_host = std::make_unique<U1LanPrintHost>(base_url, dlg.options(), target);
+    u1_host->set_printer_model(printer_model);
     {
         // What this job is a print of: project file, its saved state, and the plate.
         U1Jobs::Origin origin;
@@ -21359,7 +21365,19 @@ void Plater::reprint_u1_job(const std::string &job_id)
         printer = U1LanPrintHost::query_printer(old->printer, base_url, error);
     }
     if (!printer) {
-        show_error(this, GUI::format_wxstr(_L("Could not reach the Snapmaker U1 at %s on the local network.\n\n%s"), from_u8(old->printer), error), false);
+        // A job sent to a printer fed from slots carries its slots in the file; sending that file again with
+        // other slots is not built, and sending it unchecked is not offered.
+        std::string slots_url;
+        wxString    slots_error;
+        bool        has_lanes = false;
+        {
+            wxBusyCursor wait;
+            has_lanes = U1LanPrintHost::query_afc_printer(old->printer, slots_url, slots_error).has_value();
+        }
+        if (has_lanes)
+            show_error(this, _L("Print again is not available for this printer yet. Open the job's project, slice it and print from there."), false);
+        else
+            show_error(this, GUI::format_wxstr(_L("Could not reach the Snapmaker U1 at %s on the local network.\n\n%s"), from_u8(old->printer), error), false);
         return;
     }
     if (!u1_printer_clear_to_send(this, base_url))
@@ -21467,6 +21485,42 @@ void Plater::send_gcode_legacy(int plate_idx, Export3mfProgressFn proFn)
             u1_output_file = fs::path(Slic3r::fold_utf8_to_ascii(u1_output_file.string())).replace_extension("gcode");
             send_gcode_u1_lan(u1_output_file);
             return;
+        }
+        // A Klipper printer whose filament comes from AFC lanes (a Centauri Carbon on COSMOS with a CANVAS) gets
+        // the same checked send, with its slots in place of toolheads. What the preset is called does not say
+        // so; the printer does, so it is asked. One that does not answer, or has no AFC, gets the plain upload
+        // window as before. Only the current plate as plain G-code is sent this way.
+        const auto *host_kind   = physical_printer_config->option<ConfigOptionEnum<PrintHostType>>("host_type");
+        const auto *as_3mf      = physical_printer_config->option<ConfigOptionBool>("use_3mf");
+        const std::string host  = physical_printer_config->opt_string("print_host");
+        const bool current_plate = plate_idx == PLATE_CURRENT_IDX || plate_idx == get_partplate_list().get_curr_plate_index();
+        if (host_kind != nullptr && (host_kind->value == htMoonraker || host_kind->value == htOctoPrint) && !host.empty() && current_plate &&
+            !(as_3mf != nullptr && as_3mf->value)) {
+            std::string base_url;
+            wxString    error;
+            bool        has_lanes = false;
+            {
+                wxBusyCursor wait;
+                has_lanes = U1LanPrintHost::query_afc_printer(host, base_url, error).has_value();
+            }
+            if (has_lanes) {
+                fs::path output_file;
+                try {
+                    unsigned int state = this->p->update_restart_background_process(false, false);
+                    if (state & priv::UPDATE_BACKGROUND_PROCESS_INVALID)
+                        return;
+                    output_file = this->p->background_process.output_filepath_for_project(into_path(this->p->get_project_filename(".3mf")));
+                } catch (const Slic3r::PlaceholderParserError &ex) {
+                    show_error(this, ex.what(), true);
+                    return;
+                } catch (const std::exception &ex) {
+                    show_error(this, ex.what(), false);
+                    return;
+                }
+                output_file = fs::path(Slic3r::fold_utf8_to_ascii(output_file.string())).replace_extension("gcode");
+                send_gcode_u1_lan(output_file, true);
+                return;
+            }
         }
     }
 

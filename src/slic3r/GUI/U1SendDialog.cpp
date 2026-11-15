@@ -3,6 +3,7 @@
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "GUI_Utils.hpp"
+#include "format.hpp"
 #include "I18N.hpp"
 #include "libslic3r/U1PrintTask.hpp"
 #include "MsgDialog.hpp"
@@ -195,10 +196,10 @@ public:
     static inline const wxSize CARD_SIZE{CARD_WIDTH, CARD_HEIGHT};
 
     U1FilamentCard(wxWindow *parent, int number, const U1PrintTask::Filament &filament, double grams,
-                   const std::vector<U1PrintTask::Filament> &toolheads, int selection, std::function<void()> on_change)
+                   const std::vector<U1PrintTask::Filament> &toolheads, int selection, std::function<void()> on_change, bool slots = false)
         : wxWindow(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxWANTS_CHARS)
         , m_number(number), m_filament(filament), m_grams(grams), m_toolheads(toolheads), m_selection(selection)
-        , m_on_change(std::move(on_change))
+        , m_on_change(std::move(on_change)), m_slots(slots)
     {
         SetBackgroundStyle(wxBG_STYLE_PAINT);
         SetMinSize(FromDIP(CARD_SIZE));
@@ -226,10 +227,11 @@ public:
             return {};
         const U1PrintTask::Filament &have = m_toolheads[m_selection];
         if (!have.present)
-            return wxString::Format(_L("Filament %d is mapped to toolhead %d, which is empty."), m_number, m_selection + 1);
+            return wxString::Format(m_slots ? _L("Filament %d is mapped to slot %d, which has no filament ready.") :
+                                              _L("Filament %d is mapped to toolhead %d, which is empty."), m_number, m_selection + 1);
         if (!m_filament.type.empty() && !have.type.empty() && wxString::FromUTF8(m_filament.type).Upper() != wxString::FromUTF8(have.type).Upper())
-            return wxString::Format(_L("Filament %d is %s, but toolhead %d has %s loaded."), m_number, wxString::FromUTF8(m_filament.type),
-                                    m_selection + 1, wxString::FromUTF8(have.type));
+            return wxString::Format(m_slots ? _L("Filament %d is %s, but slot %d has %s loaded.") : _L("Filament %d is %s, but toolhead %d has %s loaded."),
+                                    m_number, wxString::FromUTF8(m_filament.type), m_selection + 1, wxString::FromUTF8(have.type));
         return {};
     }
 
@@ -239,8 +241,7 @@ private:
         SetFocus();
         wxMenu menu;
         for (size_t t = 0; t < m_toolheads.size(); ++t)
-            // TRN %1$d is a toolhead number, %2$s what is loaded in it ("Snapmaker PLA Basic", "empty").
-            menu.AppendRadioItem(int(wxID_HIGHEST + 1 + t), wxString::Format(_L("Toolhead %1$d (%2$s)"), int(t + 1), describe(m_toolheads[t])))
+            menu.AppendRadioItem(int(wxID_HIGHEST + 1 + t), source_label(t))
                 ->Check(int(t) == m_selection);
         // The choice comes back from the call itself, so nothing outlives the menu.
         const int chosen = GetPopupMenuSelectionFromUser(menu, 0, GetClientSize().y) - (wxID_HIGHEST + 1);
@@ -257,7 +258,13 @@ private:
     {
         if (m_selection >= 0 && size_t(m_selection) < m_toolheads.size())
             SetToolTip(wxString::Format(_L("Filament %d: %s"), m_number, describe(m_filament)) + "\n" +
-                       wxString::Format(_L("Toolhead %1$d (%2$s)"), m_selection + 1, describe(m_toolheads[m_selection])));
+                       source_label(size_t(m_selection)));
+    }
+
+    // TRN %1$d is a toolhead or slot number, %2$s what is loaded in it ("Snapmaker PLA Basic", "empty").
+    wxString source_label(size_t t) const
+    {
+        return wxString::Format(m_slots ? _L("Slot %1$d (%2$s)") : _L("Toolhead %1$d (%2$s)"), int(t + 1), describe(m_toolheads[t]));
     }
 
     void on_paint(wxPaintEvent &)
@@ -330,6 +337,7 @@ private:
     const U1PrintTask::Filament              m_filament;
     const double                             m_grams;
     const std::vector<U1PrintTask::Filament> m_toolheads;
+    const bool                               m_slots; ///< the sources are slots of a filament changer, not toolheads
     int                                      m_selection;
     std::function<void()>                    m_on_change;
 };
@@ -344,12 +352,15 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                            const wxBitmap                           &thumbnail,
                            const std::vector<double>                &filament_grams,
                            const wxString                           &printer_address,
-                           std::function<ReadinessRead()>            read_readiness)
-    : DPIDialog(parent, wxID_ANY, _L("Print on Snapmaker U1"), wxDefaultPosition, wxDefaultSize,
-                wxCAPTION | wxCLOSE_BOX)
+                           std::function<ReadinessRead()>            read_readiness,
+                           const wxString                           &slot_printer)
+    : DPIDialog(parent, wxID_ANY, slot_printer.empty() ? _L("Print on Snapmaker U1") : format_wxstr(_L("Print on %1%"), slot_printer), wxDefaultPosition,
+                wxDefaultSize, wxCAPTION | wxCLOSE_BOX)
     , m_plate_filaments(plate_filaments)
     , m_toolheads(printer.toolheads)
     , m_read_readiness(std::move(read_readiness))
+    , m_slots(!slot_printer.empty())
+    , m_message_title(slot_printer.empty() ? _L("Send to Snapmaker U1") : format_wxstr(_L("Send to %1%"), slot_printer))
     , m_name(printer_safe_name(from_path(default_name.filename())))
 {
     if (m_name.IsEmpty())
@@ -455,14 +466,17 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
 
     auto *device     = new Section(m_scroll, _L("Printer"));
     auto *device_row = new wxBoxSizer(wxHORIZONTAL);
-    const boost::filesystem::path cover = boost::filesystem::path(resources_dir()) / "profiles" / "Snapmaker" / "Snapmaker U1_cover.png";
+    const boost::filesystem::path cover = boost::filesystem::path(resources_dir()) / "profiles" /
+                                          (m_slots ? boost::filesystem::path("Elegoo") / "Elegoo Centauri Carbon_cover.png" :
+                                                     boost::filesystem::path("Snapmaker") / "Snapmaker U1_cover.png");
     wxImage cover_image;
     if (boost::filesystem::exists(cover) && cover_image.LoadFile(from_path(cover), wxBITMAP_TYPE_PNG))
         if (wxWindow *tile = picture(device, cover_image))
             device_row->Add(tile, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, gap);
     auto *device_text = new wxBoxSizer(wxVERTICAL);
     // TRN %1$s is the printer's model, %2$s its network address.
-    device_text->Add(new Label(device, printer_address.empty() ? wxString("Snapmaker U1") : wxString::Format(_L("%1$s at %2$s"), "Snapmaker U1", printer_address)),
+    const wxString device_name = m_slots ? slot_printer : wxString("Snapmaker U1");
+    device_text->Add(new Label(device, printer_address.empty() ? device_name : wxString::Format(_L("%1$s at %2$s"), device_name, printer_address)),
                      0, wxBOTTOM, FromDIP(3));
     m_status = new Label(device, wxEmptyString, LB_AUTO_WRAP, wxSize(FromDIP(250), -1));
     device_text->Add(m_status, 0, wxEXPAND);
@@ -483,7 +497,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
 
     // Filaments
     auto *mapping_section = new Section(m_scroll, _L("Filaments"));
-    auto *hint            = new Label(mapping_section, Label::Body_12, _L("Click a filament to change the toolhead it prints from."));
+    auto *hint            = new Label(mapping_section, Label::Body_12, m_slots ? _L("Click a filament to change the slot it prints from.") : _L("Click a filament to change the toolhead it prints from."));
     hint->SetForegroundColour(colours.muted);
     mapping_section->header()->Add(hint, 0, wxALIGN_CENTER_VERTICAL | wxLEFT, gap);
     auto *cards = new wxWrapSizer(wxHORIZONTAL, wxREMOVE_LEADING_SPACES); // not the default, which stretches the last card
@@ -495,15 +509,17 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
         if (!f.present)
             continue;
         auto *card = new U1FilamentCard(mapping_section, int(i + 1), f, i < filament_grams.size() ? filament_grams[i] : 0., printer.toolheads,
-                                        suggested[i] >= 0 ? suggested[i] : 0, [this] { update_state(); });
+                                        suggested[i] >= 0 ? suggested[i] : 0, [this] { update_state(); }, m_slots);
         cards->Add(card, 0, wxRIGHT | wxBOTTOM, FromDIP(10));
         m_rows.push_back({i, card});
     }
     mapping_section->content()->Add(cards, 0, wxEXPAND);
     mapping_section->content()->Add(m_mapping_note, 0, wxEXPAND);
-    sections->Add(mapping_section, 0, wxEXPAND | wxBOTTOM, gap);
+    sections->Add(mapping_section, 0, wxEXPAND | wxBOTTOM, m_slots ? 0 : gap);
 
-    // Print preparation: one row; what each option does is in its tooltip
+    // Print preparation: one row; what each option does is in its tooltip. These are the Snapmaker firmware's
+    // options; a printer fed from slots has none the Start could carry, so the section is not made for it.
+    if (!m_slots) {
     auto *preparation = new Section(m_scroll, _L("Print preparation"));
     auto *options_row = new wxWrapSizer(wxHORIZONTAL, wxREMOVE_LEADING_SPACES);
     auto add_check = [&](const wxString &label, const wxString &help, bool value) {
@@ -530,6 +546,7 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                              printer.time_lapse_camera);
     preparation->content()->Add(options_row, 0, wxEXPAND);
     sections->Add(preparation, 0, wxEXPAND);
+    }
 
     m_scroll->SetSizer(sections);
     top->Add(m_scroll, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(12));
@@ -685,6 +702,8 @@ U1PrintTask::Options U1SendDialog::options() const
     for (const Row &row : m_rows)
         if (row.card->selection() >= 0)
             used_toolheads.insert(row.card->selection());
+    if (m_slots) // no firmware options: the slots are written into the file
+        return options;
     options.bed_level         = m_bed_level->GetValue();
     options.flow_calibrate    = m_flow_calibrate->GetValue();
     options.shaper_calibrate  = m_shaper_calibrate->GetValue();
@@ -699,7 +718,7 @@ void U1SendDialog::on_confirm(bool start_print)
     end_name_edit(true); // a name still being typed counts as typed
     std::string error;
     if (!U1PrintTask::validate(options(), error)) {
-        MessageDialog(this, wxString::FromUTF8(error), _L("Send to Snapmaker U1"), wxOK | wxICON_WARNING).ShowModal();
+        MessageDialog(this, wxString::FromUTF8(error), m_message_title, wxOK | wxICON_WARNING).ShowModal();
         return;
     }
     // Mapping onto a different material is allowed (it can be deliberate),
@@ -712,13 +731,13 @@ void U1SendDialog::on_confirm(bool start_print)
             continue;
         const auto &have = m_toolheads[toolhead];
         if (have.present && !want.type.empty() && !have.type.empty() && wxString::FromUTF8(want.type).Upper() != wxString::FromUTF8(have.type))
-            mismatches += "\n" + wxString::Format(_L("Filament %d is %s, but toolhead %d has %s loaded."), int(row.filament + 1),
+            mismatches += "\n" + wxString::Format(m_slots ? _L("Filament %d is %s, but slot %d has %s loaded.") : _L("Filament %d is %s, but toolhead %d has %s loaded."), int(row.filament + 1),
                                                    wxString::FromUTF8(want.type), toolhead + 1, wxString::FromUTF8(have.type));
     }
     if (!mismatches.IsEmpty() &&
         MessageDialog(this, _L("The filament types do not match:") + "\n" + mismatches + "\n\n" +
                                 _L("The print will use the temperatures and speeds sliced for the original filament. Continue anyway?"),
-                      _L("Send to Snapmaker U1"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING)
+                      m_message_title, wxYES_NO | wxNO_DEFAULT | wxICON_WARNING)
                 .ShowModal() != wxID_YES)
         return;
 
@@ -728,7 +747,7 @@ void U1SendDialog::on_confirm(bool start_print)
         refresh_readiness();
         update_state();
         if (const wxString refusal = m_readiness ? m_readiness(mapping(), start_print) : wxString(); !refusal.IsEmpty()) {
-            MessageDialog(this, refusal, _L("Send to Snapmaker U1"), wxOK | wxICON_WARNING).ShowModal();
+            MessageDialog(this, refusal, m_message_title, wxOK | wxICON_WARNING).ShowModal();
             return;
         }
     }
@@ -745,7 +764,8 @@ void U1SendDialog::on_dpi_changed(const wxRect & /*suggested_rect*/)
         row.card->Refresh();
     }
     for (::CheckBox *check : {m_bed_level, m_flow_calibrate, m_shaper_calibrate, m_time_lapse})
-        check->Rescale();
+        if (check != nullptr)
+            check->Rescale();
     fit_to_screen();
     Refresh();
 }

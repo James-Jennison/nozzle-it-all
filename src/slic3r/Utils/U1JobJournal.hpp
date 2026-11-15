@@ -234,7 +234,10 @@ struct Blocker
         ToolheadUnknown,    ///< the printer does not say whether the toolhead is loaded
         ToolheadEmpty,
         NozzleUnknown,      ///< the printer does not report the toolhead's nozzle
-        NozzleMismatch
+        NozzleMismatch,
+        ChangerNotReady,    ///< AFC reports an error or is busy; detail = what it reports
+        LaneUnknown,        ///< no lane answers to the tool number (toolhead) the filament is to print from
+        LaneEmpty           ///< that lane has no filament ready
     };
     Kind        kind = Kind::None;
     std::string detail;
@@ -250,6 +253,13 @@ struct Blocker
 /// extruder..extruder3). Anything a Start depends on that the printer does not
 /// report is a refusal, never a pass.
 Blocker start_blocker(const GcodeFacts &facts, const nlohmann::json &status, const std::vector<int> &filament_to_toolhead, bool start);
+
+/// The same for a printer whose filament comes from AFC lanes (a Centauri Carbon on COSMOS with a CANVAS):
+/// one nozzle, and each filament prints from the lane mapped to its tool number. *status* holds print_stats,
+/// extruder, AFC and the AFC_lane objects. *printer_model* is the model the selected printer preset names;
+/// a file sliced for another model is refused, and an empty one is not compared.
+Blocker afc_start_blocker(const GcodeFacts &facts, const nlohmann::json &status, const std::vector<int> &filament_to_tool, bool start,
+                          const std::string &printer_model);
 
 } // namespace U1Jobs
 } // namespace Slic3r

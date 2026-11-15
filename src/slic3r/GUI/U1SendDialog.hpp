@@ -44,7 +44,11 @@ public:
     /// not use have present == false and get no card. *filament_grams* is
     /// indexed the same way; a missing or zero weight is simply not shown.
     /// *read_readiness* reads the printer and returns its Readiness. The dialog
-    /// calls it once it is on screen, when the user asks, and again when Start
+    /// *slot_printer*, when not empty, names a single-nozzle printer whose filament comes from the slots of a
+    /// filament changer (a Centauri Carbon on COSMOS with a CANVAS): *printer*'s toolheads are then its slots
+    /// by tool number, the wording says "slot", and the Snapmaker firmware's print options are not offered.
+    /// The dialog
+    /// calls *read_readiness* once it is on screen, when the user asks, and again when Start
     /// Print or Upload is pressed; it shows the reason, disables the button it applies
     /// to, and does not close on a refusal. It only informs: the send itself
     /// reads the printer again and decides.
@@ -58,7 +62,8 @@ public:
                  const wxBitmap                           &thumbnail,
                  const std::vector<double>                &filament_grams,
                  const wxString                           &printer_address,
-                 std::function<ReadinessRead()>            read_readiness = {});
+                 std::function<ReadinessRead()>            read_readiness = {},
+                 const wxString                           &slot_printer = {});
 
     /// The base of the name the file gets on the printer: the export's name, or
     /// what the user typed over it, with characters a printer cannot take
@@ -112,6 +117,8 @@ private:
     ::CheckBox                        *m_time_lapse        = nullptr;
     ::CheckBox                        *m_shaper_calibrate  = nullptr;
     bool                               m_start_print       = true;
+    bool                               m_slots             = false; ///< sources are a filament changer's slots (see the constructor)
+    wxString                           m_message_title;
 };
 
 } // namespace GUI

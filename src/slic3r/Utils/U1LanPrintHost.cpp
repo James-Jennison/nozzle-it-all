@@ -17,6 +17,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/nowide/fstream.hpp>
 #include <nlohmann/json.hpp>
+#include "libslic3r/AfcLanes.hpp"
+#include "libslic3r/GCodeToolRemap.hpp"
+
 #include <openssl/evp.h>
 
 #include <algorithm>
@@ -57,6 +60,40 @@ nlohmann::json query_status(const std::string &base_url)
     return status;
 }
 
+// The same for a printer with AFC: print_stats, extruder and AFC first, then the lanes AFC names.
+nlohmann::json query_afc_status(const std::string &base_url, long timeout_s = QUERY_TIMEOUT_S, wxString *error = nullptr)
+{
+    const auto read = [&](const std::string &objects) {
+        nlohmann::json status;
+        Http::get(base_url + "/printer/objects/query?" + objects)
+            .timeout_connect(timeout_s)
+            .timeout_max(timeout_s)
+            .on_complete([&](std::string body, unsigned) {
+                const auto doc = nlohmann::json::parse(body, nullptr, false);
+                if (!doc.is_discarded() && doc.is_object() && doc.contains("result") && doc["result"].is_object())
+                    status = doc["result"].value("status", nlohmann::json());
+            })
+            .on_error([&](std::string body, std::string err, unsigned http_status) {
+                if (error != nullptr)
+                    *error = http_status != 0 ? wxString::Format("HTTP %u", http_status) : wxString::FromUTF8(err);
+            })
+            .perform_sync();
+        return status;
+    };
+    nlohmann::json status = read("print_stats&extruder&AFC");
+    std::string    lanes;
+    for (const std::string &name : AfcLanes::lane_names(status))
+        lanes += (lanes.empty() ? "" : "&") + Http::url_encode("AFC_lane " + name);
+    if (lanes.empty())
+        return status;
+    const nlohmann::json lane_status = read(lanes);
+    if (!lane_status.is_object())
+        return nlohmann::json(); // the lanes are part of what a Start depends on: half a status is none
+    for (auto it = lane_status.begin(); it != lane_status.end(); ++it)
+        status[it.key()] = it.value();
+    return status;
+}
+
 std::string stats_string(const nlohmann::json &status, const char *key)
 {
     if (!status.is_object() || !status.contains("print_stats") || !status["print_stats"].is_object())
@@ -93,9 +130,40 @@ bool has_port(const std::string &url)
 
 } // namespace
 
-U1LanPrintHost::U1LanPrintHost(std::string base_url, U1PrintTask::Options options)
-    : m_base_url(with_scheme(std::move(base_url))), m_options(std::move(options))
+U1LanPrintHost::U1LanPrintHost(std::string base_url, U1PrintTask::Options options, Target target)
+    : m_base_url(with_scheme(std::move(base_url))), m_options(std::move(options)), m_target(target)
 {}
+
+nlohmann::json U1LanPrintHost::status() const { return m_target == Target::AfcLanes ? query_afc_status(m_base_url) : query_status(m_base_url); }
+
+U1Jobs::Blocker U1LanPrintHost::blocker(const U1Jobs::GcodeFacts &facts, const nlohmann::json &status, bool start) const
+{
+    return m_target == Target::AfcLanes ? U1Jobs::afc_start_blocker(facts, status, m_options.filament_to_toolhead, start, m_printer_model) :
+                                          U1Jobs::start_blocker(facts, status, m_options.filament_to_toolhead, start);
+}
+
+std::optional<U1PrintTask::PrinterState> U1LanPrintHost::query_afc_printer(const std::string &host, std::string &base_url, wxString &error)
+{
+    std::vector<std::string> candidates{with_scheme(host)};
+    if (!has_port(candidates.front()))
+        candidates.push_back(candidates.front() + ":7125");
+    // Asked before any window shows, for every Klipper printer: a short wait, and no answer means "not this kind".
+    for (const std::string &candidate : candidates) {
+        wxString             failure;
+        const nlohmann::json status = query_afc_status(candidate, 3, &failure);
+        if (auto state = AfcLanes::parse_printer_state(status)) {
+            base_url = candidate;
+            error.clear();
+            return state;
+        }
+        if (status.is_object()) { // it answered and has no AFC
+            error.clear();
+            return std::nullopt;
+        }
+        error = failure;
+    }
+    return std::nullopt;
+}
 
 std::optional<U1PrintTask::PrinterState> U1LanPrintHost::query_printer(const std::string &host, std::string &base_url, wxString &error)
 {
@@ -158,14 +226,20 @@ std::optional<nlohmann::json> U1LanPrintHost::query_filament_report(const std::s
 bool U1LanPrintHost::test(wxString &curl_msg) const
 {
     std::string base;
+    if (m_target == Target::AfcLanes)
+        return query_afc_printer(m_base_url, base, curl_msg).has_value();
     return query_printer(m_base_url, base, curl_msg).has_value();
 }
 
-wxString U1LanPrintHost::get_test_ok_msg() const { return _L("Connected to the Snapmaker U1 over the local network."); }
+wxString U1LanPrintHost::get_test_ok_msg() const
+{
+    return m_target == Target::AfcLanes ? _L("Connected to the printer over the local network.") : _L("Connected to the Snapmaker U1 over the local network.");
+}
 
 wxString U1LanPrintHost::get_test_failed_msg(wxString &msg) const
 {
-    return GUI::format_wxstr("%s: %s", _L("Could not reach the Snapmaker U1 on the local network"), msg);
+    return GUI::format_wxstr("%s: %s", m_target == Target::AfcLanes ? _L("Could not reach the printer on the local network") :
+                                                                       _L("Could not reach the Snapmaker U1 on the local network"), msg);
 }
 
 std::string U1LanPrintHost::reconcile(U1Jobs::Job &job, const std::string &base_url)
@@ -191,22 +265,42 @@ std::string U1LanPrintHost::reconcile(U1Jobs::Job &job, const std::string &base_
     return state;
 }
 
-U1LanPrintHost::ReadinessRead U1LanPrintHost::readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts)
+U1LanPrintHost::ReadinessRead U1LanPrintHost::readiness_check(const std::string &base_url, U1Jobs::GcodeFacts facts, Target target, std::string printer_model)
 {
     ReadinessRead read;
-    nlohmann::json status = query_status(base_url);
+    nlohmann::json status = target == Target::AfcLanes ? query_afc_status(base_url) : query_status(base_url);
     read.answered = status.is_object() && status.contains("print_stats") && status["print_stats"].is_object() && status["print_stats"].contains("state");
-    read.check = [status = std::move(status), facts = std::move(facts)](const std::vector<int> &filament_to_toolhead, bool start) {
-        return describe(U1Jobs::start_blocker(facts, status, filament_to_toolhead, start));
+    read.check = [status = std::move(status), facts = std::move(facts), target, printer_model = std::move(printer_model)](const std::vector<int> &filament_to_toolhead, bool start) {
+        return target == Target::AfcLanes ? describe(U1Jobs::afc_start_blocker(facts, status, filament_to_toolhead, start, printer_model), target) :
+                                            describe(U1Jobs::start_blocker(facts, status, filament_to_toolhead, start), target);
     };
     return read;
 }
 
-wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker)
+wxString U1LanPrintHost::describe(const U1Jobs::Blocker &blocker, Target target)
 {
     using Kind = U1Jobs::Blocker::Kind;
+    if (target == Target::AfcLanes)
+        switch (blocker.kind) {
+        case Kind::WrongModel: return GUI::format_wxstr(_L("This file was sliced for %1%, which is not the selected printer."), blocker.detail);
+        case Kind::PrinterUnreachable: return _L("The printer did not report its state and that of its filament changer, so a print cannot be started now.");
+        case Kind::ChangerNotReady:
+            return blocker.detail == "error" ? _L("The printer's filament changer reports an error, so a print cannot be started now.") :
+                                               GUI::format_wxstr(_L("The printer's filament changer is busy (%1%), so a print cannot be started now."), blocker.detail);
+        case Kind::LaneUnknown:
+            return GUI::format_wxstr(_L("No slot of the printer answers to tool %1% (needed for filament %2%)."), blocker.toolhead, blocker.filament + 1);
+        case Kind::LaneEmpty:
+            return GUI::format_wxstr(_L("Slot %1% has no filament ready (needed for filament %2%)."), blocker.toolhead + 1, blocker.filament + 1);
+        case Kind::NozzleUnknown: return _L("The printer did not report the nozzle it has fitted.");
+        case Kind::NozzleMismatch:
+            return GUI::format_wxstr(_L("This file was sliced for a %1% mm nozzle, but the printer has a %2% mm nozzle."), blocker.sliced, blocker.fitted);
+        default: break;
+        }
     switch (blocker.kind) {
     case Kind::None: return {};
+    case Kind::ChangerNotReady:
+    case Kind::LaneUnknown:
+    case Kind::LaneEmpty: return _L("The printer's filament changer is not ready, so a print cannot be started now.");
     case Kind::WrongModel: return GUI::format_wxstr(_L("This file was sliced for %1%, but the selected printer is a Snapmaker U1."), blocker.detail);
     case Kind::PrinterUnreachable: return _L("The printer did not report its state, so a print cannot be started now.");
     case Kind::PrinterNotIdle: return GUI::format_wxstr(_L("The printer is %1%, so a print cannot be started now."), blocker.detail);
@@ -310,6 +404,36 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         }
     }
 
+    // A printer fed from lanes has no map of its own: the file's tool numbers are rewritten to the lanes
+    // chosen, and the rewritten file is the one this job is bound to, uploads and reads back. A file sent
+    // again already is such a file, and is sent as it is.
+    struct Remapped
+    {
+        boost::filesystem::path path;
+        ~Remapped()
+        {
+            boost::system::error_code ignored;
+            if (!path.empty())
+                boost::filesystem::remove(path, ignored);
+        }
+    } remapped;
+    if (m_target == Target::AfcLanes && m_expected_sha256.empty() && !GCodeToolRemap::is_identity(m_options.filament_to_toolhead)) {
+        boost::filesystem::path target = upload_data.source_path;
+        target += ".slots.gcode";
+        const GCodeToolRemap::Result result = GCodeToolRemap::remap_file(upload_data.source_path.string(), target.string(), m_options.filament_to_toolhead);
+        if (!result.ok) {
+            error_fn((result.failed_line != 0 ?
+                          GUI::format_wxstr(_L("The file selects a filament in a way that cannot be changed to another slot (line %1%: %2%). "
+                                               "Print each filament from the slot of its own number, or change the printer's filament change G-code."),
+                                            result.failed_line, GUI::from_u8(result.failed_text)) :
+                          _L("The file could not be prepared for the slots chosen.")) + nothing_sent);
+            return false;
+        }
+        BOOST_LOG_TRIVIAL(warning) << "U1 LAN: tool numbers rewritten for the slots chosen: " << result.tool_lines << " tool lines, " << result.changed_lines << " changed";
+        remapped.path           = target;
+        upload_data.source_path = target;
+    }
+
     // The job is bound to the exact bytes handed over here.
     U1Jobs::Job job;
     job.id           = U1Jobs::new_id();
@@ -333,8 +457,8 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         return false;
     }
     const U1Jobs::GcodeFacts facts = U1Jobs::read_gcode_facts(upload_data.source_path);
-    if (const auto blocker = U1Jobs::start_blocker(facts, query_status(m_base_url), m_options.filament_to_toolhead, start)) {
-        error_fn(describe(blocker) + nothing_sent);
+    if (const auto refusal = blocker(facts, status(), start)) {
+        error_fn(describe(refusal, m_target) + nothing_sent);
         return false;
     }
 
@@ -404,9 +528,9 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     }
 
     // Re-check the printer immediately before the Start, then record the Start as sent before sending it.
-    if (const auto blocker = U1Jobs::start_blocker(facts, query_status(m_base_url), m_options.filament_to_toolhead, true)) {
+    if (const auto refusal = blocker(facts, status(), true)) {
         U1Jobs::save(job, U1Jobs::State::Failed, "The printer changed before the Start. The file is on the printer; nothing was started.");
-        error_fn(describe(blocker) + " " + _L("The file is on the printer; nothing was started."));
+        error_fn(describe(refusal, m_target) + " " + _L("The file is on the printer; nothing was started."));
         return false;
     }
     job.start_sent = true;
@@ -466,10 +590,13 @@ U1LanPrintHost::StartOutcome U1LanPrintHost::start_print(const std::string &path
     // excluded), so call it as JSON-RPC on Moonraker's websocket.
     std::mt19937         rng(std::random_device{}());
     const int            request_id = std::uniform_int_distribution<int>(100000, 2000000000)(rng);
-    const nlohmann::json request    = {{"jsonrpc", "2.0"},
-                                       {"method", "server.files.start_local_print"},
-                                       {"params", U1PrintTask::build_start_local_print_body(path, 1, m_options)},
-                                       {"id", request_id}};
+    // A printer fed from lanes takes Moonraker's own Start: the lanes are already in the file.
+    const nlohmann::json request    = m_target == Target::AfcLanes ?
+                                          nlohmann::json{{"jsonrpc", "2.0"}, {"method", "printer.print.start"}, {"params", {{"filename", path}}}, {"id", request_id}} :
+                                          nlohmann::json{{"jsonrpc", "2.0"},
+                                                         {"method", "server.files.start_local_print"},
+                                                         {"params", U1PrintTask::build_start_local_print_body(path, 1, m_options)},
+                                                         {"id", request_id}};
     BOOST_LOG_TRIVIAL(warning) << "U1 LAN: start_local_print " << request.dump();
 
     std::string host = m_base_url.substr(m_base_url.find("://") + 3);

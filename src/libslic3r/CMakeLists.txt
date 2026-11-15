@@ -271,6 +271,10 @@ set(lisbslic3r_sources
     GCode/FanMover.cpp
     GCode/FanMover.hpp
     GCode/GCodeProcessor.cpp
+    AfcLanes.cpp
+    AfcLanes.hpp
+    GCodeToolRemap.cpp
+    GCodeToolRemap.hpp
     U1PrintTask.cpp
     U1PrintTask.hpp
     PrinterSnapshot.cpp

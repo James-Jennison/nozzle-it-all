@@ -1,5 +1,6 @@
 #include "U1JobJournal.hpp"
 
+#include "libslic3r/AfcLanes.hpp"
 #include "libslic3r/Utils.hpp"
 
 #include <boost/algorithm/string.hpp>
@@ -824,6 +825,90 @@ Blocker start_blocker(const GcodeFacts &facts, const json &status, const std::ve
             return blocker;
         }
         blocker.sliced = facts.nozzles[filament];
+        blocker.fitted = (*extruder)["nozzle_diameter"].get<double>();
+        if (std::abs(blocker.fitted - blocker.sliced) > 0.01) {
+            blocker.kind = Blocker::Kind::NozzleMismatch;
+            return blocker;
+        }
+    }
+    return Blocker();
+}
+
+Blocker afc_start_blocker(const GcodeFacts &facts, const json &status, const std::vector<int> &filament_to_tool, bool start, const std::string &printer_model)
+{
+    Blocker blocker;
+    if (!facts.printer_model.empty() && !printer_model.empty() && !boost::iequals(facts.printer_model, printer_model)) {
+        blocker.kind   = Blocker::Kind::WrongModel;
+        blocker.detail = facts.printer_model;
+        return blocker;
+    }
+    if (!start)
+        return blocker;
+
+    const auto object = [&](const char *name) -> const json * {
+        if (!status.is_object())
+            return nullptr;
+        const auto it = status.find(name);
+        return it != status.end() && it->is_object() ? &*it : nullptr;
+    };
+    const json *stats = object("print_stats");
+    if (stats == nullptr || !stats->contains("state") || !(*stats)["state"].is_string()) {
+        blocker.kind = Blocker::Kind::PrinterUnreachable;
+        return blocker;
+    }
+    const std::string state = (*stats)["state"].get<std::string>();
+    if (state != "standby" && state != "complete" && state != "cancelled") {
+        blocker.kind   = Blocker::Kind::PrinterNotIdle;
+        blocker.detail = state;
+        return blocker;
+    }
+    // The changer itself: an error it has not been cleared of, or anything but idle, is a refusal, and so is
+    // a status that does not say.
+    const json *afc = object("AFC");
+    if (afc == nullptr || !afc->contains("error_state") || !(*afc)["error_state"].is_boolean() || !afc->contains("current_state") ||
+        !(*afc)["current_state"].is_string()) {
+        blocker.kind = Blocker::Kind::PrinterUnreachable;
+        return blocker;
+    }
+    if ((*afc)["error_state"].get<bool>()) {
+        blocker.kind   = Blocker::Kind::ChangerNotReady;
+        blocker.detail = "error";
+        return blocker;
+    }
+    if (const std::string changer = (*afc)["current_state"].get<std::string>(); !boost::iequals(changer, "Idle")) {
+        blocker.kind   = Blocker::Kind::ChangerNotReady;
+        blocker.detail = changer;
+        return blocker;
+    }
+
+    bool any = false;
+    for (size_t filament = 0; filament < filament_to_tool.size(); ++filament) {
+        const int tool = filament_to_tool[filament];
+        if (tool < 0)
+            continue;
+        any              = true;
+        blocker.filament = int(filament);
+        blocker.toolhead = tool;
+        const json *lane = AfcLanes::lane_for_tool(status, tool);
+        if (lane == nullptr) {
+            blocker.kind = Blocker::Kind::LaneUnknown;
+            return blocker;
+        }
+        if (!AfcLanes::lane_ready(*lane)) {
+            blocker.kind = Blocker::Kind::LaneEmpty;
+            return blocker;
+        }
+    }
+    // One nozzle prints every filament. The file lists the nozzle it was sliced for first.
+    if (any && !facts.nozzles.empty()) {
+        blocker.filament = -1;
+        blocker.toolhead = -1;
+        const json *extruder = object("extruder");
+        if (extruder == nullptr || !extruder->contains("nozzle_diameter") || !(*extruder)["nozzle_diameter"].is_number()) {
+            blocker.kind = Blocker::Kind::NozzleUnknown;
+            return blocker;
+        }
+        blocker.sliced = facts.nozzles.front();
         blocker.fitted = (*extruder)["nozzle_diameter"].get<double>();
         if (std::abs(blocker.fitted - blocker.sliced) > 0.01) {
             blocker.kind = Blocker::Kind::NozzleMismatch;

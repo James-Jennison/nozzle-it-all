@@ -400,11 +400,6 @@ bool U1LanPrintHost::read_back_sha256(const std::string &path, std::uintmax_t ex
 
 bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn, ErrorFn error_fn, InfoFn /*info_fn*/) const
 {
-    std::string error;
-    if (!U1PrintTask::validate(m_options, error)) {
-        error_fn(wxString::FromUTF8(error));
-        return false;
-    }
     const bool        start        = upload_data.post_action == PrintHostPostUploadAction::StartPrint;
     const std::string printer      = U1Jobs::printer_key(m_base_url);
     const wxString    nothing_sent = " " + _L("Nothing was sent to the printer.");
@@ -427,6 +422,12 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         }
         BOOST_LOG_TRIVIAL(warning) << "U1 LAN: queued " << queued->id << " sha256 " << queued->sha256 << " for " << queued->printer << "; nothing was sent";
         return true;
+    }
+    // From here on something is to be sent, so the options it is sent with must hold together.
+    std::string error;
+    if (!U1PrintTask::validate(m_options, error)) {
+        error_fn(wxString::FromUTF8(error));
+        return false;
     }
     // A file released from the queue must still be the file that was queued.
     if (!m_source_sha256.empty() && NozzleSession::sha256_file_hex(upload_data.source_path.string()) != m_source_sha256) {

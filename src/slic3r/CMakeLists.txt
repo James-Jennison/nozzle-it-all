@@ -484,6 +484,10 @@ set(SLIC3R_GUI_SOURCES
     GUI/NativeDevicePage.hpp
     GUI/U1JobHistoryPanel.cpp
     GUI/U1JobHistoryPanel.hpp
+    GUI/AddPrinterDialog.cpp
+    GUI/AddPrinterDialog.hpp
+    GUI/DesktopNotice.cpp
+    GUI/DesktopNotice.hpp
     GUI/FleetPanel.cpp
     GUI/FleetPanel.hpp
     GUI/U1JobBar.cpp
@@ -849,6 +853,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/FleetStatus.hpp
     Utils/U1Controls.cpp
     Utils/U1Controls.hpp
+    Utils/PrinterDiscovery.cpp
+    Utils/PrinterDiscovery.hpp
     Utils/U1JobJournal.cpp
     Utils/U1JobJournal.hpp
     Utils/U1JobWatcher.cpp

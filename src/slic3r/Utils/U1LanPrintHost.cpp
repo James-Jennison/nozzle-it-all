@@ -409,6 +409,36 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     const std::string printer      = U1Jobs::printer_key(m_base_url);
     const wxString    nothing_sent = " " + _L("Nothing was sent to the printer.");
 
+    // Copies for other printers are taken before anything can end this send: each is a job of its own.
+    if (m_before_upload)
+        m_before_upload(upload_data.source_path);
+
+    // A file for the queue goes nowhere: it is kept on this computer, and checked when a person releases it.
+    if (m_queue_entry) {
+        U1Jobs::Queued entry = *m_queue_entry;
+        entry.origin         = m_origin;
+        if (entry.origin.file_name.empty())
+            entry.origin.file_name = upload_data.upload_path.filename().string();
+        const std::string digest = NozzleSession::sha256_file_hex(upload_data.source_path.string());
+        const auto        queued = digest.empty() ? std::nullopt : U1Jobs::queue_add(std::move(entry), upload_data.source_path, digest);
+        if (!queued) {
+            error_fn(_L("The file could not be kept in the queue.") + nothing_sent);
+            return false;
+        }
+        BOOST_LOG_TRIVIAL(warning) << "U1 LAN: queued " << queued->id << " sha256 " << queued->sha256 << " for " << queued->printer << "; nothing was sent";
+        return true;
+    }
+    // A file released from the queue must still be the file that was queued.
+    if (!m_source_sha256.empty() && NozzleSession::sha256_file_hex(upload_data.source_path.string()) != m_source_sha256) {
+        error_fn(_L("The queued file is not the file that was added to the queue any more.") + nothing_sent);
+        return false;
+    }
+    // See set_released_queue_entry().
+    const auto released = [this] {
+        if (!m_released_queue_entry.empty() && !U1Jobs::queue_remove(m_released_queue_entry))
+            BOOST_LOG_TRIVIAL(warning) << "U1 LAN: queue entry " << m_released_queue_entry << " could not be taken out of the queue";
+    };
+
     // One send per printer at a time, in this and in any other running copy of the app.
     U1Jobs::PrinterLock lock(printer);
     if (!lock.acquired()) {
@@ -564,6 +594,7 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     U1Jobs::keep_file(job, upload_data.source_path);
     if (!start) {
         U1Jobs::save(job, U1Jobs::State::Uploaded, "Uploaded and verified. No Start was requested.");
+        released();
         return true;
     }
 
@@ -581,7 +612,10 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         return false;
     }
     wxString detail;
-    switch (start_print(path, detail)) {
+    const StartOutcome outcome = start_print(path, detail);
+    if (outcome == StartOutcome::Accepted || outcome == StartOutcome::Unknown)
+        released(); // the Start reached the printer, or may have
+    switch (outcome) {
     case StartOutcome::Accepted: {
         if (m_target != Target::AfcLanes) {
             // If this write fails the record stays "Starting": the next send reconciles it against the printer.

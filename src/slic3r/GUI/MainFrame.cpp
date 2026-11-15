@@ -160,6 +160,9 @@
 #include "slic3r/plugin/host/PluginPages.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
 #include "slic3r/Utils/U1JobWatcher.hpp"
+#include "slic3r/Utils/U1JobJournal.hpp"
+#include "DesktopNotice.hpp"
+#include "format.hpp"
 #include <wx/defs.h>
 #include <cassert>
 #include <wx/display.h>
@@ -1667,11 +1670,28 @@ void MainFrame::init_tabpanel() {
     m_plugin_pages.initialize(m_tabpanel);
 
     // From here on a U1 job's outcome is recorded whichever tab shows, including jobs sent before a restart.
-    m_u1_job_watcher = std::make_shared<U1JobWatcher>(U1JobWatcher::ChangeFn(), [this](const std::vector<U1JobWatcher::Active>& active) {
+    m_u1_job_watcher = std::make_shared<U1JobWatcher>([this](const U1Jobs::Job& job) {
+        // On the watcher's thread, as below.
+        wxGetApp().CallAfter([this, job] {
+            if (!wxGetApp().is_closing() && wxGetApp().mainframe == this)
+                notify_u1_job(job, false);
+        });
+    }, [this](const std::vector<U1JobWatcher::Active>& active) {
         // On the watcher's thread: hand a copy to the main thread, which checks the frame is still up.
         wxGetApp().CallAfter([this, active] {
-            if (!wxGetApp().is_closing() && wxGetApp().mainframe == this && m_u1_job_bar != nullptr)
+            if (wxGetApp().is_closing() || wxGetApp().mainframe != this)
+                return;
+            if (m_u1_job_bar != nullptr)
                 m_u1_job_bar->set_active(active);
+            // A job is told as paused once, when a pass first sees it so.
+            std::set<std::string> paused;
+            for (const U1JobWatcher::Active& one : active)
+                if (one.reachable && one.paused) {
+                    paused.insert(one.job.id);
+                    if (m_u1_paused.count(one.job.id) == 0)
+                        notify_u1_job(one.job, true);
+                }
+            m_u1_paused = std::move(paused);
         });
     });
 
@@ -1752,6 +1772,46 @@ void MainFrame::follow_job_on_native_view()
 }
 
 // SoftFever
+void MainFrame::notify_u1_job(const U1Jobs::Job& job, bool paused)
+{
+    const bool ended = job.state == U1Jobs::State::Completed || job.state == U1Jobs::State::Failed || job.state == U1Jobs::State::Cancelled;
+    // The watcher writes a job's record more than once (its outcome, then its times): its end is told once.
+    if (!paused && (!ended || !m_u1_notified.insert(job.id).second))
+        return;
+    // The printer by the name of its preset, where one has this address.
+    std::string printer = job.printer;
+    if (const PresetBundle* bundle = wxGetApp().preset_bundle)
+        for (const Preset& preset : bundle->printers)
+            if (preset.is_visible && preset.config.has("print_host") && !preset.config.opt_string("print_host").empty() &&
+                U1Jobs::same_printer(U1Jobs::printer_key(preset.config.opt_string("print_host")), job.printer)) {
+                printer = preset.name;
+                break;
+            }
+    const wxString file = from_u8(job.origin.file_name.empty() ? job.remote_path : job.origin.file_name);
+    // TRN %1% is a file name, %2% a printer's name or address.
+    wxString text = format_wxstr(paused                                   ? _L("%1% is paused on %2%.") :
+                                 job.state == U1Jobs::State::Completed ? _L("%1% finished on %2%.") :
+                                 job.state == U1Jobs::State::Cancelled ? _L("%1% was cancelled on %2%.") :
+                                                                         _L("%1% failed on %2%."),
+                                 file, from_u8(printer));
+    if (!paused)
+        if (const std::vector<U1Jobs::Queued> waiting = U1Jobs::queue(job.printer); !waiting.empty())
+            // TRN %1% is a file name. Follows a sentence saying a print ended.
+            text += " " + format_wxstr(_L("Next in this printer's queue: %1%. Nothing is sent until you review and start it in Print history."),
+                                       from_u8(waiting.front().origin.file_name));
+    if (m_plater != nullptr && m_plater->get_notification_manager() != nullptr) {
+        using Level = NotificationManager::NotificationLevel;
+        m_plater->get_notification_manager()->push_notification(NotificationType::CustomNotification,
+                                                                paused || job.state == U1Jobs::State::Failed ? Level::WarningNotificationLevel :
+                                                                                                               Level::ImportantNotificationLevel,
+                                                                into_u8(text));
+    }
+    BOOST_LOG_TRIVIAL(warning) << "U1 jobs: told the person about job " << job.id << " (" << (paused ? "paused" : U1Jobs::state_name(job.state))
+                               << "), window in front: " << IsActive();
+    if (!IsActive())
+        desktop_notice(wxTheApp->GetAppDisplayName(), text);
+}
+
 void MainFrame::update_native_device_tab()
 {
     if (m_native_device_page == nullptr || m_tabpanel == nullptr)

@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <iterator>
 #include <mutex>
 #include <set>
 
@@ -68,15 +69,54 @@ bool is_job_id(const std::string &s)
     return true;
 }
 
+json origin_json(const Origin &origin)
+{
+    json filaments = json::array();
+    for (const Origin::Filament &filament : origin.filaments)
+        filaments.push_back({{"used", filament.used}, {"name", filament.name}, {"type", filament.type}, {"color", filament.color},
+                             {"grams", filament.grams}});
+    return {{"fileName", origin.file_name},
+            {"project", origin.project},
+            {"projectSavedAt", origin.project_saved_ms},
+            {"projectChanged", origin.project_changed},
+            {"plate", origin.plate},
+            {"plateName", origin.plate_name},
+            {"reprintOf", origin.reprint_of},
+            {"filaments", filaments},
+            {"estimatedTime", origin.estimated_time}};
+}
+
+Origin origin_of(const json &doc)
+{
+    Origin origin;
+    if (!doc.is_object())
+        return origin;
+    origin.file_name        = doc.value("fileName", std::string());
+    origin.project          = doc.value("project", std::string());
+    origin.project_saved_ms = doc.value("projectSavedAt", 0LL);
+    origin.project_changed  = doc.value("projectChanged", false);
+    origin.plate            = doc.value("plate", 0);
+    origin.plate_name       = doc.value("plateName", std::string());
+    origin.reprint_of       = doc.value("reprintOf", std::string());
+    origin.estimated_time   = doc.value("estimatedTime", std::string());
+    if (doc.contains("filaments") && doc["filaments"].is_array())
+        for (const json &entry : doc["filaments"]) {
+            Origin::Filament filament;
+            filament.used  = entry.value("used", false);
+            filament.name  = entry.value("name", std::string());
+            filament.type  = entry.value("type", std::string());
+            filament.color = entry.value("color", std::string());
+            filament.grams = entry.value("grams", 0.);
+            origin.filaments.push_back(std::move(filament));
+        }
+    return origin;
+}
+
 json to_json(const Job &job)
 {
     json events = json::array();
     for (const auto &event : job.events)
         events.push_back({{"state", event.first}, {"at", event.second}});
-    json filaments = json::array();
-    for (const Origin::Filament &filament : job.origin.filaments)
-        filaments.push_back({{"used", filament.used}, {"name", filament.name}, {"type", filament.type}, {"color", filament.color},
-                             {"grams", filament.grams}});
     return {{"format", 1},
             {"jobId", job.id},
             {"printer", job.printer},
@@ -95,16 +135,7 @@ json to_json(const Job &job)
             {"startedAt", job.started_ms},
             {"endedAt", job.ended_ms},
             {"assessment", job.assessment},
-            {"origin",
-             {{"fileName", job.origin.file_name},
-              {"project", job.origin.project},
-              {"projectSavedAt", job.origin.project_saved_ms},
-              {"projectChanged", job.origin.project_changed},
-              {"plate", job.origin.plate},
-              {"plateName", job.origin.plate_name},
-              {"reprintOf", job.origin.reprint_of},
-              {"filaments", filaments},
-              {"estimatedTime", job.origin.estimated_time}}},
+            {"origin", origin_json(job.origin)},
             {"events", events}};
 }
 
@@ -140,27 +171,8 @@ std::optional<Job> from_json(const json &doc)
         job.started_ms              = doc.value("startedAt", 0LL);
         job.ended_ms                = doc.value("endedAt", 0LL);
         job.assessment              = doc.value("assessment", std::string());
-        if (doc.contains("origin") && doc["origin"].is_object()) {
-            const json &origin          = doc["origin"];
-            job.origin.file_name        = origin.value("fileName", std::string());
-            job.origin.project          = origin.value("project", std::string());
-            job.origin.project_saved_ms = origin.value("projectSavedAt", 0LL);
-            job.origin.project_changed  = origin.value("projectChanged", false);
-            job.origin.plate            = origin.value("plate", 0);
-            job.origin.plate_name       = origin.value("plateName", std::string());
-            job.origin.reprint_of       = origin.value("reprintOf", std::string());
-            job.origin.estimated_time   = origin.value("estimatedTime", std::string());
-            if (origin.contains("filaments") && origin["filaments"].is_array())
-                for (const json &entry : origin["filaments"]) {
-                    Origin::Filament filament;
-                    filament.used  = entry.value("used", false);
-                    filament.name  = entry.value("name", std::string());
-                    filament.type  = entry.value("type", std::string());
-                    filament.color = entry.value("color", std::string());
-                    filament.grams = entry.value("grams", 0.);
-                    job.origin.filaments.push_back(std::move(filament));
-                }
-        }
+        if (doc.contains("origin"))
+            job.origin = origin_of(doc["origin"]);
         for (const auto &event : doc.value("events", json::array()))
             job.events.emplace_back(event.value("state", std::string()), event.value("at", 0LL));
         return job;
@@ -1031,6 +1043,167 @@ Blocker afc_start_blocker(const GcodeFacts &facts, const json &status, const std
         }
     }
     return Blocker();
+}
+
+// ---------------------------------------------------------------------------
+// The queue
+
+namespace {
+
+fs::path queue_dir() { return journal_dir() / "queue"; }
+
+std::optional<Queued> read_queued(const fs::path &path)
+{
+    boost::nowide::ifstream in(path.string());
+    if (!in)
+        return std::nullopt;
+    const json doc = json::parse(in, nullptr, false);
+    try {
+        if (!doc.is_object())
+            return std::nullopt;
+        Queued entry;
+        entry.id      = doc.at("queueId").get<std::string>();
+        entry.printer = doc.at("printer").get<std::string>();
+        entry.sha256  = doc.at("sha256").get<std::string>();
+        if (!is_job_id(entry.id) || entry.printer.empty() || !is_hex(entry.sha256, 64) || entry.id + ".json" != path.filename().string())
+            return std::nullopt;
+        entry.printer_name  = doc.value("printerName", std::string());
+        entry.printer_model = doc.value("printerModel", std::string());
+        entry.slots         = doc.value("slots", false);
+        entry.bytes         = doc.value("bytes", std::uintmax_t(0));
+        entry.added_ms      = doc.value("addedAt", 0LL);
+        entry.position      = doc.value("position", 0LL);
+        if (doc.contains("origin"))
+            entry.origin = origin_of(doc["origin"]);
+        return entry;
+    } catch (const std::exception &) {
+        return std::nullopt;
+    }
+}
+
+bool write_queued(const Queued &entry)
+{
+    return write_durably(queue_dir() / (entry.id + ".json"),
+                         json{{"format", 1}, {"queueId", entry.id}, {"printer", entry.printer}, {"printerName", entry.printer_name},
+                              {"printerModel", entry.printer_model}, {"slots", entry.slots}, {"sha256", entry.sha256}, {"bytes", entry.bytes},
+                              {"addedAt", entry.added_ms}, {"position", entry.position}, {"origin", origin_json(entry.origin)}}.dump(2));
+}
+
+// Caller holds s_mutex. Every readable entry, in the order they are to be printed.
+std::vector<Queued> queue_locked()
+{
+    std::vector<Queued>       entries;
+    boost::system::error_code ec;
+    for (fs::directory_iterator it(queue_dir(), ec), end; !ec && it != end; it.increment(ec)) {
+        const fs::path &path = it->path();
+        if (path.extension() != ".json" || boost::starts_with(path.filename().string(), "."))
+            continue;
+        // An entry without its file cannot be printed and is not listed.
+        if (auto entry = read_queued(path); entry && fs::exists(queued_file(*entry), ec))
+            entries.push_back(std::move(*entry));
+    }
+    std::stable_sort(entries.begin(), entries.end(), [](const Queued &a, const Queued &b) {
+        return a.position != b.position ? a.position < b.position : a.added_ms < b.added_ms;
+    });
+    return entries;
+}
+
+} // namespace
+
+fs::path queued_file(const Queued &entry) { return queue_dir() / (entry.id + ".gcode"); }
+
+std::optional<Queued> queue_add(Queued entry, const fs::path &prepared, const std::string &sha256)
+{
+    boost::system::error_code ec;
+    entry.id       = new_id();
+    entry.printer  = printer_key(entry.printer);
+    entry.sha256   = sha256;
+    entry.added_ms = now_ms();
+    entry.bytes    = fs::file_size(prepared, ec);
+    if (ec || entry.bytes == 0 || entry.printer.empty() || !is_hex(entry.sha256, 64))
+        return std::nullopt;
+    std::lock_guard<std::mutex> lock(s_mutex);
+    fs::create_directories(queue_dir(), ec);
+    // The file first, under another name, so that an entry never points at half a file.
+    const fs::path part = queue_dir() / ("." + entry.id + ".part");
+    fs::copy_file(prepared, part, fs::copy_options::overwrite_existing, ec);
+    if (!ec)
+        fs::rename(part, queued_file(entry), ec);
+    if (ec) {
+        boost::system::error_code ignored;
+        fs::remove(part, ignored);
+        return std::nullopt;
+    }
+    const std::vector<Queued> entries = queue_locked();
+    entry.position = entries.empty() ? 1 : entries.back().position + 1;
+    if (!write_queued(entry)) {
+        boost::system::error_code ignored;
+        fs::remove(queued_file(entry), ignored);
+        fs::remove(queue_dir() / (entry.id + ".json"), ignored);
+        return std::nullopt;
+    }
+    return entry;
+}
+
+std::vector<Queued> queue(const std::string &printer)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    std::vector<Queued>         entries = queue_locked();
+    if (!printer.empty())
+        entries.erase(std::remove_if(entries.begin(), entries.end(), [&printer](const Queued &entry) { return !same_printer(entry.printer, printer); }),
+                      entries.end());
+    return entries;
+}
+
+std::optional<Queued> queued(const std::string &id)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    boost::system::error_code   ec;
+    if (!is_job_id(id))
+        return std::nullopt;
+    std::optional<Queued> entry = read_queued(queue_dir() / (id + ".json"));
+    return entry && fs::exists(queued_file(*entry), ec) ? entry : std::nullopt;
+}
+
+bool queue_remove(const std::string &id)
+{
+    if (!is_job_id(id))
+        return false;
+    std::lock_guard<std::mutex> lock(s_mutex);
+    boost::system::error_code   ec;
+    // The entry first: what is left of a removal that stopped half-way is a file nothing lists.
+    const bool removed = fs::remove(queue_dir() / (id + ".json"), ec) && !ec;
+    fs::remove(queue_dir() / (id + ".gcode"), ec);
+    return removed;
+}
+
+bool queue_move(const std::string &id, bool earlier)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    std::vector<Queued>         entries = queue_locked();
+    const auto at = std::find_if(entries.begin(), entries.end(), [&id](const Queued &entry) { return entry.id == id; });
+    if (at == entries.end())
+        return false;
+    // Its neighbour among the entries of the same printer: the order within one printer is what a person sees.
+    const auto same = [&at](const Queued &entry) { return same_printer(entry.printer, at->printer); };
+    auto other = entries.end();
+    if (earlier) {
+        for (auto it = entries.begin(); it != at; ++it)
+            if (same(*it))
+                other = it;
+    } else {
+        other = std::find_if(std::next(at), entries.end(), same);
+    }
+    if (other == entries.end())
+        return false;
+    // Positions are made distinct first: entries added by two copies of the app may share one.
+    for (size_t i = 0; i < entries.size(); ++i)
+        entries[i].position = static_cast<long long>(i) + 1;
+    std::swap(at->position, other->position);
+    bool ok = true;
+    for (const Queued &entry : entries)
+        ok = write_queued(entry) && ok;
+    return ok;
 }
 
 } // namespace U1Jobs

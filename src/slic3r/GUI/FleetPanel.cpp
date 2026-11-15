@@ -1,5 +1,7 @@
 #include "FleetPanel.hpp"
 
+#include "AddPrinterDialog.hpp"
+
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "I18N.hpp"
@@ -171,7 +173,7 @@ FleetPanel::FleetPanel(wxWindow *parent, OpenFn open)
     SetScrollRate(0, FromDIP(12));
     auto *outer = new wxBoxSizer(wxVERTICAL);
     m_filters   = new wxBoxSizer(wxHORIZONTAL);
-    outer->Add(m_filters, 0, wxLEFT | wxTOP | wxRIGHT, FromDIP(12));
+    outer->Add(m_filters, 0, wxEXPAND | wxLEFT | wxTOP | wxRIGHT, FromDIP(12));
     m_empty = new wxStaticText(this, wxID_ANY, wxEmptyString);
     outer->Add(m_empty, 0, wxALL, FromDIP(16));
     m_rows = new wxBoxSizer(wxVERTICAL);
@@ -496,6 +498,24 @@ void FleetPanel::rebuild(bool force)
         // TRN %1% is a group of printers such as "Printing", %2% the number of printers in it.
         add_filter(int(band), format_wxstr(_L("%1% (%2%)"), band_name(band), counts[int(band)]));
 
+    // Beside the filters: a printer is added as a printer preset with its address.
+    m_filters->AddStretchSpacer(1);
+    auto *add_printer = new ::Button(this, _L("Add printer"));
+    add_printer->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+    add_printer->SetToolTip(_L("Searches the local network for printers, or takes an address you type, and makes a printer preset of your own with it."));
+    add_printer->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+        // Not on the stack of the click: the dialog is modal and the rebuild destroys the button.
+        wxGetApp().CallAfter([alive = m_alive, this] {
+            if (!alive->load())
+                return;
+            AddPrinterDialog dialog(this);
+            if (dialog.ShowModal() == wxID_OK && alive->load())
+                reload();
+        });
+    });
+    m_filters->Add(add_printer, 0);
+    m_filter_buttons.push_back(add_printer);
+
     m_rows->Clear(true);
     m_pictures.clear();
     m_texts.clear();
@@ -556,7 +576,7 @@ void FleetPanel::rebuild(bool force)
         m_rows->Add(card, 0, wxEXPAND | wxTOP, FromDIP(8));
     }
     m_empty->SetForegroundColour(NIATheme::text_muted(dark));
-    m_empty->SetLabel(rows.empty() ? _L("No printer has an address yet. Enter one in a printer's Connection settings.") :
+    m_empty->SetLabel(rows.empty() ? _L("No printer has an address yet. Press Add printer, or enter an address in a printer's Connection settings.") :
                       listed == 0  ? _L("No printer is in this group.") : wxString());
     m_empty->Show(listed == 0);
     wxGetApp().UpdateDarkUIWin(this);

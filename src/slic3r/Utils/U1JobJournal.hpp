@@ -215,6 +215,37 @@ private:
 bool sending_now(const std::string &printer);
 
 // ---------------------------------------------------------------------------
+// The queue
+
+/// A prepared file waiting to be printed on one printer. Nothing of it has been sent: it is released by a
+/// person, one at a time, through the same checked send as any other job, and then becomes a Job. Queue
+/// entries are kept apart from the job records, so a record of a job is never anything but a job.
+struct Queued
+{
+    std::string    id;
+    std::string    printer;       ///< host[:port] of the printer it waits for
+    std::string    printer_name;  ///< the printer preset it was prepared with
+    std::string    printer_model; ///< the model that preset names
+    bool           slots = false; ///< the printer is fed from a filament changer's slots
+    std::string    sha256;        ///< of the prepared file
+    std::uintmax_t bytes = 0;
+    Origin         origin;
+    long long      added_ms = 0;
+    long long      position = 0;  ///< lower prints first
+};
+/// Copies *prepared* (whose SHA-256 is *sha256*) into the queue and writes its entry behind the others.
+/// *entry* gives the printer, the preset's name and model, and the origin. Nothing on failure.
+std::optional<Queued> queue_add(Queued entry, const boost::filesystem::path &prepared, const std::string &sha256);
+/// The entries waiting for *printer*, or all of them when it is empty, first to print first.
+std::vector<Queued> queue(const std::string &printer = {});
+std::optional<Queued> queued(const std::string &id);
+boost::filesystem::path queued_file(const Queued &entry);
+/// Takes the entry and its file away.
+bool queue_remove(const std::string &id);
+/// Moves the entry one place among those of its own printer.
+bool queue_move(const std::string &id, bool earlier);
+
+// ---------------------------------------------------------------------------
 // Readiness
 
 /// What the prepared G-code says it was sliced for (Orca writes its settings as trailing comments).

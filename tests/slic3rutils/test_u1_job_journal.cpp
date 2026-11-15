@@ -587,3 +587,114 @@ TEST_CASE("A printer that stops answering is asked on every pass at first, then 
             asked.push_back(misses);
     CHECK(asked == std::vector<int>{0, 1, 2, 3, 4, 5, 6, 36, 66, 96});
 }
+
+namespace {
+
+fs::path prepared_file(const ScratchJournal &journal, const std::string &name, const std::string &text)
+{
+    journal.write(name, text);
+    return journal.dir / name;
+}
+
+U1Jobs::Queued for_printer(const std::string &printer, const std::string &file_name)
+{
+    U1Jobs::Queued entry;
+    entry.printer          = printer;
+    entry.printer_name     = "Printer preset";
+    entry.printer_model    = "Model";
+    entry.origin.file_name = file_name;
+    return entry;
+}
+
+const std::string DIGEST(64, 'a');
+
+} // namespace
+
+TEST_CASE("A queued file waits in the order it was added and reads back as written", "[U1Jobs][Queue]")
+{
+    ScratchJournal journal;
+    const fs::path file = prepared_file(journal, "a.gcode.txt", "G1 X1\n");
+    const auto first  = U1Jobs::queue_add(for_printer("http://192.168.1.50:7125/", "first.gcode"), file, DIGEST);
+    const auto second = U1Jobs::queue_add(for_printer("192.168.1.50", "second.gcode"), file, DIGEST);
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    const std::vector<U1Jobs::Queued> waiting = U1Jobs::queue("192.168.1.50");
+    REQUIRE(waiting.size() == 2);
+    CHECK(waiting[0].id == first->id);
+    CHECK(waiting[1].id == second->id);
+    CHECK(waiting[0].printer == "192.168.1.50:7125");
+    CHECK(waiting[0].printer_model == "Model");
+    CHECK(waiting[0].origin.file_name == "first.gcode");
+    CHECK(waiting[0].bytes == 6);
+    CHECK(fs::exists(U1Jobs::queued_file(waiting[0])));
+}
+
+TEST_CASE("Queue entries are not job records", "[U1Jobs][Queue]")
+{
+    ScratchJournal journal;
+    const fs::path file = prepared_file(journal, "a.gcode.txt", "G1 X1\n");
+    REQUIRE(U1Jobs::queue_add(for_printer("192.168.1.50", "first.gcode"), file, DIGEST).has_value());
+    std::vector<std::string> unreadable;
+    CHECK(U1Jobs::load_all(&unreadable).empty());
+    CHECK(unreadable.empty());
+    CHECK_FALSE(U1Jobs::unresolved("192.168.1.50").has_value());
+}
+
+TEST_CASE("A queue lists only the entries of the printer asked for", "[U1Jobs][Queue]")
+{
+    ScratchJournal journal;
+    const fs::path file = prepared_file(journal, "a.gcode.txt", "G1 X1\n");
+    REQUIRE(U1Jobs::queue_add(for_printer("192.168.1.50", "one.gcode"), file, DIGEST).has_value());
+    REQUIRE(U1Jobs::queue_add(for_printer("192.168.1.60", "other.gcode"), file, DIGEST).has_value());
+    CHECK(U1Jobs::queue("192.168.1.50").size() == 1);
+    CHECK(U1Jobs::queue("192.168.1.60").size() == 1);
+    CHECK(U1Jobs::queue().size() == 2);
+}
+
+TEST_CASE("Moving a queue entry changes places with its neighbour on the same printer", "[U1Jobs][Queue]")
+{
+    ScratchJournal journal;
+    const fs::path file = prepared_file(journal, "a.gcode.txt", "G1 X1\n");
+    const auto a     = U1Jobs::queue_add(for_printer("192.168.1.50", "a.gcode"), file, DIGEST);
+    const auto other = U1Jobs::queue_add(for_printer("192.168.1.60", "other.gcode"), file, DIGEST);
+    const auto b     = U1Jobs::queue_add(for_printer("192.168.1.50", "b.gcode"), file, DIGEST);
+    REQUIRE(a.has_value());
+    REQUIRE(other.has_value());
+    REQUIRE(b.has_value());
+    CHECK(U1Jobs::queue_move(b->id, true));
+    std::vector<U1Jobs::Queued> waiting = U1Jobs::queue("192.168.1.50");
+    REQUIRE(waiting.size() == 2);
+    CHECK(waiting[0].id == b->id);
+    CHECK(waiting[1].id == a->id);
+    // The first of a printer has nothing before it.
+    CHECK_FALSE(U1Jobs::queue_move(b->id, true));
+    CHECK(U1Jobs::queue_move(b->id, false));
+    waiting = U1Jobs::queue("192.168.1.50");
+    REQUIRE(waiting.size() == 2);
+    CHECK(waiting[0].id == a->id);
+}
+
+TEST_CASE("Removing a queue entry takes its file away", "[U1Jobs][Queue]")
+{
+    ScratchJournal journal;
+    const fs::path file  = prepared_file(journal, "a.gcode.txt", "G1 X1\n");
+    const auto     entry = U1Jobs::queue_add(for_printer("192.168.1.50", "a.gcode"), file, DIGEST);
+    REQUIRE(entry.has_value());
+    const fs::path kept = U1Jobs::queued_file(*entry);
+    CHECK(U1Jobs::queue_remove(entry->id));
+    CHECK_FALSE(fs::exists(kept));
+    CHECK(U1Jobs::queue().empty());
+    CHECK_FALSE(U1Jobs::queued(entry->id).has_value());
+    CHECK_FALSE(U1Jobs::queue_remove(entry->id));
+}
+
+TEST_CASE("An empty file, a file without a digest or an entry without a printer is not queued", "[U1Jobs][Queue]")
+{
+    ScratchJournal journal;
+    const fs::path empty = prepared_file(journal, "empty.gcode.txt", "");
+    const fs::path file  = prepared_file(journal, "a.gcode.txt", "G1 X1\n");
+    CHECK_FALSE(U1Jobs::queue_add(for_printer("192.168.1.50", "a.gcode"), empty, DIGEST).has_value());
+    CHECK_FALSE(U1Jobs::queue_add(for_printer("192.168.1.50", "a.gcode"), file, "abc").has_value());
+    CHECK_FALSE(U1Jobs::queue_add(for_printer("", "a.gcode"), file, DIGEST).has_value());
+    CHECK(U1Jobs::queue().empty());
+}

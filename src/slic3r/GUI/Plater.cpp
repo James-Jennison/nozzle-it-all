@@ -21214,11 +21214,12 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file, bool slots)
     std::vector<double>                filament_grams;
     // What the G-code will say it was sliced for, so the dialog can show a refusal before anything is exported.
     std::function<U1SendDialog::ReadinessRead()> read_readiness;
+    U1Jobs::GcodeFacts                           send_facts; ///< the same facts, for the windows of other printers
     if (print != nullptr) {
         const DynamicPrintConfig full_config = print->full_print_config();
         // Read from the sliced file with the parser the send uses, so the dialog and the send judge the same
         // facts. The print configuration stands in only when there is no sliced file to read.
-        U1Jobs::GcodeFacts facts;
+        U1Jobs::GcodeFacts &facts = send_facts;
         if (plate->is_slice_result_valid()) {
             const std::string sliced = plate->get_tmp_gcode_path();
             boost::system::error_code ec;
@@ -21299,18 +21300,44 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file, bool slots)
 
     const wxString project_name = get_project_filename();
     const wxString estimated_time = print != nullptr ? wxString::FromUTF8(print->print_statistics().estimated_normal_print_time) : wxString();
+    // Other printers of the same model that have an address: the file is sliced for that model, so each of them
+    // can be given a job of its own.
+    struct Other
+    {
+        std::string name;
+        std::string host;
+    };
+    std::vector<Other> others;
+    {
+        std::set<std::string> seen = {U1Jobs::printer_key(host)};
+        for (const Preset &preset : wxGetApp().preset_bundle->printers) {
+            if (!preset.is_visible || preset.is_default || !preset.config.has("print_host") || !preset.config.has("printer_model"))
+                continue;
+            const std::string other_host = preset.config.opt_string("print_host");
+            if (other_host.empty() || printer_model.empty() || preset.config.opt_string("printer_model") != printer_model)
+                continue;
+            const std::string key = U1Jobs::printer_key(other_host);
+            if (std::any_of(seen.begin(), seen.end(), [&key](const std::string &had) { return U1Jobs::same_printer(had, key); }))
+                continue;
+            seen.insert(key);
+            others.push_back({preset.name, other_host});
+        }
+    }
+    std::vector<wxString> other_names;
+    for (const Other &other : others)
+        other_names.push_back(from_u8(other.name) + " (" + from_u8(other.host) + ")");
+
+    const wxString model_name = slots ? (printer_model.empty() ? _L("the printer") : from_u8(printer_model)) : wxString();
     U1SendDialog dlg(this, default_output_file, filaments, *printer, project_name,
                      get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host), read_readiness,
-                     slots ? (printer_model.empty() ? _L("the printer") : from_u8(printer_model)) : wxString());
+                     model_name, true, other_names);
     if (dlg.ShowModal() != wxID_OK)
         return;
 
-    PrintHostJob upload_job;
-    auto u1_host = std::make_unique<U1LanPrintHost>(base_url, dlg.options(), target);
-    u1_host->set_printer_model(printer_model);
+    // What this job is a print of: project file, its saved state, and the plate.
+    U1Jobs::Origin job_origin;
     {
-        // What this job is a print of: project file, its saved state, and the plate.
-        U1Jobs::Origin origin;
+        U1Jobs::Origin &origin = job_origin;
         origin.file_name = dlg.filename().filename().string();
         const wxString project_file = get_project_filename(".3mf");
         boost::system::error_code file_error;
@@ -21334,7 +21361,113 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file, bool slots)
             filament.grams = i < filament_grams.size() ? filament_grams[i] : 0.;
             origin.filaments.push_back(std::move(filament));
         }
-        u1_host->set_origin(std::move(origin));
+    }
+
+    PrintHostJob upload_job;
+    auto u1_host = std::make_unique<U1LanPrintHost>(base_url, dlg.options(), target);
+    u1_host->set_printer_model(printer_model);
+    u1_host->set_origin(job_origin);
+    const std::string preset_name = wxGetApp().preset_bundle->printers.get_edited_preset().name;
+    if (dlg.queue_only()) {
+        // Nothing is sent: the file is kept for this printer, and for each other printer ticked, until released.
+        U1Jobs::Queued entry;
+        entry.printer       = base_url;
+        entry.printer_name  = preset_name;
+        entry.printer_model = printer_model;
+        entry.slots         = slots;
+        u1_host->set_queue_entry(entry);
+        std::vector<U1Jobs::Queued> more;
+        for (size_t index : dlg.also()) {
+            entry.printer      = others[index].host;
+            entry.printer_name = others[index].name;
+            entry.origin       = job_origin;
+            more.push_back(entry);
+        }
+        if (!more.empty())
+            u1_host->set_before_upload([more](const fs::path &prepared) {
+                const std::string digest = NozzleSession::sha256_file_hex(prepared.string());
+                for (const U1Jobs::Queued &other : more)
+                    if (digest.empty() || !U1Jobs::queue_add(other, prepared, digest)) {
+                        const std::string name = other.printer_name;
+                        wxGetApp().CallAfter([name] {
+                            if (!wxGetApp().is_closing())
+                                show_error(static_cast<wxWindow *>(wxGetApp().mainframe), format_wxstr(_L("The file could not be kept in the queue of %1%."), from_u8(name)), false);
+                        });
+                    }
+            });
+    } else if (!dlg.also().empty()) {
+        // One checked job per printer: each other printer ticked gets its own window, with its own filaments
+        // and its own readiness, and then its own upload, read-back and Start. Cancelling one leaves it out.
+        struct Extra
+        {
+            std::string          base_url;
+            U1PrintTask::Options options;
+            fs::path             name;
+            bool                 start = false;
+        };
+        std::vector<Extra> extras;
+        for (size_t index : dlg.also()) {
+            const Other &other = others[index];
+            std::string  other_url;
+            wxString     other_error;
+            std::optional<U1PrintTask::PrinterState> other_printer;
+            {
+                wxBusyCursor wait;
+                other_printer = slots ? U1LanPrintHost::query_afc_printer(other.host, other_url, other_error) :
+                                        U1LanPrintHost::query_printer(other.host, other_url, other_error);
+            }
+            if (!other_printer) {
+                show_error(this, format_wxstr(_L("%1% at %2% could not be read on the local network, so no job was made for it.\n\n%3%"), from_u8(other.name),
+                                              from_u8(other.host), other_error), false);
+                continue;
+            }
+            if (!u1_printer_clear_to_send(this, other_url))
+                continue;
+            U1SendDialog other_dlg(this, dlg.filename(), filaments, *other_printer, project_name, get_partplate_list().get_curr_plate_index() + 1,
+                                   estimated_time, thumbnail, filament_grams, from_u8(other.host),
+                                   [other_url, facts = send_facts, target, printer_model] {
+                                       U1LanPrintHost::ReadinessRead read = U1LanPrintHost::readiness_check(other_url, facts, target, printer_model);
+                                       return U1SendDialog::ReadinessRead{std::move(read.check), read.answered};
+                                   },
+                                   model_name);
+            // TRN %1% is a printer's name.
+            other_dlg.SetTitle(format_wxstr(_L("Print on %1%"), from_u8(other.name)));
+            if (other_dlg.ShowModal() != wxID_OK)
+                continue;
+            extras.push_back({other_url, other_dlg.options(), other_dlg.filename(), other_dlg.start_print()});
+        }
+        if (!extras.empty())
+            u1_host->set_before_upload([extras, target, printer_model, job_origin](const fs::path &prepared) {
+                for (const Extra &extra : extras) {
+                    // Each job works on a copy of its own: the upload queue removes the file it is given.
+                    const fs::path            copy = fs::temp_directory_path() / fs::unique_path("u1-also-%%%%-%%%%.gcode");
+                    boost::system::error_code ec;
+                    fs::copy_file(prepared, copy, ec);
+                    wxGetApp().CallAfter([extra, target, printer_model, job_origin, copy, failed = bool(ec)] {
+                        boost::system::error_code ignored;
+                        if (failed || wxGetApp().is_closing()) {
+                            fs::remove(copy, ignored);
+                            if (failed && !wxGetApp().is_closing())
+                                show_error(static_cast<wxWindow *>(wxGetApp().mainframe), format_wxstr(_L("The file could not be copied for the printer at %1%, so no job was made for it."),
+                                                                 from_u8(extra.base_url)), false);
+                            return;
+                        }
+                        U1Jobs::Origin origin = job_origin;
+                        origin.file_name      = extra.name.filename().string();
+                        auto host             = std::make_unique<U1LanPrintHost>(extra.base_url, extra.options, target);
+                        host->set_printer_model(printer_model);
+                        host->set_origin(std::move(origin));
+                        PrintHostJob job;
+                        job.printhost               = std::move(host);
+                        job.upload_data.use_3mf     = false;
+                        job.upload_data.source_path = copy;
+                        job.upload_data.upload_path = extra.name;
+                        job.upload_data.post_action = extra.start ? PrintHostPostUploadAction::StartPrint : PrintHostPostUploadAction::None;
+                        job.native_device_tab       = true;
+                        wxGetApp().printhost_job_queue().enqueue(std::move(job));
+                    });
+                }
+            });
     }
     upload_job.printhost               = std::move(u1_host);
     upload_job.upload_data.use_3mf     = false;
@@ -21447,6 +21580,96 @@ void Plater::reprint_u1_job(const std::string &job_id)
     auto u1_host          = std::make_unique<U1LanPrintHost>(base_url, dlg.options());
     u1_host->set_origin(std::move(origin));
     u1_host->set_expected_sha256(old->sha256);
+    PrintHostJob upload_job;
+    upload_job.printhost               = std::move(u1_host);
+    upload_job.upload_data.use_3mf     = false;
+    upload_job.upload_data.source_path = copy;
+    upload_job.upload_data.upload_path = dlg.filename();
+    upload_job.upload_data.post_action = dlg.start_print() ? PrintHostPostUploadAction::StartPrint : PrintHostPostUploadAction::None;
+    upload_job.switch_to_device_tab    = dlg.start_print();
+    upload_job.native_device_tab       = true;
+    wxGetApp().printhost_job_queue().enqueue(std::move(upload_job));
+}
+
+void Plater::start_queued_u1_job(const std::string &queue_id)
+{
+    const wxString                      title = _L("Review and Start");
+    const std::optional<U1Jobs::Queued> entry = U1Jobs::queued(queue_id);
+    if (!entry) {
+        show_error(this, _L("That file is not in the queue any more."), false);
+        return;
+    }
+    const U1LanPrintHost::Target target = entry->slots ? U1LanPrintHost::Target::AfcLanes : U1LanPrintHost::Target::SnapmakerU1;
+    std::string                              base_url;
+    wxString                                 error;
+    std::optional<U1PrintTask::PrinterState> printer;
+    {
+        wxBusyCursor wait;
+        printer = entry->slots ? U1LanPrintHost::query_afc_printer(entry->printer, base_url, error) : U1LanPrintHost::query_printer(entry->printer, base_url, error);
+    }
+    if (!printer) {
+        show_error(this, format_wxstr(_L("The printer at %1% could not be read on the local network, so the queued file was not sent. It stays in the queue.\n\n%2%"),
+                                      from_u8(entry->printer), error), false);
+        return;
+    }
+    if (!u1_printer_clear_to_send(this, base_url))
+        return;
+
+    // The send works on its own copy, which must be the bytes that were queued, or nothing is sent.
+    boost::system::error_code ec;
+    const fs::path            copy = fs::temp_directory_path() / fs::unique_path("u1-queued-%%%%-%%%%.gcode");
+    const auto same_bytes = [&] {
+        wxBusyCursor wait;
+        return NozzleSession::sha256_file_hex(copy.string()) == entry->sha256;
+    };
+    fs::copy_file(U1Jobs::queued_file(*entry), copy, ec);
+    if (ec || !same_bytes()) {
+        fs::remove(copy, ec);
+        show_error(this, _L("The queued file is damaged or could not be read, so it was not sent. Open its project, slice it and print from there."), false);
+        return;
+    }
+    const U1Jobs::GcodeFacts facts = U1Jobs::read_gcode_facts(copy);
+    std::vector<U1PrintTask::Filament> filaments;
+    std::vector<double>                grams;
+    for (const U1Jobs::Origin::Filament &kept : entry->origin.filaments) {
+        U1PrintTask::Filament filament;
+        filament.present = kept.used;
+        filament.name    = kept.name;
+        filament.type    = kept.type;
+        filament.color   = kept.color;
+        filaments.push_back(std::move(filament));
+        grams.push_back(kept.grams);
+    }
+    const fs::path    name          = entry->origin.file_name.empty() ? fs::path("print.gcode") : fs::path(entry->origin.file_name);
+    const std::string printer_model = entry->printer_model;
+    U1SendDialog dlg(this, name, filaments, *printer, from_u8(entry->origin.project), entry->origin.plate, from_u8(entry->origin.estimated_time),
+                     wxBitmap(), grams, from_u8(entry->printer),
+                     [base_url, facts, target, printer_model] {
+                         U1LanPrintHost::ReadinessRead read = U1LanPrintHost::readiness_check(base_url, facts, target, printer_model);
+                         return U1SendDialog::ReadinessRead{std::move(read.check), read.answered};
+                     },
+                     entry->slots ? (printer_model.empty() ? _L("the printer") : from_u8(printer_model)) : wxString());
+    dlg.SetTitle(title);
+    if (dlg.ShowModal() != wxID_OK) {
+        fs::remove(copy, ec);
+        return;
+    }
+    // The dialog may have been open for a long time: the copy is checked again, and the send checks it once more.
+    if (!same_bytes()) {
+        fs::remove(copy, ec);
+        show_error(this, _L("The queued file is damaged or could not be read, so it was not sent. Open its project, slice it and print from there."), false);
+        return;
+    }
+
+    // A job with its own identity, through the same upload, read-back and single Start as any other. The queue
+    // entry goes once the file is verified on the printer or a Start was sent (U1LanPrintHost).
+    U1Jobs::Origin origin = entry->origin;
+    origin.file_name      = dlg.filename().filename().string();
+    auto u1_host          = std::make_unique<U1LanPrintHost>(base_url, dlg.options(), target);
+    u1_host->set_printer_model(printer_model);
+    u1_host->set_origin(std::move(origin));
+    u1_host->set_source_sha256(entry->sha256);
+    u1_host->set_released_queue_entry(entry->id);
     PrintHostJob upload_job;
     upload_job.printhost               = std::move(u1_host);
     upload_job.upload_data.use_3mf     = false;

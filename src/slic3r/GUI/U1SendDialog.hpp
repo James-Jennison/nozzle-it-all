@@ -48,6 +48,10 @@ public:
     /// filament changer (a Centauri Carbon on COSMOS with a CANVAS): *printer*'s toolheads are then its slots
     /// by tool number, the wording says "slot", and the Snapmaker firmware's print options are not offered.
     /// The dialog
+    /// *offer_queue* adds "Add to queue": the file is kept on this computer for this printer and nothing is
+    /// sent; the printer's state does not stand in its way, because the file is checked when it is released.
+    /// *other_printers* names more printers of the same model: each one ticked gets a job of its own (see also()).
+    /// The dialog
     /// calls *read_readiness* once it is on screen, when the user asks, and again when Start
     /// Print or Upload is pressed; it shows the reason, disables the button it applies
     /// to, and does not close on a refusal. It only informs: the send itself
@@ -63,13 +67,19 @@ public:
                  const std::vector<double>                &filament_grams,
                  const wxString                           &printer_address,
                  std::function<ReadinessRead()>            read_readiness = {},
-                 const wxString                           &slot_printer = {});
+                 const wxString                           &slot_printer = {},
+                 bool                                      offer_queue = false,
+                 const std::vector<wxString>              &other_printers = {});
 
     /// The base of the name the file gets on the printer: the export's name, or
     /// what the user typed over it, with characters a printer cannot take
     /// replaced, ending in .gcode. The send adds the job's identifier to it.
     boost::filesystem::path filename() const;
     bool                    start_print() const { return m_start_print; }
+    /// "Add to queue" was pressed: nothing is to be sent.
+    bool                    queue_only() const { return m_queue_only; }
+    /// The other printers ticked, as indices into the list the dialog was given.
+    std::vector<size_t>     also() const;
     U1PrintTask::Options    options() const;
 
 protected:
@@ -117,6 +127,8 @@ private:
     ::CheckBox                        *m_time_lapse        = nullptr;
     ::CheckBox                        *m_shaper_calibrate  = nullptr;
     bool                               m_start_print       = true;
+    bool                               m_queue_only        = false;
+    std::vector<::CheckBox *>          m_also;
     bool                               m_slots             = false; ///< sources are a filament changer's slots (see the constructor)
     wxString                           m_message_title;
 };

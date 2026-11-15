@@ -630,6 +630,8 @@ public:
     void send_gcode_u1_lan(const boost::filesystem::path &default_output_file, bool slots = false);
     /// Sends the kept prepared file of U1 job *job_id* again, as a new job, after the send dialog.
     void reprint_u1_job(const std::string &job_id);
+    /// "Review and Start" for a file waiting in the queue: the checked send for the printer it waits for.
+    void start_queued_u1_job(const std::string &queue_id);
     void send_gcode_legacy(int plate_idx = -1, Export3mfProgressFn proFn = nullptr);
     int export_config_3mf(int plate_idx = -1, Export3mfProgressFn proFn = nullptr);
     //BBS jump to nonitor after print job finished

@@ -384,7 +384,9 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
                            const std::vector<double>                &filament_grams,
                            const wxString                           &printer_address,
                            std::function<ReadinessRead()>            read_readiness,
-                           const wxString                           &slot_printer)
+                           const wxString                           &slot_printer,
+                           bool                                      offer_queue,
+                           const std::vector<wxString>              &other_printers)
     : DPIDialog(parent, wxID_ANY, slot_printer.empty() ? _L("Print on Snapmaker U1") : format_wxstr(_L("Print on %1%"), slot_printer), wxDefaultPosition,
                 wxDefaultSize, wxCAPTION | wxCLOSE_BOX)
     , m_plate_filaments(plate_filaments)
@@ -579,13 +581,48 @@ U1SendDialog::U1SendDialog(wxWindow                                 *parent,
     sections->Add(preparation, 0, wxEXPAND);
     }
 
+    // More printers of the same model: each one ticked gets a job of its own, checked in a window of its own.
+    if (!other_printers.empty()) {
+        auto *others     = new Section(m_scroll, _L("Also print on"));
+        auto *others_row = new wxWrapSizer(wxHORIZONTAL, wxREMOVE_LEADING_SPACES);
+        const wxString help = _L("Each printer ticked gets a job of its own. Its window opens after this one, with that printer's own filaments and checks.");
+        for (const wxString &name : other_printers) {
+            auto *check = new ::CheckBox(others);
+            check->SetToolTip(help);
+            auto *text = new Label(others, name);
+            text->SetToolTip(help);
+            text->Bind(wxEVT_LEFT_UP, [check](wxMouseEvent &) { check->SetValue(!check->GetValue()); });
+            auto *pair = new wxBoxSizer(wxHORIZONTAL);
+            pair->Add(check, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
+            pair->Add(text, 0, wxALIGN_CENTER_VERTICAL);
+            others_row->Add(pair, 0, wxRIGHT | wxBOTTOM, FromDIP(18));
+            m_also.push_back(check);
+        }
+        others->content()->Add(others_row, 0, wxEXPAND);
+        sections->Add(others, 0, wxEXPAND | wxTOP, gap);
+    }
+
     m_scroll->SetSizer(sections);
     top->Add(m_scroll, 1, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, FromDIP(12));
 
-    auto *buttons = new DialogButtons(this, {"Cancel", "Upload without starting", "Start Print"}, _L("Start Print"));
+    std::vector<wxString> labels = {"Cancel", "Upload without starting", "Start Print"};
+    if (offer_queue)
+        labels.insert(labels.begin(), L("Add to queue"));
+    const int first = offer_queue ? 1 : 0;
+    auto *buttons = new DialogButtons(this, labels, _L("Start Print"), first);
     auto *cancel = buttons->GetCANCEL();
-    auto *upload = m_upload = buttons->GetButtonFromIndex(1);
-    auto *print  = m_print  = buttons->GetButtonFromIndex(2);
+    auto *upload = m_upload = buttons->GetButtonFromIndex(first + 1);
+    auto *print  = m_print  = buttons->GetButtonFromIndex(first + 2);
+    if (offer_queue) {
+        auto *queue = buttons->GetButtonFromIndex(0);
+        queue->SetToolTip(_L("Keeps this file on this computer for this printer. Nothing is sent now: it waits in the printer's Print history until you review and start it."));
+        queue->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+            end_name_edit(true);
+            m_queue_only  = true;
+            m_start_print = false;
+            EndModal(wxID_OK);
+        });
+    }
     buttons->SetBackgroundColour(colours.window); // the row behind the buttons, which is otherwise white
     top->Add(buttons, 0, wxEXPAND);
 
@@ -742,6 +779,15 @@ U1PrintTask::Options U1SendDialog::options() const
     if (*options.flow_calibrate)
         options.flow_calibrate_toolheads.assign(used_toolheads.begin(), used_toolheads.end());
     return options;
+}
+
+std::vector<size_t> U1SendDialog::also() const
+{
+    std::vector<size_t> ticked;
+    for (size_t i = 0; i < m_also.size(); ++i)
+        if (m_also[i]->GetValue())
+            ticked.push_back(i);
+    return ticked;
 }
 
 void U1SendDialog::on_confirm(bool start_print)

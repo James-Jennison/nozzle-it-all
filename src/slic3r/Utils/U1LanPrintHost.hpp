@@ -8,6 +8,8 @@
 #include <utility>
 #include <nlohmann/json.hpp>
 
+#include <boost/filesystem/path.hpp>
+
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -47,6 +49,19 @@ public:
     /// For a file sent again: the SHA-256 the prepared file must have. upload() refuses any other bytes
     /// before anything is sent.
     void set_expected_sha256(std::string sha256) { m_expected_sha256 = std::move(sha256); }
+    /// For a file released from the queue: the SHA-256 the file must have as it is handed over, before its
+    /// tool numbers are rewritten for the slots chosen. upload() refuses any other bytes.
+    void set_source_sha256(std::string sha256) { m_source_sha256 = std::move(sha256); }
+    /// The queue entry this send releases. It is taken out of the queue once the file is verified on the printer
+    /// without a Start, or once a Start has been sent, whatever became of it: from then on the job's record
+    /// speaks for it. A send that ends before that leaves the entry waiting.
+    void set_released_queue_entry(std::string id) { m_released_queue_entry = std::move(id); }
+    /// Makes this a send that sends nothing: upload() keeps the prepared file in the queue for the printer
+    /// *entry* names, with the origin given by set_origin(), and contacts no printer.
+    void set_queue_entry(U1Jobs::Queued entry) { m_queue_entry = std::move(entry); }
+    /// Runs first in upload(), on its thread, with the prepared file: where copies of it are taken for the
+    /// jobs of other printers, each of which is then a send of its own.
+    void set_before_upload(std::function<void(const boost::filesystem::path &)> fn) { m_before_upload = std::move(fn); }
 
     /// Reads print_task_config from the printer. Tries *host* as given (port 80
     /// through the printer's web proxy), then Moonraker's own port 7125. On
@@ -119,6 +134,10 @@ private:
     std::string          m_printer_model;
     U1Jobs::Origin       m_origin;
     std::string          m_expected_sha256;
+    std::string          m_source_sha256;
+    std::string          m_released_queue_entry;
+    std::optional<U1Jobs::Queued> m_queue_entry;
+    std::function<void(const boost::filesystem::path &)> m_before_upload;
 };
 
 } // namespace Slic3r

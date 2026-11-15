@@ -29,6 +29,7 @@ add_executable(${_TEST_NAME}_tests
     test_camera_relay.cpp
     test_mjpeg_stream.cpp
     test_u1_job_journal.cpp
+    test_printer_discovery.cpp
     test_afc_send.cpp
     test_network_versions.cpp
     test_nia_theme.cpp

@@ -23,6 +23,7 @@
 #include <wx/taskbar.h>
 #endif // __APPLE__
 
+#include <set>
 #include <string>
 #include <map>
 #include <vector>
@@ -70,6 +71,7 @@ class wxProgressDialog;
 namespace Slic3r {
 
 class U1JobWatcher;
+namespace U1Jobs { struct Job; }
 
 namespace GUI
 {
@@ -551,6 +553,11 @@ public:
     LazyPage<NativeDevicePage>* m_native_device_page{nullptr};
     // Records how U1 jobs ended whichever tab shows. shared_ptr: the type is only forward-declared here.
     std::shared_ptr<U1JobWatcher> m_u1_job_watcher;
+    /// Tells the person what the watcher saw of a job sent from here: in Orca's notifications, and through the
+    /// desktop's when this window is not in front. *paused* for a job that has just been paused.
+    void notify_u1_job(const U1Jobs::Job &job, bool paused);
+    std::set<std::string> m_u1_notified; ///< jobs whose end was already told in this run
+    std::set<std::string> m_u1_paused;   ///< jobs paused at the watcher's last pass
     U1JobBar* m_u1_job_bar{nullptr};
     void update_native_device_tab();
     // The selected printer has a native view (NativeDevicePage).

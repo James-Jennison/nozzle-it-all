@@ -3,6 +3,8 @@
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "I18N.hpp"
+#include "MainFrame.hpp"
+#include "MsgDialog.hpp"
 #include "NIATheme.hpp"
 #include "NativePrinterPanel.hpp"
 #include "Plater.hpp"
@@ -21,9 +23,11 @@
 #include <wx/panel.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
+#include <wx/weakref.h>
 
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -180,6 +184,9 @@ void U1JobHistoryPanel::rebuild(bool force)
     for (const U1Jobs::Job &job : jobs)
         shown += "|" + job.id + ":" + U1Jobs::state_name(job.state) + ":" + job.assessment + ":" + std::to_string(job.started_ms) + ":" +
                  std::to_string(job.ended_ms) + (can_print_again(job) ? ":kept" : "");
+    const std::vector<U1Jobs::Queued> waiting = host.empty() ? std::vector<U1Jobs::Queued>() : U1Jobs::queue(host);
+    for (const U1Jobs::Queued &entry : waiting)
+        shown += "|q" + entry.id;
     const std::vector<U1Jobs::ExternalPrint> outside = host.empty() ? std::vector<U1Jobs::ExternalPrint>() : U1Jobs::external_prints(host);
     for (const U1Jobs::ExternalPrint &print : outside)
         shown += "|x" + print.printer_job_id + ":" + print.status + ":" + print.assessment + ":" + std::to_string(print.ended_ms);
@@ -207,7 +214,7 @@ void U1JobHistoryPanel::rebuild(bool force)
                               format_wxstr(_L("Prints on %1% (not the printer selected for slicing), newest first. Print again sends to this printer."), from_u8(other)));
     else
         m_empty->SetLabel(host.empty() ? _L("No printer address is set for the selected printer.") :
-                          jobs.empty() && outside.empty() ? _L("No job has been sent to this printer from this app yet.") :
+                          jobs.empty() && outside.empty() && waiting.empty() ? _L("No job has been sent to this printer from this app yet.") :
                                                             _L("Prints on this printer, newest first."));
 
     std::vector<std::pair<long long, wxWindow *>> rows; // newest first once sorted
@@ -380,6 +387,79 @@ void U1JobHistoryPanel::rebuild(bool force)
         line->Add(verdict_col, 0, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
         row->SetSizer(line);
         rows.emplace_back(print.started_ms, row);
+    }
+
+    // What waits in the queue for this printer, first to print first, above what was printed. Nothing of it has
+    // been sent; each is released by hand through the checked send.
+    for (size_t i = 0; i < waiting.size(); ++i) {
+        const U1Jobs::Queued &entry = waiting[i];
+        auto *row = new wxPanel(this);
+        row->SetBackgroundColour(NIATheme::surface(dark));
+        auto *line = new wxBoxSizer(wxHORIZONTAL);
+        auto *text = new wxBoxSizer(wxVERTICAL);
+        auto *name = new wxStaticText(row, wxID_ANY, from_u8(entry.origin.file_name), wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_MIDDLE);
+        name->SetFont(Label::Head_14);
+        name->SetForegroundColour(NIATheme::text(dark));
+        text->Add(name, 0, wxEXPAND);
+        wxString origin;
+        if (entry.origin.plate > 0)
+            origin = format_wxstr(_L("Plate %1%"), entry.origin.plate);
+        if (!entry.origin.project.empty())
+            origin += (origin.empty() ? "" : wxString::FromUTF8(" · ")) + leaf(entry.origin.project);
+        if (!entry.origin.estimated_time.empty())
+            origin += (origin.empty() ? "" : wxString::FromUTF8(" · ")) + from_u8(entry.origin.estimated_time);
+        if (!origin.empty()) {
+            auto *from = new wxStaticText(row, wxID_ANY, origin, wxDefaultPosition, wxDefaultSize, wxST_ELLIPSIZE_END);
+            from->SetForegroundColour(NIATheme::text_muted(dark));
+            text->Add(from, 0, wxEXPAND | wxTOP, FromDIP(2));
+        }
+        // TRN %1% is a place in a queue, counted from 1; %2% a date and time.
+        auto *place = new wxStaticText(row, wxID_ANY, format_wxstr(_L("Waiting in the queue, place %1% · added %2% · nothing has been sent"), i + 1, when(entry.added_ms)));
+        place->SetForegroundColour(NIATheme::heat(dark));
+        text->Add(place, 0, wxTOP, FromDIP(2));
+        line->Add(text, 1, wxALIGN_CENTER_VERTICAL | wxALL, FromDIP(10));
+
+        const std::string id = entry.id;
+        const auto add_button = [&](const wxString &label, const wxString &help, bool enabled, std::function<void()> act) {
+            auto *button = new ::Button(row, label);
+            button->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+            button->SetToolTip(help);
+            button->Enable(enabled);
+            button->Bind(wxEVT_BUTTON, [act = std::move(act)](wxCommandEvent &) {
+                // Not on the stack of the click: the list is rebuilt, and the send dialog is modal.
+                wxGetApp().CallAfter([act] {
+                    if (!wxGetApp().is_closing())
+                        act();
+                });
+            });
+            line->Add(button, 0, wxALIGN_CENTER_VERTICAL | wxTOP | wxBOTTOM | wxRIGHT, FromDIP(10));
+        };
+        // Main thread only: the panel may be gone by the time a click's work runs.
+        const auto reload_all = [self = wxWeakRef<U1JobHistoryPanel>(this)] {
+            if (self)
+                self->rebuild(true);
+        };
+        add_button(_L("Earlier"), _L("Moves this file one place earlier in this printer's queue."), i > 0, [id, reload_all] {
+            U1Jobs::queue_move(id, true);
+            reload_all();
+        });
+        add_button(_L("Later"), _L("Moves this file one place later in this printer's queue."), i + 1 < waiting.size(), [id, reload_all] {
+            U1Jobs::queue_move(id, false);
+            reload_all();
+        });
+        add_button(_L("Remove"), _L("Takes this file out of the queue. Nothing was sent to the printer."), true, [id, reload_all] {
+            if (MessageDialog(static_cast<wxWindow *>(wxGetApp().mainframe), _L("Take this file out of the queue? Nothing of it was sent to the printer."),
+                              _L("Queue"), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION).ShowModal() == wxID_YES)
+                U1Jobs::queue_remove(id);
+            reload_all();
+        });
+        add_button(_L("Review and Start"), _L("Opens the print window for this file: the printer is checked, and nothing is sent until you confirm."), true, [id, reload_all] {
+            if (wxGetApp().plater() != nullptr)
+                wxGetApp().plater()->start_queued_u1_job(id);
+            reload_all();
+        });
+        row->SetSizer(line);
+        m_rows->Add(row, 0, wxEXPAND | wxBOTTOM, FromDIP(8));
     }
 
     std::stable_sort(rows.begin(), rows.end(), [](const auto &a, const auto &b) { return a.first > b.first; });

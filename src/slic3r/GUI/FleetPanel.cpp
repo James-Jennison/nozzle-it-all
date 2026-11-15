@@ -13,6 +13,8 @@
 #include "slic3r/Utils/Http.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
 
+#include <optional>
+#include <future>
 #include <nlohmann/json.hpp>
 
 #include <wx/bitmap.h>
@@ -266,37 +268,63 @@ void FleetPanel::read_printers()
         return;
     if (m_reader.joinable())
         m_reader.join(); // the previous pass has finished: its flag was clear
-    // A printer whose stream is playing needs no still picture.
-    std::set<std::string> playing;
+    // A printer whose stream is playing needs no still picture. One whose stream ended is asked again where
+    // its camera is: the address may have changed.
+    std::set<std::string> playing, ended;
     for (const auto &[host, stream] : m_streams)
-        if (!stream->ended() && stream->frames() > 0)
+        if (stream->ended())
+            ended.insert(host);
+        else if (stream->frames() > 0)
             playing.insert(host);
-    m_reader = std::thread([hosts, playing, alive = m_alive, reading = m_reading, stop = m_stop, cameras = m_cameras, panel = this] {
+    m_reader = std::thread([hosts, playing, ended, alive = m_alive, reading = m_reading, stop = m_stop, cameras = m_cameras, panel = this] {
         std::map<std::string, Fleet::Reading> readings;
         std::map<std::string, std::string>    pictures; // by address: the bytes of a still picture, empty for none
         std::map<std::string, std::string>    streams;  // by address: where the camera's stream is, empty for none
-        for (const std::string &host : hosts) {
-            if (stop->load())
-                break;
-            Fleet::Reading one = read_printer(host, stop);
+        for (const std::string &host : ended)
+            cameras->erase(host);
+        // The printers are read side by side, eight at a time, so that one which does not answer holds up
+        // nobody else's card. The camera list is touched only on this thread, before and after.
+        struct Read
+        {
+            Fleet::Reading        reading;
+            std::string           picture;
+            std::optional<Camera> camera; // what is known of its camera after this read; none when it is no Moonraker printer
+        };
+        const auto read_one = [&stop, &playing](const std::string &host, std::optional<Camera> known) {
+            Read read;
+            read.reading = read_printer(host, stop);
             // From this app's own record, not from the printer.
-            one.start_open = U1Jobs::unresolved(host).has_value();
+            read.reading.start_open = U1Jobs::unresolved(host).has_value();
             // A still picture from the printer's camera, when it answers as a Moonraker printer and lists one.
             // The list is asked for once; a printer that was away is asked again when it is back.
-            std::string picture;
-            if (one.moonraker && !stop->load()) {
-                auto known = cameras->find(host);
-                if (known == cameras->end()) {
-                    const auto found = camera_addresses(host, stop);
-                    known            = cameras->emplace(host, Camera{found.first, found.second}).first;
-                }
-                streams.emplace(host, known->second.stream);
-                if (!known->second.snapshot.empty() && playing.count(host) == 0 && !stop->load())
-                    picture = camera_picture(known->second.snapshot, stop);
-            } else
-                cameras->erase(host);
-            pictures.emplace(host, std::move(picture));
-            readings.emplace(host, std::move(one));
+            if (!read.reading.moonraker || stop->load())
+                return read;
+            if (!known) {
+                const auto found = camera_addresses(host, stop);
+                known            = Camera{found.first, found.second};
+            }
+            read.camera = known;
+            if (!known->snapshot.empty() && playing.count(host) == 0 && !stop->load())
+                read.picture = camera_picture(known->snapshot, stop);
+            return read;
+        };
+        for (size_t first = 0; first < hosts.size() && !stop->load(); first += 8) {
+            std::vector<std::pair<std::string, std::future<Read>>> batch;
+            for (size_t i = first; i < std::min(hosts.size(), first + 8); ++i) {
+                const auto known = cameras->find(hosts[i]);
+                batch.emplace_back(hosts[i], std::async(std::launch::async, read_one, hosts[i],
+                                                        known == cameras->end() ? std::optional<Camera>() : std::optional<Camera>(known->second)));
+            }
+            for (auto &[host, pending] : batch) {
+                Read read = pending.get();
+                if (read.camera) {
+                    (*cameras)[host] = *read.camera;
+                    streams.emplace(host, read.camera->stream);
+                } else if (read.reading.moonraker == false)
+                    cameras->erase(host);
+                pictures.emplace(host, std::move(read.picture));
+                readings.emplace(host, std::move(read.reading));
+            }
         }
         // The panel joins this thread before it goes, so the application is still there for this call.
         if (!stop->load())

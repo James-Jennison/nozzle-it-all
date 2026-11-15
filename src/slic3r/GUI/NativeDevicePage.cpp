@@ -9,9 +9,33 @@
 #include "U1JobHistoryPanel.hpp"
 #include "Widgets/Button.hpp"
 
+#include "libslic3r/PresetBundle.hpp"
+#include "libslic3r/PrintConfig.hpp"
+#include "slic3r/Utils/Http.hpp"
+
+#include <nlohmann/json.hpp>
+
 #include <wx/sizer.h>
+#include <wx/stattext.h>
+
+#include <map>
 
 namespace Slic3r::GUI {
+
+namespace {
+// What the printers asked so far turned out to be, by address: true for a Klipper (Moonraker) printer.
+// Main thread only. An address that did not answer is not kept: it is asked again.
+std::map<std::string, bool> s_is_klipper;
+
+std::string octo_type_host()
+{
+    const PresetBundle* bundle = wxGetApp().preset_bundle;
+    if (bundle == nullptr)
+        return {};
+    const auto* host_type = bundle->printers.get_edited_preset().config.option<ConfigOptionEnum<PrintHostType>>("host_type");
+    return host_type != nullptr && host_type->value == htOctoPrint ? resolve_printer_lan_host() : std::string();
+}
+} // namespace
 
 NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
 {
@@ -39,6 +63,10 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     bar->Add(m_btn_history, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
     bar->Add(m_btn_printers, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
     bar->Add(m_btn_web, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
+    m_notice = new wxStaticText(m_switch_bar, wxID_ANY, _L("This printer does not answer as a Klipper printer. Monitor, History and the controls need Klipper (Moonraker); the printer's own page is on the Web interface side."));
+    m_notice->SetForegroundColour(NIATheme::text_muted(wxGetApp().dark_mode()));
+    m_notice->Hide();
+    bar->Add(m_notice, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(12));
     m_switch_bar->SetSizer(bar);
     m_btn_web->Hide();
     sizer->Add(m_switch_bar, 0, wxEXPAND);
@@ -84,8 +112,52 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
 
 NativeDevicePage::~NativeDevicePage()
 {
+    m_alive->store(false);
     // The printer opened from a card is this page's; without the page the selected printer is the one shown.
     view_printer({}, {});
+}
+
+void NativeDevicePage::ask_server_kind()
+{
+    const std::string host = octo_type_host();
+    if (host.empty() || s_is_klipper.count(host) != 0)
+        return apply_server_kind();
+    // One read request, on the request's own thread; its answer is taken on the main thread.
+    const auto answer = [this, alive = m_alive, host](bool reached, bool klipper) {
+        wxGetApp().CallAfter([this, alive, host, reached, klipper] {
+            if (!reached || !alive->load() || wxGetApp().is_closing())
+                return;
+            s_is_klipper[host] = klipper;
+            apply_server_kind();
+        });
+    };
+    Http::get("http://" + host + "/server/info")
+        .timeout_connect(4)
+        .timeout_max(6)
+        .on_complete([answer](std::string body, unsigned) {
+            const auto doc = nlohmann::json::parse(body, nullptr, false);
+            answer(true, !doc.is_discarded() && doc.is_object() && doc.contains("result") && doc["result"].is_object() &&
+                             (doc["result"].contains("klippy_state") || doc["result"].contains("klippy_connected")));
+        })
+        // An HTTP status means a server is there and did not know the question: not a Moonraker.
+        .on_error([answer](std::string, std::string, unsigned status) { answer(status != 0, false); })
+        .perform();
+}
+
+void NativeDevicePage::apply_server_kind()
+{
+    const std::string host  = octo_type_host();
+    const auto        known = host.empty() ? s_is_klipper.end() : s_is_klipper.find(host);
+    const bool        other = known != s_is_klipper.end() && !known->second && viewed_printer_name().empty();
+    if (m_notice->IsShown() != other) {
+        m_notice->Show(other);
+        m_switch_bar->Layout();
+    }
+    // Its own page first, once: the person can still go to the other sides.
+    if (other && !m_web_first_done && m_web_page != nullptr && !m_web && !m_history_shown && !m_fleet_shown) {
+        m_web_first_done = true;
+        show_view(View::Web);
+    }
 }
 
 void NativeDevicePage::set_active(bool active)
@@ -103,6 +175,8 @@ void NativeDevicePage::reload()
     view_printer({}, {});
     m_fleet->reload();
     refresh();
+    m_web_first_done = false;
+    ask_server_kind();
 }
 
 void NativeDevicePage::refresh()
@@ -118,6 +192,7 @@ void NativeDevicePage::refresh()
 void NativeDevicePage::on_sys_color_changed()
 {
     m_switch_bar->SetBackgroundColour(NIATheme::background(wxGetApp().dark_mode()));
+    m_notice->SetForegroundColour(NIATheme::text_muted(wxGetApp().dark_mode()));
     apply_switch_state();
     m_panel->on_sys_color_changed();
     m_history->on_sys_color_changed();
@@ -141,6 +216,7 @@ void NativeDevicePage::host_web_page(wxWindow* page, std::function<void()> befor
     m_panel->Show(!m_history_shown && !m_fleet_shown);
     m_switch_bar->Layout();
     Layout();
+    apply_server_kind();
 }
 
 wxWindow* NativeDevicePage::release_web_page()
@@ -211,6 +287,8 @@ void NativeDevicePage::apply_switch_state()
     style(m_btn_printers, m_fleet_shown);
     m_btn_web->Show(m_web_page != nullptr && viewed_printer_name().empty());
     style(m_btn_web, m_web);
+    if (m_notice != nullptr && m_notice->IsShown() && !viewed_printer_name().empty())
+        m_notice->Hide(); // the notice is about the selected printer
     m_switch_bar->Refresh();
 }
 

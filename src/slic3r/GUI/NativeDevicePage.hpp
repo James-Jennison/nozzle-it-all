@@ -1,12 +1,16 @@
 #ifndef slic3r_GUI_NativeDevicePage_hpp_
 #define slic3r_GUI_NativeDevicePage_hpp_
 
+#include <atomic>
 #include <cstddef>
 #include <functional>
+#include <memory>
+#include <string>
 
 #include <wx/panel.h>
 
 class Button;
+class wxStaticText;
 
 namespace Slic3r::GUI {
 
@@ -54,6 +58,14 @@ private:
     bool                m_active{false};
 
     void apply_switch_state();
+    /// A preset of the "Octo/Klipper" connection type may be a real OctoPrint server, which answers none of
+    /// the Monitor side's reads. The selected printer is asked once what it is; when it answers and is no
+    /// Klipper (Moonraker) printer, the page says so and shows its own web interface first.
+    void ask_server_kind();
+    void apply_server_kind();
+    wxStaticText*                      m_notice{nullptr};
+    std::shared_ptr<std::atomic<bool>> m_alive{std::make_shared<std::atomic<bool>>(true)};
+    bool                               m_web_first_done{false}; ///< the web side was shown first once for this selection
     /// Reconnects Monitor and History to the printer now viewed.
     void refresh();
 

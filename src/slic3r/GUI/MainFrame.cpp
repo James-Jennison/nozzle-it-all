@@ -1698,7 +1698,8 @@ bool MainFrame::wants_native_printer_view() const
     const bool is_u1 = boost::icontains(model, "Snapmaker") && boost::icontains(model, "U1");
     // "Octo/Klipper" is the connection type most Klipper printers are set up with, a copy of a stock profile
     // included, so it gets the native tab like "Moonraker". A real OctoPrint server answers none of the
-    // native page's reads; its own page is the tab's Web interface side.
+    // native page's reads; the page asks the printer once what it is and then shows its own page first
+    // (NativeDevicePage::ask_server_kind).
     const bool klipper_type = host_type != nullptr && (host_type->value == htMoonraker || host_type->value == htOctoPrint);
     return is_u1 || (klipper_type && !cfg.opt_string("print_host").empty());
 }

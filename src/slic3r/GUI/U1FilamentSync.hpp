@@ -51,6 +51,9 @@ std::vector<U1ReportedFilament> parse_u1_filament_report(const nlohmann::json& r
 /// it is mapped to ("lane": "0" is T0). Lanes without a tool, beyond T3 or doubly mapped are left out; an
 /// unloaded lane has no material and is an empty slot. *value* is the "value" object of the database item.
 std::vector<U1ReportedFilament> parse_filament_lane_data(const nlohmann::json& value);
+/// Whether lane data has the form parse_filament_lane_data() reads. Data in another form is reported as not
+/// readable, never as an empty printer.
+bool filament_lane_data_is_recognised(const nlohmann::json& value);
 
 /// True when the edited printer is not a U1, has a LAN address reached the Moonraker way, and no printer agent
 /// syncs its filaments: its filament lanes can then be asked for. Whether it has any is known after asking.

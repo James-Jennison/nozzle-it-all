@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -23,6 +25,7 @@
 #include <wx/dcmemory.h>
 #include <wx/image.h>
 #include <wx/panel.h>
+#include <wx/progdlg.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
@@ -50,6 +53,7 @@
 #include "Widgets/CheckBox.hpp"
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/DialogButtons.hpp"
+#include "Widgets/ProgressDialog.hpp"
 #include "Widgets/TextInput.hpp"
 #include "libslic3r/GCode/ThumbnailData.hpp"
 #include "libslic3r/PresetBundle.hpp"
@@ -195,6 +199,20 @@ bool json_flag(const nlohmann::json& arr, size_t i, bool fallback)
 // True while a printer with filament lanes on one nozzle (a CANVAS or other AFC unit) is being synced: the
 // dialogs then speak of slots, not toolheads. Main thread only; the sync is modal.
 bool s_lane_sync = false;
+
+// Whether lane data has the form parse_lane_data_impl() reads: at least one entry that is an object naming
+// its tool as a string. Data in another form is not "no filament": the sync says it cannot read it.
+bool lane_data_is_recognised(const nlohmann::json& value)
+{
+    if (!value.is_object())
+        return false;
+    if (value.empty())
+        return true; // no lanes at all: nothing to misread
+    for (const auto& [name, lane] : value.items())
+        if (lane.is_object() && lane.contains("lane") && lane["lane"].is_string())
+            return true;
+    return false;
+}
 
 std::vector<Slot> parse_lane_data_impl(const nlohmann::json& value)
 {
@@ -1564,6 +1582,7 @@ private:
 
 std::vector<U1ReportedFilament> parse_u1_filament_report(const nlohmann::json& report) { return parse_report_impl(report); }
 std::vector<U1ReportedFilament> parse_filament_lane_data(const nlohmann::json& value) { return parse_lane_data_impl(value); }
+bool filament_lane_data_is_recognised(const nlohmann::json& value) { return lane_data_is_recognised(value); }
 
 bool u1_catalog_preset_matches_record(const Preset& preset, const FilamentProfileRecord& record)
 {
@@ -1695,11 +1714,18 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
 bool sync_filaments_from_lanes(wxWindow* parent)
 {
     const std::string host = resolve_printer_lan_host();
-    std::optional<nlohmann::json> value;
-    bool     answered = false;
-    wxString error;
+    // The read runs beside the GUI thread: a printer that does not answer costs up to ten seconds, and the
+    // window stays alive meanwhile. When no answer has come within half a second a small window with Cancel
+    // shows; cancelling gives the read up and changes nothing.
+    struct LaneRead
     {
-        wxBusyCursor wait;
+        std::optional<nlohmann::json> value;
+        bool        answered = false;
+        std::string error;
+    };
+    const auto stop    = std::make_shared<std::atomic<bool>>(false);
+    auto       pending = std::async(std::launch::async, [host, stop] {
+        LaneRead read;
         // The address as given, then Moonraker's own port when no port was given and nothing answered there.
         std::vector<std::string> bases{"http://" + host};
         if (host.find(':') == std::string::npos)
@@ -1708,24 +1734,40 @@ bool sync_filaments_from_lanes(wxWindow* parent)
             Http::get(base + "/server/database/item?namespace=lane_data")
                 .timeout_connect(5)
                 .timeout_max(5)
-                .on_complete([&](std::string body, unsigned) {
-                    answered       = true;
+                .on_progress([stop](Http::Progress, bool& cancel) { cancel = stop->load(); })
+                .on_complete([&read](std::string body, unsigned) {
+                    read.answered  = true;
                     const auto doc = nlohmann::json::parse(body, nullptr, false);
                     if (!doc.is_discarded() && doc.is_object() && doc.contains("result") && doc["result"].is_object() &&
                         doc["result"].contains("value") && doc["result"]["value"].is_object())
-                        value = doc["result"]["value"];
+                        read.value = doc["result"]["value"];
                 })
                 // Moonraker answers 404 when nothing ever wrote lane data: an answer, and no lanes.
-                .on_error([&](std::string, std::string err, unsigned status) {
-                    answered = answered || status != 0;
+                .on_error([&read](std::string, std::string err, unsigned status) {
+                    read.answered = read.answered || status != 0;
                     if (status == 0)
-                        error = from_u8(err);
+                        read.error = err;
                 })
                 .perform_sync();
-            if (answered)
+            if (read.answered || stop->load())
                 break;
         }
+        return read;
+    });
+    if (pending.wait_for(std::chrono::milliseconds(500)) != std::future_status::ready) {
+        // TRN %1% is a network address.
+        ProgressDialog waiting(_L("Sync filaments"), format_wxstr(_L("Reading the filament lanes of the printer at %1%…"), from_u8(host)), 100, parent,
+                               wxPD_APP_MODAL | wxPD_AUTO_HIDE | wxPD_CAN_ABORT);
+        while (pending.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready)
+            if (!waiting.Pulse())
+                stop->store(true);
     }
+    const LaneRead read = pending.get();
+    if (stop->load())
+        return false; // cancelled
+    const std::optional<nlohmann::json>& value    = read.value;
+    const bool                           answered = read.answered;
+    const wxString                       error    = from_u8(read.error);
     std::vector<Slot> slots = value ? parse_lane_data_impl(*value) : std::vector<Slot>();
     if (!std::any_of(slots.begin(), slots.end(), [](const Slot& slot) { return slot.present; })) {
         // No lane data, but a printer agent that syncs filaments its own way (Happy Hare, a Creality CFS): its sync runs.
@@ -1741,6 +1783,8 @@ bool sync_filaments_from_lanes(wxWindow* parent)
             detail = format_wxstr(_L("The printer at %1% did not answer: %2%"), from_u8(host), error);
         else if (!value)
             detail = _L("This printer reports no filament lanes. The sync reads the lane data a filament changer such as a CANVAS on COSMOS (AFC) writes to the printer; this printer has none.");
+        else if (!lane_data_is_recognised(*value))
+            detail = _L("This printer's filament lane data is in a form this version does not read, so nothing was changed. The sync reads lane data as a CANVAS on COSMOS (AFC) writes it: one entry per lane, each naming its tool, material and colour.");
         else
             detail = _L("The printer's filament lanes are all empty, or none is mapped to a tool.");
         MessageDialog(parent, detail, _L("Sync filaments"), wxOK | wxICON_INFORMATION).ShowModal();

@@ -176,6 +176,12 @@ TEST_CASE("The lanes of a filament changer become slots by the tool each is mapp
                           {"G", lane("2", "#333333", "PETG")}, {"H", lane("2", "#444444", "ABS")}};
     bad["I"]         = lane("1", "#555555", "PLA");
     bad["I"]["lane"] = 1; // a number, not AFC's string
+    // Lane data in another form is told apart from an empty printer.
+    CHECK(filament_lane_data_is_recognised(canvas));
+    CHECK(filament_lane_data_is_recognised(nlohmann::json::object()));
+    CHECK_FALSE(filament_lane_data_is_recognised(nlohmann::json{{"lanes", nlohmann::json::array({1, 2})}}));
+    CHECK_FALSE(filament_lane_data_is_recognised(nlohmann::json{{"L", {{"lane", 1}, {"material", "PLA"}}}}));
+    CHECK_FALSE(filament_lane_data_is_recognised(nlohmann::json::array()));
     const auto filtered = parse_filament_lane_data(bad);
     REQUIRE(filtered.size() == 4);
     CHECK_FALSE(filtered[0].present);

@@ -315,9 +315,12 @@ void SpoolsPanel::rebuild()
         auto *amount = new wxStaticText(row, wxID_ANY, (left.measured ? wxString() : wxString::FromUTF8("≈ ")) + grams(left.grams));
         amount->SetFont(Label::Head_14);
         amount->SetForegroundColour(left.grams <= 0. ? NIATheme::danger(dark) : NIATheme::text(dark));
-        // What kind of figure it is, always said: a weighing, or an estimate from the jobs sent from this app.
+        // What kind of figure it is, always said: a weighing, or an estimate from the jobs sent from this app and,
+        // for a spool added from a printer that counts what it feeds, from that printer's count when it was added.
+        const bool counted = std::any_of(spool.uses.begin(), spool.uses.end(), [](const Spools::Use &use) { return use.job_id.empty() && use.grams > 0.; });
         auto *kind = new wxStaticText(row, wxID_ANY, left.measured ? format_wxstr(_L("weighed %1%"), when(spool.weighings.back().at_ms)) :
-                                                     spool.weighings.empty() ? _L("estimated from jobs") : _L("estimated since the last weighing"));
+                                                     !spool.weighings.empty() ? _L("estimated since the last weighing") :
+                                                     counted ? _L("estimated from the printer's count and jobs") : _L("estimated from jobs"));
         kind->SetForegroundColour(NIATheme::text_muted(dark));
         left_col->Add(amount, 0, wxALIGN_RIGHT);
         left_col->Add(kind, 0, wxALIGN_RIGHT | wxTOP, FromDIP(2));
@@ -348,7 +351,7 @@ void SpoolsPanel::rebuild()
     m_empty->SetForegroundColour(NIATheme::text_muted(dark));
     m_empty->SetLabel(damaged      ? _L("The spool list could not be read. Nothing is changed until that file is moved away.") :
                       listed == 0  ? _L("No spools yet. Add one yourself, or from what is loaded in the printer shown on this tab.") :
-                                     _L("Your spools. What is left is an estimate from the jobs sent from this app until you weigh a spool. None of this stops a print."));
+                                     _L("Your spools. What is left is an estimate until you weigh a spool: from the jobs sent from this app and, for a spool added from a printer, from what that printer reported. None of this stops a print."));
     BOOST_LOG_TRIVIAL(warning) << "Spools: " << listed << " listed";
     wxGetApp().UpdateDarkUIWin(this);
     Thaw();

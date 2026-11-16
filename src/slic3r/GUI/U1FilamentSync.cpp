@@ -2349,6 +2349,13 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
             }
         }
 
+    {
+        // What each slot is offered, in slot order, for a question asked afterwards about what the sync did.
+        std::string offered;
+        for (size_t i = 0; i < automatic.size(); ++i)
+            offered += (i == 0 ? "" : " | ") + (slots[i].present ? (automatic[i].empty() ? std::string("(to be chosen)") : automatic[i]) : std::string("(empty)"));
+        BOOST_LOG_TRIVIAL(warning) << "Sync filaments: presets offered per slot: " << offered;
+    }
     // Nothing changes before the user has seen what would change and said so.
     if (Plater* plater = wxGetApp().plater())
         plater->update_all_plate_thumbnails(true); // the plate pictures the dialog recolors

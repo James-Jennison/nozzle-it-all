@@ -4,10 +4,21 @@
 #include "Utils.hpp"
 
 #include <boost/filesystem.hpp>
+#include <boost/interprocess/sync/file_lock.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
+#include <boost/nowide/cstdio.hpp>
 #include <boost/nowide/fstream.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cstdio>
+#include <mutex>
+
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace Slic3r {
 namespace Spools {
@@ -156,22 +167,29 @@ bool Inventory::save(const std::string &path) const
     json spools = json::array();
     for (const Spool &spool : m_spools)
         spools.push_back(to_json(spool));
-    const json                doc = {{"format", 1}, {"nextNumber", m_next_number}, {"spools", spools}};
-    const std::string         tmp = path + ".tmp";
+    const json                doc  = {{"format", 1}, {"nextNumber", m_next_number}, {"spools", spools}};
+    const std::string         text = doc.dump(1);
+    const std::string         tmp  = path + ".tmp";
     boost::system::error_code ec;
-    {
-        boost::nowide::ofstream out(tmp, std::ios::trunc);
-        if (!out)
-            return false;
-        out << doc.dump(1);
-        out.flush();
-        if (!out)
-            return false;
+    // Written whole to another name and forced to disk before it takes the file's name: the file is the old
+    // list or the new one, never part of one.
+    FILE *file = boost::nowide::fopen(tmp.c_str(), "wb");
+    if (file == nullptr)
+        return false;
+    bool ok = std::fwrite(text.data(), 1, text.size(), file) == text.size() && std::fflush(file) == 0;
+#ifdef _WIN32
+    ok = ok && _commit(_fileno(file)) == 0;
+#else
+    ok = ok && ::fsync(fileno(file)) == 0;
+#endif
+    ok = std::fclose(file) == 0 && ok;
+    if (ok) {
+        boost::filesystem::rename(tmp, path, ec);
+        ok = !ec;
     }
-    boost::filesystem::rename(tmp, path, ec);
-    if (ec)
+    if (!ok)
         boost::filesystem::remove(tmp, ec);
-    return !ec;
+    return ok;
 }
 
 Spool *Inventory::find(int number)
@@ -291,6 +309,32 @@ bool Inventory::end_drying(int number, const std::string &notes, long long now_m
 }
 
 std::string inventory_path() { return (boost::filesystem::path(data_dir()) / "spools.json").string(); }
+
+Changed change(const std::string &path, const std::function<bool(Inventory &)> &change)
+{
+    // Threads of this process first, then other copies of the app through a lock file beside the list.
+    static std::mutex           s_mutex;
+    std::lock_guard<std::mutex> in_process(s_mutex);
+    const std::string           lock_path = path + ".lock";
+    try {
+        {
+            boost::nowide::ofstream touch(lock_path, std::ios::app);
+            if (!touch)
+                return Changed::NotSaved;
+        }
+        boost::interprocess::file_lock                                   file_lock(lock_path.c_str());
+        boost::interprocess::scoped_lock<boost::interprocess::file_lock> between_processes(file_lock);
+        bool      damaged   = false;
+        Inventory inventory = Inventory::load(path, &damaged);
+        if (damaged)
+            return Changed::Damaged;
+        if (!change(inventory))
+            return Changed::NotChanged;
+        return inventory.save(path) ? Changed::Saved : Changed::NotSaved;
+    } catch (const std::exception &) {
+        return Changed::NotSaved;
+    }
+}
 
 } // namespace Spools
 } // namespace Slic3r

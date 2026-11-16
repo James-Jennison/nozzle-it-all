@@ -109,3 +109,30 @@ TEST_CASE("A slot with no spool recorded gives no shortfall", "[SpoolJobs]")
     CHECK(SpoolJobs::shortfalls(inventory, "192.168.1.243", {20., 5000.}, {0, 3}).empty());
     CHECK(SpoolJobs::shortfalls(inventory, "192.168.1.99", {5000.}, {0}).empty());
 }
+
+TEST_CASE("A job takes from the spools noted when it was sent, wherever they are when it ends", "[SpoolJobs]")
+{
+    Spools::Inventory inventory;
+    const int started_on = spool_in_slot(inventory, 0, 1000.);
+    U1Jobs::Job job      = job_of(U1Jobs::State::Completed, {40.}, {0});
+    job.spools           = SpoolJobs::spools_for(inventory, job.printer, job.toolhead_map);
+    REQUIRE(job.spools == std::vector<int>{started_on});
+    // During the print the person takes that spool out and records another in the toolhead.
+    inventory.move(started_on, Spools::Location{Spools::Location::Kind::Storage, "shelf", -1});
+    const int put_in_later = spool_in_slot(inventory, 0, 1000.);
+    CHECK(SpoolJobs::record_job(inventory, job, 5) == 1);
+    CHECK_THAT(Spools::remaining(*inventory.find(started_on)).grams, WithinAbs(960., 1e-9));
+    CHECK_THAT(Spools::remaining(*inventory.find(put_in_later)).grams, WithinAbs(1000., 1e-9));
+}
+
+TEST_CASE("A job sent with no spool noted for a toolhead takes nothing for it, even if one is recorded there later", "[SpoolJobs]")
+{
+    Spools::Inventory inventory;
+    spool_in_slot(inventory, 1, 1000.);
+    U1Jobs::Job job = job_of(U1Jobs::State::Completed, {40.}, {0});
+    job.spools      = SpoolJobs::spools_for(inventory, job.printer, job.toolhead_map);
+    REQUIRE(job.spools == std::vector<int>{0});
+    const int later = spool_in_slot(inventory, 0, 1000.);
+    CHECK(SpoolJobs::record_job(inventory, job, 5) == 0);
+    CHECK_THAT(Spools::remaining(*inventory.find(later)).grams, WithinAbs(1000., 1e-9));
+}

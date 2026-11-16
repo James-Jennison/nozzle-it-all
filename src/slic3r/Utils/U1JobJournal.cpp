@@ -132,6 +132,7 @@ json to_json(const Job &job)
             {"recoveredFromLostAck", job.recovered_from_lost_ack},
             {"state", state_name(job.state)},
             {"toolheadMap", job.toolhead_map},
+            {"spools", job.spools},
             {"createdAt", job.created_ms},
             {"progress", job.progress},
             {"startedAt", job.started_ms},
@@ -169,6 +170,7 @@ std::optional<Job> from_json(const json &doc)
         job.start                   = doc.value("start", false);
         job.recovered_from_lost_ack = doc.value("recoveredFromLostAck", false);
         job.toolhead_map            = doc.value("toolheadMap", std::vector<int>());
+        job.spools                  = doc.value("spools", std::vector<int>());
         job.created_ms              = doc.value("createdAt", 0LL);
         job.progress                = doc.value("progress", 0.);
         job.started_ms              = doc.value("startedAt", 0LL);

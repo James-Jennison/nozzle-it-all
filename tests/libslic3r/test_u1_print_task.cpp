@@ -204,6 +204,21 @@ TEST_CASE("A tagged U1 spool whose reader no longer holds the card is named by t
     CHECK(report["tag_ids"] == json({"SKU34262", "70498FE2", "", ""}));
 }
 
+TEST_CASE("A card whose product number is not the toolhead's own is not taken for that toolhead", "[U1PrintTask]")
+{
+    // The reader's entry at the second place names another product than the printer keeps for the second toolhead.
+    const json status = {{"print_task_config",
+                          {{"filament_exist", {true, true, true, true}},
+                           {"filament_type", {"PLA", "PLA", "PLA", "PLA"}},
+                           {"filament_official", {true, true, true, true}},
+                           {"filament_sku", {34262, 34263, 34069, 34265}}}},
+                         {"filament_detect",
+                          {{"info", {{{"CARD_UID", 0}, {"SKU", 0}}, {{"CARD_UID", {112, 73, 143, 226}}, {"SKU", 34069}}, {{"CARD_UID", {1, 2, 3, 4}}, {"SKU", 34069}}, {{"CARD_UID", 0}}}}}}};
+    const json report = U1PrintTask::build_filament_report(status);
+    // The second toolhead goes by its own product number; the third's card names the third's product and is taken.
+    CHECK(report["tag_ids"] == json({"SKU34262", "SKU34263", "01020304", "SKU34265"}));
+}
+
 TEST_CASE("U1 manual filament edits use SET_PRINT_FILAMENT_CONFIG", "[U1PrintTask]")
 {
     CHECK(U1PrintTask::set_filament_command(2, "amazon basics", "TPU", "95A", "#dd0000") ==

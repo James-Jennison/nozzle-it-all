@@ -224,3 +224,36 @@ TEST_CASE("A missing inventory file is an empty inventory; a damaged one is said
     CHECK(Spools::Inventory::load(file.path.string(), &damaged).spools().empty());
     CHECK(damaged);
 }
+
+TEST_CASE("A change to the inventory is read, made and written under one lock", "[Spools]")
+{
+    ScratchFile file;
+    CHECK(Spools::change(file.path.string(), [](Spools::Inventory &inventory) { return inventory.add(pla(), 1) == 1; }) == Spools::Changed::Saved);
+    CHECK(Spools::change(file.path.string(), [](Spools::Inventory &inventory) { return inventory.weigh(1, 900., 2); }) == Spools::Changed::Saved);
+    // A change that says no leaves the file as it was.
+    CHECK(Spools::change(file.path.string(), [](Spools::Inventory &inventory) {
+              inventory.add(pla(), 3);
+              return false;
+          }) == Spools::Changed::NotChanged);
+    const Spools::Inventory read = Spools::Inventory::load(file.path.string());
+    REQUIRE(read.spools().size() == 1);
+    CHECK_THAT(Spools::remaining(read.spools()[0]).grams, WithinAbs(900., 1e-9));
+    boost::system::error_code ec;
+    fs::remove(file.path.string() + ".lock", ec);
+}
+
+TEST_CASE("A damaged inventory file is not changed", "[Spools]")
+{
+    ScratchFile file;
+    {
+        boost::nowide::ofstream out(file.path.string());
+        out << "{ not json";
+    }
+    CHECK(Spools::change(file.path.string(), [](Spools::Inventory &inventory) { return inventory.add(pla(), 1) > 0; }) == Spools::Changed::Damaged);
+    boost::nowide::ifstream in(file.path.string());
+    std::string             text;
+    std::getline(in, text);
+    CHECK(text == "{ not json");
+    boost::system::error_code ec;
+    fs::remove(file.path.string() + ".lock", ec);
+}

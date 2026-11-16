@@ -1,5 +1,8 @@
 #include "U1LanPrintHost.hpp"
 
+#include "SpoolJobs.hpp"
+#include "libslic3r/SpoolInventory.hpp"
+
 #include "Http.hpp"
 #include "NozzleSession.hpp"
 #include "U1JobJournal.hpp"
@@ -533,6 +536,14 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     job.source_sha256 = source_digest; // the file as handed over, when it was queued or is not the file sent
     job.start        = start;
     job.toolhead_map = m_options.filament_to_toolhead;
+    {
+        // The spools the person has recorded in the toolheads or slots this job prints from, as the list stands
+        // now. A list that cannot be read notes nothing; it never stands in the way of the send.
+        bool              damaged   = false;
+        Spools::Inventory inventory = Spools::Inventory::load(Spools::inventory_path(), &damaged);
+        if (!damaged && !inventory.spools().empty())
+            job.spools = SpoolJobs::spools_for(inventory, printer, job.toolhead_map);
+    }
     job.created_ms   = U1Jobs::now_ms();
     job.origin       = m_origin;
     if (job.origin.file_name.empty())

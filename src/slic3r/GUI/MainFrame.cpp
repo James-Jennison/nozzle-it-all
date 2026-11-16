@@ -1783,10 +1783,12 @@ void MainFrame::notify_u1_job(const U1Jobs::Job& job, bool paused)
     // What the job took goes into the record of the spools the person said were in that printer. Done each time
     // the watcher writes the ended job (its outcome, then its times): the job is counted once per spool.
     if (ended) {
-        bool              damaged   = false;
-        Spools::Inventory inventory = Spools::Inventory::load(Spools::inventory_path(), &damaged);
-        if (!damaged && SpoolJobs::record_job(inventory, job, U1Jobs::now_ms()) > 0 && !inventory.save(Spools::inventory_path()))
-            BOOST_LOG_TRIVIAL(warning) << "Spools: what job " << job.id << " took could not be saved";
+        const Spools::Changed changed = Spools::change(Spools::inventory_path(), [&job](Spools::Inventory& inventory) {
+            return SpoolJobs::record_job(inventory, job, U1Jobs::now_ms()) > 0;
+        });
+        if (changed == Spools::Changed::Damaged || changed == Spools::Changed::NotSaved)
+            BOOST_LOG_TRIVIAL(warning) << "Spools: what job " << job.id << " took could not be recorded (the spool list could not be "
+                                       << (changed == Spools::Changed::Damaged ? "read" : "saved") << ")";
     }
     // The watcher writes a job's record more than once (its outcome, then its times): its end is told once.
     if (!paused && (!ended || !m_u1_notified.insert(job.id).second))

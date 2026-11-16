@@ -200,11 +200,19 @@ nlohmann::json build_filament_report(const nlohmann::json &status)
     for (int i = 0; i < PHYSICAL_EXTRUDER_COUNT; ++i) {
         const size_t at = size_t(i);
         std::string  id;
-        if (detect != status.end() && detect->is_object() && detect->contains("info") && (*detect)["info"].is_array() && at < (*detect)["info"].size())
-            id = SpoolTags::u1_card_uid((*detect)["info"][at]);
+        const bool has_sku = sku != cfg->end() && sku->is_array() && at < sku->size() && (*sku)[at].is_number_integer();
+        if (detect != status.end() && detect->is_object() && detect->contains("info") && (*detect)["info"].is_array() && at < (*detect)["info"].size()) {
+            // The reader's entry is taken for this toolhead only when it names the product the printer keeps for
+            // this toolhead: that the list is in toolhead order is not relied on alone.
+            const nlohmann::json &entry     = (*detect)["info"][at];
+            const auto            entry_sku = entry.is_object() ? entry.find("SKU") : entry.end();
+            const bool            same      = !has_sku || !entry.is_object() || entry_sku == entry.end() || !entry_sku->is_number_integer() ||
+                                              entry_sku->get<long long>() == (*sku)[at].get<long long>();
+            if (same)
+                id = SpoolTags::u1_card_uid(entry);
+        }
         if (id.empty() && official != cfg->end() && official->is_array() && at < official->size() && (*official)[at].is_boolean() &&
-            (*official)[at].get<bool>() && sku != cfg->end() && sku->is_array() && at < sku->size() && (*sku)[at].is_number_integer() &&
-            (*sku)[at].get<long long>() > 0)
+            (*official)[at].get<bool>() && has_sku && (*sku)[at].get<long long>() > 0)
             id = "SKU" + std::to_string((*sku)[at].get<long long>());
         tag_ids.push_back(id);
     }

@@ -27,16 +27,34 @@ int record_job(Spools::Inventory &inventory, const U1Jobs::Job &job, long long n
     if (!completed && !job.start_sent)
         return 0;
     const double part = completed ? 1. : std::clamp(job.progress, 0., 1.);
-    std::map<int, double> by_slot;
-    for (size_t i = 0; i < job.origin.filaments.size() && i < job.toolhead_map.size(); ++i)
-        if (job.origin.filaments[i].used && job.origin.filaments[i].grams > 0. && job.toolhead_map[i] >= 0)
-            by_slot[job.toolhead_map[i]] += job.origin.filaments[i].grams * part;
+    // By spool: the one noted when the job was sent, or, for a job without that note, the one in the slot now.
+    std::map<int, double> by_spool;
+    for (size_t i = 0; i < job.origin.filaments.size() && i < job.toolhead_map.size(); ++i) {
+        if (!job.origin.filaments[i].used || job.origin.filaments[i].grams <= 0. || job.toolhead_map[i] < 0)
+            continue;
+        int number = 0;
+        if (!job.spools.empty())
+            number = i < job.spools.size() ? job.spools[i] : 0;
+        else if (const Spools::Spool *spool = spool_in(inventory, job.printer, job.toolhead_map[i]))
+            number = spool->number;
+        if (number > 0)
+            by_spool[number] += job.origin.filaments[i].grams * part;
+    }
     int written = 0;
-    for (const auto &taken : by_slot)
-        if (Spools::Spool *spool = spool_in(inventory, job.printer, taken.first))
-            if (inventory.record_use(spool->number, Spools::Use{job.id, taken.second, false, job.ended_ms > 0 ? job.ended_ms : now_ms}))
-                ++written;
+    for (const auto &taken : by_spool)
+        if (inventory.record_use(taken.first, Spools::Use{job.id, taken.second, false, job.ended_ms > 0 ? job.ended_ms : now_ms}))
+            ++written;
     return written;
+}
+
+std::vector<int> spools_for(Spools::Inventory &inventory, const std::string &printer, const std::vector<int> &filament_to_slot)
+{
+    std::vector<int> numbers;
+    for (int slot : filament_to_slot) {
+        const Spools::Spool *spool = spool_in(inventory, printer, slot);
+        numbers.push_back(spool != nullptr ? spool->number : 0);
+    }
+    return numbers;
 }
 
 std::vector<Shortfall> shortfalls(Spools::Inventory &inventory, const std::string &printer, const std::vector<double> &grams,

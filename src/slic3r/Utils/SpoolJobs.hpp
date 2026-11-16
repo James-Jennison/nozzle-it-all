@@ -17,11 +17,18 @@ namespace SpoolJobs {
 /// with its web port, Moonraker's own or none; see U1Jobs::same_printer).
 Spools::Spool *spool_in(Spools::Inventory &inventory, const std::string &printer, int slot);
 
-/// Records what *job* took from each such spool: the slicer's grams for each filament the job printed, from
-/// the toolhead or slot that filament was mapped to. A job that ended before its end counts for the part of it
+/// Records what *job* took: the slicer's grams for each filament the job printed, from the spool noted for that
+/// filament when the job was sent (Job::spools) or, for a job recorded without that note, from the spool said
+/// to be in the filament's toolhead or slot now. A job that ended before its end counts for the part of it
 /// the printer reported as done. Only a job that has ended (completed, cancelled or failed) is recorded, and
 /// a job is counted once however often this is called. Returns how many spools were written to.
 int record_job(Spools::Inventory &inventory, const U1Jobs::Job &job, long long now_ms);
+
+/// Per filament of a job about to be sent to *printer* with each filament printing from *filament_to_slot*: the
+/// number of the spool the person has recorded in that slot now, 0 where there is none. Kept in the job's record
+/// (Job::spools), so that what the job takes goes to the spools that were there when it was sent, wherever they
+/// are when it ends.
+std::vector<int> spools_for(Spools::Inventory &inventory, const std::string &printer, const std::vector<int> &filament_to_slot);
 
 /// A spool that, by the inventory, does not hold what a print would take from it.
 struct Shortfall

@@ -19,6 +19,7 @@
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/SpoolInventory.hpp"
 #include "libslic3r/SpoolTags.hpp"
+#include "libslic3r/U1PrintTask.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
 #include "slic3r/Utils/U1LanPrintHost.hpp"
 
@@ -185,22 +186,19 @@ std::optional<double> grams_typed(std::string text)
 // over: the person is told instead.
 bool change_inventory(wxWindow *parent, const std::function<bool(Spools::Inventory &)> &change)
 {
-    bool              damaged   = false;
-    Spools::Inventory inventory = Spools::Inventory::load(Spools::inventory_path(), &damaged);
-    if (damaged) {
+    switch (Spools::change(Spools::inventory_path(), change)) {
+    case Spools::Changed::Saved: return true;
+    case Spools::Changed::NotChanged: return false;
+    case Spools::Changed::Damaged:
         MessageDialog(parent,
                       format_wxstr(_L("The spool list could not be read, so nothing was changed:\n%1%\n\nMove that file away to start a new list."),
                                    from_u8(Spools::inventory_path())),
                       _L("Spools"), wxOK | wxICON_WARNING).ShowModal();
         return false;
+    case Spools::Changed::NotSaved: break;
     }
-    if (!change(inventory))
-        return false;
-    if (!inventory.save(Spools::inventory_path())) {
-        MessageDialog(parent, _L("The spool list could not be saved."), _L("Spools"), wxOK | wxICON_WARNING).ShowModal();
-        return false;
-    }
-    return true;
+    MessageDialog(parent, _L("The spool list could not be saved."), _L("Spools"), wxOK | wxICON_WARNING).ShowModal();
+    return false;
 }
 
 // A square of the spool's colour.
@@ -493,7 +491,9 @@ void SpoolsPanel::move(int number)
         // TRN %1% is a printer's name.
         places.push_back(format_wxstr(_L("Printer: %1%"), from_u8(printer.name)));
     SpoolForm form(wxGetApp().mainframe, _L("Move spool"),
-                   _L("Say where the spool is now. For storage or a dryer, name the place in your own words. For a printer, type the slot number (1 to 4)."),
+                   // TRN %1% is the highest slot number.
+                   format_wxstr(_L("Say where the spool is now. For storage or a dryer, name the place in your own words. For a printer, type the slot number (1 to %1%)."),
+                                U1PrintTask::PHYSICAL_EXTRUDER_COUNT),
                    {{_L("Where"), wxEmptyString, places, 0}, {_L("Place, or slot number"), wxEmptyString, {}, 0}}, _L("Move"));
     if (form.ShowModal() != wxID_OK)
         return;
@@ -505,8 +505,9 @@ void SpoolsPanel::move(int number)
             slot = std::stoi(form.text(1));
         } catch (const std::exception &) {
         }
-        if (slot < 1 || slot > 4) {
-            MessageDialog(this, _L("For a printer, type the slot number, 1 to 4. The spool was not moved."), _L("Spools"), wxOK | wxICON_WARNING).ShowModal();
+        if (slot < 1 || slot > U1PrintTask::PHYSICAL_EXTRUDER_COUNT) {
+            MessageDialog(this, format_wxstr(_L("For a printer, type the slot number, 1 to %1%. The spool was not moved."), U1PrintTask::PHYSICAL_EXTRUDER_COUNT), _L("Spools"),
+                          wxOK | wxICON_WARNING).ShowModal();
             return;
         }
         to = Spools::Location{Spools::Location::Kind::Printer, printers[size_t(chosen - 2)].key, slot - 1};

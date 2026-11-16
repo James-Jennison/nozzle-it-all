@@ -1,6 +1,7 @@
 #ifndef slic3r_SpoolInventory_hpp_
 #define slic3r_SpoolInventory_hpp_
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -115,6 +116,18 @@ private:
 
 /// Where the inventory is kept: data_dir()/spools.json.
 std::string inventory_path();
+
+/// What became of a change().
+enum class Changed {
+    Saved,
+    NotChanged, ///< *change* returned false; nothing was written
+    Damaged,    ///< the file is there and cannot be read; nothing was written
+    NotSaved    ///< the file could not be locked or written
+};
+/// Reads the inventory at *path*, lets *change* edit it and writes it back, all while holding a lock on the
+/// file that other threads and other running copies of the app wait for: no change made in between is lost.
+/// *change* returns false to leave the file as it is.
+Changed change(const std::string &path, const std::function<bool(Inventory &)> &change);
 
 } // namespace Spools
 } // namespace Slic3r

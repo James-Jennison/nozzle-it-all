@@ -87,6 +87,10 @@ struct Job
     std::string assessment;
     State       state = State::Uploading;
     std::vector<int> toolhead_map;
+    /// Per filament, the number of the spool the person had recorded in the toolhead or slot the filament was
+    /// sent to print from, as the spool list stood when the job was sent; 0 where none was recorded. Empty for a
+    /// job recorded before this was kept.
+    std::vector<int> spools;
     long long   created_ms = 0;
     double      progress = 0.;
     /// When the print began and ended, by the printer's own job history. 0 while unknown: a time is

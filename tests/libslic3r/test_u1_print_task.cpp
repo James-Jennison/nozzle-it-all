@@ -198,7 +198,7 @@ TEST_CASE("A tagged U1 spool whose reader no longer holds the card is named by t
                            {"filament_type", {"PLA", "PLA", "PLA", "PLA"}},
                            {"filament_official", {true, true, false, true}},
                            {"filament_sku", {34262, 34263, 34069, 0}}}},
-                         {"filament_detect", {{"info", {{{"CARD_UID", 0}}, {{"CARD_UID", {112, 73, 143, 226}}}, {{"CARD_UID", 0}}, {{"CARD_UID", 0}}}}}}};
+                         {"filament_detect", {{"info", {{{"CARD_UID", 0}}, {{"CARD_UID", {112, 73, 143, 226}}, {"SKU", 34263}}, {{"CARD_UID", 0}}, {{"CARD_UID", 0}}}}}}};
     const json report = U1PrintTask::build_filament_report(status);
     // The card where it is held; the product number where the spool is tagged; nothing for a spool set by hand or without a number.
     CHECK(report["tag_ids"] == json({"SKU34262", "70498FE2", "", ""}));
@@ -217,6 +217,17 @@ TEST_CASE("A card whose product number is not the toolhead's own is not taken fo
     const json report = U1PrintTask::build_filament_report(status);
     // The second toolhead goes by its own product number; the third's card names the third's product and is taken.
     CHECK(report["tag_ids"] == json({"SKU34262", "SKU34263", "01020304", "SKU34265"}));
+}
+
+TEST_CASE("A card with no product number is not taken where the printer keeps one for the toolhead", "[U1PrintTask]")
+{
+    const json status = {{"print_task_config",
+                          {{"filament_exist", {true, true}}, {"filament_type", {"PLA", "PLA"}}, {"filament_official", {true, false}}, {"filament_sku", {34262, 0}}}},
+                         {"filament_detect", {{"info", {{{"CARD_UID", {9, 9, 9, 9}}}, {{"CARD_UID", {8, 8, 8, 8}}, {"SKU", 0}}}}}}};
+    const json report = U1PrintTask::build_filament_report(status);
+    // The first entry names no product: the toolhead goes by its own number. The second names the toolhead's own (none).
+    CHECK(report["tag_ids"][0] == "SKU34262");
+    CHECK(report["tag_ids"][1] == "08080808");
 }
 
 TEST_CASE("U1 manual filament edits use SET_PRINT_FILAMENT_CONFIG", "[U1PrintTask]")

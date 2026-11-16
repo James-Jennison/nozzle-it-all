@@ -3,12 +3,19 @@
 #include "Utils.hpp"
 
 #include <boost/filesystem.hpp>
+#include <boost/nowide/cstdio.hpp>
 #include <boost/nowide/fstream.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace Slic3r {
 namespace SpoolTags {
@@ -74,22 +81,28 @@ bool Memory::save(const std::string &path) const
     nlohmann::json tags = nlohmann::json::object();
     for (const auto &entry : m_tags)
         tags[entry.first] = {{"presets", entry.second.presets}, {"seenAt", entry.second.seen_ms}};
-    const nlohmann::json      doc = {{"format", 1}, {"tags", tags}};
-    const std::string         tmp = path + ".tmp";
+    const nlohmann::json      doc  = {{"format", 1}, {"tags", tags}};
+    const std::string         text = doc.dump(1);
+    const std::string         tmp  = path + ".tmp";
     boost::system::error_code ec;
-    {
-        boost::nowide::ofstream out(tmp, std::ios::trunc);
-        if (!out)
-            return false;
-        out << doc.dump(1);
-        out.flush();
-        if (!out)
-            return false;
+    // Forced to disk under another name before it takes the file's name, as the spool list is.
+    FILE *file = boost::nowide::fopen(tmp.c_str(), "wb");
+    if (file == nullptr)
+        return false;
+    bool ok = std::fwrite(text.data(), 1, text.size(), file) == text.size() && std::fflush(file) == 0;
+#ifdef _WIN32
+    ok = ok && _commit(_fileno(file)) == 0;
+#else
+    ok = ok && ::fsync(fileno(file)) == 0;
+#endif
+    ok = std::fclose(file) == 0 && ok;
+    if (ok) {
+        boost::filesystem::rename(tmp, path, ec);
+        ok = !ec;
     }
-    boost::filesystem::rename(tmp, path, ec);
-    if (ec)
+    if (!ok)
         boost::filesystem::remove(tmp, ec);
-    return !ec;
+    return ok;
 }
 
 std::string Memory::preset_for(const std::string &tag_id, const std::string &printer_model) const

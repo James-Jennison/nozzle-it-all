@@ -205,9 +205,12 @@ nlohmann::json build_filament_report(const nlohmann::json &status)
             // The reader's entry is taken for this toolhead only when it names the product the printer keeps for
             // this toolhead: that the list is in toolhead order is not relied on alone.
             const nlohmann::json &entry     = (*detect)["info"][at];
-            const auto            entry_sku = entry.is_object() ? entry.find("SKU") : entry.end();
-            const bool            same      = !has_sku || !entry.is_object() || entry_sku == entry.end() || !entry_sku->is_number_integer() ||
-                                              entry_sku->get<long long>() == (*sku)[at].get<long long>();
+            const auto            entry_sku = entry.is_object() ? entry.find("SKU") : nlohmann::json::const_iterator();
+            // Where the printer keeps a product number for the toolhead, the entry must name that same number:
+            // an entry without one is not taken on its place alone. Only a printer that keeps no product
+            // numbers at all leaves nothing to compare, and its list is then taken in toolhead order.
+            const bool            names_it  = entry.is_object() && entry_sku != entry.end() && entry_sku->is_number_integer();
+            const bool            same      = has_sku ? names_it && entry_sku->get<long long>() == (*sku)[at].get<long long>() : true;
             if (same)
                 id = SpoolTags::u1_card_uid(entry);
         }

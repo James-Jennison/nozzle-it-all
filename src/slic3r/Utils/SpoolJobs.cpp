@@ -32,9 +32,10 @@ int record_job(Spools::Inventory &inventory, const U1Jobs::Job &job, long long n
     for (size_t i = 0; i < job.origin.filaments.size() && i < job.toolhead_map.size(); ++i) {
         if (!job.origin.filaments[i].used || job.origin.filaments[i].grams <= 0. || job.toolhead_map[i] < 0)
             continue;
+        // The note is one entry per filament; a filament it does not reach was not noted and goes by the slot.
         int number = 0;
-        if (!job.spools.empty())
-            number = i < job.spools.size() ? job.spools[i] : 0;
+        if (i < job.spools.size())
+            number = job.spools[i];
         else if (const Spools::Spool *spool = spool_in(inventory, job.printer, job.toolhead_map[i]))
             number = spool->number;
         if (number > 0)

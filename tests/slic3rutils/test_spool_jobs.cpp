@@ -136,3 +136,15 @@ TEST_CASE("A job sent with no spool noted for a toolhead takes nothing for it, e
     CHECK(SpoolJobs::record_job(inventory, job, 5) == 0);
     CHECK_THAT(Spools::remaining(*inventory.find(later)).grams, WithinAbs(1000., 1e-9));
 }
+
+TEST_CASE("A filament the job's spool note does not reach goes by the spool in its slot", "[SpoolJobs]")
+{
+    Spools::Inventory inventory;
+    const int first  = spool_in_slot(inventory, 0, 1000.);
+    const int second = spool_in_slot(inventory, 1, 1000.);
+    U1Jobs::Job job  = job_of(U1Jobs::State::Completed, {10., 20.}, {0, 1});
+    job.spools       = {first}; // a note that covers the first filament only
+    CHECK(SpoolJobs::record_job(inventory, job, 5) == 2);
+    CHECK_THAT(Spools::remaining(*inventory.find(first)).grams, WithinAbs(990., 1e-9));
+    CHECK_THAT(Spools::remaining(*inventory.find(second)).grams, WithinAbs(980., 1e-9));
+}

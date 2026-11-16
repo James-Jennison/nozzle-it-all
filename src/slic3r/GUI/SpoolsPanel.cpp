@@ -363,7 +363,9 @@ void SpoolsPanel::add_by_hand()
                     {_L("Colour (#RRGGBB)"), wxEmptyString, {}, 0},
                     {_L("Filament on it (g)"), "1000", {}, 0}},
                    _L("Add"));
-    if (form.ShowModal() != wxID_OK)
+    // The form is the main frame's; this panel may be gone by the time it closes.
+    const wxWeakRef<SpoolsPanel> self(this);
+    if (form.ShowModal() != wxID_OK || !self)
         return;
     const std::optional<double> initial = grams_typed(form.text(4));
     std::string                 colour  = form.text(3);
@@ -472,7 +474,9 @@ void SpoolsPanel::weigh(int number)
     SpoolForm form(wxGetApp().mainframe, _L("Weigh spool"),
                    _L("Type how much filament is left on the spool, in grams: what the scale shows less the weight of the empty spool."),
                    {{_L("Filament left (g)"), wxEmptyString, {}, 0}}, _L("Record"));
-    if (form.ShowModal() != wxID_OK)
+    // The form is the main frame's; this panel may be gone by the time it closes.
+    const wxWeakRef<SpoolsPanel> self(this);
+    if (form.ShowModal() != wxID_OK || !self)
         return;
     const std::optional<double> left = grams_typed(form.text(0));
     if (!left) {
@@ -495,7 +499,9 @@ void SpoolsPanel::move(int number)
                    format_wxstr(_L("Say where the spool is now. For storage or a dryer, name the place in your own words. For a printer, type the slot number (1 to %1%)."),
                                 U1PrintTask::PHYSICAL_EXTRUDER_COUNT),
                    {{_L("Where"), wxEmptyString, places, 0}, {_L("Place, or slot number"), wxEmptyString, {}, 0}}, _L("Move"));
-    if (form.ShowModal() != wxID_OK)
+    // The form is the main frame's; this panel may be gone by the time it closes.
+    const wxWeakRef<SpoolsPanel> self(this);
+    if (form.ShowModal() != wxID_OK || !self)
         return;
     const int        chosen = form.choice(0);
     Spools::Location to;
@@ -539,7 +545,9 @@ void SpoolsPanel::dry(int number)
                     ending ? _L("Ends the drying session and keeps a note with it. This records that the spool was in a dryer, not that the filament is dry.") :
                              _L("Starts a drying session for this spool. The app does not control a dryer."),
                     {{ending ? _L("Notes") : _L("Dryer or position"), wxEmptyString, {}, 0}}, ending ? _L("End") : _L("Start"));
-    if (form.ShowModal() != wxID_OK)
+    // The form is the main frame's; this panel may be gone by the time it closes.
+    const wxWeakRef<SpoolsPanel> self(this);
+    if (form.ShowModal() != wxID_OK || !self)
         return;
     if (change_inventory(this, [&](Spools::Inventory &inventory) {
             return ending ? inventory.end_drying(number, form.text(0), U1Jobs::now_ms()) : inventory.start_drying(number, form.text(0), U1Jobs::now_ms());

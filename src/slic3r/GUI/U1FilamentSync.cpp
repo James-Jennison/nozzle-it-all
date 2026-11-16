@@ -699,6 +699,7 @@ public:
         SetSizerAndFit(root);
         CenterOnParent();
         wxGetApp().UpdateDlgDarkUI(this);
+        m_query->GetTextCtrl()->SetFocus(); // what is typed first is what to look for
     }
 
     ~FilamentCatalogSearchDialog() override
@@ -736,6 +737,7 @@ private:
         }
         m_api_key = load_filament_profiles_api_key();
         if (m_api_key.empty()) {
+            BOOST_LOG_TRIVIAL(warning) << "Filament catalogue: no API key is stored, so nothing was asked";
             say(_L("No API key is stored yet. Press Configure API key and enter your own key from 3dfilamentprofiles.com."));
             return;
         }

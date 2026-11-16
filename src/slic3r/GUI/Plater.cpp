@@ -3405,7 +3405,7 @@ Sidebar::Sidebar(Plater *parent)
         // Not on the stack of the click: the dialog is modal.
         wxGetApp().CallAfter([this] {
             if (!wxGetApp().is_closing())
-                find_filament_in_catalog(this);
+                find_filament_in_catalog(wxGetApp().mainframe); // over the middle of the window, not the sidebar
         });
     });
     bSizer39->Add(find_btn, 0, wxALIGN_CENTER | wxLEFT, FromDIP(SidebarProps::WideSpacing()));

@@ -200,8 +200,6 @@ bool json_flag(const nlohmann::json& arr, size_t i, bool fallback)
 // True while a printer with filament lanes on one nozzle (a CANVAS or other AFC unit) is being synced: the
 // dialogs then speak of slots, not toolheads. Main thread only; the sync is modal.
 bool s_lane_sync = false;
-// True while a preset is made from a catalogue search that no printer is part of (see find_filament_in_catalog()).
-bool s_catalog_search = false;
 
 // Whether lane data has the form parse_lane_data_impl() reads: at least one entry that is an object naming
 // its tool as a string. Data in another form is not "no filament": the sync says it cannot read it.
@@ -415,8 +413,10 @@ struct CatalogPresetResult
     std::vector<std::string> created_preset_names;
 };
 
+// *from_search*: the record was picked in a catalogue search that no printer is part of (find_filament_in_catalog()),
+// so the preset's notes do not say what a printer reported.
 CatalogPresetResult catalog_preset(PresetBundle& bundle, const FilamentProfileRecord& record, const Slot& reported,
-                                   std::vector<std::string>& transaction_created_presets, std::string& error)
+                                   std::vector<std::string>& transaction_created_presets, std::string& error, bool from_search = false)
 {
     const std::string name     = filament_profile_product_name(record);
     const std::string material = filament_profile_base_material(record);
@@ -468,7 +468,7 @@ CatalogPresetResult catalog_preset(PresetBundle& bundle, const FilamentProfileRe
     std::string notes              = "Source: 3D Filament Profiles (" + source + ")";
     if (!record.id.empty())
         notes += "; record " + record.id;
-    if (s_catalog_search)
+    if (from_search)
         notes += "; found by a search in the app, not reported by a printer";
     else
         notes += "; Snapmaker U1 reported " + (reported.from_tag ? std::string("RFID") : std::string("printer setting"));
@@ -707,7 +707,6 @@ public:
         m_alive->store(false);
         if (m_request)
             m_request->cancel();
-        std::fill(m_api_key.begin(), m_api_key.end(), '\0');
     }
 
     /// The presets made while the dialog was open.
@@ -735,8 +734,9 @@ private:
             say(_L("Type at least two letters of a brand, a material or a name."));
             return;
         }
-        m_api_key = load_filament_profiles_api_key();
-        if (m_api_key.empty()) {
+        // The key is read for this one request and overwritten once the request has taken its copy.
+        std::string api_key = load_filament_profiles_api_key();
+        if (api_key.empty()) {
             BOOST_LOG_TRIVIAL(warning) << "Filament catalogue: no API key is stored, so nothing was asked";
             say(_L("No API key is stored yet. Press Configure API key and enter your own key from 3dfilamentprofiles.com."));
             return;
@@ -746,15 +746,20 @@ private:
         const unsigned generation = ++m_generation;
         m_search->Disable();
         m_add->Disable();
+        // What the last search found is not left to be picked while the next one is under way.
+        m_records.clear();
+        m_results->Clear();
+        m_results->Disable();
         say(_L("Searching…"));
         auto* dialog = this;
-        m_request    = search_filament_profiles_async(query, m_api_key, [dialog, alive = m_alive, generation](FilamentProfilesSearchReply reply) {
+        m_request    = search_filament_profiles_async(query, api_key, [dialog, alive = m_alive, generation](FilamentProfilesSearchReply reply) {
             // On the request's thread: the answer is handed to the main thread, which checks the dialog is still there.
             wxGetApp().CallAfter([dialog, alive, generation, reply = std::move(reply)] {
                 if (alive->load() && generation == dialog->m_generation)
                     dialog->took(reply);
             });
         });
+        std::fill(api_key.begin(), api_key.end(), '\0');
     }
 
     void took(const FilamentProfilesSearchReply& reply)
@@ -792,9 +797,7 @@ private:
         std::vector<std::string> created;
         std::string              error;
         Slot                     none;
-        s_catalog_search = true;
-        const CatalogPresetResult result = catalog_preset(bundle, m_records[size_t(at)], none, created, error);
-        s_catalog_search = false;
+        const CatalogPresetResult result = catalog_preset(bundle, m_records[size_t(at)], none, created, error, true);
         if (result.preset_name.empty()) {
             // TRN %1% is the reason, in English as the preset code gives it.
             say(format_wxstr(_L("The preset could not be made: %1%"), from_u8(error)));
@@ -817,7 +820,6 @@ private:
     ::Label*                           m_status{nullptr};
     std::vector<FilamentProfileRecord> m_records;
     std::vector<std::string>           m_added;
-    std::string                        m_api_key;
     Http::Ptr                          m_request;
     unsigned                           m_generation{0};
     std::shared_ptr<std::atomic<bool>> m_alive;

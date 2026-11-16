@@ -188,14 +188,24 @@ nlohmann::json build_filament_report(const nlohmann::json &status)
     }
     report["nozzle_diameters"]    = diameters;
     report["nozzle_volume_types"] = flows;
-    // The identity of the tag each toolhead read, where the status carries filament_detect; "" for none.
-    nlohmann::json tag_ids = nlohmann::json::array();
-    const auto     detect  = status.find("filament_detect");
+    // What the printer keeps of the tag each toolhead's spool was read from; "" for none. The reader's own data
+    // (filament_detect, with the card's identity) is there only while the reader still holds the card it read:
+    // on the Owner's U1 three of four tagged spools had none. What the printer keeps for every tagged spool is
+    // the product number from the tag (filament_sku, with filament_official set), so that stands in: it names
+    // the product, not the single spool, which is what a preset choice goes by.
+    nlohmann::json tag_ids  = nlohmann::json::array();
+    const auto     detect   = status.find("filament_detect");
+    const auto     official = cfg->find("filament_official");
+    const auto     sku      = cfg->find("filament_sku");
     for (int i = 0; i < PHYSICAL_EXTRUDER_COUNT; ++i) {
-        std::string id;
-        if (detect != status.end() && detect->is_object() && detect->contains("info") && (*detect)["info"].is_array() &&
-            size_t(i) < (*detect)["info"].size())
-            id = SpoolTags::u1_card_uid((*detect)["info"][size_t(i)]);
+        const size_t at = size_t(i);
+        std::string  id;
+        if (detect != status.end() && detect->is_object() && detect->contains("info") && (*detect)["info"].is_array() && at < (*detect)["info"].size())
+            id = SpoolTags::u1_card_uid((*detect)["info"][at]);
+        if (id.empty() && official != cfg->end() && official->is_array() && at < official->size() && (*official)[at].is_boolean() &&
+            (*official)[at].get<bool>() && sku != cfg->end() && sku->is_array() && at < sku->size() && (*sku)[at].is_number_integer() &&
+            (*sku)[at].get<long long>() > 0)
+            id = "SKU" + std::to_string((*sku)[at].get<long long>());
         tag_ids.push_back(id);
     }
     report["tag_ids"] = tag_ids;

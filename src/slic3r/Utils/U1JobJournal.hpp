@@ -71,6 +71,10 @@ struct Job
     std::string printer;         ///< host[:port] of the printer it was sent to
     std::string sha256;          ///< of the prepared file
     std::string uploaded_sha256; ///< of the file read back from the printer
+    /// Of the file as it was handed over, when that is not the file that was sent: a file whose tool numbers
+    /// were rewritten for the slots chosen (sha256 is then of the rewritten file), or one released from the
+    /// queue. Empty otherwise.
+    std::string source_sha256;
     std::string remote_path;     ///< name on the printer; unique to this job
     std::string message;
     std::uintmax_t bytes = 0;
@@ -242,8 +246,13 @@ std::optional<Queued> queued(const std::string &id);
 boost::filesystem::path queued_file(const Queued &entry);
 /// Takes the entry and its file away.
 bool queue_remove(const std::string &id);
-/// Moves the entry one place among those of its own printer.
+/// Moves the entry one place among those of its own printer. Only entries whose place changes are written.
 bool queue_move(const std::string &id, bool earlier);
+
+/// Removes copies of prepared files that a send of an earlier run left in the temporary folder (a send works
+/// on its own copy, and a run that was killed cannot remove it). Only files older than a day are touched,
+/// so a copy another running copy of the app is using is left alone. Returns how many were removed.
+size_t remove_stale_send_copies();
 
 // ---------------------------------------------------------------------------
 // Readiness

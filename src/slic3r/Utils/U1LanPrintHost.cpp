@@ -37,7 +37,9 @@ namespace {
 constexpr long QUERY_TIMEOUT_S = 5;
 // After a lost Start reply the printer is watched for as long as the Start itself may take.
 constexpr int  RECONCILE_SECONDS = 60;
-constexpr int  START_CONFIRM_SECONDS = 10; // after an accepted Start, for the printer to report the file as running
+// After an accepted Start, for the printer to report the file as running. Klipper sets the print state when the
+// file is selected, before any heating, so this covers a slow answer, not the print's preparation.
+constexpr int  START_CONFIRM_SECONDS = 30;
 constexpr int  START_REPLY_SECONDS = 60;
 // Connecting, the websocket handshake and writing the request each get this long.
 constexpr int  CONNECT_SECONDS = 10;
@@ -429,10 +431,15 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         error_fn(wxString::FromUTF8(error));
         return false;
     }
-    // A file released from the queue must still be the file that was queued.
-    if (!m_source_sha256.empty() && NozzleSession::sha256_file_hex(upload_data.source_path.string()) != m_source_sha256) {
-        error_fn(_L("The queued file is not the file that was added to the queue any more.") + nothing_sent);
-        return false;
+    // A file released from the queue must still be the file that was queued. Its digest goes into the job's
+    // record, beside the digest of the file that is sent when the tool numbers are rewritten below.
+    std::string source_digest;
+    if (!m_source_sha256.empty()) {
+        source_digest = NozzleSession::sha256_file_hex(upload_data.source_path.string());
+        if (source_digest != m_source_sha256) {
+            error_fn(_L("The queued file is not the file that was added to the queue any more.") + nothing_sent);
+            return false;
+        }
     }
     // See set_released_queue_entry().
     const auto released = [this] {
@@ -452,6 +459,13 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     if (!unreadable.empty()) {
         error_fn(GUI::format_wxstr(_L("A job record could not be read, so it is not known whether an earlier print is unsettled:\n%1%\n\n"
                                       "Check the printer, then move that file out of the folder to send again."), unreadable.front()) + nothing_sent);
+        return false;
+    }
+    // A queue entry is released once. This send holds the printer's lock, and an earlier release of the same
+    // entry took it out of the queue under that lock when its file was verified or its Start was sent; so an
+    // entry that is gone was released, and this is a second window or a second copy of the app.
+    if (!m_released_queue_entry.empty() && !U1Jobs::queued(m_released_queue_entry)) {
+        error_fn(_L("This file is not in the queue any more: it was released or removed in the meantime.") + nothing_sent);
         return false;
     }
     if (auto open_job = U1Jobs::unresolved(printer)) {
@@ -480,6 +494,8 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
         }
     } remapped;
     if (m_target == Target::AfcLanes && m_expected_sha256.empty() && !GCodeToolRemap::is_identity(m_options.filament_to_toolhead)) {
+        if (source_digest.empty())
+            source_digest = NozzleSession::sha256_file_hex(upload_data.source_path.string());
         boost::filesystem::path target = upload_data.source_path;
         target += ".slots.gcode";
         const GCodeToolRemap::Result result = GCodeToolRemap::remap_file(upload_data.source_path.string(), target.string(), m_options.filament_to_toolhead);
@@ -510,6 +526,7 @@ bool U1LanPrintHost::upload(PrintHostUpload upload_data, ProgressFn progress_fn,
     job.id           = U1Jobs::new_id();
     job.printer      = printer;
     job.sha256       = NozzleSession::sha256_file_hex(upload_data.source_path.string());
+    job.source_sha256 = source_digest; // the file as handed over, when it was queued or is not the file sent
     job.start        = start;
     job.toolhead_map = m_options.filament_to_toolhead;
     job.created_ms   = U1Jobs::now_ms();

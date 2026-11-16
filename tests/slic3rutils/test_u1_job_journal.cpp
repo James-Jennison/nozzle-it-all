@@ -8,6 +8,7 @@
 #include <boost/nowide/fstream.hpp>
 #include <nlohmann/json.hpp>
 
+#include <ctime>
 #include <set>
 #include <string>
 #include <thread>
@@ -697,4 +698,38 @@ TEST_CASE("An empty file, a file without a digest or an entry without a printer 
     CHECK_FALSE(U1Jobs::queue_add(for_printer("192.168.1.50", "a.gcode"), file, "abc").has_value());
     CHECK_FALSE(U1Jobs::queue_add(for_printer("", "a.gcode"), file, DIGEST).has_value());
     CHECK(U1Jobs::queue().empty());
+}
+
+TEST_CASE("Moving a queue entry writes only the entries whose place changes", "[U1Jobs][Queue]")
+{
+    ScratchJournal journal;
+    const fs::path file  = prepared_file(journal, "a.gcode.txt", "G1 X1\n");
+    const auto     a     = U1Jobs::queue_add(for_printer("192.168.1.50", "a.gcode"), file, DIGEST);
+    const auto     other = U1Jobs::queue_add(for_printer("192.168.1.60", "other.gcode"), file, DIGEST);
+    const auto     b     = U1Jobs::queue_add(for_printer("192.168.1.50", "b.gcode"), file, DIGEST);
+    REQUIRE(a.has_value());
+    REQUIRE(other.has_value());
+    REQUIRE(b.has_value());
+    // The other printer's entry cannot be written: a move that leaves its place alone must not need to.
+    const fs::path untouched = journal.dir / "queue" / (other->id + ".json");
+    const std::time_t stamp  = fs::last_write_time(untouched) - 100;
+    fs::last_write_time(untouched, stamp);
+    CHECK(U1Jobs::queue_move(a->id, false));
+    CHECK(fs::last_write_time(untouched) == stamp);
+    const std::vector<U1Jobs::Queued> waiting = U1Jobs::queue("192.168.1.50");
+    REQUIRE(waiting.size() == 2);
+    CHECK(waiting[0].id == b->id);
+    CHECK(waiting[1].id == a->id);
+}
+
+TEST_CASE("A job's record keeps the digest of the file as it was handed over", "[U1Jobs]")
+{
+    ScratchJournal journal;
+    U1Jobs::Job    job = new_job();
+    job.source_sha256  = std::string(64, 'b');
+    REQUIRE(U1Jobs::save(job, U1Jobs::State::Uploading));
+    const auto read = U1Jobs::get(job.id);
+    REQUIRE(read.has_value());
+    CHECK(read->source_sha256 == std::string(64, 'b'));
+    CHECK(read->sha256 == SHA);
 }

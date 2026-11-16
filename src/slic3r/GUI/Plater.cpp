@@ -21316,6 +21316,12 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file, bool slots)
             const std::string other_host = preset.config.opt_string("print_host");
             if (other_host.empty() || printer_model.empty() || preset.config.opt_string("printer_model") != printer_model)
                 continue;
+            // The file is sliced for the selected preset's nozzles: a preset of the same model with other nozzles
+            // is not offered. (Each printer's own window still checks the nozzles the printer itself reports.)
+            const auto *own_nozzles   = printer_config.option<ConfigOptionFloats>("nozzle_diameter");
+            const auto *other_nozzles = preset.config.option<ConfigOptionFloats>("nozzle_diameter");
+            if (own_nozzles != nullptr && other_nozzles != nullptr && own_nozzles->values != other_nozzles->values)
+                continue;
             const std::string key = U1Jobs::printer_key(other_host);
             if (std::any_of(seen.begin(), seen.end(), [&key](const std::string &had) { return U1Jobs::same_printer(had, key); }))
                 continue;

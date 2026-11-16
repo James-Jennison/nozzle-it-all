@@ -107,7 +107,7 @@ AddPrinterDialog::AddPrinterDialog(wxWindow *parent)
     m_address         = new ::TextInput(this, wxEmptyString, wxEmptyString, wxEmptyString, wxDefaultPosition, wxSize(FromDIP(260), -1), wxTE_PROCESS_ENTER);
     auto *check       = new ::Button(this, _L("Check"));
     check->SetStyle(ButtonStyle::Regular, ButtonType::Window);
-    check->SetToolTip(_L("Asks this address what printer answers there."));
+    check->SetToolTip(_L("Sends this address two read requests to learn what printer answers there. Only an address on the local network is asked."));
     address_row->Add(m_address, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, gap);
     address_row->Add(check, 0, wxALIGN_CENTER_VERTICAL);
     add_row(_L("Address"), address_row);
@@ -238,6 +238,14 @@ void AddPrinterDialog::check_address()
     if (address.empty()) {
         m_address_status->SetLabel(_L("Type the printer's address first, such as 192.168.1.50."));
         Layout();
+        return;
+    }
+    // Only an address on the local network is asked: the same rule Add applies, so nothing typed here makes
+    // the app contact a host elsewhere.
+    if (DeviceWorkspaceState::lan_host_from_address(address).empty()) {
+        m_address_status->SetLabel(_L("This is not an address on the local network, so it was not asked. Type the printer's IP address, such as 192.168.1.50."));
+        Layout();
+        Fit();
         return;
     }
     std::optional<PrinterDiscovery::Found> found;

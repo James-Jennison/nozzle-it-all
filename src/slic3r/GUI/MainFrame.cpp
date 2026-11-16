@@ -1669,6 +1669,9 @@ void MainFrame::init_tabpanel() {
     // (plugin.<plugin_key>.<name>) so they can't collide with the built-in TAB_ID_* constants.
     m_plugin_pages.initialize(m_tabpanel);
 
+    // Copies of prepared files left in the temporary folder by a run that was killed while sending.
+    if (const size_t stale = U1Jobs::remove_stale_send_copies(); stale != 0)
+        BOOST_LOG_TRIVIAL(warning) << "U1 jobs: removed " << stale << " copies of prepared files left by an earlier run";
     // From here on a U1 job's outcome is recorded whichever tab shows, including jobs sent before a restart.
     m_u1_job_watcher = std::make_shared<U1JobWatcher>([this](const U1Jobs::Job& job) {
         // On the watcher's thread, as below.

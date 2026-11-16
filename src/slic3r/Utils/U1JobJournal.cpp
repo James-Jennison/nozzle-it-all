@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <iterator>
 #include <mutex>
 #include <set>
@@ -122,6 +123,7 @@ json to_json(const Job &job)
             {"printer", job.printer},
             {"sha256", job.sha256},
             {"uploadedSha256", job.uploaded_sha256},
+            {"sourceSha256", job.source_sha256},
             {"remotePath", job.remote_path},
             {"message", job.message},
             {"bytes", job.bytes},
@@ -161,6 +163,7 @@ std::optional<Job> from_json(const json &doc)
         if (!known || !is_job_id(job.id) || job.printer.empty() || job.remote_path.empty() || !is_hex(job.sha256, 64))
             return std::nullopt;
         job.uploaded_sha256         = doc.value("uploadedSha256", std::string());
+        job.source_sha256           = doc.value("sourceSha256", std::string());
         job.message                 = doc.value("message", std::string());
         job.bytes                   = doc.value("bytes", std::uintmax_t(0));
         job.start                   = doc.value("start", false);
@@ -1196,14 +1199,39 @@ bool queue_move(const std::string &id, bool earlier)
     }
     if (other == entries.end())
         return false;
-    // Positions are made distinct first: entries added by two copies of the app may share one.
+    // Positions are made distinct first: entries added by two copies of the app may share one. Only an entry
+    // whose position changes is written, which in the ordinary case is the two that change places.
+    std::vector<long long> before;
+    for (const Queued &entry : entries)
+        before.push_back(entry.position);
     for (size_t i = 0; i < entries.size(); ++i)
         entries[i].position = static_cast<long long>(i) + 1;
     std::swap(at->position, other->position);
     bool ok = true;
-    for (const Queued &entry : entries)
-        ok = write_queued(entry) && ok;
+    for (size_t i = 0; i < entries.size(); ++i)
+        if (entries[i].position != before[i])
+            ok = write_queued(entries[i]) && ok;
     return ok;
+}
+
+size_t remove_stale_send_copies()
+{
+    size_t                    removed = 0;
+    boost::system::error_code ec;
+    const std::time_t         day_ago = std::time(nullptr) - 24 * 60 * 60;
+    for (fs::directory_iterator it(fs::temp_directory_path(ec), ec), end; !ec && it != end; it.increment(ec)) {
+        const std::string name = it->path().filename().string();
+        const bool        ours = boost::starts_with(name, "u1-also-") || boost::starts_with(name, "u1-queued-") || boost::starts_with(name, "u1-reprint-");
+        if (!ours || !boost::ends_with(name, ".gcode"))
+            continue;
+        boost::system::error_code file_error;
+        const std::time_t         written = fs::last_write_time(it->path(), file_error);
+        if (file_error || written > day_ago || !fs::is_regular_file(it->path(), file_error))
+            continue;
+        if (fs::remove(it->path(), file_error) && !file_error)
+            ++removed;
+    }
+    return removed;
 }
 
 } // namespace U1Jobs

@@ -479,7 +479,7 @@ void AboutDialog::build_nozzle_layout()
               Label::Head_14, false, 0, 0, content_w);
     add_label(body,
               // What this build does. Brought up to date when a phase of the plan is accepted.
-              _L("Nozzle It All Desktop is built on the OrcaSlicer engine and adds printer tools of its own: a send that checks the printer and starts each print once, one Printer tab that also holds the printer's web interface, a filament sync that lets you choose a toolhead for each filament before anything changes, a history of the jobs sent to a Snapmaker U1 with printing a job again, printer controls that ask before they move or heat and a Resume that checks the printer first, a Printers view of every saved printer with its state and live camera, Elegoo Centauri Carbon printers running COSMOS with a filament sync from the CANVAS, and importing a preset bundle from a link."),
+              _L("Nozzle It All Desktop is built on the OrcaSlicer engine and adds printer tools of its own: a send that checks the printer and starts each print once, one Printer tab that also holds the printer's web interface, a filament sync that lets you choose a toolhead for each filament before anything changes, a history of the jobs sent to a Snapmaker U1 with printing a job again, printer controls that ask before they move or heat and a Resume that checks the printer first, a Printers view of every saved printer with its state and live camera, adding a printer from a search of your own network, sending one print to several printers with a check for each, a queue of prints that you release one at a time, a notice when a print ends or pauses, Elegoo Centauri Carbon printers running COSMOS with a filament sync from the CANVAS, and importing a preset bundle from a link."),
               Label::Body_13, true, wxTOP, FromDIP(14), content_w);
 #ifdef __linux__
     {
@@ -494,7 +494,7 @@ void AboutDialog::build_nozzle_layout()
 #endif
     // What is being built and is not in this build yet. An item moves to the sentence above when it lands.
     add_label(body,
-              _L("In development: a job queue and notifications across printers, spool tracking, AI assistance, model discovery, and a phone companion."),
+              _L("In development: spool tracking, AI assistance, model discovery, and a phone companion."),
               Label::Body_13, true, wxTOP, FromDIP(10), content_w);
 
     add_label(body, _L("Open-source lineage"), Label::Head_12, false,

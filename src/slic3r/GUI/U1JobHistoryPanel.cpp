@@ -115,6 +115,7 @@ void U1JobHistoryPanel::read_printer_history()
         m_reader.join(); // the previous read has finished: its flag was clear
     m_reader = std::thread([host, alive = m_alive, reading = m_reading, stop = m_stop, panel = this] {
         nlohmann::json history;
+        std::vector<U1Jobs::Job> fed; // stopped jobs that have just been given how much they fed
         Http::get("http://" + host + "/server/history/list?limit=50&order=desc")
             .timeout_connect(5)
             .timeout_max(5)
@@ -130,20 +131,30 @@ void U1JobHistoryPanel::read_printer_history()
         if (history.is_object() && !stop->load()) {
             const std::vector<U1Jobs::Job> jobs = U1Jobs::history(host);
             U1Jobs::remember_external(host, U1Jobs::external_from_history(history, jobs));
-            // A job whose end was recorded from the printer's live state has no times yet: the history has them.
-            // Only times are written here, never an outcome.
-            for (const U1Jobs::Job &job : jobs)
-                if (job.state != U1Jobs::State::Printing && (job.started_ms == 0 || job.ended_ms == 0))
+            // A job whose end was recorded from the printer's live state has no times yet: the history has them,
+            // and for a job that stopped before its end how much of its filament was fed. Only these are written
+            // here, never an outcome.
+            for (const U1Jobs::Job &job : jobs) {
+                const bool stopped = job.start_sent && (job.state == U1Jobs::State::Cancelled || job.state == U1Jobs::State::Failed);
+                if (job.state != U1Jobs::State::Printing && (job.started_ms == 0 || job.ended_ms == 0 || (stopped && job.fed_part < 0.)))
                     if (auto listed = U1Jobs::record_from_history(job, history)) {
                         listed->outcome.reset();
-                        U1Jobs::record_outcome(job.id, *listed, {});
+                        if (const auto written = U1Jobs::record_outcome(job.id, *listed, {}); written && stopped && job.fed_part < 0. && written->fed_part >= 0.)
+                            fed.push_back(*written);
                     }
+            }
         }
         // The panel joins this thread before it goes, so the application is still there for this call. The
         // rebuild itself runs on the main thread and checks again that the panel is.
         if (!stop->load())
-            wxGetApp().CallAfter([alive, panel] {
-                if (alive->load() && !wxGetApp().is_closing())
+            wxGetApp().CallAfter([alive, panel, fed] {
+                if (wxGetApp().is_closing())
+                    return;
+                // What such a job took goes to its spools here too: nothing else will come back to it.
+                if (wxGetApp().mainframe != nullptr)
+                    for (const U1Jobs::Job &job : fed)
+                        wxGetApp().mainframe->record_u1_job_use(job);
+                if (alive->load())
                     panel->rebuild(false);
             });
         reading->store(false);

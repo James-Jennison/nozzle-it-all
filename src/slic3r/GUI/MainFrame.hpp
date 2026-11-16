@@ -558,6 +558,9 @@ public:
     /// person is told in Orca's notifications and, when this window is not in front, through the desktop's.
     /// *paused* for a job that has just been paused. Main thread only.
     void notify_u1_job(const U1Jobs::Job &job, bool paused);
+    /// The spool list's part of that alone, for an ended job, with nothing told to the person: what the job took is
+    /// written into the spools it printed from, once however often this is called. Main thread only.
+    void record_u1_job_use(const U1Jobs::Job &job);
     std::set<std::string> m_u1_notified; ///< jobs whose end was already told in this run
     std::set<std::string> m_u1_fed_asked; ///< stopped jobs whose printer was already asked how much filament it fed
     std::set<std::string> m_u1_paused;   ///< jobs paused at the watcher's last pass

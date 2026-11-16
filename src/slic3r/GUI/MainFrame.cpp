@@ -1778,19 +1778,24 @@ void MainFrame::follow_job_on_native_view()
 }
 
 // SoftFever
+void MainFrame::record_u1_job_use(const U1Jobs::Job& job)
+{
+    if (job.state != U1Jobs::State::Completed && job.state != U1Jobs::State::Failed && job.state != U1Jobs::State::Cancelled)
+        return;
+    const Spools::Changed changed = Spools::change(Spools::inventory_path(), [&job](Spools::Inventory& inventory) {
+        return SpoolJobs::record_job(inventory, job, U1Jobs::now_ms()) > 0;
+    });
+    if (changed == Spools::Changed::Damaged || changed == Spools::Changed::NotSaved)
+        BOOST_LOG_TRIVIAL(warning) << "Spools: what job " << job.id << " took could not be recorded (the spool list could not be "
+                                   << (changed == Spools::Changed::Damaged ? "read" : "saved") << ")";
+}
+
 void MainFrame::notify_u1_job(const U1Jobs::Job& job, bool paused)
 {
     const bool ended = job.state == U1Jobs::State::Completed || job.state == U1Jobs::State::Failed || job.state == U1Jobs::State::Cancelled;
     // What the job took goes into the record of the spools the person said were in that printer. Done each time
     // the watcher writes the ended job (its outcome, then its times): the job is counted once per spool.
-    if (ended) {
-        const Spools::Changed changed = Spools::change(Spools::inventory_path(), [&job](Spools::Inventory& inventory) {
-            return SpoolJobs::record_job(inventory, job, U1Jobs::now_ms()) > 0;
-        });
-        if (changed == Spools::Changed::Damaged || changed == Spools::Changed::NotSaved)
-            BOOST_LOG_TRIVIAL(warning) << "Spools: what job " << job.id << " took could not be recorded (the spool list could not be "
-                                       << (changed == Spools::Changed::Damaged ? "read" : "saved") << ")";
-    }
+    record_u1_job_use(job);
     // A job that stopped before its end took what the printer's own history says was fed. Where the record does
     // not have that yet (the Monitor side read the end from the live state, or the history was not written
     // yet), the printer is asked once, off this thread; the answer comes back through here.

@@ -855,6 +855,8 @@ set(SLIC3R_GUI_SOURCES
     Utils/U1Controls.hpp
     Utils/PrinterDiscovery.cpp
     Utils/PrinterDiscovery.hpp
+    Utils/SpoolJobs.cpp
+    Utils/SpoolJobs.hpp
     Utils/U1JobJournal.cpp
     Utils/U1JobJournal.hpp
     Utils/U1JobWatcher.cpp

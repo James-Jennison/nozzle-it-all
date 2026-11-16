@@ -246,6 +246,17 @@ TEST_CASE("A product number of 0 is no product number", "[U1PrintTask]")
     CHECK(report["tag_ids"][2] == "");
 }
 
+TEST_CASE("A weight is not taken from a card that is a toolhead's by its place alone", "[U1PrintTask]")
+{
+    // The printer keeps no product number for the toolhead and the card names none: the card is taken, its weight not.
+    const json status = {{"print_task_config",
+                          {{"filament_exist", {true}}, {"filament_type", {"PLA"}}, {"filament_official", {false}}, {"filament_sku", {0}}}},
+                         {"filament_detect", {{"info", {{{"CARD_UID", {9, 9, 9, 9}}, {"WEIGHT", 500}}}}}}};
+    const json report = U1PrintTask::build_filament_report(status);
+    CHECK(report["tag_ids"][0] == "09090909");
+    CHECK(report["tag_weights"][0] == 0.);
+}
+
 TEST_CASE("U1 filament report gives the weight a tag says a full spool holds", "[U1PrintTask]")
 {
     const json status = {{"print_task_config",

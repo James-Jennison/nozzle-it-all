@@ -221,8 +221,10 @@ nlohmann::json build_filament_report(const nlohmann::json &status)
             const bool            same      = !keeps_sku || (tool_sku > 0 ? names_it && named == tool_sku : named == 0);
             if (same) {
                 id = SpoolTags::u1_card_uid(entry);
+                // A weight is taken only from an entry that names the toolhead's own product: an entry taken by
+                // its place alone is not sure enough to say what the spool held.
                 if (const auto grams = entry.is_object() ? entry.find("WEIGHT") : nlohmann::json::const_iterator();
-                    entry.is_object() && grams != entry.end() && grams->is_number() && grams->get<double>() > 0. && grams->get<double>() <= 100000.)
+                    tool_sku > 0 && entry.is_object() && grams != entry.end() && grams->is_number() && grams->get<double>() > 0. && grams->get<double>() <= 100000.)
                     weight = grams->get<double>();
             }
         }

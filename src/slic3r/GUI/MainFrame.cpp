@@ -160,7 +160,6 @@
 #include "slic3r/plugin/host/PluginPages.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
 #include "slic3r/Utils/U1JobWatcher.hpp"
-#include "slic3r/Utils/Http.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
 #include "DesktopNotice.hpp"
 #include "slic3r/Utils/SpoolJobs.hpp"
@@ -1699,6 +1698,13 @@ void MainFrame::init_tabpanel() {
                 }
             m_u1_paused = std::move(paused);
         });
+    }, [this](const U1Jobs::Job& job) {
+        // On the watcher's thread: a job that had stopped has been given how much of its filament was fed. That
+        // goes to the spool list; the job's end was told when it ended.
+        wxGetApp().CallAfter([this, job] {
+            if (!wxGetApp().is_closing() && wxGetApp().mainframe == this)
+                record_u1_job_use(job);
+        });
     });
 
     if (m_plater) {
@@ -1796,35 +1802,6 @@ void MainFrame::notify_u1_job(const U1Jobs::Job& job, bool paused)
     // What the job took goes into the record of the spools the person said were in that printer. Done each time
     // the watcher writes the ended job (its outcome, then its times): the job is counted once per spool.
     record_u1_job_use(job);
-    // A job that stopped before its end took what the printer's own history says was fed. Where the record does
-    // not have that yet (the Monitor side read the end from the live state, or the history was not written
-    // yet), the printer is asked once, off this thread; the answer comes back through here.
-    if (ended && job.state != U1Jobs::State::Completed && job.start_sent && job.fed_part < 0. && m_u1_fed_asked.insert(job.id).second) {
-        const std::string printer = job.printer.find("://") == std::string::npos ? "http://" + job.printer : job.printer;
-        Http::get(printer + "/server/history/list?limit=50&order=desc")
-            .timeout_connect(5)
-            .timeout_max(10)
-            .on_complete([id = job.id](std::string body, unsigned) {
-                const auto doc = nlohmann::json::parse(body, nullptr, false);
-                const auto job = U1Jobs::get(id);
-                if (doc.is_discarded() || !doc.is_object() || !doc.contains("result") || !job)
-                    return;
-                auto listed = U1Jobs::record_from_history(*job, doc["result"]);
-                if (!listed || listed->fed_part < 0.)
-                    return;
-                // The outcome is already written; only what the history adds is taken.
-                listed->outcome.reset();
-                if (const auto written = U1Jobs::record_outcome(id, *listed, {}))
-                    wxGetApp().CallAfter([job = *written] {
-                        if (!wxGetApp().is_closing() && wxGetApp().mainframe != nullptr)
-                            wxGetApp().mainframe->notify_u1_job(job, false);
-                    });
-            })
-            .on_error([id = job.id](std::string, std::string error, unsigned status) {
-                BOOST_LOG_TRIVIAL(info) << "Spools: the printer did not say how much filament job " << id << " fed (" << status << " " << error << ")";
-            })
-            .perform();
-    }
     // The watcher writes a job's record more than once (its outcome, then its times): its end is told once.
     if (!paused && (!ended || !m_u1_notified.insert(job.id).second))
         return;

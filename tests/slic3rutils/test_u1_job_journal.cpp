@@ -469,16 +469,23 @@ TEST_CASE("A stopped job takes how much filament it fed once, with its outcome o
     CHECK_FALSE(U1Jobs::record_outcome(job.id, early, "running"));
     // The outcome read from the live state has no figure; the history gives it afterwards.
     U1Jobs::PrinterRecord stopped;
-    stopped.outcome = U1Jobs::State::Cancelled;
-    auto written    = U1Jobs::record_outcome(job.id, stopped, "Cancelled.");
+    stopped.outcome    = U1Jobs::State::Cancelled;
+    stopped.started_ms = 1000;
+    stopped.ended_ms   = 2000;
+    auto written       = U1Jobs::record_outcome(job.id, stopped, "Cancelled.");
     REQUIRE(written);
     CHECK(written->fed_part < 0.);
+    // The history's record brings other times with it: the ones already written stay.
     U1Jobs::PrinterRecord listed;
-    listed.fed_part = 0.4;
-    written         = U1Jobs::record_outcome(job.id, listed, {});
+    listed.fed_part   = 0.4;
+    listed.started_ms = 5000;
+    listed.ended_ms   = 6000;
+    written           = U1Jobs::record_outcome(job.id, listed, {});
     REQUIRE(written);
     CHECK(written->state == U1Jobs::State::Cancelled);
     CHECK(written->message == "Cancelled.");
+    CHECK(written->started_ms == 1000);
+    CHECK(written->ended_ms == 2000);
     CHECK_THAT(written->fed_part, Catch::Matchers::WithinAbs(0.4, 1e-9));
     // It is kept on disk, and a later figure does not replace it.
     listed.fed_part = 0.9;
@@ -638,6 +645,40 @@ TEST_CASE("A printer that stops answering is asked on every pass at first, then 
         if (U1JobWatcher::asks_after(misses))
             asked.push_back(misses);
     CHECK(asked == std::vector<int>{0, 1, 2, 3, 4, 5, 6, 36, 66, 96});
+}
+
+TEST_CASE("A stopped job that does not say how much it fed is looked up a few times, then left", "[U1Jobs]")
+{
+    std::vector<int> asked;
+    for (int pass = 0; pass <= 200; ++pass)
+        if (U1JobWatcher::asks_fed(pass))
+            asked.push_back(pass);
+    CHECK(asked == std::vector<int>{0, 1, 3, 7, 15, 31});
+    CHECK_FALSE(U1JobWatcher::asks_fed(-1));
+
+    const long long now = 1763000000000LL;
+    U1Jobs::Job     job = new_job();
+    job.created_ms      = now - 60000;
+    job.start_sent      = true;
+    job.state           = U1Jobs::State::Cancelled;
+    CHECK(U1JobWatcher::lacks_fed(job, now));
+    job.state = U1Jobs::State::Failed;
+    CHECK(U1JobWatcher::lacks_fed(job, now));
+    // Not a job that finished, is still printing, never started, already has the figure, or is long past.
+    for (const U1Jobs::State state : {U1Jobs::State::Completed, U1Jobs::State::Printing, U1Jobs::State::Held}) {
+        U1Jobs::Job other = job;
+        other.state       = state;
+        CHECK_FALSE(U1JobWatcher::lacks_fed(other, now));
+    }
+    U1Jobs::Job refused = job;
+    refused.start_sent  = false;
+    CHECK_FALSE(U1JobWatcher::lacks_fed(refused, now));
+    U1Jobs::Job known = job;
+    known.fed_part    = 0.;
+    CHECK_FALSE(U1JobWatcher::lacks_fed(known, now));
+    U1Jobs::Job old = job;
+    old.created_ms  = now - U1JobWatcher::FED_WINDOW_MS;
+    CHECK_FALSE(U1JobWatcher::lacks_fed(old, now));
 }
 
 namespace {

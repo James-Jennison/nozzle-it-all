@@ -562,7 +562,6 @@ public:
     /// written into the spools it printed from, once however often this is called. Main thread only.
     void record_u1_job_use(const U1Jobs::Job &job);
     std::set<std::string> m_u1_notified; ///< jobs whose end was already told in this run
-    std::set<std::string> m_u1_fed_asked; ///< stopped jobs whose printer was already asked how much filament it fed
     std::set<std::string> m_u1_paused;   ///< jobs paused at the watcher's last pass
     U1JobBar* m_u1_job_bar{nullptr};
     void update_native_device_tab();

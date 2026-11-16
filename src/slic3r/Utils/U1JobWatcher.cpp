@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace Slic3r {
 
@@ -44,8 +45,8 @@ nlohmann::json get_result(const std::string &url, const std::atomic<bool> *stop)
 
 } // namespace
 
-U1JobWatcher::U1JobWatcher(ChangeFn on_change, ActiveFn on_active)
-    : m_on_change(std::move(on_change)), m_on_active(std::move(on_active)), m_thread([this] { run(); })
+U1JobWatcher::U1JobWatcher(ChangeFn on_change, ActiveFn on_active, FedFn on_fed)
+    : m_on_change(std::move(on_change)), m_on_active(std::move(on_active)), m_on_fed(std::move(on_fed)), m_thread([this] { run(); })
 {}
 
 U1JobWatcher::~U1JobWatcher()
@@ -82,7 +83,7 @@ void U1JobWatcher::run()
         }
         wait = INTERVAL;
         try {
-            look_once(m_on_change, m_on_active, &m_unanswered, &m_stopping);
+            look_once(m_on_change, m_on_active, &m_unanswered, &m_stopping, m_on_fed, &m_fed_passes);
         } catch (const std::exception &error) {
             BOOST_LOG_TRIVIAL(warning) << "U1 job watcher: " << error.what();
         }
@@ -94,9 +95,50 @@ bool U1JobWatcher::asks_after(int misses)
     return misses <= BACKOFF_AFTER || (misses - BACKOFF_AFTER) % MAX_SKIP == 0;
 }
 
-void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_active, std::map<std::string, int> *unanswered,
-                             const std::atomic<bool> *stop)
+bool U1JobWatcher::lacks_fed(const U1Jobs::Job &job, long long now_ms)
 {
+    return job.start_sent && (job.state == U1Jobs::State::Cancelled || job.state == U1Jobs::State::Failed) && job.fed_part < 0. &&
+           job.created_ms > 0 && now_ms - job.created_ms < FED_WINDOW_MS;
+}
+
+bool U1JobWatcher::asks_fed(int pass)
+{
+    // 0, 1, 3, 7, 15, 31: one less than a power of two.
+    return pass >= 0 && pass <= FED_LAST_PASS && ((pass + 1) & pass) == 0;
+}
+
+void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_active, std::map<std::string, int> *unanswered,
+                             const std::atomic<bool> *stop, const FedFn &on_fed, std::map<std::string, int> *fed_passes)
+{
+    // Jobs that stopped before their end and do not yet say how much filament they fed: the printer's history
+    // has that figure, though not always at the moment the end is first read (and the Printer tab reads an end
+    // from the live state, without the history). Only the figure and missing times are taken, never an outcome.
+    {
+        const long long now = U1Jobs::now_ms();
+        std::vector<U1Jobs::Job> lacking = U1Jobs::load_all();
+        lacking.erase(std::remove_if(lacking.begin(), lacking.end(), [now](const U1Jobs::Job &job) { return !lacks_fed(job, now); }), lacking.end());
+        if (fed_passes != nullptr)
+            for (auto it = fed_passes->begin(); it != fed_passes->end();)
+                it = std::any_of(lacking.begin(), lacking.end(), [&](const U1Jobs::Job &job) { return job.id == it->first; }) ? std::next(it) :
+                                                                                                                             fed_passes->erase(it);
+        for (const U1Jobs::Job &job : lacking) {
+            if (stop != nullptr && stop->load())
+                return;
+            const int pass = fed_passes != nullptr ? (*fed_passes)[job.id]++ : 0;
+            if (!asks_fed(pass) || U1Jobs::sending_now(job.printer))
+                continue;
+            auto listed = U1Jobs::record_from_history(job, get_result("http://" + job.printer + "/server/history/list?limit=50&order=desc", stop));
+            if (!listed || listed->fed_part < 0.)
+                continue;
+            listed->outcome.reset();
+            if (const auto written = U1Jobs::record_outcome(job.id, *listed, {}); written && written->fed_part >= 0.) {
+                BOOST_LOG_TRIVIAL(info) << "U1 job watcher: job " << written->id << " fed " << written->fed_part << " of its filament";
+                if (on_fed)
+                    on_fed(*written);
+            }
+        }
+    }
+
     std::vector<Active> active;
     const std::vector<U1Jobs::Job> printing = U1Jobs::printing();
     // A job that is no longer printing needs no counter.

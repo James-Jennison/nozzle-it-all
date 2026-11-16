@@ -18,7 +18,8 @@ namespace Slic3r {
 ///
 /// One background thread looks, at an interval, at every job the journal still lists as printing and
 /// asks that job's printer for its print state and its job history. It only reads from the printer:
-/// two GET requests, no command of any kind. An outcome is written only when the printer names this
+/// two GET requests, no command of any kind. A job that stopped before its end is looked up in the history a
+/// few more times afterwards, for how much of its filament was fed. An outcome is written only when the printer names this
 /// job's own file as finished, cancelled or failed; a printer that does not answer, or that shows
 /// another file and has no history entry for this one, leaves the job as it is.
 ///
@@ -41,7 +42,11 @@ public:
     /// Runs on the watcher's thread after every pass, with the jobs still printing (empty when none).
     using ActiveFn = std::function<void(const std::vector<Active> &)>;
 
-    explicit U1JobWatcher(ChangeFn on_change = {}, ActiveFn on_active = {});
+    /// Runs on the watcher's thread when a job that had already ended before its end (cancelled or failed after
+    /// its Start) is given the part of its filament the printer's history says was fed.
+    using FedFn = std::function<void(const U1Jobs::Job &)>;
+
+    explicit U1JobWatcher(ChangeFn on_change = {}, ActiveFn on_active = {}, FedFn on_fed = {});
     ~U1JobWatcher();
 
     U1JobWatcher(const U1JobWatcher &)            = delete;
@@ -53,8 +58,22 @@ public:
     /// One pass over the journal. Public for the worker and for tests of a live simulator.
     /// *unanswered* counts, per job, the passes in which its printer gave no answer; with it, such a printer is
     /// asked less often. *stop*, when set, ends the pass and cancels its request.
+    /// *fed_passes* counts, per stopped job that lacks it, the passes since the watcher first looked for how much
+    /// filament it fed; with it the printer's history is asked in the passes asks_fed() names, without it in
+    /// every pass. *on_fed* is told each such job that was given the figure.
     static void look_once(const ChangeFn &on_change, const ActiveFn &on_active = {}, std::map<std::string, int> *unanswered = nullptr,
-                          const std::atomic<bool> *stop = nullptr);
+                          const std::atomic<bool> *stop = nullptr, const FedFn &on_fed = {}, std::map<std::string, int> *fed_passes = nullptr);
+
+    /// A job that stopped before its end and whose record does not say how much filament it fed is looked up in
+    /// its printer's history while it is no older than this (by the time it was sent), ...
+    static constexpr long long FED_WINDOW_MS = 7LL * 24 * 3600 * 1000;
+    /// ... in the passes numbered 0, 1, 3, 7, 15 and 31 since the watcher first saw it so (about five minutes in
+    /// all), and then no more in this run of the app: a printer without a job history never has the figure.
+    static constexpr int FED_LAST_PASS = 31;
+    /// Whether *job* is such a job at *now_ms*.
+    static bool lacks_fed(const U1Jobs::Job &job, long long now_ms);
+    /// Whether the history is asked in pass *pass* (counted from 0) for such a job.
+    static bool asks_fed(int pass);
 
     /// Passes without an answer before a printer is asked less often, and the passes between two tries after
     /// that (30 passes of 10 s: once in five minutes).
@@ -69,12 +88,14 @@ private:
 
     ChangeFn                m_on_change;
     ActiveFn                m_on_active;
+    FedFn                   m_on_fed;
     std::mutex              m_mutex;
     std::condition_variable m_wake;
     bool                    m_stop{false};
     std::atomic<bool>       m_stopping{false}; ///< set first when stopping, so a request under way gives up
     bool                    m_look{false};
     std::map<std::string, int> m_unanswered; ///< only touched by the watcher's thread
+    std::map<std::string, int> m_fed_passes; ///< likewise
     std::thread             m_thread;
 };
 

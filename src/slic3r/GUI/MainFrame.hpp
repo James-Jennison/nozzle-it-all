@@ -553,8 +553,10 @@ public:
     LazyPage<NativeDevicePage>* m_native_device_page{nullptr};
     // Records how U1 jobs ended whichever tab shows. shared_ptr: the type is only forward-declared here.
     std::shared_ptr<U1JobWatcher> m_u1_job_watcher;
-    /// Tells the person what the watcher saw of a job sent from here: in Orca's notifications, and through the
-    /// desktop's when this window is not in front. *paused* for a job that has just been paused.
+    /// Takes note of what became of a job sent from here, wherever its end was read from the printer (the
+    /// watcher, or the Monitor side while it shows the job): what it took goes into the spool list, and the
+    /// person is told in Orca's notifications and, when this window is not in front, through the desktop's.
+    /// *paused* for a job that has just been paused. Main thread only.
     void notify_u1_job(const U1Jobs::Job &job, bool paused);
     std::set<std::string> m_u1_notified; ///< jobs whose end was already told in this run
     std::set<std::string> m_u1_paused;   ///< jobs paused at the watcher's last pass

@@ -485,8 +485,12 @@ void NativePrinterPanel::refresh_job_identity(const PP::Snapshot &s)
                 }
             },
             "Outcome reported by the printer while the Printer tab was open.");
-        if (updated)
+        if (updated) {
             job = updated;
+            // The job's end was read here and not by the watcher: the spool list and the person are told all the same.
+            if (wxGetApp().mainframe != nullptr && !wxGetApp().is_closing())
+                wxGetApp().mainframe->notify_u1_job(*updated, false);
+        }
     }
     // TRN %1% is a short job id, %2% a short file checksum, %3% how many Start commands were sent.
     wxString text = GUI::format_wxstr(_L("Job %1% · file SHA-256 %2%… verified on the printer · Starts sent: %3%"), job->id.substr(0, 8),

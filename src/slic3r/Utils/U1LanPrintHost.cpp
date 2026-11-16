@@ -183,11 +183,14 @@ std::optional<U1PrintTask::PrinterState> U1LanPrintHost::query_afc_printer(const
     return std::nullopt;
 }
 
-std::vector<std::string> U1LanPrintHost::query_afc_brands(const std::string &base_url, std::vector<std::string> *tags)
+std::vector<std::string> U1LanPrintHost::query_afc_brands(const std::string &base_url, std::vector<std::string> *tags,
+                                                          std::vector<AfcLanes::Weight> *weights)
 {
     const nlohmann::json status = query_afc_status(base_url, 3);
     if (tags != nullptr)
         *tags = AfcLanes::tool_tags(status);
+    if (weights != nullptr)
+        *weights = AfcLanes::tool_weights(status);
     return AfcLanes::tool_brands(status);
 }
 

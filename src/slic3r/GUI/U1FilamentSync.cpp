@@ -276,6 +276,9 @@ std::vector<Slot> parse_report_impl(const nlohmann::json& report)
         s.color_invalid    = !raw_color.empty() && s.color.empty();
         s.from_tag         = json_flag(official, i, false);
         s.tag_id           = SpoolTags::normalized(json_string(report.value("tag_ids", nlohmann::json::array()), i));
+        if (const auto weights = report.find("tag_weights"); weights != report.end() && weights->is_array() && size_t(i) < weights->size() &&
+                                                             (*weights)[size_t(i)].is_number())
+            s.tag_weight_g = std::max(0., (*weights)[size_t(i)].get<double>());
         // A missing or malformed presence flag is not evidence that a physical
         // toolhead is loaded.  Treat it as unresolved instead of allowing an
         // incomplete report to mutate the project.

@@ -93,6 +93,9 @@ struct Job
     std::vector<int> spools;
     long long   created_ms = 0;
     double      progress = 0.;
+    /// For a job that ended: the part of the file's filament the printer's own history says was fed (its
+    /// "filament_used" over the file's "filament_total"), 0 to 1. -1 while the printer has not said.
+    double      fed_part = -1.;
     /// When the print began and ended, by the printer's own job history. 0 while unknown: a time is
     /// never taken from this computer's clock.
     long long   started_ms = 0;
@@ -149,6 +152,7 @@ struct PrinterRecord
     std::optional<State> outcome; ///< Completed, Cancelled or Failed; empty while the printer still shows it running
     long long started_ms = 0;     ///< 0 when the record gives no time
     long long ended_ms   = 0;
+    double    fed_part   = -1.;   ///< as Job::fed_part; -1 when the record does not give it
 };
 /// Reads *status* (Moonraker print_stats, as U1LanPrintHost queries it). An outcome is returned only when
 /// the printer shows this job's own file as complete, cancelled or failed. Another file, no file or a
@@ -158,7 +162,7 @@ std::optional<State> outcome_from_status(const Job &job, const nlohmann::json &s
 /// which is unique to the job. Empty when the history does not list it.
 std::optional<PrinterRecord> record_from_history(const Job &job, const nlohmann::json &history);
 /// Writes what the printer's record says into job *id*, under the journal's lock. Only a job still
-/// recorded as printing takes an outcome; times are filled in when they are not known yet.
+/// recorded as printing takes an outcome; times and the part of the filament fed are filled in when they are not known yet.
 /// Returns the record when something was written.
 std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &record, const std::string &message);
 

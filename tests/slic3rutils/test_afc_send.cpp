@@ -316,3 +316,31 @@ TEST_CASE("A lane's tag is the one the printer keeps for the spool still in it",
     CHECK(tags[2].empty()); // the entry is for PLA; the lane now reports PETG
     CHECK(tags[3].empty()); // loaded without a scan
 }
+
+TEST_CASE("A lane's weight is what the printer keeps for the spool ready in it", "[AfcLanes]")
+{
+    auto status = idle_carbon();
+    // As the Owner's Carbon answered: what the spool held and what the printer counts as left.
+    status["AFC_lane CANVAS_1"]["initial_weight"] = 1000;
+    status["AFC_lane CANVAS_1"]["weight"]         = 741.5;
+    // More left than the spool ever held is not a figure to go by.
+    status["AFC_lane CANVAS_2"]["initial_weight"] = 750;
+    status["AFC_lane CANVAS_2"]["weight"]         = 900.;
+    // Not numbers.
+    status["AFC_lane CANVAS_3"]["initial_weight"] = nullptr;
+    status["AFC_lane CANVAS_3"]["weight"]         = "full";
+    // A lane with nothing ready in it has no spool to weigh.
+    status["AFC_lane CANVAS_4"]                   = lane(4, "T3", "PLA", "#080A0D", false);
+    status["AFC_lane CANVAS_4"]["initial_weight"] = 1000;
+    status["AFC_lane CANVAS_4"]["weight"]         = 500.;
+    const std::vector<AfcLanes::Weight> weights = AfcLanes::tool_weights(status);
+    REQUIRE(weights.size() == size_t(U1PrintTask::PHYSICAL_EXTRUDER_COUNT));
+    CHECK_THAT(weights[0].initial_g, Catch::Matchers::WithinAbs(1000., 1e-9));
+    CHECK_THAT(weights[0].left_g, Catch::Matchers::WithinAbs(741.5, 1e-9));
+    CHECK_THAT(weights[1].initial_g, Catch::Matchers::WithinAbs(750., 1e-9));
+    CHECK_THAT(weights[1].left_g, Catch::Matchers::WithinAbs(0., 1e-9));
+    CHECK_THAT(weights[2].initial_g, Catch::Matchers::WithinAbs(0., 1e-9));
+    CHECK_THAT(weights[2].left_g, Catch::Matchers::WithinAbs(0., 1e-9));
+    CHECK_THAT(weights[3].initial_g, Catch::Matchers::WithinAbs(0., 1e-9));
+    CHECK_THAT(weights[3].left_g, Catch::Matchers::WithinAbs(0., 1e-9));
+}

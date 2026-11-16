@@ -170,6 +170,29 @@ std::vector<std::string> tool_tags(const nlohmann::json &status)
     return tags;
 }
 
+Weight lane_weight(const nlohmann::json &lane)
+{
+    const auto grams = [&lane](const char *key) {
+        const auto it = lane.find(key);
+        const double value = lane.is_object() && it != lane.end() && it->is_number() ? it->get<double>() : 0.;
+        return value > 0. && value <= 100000. ? value : 0.;
+    };
+    Weight weight{grams("initial_weight"), grams("weight")};
+    // More left than the spool ever held is not a figure to go by.
+    if (weight.initial_g > 0. && weight.left_g > weight.initial_g)
+        weight.left_g = 0.;
+    return weight;
+}
+
+std::vector<Weight> tool_weights(const nlohmann::json &status)
+{
+    std::vector<Weight> weights(U1PrintTask::PHYSICAL_EXTRUDER_COUNT);
+    for (int tool = 0; tool < U1PrintTask::PHYSICAL_EXTRUDER_COUNT; ++tool)
+        if (const nlohmann::json *lane = lane_for_tool(status, tool); lane != nullptr && lane_ready(*lane))
+            weights[tool] = lane_weight(*lane);
+    return weights;
+}
+
 std::vector<std::string> tool_brands(const nlohmann::json &status)
 {
     std::vector<std::string> brands(U1PrintTask::PHYSICAL_EXTRUDER_COUNT);

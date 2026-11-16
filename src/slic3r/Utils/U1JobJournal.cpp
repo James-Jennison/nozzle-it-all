@@ -135,6 +135,7 @@ json to_json(const Job &job)
             {"spools", job.spools},
             {"createdAt", job.created_ms},
             {"progress", job.progress},
+            {"fedPart", job.fed_part},
             {"startedAt", job.started_ms},
             {"endedAt", job.ended_ms},
             {"assessment", job.assessment},
@@ -173,6 +174,7 @@ std::optional<Job> from_json(const json &doc)
         job.spools                  = doc.value("spools", std::vector<int>());
         job.created_ms              = doc.value("createdAt", 0LL);
         job.progress                = doc.value("progress", 0.);
+        job.fed_part                = doc.contains("fedPart") && doc["fedPart"].is_number() ? doc["fedPart"].get<double>() : -1.;
         job.started_ms              = doc.value("startedAt", 0LL);
         job.ended_ms                = doc.value("endedAt", 0LL);
         job.assessment              = doc.value("assessment", std::string());
@@ -462,8 +464,16 @@ std::optional<PrinterRecord> record_from_history(const Job &job, const json &his
         if (entry.contains("status") && entry["status"].is_string())
             record.outcome = outcome_named(entry["status"].get<std::string>());
         // An end time belongs to an ended job only.
-        if (record.outcome)
+        if (record.outcome) {
             record.ended_ms = epoch_ms(entry, "end_time");
+            // How much of the file's filament was fed, both figures the printer's own.
+            const auto used  = entry.find("filament_used");
+            const auto meta  = entry.find("metadata");
+            const auto total = meta != entry.end() && meta->is_object() ? meta->find("filament_total") : entry.end();
+            if (used != entry.end() && used->is_number() && meta != entry.end() && meta->is_object() && total != meta->end() && total->is_number() &&
+                total->get<double>() > 0. && used->get<double>() >= 0.)
+                record.fed_part = std::min(1., used->get<double>() / total->get<double>());
+        }
         return record;
     }
     return std::nullopt;
@@ -481,14 +491,17 @@ std::optional<Job> record_outcome(const std::string &id, const PrinterRecord &re
     const bool takes_outcome = record.outcome && job->state == State::Printing;
     const bool takes_start   = record.started_ms > 0 && job->started_ms == 0;
     const bool takes_end     = record.ended_ms > 0 && job->ended_ms == 0 && (takes_outcome || job->state != State::Printing);
-    if (!takes_outcome && !takes_start && !takes_end)
+    const bool takes_part    = record.fed_part >= 0. && job->fed_part < 0. && (takes_outcome || job->state != State::Printing);
+    if (!takes_outcome && !takes_start && !takes_end && !takes_part)
         return std::nullopt;
+    if (takes_part)
+        job->fed_part = std::min(1., record.fed_part);
     if (takes_start)
         job->started_ms = record.started_ms;
     if (takes_end)
         job->ended_ms = record.ended_ms;
     if (!save_locked(*job, takes_outcome ? *record.outcome : job->state, takes_outcome ? message : job->message,
-                     takes_outcome ? std::string() : std::string("times from the printer's history")))
+                     takes_outcome ? std::string() : std::string(takes_start || takes_end ? "times from the printer's history" : "filament fed from the printer's history")))
         return std::nullopt;
     return job;
 }

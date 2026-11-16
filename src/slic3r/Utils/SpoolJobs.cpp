@@ -23,10 +23,12 @@ int record_job(Spools::Inventory &inventory, const U1Jobs::Job &job, long long n
     const bool completed = job.state == U1Jobs::State::Completed;
     if (!completed && job.state != U1Jobs::State::Cancelled && job.state != U1Jobs::State::Failed)
         return 0;
-    // A job that never started printing took nothing.
-    if (!completed && !job.start_sent)
+    // A job that never started printing took nothing; one that stopped took the part the printer's own history
+    // says was fed, and nothing is written while the printer has not said.
+    if (!completed && (!job.start_sent || job.fed_part < 0.))
         return 0;
-    const double part = completed ? 1. : std::clamp(job.progress, 0., 1.);
+    // Across several filaments the part is of their total length, so each is counted in that proportion.
+    const double part = completed ? 1. : std::clamp(job.fed_part, 0., 1.);
     // By spool: the one noted when the job was sent, or, for a job without that note, the one in the slot now.
     std::map<int, double> by_spool;
     for (size_t i = 0; i < job.origin.filaments.size() && i < job.toolhead_map.size(); ++i) {
@@ -46,6 +48,13 @@ int record_job(Spools::Inventory &inventory, const U1Jobs::Job &job, long long n
         if (inventory.record_use(taken.first, Spools::Use{job.id, taken.second, false, job.ended_ms > 0 ? job.ended_ms : now_ms}))
             ++written;
     return written;
+}
+
+void set_reported_weight(Spools::Spool &spool, double full_g, double left_g, long long now_ms)
+{
+    spool.initial_g = full_g > 0. ? full_g : ASSUMED_FULL_G;
+    if (left_g > 0. && left_g < spool.initial_g)
+        spool.uses.push_back(Spools::Use{std::string(), spool.initial_g - left_g, false, now_ms});
 }
 
 std::vector<int> spools_for(Spools::Inventory &inventory, const std::string &printer, const std::vector<int> &filament_to_slot)

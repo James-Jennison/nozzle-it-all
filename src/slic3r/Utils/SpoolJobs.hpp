@@ -19,8 +19,8 @@ Spools::Spool *spool_in(Spools::Inventory &inventory, const std::string &printer
 
 /// Records what *job* took: the slicer's grams for each filament the job printed, from the spool noted for that
 /// filament when the job was sent (Job::spools) or, for a job recorded without that note, from the spool said
-/// to be in the filament's toolhead or slot now. A job that ended before its end counts for the part of it
-/// the printer reported as done. Only a job that has ended (completed, cancelled or failed) is recorded, and
+/// to be in the filament's toolhead or slot now. A job that ended before its end counts for the part of its
+/// filament the printer's history says was fed (Job::fed_part), and for nothing while that is not known. Only a job that has ended (completed, cancelled or failed) is recorded, and
 /// a job is counted once however often this is called. Returns how many spools were written to.
 int record_job(Spools::Inventory &inventory, const U1Jobs::Job &job, long long now_ms);
 
@@ -29,6 +29,13 @@ int record_job(Spools::Inventory &inventory, const U1Jobs::Job &job, long long n
 /// (Job::spools), so that what the job takes goes to the spools that were there when it was sent, wherever they
 /// are when it ends.
 std::vector<int> spools_for(Spools::Inventory &inventory, const std::string &printer, const std::vector<int> &filament_to_slot);
+
+/// What a spool is taken to hold when no figure is known for it.
+constexpr double ASSUMED_FULL_G = 1000.;
+/// Sets what *spool*, newly added from a printer's report, holds: *full_g* when new (a tag's figure or the
+/// printer's; ASSUMED_FULL_G when it is 0) and, where the printer counts *left_g* as on it now (0 for unknown),
+/// the difference as one use without a job. That figure is the printer's own estimate and stays shown as one.
+void set_reported_weight(Spools::Spool &spool, double full_g, double left_g, long long now_ms);
 
 /// A spool that, by the inventory, does not hold what a print would take from it.
 struct Shortfall

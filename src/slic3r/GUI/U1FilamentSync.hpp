@@ -32,6 +32,8 @@ struct U1ReportedFilament
     bool color_invalid{false};
     /// The identity of the tag the printer's own reader read for this slot's spool; empty when it read none.
     std::string tag_id;
+    /// What a full spool holds by that tag, in grams; 0 when the reader holds no tag data for the slot.
+    double tag_weight_g{0.};
 };
 
 enum class U1ReportSource { None, DirectLan, PrinterAgent, Conflict };

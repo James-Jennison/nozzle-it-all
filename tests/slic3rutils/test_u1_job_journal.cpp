@@ -386,6 +386,26 @@ TEST_CASE("The printer's job history gives a job its times and its outcome", "[U
     CHECK_FALSE(U1Jobs::record_from_history(job, nlohmann::json()));
 }
 
+TEST_CASE("The printer's job history says how much of a stopped job's filament was fed", "[U1Jobs]")
+{
+    U1Jobs::Job job = new_job();
+    const auto  entry = [&job](const char *status, nlohmann::json used, nlohmann::json metadata) {
+        return nlohmann::json{{"jobs", {{{"filename", job.remote_path}, {"status", status}, {"filament_used", used}, {"metadata", metadata}}}}};
+    };
+    const auto cancelled = U1Jobs::record_from_history(job, entry("cancelled", 2500.0, {{"filament_total", 10000.0}}));
+    REQUIRE(cancelled);
+    CHECK_THAT(cancelled->fed_part, Catch::Matchers::WithinAbs(0.25, 1e-9));
+    // The printer feeds a little more than the file says (purging): never more than the whole file.
+    const auto over = U1Jobs::record_from_history(job, entry("completed", 71390.4, {{"filament_total", 71340.9}}));
+    REQUIRE(over);
+    CHECK_THAT(over->fed_part, Catch::Matchers::WithinAbs(1., 1e-9));
+    // No total, a total of nothing, or a job still running: not known.
+    CHECK(U1Jobs::record_from_history(job, entry("cancelled", 2500.0, nlohmann::json::object()))->fed_part < 0.);
+    CHECK(U1Jobs::record_from_history(job, entry("cancelled", 2500.0, {{"filament_total", 0.0}}))->fed_part < 0.);
+    CHECK(U1Jobs::record_from_history(job, entry("cancelled", "much", {{"filament_total", 10000.0}}))->fed_part < 0.);
+    CHECK(U1Jobs::record_from_history(job, entry("in_progress", 2500.0, {{"filament_total", 10000.0}}))->fed_part < 0.);
+}
+
 TEST_CASE("Only a job recorded as printing takes an outcome, and a known time is not replaced", "[U1Jobs]")
 {
     ScratchJournal scratch;
@@ -435,6 +455,37 @@ TEST_CASE("Only a job recorded as printing takes an outcome, and a known time is
     REQUIRE(U1Jobs::save(held, U1Jobs::State::Held));
     CHECK_FALSE(U1Jobs::record_outcome(held.id, done, "no"));
     CHECK(U1Jobs::unresolved("192.168.1.51"));
+}
+
+TEST_CASE("A stopped job takes how much filament it fed once, with its outcome or after it", "[U1Jobs]")
+{
+    ScratchJournal scratch;
+    U1Jobs::Job    job = new_job();
+    job.start_sent     = true;
+    REQUIRE(U1Jobs::save(job, U1Jobs::State::Printing));
+    // While the job runs nothing is taken as fed.
+    U1Jobs::PrinterRecord early;
+    early.fed_part = 0.1;
+    CHECK_FALSE(U1Jobs::record_outcome(job.id, early, "running"));
+    // The outcome read from the live state has no figure; the history gives it afterwards.
+    U1Jobs::PrinterRecord stopped;
+    stopped.outcome = U1Jobs::State::Cancelled;
+    auto written    = U1Jobs::record_outcome(job.id, stopped, "Cancelled.");
+    REQUIRE(written);
+    CHECK(written->fed_part < 0.);
+    U1Jobs::PrinterRecord listed;
+    listed.fed_part = 0.4;
+    written         = U1Jobs::record_outcome(job.id, listed, {});
+    REQUIRE(written);
+    CHECK(written->state == U1Jobs::State::Cancelled);
+    CHECK(written->message == "Cancelled.");
+    CHECK_THAT(written->fed_part, Catch::Matchers::WithinAbs(0.4, 1e-9));
+    // It is kept on disk, and a later figure does not replace it.
+    listed.fed_part = 0.9;
+    CHECK_FALSE(U1Jobs::record_outcome(job.id, listed, {}));
+    const auto kept = U1Jobs::get(job.id);
+    REQUIRE(kept);
+    CHECK_THAT(kept->fed_part, Catch::Matchers::WithinAbs(0.4, 1e-9));
 }
 
 TEST_CASE("A job keeps where it came from and the person's own verdict, apart from the machine's state", "[U1Jobs]")

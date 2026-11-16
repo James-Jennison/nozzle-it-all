@@ -46,6 +46,18 @@ std::string lane_tag(const nlohmann::json &status, const nlohmann::json &lane);
 /// lane_tag() by tool number: always U1PrintTask::PHYSICAL_EXTRUDER_COUNT entries.
 std::vector<std::string> tool_tags(const nlohmann::json &status);
 
+/// What the printer keeps of the weight of the spool in a lane: what it held when put in ("initial_weight") and
+/// what the printer counts as left on it now ("weight"), in grams. 0 where the lane gives no usable figure. The
+/// printer's count is its own estimate from what it fed, not a weighing.
+struct Weight
+{
+    double initial_g = 0.;
+    double left_g    = 0.;
+};
+Weight lane_weight(const nlohmann::json &lane);
+/// lane_weight() by tool number, for lanes with filament ready: always U1PrintTask::PHYSICAL_EXTRUDER_COUNT entries.
+std::vector<Weight> tool_weights(const nlohmann::json &status);
+
 /// The lanes as the send dialog's sources, indexed by tool number, always
 /// U1PrintTask::PHYSICAL_EXTRUDER_COUNT entries; a tool no lane is mapped to, or whose lane is not ready,
 /// is not present. Null when *status* holds no AFC object.

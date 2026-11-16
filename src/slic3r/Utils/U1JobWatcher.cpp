@@ -137,6 +137,7 @@ void U1JobWatcher::look_once(const ChangeFn &on_change, const ActiveFn &on_activ
         if (const auto listed = U1Jobs::record_from_history(job, get_result(base + "/server/history/list?limit=50&order=desc", stop))) {
             record.started_ms = listed->started_ms;
             record.ended_ms   = listed->ended_ms;
+            record.fed_part   = listed->fed_part;
             if (!record.outcome)
                 record.outcome = listed->outcome;
         }

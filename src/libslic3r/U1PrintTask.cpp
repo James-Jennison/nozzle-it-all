@@ -193,14 +193,20 @@ nlohmann::json build_filament_report(const nlohmann::json &status)
     // on the Owner's U1 three of four tagged spools had none. What the printer keeps for every tagged spool is
     // the product number from the tag (filament_sku, with filament_official set), so that stands in: it names
     // the product, not the single spool, which is what a preset choice goes by.
-    nlohmann::json tag_ids  = nlohmann::json::array();
+    nlohmann::json tag_ids     = nlohmann::json::array();
+    // The weight of filament a full spool holds, as its tag says (grams); 0 where the reader holds no tag data
+    // for the toolhead's spool. It is what the spool held when new, not what is on it now.
+    nlohmann::json tag_weights = nlohmann::json::array();
     const auto     detect   = status.find("filament_detect");
     const auto     official = cfg->find("filament_official");
     const auto     sku      = cfg->find("filament_sku");
     for (int i = 0; i < PHYSICAL_EXTRUDER_COUNT; ++i) {
         const size_t at = size_t(i);
         std::string  id;
-        const bool has_sku = sku != cfg->end() && sku->is_array() && at < sku->size() && (*sku)[at].is_number_integer();
+        double       weight = 0.;
+        // Whether the printer keeps product numbers at all, and this toolhead's; 0 is the printer's word for none.
+        const bool      keeps_sku = sku != cfg->end() && sku->is_array();
+        const long long tool_sku  = keeps_sku && at < sku->size() && (*sku)[at].is_number_integer() ? std::max(0ll, (*sku)[at].get<long long>()) : 0;
         if (detect != status.end() && detect->is_object() && detect->contains("info") && (*detect)["info"].is_array() && at < (*detect)["info"].size()) {
             // The reader's entry is taken for this toolhead only when it names the product the printer keeps for
             // this toolhead: that the list is in toolhead order is not relied on alone.
@@ -209,17 +215,25 @@ nlohmann::json build_filament_report(const nlohmann::json &status)
             // Where the printer keeps a product number for the toolhead, the entry must name that same number:
             // an entry without one is not taken on its place alone. Only a printer that keeps no product
             // numbers at all leaves nothing to compare, and its list is then taken in toolhead order.
+            // A toolhead the printer keeps no number for (0) takes only an entry that names none either.
             const bool            names_it  = entry.is_object() && entry_sku != entry.end() && entry_sku->is_number_integer();
-            const bool            same      = has_sku ? names_it && entry_sku->get<long long>() == (*sku)[at].get<long long>() : true;
-            if (same)
+            const long long       named     = names_it ? std::max(0ll, entry_sku->get<long long>()) : 0;
+            const bool            same      = !keeps_sku || (tool_sku > 0 ? names_it && named == tool_sku : named == 0);
+            if (same) {
                 id = SpoolTags::u1_card_uid(entry);
+                if (const auto grams = entry.is_object() ? entry.find("WEIGHT") : nlohmann::json::const_iterator();
+                    entry.is_object() && grams != entry.end() && grams->is_number() && grams->get<double>() > 0. && grams->get<double>() <= 100000.)
+                    weight = grams->get<double>();
+            }
         }
         if (id.empty() && official != cfg->end() && official->is_array() && at < official->size() && (*official)[at].is_boolean() &&
-            (*official)[at].get<bool>() && has_sku && (*sku)[at].get<long long>() > 0)
-            id = "SKU" + std::to_string((*sku)[at].get<long long>());
+            (*official)[at].get<bool>() && tool_sku > 0)
+            id = "SKU" + std::to_string(tool_sku);
         tag_ids.push_back(id);
+        tag_weights.push_back(weight);
     }
-    report["tag_ids"] = tag_ids;
+    report["tag_ids"]     = tag_ids;
+    report["tag_weights"] = tag_weights;
     return report;
 }
 

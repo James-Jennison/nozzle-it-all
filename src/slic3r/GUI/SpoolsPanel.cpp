@@ -20,6 +20,8 @@
 #include "libslic3r/SpoolInventory.hpp"
 #include "libslic3r/SpoolTags.hpp"
 #include "libslic3r/U1PrintTask.hpp"
+#include "libslic3r/AfcLanes.hpp"
+#include "slic3r/Utils/SpoolJobs.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
 #include "slic3r/Utils/U1LanPrintHost.hpp"
 
@@ -398,6 +400,8 @@ void SpoolsPanel::add_from_printer()
     {
         int         slot = 0;
         std::string vendor, material, colour, tag;
+        double      full_g = 0.; ///< what the spool held when new, by its tag or the printer; 0 when not reported
+        double      left_g = 0.; ///< what the printer counts as left on it; 0 when not reported
     };
     std::vector<Loaded> loaded;
     wxString            error;
@@ -407,16 +411,19 @@ void SpoolsPanel::add_from_printer()
             const std::vector<U1ReportedFilament> slots = parse_u1_filament_report(*report);
             for (size_t i = 0; i < slots.size(); ++i)
                 if (slots[i].present)
-                    loaded.push_back({int(i), slots[i].vendor, slots[i].type + (slots[i].sub_type.empty() ? "" : " " + slots[i].sub_type), slots[i].color, slots[i].tag_id});
+                    loaded.push_back({int(i), slots[i].vendor, slots[i].type + (slots[i].sub_type.empty() ? "" : " " + slots[i].sub_type), slots[i].color, slots[i].tag_id,
+                                      slots[i].tag_weight_g, 0.});
         } else {
             std::string base;
             if (const auto state = U1LanPrintHost::query_afc_printer(host, base, error)) {
-                std::vector<std::string> tags;
-                U1LanPrintHost::query_afc_brands(base, &tags);
+                std::vector<std::string>      tags;
+                std::vector<AfcLanes::Weight> weights;
+                U1LanPrintHost::query_afc_brands(base, &tags, &weights);
                 for (size_t i = 0; i < state->toolheads.size(); ++i)
                     if (state->toolheads[i].present)
                         loaded.push_back({int(i), state->toolheads[i].vendor, state->toolheads[i].type, state->toolheads[i].color,
-                                          i < tags.size() ? SpoolTags::normalized(tags[i]) : std::string()});
+                                          i < tags.size() ? SpoolTags::normalized(tags[i]) : std::string(), i < weights.size() ? weights[i].initial_g : 0.,
+                                          i < weights.size() ? weights[i].left_g : 0.});
             }
         }
     }
@@ -438,8 +445,17 @@ void SpoolsPanel::add_from_printer()
         if (taken)
             continue;
         to_add.push_back(slot);
-        // TRN %1% is a slot number, %2% a brand and material such as "Snapmaker PLA".
-        list += "\n" + format_wxstr(_L("Slot %1%: %2%"), slot.slot + 1, from_u8(boost::trim_copy(slot.vendor + " " + slot.material)));
+        const wxString what = from_u8(boost::trim_copy(slot.vendor + " " + slot.material));
+        // Where each figure comes from is said: the printer's own count, the tag, or nothing reported.
+        if (slot.left_g > 0. && (slot.full_g <= 0. || slot.left_g < slot.full_g))
+            // TRN %1% is a slot number, %2% a brand and material such as "Snapmaker PLA", %3% a weight such as "742 g".
+            list += "\n" + format_wxstr(_L("Slot %1%: %2%, %3% left by the printer's own count"), slot.slot + 1, what, grams(slot.left_g));
+        else if (slot.full_g > 0.)
+            // TRN %1% is a slot number, %2% a brand and material, %3% a weight such as "1000 g".
+            list += "\n" + format_wxstr(_L("Slot %1%: %2%, %3% when new by the printer's report"), slot.slot + 1, what, grams(slot.full_g));
+        else
+            // TRN %1% is a slot number, %2% a brand and material, %3% a weight such as "1000 g".
+            list += "\n" + format_wxstr(_L("Slot %1%: %2%, no weight reported, taken as %3%"), slot.slot + 1, what, grams(SpoolJobs::ASSUMED_FULL_G));
     }
     if (to_add.empty()) {
         MessageDialog(this, _L("Every loaded slot of this printer already has a spool recorded."), _L("Spools"), wxOK | wxICON_INFORMATION).ShowModal();
@@ -447,7 +463,7 @@ void SpoolsPanel::add_from_printer()
     }
     if (MessageDialog(this,
                       _L("Add a spool for each of these slots, as the printer reports them?") + "\n" + list + "\n\n" +
-                          _L("Each is recorded as holding 1000 g; weigh a spool to correct that. Nothing is sent to the printer."),
+                          _L("These figures are estimates; weigh a spool to correct one. Nothing is sent to the printer."),
                       _L("Spools"), wxYES_NO | wxYES_DEFAULT | wxICON_QUESTION).ShowModal() != wxID_YES)
         return;
     if (change_inventory(this, [&](Spools::Inventory &inventory) {
@@ -457,7 +473,7 @@ void SpoolsPanel::add_from_printer()
                 spool.material  = slot.material;
                 spool.name      = boost::trim_copy(slot.vendor + " " + slot.material);
                 spool.color     = slot.colour;
-                spool.initial_g = 1000.;
+                SpoolJobs::set_reported_weight(spool, slot.full_g, slot.left_g, U1Jobs::now_ms());
                 // A product number names the product, not this one spool: it is not kept as the spool's tag.
                 if (!slot.tag.empty() && !boost::starts_with(slot.tag, "SKU"))
                     spool.tags.push_back(slot.tag);

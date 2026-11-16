@@ -3,6 +3,7 @@
 
 #include "PrintHost.hpp"
 #include "U1JobJournal.hpp"
+#include "libslic3r/AfcLanes.hpp"
 #include "libslic3r/U1PrintTask.hpp"
 
 #include <utility>
@@ -75,8 +76,10 @@ public:
 
     /// The brand of the spool in the lane of each tool number of a printer with AFC at *base_url*, where the
     /// printer knows it (AfcLanes::lane_brand); empty entries otherwise, and all empty when it does not answer.
-    /// *tags*, when given, receives the identity of the tag last read for each tool number's lane (AfcLanes::lane_tag).
-    static std::vector<std::string> query_afc_brands(const std::string &base_url, std::vector<std::string> *tags = nullptr);
+    /// *tags*, when given, receives the identity of the tag last read for each tool number's lane (AfcLanes::lane_tag),
+    /// and *weights* what the printer keeps of each lane's spool weight (AfcLanes::lane_weight).
+    static std::vector<std::string> query_afc_brands(const std::string &base_url, std::vector<std::string> *tags = nullptr,
+                                                     std::vector<AfcLanes::Weight> *weights = nullptr);
 
     /// Reads the loaded filaments and nozzles for the slicer's Sync Filament
     /// flow (see U1PrintTask::build_filament_report). *host* as in query_printer.

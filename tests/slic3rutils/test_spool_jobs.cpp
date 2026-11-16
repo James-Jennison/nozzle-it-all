@@ -54,14 +54,48 @@ TEST_CASE("A finished job takes each filament's grams from the spool in the slot
     CHECK_THAT(Spools::remaining(*inventory.find(third)).grams, WithinAbs(960., 1e-9));
 }
 
-TEST_CASE("A job that stopped early counts for the part the printer reported as done", "[SpoolJobs]")
+TEST_CASE("A job that stopped early counts for the part of its filament the printer says was fed", "[SpoolJobs]")
 {
     Spools::Inventory inventory;
     const int number = spool_in_slot(inventory, 0, 1000.);
     U1Jobs::Job job  = job_of(U1Jobs::State::Cancelled, {80.}, {0});
-    job.progress     = 0.25;
-    CHECK(SpoolJobs::record_job(inventory, job, 5) == 1);
+    // The printer has not said yet: nothing is written, so a later answer is not a second count.
+    CHECK(SpoolJobs::record_job(inventory, job, 5) == 0);
+    CHECK(inventory.find(number)->uses.empty());
+    job.fed_part = 0.25;
+    CHECK(SpoolJobs::record_job(inventory, job, 6) == 1);
     CHECK_THAT(Spools::remaining(*inventory.find(number)).grams, WithinAbs(980., 1e-9));
+    // A failed job goes the same way, and a figure past the whole file is the whole file.
+    U1Jobs::Job failed = job_of(U1Jobs::State::Failed, {100.}, {0});
+    failed.fed_part    = 1.4;
+    CHECK(SpoolJobs::record_job(inventory, failed, 7) == 1);
+    CHECK_THAT(Spools::remaining(*inventory.find(number)).grams, WithinAbs(880., 1e-9));
+}
+
+TEST_CASE("A spool added from a printer's report holds what the printer reports", "[SpoolJobs]")
+{
+    Spools::Spool counted;
+    SpoolJobs::set_reported_weight(counted, 1000., 741.5, 9);
+    CHECK_THAT(counted.initial_g, WithinAbs(1000., 1e-9));
+    const Spools::Remaining left = Spools::remaining(counted);
+    CHECK_THAT(left.grams, WithinAbs(741.5, 1e-9));
+    // The printer's count is an estimate, never shown as a weighing.
+    CHECK_FALSE(left.measured);
+
+    // A tag gives what the spool held when new and nothing about now.
+    Spools::Spool tagged;
+    SpoolJobs::set_reported_weight(tagged, 750., 0., 9);
+    CHECK_THAT(Spools::remaining(tagged).grams, WithinAbs(750., 1e-9));
+    CHECK(tagged.uses.empty());
+
+    // Nothing reported: the assumed figure.
+    Spools::Spool unknown;
+    SpoolJobs::set_reported_weight(unknown, 0., 0., 9);
+    CHECK_THAT(unknown.initial_g, WithinAbs(SpoolJobs::ASSUMED_FULL_G, 1e-9));
+    // A count with no figure for the full spool is measured against the assumed one.
+    Spools::Spool part;
+    SpoolJobs::set_reported_weight(part, 0., 300., 9);
+    CHECK_THAT(Spools::remaining(part).grams, WithinAbs(300., 1e-9));
 }
 
 TEST_CASE("A job that is still printing, or never started, takes nothing", "[SpoolJobs]")
@@ -72,7 +106,7 @@ TEST_CASE("A job that is still printing, or never started, takes nothing", "[Spo
     CHECK(SpoolJobs::record_job(inventory, job_of(U1Jobs::State::Uploaded, {80.}, {0}), 5) == 0);
     U1Jobs::Job refused = job_of(U1Jobs::State::Failed, {80.}, {0});
     refused.start_sent  = false;
-    refused.progress    = 0.5;
+    refused.fed_part    = 0.5;
     CHECK(SpoolJobs::record_job(inventory, refused, 5) == 0);
     CHECK_THAT(Spools::remaining(*inventory.find(number)).grams, WithinAbs(1000., 1e-9));
 }

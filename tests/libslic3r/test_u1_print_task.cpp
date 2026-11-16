@@ -230,6 +230,40 @@ TEST_CASE("A card with no product number is not taken where the printer keeps on
     CHECK(report["tag_ids"][1] == "08080808");
 }
 
+TEST_CASE("A product number of 0 is no product number", "[U1PrintTask]")
+{
+    // The printer keeps numbers, and none for these toolheads: a card that names none either is the toolhead's,
+    // a card that names a product is not, and 0 never stands in as a tag.
+    const json status = {{"print_task_config",
+                          {{"filament_exist", {true, true, true}},
+                           {"filament_type", {"PLA", "PLA", "PLA"}},
+                           {"filament_official", {true, true, true}},
+                           {"filament_sku", {0, 0, 0}}}},
+                         {"filament_detect", {{"info", {{{"CARD_UID", {9, 9, 9, 9}}}, {{"CARD_UID", {8, 8, 8, 8}}, {"SKU", 34263}}, {{"CARD_UID", 0}, {"SKU", 0}}}}}}};
+    const json report = U1PrintTask::build_filament_report(status);
+    CHECK(report["tag_ids"][0] == "09090909");
+    CHECK(report["tag_ids"][1] == "");
+    CHECK(report["tag_ids"][2] == "");
+}
+
+TEST_CASE("U1 filament report gives the weight a tag says a full spool holds", "[U1PrintTask]")
+{
+    const json status = {{"print_task_config",
+                          {{"filament_exist", {true, true, true, true}},
+                           {"filament_type", {"PLA", "PLA", "PLA", "PLA"}},
+                           {"filament_official", {true, true, true, true}},
+                           {"filament_sku", {34262, 34263, 34069, 34265}}}},
+                         {"filament_detect",
+                          {{"info",
+                            {{{"CARD_UID", 0}, {"SKU", 0}, {"WEIGHT", 0}},
+                             {{"CARD_UID", {112, 73, 143, 226}}, {"SKU", 34263}, {"WEIGHT", 1000}},
+                             // Names another product than the third toolhead's: its weight is not this spool's.
+                             {{"CARD_UID", {1, 2, 3, 4}}, {"SKU", 11111}, {"WEIGHT", 500}},
+                             {{"CARD_UID", {5, 6, 7, 8}}, {"SKU", 34265}, {"WEIGHT", "heavy"}}}}}}};
+    const json report = U1PrintTask::build_filament_report(status);
+    CHECK(report["tag_weights"] == json({0., 1000., 0., 0.}));
+}
+
 TEST_CASE("U1 manual filament edits use SET_PRINT_FILAMENT_CONFIG", "[U1PrintTask]")
 {
     CHECK(U1PrintTask::set_filament_command(2, "amazon basics", "TPU", "95A", "#dd0000") ==

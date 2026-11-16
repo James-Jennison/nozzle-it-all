@@ -273,6 +273,8 @@ set(lisbslic3r_sources
     GCode/GCodeProcessor.cpp
     AfcLanes.cpp
     AfcLanes.hpp
+    SpoolInventory.cpp
+    SpoolInventory.hpp
     SpoolTags.cpp
     SpoolTags.hpp
     GCodeToolRemap.cpp

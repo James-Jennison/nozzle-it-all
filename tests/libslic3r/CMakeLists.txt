@@ -9,6 +9,7 @@ add_executable(${_TEST_NAME}_tests
     test_semantic_paint.cpp
     test_u1_print_task.cpp
     test_gcode_tool_remap.cpp
+    test_spool_inventory.cpp
     test_spool_tags.cpp
     test_printer_snapshot.cpp
     test_device_workspace_state.cpp

@@ -701,6 +701,10 @@ void U1SendDialog::update_state()
             note += (note.IsEmpty() ? wxString() : "\n") + problem;
 
     const std::vector<int> filament_to_toolhead = mapping();
+    // What the spool list has to say about this mapping: a warning among the notes, and nothing more.
+    if (m_spool_note)
+        if (const wxString spools = m_spool_note(filament_to_toolhead); !spools.IsEmpty())
+            note += (note.IsEmpty() ? wxString() : "\n") + spools;
     const wxString         no_upload = m_readiness ? m_readiness(filament_to_toolhead, false) : wxString();
     const wxString         no_start  = m_readiness ? m_readiness(filament_to_toolhead, true) : wxString();
     m_upload->Enable(!m_checking && no_upload.IsEmpty());

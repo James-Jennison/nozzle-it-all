@@ -162,6 +162,8 @@
 #include "slic3r/Utils/U1JobWatcher.hpp"
 #include "slic3r/Utils/U1JobJournal.hpp"
 #include "DesktopNotice.hpp"
+#include "slic3r/Utils/SpoolJobs.hpp"
+#include "libslic3r/SpoolInventory.hpp"
 #include "format.hpp"
 #include <wx/defs.h>
 #include <cassert>
@@ -1778,6 +1780,14 @@ void MainFrame::follow_job_on_native_view()
 void MainFrame::notify_u1_job(const U1Jobs::Job& job, bool paused)
 {
     const bool ended = job.state == U1Jobs::State::Completed || job.state == U1Jobs::State::Failed || job.state == U1Jobs::State::Cancelled;
+    // What the job took goes into the record of the spools the person said were in that printer. Done each time
+    // the watcher writes the ended job (its outcome, then its times): the job is counted once per spool.
+    if (ended) {
+        bool              damaged   = false;
+        Spools::Inventory inventory = Spools::Inventory::load(Spools::inventory_path(), &damaged);
+        if (!damaged && SpoolJobs::record_job(inventory, job, U1Jobs::now_ms()) > 0 && !inventory.save(Spools::inventory_path()))
+            BOOST_LOG_TRIVIAL(warning) << "Spools: what job " << job.id << " took could not be saved";
+    }
     // The watcher writes a job's record more than once (its outcome, then its times): its end is told once.
     if (!paused && (!ended || !m_u1_notified.insert(job.id).second))
         return;

@@ -2,6 +2,7 @@
 
 #include "DirectLanPage.hpp"
 #include "FleetPanel.hpp"
+#include "SpoolsPanel.hpp"
 #include "GUI_App.hpp"
 #include "I18N.hpp"
 #include "NIATheme.hpp"
@@ -50,9 +51,12 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     m_btn_monitor = new ::Button(m_switch_bar, _L("Monitor"));
     m_btn_history = new ::Button(m_switch_bar, _L("History"));
     m_btn_printers = new ::Button(m_switch_bar, _L("Printers"));
+    m_btn_spools = new ::Button(m_switch_bar, _L("Spools"));
+    m_btn_spools->SetToolTip(_L("Your spools: what is left on each, where it is, and when it was dried"));
     m_btn_web     = new ::Button(m_switch_bar, _L("Web interface"));
     m_btn_printers->SetToolTip(_L("Every printer with an address, and what each is doing"));
     m_btn_printers->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { show_view(View::Printers); });
+    m_btn_spools->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { show_view(View::Spools); });
     m_btn_history->SetToolTip(_L("Jobs sent to this printer from this app, and how they ended"));
     m_btn_history->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { show_view(View::History); });
     m_btn_monitor->SetToolTip(_L("Job, temperatures, controls and camera"));
@@ -63,6 +67,7 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     bar->Add(m_btn_history, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
     bar->Add(m_btn_printers, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
     bar->Add(m_btn_web, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
+    bar->Add(m_btn_spools, 0, wxALIGN_CENTER_VERTICAL | wxLEFT | wxTOP, FromDIP(8));
     m_notice = new wxStaticText(m_switch_bar, wxID_ANY, _L("This printer does not answer as a Klipper printer. Monitor, History and the controls need Klipper (Moonraker); the printer's own page is on the Web interface side."));
     m_notice->SetForegroundColour(NIATheme::text_muted(wxGetApp().dark_mode()));
     m_notice->Hide();
@@ -103,6 +108,9 @@ NativeDevicePage::NativeDevicePage(wxWindow* parent) : wxPanel(parent)
     });
     m_fleet->Hide();
     sizer->Add(m_fleet, 1, wxEXPAND);
+    m_spools = new SpoolsPanel(this);
+    m_spools->Hide();
+    sizer->Add(m_spools, 1, wxEXPAND);
     SetSizer(sizer);
     apply_switch_state();
 
@@ -157,7 +165,7 @@ void NativeDevicePage::apply_server_kind()
         m_switch_bar->Layout();
     }
     // Its own page first, once: the person can still go to the other sides.
-    if (other && !m_web_first_done && m_web_page != nullptr && !m_web && !m_history_shown && !m_fleet_shown) {
+    if (other && !m_web_first_done && m_web_page != nullptr && !m_web && !m_history_shown && !m_fleet_shown && !m_spools_shown) {
         m_web_first_done = true;
         show_view(View::Web);
     }
@@ -169,9 +177,10 @@ void NativeDevicePage::set_active(bool active)
         ask_server_kind(); // once for each address; known addresses are answered from what was learnt
     m_active = active;
     // The native panel holds no connection while another side covers it.
-    m_panel->set_active(active && !m_web && !m_history_shown && !m_fleet_shown);
+    m_panel->set_active(active && !m_web && !m_history_shown && !m_fleet_shown && !m_spools_shown);
     m_history->set_active(active && m_history_shown);
     m_fleet->set_active(active && m_fleet_shown);
+    m_spools->set_active(active && m_spools_shown);
 }
 
 void NativeDevicePage::reload()
@@ -188,7 +197,7 @@ void NativeDevicePage::refresh()
 {
     // Drop the connection to the previous printer and reconnect to the new one.
     m_panel->set_active(false);
-    m_panel->set_active(m_active && !m_web && !m_history_shown && !m_fleet_shown);
+    m_panel->set_active(m_active && !m_web && !m_history_shown && !m_fleet_shown && !m_spools_shown);
     m_history->reload();
     apply_switch_state();
     m_switch_bar->Layout();
@@ -202,6 +211,7 @@ void NativeDevicePage::on_sys_color_changed()
     m_panel->on_sys_color_changed();
     m_history->on_sys_color_changed();
     m_fleet->on_sys_color_changed();
+    m_spools->on_sys_color_changed();
 }
 
 void NativeDevicePage::msw_rescale() { on_sys_color_changed(); }
@@ -218,7 +228,7 @@ void NativeDevicePage::host_web_page(wxWindow* page, std::function<void()> befor
     m_btn_web->Show();
     m_web = false;
     apply_switch_state();
-    m_panel->Show(!m_history_shown && !m_fleet_shown);
+    m_panel->Show(!m_history_shown && !m_fleet_shown && !m_spools_shown);
     m_switch_bar->Layout();
     Layout();
     apply_server_kind();
@@ -236,8 +246,8 @@ wxWindow* NativeDevicePage::release_web_page()
     m_web             = false;
     m_btn_web->Hide();
     apply_switch_state();
-    m_panel->Show(!m_history_shown && !m_fleet_shown);
-    m_panel->set_active(m_active && !m_history_shown && !m_fleet_shown);
+    m_panel->Show(!m_history_shown && !m_fleet_shown && !m_spools_shown);
+    m_panel->set_active(m_active && !m_history_shown && !m_fleet_shown && !m_spools_shown);
     m_switch_bar->Layout();
     Layout();
     return page;
@@ -259,11 +269,13 @@ void NativeDevicePage::show_view(View view)
     const bool web     = view == View::Web;
     const bool history = view == View::History;
     const bool fleet   = view == View::Printers;
-    if (web == m_web && history == m_history_shown && fleet == m_fleet_shown)
+    const bool spools  = view == View::Spools;
+    if (web == m_web && history == m_history_shown && fleet == m_fleet_shown && spools == m_spools_shown)
         return;
     m_web           = web;
     m_history_shown = history;
     m_fleet_shown   = fleet;
+    m_spools_shown  = spools;
     apply_switch_state();
 
     m_panel->set_active(false);
@@ -272,6 +284,8 @@ void NativeDevicePage::show_view(View view)
     m_history->set_active(m_active && history);
     m_fleet->Show(fleet);
     m_fleet->set_active(m_active && fleet);
+    m_spools->Show(spools);
+    m_spools->set_active(m_active && spools);
     if (m_web_page != nullptr) {
         if (web && m_before_web_show)
             m_before_web_show();
@@ -287,9 +301,10 @@ void NativeDevicePage::apply_switch_state()
     const auto style = [](::Button* button, bool chosen) {
         button->SetStyle(chosen ? ButtonStyle::Confirm : ButtonStyle::Regular, ButtonType::Window);
     };
-    style(m_btn_monitor, !m_web && !m_history_shown && !m_fleet_shown);
+    style(m_btn_monitor, !m_web && !m_history_shown && !m_fleet_shown && !m_spools_shown);
     style(m_btn_history, m_history_shown);
     style(m_btn_printers, m_fleet_shown);
+    style(m_btn_spools, m_spools_shown);
     m_btn_web->Show(m_web_page != nullptr && viewed_printer_name().empty());
     style(m_btn_web, m_web);
     if (m_notice != nullptr && m_notice->IsShown() && !viewed_printer_name().empty())

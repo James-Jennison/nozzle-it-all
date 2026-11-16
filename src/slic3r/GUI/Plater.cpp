@@ -209,6 +209,8 @@
 #include "../Utils/NozzleSession.hpp"
 #include "U1FilamentSync.hpp"
 #include "U1SendDialog.hpp"
+#include "slic3r/Utils/SpoolJobs.hpp"
+#include "libslic3r/SpoolInventory.hpp"
 #include "libslic3r/U1PrintTask.hpp"
 #include "MainFrame.hpp"
 #ifdef SLIC3R_CAD
@@ -21350,6 +21352,27 @@ void Plater::send_gcode_u1_lan(const fs::path &default_output_file, bool slots)
     U1SendDialog dlg(this, default_output_file, filaments, *printer, project_name,
                      get_partplate_list().get_curr_plate_index() + 1, estimated_time, thumbnail, filament_grams, from_u8(host), read_readiness,
                      model_name, true, other_names);
+    // A warning from the person's spool list, when a spool said to be in a slot holds less than the print takes.
+    dlg.set_spool_note([base_url, filament_grams, slots](const std::vector<int> &map) {
+        bool              damaged   = false;
+        Spools::Inventory inventory = Spools::Inventory::load(Spools::inventory_path(), &damaged);
+        wxString          text;
+        if (damaged)
+            return text;
+        for (const SpoolJobs::Shortfall &low : SpoolJobs::shortfalls(inventory, base_url, filament_grams, map)) {
+            const int slot = low.filament >= 0 && size_t(low.filament) < map.size() ? map[size_t(low.filament)] + 1 : 0;
+            // TRN %1% is the app's number for a spool, %2% a slot or toolhead number, %3% and %4% weights such as "30 g".
+            text += (text.IsEmpty() ? wxString() : "\n") +
+                    format_wxstr(low.measured ? (slots ? _L("Spool %1% in slot %2% was weighed at %3% left; this print takes %4% from it.") :
+                                                         _L("Spool %1% on toolhead %2% was weighed at %3% left; this print takes %4% from it.")) :
+                                                (slots ? _L("Spool %1% in slot %2% is estimated to have %3% left; this print takes %4% from it.") :
+                                                         _L("Spool %1% on toolhead %2% is estimated to have %3% left; this print takes %4% from it.")),
+                                 low.spool, slot, wxString::Format("%d g", int(std::lround(low.left_g))), wxString::Format("%d g", int(std::lround(low.needed_g))));
+        }
+        if (!text.IsEmpty())
+            text += "\n" + _L("This comes from your spool list and does not stop the print.");
+        return text;
+    });
     if (dlg.ShowModal() != wxID_OK)
         return;
 

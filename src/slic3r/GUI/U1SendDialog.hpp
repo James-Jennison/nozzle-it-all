@@ -76,6 +76,10 @@ public:
     /// replaced, ending in .gcode. The send adds the job's identifier to it.
     boost::filesystem::path filename() const;
     bool                    start_print() const { return m_start_print; }
+    /// A note from the person's spool list for a filament -> toolhead map (a spool recorded as holding less than
+    /// the print takes from it). It is shown with the mapping's other notes and never disables a button. Set
+    /// before the dialog is shown.
+    void set_spool_note(std::function<wxString(const std::vector<int> &)> note) { m_spool_note = std::move(note); }
     /// "Add to queue" was pressed: nothing is to be sent.
     bool                    queue_only() const { return m_queue_only; }
     /// The other printers ticked, as indices into the list the dialog was given.
@@ -128,6 +132,7 @@ private:
     ::CheckBox                        *m_shaper_calibrate  = nullptr;
     bool                               m_start_print       = true;
     bool                               m_queue_only        = false;
+    std::function<wxString(const std::vector<int> &)> m_spool_note;
     std::vector<::CheckBox *>          m_also;
     bool                               m_slots             = false; ///< sources are a filament changer's slots (see the constructor)
     wxString                           m_message_title;

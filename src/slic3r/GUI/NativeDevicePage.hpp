@@ -17,6 +17,7 @@ namespace Slic3r::GUI {
 class DirectLanPage;
 class NativePrinterPanel;
 class U1JobHistoryPanel;
+class SpoolsPanel;
 class FleetPanel;
 
 /// "Printer" tab for Moonraker/Klipper printers: the native monitor-first printer
@@ -48,7 +49,7 @@ public:
     void show_web(bool web);
     /// The three sides of the page. The switch above them is always shown; its Web interface
     /// button only while a web page is hosted.
-    enum class View { Monitor, History, Printers, Web };
+    enum class View { Monitor, History, Printers, Web, Spools };
     void show_view(View view);
 
 private:
@@ -81,6 +82,9 @@ private:
     ::Button*             m_btn_printers{nullptr};
     FleetPanel*           m_fleet{nullptr};
     bool                  m_fleet_shown{false};
+    ::Button*             m_btn_spools{nullptr};
+    SpoolsPanel*          m_spools{nullptr};
+    bool                  m_spools_shown{false};
 };
 
 } // namespace Slic3r::GUI

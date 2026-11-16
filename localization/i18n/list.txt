@@ -251,6 +251,7 @@ src/slic3r/GUI/calib_dlg.cpp
 src/slic3r/GUI/PrintHostDialogs.cpp
 src/slic3r/GUI/U1SendDialog.cpp
 src/slic3r/GUI/U1FilamentSync.cpp
+src/slic3r/GUI/SpoolsPanel.cpp
 src/slic3r/GUI/U1JobHistoryPanel.cpp
 src/slic3r/GUI/U1JobBar.cpp
 src/slic3r/GUI/AddPrinterDialog.cpp

@@ -200,6 +200,8 @@ bool json_flag(const nlohmann::json& arr, size_t i, bool fallback)
 // True while a printer with filament lanes on one nozzle (a CANVAS or other AFC unit) is being synced: the
 // dialogs then speak of slots, not toolheads. Main thread only; the sync is modal.
 bool s_lane_sync = false;
+// True while a preset is made from a catalogue search that no printer is part of (see find_filament_in_catalog()).
+bool s_catalog_search = false;
 
 // Whether lane data has the form parse_lane_data_impl() reads: at least one entry that is an object naming
 // its tool as a string. Data in another form is not "no filament": the sync says it cannot read it.
@@ -466,7 +468,10 @@ CatalogPresetResult catalog_preset(PresetBundle& bundle, const FilamentProfileRe
     std::string notes              = "Source: 3D Filament Profiles (" + source + ")";
     if (!record.id.empty())
         notes += "; record " + record.id;
-    notes += "; Snapmaker U1 reported " + (reported.from_tag ? std::string("RFID") : std::string("printer setting"));
+    if (s_catalog_search)
+        notes += "; found by a search in the app, not reported by a printer";
+    else
+        notes += "; Snapmaker U1 reported " + (reported.from_tag ? std::string("RFID") : std::string("printer setting"));
     // A preset made for a brand a filament changer's lane reports: its settings are the generic ones of the
     // material; only the brand comes from the printer.
     if (s_lane_sync && record.id.empty())
@@ -632,6 +637,188 @@ private:
 
     ::TextInput* m_key{nullptr};
     bool m_replacing{false};
+};
+
+// A search of the 3D Filament Profiles catalogue that no printer is part of: the person types what they look
+// for, picks a result, and it becomes a filament preset of their own for the selected printer, made the same
+// way the filament sync makes one (catalog_preset). Only the search request leaves this computer, and only
+// when Search is pressed; the key is the person's own, from the system keychain.
+class FilamentCatalogSearchDialog final : public DPIDialog
+{
+public:
+    explicit FilamentCatalogSearchDialog(wxWindow* parent)
+        : DPIDialog(parent, wxID_ANY, _L("Find a filament"), wxDefaultPosition, wxDefaultSize,
+                    wxCAPTION | wxCLOSE_BOX)
+        , m_alive(std::make_shared<std::atomic<bool>>(true))
+    {
+        const int  em   = wxGetApp().em_unit();
+        const bool dark = wxGetApp().dark_mode();
+        SetBackgroundColour(NIATheme::surface(dark));
+        auto* root  = new wxBoxSizer(wxVERTICAL);
+        auto* intro = new Label(this, _L("Searches 3dfilamentprofiles.com for a filament by brand, material or name, with your own API key. The one you "
+                                         "pick becomes a filament preset of your own for the selected printer, with the settings of that material's "
+                                         "generic preset; only its name and brand come from the catalogue."),
+                                LB_AUTO_WRAP, wxSize(46 * em, -1));
+        intro->SetForegroundColour(NIATheme::text_muted(dark));
+        root->Add(intro, 0, wxALL | wxEXPAND, em);
+
+        auto* search_row = new wxBoxSizer(wxHORIZONTAL);
+        m_query          = new ::TextInput(this, "", "", "", wxDefaultPosition, wxSize(30 * em, -1), wxTE_PROCESS_ENTER);
+        m_search         = new ::Button(this, _L("Search"));
+        m_search->SetStyle(ButtonStyle::Confirm, ButtonType::Window);
+        auto* key = new ::Button(this, _L("Configure API key"));
+        key->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+        search_row->Add(m_query, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, em / 2);
+        search_row->Add(m_search, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, em / 2);
+        search_row->Add(key, 0, wxALIGN_CENTER_VERTICAL);
+        root->Add(search_row, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, em);
+
+        m_results = new ::ComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxSize(46 * em, -1), 0, nullptr, wxCB_READONLY);
+        m_results->Disable();
+        root->Add(m_results, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, em);
+        m_status = new Label(this, wxEmptyString, LB_AUTO_WRAP, wxSize(46 * em, -1));
+        m_status->SetForegroundColour(NIATheme::text_muted(dark));
+        root->Add(m_status, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, em);
+
+        auto* buttons = new DialogButtons(this, {"Add to my filaments", "Close"}, _L("Add to my filaments"));
+        m_add         = buttons->GetButtonFromIndex(0);
+        m_add->Disable();
+        root->Add(buttons, 0, wxEXPAND);
+
+        m_search->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { search(); });
+        m_query->Bind(wxEVT_TEXT_ENTER, [this](wxCommandEvent&) { search(); });
+        key->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { FilamentProfilesKeyDialog(this).ShowModal(); });
+        m_results->Bind(wxEVT_COMBOBOX, [this](wxCommandEvent& event) {
+            m_add->Enable(m_results->GetSelection() >= 0);
+            event.Skip();
+        });
+        m_add->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { add(); });
+        buttons->GetButtonFromIndex(1)->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { EndModal(m_added.empty() ? wxID_CANCEL : wxID_OK); });
+        Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent&) { EndModal(m_added.empty() ? wxID_CANCEL : wxID_OK); });
+
+        SetSizerAndFit(root);
+        CenterOnParent();
+        wxGetApp().UpdateDlgDarkUI(this);
+    }
+
+    ~FilamentCatalogSearchDialog() override
+    {
+        m_alive->store(false);
+        if (m_request)
+            m_request->cancel();
+        std::fill(m_api_key.begin(), m_api_key.end(), '\0');
+    }
+
+    /// The presets made while the dialog was open.
+    const std::vector<std::string>& added() const { return m_added; }
+
+private:
+    void on_dpi_changed(const wxRect&) override
+    {
+        if (GetSizer() != nullptr)
+            GetSizer()->SetSizeHints(this);
+        Refresh();
+    }
+
+    void say(const wxString& text)
+    {
+        m_status->SetLabel(text);
+        Layout();
+        Fit();
+    }
+
+    void search()
+    {
+        const std::string query = into_u8(m_query->GetTextCtrl()->GetValue().Trim().Trim(false));
+        if (query.size() < 2) {
+            say(_L("Type at least two letters of a brand, a material or a name."));
+            return;
+        }
+        m_api_key = load_filament_profiles_api_key();
+        if (m_api_key.empty()) {
+            say(_L("No API key is stored yet. Press Configure API key and enter your own key from 3dfilamentprofiles.com."));
+            return;
+        }
+        if (m_request)
+            m_request->cancel();
+        const unsigned generation = ++m_generation;
+        m_search->Disable();
+        m_add->Disable();
+        say(_L("Searching…"));
+        auto* dialog = this;
+        m_request    = search_filament_profiles_async(query, m_api_key, [dialog, alive = m_alive, generation](FilamentProfilesSearchReply reply) {
+            // On the request's thread: the answer is handed to the main thread, which checks the dialog is still there.
+            wxGetApp().CallAfter([dialog, alive, generation, reply = std::move(reply)] {
+                if (alive->load() && generation == dialog->m_generation)
+                    dialog->took(reply);
+            });
+        });
+    }
+
+    void took(const FilamentProfilesSearchReply& reply)
+    {
+        m_search->Enable();
+        m_records.clear();
+        m_results->Clear();
+        if (!reply.ok) {
+            m_results->Disable();
+            // TRN %1% is what the catalogue's server or the network said.
+            say(format_wxstr(_L("The search did not succeed: %1%"), from_u8(reply.error)));
+            return;
+        }
+        for (const FilamentProfileRecord& record : reply.records)
+            if (filament_profile_record_is_usable(record)) {
+                m_records.push_back(record);
+                wxString line = from_u8(filament_profile_product_name(record));
+                if (!record.color.empty())
+                    line += wxString::FromUTF8(" · ") + from_u8(record.color);
+                m_results->Append(line);
+            }
+        m_results->Enable(!m_records.empty());
+        // TRN %1% is a number of filaments found.
+        say(m_records.empty() ? _L("Nothing usable was found. Try other words.") :
+                                format_wxstr(_L_PLURAL("%1% filament found. Choose one in the list.", "%1% filaments found. Choose one in the list.", m_records.size()),
+                                             m_records.size()));
+    }
+
+    void add()
+    {
+        const int at = m_results->GetSelection();
+        if (at < 0 || size_t(at) >= m_records.size())
+            return;
+        PresetBundle&            bundle = *wxGetApp().preset_bundle;
+        std::vector<std::string> created;
+        std::string              error;
+        Slot                     none;
+        s_catalog_search = true;
+        const CatalogPresetResult result = catalog_preset(bundle, m_records[size_t(at)], none, created, error);
+        s_catalog_search = false;
+        if (result.preset_name.empty()) {
+            // TRN %1% is the reason, in English as the preset code gives it.
+            say(format_wxstr(_L("The preset could not be made: %1%"), from_u8(error)));
+            return;
+        }
+        if (wxGetApp().plater() != nullptr)
+            wxGetApp().plater()->sidebar().update_presets(Preset::TYPE_FILAMENT);
+        BOOST_LOG_TRIVIAL(warning) << "Filament catalogue: preset \"" << result.preset_name << "\" " << (result.created_preset_names.empty() ? "was already there" : "made");
+        if (!result.created_preset_names.empty())
+            m_added.push_back(result.preset_name);
+        // TRN %1% is the name of a filament preset.
+        say(result.created_preset_names.empty() ? format_wxstr(_L("%1% is already among your filaments for this printer."), from_u8(result.preset_name)) :
+                                                  format_wxstr(_L("%1% was added to your filaments for this printer. Choose it in a filament's list."), from_u8(result.preset_name)));
+    }
+
+    ::TextInput*                       m_query{nullptr};
+    ::Button*                          m_search{nullptr};
+    ::Button*                          m_add{nullptr};
+    ::ComboBox*                        m_results{nullptr};
+    ::Label*                           m_status{nullptr};
+    std::vector<FilamentProfileRecord> m_records;
+    std::vector<std::string>           m_added;
+    std::string                        m_api_key;
+    Http::Ptr                          m_request;
+    unsigned                           m_generation{0};
+    std::shared_ptr<std::atomic<bool>> m_alive;
 };
 
 // The preset a loaded toolhead gets without asking: the highest ranked compatible preset of the
@@ -2298,5 +2485,12 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
 }
 
 } // namespace
+
+bool find_filament_in_catalog(wxWindow* parent)
+{
+    FilamentCatalogSearchDialog dialog(parent);
+    dialog.ShowModal();
+    return !dialog.added().empty();
+}
 
 } // namespace Slic3r::GUI

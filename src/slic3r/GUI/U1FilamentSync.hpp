@@ -116,6 +116,10 @@ bool u1_filament_sync_available();
 /// For a printer with filament lanes (lane_filament_sync_available()) the lanes are read instead and the same
 /// review is shown, worded for slots.
 bool sync_filaments_from_u1(wxWindow* parent);
+/// Opens a search of the 3D Filament Profiles catalogue that no printer is part of. A result the person picks
+/// becomes a user filament preset for the selected printer, made as the filament sync makes one. A request
+/// leaves this computer only when Search is pressed. Returns true when a preset was made.
+bool find_filament_in_catalog(wxWindow* parent);
 
 } // namespace Slic3r::GUI
 

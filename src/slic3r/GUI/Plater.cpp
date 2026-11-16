@@ -3397,6 +3397,19 @@ Sidebar::Sidebar(Plater *parent)
 
     bSizer39->Hide(p->m_bpButton_del_filament); // ORCA Ensure button is hidden on launch while 1 filament exist
 
+    // A search of the filament catalogue (3dfilamentprofiles.com) that needs no printer.
+    auto* find_btn = new ScalableButton(p->m_panel_filament_title, wxID_ANY, "search", wxEmptyString, wxDefaultSize, wxDefaultPosition,
+                                        wxBU_EXACTFIT | wxNO_BORDER, false, 16);
+    find_btn->SetToolTip(_L("Find a filament in the 3D Filament Profiles catalogue"));
+    find_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+        // Not on the stack of the click: the dialog is modal.
+        wxGetApp().CallAfter([this] {
+            if (!wxGetApp().is_closing())
+                find_filament_in_catalog(this);
+        });
+    });
+    bSizer39->Add(find_btn, 0, wxALIGN_CENTER | wxLEFT, FromDIP(SidebarProps::WideSpacing()));
+
     ams_btn = new ScalableButton(p->m_panel_filament_title, wxID_ANY, "ams_fila_sync", wxEmptyString, wxDefaultSize, wxDefaultPosition,
                                                  wxBU_EXACTFIT | wxNO_BORDER, false, 16); // ORCA match icon size with other icons as 16x16
     ams_btn->SetToolTip(_L("Synchronize filament list from AMS"));

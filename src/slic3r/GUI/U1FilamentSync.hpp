@@ -30,6 +30,8 @@ struct U1ReportedFilament
     std::string sub_type;
     std::string color;
     bool color_invalid{false};
+    /// The identity of the tag the printer's own reader read for this slot's spool; empty when it read none.
+    std::string tag_id;
 };
 
 enum class U1ReportSource { None, DirectLan, PrinterAgent, Conflict };

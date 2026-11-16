@@ -1,5 +1,7 @@
 #include "U1PrintTask.hpp"
 
+#include "SpoolTags.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -186,6 +188,17 @@ nlohmann::json build_filament_report(const nlohmann::json &status)
     }
     report["nozzle_diameters"]    = diameters;
     report["nozzle_volume_types"] = flows;
+    // The identity of the tag each toolhead read, where the status carries filament_detect; "" for none.
+    nlohmann::json tag_ids = nlohmann::json::array();
+    const auto     detect  = status.find("filament_detect");
+    for (int i = 0; i < PHYSICAL_EXTRUDER_COUNT; ++i) {
+        std::string id;
+        if (detect != status.end() && detect->is_object() && detect->contains("info") && (*detect)["info"].is_array() &&
+            size_t(i) < (*detect)["info"].size())
+            id = SpoolTags::u1_card_uid((*detect)["info"][size_t(i)]);
+        tag_ids.push_back(id);
+    }
+    report["tag_ids"] = tag_ids;
     return report;
 }
 

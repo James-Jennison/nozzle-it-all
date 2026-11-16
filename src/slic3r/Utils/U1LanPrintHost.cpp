@@ -180,9 +180,12 @@ std::optional<U1PrintTask::PrinterState> U1LanPrintHost::query_afc_printer(const
     return std::nullopt;
 }
 
-std::vector<std::string> U1LanPrintHost::query_afc_brands(const std::string &base_url)
+std::vector<std::string> U1LanPrintHost::query_afc_brands(const std::string &base_url, std::vector<std::string> *tags)
 {
-    return AfcLanes::tool_brands(query_afc_status(base_url, 3));
+    const nlohmann::json status = query_afc_status(base_url, 3);
+    if (tags != nullptr)
+        *tags = AfcLanes::tool_tags(status);
+    return AfcLanes::tool_brands(status);
 }
 
 std::optional<U1PrintTask::PrinterState> U1LanPrintHost::query_printer(const std::string &host, std::string &base_url, wxString &error)
@@ -224,7 +227,8 @@ std::optional<nlohmann::json> U1LanPrintHost::query_filament_report(const std::s
         return std::nullopt;
 
     std::optional<nlohmann::json> report;
-    Http::get(base + "/printer/objects/query?print_task_config&extruder&extruder1&extruder2&extruder3")
+    // filament_detect gives the tag each toolhead read; a printer without it answers the rest all the same.
+    Http::get(base + "/printer/objects/query?print_task_config&extruder&extruder1&extruder2&extruder3&filament_detect")
         .timeout_connect(QUERY_TIMEOUT_S)
         .timeout_max(QUERY_TIMEOUT_S)
         .on_complete([&](std::string body, unsigned) {

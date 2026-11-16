@@ -176,6 +176,20 @@ TEST_CASE("U1 filament report for Sync Filament is built from Moonraker status",
     CHECK(U1PrintTask::build_filament_report(json::object()).is_null());
 }
 
+TEST_CASE("U1 filament report names the tag each toolhead read", "[U1PrintTask]")
+{
+    json status = {{"print_task_config", {{"filament_exist", {true, true, false, true}}, {"filament_type", {"PLA", "PLA", "NONE", "PLA"}}}},
+                   {"filament_detect",
+                    {{"info",
+                      {{{"CARD_UID", 0}, {"CARD_TYPE", ""}}, {{"CARD_UID", {112, 73, 143, 226}}, {"CARD_TYPE", "M1"}}, {{"CARD_UID", 0}}, {{"CARD_UID", 0}}}}}}};
+    const json report = U1PrintTask::build_filament_report(status);
+    REQUIRE(report.is_object());
+    CHECK(report["tag_ids"] == json({"", "70498FE2", "", ""}));
+    // A printer that reports no tag readers gives four empty identities, not an error.
+    status.erase("filament_detect");
+    CHECK(U1PrintTask::build_filament_report(status)["tag_ids"] == json({"", "", "", ""}));
+}
+
 TEST_CASE("U1 manual filament edits use SET_PRINT_FILAMENT_CONFIG", "[U1PrintTask]")
 {
     CHECK(U1PrintTask::set_filament_command(2, "amazon basics", "TPU", "95A", "#dd0000") ==

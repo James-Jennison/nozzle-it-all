@@ -295,3 +295,24 @@ TEST_CASE("A lane's brand is the one the printer keeps for the spool still in it
     // No saved variables at all: no brand, and nothing else changes.
     CHECK(AfcLanes::tool_brands(idle_carbon()) == std::vector<std::string>(size_t(U1PrintTask::PHYSICAL_EXTRUDER_COUNT)));
 }
+
+TEST_CASE("A lane's tag is the one the printer keeps for the spool still in it", "[AfcLanes]")
+{
+    const auto tag = [](const char *type, const char *color, const char *source, const char *id) {
+        return nlohmann::json{{"manufacturer", "Maker"}, {"type", type}, {"color", color}, {"uid", ""}, {"source", source}, {"tag", id}};
+    };
+    auto status = idle_carbon();
+    status["save_variables"] = {{"variables",
+                                 {{"canvas_tag_canvas_1", tag("PLA", "FFCBAC", "told", "046ffea68d2681")},
+                                  {"canvas_tag_canvas_2", tag("PLA", "544144", "elegoo", "0489FEA68D2681")},
+                                  {"canvas_tag_canvas_3", tag("PLA", "FFFFFF", "openspool", "046EFEA68D2681")},
+                                  {"canvas_tag_canvas_4", nlohmann::json::object()}}}};
+    const std::vector<std::string> tags = AfcLanes::tool_tags(status);
+    REQUIRE(tags.size() == size_t(U1PrintTask::PHYSICAL_EXTRUDER_COUNT));
+    // The same lanes as the brand test: where the entry still describes the spool in the lane, its tag is given,
+    // whatever format the tag has (a tag in Elegoo's format names no maker, but it is still that spool's tag).
+    CHECK(tags[0] == "046FFEA68D2681");
+    CHECK(tags[1] == "0489FEA68D2681"); // Elegoo's format: no maker, but the spool's own tag
+    CHECK(tags[2].empty()); // the entry is for PLA; the lane now reports PETG
+    CHECK(tags[3].empty()); // loaded without a scan
+}

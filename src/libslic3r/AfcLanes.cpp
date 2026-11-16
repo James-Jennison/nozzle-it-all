@@ -142,6 +142,34 @@ std::string lane_brand(const nlohmann::json &status, const nlohmann::json &lane)
     return brand;
 }
 
+std::string lane_tag(const nlohmann::json &status, const nlohmann::json &lane)
+{
+    const nlohmann::json *saved     = object(status, "save_variables");
+    const nlohmann::json *variables = saved != nullptr ? object(*saved, "variables") : nullptr;
+    std::string           name      = text(lane, "name");
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (variables == nullptr || name.empty() || !lane_ready(lane))
+        return {};
+    const nlohmann::json *entry = object(*variables, "canvas_tag_" + name);
+    if (entry == nullptr)
+        return {};
+    // As for the brand: the entry is about this spool only while the lane reports what it was written with.
+    const std::string material = upper(trimmed(text(lane, "material")));
+    const std::string shade    = color(trimmed(text(lane, "color")));
+    if (material.empty() || shade.empty() || upper(trimmed(text(*entry, "type"))) != material || color(trimmed(text(*entry, "color"))) != shade)
+        return {};
+    return upper(trimmed(text(*entry, "tag")));
+}
+
+std::vector<std::string> tool_tags(const nlohmann::json &status)
+{
+    std::vector<std::string> tags(U1PrintTask::PHYSICAL_EXTRUDER_COUNT);
+    for (int tool = 0; tool < U1PrintTask::PHYSICAL_EXTRUDER_COUNT; ++tool)
+        if (const nlohmann::json *lane = lane_for_tool(status, tool); lane != nullptr)
+            tags[tool] = lane_tag(status, *lane);
+    return tags;
+}
+
 std::vector<std::string> tool_brands(const nlohmann::json &status)
 {
     std::vector<std::string> brands(U1PrintTask::PHYSICAL_EXTRUDER_COUNT);

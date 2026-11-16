@@ -59,6 +59,7 @@
 #include "libslic3r/GCode/ThumbnailData.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/PrintConfig.hpp"
+#include "libslic3r/SpoolTags.hpp"
 #include "slic3r/Utils/FilamentProfilesClient.hpp"
 #include "slic3r/Utils/Http.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
@@ -274,6 +275,7 @@ std::vector<Slot> parse_report_impl(const nlohmann::json& report)
         s.color            = normalize_u1_filament_color(raw_color);
         s.color_invalid    = !raw_color.empty() && s.color.empty();
         s.from_tag         = json_flag(official, i, false);
+        s.tag_id           = SpoolTags::normalized(json_string(report.value("tag_ids", nlohmann::json::array()), i));
         // A missing or malformed presence flag is not evidence that a physical
         // toolhead is loaded.  Treat it as unresolved instead of allowing an
         // incomplete report to mutate the project.
@@ -1938,6 +1940,7 @@ bool sync_filaments_from_lanes(wxWindow* parent)
         bool        answered = false;
         std::string error;
         std::vector<std::string> brands; ///< per tool number, where the printer knows the spool's brand
+        std::vector<std::string> tags;   ///< per tool number, the tag last read for the spool, where the printer keeps it
     };
     const auto stop    = std::make_shared<std::atomic<bool>>(false);
     auto       pending = std::async(std::launch::async, [host, stop] {
@@ -1966,7 +1969,7 @@ bool sync_filaments_from_lanes(wxWindow* parent)
                 })
                 .perform_sync();
             if (read.value && !stop->load())
-                read.brands = U1LanPrintHost::query_afc_brands(base);
+                read.brands = U1LanPrintHost::query_afc_brands(base, &read.tags);
             if (read.answered || stop->load())
                 break;
         }
@@ -1990,6 +1993,9 @@ bool sync_filaments_from_lanes(wxWindow* parent)
     for (size_t i = 0; i < slots.size() && i < read.brands.size(); ++i)
         if (slots[i].present && slots[i].vendor.empty())
             slots[i].vendor = read.brands[i];
+    for (size_t i = 0; i < slots.size() && i < read.tags.size(); ++i)
+        if (slots[i].present)
+            slots[i].tag_id = SpoolTags::normalized(read.tags[i]);
     if (!std::any_of(slots.begin(), slots.end(), [](const Slot& slot) { return slot.present; })) {
         // No lane data, but a printer agent that syncs filaments its own way (Happy Hare, a Creality CFS): its sync runs.
         // Not for a printer that did not answer at all: its sync would only wait for the same printer again.
@@ -2323,11 +2329,25 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
     return true;
     };
 
-    // The preset each loaded toolhead gets without asking; empty where none could be picked.
+    // The preset each loaded toolhead gets without asking; empty where none could be picked. A spool whose tag
+    // the person chose a preset for before, on this printer model, gets that preset again, as long as it is
+    // still there, still fits this printer and is still of the material the printer reports.
+    const std::string        printer_model = bundle.printers.get_edited_preset().config.opt_string("printer_model");
+    SpoolTags::Memory        tag_memory    = SpoolTags::Memory::load(SpoolTags::memory_path());
+    std::vector<bool>        from_memory(slots.size(), false);
     std::vector<std::string> automatic(slots.size());
     for (size_t i = 0; i < slots.size(); ++i)
-        if (slots[i].present)
+        if (slots[i].present) {
             automatic[i] = automatic_preset(bundle, slots[i]);
+            const std::string remembered = slots[i].tag_id.empty() ? std::string() : tag_memory.preset_for(slots[i].tag_id, printer_model);
+            if (const Preset* preset = remembered.empty() ? nullptr : preset_named(bundle, remembered);
+                preset != nullptr && preset->is_compatible &&
+                boost::iequals(canonical_material(preset->config.opt_string("filament_type", 0u)), canonical_material(slots[i].type, slots[i].sub_type))) {
+                automatic[i]   = preset->name;
+                from_memory[i] = true;
+                BOOST_LOG_TRIVIAL(warning) << "Sync filaments: slot " << i + 1 << " has a tag chosen for before; its preset is offered again: " << preset->name;
+            }
+        }
 
     // Nothing changes before the user has seen what would change and said so.
     if (Plater* plater = wxGetApp().plater())
@@ -2339,8 +2359,8 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
     std::vector<std::string>                          to_make(slots.size());
     for (size_t i = 0; s_lane_sync && i < slots.size(); ++i) {
         const std::string material = canonical_material(slots[i].type, slots[i].sub_type);
-        if (!slots[i].present || slots[i].vendor.empty() || boost::iequals(slots[i].vendor, "Generic") || material.empty() || automatic[i].empty())
-            continue;
+        if (!slots[i].present || slots[i].vendor.empty() || boost::iequals(slots[i].vendor, "Generic") || material.empty() || automatic[i].empty() || from_memory[i])
+            continue; // nothing to make a brand preset from, or the person already chose a preset for this spool's tag
         const Preset* chosen = preset_named(bundle, automatic[i]);
         if (chosen != nullptr && boost::iequals(chosen->config.opt_string("filament_vendor", 0u), slots[i].vendor))
             continue;
@@ -2409,6 +2429,14 @@ bool sync_from_slots(wxWindow* parent, std::vector<Slot> slots, const wxString& 
         for (size_t i = 0; i < slots.size(); ++i)
             if (const std::optional<MappingChoice> chosen = mapping.selection(i); chosen && !chosen->preset_name.empty())
                 applied[i] = chosen->preset_name;
+        // What the person chose by hand for a spool with a tag is remembered for that tag on this printer model.
+        bool remembered_any = false;
+        for (size_t i = 0; i < slots.size(); ++i)
+            if (const std::optional<MappingChoice> chosen = mapping.selection(i);
+                chosen && !chosen->keep_current && !chosen->preset_name.empty() && slots[i].present && !slots[i].tag_id.empty())
+                remembered_any = tag_memory.remember(slots[i].tag_id, printer_model, chosen->preset_name, U1Jobs::now_ms()) || remembered_any;
+        if (remembered_any && !tag_memory.save(SpoolTags::memory_path()))
+            BOOST_LOG_TRIVIAL(warning) << "Sync filaments: the choice for a spool's tag could not be kept";
     } else {
         if (!apply([&](size_t i) { return std::optional<MappingChoice>(MappingChoice{brand_preset[i] ? std::string() : automatic[i], brand_preset[i], false}); },
                    target, count))

@@ -38,6 +38,14 @@ std::string lane_brand(const nlohmann::json &status, const nlohmann::json &lane)
 /// lane_brand() by tool number: always U1PrintTask::PHYSICAL_EXTRUDER_COUNT entries.
 std::vector<std::string> tool_brands(const nlohmann::json &status);
 
+/// The identity of the tag last read for the spool in *lane*, where the printer keeps one in its saved variables
+/// (canvas_tag_<lane>.tag, as the Owner's CANVAS configuration writes it). Empty unless the lane has filament
+/// ready and still reports the material and colour that entry was written with: the entry is then about the
+/// spool that is in the lane now.
+std::string lane_tag(const nlohmann::json &status, const nlohmann::json &lane);
+/// lane_tag() by tool number: always U1PrintTask::PHYSICAL_EXTRUDER_COUNT entries.
+std::vector<std::string> tool_tags(const nlohmann::json &status);
+
 /// The lanes as the send dialog's sources, indexed by tool number, always
 /// U1PrintTask::PHYSICAL_EXTRUDER_COUNT entries; a tool no lane is mapped to, or whose lane is not ready,
 /// is not present. Null when *status* holds no AFC object.

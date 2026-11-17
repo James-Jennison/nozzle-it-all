@@ -266,7 +266,7 @@ private:
     {
         const wxSize content = m_body->GetSizer()->GetMinSize();
         const int    room    = wxDisplay(wxGetApp().mainframe ? static_cast<wxWindow *>(wxGetApp().mainframe) : this).GetClientArea().GetHeight() -
-                               FromDIP(130);
+                               FromDIP(190);
         m_body->SetMinSize(wxSize(content.GetWidth() + wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_body),
                                   std::max(FromDIP(200), std::min(content.GetHeight(), room))));
         m_body->FitInside();

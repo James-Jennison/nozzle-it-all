@@ -286,7 +286,7 @@ private:
         const int    room    = wxDisplay(wxGetApp().mainframe ? static_cast<wxWindow *>(wxGetApp().mainframe) : this).GetClientArea().GetHeight() -
                                FromDIP(230);
         m_body->SetMinSize(wxSize(content.GetWidth() + wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_body),
-                                  std::max(FromDIP(200), std::min(content.GetHeight(), room))));
+                                  std::min(content.GetHeight(), std::max(FromDIP(200), room))));
         m_body->Layout();
         m_body->FitInside();
     }
@@ -417,13 +417,16 @@ private:
 
     void set_status(const wxString &text)
     {
+        const bool changed = m_status_text != text;
+        m_status_text      = text;
         m_status->SetLabel(text);
         m_status->Wrap(-1);
         m_status->Wrap(m_status->GetSize().GetWidth() > 0 ? m_status->GetSize().GetWidth() : FromDIP(430));
+        // A status of another length needs another height: the window follows, so the text is never cut off.
+        if (changed)
+            refit();
         if (GetSizer() != nullptr)
             Layout();
-        m_body->Layout();
-        m_body->FitInside();
     }
 
     void on_send()
@@ -480,6 +483,7 @@ private:
     std::atomic<bool>                  m_cancel{false};
     bool                               m_busy{false};
     bool                               m_can_send{false};
+    wxString                           m_status_text;
     std::thread                        m_worker;
 
     struct Row

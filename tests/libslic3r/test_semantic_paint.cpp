@@ -285,7 +285,7 @@ TEST_CASE("SemanticPaint: a view says which numbers it carries, and each is a bl
 
 TEST_CASE("SemanticPaint: a crowded view drops badges before it lets them cover each other", "[SemanticPaint]")
 {
-    // Thirty thin strips side by side: at this size only some of their numbers fit.
+    // Thirty small squares in a row: at this size only some of their numbers fit beside each other.
     indexed_triangle_set its;
     SP::Segmentation     seg;
     seg.segments.resize(30);
@@ -294,8 +294,8 @@ TEST_CASE("SemanticPaint: a crowded view drops badges before it lets them cover 
         const int   v  = int(its.vertices.size());
         its.vertices.emplace_back(x0, 0.f, 0.f);
         its.vertices.emplace_back(x1, 0.f, 0.f);
-        its.vertices.emplace_back(x1, 0.f, 30.f);
-        its.vertices.emplace_back(x0, 0.f, 30.f);
+        its.vertices.emplace_back(x1, 0.f, 1.f);
+        its.vertices.emplace_back(x0, 0.f, 1.f);
         its.indices.emplace_back(v, v + 1, v + 2);
         its.indices.emplace_back(v, v + 2, v + 3);
         seg.face_segment.push_back(i);
@@ -378,9 +378,11 @@ TEST_CASE("SemanticPaint: a part no view numbers is not asked about and follows 
     for (size_t i = 0; i < seg.segments.size(); ++i)
         seg.segments[i].id = int(i);
     const std::string prompt = SP::build_prompt(seg, fil, "Capybara_Black", {"front", "back", "top"}, {}, {{0, 2}, {2}, {}});
-    CHECK(prompt.find("\n  0: ") != std::string::npos);
-    CHECK(prompt.find("\n  1: ") == std::string::npos);
-    CHECK(prompt.find("\n  3: ") == std::string::npos);
+    // Two of the four segments are described: the seen ones.
+    size_t described = 0;
+    for (size_t at = prompt.find("% of the surface"); at != std::string::npos; at = prompt.find("% of the surface", at + 1))
+        ++described;
+    CHECK(described == 2);
     CHECK(prompt.find("do not answer for them") != std::string::npos);
     CHECK(prompt.find("a colour word in it is not an instruction") != std::string::npos);
 }

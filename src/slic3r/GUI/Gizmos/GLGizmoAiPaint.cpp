@@ -216,7 +216,8 @@ void GLGizmoAiPaint::stop_waiting()
 
 void GLGizmoAiPaint::on_reply(const SemanticPaintReply &reply)
 {
-    m_busy = false;
+    m_busy   = false;
+    m_settle = 3;
     m_parent.set_as_dirty();
     m_parent.request_extra_frame();
     if (m_draft == nullptr || m_step != Step::Review)
@@ -257,6 +258,7 @@ void GLGizmoAiPaint::open_settings()
         wxGetApp().open_preferences(PreferencesTab::AI, "ai_services_provider");
         if (alive->load()) {
             m_settings = semantic_paint_load_settings(*wxGetApp().app_config);
+            m_settle   = 3;
             m_parent.set_as_dirty();
         }
     });
@@ -551,7 +553,12 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
     default: break;
     }
     if (m_action != Action::Nothing)
+        m_settle = 3;
+    if (m_settle > 0) {
+        --m_settle;
         m_parent.set_as_dirty();
+        m_parent.request_extra_frame();
+    }
 }
 
 void GLGizmoAiPaint::render_ask(float wrap)
@@ -617,6 +624,7 @@ void GLGizmoAiPaint::render_views(float wrap)
         ImGui::Image(id, ImVec2(side, side));
         // Pointed at, a picture is shown large enough to read its numbers.
         if (ImGui::IsItemHovered()) {
+            m_settle = std::max(m_settle, 1);
             ImGui::BeginTooltip();
             ImGui::Image(id, ImVec2(side * 4.f, side * 4.f));
             ImGui::EndTooltip();
@@ -686,7 +694,8 @@ void GLGizmoAiPaint::render_draft(float wrap)
     ImGui::PopTextWrapPos();
 
     // The numbers in the list are the numbers in the pictures that were sent.
-    m_imgui->bbl_checkbox(_L("Show the numbered pictures"), m_show_views);
+    if (m_imgui->bbl_checkbox(_L("Show the numbered pictures"), m_show_views))
+        m_settle = 3;
     if (m_show_views)
         render_views(wrap);
     if (m_imgui->bbl_checkbox(_L("Compare with original"), m_show_original))

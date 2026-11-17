@@ -107,6 +107,7 @@ private:
     bool                                                m_busy{false};     // an answer is being waited for
     Action                                              m_action{Action::Nothing}; // what a button asked for, acted on once the panel is drawn
     bool                                                m_show_views{false};
+    int                                                 m_settle{0};       // frames still to draw: a panel that changed takes its new size a frame later
     unsigned                                            m_asked{0};        // counts questions, so a late answer to an abandoned one is dropped
     std::shared_ptr<std::atomic<bool>>                  m_alive;
     std::shared_ptr<std::atomic<bool>>                  m_cancel;

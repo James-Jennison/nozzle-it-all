@@ -1257,17 +1257,13 @@ int CLI::run(int argc, char **argv)
         if (::access("/proc/driver/nvidia/version", F_OK) == 0 && WebView::SupportsForceSharedMemory()) {
             std::ifstream  version_file("/proc/driver/nvidia/version");
             const std::string version_text((std::istreambuf_iterator<char>(version_file)), std::istreambuf_iterator<char>());
-            const int branch = Slic3r::nvidia_driver_branch(version_text);
-            if (branch >= 610) {
+            // What was read and set is logged by GUI_App once its log exists.
+            if (Slic3r::nvidia_driver_branch(version_text) >= 610) {
                 ::setenv("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1", /* replace */ false);
                 ::setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", /* replace */ false);
             } else {
                 ::setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", /* replace */ false);
             }
-            BOOST_LOG_TRIVIAL(info) << "NVIDIA driver branch " << branch << " (0: not read): web views "
-                                    << (branch >= 610 ? "composited over shared memory" : "without accelerated compositing")
-                                    << "; WEBKIT_DISABLE_COMPOSITING_MODE=" << (::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") ? ::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") : "(unset)")
-                                    << " WEBKIT_FORCE_DMABUF_RENDERER=" << (::getenv("WEBKIT_FORCE_DMABUF_RENDERER") ? ::getenv("WEBKIT_FORCE_DMABUF_RENDERER") : "(unset)");
         }
 
         if (is_hypervisor_guest() && WebView::SupportsForceSharedMemory())

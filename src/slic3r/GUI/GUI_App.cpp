@@ -2841,6 +2841,17 @@ void GUI_App::init_app_config()
     BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, Current OrcaSlicer Version %1% build %2%") % SoftFever_VERSION % build_commit_label;
 #endif
 
+#ifdef __linux__
+    // How web views are drawn on NVIDIA was decided before GTK and this log existed (CLI::run); it is said here.
+    if (std::ifstream nvidia_version("/proc/driver/nvidia/version"); nvidia_version) {
+        const std::string version_text((std::istreambuf_iterator<char>(nvidia_version)), std::istreambuf_iterator<char>());
+        const auto value = [](const char *name) { const char *v = std::getenv(name); return std::string(v != nullptr ? v : "(unset)"); };
+        BOOST_LOG_TRIVIAL(info) << "NVIDIA driver branch " << nvidia_driver_branch(version_text) << " (0: not read); web views: WEBKIT_DISABLE_COMPOSITING_MODE="
+                                << value("WEBKIT_DISABLE_COMPOSITING_MODE") << " WEBKIT_FORCE_DMABUF_RENDERER=" << value("WEBKIT_FORCE_DMABUF_RENDERER")
+                                << " WEBKIT_DMABUF_RENDERER_FORCE_SHM=" << value("WEBKIT_DMABUF_RENDERER_FORCE_SHM");
+    }
+#endif
+
     //BBS: remove GCodeViewer as seperate APP logic
 	if (!app_config)
         app_config = new AppConfig();

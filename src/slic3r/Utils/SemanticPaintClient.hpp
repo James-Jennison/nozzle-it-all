@@ -65,6 +65,9 @@ SemanticPaintCheck semantic_paint_check(const SemanticPaintSettings &settings);
 class AppConfig;
 // The AI service settings as kept in the app's configuration, with the API key from the system keychain.
 SemanticPaintSettings semantic_paint_load_settings(const AppConfig &config);
+// The model name kept for one way of sending ("command" or "openai"): each has its own, so a server's model name is
+// never handed to a command or the other way round.
+std::string semantic_paint_stored_model(const AppConfig &config, const std::string &provider);
 // Keeps everything but the API key, which only semantic_paint_save_api_key() stores.
 void semantic_paint_save_settings(AppConfig &config, const SemanticPaintSettings &settings);
 

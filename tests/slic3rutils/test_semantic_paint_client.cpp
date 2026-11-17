@@ -2,6 +2,8 @@
 
 #include "slic3r/Utils/SemanticPaintClient.hpp"
 
+#include "libslic3r/AppConfig.hpp"
+
 #include <string>
 #include <vector>
 
@@ -116,4 +118,31 @@ TEST_CASE("Testing a connection sends nothing when there is nowhere to send", "[
     s.endpoint = "http://127.0.0.1:9/v1";
     s.api_key  = "secret";
     CHECK(semantic_paint_check(s).error == "A server that takes an API key must use HTTPS.");
+}
+
+TEST_CASE("A command and a server each keep their own model name", "[SemanticPaintClient]")
+{
+    AppConfig config;
+    SemanticPaintSettings s;
+    s.provider = "openai";
+    s.endpoint = "http://localhost:11434/v1";
+    s.model    = "llava";
+    semantic_paint_save_settings(config, s);
+    s.provider = "command";
+    s.command  = "runner {model}";
+    s.model    = "";
+    semantic_paint_save_settings(config, s);
+
+    // The command is chosen: it has no model of its own, and the server's is not handed to it.
+    SemanticPaintSettings loaded = semantic_paint_load_settings(config);
+    CHECK(loaded.provider == "command");
+    CHECK(loaded.command == "runner {model}");
+    CHECK(loaded.model.empty());
+    CHECK(loaded.api_key.empty()); // a command never gets the server's key
+    CHECK(semantic_paint_stored_model(config, "openai") == "llava");
+
+    // An unknown provider in the file counts as nothing chosen.
+    config.set("semantic_paint", "provider", "something-else");
+    CHECK(semantic_paint_load_settings(config).provider.empty());
+    CHECK(semantic_paint_not_ready(semantic_paint_load_settings(config)) == "No provider chosen.");
 }

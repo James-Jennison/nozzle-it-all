@@ -1351,8 +1351,10 @@ wxBoxSizer *PreferencesDialog::create_item_ai_services()
 
     auto *key        = input(wxTE_PASSWORD);
     auto *remove_key = button(_L("Remove key"));
-    wxBoxSizer *row_key = row(_L("API key"), _L("Kept in the system keychain, never in a settings file. Leave empty for a server on this computer. "
-                                                "A server that takes a key must be reached over HTTPS."), {key, remove_key});
+    const wxString key_tip = _L("Kept in the system keychain, never in a settings file. Leave empty for a server on this computer. "
+                                "A server that takes a key must be reached over HTTPS.");
+    wxBoxSizer    *row_key        = row(_L("API key"), key_tip, {key});
+    wxBoxSizer    *row_remove_key = row(wxEmptyString, key_tip, {remove_key});
     const auto  key_note      = note(wxEmptyString);
     wxBoxSizer *row_key_state = key_note.first;
     ::Label    *key_state     = key_note.second;
@@ -1388,7 +1390,7 @@ wxBoxSizer *PreferencesDialog::create_item_ai_services()
                                                               _L("An API key is saved in the system keychain. Type a new one to replace it."));
     };
     // Only the rows of the chosen way of sending are shown. A tab change shows every row again, so this is also run after one.
-    const auto show_rows = [this, box, provider, row_command, row_fill, row_endpoint, row_presets, row_model, row_key, row_key_state, row_test, row_result] {
+    const auto show_rows = [this, box, provider, row_command, row_fill, row_endpoint, row_presets, row_model, row_key, row_remove_key, row_key_state, row_test, row_result] {
         const int at = provider->GetSelection();
         box->Show(row_command, at == 1);
         box->Show(row_fill, at == 1);
@@ -1396,6 +1398,7 @@ wxBoxSizer *PreferencesDialog::create_item_ai_services()
         box->Show(row_presets, at == 2);
         box->Show(row_model, at != 0);
         box->Show(row_key, at == 2);
+        box->Show(row_remove_key, at == 2);
         box->Show(row_key_state, at == 2);
         box->Show(row_test, at != 0);
         box->Show(row_result, at != 0);
@@ -1404,7 +1407,12 @@ wxBoxSizer *PreferencesDialog::create_item_ai_services()
     };
     m_ai_show_rows = show_rows;
 
-    provider->Bind(wxEVT_COMBOBOX, [save, show_rows, say, result](wxCommandEvent &event) {
+    provider->Bind(wxEVT_COMBOBOX, [this, provider, model, save, show_rows, say, result](wxCommandEvent &event) {
+        // A command and a server each keep their own model name: the field shows the one of what is now chosen.
+        SemanticPaintSettings chosen;
+        chosen.provider = provider->GetSelection() == 2 ? "openai" : provider->GetSelection() == 1 ? "command" : "";
+        model->Clear();
+        model->SetValue(from_u8(semantic_paint_stored_model(*app_config, chosen.provider)));
         save();
         say(result, wxEmptyString);
         show_rows();

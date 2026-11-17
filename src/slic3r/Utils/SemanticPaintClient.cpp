@@ -326,15 +326,20 @@ SemanticPaintCheck semantic_paint_check(const SemanticPaintSettings &s)
     return out;
 }
 
+std::string semantic_paint_stored_model(const AppConfig &config, const std::string &provider)
+{
+    return provider == "command" ? config.get("semantic_paint", "command_model") : provider == "openai" ? config.get("semantic_paint", "model") : std::string();
+}
+
 SemanticPaintSettings semantic_paint_load_settings(const AppConfig &config)
 {
     SemanticPaintSettings s;
     s.provider = config.get("semantic_paint", "provider");
     s.command  = config.get("semantic_paint", "command");
     s.endpoint = config.get("semantic_paint", "endpoint");
-    s.model    = config.get("semantic_paint", "model");
     if (s.provider != "command" && s.provider != "openai")
         s.provider.clear();
+    s.model = semantic_paint_stored_model(config, s.provider);
     if (s.provider == "openai")
         s.api_key = semantic_paint_load_api_key();
     return s;
@@ -345,7 +350,10 @@ void semantic_paint_save_settings(AppConfig &config, const SemanticPaintSettings
     config.set("semantic_paint", "provider", s.provider);
     config.set("semantic_paint", "command", s.command);
     config.set("semantic_paint", "endpoint", s.endpoint);
-    config.set("semantic_paint", "model", s.model);
+    if (s.provider == "command")
+        config.set("semantic_paint", "command_model", s.model);
+    else if (s.provider == "openai")
+        config.set("semantic_paint", "model", s.model);
 }
 
 std::string semantic_paint_load_api_key()

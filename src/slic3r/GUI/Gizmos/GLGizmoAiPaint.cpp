@@ -320,8 +320,9 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
     ImGui::PushTextWrapPos(wrap);
     if (!m_draft->subject.empty())
         m_imgui->text(format_wxstr(_L("The service took the object to be: %1%"), from_u8(m_draft->subject)));
-    m_imgui->text(format_wxstr(_L("%1% of %2% faces get a filament. This is a draft: the model is unchanged until you apply. Turn the view to "
-                                  "look at every side, underneath too."), m_assigned, m_draft->seg.face_segment.size()));
+    // The count has a line of its own: it changes with every choice, and nothing below it may move when it does.
+    m_imgui->text(format_wxstr(_L("%1% of %2% faces get a filament."), m_assigned, m_draft->seg.face_segment.size()));
+    m_imgui->text(_L("This is a draft: the model is unchanged until you apply. Turn the view to look at every side, underneath too."));
     m_imgui->text(_L("Click a part on the model to find it in the list."));
     if (const size_t unsure = size_t(std::count(m_draft->unsure.begin(), m_draft->unsure.end(), 1)); unsure > 0)
         m_imgui->text(format_wxstr(_L_PLURAL("The service was unsure about %1% part. It is marked with a question mark: look at it first.",

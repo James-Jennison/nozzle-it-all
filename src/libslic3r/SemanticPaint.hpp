@@ -138,6 +138,16 @@ struct Suggestion
 // to a short length and stripped of control characters: they are shown to the user. std::nullopt when neither is found.
 std::optional<Suggestion> parse_suggestion(const std::string &reply_text, size_t segment_count, size_t filament_count);
 
+// Which segments carry a number in no view at all (1) and which in at least one (0): the first cannot be seen by
+// the model, so they are not asked about.
+std::vector<char> unseen_segments(size_t segment_count, const std::vector<std::vector<int>> &labelled_per_view);
+
+// Gives every segment marked in `follows` the filament of the neighbouring segment it shares the longest border
+// with, among those that are not followers themselves or were settled before it; a follower with no such neighbour
+// keeps what it had. The other segments are returned unchanged.
+std::vector<int> follow_neighbours(const indexed_triangle_set &its, const Segmentation &seg, std::vector<int> seg_to_filament,
+                                   const std::vector<char> &follows);
+
 // Per-face painted filament (0 = unpainted) for a segment -> filament map.
 std::vector<int> face_filaments(const Segmentation &seg, const std::vector<int> &seg_to_filament);
 

@@ -84,12 +84,13 @@ std::string s_kept_hint;
 class SemanticPaintDialog : public DPIDialog
 {
 public:
-    SemanticPaintDialog(wxWindow *parent, const std::string &object_name, SP::Segmentation seg, std::vector<SP::Image> images,
+    SemanticPaintDialog(wxWindow *parent, const std::string &object_name, const indexed_triangle_set &mesh, SP::Segmentation seg, std::vector<SP::Image> images,
                         std::vector<std::string> view_names, std::vector<std::vector<int>> labelled, std::vector<SP::FilamentInfo> filaments,
                         bool has_paint)
         : DPIDialog(parent ? parent : static_cast<wxWindow *>(wxGetApp().mainframe), wxID_ANY, _L("AI auto-paint"), wxDefaultPosition, wxDefaultSize,
                     wxCAPTION | wxCLOSE_BOX | wxRESIZE_BORDER)
         , m_object_name(object_name)
+        , m_mesh(mesh)
         , m_seg(std::move(seg))
         , m_view_names(std::move(view_names))
         , m_labelled(std::move(labelled))
@@ -323,11 +324,14 @@ private:
             return;
         }
         // The answer goes to the plate: the window closes and the draft is shown on the model itself.
-        m_suggested = std::move(*parsed);
+        // A part that no picture numbers was not asked about: it takes the filament of the part around it.
+        parsed->filament = SP::follow_neighbours(m_mesh, m_seg, std::move(parsed->filament), SP::unseen_segments(m_seg.segments.size(), m_labelled));
+        m_suggested      = std::move(*parsed);
         EndModal(wxID_OK);
     }
 
     std::string                        m_object_name;
+    const indexed_triangle_set        &m_mesh; // the caller's, which outlives the window
     SP::Segmentation                   m_seg;
     SP::Suggestion                     m_suggested;
     std::vector<std::vector<int>>      m_labelled;
@@ -413,7 +417,7 @@ void run_semantic_paint()
     const bool has_paint = std::any_of(parts.begin(), parts.end(), [](const ModelVolume *v) { return !v->mmu_segmentation_facets.empty(); });
     SP::Suggestion suggested;
     {
-        SemanticPaintDialog dlg(plater, object->name, seg, std::move(images), std::move(names), std::move(labelled), filaments, has_paint);
+        SemanticPaintDialog dlg(plater, object->name, combined, seg, std::move(images), std::move(names), std::move(labelled), filaments, has_paint);
         const int           answer = dlg.ShowModal();
         s_kept_hint                = answer == wxID_PREFERENCES ? dlg.hint() : std::string();
         if (answer == wxID_PREFERENCES) {

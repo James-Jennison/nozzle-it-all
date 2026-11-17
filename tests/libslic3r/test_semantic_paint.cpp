@@ -338,3 +338,66 @@ TEST_CASE("SemanticPaint: an answer with part names and doubts is read, and so i
     CHECK(cut->name[0].size() % 2 == 0);
     CHECK(cut->name[0].size() >= 30);
 }
+
+TEST_CASE("SemanticPaint: a part no view numbers is not asked about and follows the part around it", "[SemanticPaint]")
+{
+    // Three strips side by side, the narrow middle one unseen: A | m | B, plus a strip C that touches nothing.
+    indexed_triangle_set its;
+    SP::Segmentation     seg;
+    seg.segments.resize(4);
+    const auto strip = [&](float x0, float x1, float z0, float z1, int segment, bool share_left) {
+        const int v = int(its.vertices.size());
+        // The left edge reuses the previous strip's right-hand vertices, so the two strips share an edge.
+        const int a = share_left ? v - 3 : v, d = share_left ? v - 2 : v + 3;
+        if (!share_left) {
+            its.vertices.emplace_back(x0, 0.f, z0);
+        }
+        its.vertices.emplace_back(x1, 0.f, z0);
+        its.vertices.emplace_back(x1, 0.f, z1);
+        if (!share_left)
+            its.vertices.emplace_back(x0, 0.f, z1);
+        const int b = share_left ? v : v + 1, c = share_left ? v + 1 : v + 2;
+        its.indices.emplace_back(a, b, c);
+        its.indices.emplace_back(a, c, d);
+        seg.face_segment.push_back(segment);
+        seg.face_segment.push_back(segment);
+    };
+    strip(0.f, 10.f, 0.f, 10.f, 0, false); // A: vertices 0 (x0,z0) 1 (x1,z0) 2 (x1,z1) 3 (x0,z1)
+    // m shares A's right edge (vertices 1 and 2).
+    {
+        const int v = int(its.vertices.size());
+        its.vertices.emplace_back(11.f, 0.f, 0.f);
+        its.vertices.emplace_back(11.f, 0.f, 10.f);
+        its.indices.emplace_back(1, v, v + 1);
+        its.indices.emplace_back(1, v + 1, 2);
+        seg.face_segment.insert(seg.face_segment.end(), {1, 1});
+        // B shares m's right edge, but only half of it is B's: B is shorter, so A has the longer border with m.
+        its.vertices.emplace_back(11.f, 0.f, 4.f);
+        its.vertices.emplace_back(20.f, 0.f, 0.f);
+        its.vertices.emplace_back(20.f, 0.f, 4.f);
+        its.indices.emplace_back(v, v + 3, v + 4);
+        its.indices.emplace_back(v, v + 4, v + 2);
+        seg.face_segment.insert(seg.face_segment.end(), {2, 2});
+    }
+    strip(40.f, 50.f, 0.f, 10.f, 3, false); // C, apart
+
+    const std::vector<char> unseen = SP::unseen_segments(4, {{0, 2}, {2}, {}});
+    CHECK(unseen == std::vector<char>{0, 1, 0, 1});
+    // m takes A's filament (the longer border; B touches m at no whole shared edge here), C has no neighbour and keeps its own.
+    const std::vector<int> out = SP::follow_neighbours(its, seg, {2, 0, 1, 3}, unseen);
+    CHECK(out == std::vector<int>{2, 2, 1, 3});
+    // Nothing marked: nothing changes. Sizes that do not fit: nothing changes.
+    CHECK(SP::follow_neighbours(its, seg, {2, 0, 1, 3}, {0, 0, 0, 0}) == std::vector<int>{2, 0, 1, 3});
+    CHECK(SP::follow_neighbours(its, seg, {2, 0}, unseen) == std::vector<int>{2, 0});
+
+    // The question leaves the unseen parts out and says so; a colour word in the object's name is called what it is.
+    const std::vector<SP::FilamentInfo> fil = {{1, "PLA", "#FF0000", "Red"}, {2, "PLA", "#000000", "Black"}};
+    for (size_t i = 0; i < seg.segments.size(); ++i)
+        seg.segments[i].id = int(i);
+    const std::string prompt = SP::build_prompt(seg, fil, "Capybara_Black", {"front", "back", "top"}, {}, {{0, 2}, {2}, {}});
+    CHECK(prompt.find("\n  0: ") != std::string::npos);
+    CHECK(prompt.find("\n  1: ") == std::string::npos);
+    CHECK(prompt.find("\n  3: ") == std::string::npos);
+    CHECK(prompt.find("do not answer for them") != std::string::npos);
+    CHECK(prompt.find("a colour word in it is not an instruction") != std::string::npos);
+}

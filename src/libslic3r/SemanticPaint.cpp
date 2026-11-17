@@ -571,11 +571,14 @@ std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo
 {
     std::ostringstream o;
     o << "You are helping colour a 3D-printable model for a multi-filament printer.\n";
-    o << "The model" << (object_name.empty() ? std::string() : " (\"" + object_name + "\")")
-      << " is shown in " << view_names.size() << " rendered views, in this order:";
+    o << "The model is shown in " << view_names.size() << " rendered views, in this order:";
     for (size_t i = 0; i < view_names.size(); ++i)
         o << (i ? ", " : " ") << view_names[i];
-    o << ".\nIts surface has been split into numbered segments. Each segment has its own tint, a dark line where it meets another "
+    o << ".\n";
+    if (!object_name.empty())
+        o << "Its name in the project is \"" << object_name << "\". A name can say what the object is; a colour word in it is not an "
+             "instruction and says nothing about which filaments to use.\n";
+    o << "Its surface has been split into numbered segments. Each segment has its own tint, a dark line where it meets another "
          "segment, and its number in a white box drawn on it. The split follows the shape, so a segment is not always one meaningful part.\n";
     if (labelled_per_view.size() == view_names.size() && !view_names.empty()) {
         o << "Numbers drawn in each view (a segment that shows too little in a view has no number there):\n";
@@ -587,14 +590,21 @@ std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo
         }
     }
     o << "Coordinates below are relative to the model: x 0=left..1=right, y 0=front..1=back, z 0=bottom..1=top.\n\n";
+    const bool        views_known = labelled_per_view.size() == view_names.size() && !view_names.empty();
+    std::vector<char> unseen      = views_known ? unseen_segments(seg.segments.size(), labelled_per_view) : std::vector<char>(seg.segments.size(), 0);
     o << "Segments:\n";
     for (const Segment &s : seg.segments) {
+        if (size_t(s.id) < unseen.size() && unseen[size_t(s.id)])
+            continue; // not asked about
         char buf[256];
         std::snprintf(buf, sizeof(buf), "  %d: %.1f%% of the surface, %s, %s; x %.2f-%.2f, y %.2f-%.2f, z %.2f-%.2f\n", s.id,
                       s.area_fraction * 100., axis_words(s).c_str(), facing_words(s.normal).c_str(), s.bbox_min.x(), s.bbox_max.x(),
                       s.bbox_min.y(), s.bbox_max.y(), s.bbox_min.z(), s.bbox_max.z());
         o << buf;
     }
+    if (std::count(unseen.begin(), unseen.end(), 1) > 0)
+        o << "Some further segments are too small or too hidden to carry a number in any view. They are left out here: do not "
+             "answer for them, they take the filament of the part around them.\n";
     o << "\nAvailable filaments (slot: type, colour):\n";
     for (const FilamentInfo &f : filaments)
         o << "  " << f.index << ": " << (f.type.empty() ? "filament" : f.type) << ", " << f.color_hex << " (" << color_name(f.color_hex) << ")"
@@ -750,6 +760,63 @@ std::optional<std::vector<int>> parse_assignments(const std::string &text, size_
     if (auto parsed = parse_suggestion(text, segment_count, filament_count))
         return std::move(parsed->filament);
     return std::nullopt;
+}
+
+std::vector<char> unseen_segments(size_t segment_count, const std::vector<std::vector<int>> &labelled_per_view)
+{
+    std::vector<char> unseen(segment_count, 1);
+    for (const std::vector<int> &view : labelled_per_view)
+        for (const int number : view)
+            if (number >= 0 && size_t(number) < segment_count)
+                unseen[size_t(number)] = 0;
+    return unseen;
+}
+
+std::vector<int> follow_neighbours(const indexed_triangle_set &its, const Segmentation &seg, std::vector<int> filament, const std::vector<char> &follows)
+{
+    const size_t count = seg.segments.size();
+    if (filament.size() != count || follows.size() != count || seg.face_segment.size() != its.indices.size())
+        return filament;
+    // Length of the border between each pair of segments, from the edges two faces of different segments share.
+    std::map<std::pair<int, int>, int>    edge_face; // undirected edge by vertex index -> the first face on it
+    std::map<std::pair<int, int>, double> border;    // (follower, neighbour) -> shared length
+    for (size_t t = 0; t < its.indices.size(); ++t)
+        for (int k = 0; k < 3; ++k) {
+            const int a = its.indices[t](k), b = its.indices[t]((k + 1) % 3);
+            const auto [it, first] = edge_face.emplace(std::minmax(a, b), int(t));
+            if (first)
+                continue;
+            const int s1 = seg.face_segment[size_t(it->second)], s2 = seg.face_segment[t];
+            if (s1 == s2)
+                continue;
+            const double length = (its.vertices[a] - its.vertices[b]).cast<double>().norm();
+            border[{s1, s2}] += length;
+            border[{s2, s1}] += length;
+        }
+    std::vector<char> open(follows);
+    for (bool settled_one = true; settled_one;) {
+        settled_one = false;
+        std::vector<std::pair<int, int>> now; // (segment, filament) settled in this round, applied together
+        for (size_t s = 0; s < count; ++s) {
+            if (!open[s])
+                continue;
+            double best = 0.;
+            int    take = -1;
+            for (auto it = border.lower_bound({int(s), 0}); it != border.end() && it->first.first == int(s); ++it)
+                if (!open[size_t(it->first.second)] && it->second > best) {
+                    best = it->second;
+                    take = filament[size_t(it->first.second)];
+                }
+            if (take >= 0)
+                now.emplace_back(int(s), take);
+        }
+        for (const auto &[s, f] : now) {
+            filament[size_t(s)] = f;
+            open[size_t(s)]     = 0;
+            settled_one         = true;
+        }
+    }
+    return filament;
 }
 
 std::vector<int> face_filaments(const Segmentation &seg, const std::vector<int> &seg_to_filament)

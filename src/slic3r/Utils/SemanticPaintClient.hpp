@@ -43,6 +43,31 @@ std::string semantic_paint_not_ready(const SemanticPaintSettings &settings);
 // (its first word), or the server address. Empty when no provider is chosen.
 std::string semantic_paint_recipient(const SemanticPaintSettings &settings);
 
+// A server address as it is used: surrounding blanks, trailing slashes and a pasted "/chat/completions" removed.
+// Nothing is added: some servers' addresses do not end in /v1.
+std::string semantic_paint_tidy_endpoint(std::string endpoint);
+
+// The model names in a server's answer to GET <address>/models, sorted; empty when the answer is not such a list.
+std::vector<std::string> semantic_paint_parse_models(const std::string &body);
+
+struct SemanticPaintCheck
+{
+    bool                     ok{false};
+    std::string              found;  // command: the program's full path
+    std::vector<std::string> models; // server: the models it lists
+    std::string              error;  // set when !ok, in English
+};
+
+// Checks that the settings lead somewhere, sending no question, no picture and no model data. A command: its
+// program is looked up. A server: its model list is asked for, with the key when one is set. Blocks until done.
+SemanticPaintCheck semantic_paint_check(const SemanticPaintSettings &settings);
+
+class AppConfig;
+// The AI service settings as kept in the app's configuration, with the API key from the system keychain.
+SemanticPaintSettings semantic_paint_load_settings(const AppConfig &config);
+// Keeps everything but the API key, which only semantic_paint_save_api_key() stores.
+void semantic_paint_save_settings(AppConfig &config, const SemanticPaintSettings &settings);
+
 // Full path of `claude` if it is installed but not on PATH (GUI apps often start without ~/.local/bin), else empty.
 std::string semantic_paint_find_claude();
 

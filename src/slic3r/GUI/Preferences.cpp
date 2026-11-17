@@ -48,6 +48,13 @@
 #include "slic3r/GUI/ReleaseNote.hpp"
 #include <wx/language.h>
 #include "OG_CustomCtrl.hpp"
+#include "format.hpp"
+#include "slic3r/GUI/Widgets/ComboBox.hpp"
+#include "slic3r/Utils/SemanticPaintClient.hpp"
+#include <atomic>
+#include <initializer_list>
+#include <memory>
+#include <thread>
 #include "libslic3r_version.h"
 #include "wx/graphics.h"
 #include <wx/listimpl.cpp>
@@ -1273,6 +1280,203 @@ wxBoxSizer* PreferencesDialog::create_item_button(wxString title, wxString title
     return m_sizer;
 }
 
+// The one place where the AI service is chosen and set up. Features that use it show what they send before sending.
+wxBoxSizer *PreferencesDialog::create_item_ai_services()
+{
+    auto *box  = new wxBoxSizer(wxVERTICAL);
+    m_ai_alive = std::make_shared<std::atomic<bool>>(true);
+    const SemanticPaintSettings at_open = semantic_paint_load_settings(*app_config);
+    const wxSize                wide(FromDIP(290), -1);
+
+    const auto note = [this, box](const wxString &text) {
+        auto *row = new wxBoxSizer(wxHORIZONTAL);
+        row->AddSpacer(FromDIP(DESIGN_LEFT_MARGIN));
+        auto *label = new ::Label(m_parent, text, LB_AUTO_WRAP, wxSize(FromDIP(570), -1));
+        row->Add(label, 0, wxTOP | wxBOTTOM, FromDIP(3));
+        box->Add(row, 0, wxEXPAND);
+        return std::make_pair(row, label);
+    };
+    const auto row = [this, box](const wxString &title, const wxString &tip, std::initializer_list<wxWindow *> controls) {
+        wxBoxSizer *sizer = create_item_label(title, tip);
+        for (wxWindow *control : controls) {
+            control->SetToolTip(tip);
+            sizer->Add(control, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
+        }
+        box->Add(sizer, 0, wxEXPAND);
+        return sizer;
+    };
+    const auto input = [this, wide](long style = 0) {
+        auto *field = new ::TextInput(m_parent, wxEmptyString, wxEmptyString, wxEmptyString, wxDefaultPosition, wide, style | wxTE_PROCESS_ENTER);
+        field->SetBackgroundColor(StateColor(std::pair<wxColour, int>(wxColour("#F0F0F1"), StateColor::Disabled), std::pair<wxColour, int>(*wxWHITE, StateColor::Enabled)));
+        return field;
+    };
+    const auto button = [this](const wxString &text) {
+        auto *b = new Button(m_parent, text);
+        b->SetStyle(ButtonStyle::Regular, ButtonType::Parameter);
+        return b;
+    };
+
+    note(_L("AI features are optional and never start by themselves. No service is set up in advance: nothing can be sent until you choose "
+            "one here, and each feature shows what it will send, and where to, before it sends anything."));
+
+    auto *provider = new ::ComboBox(m_parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wide, 0, nullptr, wxCB_READONLY);
+    provider->Append(_L("Nothing chosen"));
+    provider->Append(_L("A command on this computer"));
+    provider->Append(_L("An OpenAI-compatible server"));
+    provider->SetSelection(at_open.provider == "openai" ? 2 : at_open.provider == "command" ? 1 : 0);
+    provider->SetName("ai_services_provider"); // select_tab() finds the row by this name
+    row(_L("Send to"), _L("A command is any program that reads the question and prints an answer, such as Claude Code or a local model runner. "
+                          "A server is any address that speaks the OpenAI chat protocol, such as a local Ollama or LM Studio."), {provider});
+
+    // A command on this computer.
+    auto *command = input();
+    command->GetTextCtrl()->SetValue(from_u8(at_open.command));
+    wxBoxSizer *row_command = row(_L("Command"), _L("The command line to run. {dir} is replaced by the folder holding the pictures and {model} by the model name."), {command});
+    auto       *fill_claude = button(_L("Fill in the command for Claude Code"));
+    wxBoxSizer *row_fill    = row(wxEmptyString, _L("Writes the command line that runs Claude Code, if you have it installed. It uses your own Claude subscription."), {fill_claude});
+
+    // An OpenAI-compatible server.
+    auto *endpoint = input();
+    endpoint->GetTextCtrl()->SetValue(from_u8(at_open.endpoint));
+    endpoint->GetTextCtrl()->SetHint("http://localhost:11434/v1");
+    wxBoxSizer *row_endpoint = row(_L("Server address"), _L("The server's base address, without /chat/completions."), {endpoint});
+    auto       *ollama       = button("Ollama");
+    auto       *lm_studio    = button("LM Studio");
+    wxBoxSizer *row_presets  = row(wxEmptyString, _L("Fills in the address this program uses when it runs on this computer."), {ollama, lm_studio});
+
+    auto *model = new ::ComboBox(m_parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wide, 0, nullptr, 0);
+    model->SetValue(from_u8(at_open.model));
+    wxBoxSizer *row_model = row(_L("Model"), _L("The model to ask. For auto-paint it must be one that accepts pictures. Test connection fills this list from a server; "
+                                                "a name can also be typed."), {model});
+
+    auto *key        = input(wxTE_PASSWORD);
+    auto *remove_key = button(_L("Remove key"));
+    wxBoxSizer *row_key = row(_L("API key"), _L("Kept in the system keychain, never in a settings file. Leave empty for a server on this computer. "
+                                                "A server that takes a key must be reached over HTTPS."), {key, remove_key});
+    const auto  key_note      = note(wxEmptyString);
+    wxBoxSizer *row_key_state = key_note.first;
+    ::Label    *key_state     = key_note.second;
+
+    auto *test = button(_L("Test connection"));
+    wxBoxSizer *row_test = row(wxEmptyString, _L("Checks that the command's program is found, or asks the server for its model list. No question, picture or model data is sent."), {test});
+    const auto  result_note = note(wxEmptyString);
+    wxBoxSizer *row_result  = result_note.first;
+    ::Label    *result      = result_note.second;
+
+    const auto say = [this](::Label *label, const wxString &text) {
+        label->SetLabel(text);
+        label->Wrap(-1);
+        label->Wrap(FromDIP(570));
+        m_parent->Layout();
+        m_parent->FitInside();
+    };
+    const auto gather = [provider, command, endpoint, model, key] {
+        SemanticPaintSettings s;
+        const int             at = provider->GetSelection();
+        s.provider = at == 2 ? "openai" : at == 1 ? "command" : "";
+        s.command  = into_u8(command->GetTextCtrl()->GetValue());
+        s.endpoint = semantic_paint_tidy_endpoint(into_u8(endpoint->GetTextCtrl()->GetValue()));
+        s.model    = into_u8(model->GetValue().Trim().Trim(false));
+        s.api_key  = into_u8(key->GetTextCtrl()->GetValue());
+        if (s.api_key.empty() && s.provider == "openai")
+            s.api_key = semantic_paint_load_api_key();
+        return s;
+    };
+    const auto save = [this, gather] { semantic_paint_save_settings(*app_config, gather()); };
+    const auto key_words = [say, key_state] {
+        say(key_state, semantic_paint_load_api_key().empty() ? _L("No API key is saved.") :
+                                                              _L("An API key is saved in the system keychain. Type a new one to replace it."));
+    };
+    // Only the rows of the chosen way of sending are shown. A tab change shows every row again, so this is also run after one.
+    const auto show_rows = [this, box, provider, row_command, row_fill, row_endpoint, row_presets, row_model, row_key, row_key_state, row_test, row_result] {
+        const int at = provider->GetSelection();
+        box->Show(row_command, at == 1);
+        box->Show(row_fill, at == 1);
+        box->Show(row_endpoint, at == 2);
+        box->Show(row_presets, at == 2);
+        box->Show(row_model, at != 0);
+        box->Show(row_key, at == 2);
+        box->Show(row_key_state, at == 2);
+        box->Show(row_test, at != 0);
+        box->Show(row_result, at != 0);
+        m_parent->Layout();
+        m_parent->FitInside();
+    };
+    m_ai_show_rows = show_rows;
+
+    provider->Bind(wxEVT_COMBOBOX, [save, show_rows, say, result](wxCommandEvent &event) {
+        save();
+        say(result, wxEmptyString);
+        show_rows();
+        event.Skip();
+    });
+    for (wxTextCtrl *text : {command->GetTextCtrl(), endpoint->GetTextCtrl(), model->GetTextCtrl()})
+        text->Bind(wxEVT_TEXT, [save](wxCommandEvent &event) {
+            save();
+            event.Skip();
+        });
+    model->Bind(wxEVT_COMBOBOX, [save](wxCommandEvent &event) {
+        save();
+        event.Skip();
+    });
+    fill_claude->Bind(wxEVT_BUTTON, [command](wxCommandEvent &) { command->GetTextCtrl()->SetValue(k_semantic_paint_claude_code_command); });
+    ollama->Bind(wxEVT_BUTTON, [endpoint](wxCommandEvent &) { endpoint->GetTextCtrl()->SetValue("http://localhost:11434/v1"); });
+    lm_studio->Bind(wxEVT_BUTTON, [endpoint](wxCommandEvent &) { endpoint->GetTextCtrl()->SetValue("http://localhost:1234/v1"); });
+
+    // A typed key goes to the keychain when the field is left or Enter is pressed, and the field is emptied again.
+    const auto keep_key = [say, key, key_state, key_words] {
+        const std::string typed = into_u8(key->GetTextCtrl()->GetValue());
+        if (typed.empty())
+            return;
+        if (semantic_paint_save_api_key(typed)) {
+            key->GetTextCtrl()->ChangeValue(wxEmptyString);
+            key_words();
+        } else
+            say(key_state, _L("The system keychain is not available, so the key was not saved. It is used until this window closes."));
+    };
+    key->GetTextCtrl()->Bind(wxEVT_KILL_FOCUS, [keep_key](wxFocusEvent &event) {
+        keep_key();
+        event.Skip();
+    });
+    key->GetTextCtrl()->Bind(wxEVT_TEXT_ENTER, [keep_key](wxCommandEvent &) { keep_key(); });
+    remove_key->Bind(wxEVT_BUTTON, [key, key_words](wxCommandEvent &) {
+        key->GetTextCtrl()->ChangeValue(wxEmptyString);
+        semantic_paint_save_api_key(std::string());
+        key_words();
+    });
+
+    test->Bind(wxEVT_BUTTON, [this, gather, say, result, test, model](wxCommandEvent &) {
+        const SemanticPaintSettings s = gather();
+        test->Disable();
+        say(result, _L("Checking..."));
+        std::thread([alive = m_ai_alive, s, say, result, test, model] {
+            const SemanticPaintCheck check = semantic_paint_check(s);
+            wxGetApp().CallAfter([alive, check, say, result, test, model, command = s.provider == "command"] {
+                if (!alive->load())
+                    return;
+                test->Enable();
+                if (!check.ok)
+                    say(result, format_wxstr(_L("Failed: %1%"), from_u8(check.error)));
+                else if (command)
+                    say(result, format_wxstr(_L("Found: %1%. It was not run."), from_u8(check.found)));
+                else {
+                    const wxString typed = model->GetValue();
+                    model->Clear();
+                    for (const std::string &name : check.models)
+                        model->Append(from_u8(name));
+                    model->SetValue(typed);
+                    say(result, format_wxstr(_L_PLURAL("The server answered and lists %1% model. Choose it under Model.",
+                                                       "The server answered and lists %1% models. Choose one under Model.", check.models.size()),
+                                             check.models.size()));
+                }
+            });
+        }).detach();
+    });
+
+    key_words();
+    return box;
+}
+
 wxBoxSizer* PreferencesDialog::create_item_downloads(wxString title, wxString tooltip)
 {
     wxString download_path = wxString::FromUTF8(app_config->get("download_path"));
@@ -1573,6 +1777,9 @@ void PreferencesDialog::create()
             m_pref_tabs->SetItemBold(i, i == selection);
             f_sizers[i]->Show(i == selection);
         }
+        // Showing a page shows all of its rows: the AI page hides again those that do not belong to the chosen way of sending.
+        if (const auto ai = m_tab_index.find(PreferencesTab::AI); ai != m_tab_index.end() && ai->second == selection && m_ai_show_rows)
+            m_ai_show_rows();
         Layout();
         Thaw();
     });
@@ -1598,6 +1805,9 @@ void PreferencesDialog::create()
 
 PreferencesDialog::~PreferencesDialog()
 {
+    // A connection test still running finds this and leaves the closed window alone.
+    if (m_ai_alive)
+        m_ai_alive->store(false);
 }
 
 void PreferencesDialog::select_tab(PreferencesTab tab, const std::string& option)
@@ -2319,6 +2529,18 @@ void PreferencesDialog::create_items()
     auto item_plugin_version = create_item_network_plugin_version(_L("Network plug-in version"), _L("Select the network plug-in version to use"));
     g_sizer->Add(item_plugin_version);
 
+    g_sizer->AddSpacer(FromDIP(10));
+    sizer_page->Add(g_sizer, 0, wxEXPAND);
+
+    //////////////////////////
+    //// AI SERVICES TAB
+    /////////////////////////////////////
+    m_tab_index[PreferencesTab::AI] = m_pref_tabs->AppendItem(_L("AI services"));
+    f_sizers.push_back(new wxFlexGridSizer(1, 1, v_gap, 0));
+    g_sizer = f_sizers.back();
+    g_sizer->AddGrowableCol(0, 1);
+    g_sizer->Add(create_item_title(_L("AI services")), 1, wxEXPAND);
+    g_sizer->Add(create_item_ai_services(), 1, wxEXPAND);
     g_sizer->AddSpacer(FromDIP(10));
     sizer_page->Add(g_sizer, 0, wxEXPAND);
 

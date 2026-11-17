@@ -69,3 +69,50 @@ TEST_CASE("The Claude Code command line is offered, not preset", "[SemanticPaint
     CHECK(std::string(k_semantic_paint_claude_code_command).rfind("claude ", 0) == 0);
     CHECK(SemanticPaintSettings().command != k_semantic_paint_claude_code_command);
 }
+
+TEST_CASE("A server address is tidied without adding anything", "[SemanticPaintClient]")
+{
+    CHECK(semantic_paint_tidy_endpoint("  http://localhost:11434/v1/  ") == "http://localhost:11434/v1");
+    CHECK(semantic_paint_tidy_endpoint("http://localhost:1234/v1/chat/completions") == "http://localhost:1234/v1");
+    CHECK(semantic_paint_tidy_endpoint("https://example.test/v1beta/openai///") == "https://example.test/v1beta/openai");
+    // Nothing is guessed: an address without /v1 stays without it.
+    CHECK(semantic_paint_tidy_endpoint("http://localhost:8080") == "http://localhost:8080");
+    CHECK(semantic_paint_tidy_endpoint("   ").empty());
+}
+
+TEST_CASE("A server's model list is read, and anything else gives none", "[SemanticPaintClient]")
+{
+    const std::vector<std::string> models =
+        semantic_paint_parse_models(R"({"object":"list","data":[{"id":"llava"},{"id":"gemma3"},{"id":"llava"},{"name":"no id"},{"id":7}]})");
+    REQUIRE(models.size() == 2);
+    CHECK(models[0] == "gemma3");
+    CHECK(models[1] == "llava");
+    CHECK(semantic_paint_parse_models("<html>not json</html>").empty());
+    CHECK(semantic_paint_parse_models(R"({"error":"unauthorized"})").empty());
+    CHECK(semantic_paint_parse_models(R"({"data":"x"})").empty());
+}
+
+TEST_CASE("Testing a connection sends nothing when there is nowhere to send", "[SemanticPaintClient]")
+{
+    SemanticPaintSettings s;
+    CHECK_FALSE(semantic_paint_check(s).ok);
+    CHECK(semantic_paint_check(s).error == "No provider chosen.");
+
+    s.provider = "command";
+    CHECK(semantic_paint_check(s).error == "No command set.");
+    s.command = "no-such-program-nia-test --flag";
+    CHECK(semantic_paint_check(s).error == "The program was not found.");
+    // A program that every system has is found, and only looked up, not run.
+    s.command = "sh -c 'exit 9'";
+    const SemanticPaintCheck found = semantic_paint_check(s);
+    CHECK(found.ok);
+    CHECK(found.found.find("sh") != std::string::npos);
+
+    s.provider = "openai";
+    s.endpoint = " ";
+    CHECK(semantic_paint_check(s).error == "No server address set.");
+    // A key is never sent over plain HTTP, not even for a test.
+    s.endpoint = "http://127.0.0.1:9/v1";
+    s.api_key  = "secret";
+    CHECK(semantic_paint_check(s).error == "A server that takes an API key must use HTTPS.");
+}

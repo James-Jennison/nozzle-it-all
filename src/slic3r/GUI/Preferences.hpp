@@ -5,7 +5,9 @@
 #include "GUI_Utils.hpp"
 
 #include <wx/chartype.h>
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <tuple>
 #include <wx/dialog.h>
 #include <wx/string.h>
@@ -37,7 +39,7 @@ namespace Slic3r { namespace GUI {
 #define DESIGN_LEFT_MARGIN 25
 
 // The tabs other dialogs open Preferences on.
-enum class PreferencesTab { General, Control, Graphics, Online };
+enum class PreferencesTab { General, Control, Graphics, Online, AI };
 
 class PreferencesDialog : public DPIDialog
 {
@@ -48,6 +50,8 @@ protected:
     wxBoxSizer *  m_sizer_body;
     wxScrolledWindow* m_parent;
     TabCtrl* m_pref_tabs;
+    std::shared_ptr<std::atomic<bool>> m_ai_alive;     // false once the dialog is gone
+    std::function<void()>              m_ai_show_rows; // hides the AI rows that do not belong to the chosen way of sending
     std::map<PreferencesTab, int> m_tab_index;   // position of each tab in m_pref_tabs
 
     // bool								m_settings_layout_changed {false};
@@ -118,6 +122,7 @@ public:
     wxBoxSizer *create_item_bambu_cloud(wxString title, wxString tooltip);
     wxBoxSizer *create_item_network_plugin_version(wxString title, wxString tooltip);
 #ifdef WIN32
+    wxBoxSizer *create_item_ai_services();
     wxBoxSizer *create_item_link_association(wxString url_prefix, wxString website_name);
 #endif // WIN32
 

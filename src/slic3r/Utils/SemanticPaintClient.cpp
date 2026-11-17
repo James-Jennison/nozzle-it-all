@@ -1,10 +1,12 @@
 #include "SemanticPaintClient.hpp"
 
 #include "Http.hpp"
+#include "libslic3r/AppConfig.hpp"
 #include "libslic3r/SemanticPaint.hpp"
 
 #include <chrono>
 #include <cstdlib>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <thread>
@@ -15,6 +17,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/process.hpp>
+#include <nlohmann/json.hpp>
 #include <wx/secretstore.h>
 #include <wx/string.h>
 
@@ -143,9 +146,7 @@ SemanticPaintReply run_openai(const SemanticPaintSettings &s, const std::string 
     std::vector<std::string> b64;
     for (const std::string &p : png_files)
         b64.push_back(SemanticPaint::base64_encode(p));
-    std::string base = s.endpoint;
-    while (!base.empty() && base.back() == '/')
-        base.pop_back();
+    const std::string base = semantic_paint_tidy_endpoint(s.endpoint);
 
     Http http = Http::post(base + "/chat/completions");
     http.header("Content-Type", "application/json").timeout_connect(15).timeout_max(kTimeoutSeconds);
@@ -235,6 +236,116 @@ SemanticPaintReply semantic_paint_query(const SemanticPaintSettings &settings, c
     SemanticPaintReply r;
     r.error = "Unknown provider: " + settings.provider;
     return r;
+}
+
+std::string semantic_paint_tidy_endpoint(std::string endpoint)
+{
+    boost::trim(endpoint);
+    const auto drop_slashes = [&endpoint] {
+        while (!endpoint.empty() && endpoint.back() == '/')
+            endpoint.pop_back();
+    };
+    drop_slashes();
+    if (boost::iends_with(endpoint, "/chat/completions"))
+        endpoint.erase(endpoint.size() - std::string("/chat/completions").size());
+    drop_slashes();
+    return endpoint;
+}
+
+std::vector<std::string> semantic_paint_parse_models(const std::string &body)
+{
+    std::vector<std::string> out;
+    const nlohmann::json     j = nlohmann::json::parse(body, nullptr, false);
+    if (!j.is_object() || !j.contains("data") || !j["data"].is_array())
+        return out;
+    for (const nlohmann::json &item : j["data"])
+        if (item.is_object() && item.contains("id") && item["id"].is_string())
+            out.push_back(item["id"].get<std::string>());
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+SemanticPaintCheck semantic_paint_check(const SemanticPaintSettings &s)
+{
+    SemanticPaintCheck out;
+    if (s.provider == "command") {
+        const std::string program = semantic_paint_recipient(s);
+        if (program.empty()) {
+            out.error = "No command set.";
+            return out;
+        }
+        boost::system::error_code ec;
+        fs::path                  found = fs::path(program).has_parent_path() && fs::exists(program, ec) ? fs::path(program) :
+                                                                                                           boost::process::search_path(program);
+        if (found.empty() && program == "claude")
+            found = semantic_paint_find_claude();
+        if (found.empty()) {
+            out.error = "The program was not found.";
+            return out;
+        }
+        out.ok    = true;
+        out.found = found.string();
+        return out;
+    }
+    if (s.provider != "openai") {
+        out.error = semantic_paint_not_ready(s);
+        return out;
+    }
+    const std::string base = semantic_paint_tidy_endpoint(s.endpoint);
+    if (base.empty()) {
+        out.error = "No server address set.";
+        return out;
+    }
+    if (!s.api_key.empty() && !boost::istarts_with(base, "https://")) {
+        out.error = "A server that takes an API key must use HTTPS.";
+        return out;
+    }
+    Http http = Http::get(base + "/models");
+    http.timeout_connect(10).timeout_max(20);
+    if (!s.api_key.empty())
+        http.header("Authorization", "Bearer " + s.api_key);
+    std::string body;
+    http.on_complete([&](std::string resp, unsigned) { body = std::move(resp); })
+        .on_error([&](std::string, std::string err, unsigned status) {
+            // The server's own error text is not shown: it can repeat the key.
+            out.error = status == 401 || status == 403 ? "The server refused the API key." :
+                        status == 404                  ? "The server answered, but it has no model list at this address." :
+                        status != 0                    ? "The server answered HTTP " + std::to_string(status) + "." :
+                                                         "The server could not be reached: " + err;
+        })
+        .perform_sync();
+    if (!out.error.empty())
+        return out;
+    out.models = semantic_paint_parse_models(body);
+    if (out.models.empty()) {
+        out.error = "The server answered, but not with a model list.";
+        return out;
+    }
+    out.ok = true;
+    return out;
+}
+
+SemanticPaintSettings semantic_paint_load_settings(const AppConfig &config)
+{
+    SemanticPaintSettings s;
+    s.provider = config.get("semantic_paint", "provider");
+    s.command  = config.get("semantic_paint", "command");
+    s.endpoint = config.get("semantic_paint", "endpoint");
+    s.model    = config.get("semantic_paint", "model");
+    if (s.provider != "command" && s.provider != "openai")
+        s.provider.clear();
+    if (s.provider == "openai")
+        s.api_key = semantic_paint_load_api_key();
+    return s;
+}
+
+void semantic_paint_save_settings(AppConfig &config, const SemanticPaintSettings &s)
+{
+    config.set("semantic_paint", "provider", s.provider);
+    config.set("semantic_paint", "command", s.command);
+    config.set("semantic_paint", "endpoint", s.endpoint);
+    config.set("semantic_paint", "model", s.model);
 }
 
 std::string semantic_paint_load_api_key()

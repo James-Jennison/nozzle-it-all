@@ -272,13 +272,20 @@ void PrinterWebView::create_browser()
     // so the page is loaded again then too, with the relay left as it is. Two cases are left alone: a process
     // that ends while the view is already loading a page (one ends, reported the same way, when the view
     // leaves one printer's page for another's), and a page whose process keeps ending, which is loaded again
-    // at most three times in a minute.
+    // at most three times in a minute; after that the view says so and offers the page by a link. The address
+    // is taken with the signal and compared again on the main thread, so a page the view has since left is
+    // not loaded again.
     g_signal_connect(wv, "web-process-terminated", G_CALLBACK(+[](WebKitWebView *web_view, WebKitWebProcessTerminationReason reason, gpointer self) {
                          auto *view = static_cast<PrinterWebView *>(self);
                          const bool loading = webkit_web_view_is_loading(web_view); // asked now: by the time the call below runs, a load may have begun
-                         wxGetApp().CallAfter([view, reason, loading] {
+                         const wxString url = view->m_url;                          // the page that was showing (signals arrive on the main thread)
+                         wxGetApp().CallAfter([view, reason, loading, url] {
                              if (wxGetApp().is_closing() || !PrinterWebView::is_live(view))
                                  return;
+                             if (view->m_url != url) {
+                                 BOOST_LOG_TRIVIAL(warning) << "Printer page camera: a web process ended (reason " << int(reason) << ") for a page the view has left; nothing done";
+                                 return;
+                             }
                              const std::string host = wxURI(view->m_url).GetServer().utf8_string();
                              if (!CameraRelay::instance().had_stream(host, 1)) {
                                  if (loading || view->m_browser == nullptr || view->m_url.empty()) {
@@ -291,6 +298,7 @@ void PrinterWebView::create_browser()
                                  if (reloads.size() >= 3) {
                                      BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the page's web process ended (reason " << int(reason)
                                                                 << ") again; the page of " << host << " was loaded again three times in the last minute and is left as it is";
+                                     view->show_page_stopped();
                                      return;
                                  }
                                  reloads.push_back(now);
@@ -313,6 +321,16 @@ void PrinterWebView::create_browser()
     m_browser->Bind(wxEVT_WEBVIEW_NEWWINDOW, &PrinterWebView::OnNewWindow, this);
     m_browser->Bind(wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED, &PrinterWebView::OnScriptMessage, this);
     update_mode();
+}
+
+// Text made safe to stand in an HTML page or a quoted attribute.
+static wxString html_text(wxString text)
+{
+    text.Replace("&", "&amp;");
+    text.Replace("<", "&lt;");
+    text.Replace(">", "&gt;");
+    text.Replace("\"", "&quot;");
+    return text;
 }
 
 void PrinterWebView::reset_browser()
@@ -345,6 +363,8 @@ void PrinterWebView::load_url(wxString& url, wxString apikey)
     if (m_url_loaded && url == m_url && apikey == m_apikey && host_type == m_host_type)
         return;
 
+    if (m_url != url)
+        m_process_reloads.clear(); // the count of reloads after an ended web process belongs to one page
     m_url = url;
     // The relay passes on cameras of printers whose page is shown here, and of no other machine.
     CameraRelay::instance().allow_host(wxURI(url).GetServer().utf8_string());
@@ -469,6 +489,24 @@ void PrinterWebView::OnError(wxWebViewEvent &evt)
         break;
       }
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__<< boost::format(": error loading page %1% %2% %3% %4%") %evt.GetURL() %evt.GetTarget() %e %evt.GetString();
+}
+
+void PrinterWebView::show_page_stopped()
+{
+    if (m_browser == nullptr)
+        return;
+    // A page of the application's own in place of the dead one, with the printer's page one click away.
+    // Its address is about:blank, which OnLoaded() does not take for the printer's page; selecting the
+    // tab again asks for the printer's page too, as m_url_loaded is cleared.
+    const bool     dark = wxGetApp().dark_mode();
+    const wxString html = wxString::Format(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><style>body{font:15px sans-serif;margin:48px;background:%s;color:%s}a{color:%s}</style></head>"
+        "<body><p>%s</p><p><a href=\"%s\">%s</a></p></body></html>",
+        dark ? "#17191a" : "#ffffff", dark ? "#f5f5f5" : "#262e30", dark ? "#b89cff" : "#6e3ad6",
+        html_text(_L("The printer's page stopped working three times within a minute and was not loaded again.")), html_text(m_url),
+        html_text(_L("Load the printer's page again")));
+    m_url_loaded = false;
+    m_browser->SetPage(html, wxEmptyString);
 }
 
 void PrinterWebView::OnLoaded(wxWebViewEvent& evt)

@@ -1246,15 +1246,28 @@ int CLI::run(int argc, char **argv)
         // Only from driver branch 610 on. On the 580 branch the composited web process leaks one fence
         // handle (sync_file) for each composited frame, so a page that redraws steadily (a camera's video)
         // fills its 1024 file handles within a minute and its process ends. Below 610, and when the version
-        // cannot be read, nothing is set: WebKitGTK then keeps accelerated compositing off on NVIDIA, as it
-        // does by itself. 610 is the first branch seen without the leak, not a documented correction.
+        // cannot be read, accelerated compositing is turned off instead. WebKitGTK does that by itself on
+        // NVIDIA where a distribution patches it to (Debian, Ubuntu, openSUSE, and so the engine an AppImage
+        // carries); saying so here covers an unpatched engine as well. 610 is the first branch seen without
+        // the leak, not a documented correction.
+        //
+        // All three variables are set non-replacing, so each can be overridden from the environment:
+        // WEBKIT_DISABLE_COMPOSITING_MODE=0 with the other two set to 1 gives the earlier behaviour on any
+        // driver, and WEBKIT_DISABLE_COMPOSITING_MODE=1 turns compositing off on any driver.
         if (::access("/proc/driver/nvidia/version", F_OK) == 0 && WebView::SupportsForceSharedMemory()) {
             std::ifstream  version_file("/proc/driver/nvidia/version");
             const std::string version_text((std::istreambuf_iterator<char>(version_file)), std::istreambuf_iterator<char>());
-            if (Slic3r::nvidia_driver_branch(version_text) >= 610) {
+            const int branch = Slic3r::nvidia_driver_branch(version_text);
+            if (branch >= 610) {
                 ::setenv("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1", /* replace */ false);
                 ::setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", /* replace */ false);
+            } else {
+                ::setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", /* replace */ false);
             }
+            BOOST_LOG_TRIVIAL(info) << "NVIDIA driver branch " << branch << " (0: not read): web views "
+                                    << (branch >= 610 ? "composited over shared memory" : "without accelerated compositing")
+                                    << "; WEBKIT_DISABLE_COMPOSITING_MODE=" << (::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") ? ::getenv("WEBKIT_DISABLE_COMPOSITING_MODE") : "(unset)")
+                                    << " WEBKIT_FORCE_DMABUF_RENDERER=" << (::getenv("WEBKIT_FORCE_DMABUF_RENDERER") ? ::getenv("WEBKIT_FORCE_DMABUF_RENDERER") : "(unset)");
         }
 
         if (is_hypervisor_guest() && WebView::SupportsForceSharedMemory())

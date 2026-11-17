@@ -60,6 +60,8 @@ public:
     bool Show(bool show = true) override;
     /// Whether *view* is a PrinterWebView that exists now. Main thread only; for work queued with CallAfter.
     static bool is_live(const PrinterWebView *view);
+    // Shows, in place of a page whose web process keeps ending, a short text and a link to the page.
+    void show_page_stopped();
 
 private:
     friend class PrinterWebViewHandler;

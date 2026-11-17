@@ -576,8 +576,9 @@ sets the DMABUF workarounds and then branches on `GDK_BACKEND`:
   proprietary driver cannot back WebKit's hardware DMABUF renderer, so the shared-memory transport keeps
   accelerated compositing instead of dropping it; `WEBKIT_FORCE_DMABUF_RENDERER` clears the
   Debian/Ubuntu/openSUSE `isNVIDIA()` early return, which otherwise returns before the FORCE_SHM check.
-  Below branch 610, or when the version cannot be read, it sets neither: WebKitGTK then keeps accelerated
-  compositing off on NVIDIA by itself (`isNVIDIA()`).
+  Below branch 610, or when the version cannot be read, it sets `WEBKIT_DISABLE_COMPOSITING_MODE=1`
+  non-replacing instead: a patched WebKitGTK keeps accelerated compositing off on NVIDIA by itself
+  (`isNVIDIA()`), and the variable covers an unpatched one. One log line names the branch read and the path taken.
 - **Hypervisor guests**, same position: when `is_hypervisor_guest()` (the `hypervisor` flag in
   `/proc/cpuinfo`) and WebKitGTK >= 2.44, it sets `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` non-replacing.
   Virtual GPUs (VirtualBox VMSVGA, VMware, QEMU) cannot back the hardware DMABUF path either, and
@@ -620,11 +621,14 @@ Runtime backend detection elsewhere uses Orca's `is_running_on_wayland()` / `is_
   ```cpp
   // Wrong: kills compositing and threaded scrolling (and can crash on modern WebKit)
   ::setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", false);
-  // Right: keep compositing, skip only the hardware DMABUF path, on a driver that does not leak fences
-  if (::access("/proc/driver/nvidia/version", F_OK) == 0 && WebView::SupportsForceSharedMemory()
-      && Slic3r::nvidia_driver_branch(version_text) >= 610) {
-      ::setenv("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1", /*replace*/ false);
-      ::setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", /*replace*/ false);
+  // Right: keep compositing, skip only the hardware DMABUF path, on a driver that does not leak fences;
+  // on an older driver turn compositing off
+  if (::access("/proc/driver/nvidia/version", F_OK) == 0 && WebView::SupportsForceSharedMemory()) {
+      if (Slic3r::nvidia_driver_branch(version_text) >= 610) {
+          ::setenv("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1", /*replace*/ false);
+          ::setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", /*replace*/ false);
+      } else
+          ::setenv("WEBKIT_DISABLE_COMPOSITING_MODE", "1", /*replace*/ false);
   }
   ```
 - **Rule:** Do not force compositing on an NVIDIA driver older than branch 610. **Why:** on the 580 branch a

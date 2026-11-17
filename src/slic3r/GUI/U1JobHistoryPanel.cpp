@@ -150,7 +150,8 @@ void U1JobHistoryPanel::read_printer_history()
             wxGetApp().CallAfter([alive, panel, fed] {
                 if (wxGetApp().is_closing())
                     return;
-                // What such a job took goes to its spools here too: nothing else will come back to it.
+                // What such a job took goes to its spools here too, as when the job watcher finds the figure: whichever
+                // reads it first writes it, and the spool list keeps one use for a job however often it is told.
                 if (wxGetApp().mainframe != nullptr)
                     for (const U1Jobs::Job &job : fed)
                         wxGetApp().mainframe->record_u1_job_use(job);

@@ -74,6 +74,8 @@ private:
     bool m_apikey_sent;
     // Last url passed to load_url(), reloaded after reset_browser().
     wxString m_url;
+    // When (steady clock, ms) the page was loaded again because its web process had ended: at most three in a minute.
+    std::vector<long long> m_process_reloads;
     wxString m_url_deferred;
     // Host type the page was loaded for; it selects the handler, so a change needs a reload.
     PrintHostType m_host_type{htOctoPrint};

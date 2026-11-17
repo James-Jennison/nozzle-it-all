@@ -40,6 +40,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 class wxWindow;
 
@@ -267,16 +268,35 @@ void PrinterWebView::create_browser()
     // relay is passing this printer's camera on, or was within the last second (the stream ends with the
     // process, a moment before this is told), the page is loaded again and the relay serves
     // that printer no more in this run: the page is back as it was before the relay, with its camera error.
-    // A web process that ends at any other time is none of this code's business (one ends, reported the same
-    // way, when the view leaves one printer's page for another's) and is left to the engine.
-    g_signal_connect(wv, "web-process-terminated", G_CALLBACK(+[](WebKitWebView *, WebKitWebProcessTerminationReason reason, gpointer self) {
+    // A web process that ends at any other time leaves the page dead as well (a driver fault can end one),
+    // so the page is loaded again then too, with the relay left as it is. Two cases are left alone: a process
+    // that ends while the view is already loading a page (one ends, reported the same way, when the view
+    // leaves one printer's page for another's), and a page whose process keeps ending, which is loaded again
+    // at most three times in a minute.
+    g_signal_connect(wv, "web-process-terminated", G_CALLBACK(+[](WebKitWebView *web_view, WebKitWebProcessTerminationReason reason, gpointer self) {
                          auto *view = static_cast<PrinterWebView *>(self);
-                         wxGetApp().CallAfter([view, reason] {
+                         const bool loading = webkit_web_view_is_loading(web_view); // asked now: by the time the call below runs, a load may have begun
+                         wxGetApp().CallAfter([view, reason, loading] {
                              if (wxGetApp().is_closing() || !PrinterWebView::is_live(view))
                                  return;
                              const std::string host = wxURI(view->m_url).GetServer().utf8_string();
                              if (!CameraRelay::instance().had_stream(host, 1)) {
-                                 BOOST_LOG_TRIVIAL(warning) << "Printer page camera: a web process ended (reason " << int(reason) << ") with no camera of " << host << " being passed on; nothing done";
+                                 if (loading || view->m_browser == nullptr || view->m_url.empty()) {
+                                     BOOST_LOG_TRIVIAL(warning) << "Printer page camera: a web process ended (reason " << int(reason) << ") while a page was loading; nothing done";
+                                     return;
+                                 }
+                                 const long long now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                                 std::vector<long long> &reloads = view->m_process_reloads;
+                                 reloads.erase(std::remove_if(reloads.begin(), reloads.end(), [now](long long at) { return now - at > 60000; }), reloads.end());
+                                 if (reloads.size() >= 3) {
+                                     BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the page's web process ended (reason " << int(reason)
+                                                                << ") again; the page of " << host << " was loaded again three times in the last minute and is left as it is";
+                                     return;
+                                 }
+                                 reloads.push_back(now);
+                                 BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the page's web process ended (reason " << int(reason) << ") with no camera of " << host
+                                                            << " being passed on; the page is loaded again";
+                                 view->m_browser->LoadURL(view->m_url);
                                  return;
                              }
                              BOOST_LOG_TRIVIAL(warning) << "Printer page camera: the page's web process ended (reason " << int(reason) << ") while the camera of " << host

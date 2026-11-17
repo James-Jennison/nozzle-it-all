@@ -23,6 +23,7 @@
 #include "Widgets/ComboBox.hpp"
 #include "Widgets/DialogButtons.hpp"
 #include "Widgets/Label.hpp"
+#include "Widgets/StateColor.hpp"
 #include "Widgets/TextInput.hpp"
 #include "format.hpp"
 
@@ -218,6 +219,9 @@ public:
         SetSizerAndFit(sizer);
         CenterOnParent();
         wxGetApp().UpdateDlgDarkUI(this);
+        // The text that is sent is there to be read: full contrast in both themes, though it cannot be edited.
+        m_prompt->SetBackgroundColour(StateColor::darkModeColorFor(*wxWHITE));
+        m_prompt->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#262E30")));
     }
 
     ~SemanticPaintDialog() override

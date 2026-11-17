@@ -4,6 +4,7 @@
 #include "slic3r/GUI/Camera.hpp"
 #include "slic3r/GUI/GLCanvas3D.hpp"
 #include "slic3r/GUI/GLShader.hpp"
+#include "slic3r/GUI/GLTexture.hpp"
 #include "slic3r/GUI/GUI.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/GUI_ObjectList.hpp"
@@ -11,20 +12,28 @@
 #include "slic3r/GUI/ImGuiWrapper.hpp"
 #include "slic3r/GUI/MeshUtils.hpp"
 #include "slic3r/GUI/Plater.hpp"
+#include "slic3r/GUI/Preferences.hpp"
 #include "slic3r/GUI/SemanticPaintDialog.hpp"
 #include "slic3r/GUI/format.hpp"
 
+#include "libslic3r/AppConfig.hpp"
 #include "libslic3r/Color.hpp"
 #include "libslic3r/Model.hpp"
+#include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/TriangleSelector.hpp"
 
 #include <boost/format.hpp>
 #include <imgui/imgui.h>
+#include <imgui/imgui_stdlib.h> // std::string for text fields
 #include <wx/event.h>
+#include <wx/utils.h>
 
 #include <algorithm>
 #include <cfloat>
+#include <cmath>
+#include <cstdint>
+#include <thread>
 
 namespace Slic3r {
 namespace GUI {
@@ -34,13 +43,60 @@ namespace SP = Slic3r::SemanticPaint;
 namespace {
 constexpr auto k_flash = std::chrono::milliseconds(1200); // how long a picked part is shown in the highlight colour
 const ColorRGBA k_highlight{1.f, 0.f, 0.9f, 1.f};
+const ImVec4    k_warning{0.95f, 0.6f, 0.1f, 1.f};
+
+// Standing guidance that goes with every question, ahead of the user's own hint.
+const char *const k_guidance =
+    "Prefer a coherent, natural palette. Segment tints are identification labels, not suggested paint colours. Do not use every "
+    "available filament merely because it is available. Use accent colours only when the views clearly support them; do not invent "
+    "decorative patches. A geometric segment may cross a semantic feature: when uncertain keep the dominant body colour. Keep "
+    "matching features consistent across all views. The user's requested style takes precedence.";
+
+std::vector<SP::FilamentInfo> current_filaments()
+{
+    std::vector<SP::FilamentInfo> out;
+    const DynamicPrintConfig     &cfg     = wxGetApp().preset_bundle->project_config;
+    const auto                   *colours = cfg.option<ConfigOptionStrings>("filament_colour");
+    const auto                   *types   = cfg.option<ConfigOptionStrings>("filament_type");
+    const size_t                  n       = colours ? colours->values.size() : 0;
+    for (size_t i = 0; i < n; ++i) {
+        SP::FilamentInfo f;
+        f.index     = int(i) + 1;
+        f.color_hex = colours->values[i];
+        f.type      = types && i < types->values.size() ? types->values[i] : std::string();
+        out.push_back(f);
+    }
+    return out;
+}
+
+// The selected object's printable parts, or none.
+std::vector<ModelVolume *> selected_parts(int *object_idx = nullptr)
+{
+    std::vector<ModelVolume *> out;
+    const int                  idx   = wxGetApp().obj_list()->get_selected_obj_idx();
+    Model                     &model = wxGetApp().model();
+    if (object_idx != nullptr)
+        *object_idx = idx;
+    if (idx < 0 || idx >= int(model.objects.size()))
+        return out;
+    for (ModelVolume *volume : model.objects[size_t(idx)]->volumes)
+        if (volume->is_model_part())
+            out.push_back(volume);
+    return out;
+}
 } // namespace
 
 GLGizmoAiPaint::GLGizmoAiPaint(GLCanvas3D &parent, const std::string &icon_filename, unsigned int sprite_id)
-    : GLGizmoBase(parent, icon_filename, sprite_id)
+    : GLGizmoBase(parent, icon_filename, sprite_id), m_alive(std::make_shared<std::atomic<bool>>(true))
 {}
 
-GLGizmoAiPaint::~GLGizmoAiPaint() = default;
+GLGizmoAiPaint::~GLGizmoAiPaint()
+{
+    // A question still out is told to stop, and its answer finds nobody to give it to.
+    m_alive->store(false);
+    if (m_cancel)
+        m_cancel->store(true);
+}
 
 std::string GLGizmoAiPaint::on_get_name() const { return _u8L("AI auto-paint"); }
 
@@ -48,19 +104,162 @@ bool GLGizmoAiPaint::on_is_activable() const { return m_draft != nullptr || can_
 
 CommonGizmosDataID GLGizmoAiPaint::on_get_requirements() const { return CommonGizmosDataID(int(CommonGizmosDataID::SelectionInfo)); }
 
-void GLGizmoAiPaint::start(Draft draft)
+wxString GLGizmoAiPaint::not_ready() const
 {
-    m_draft         = std::make_unique<Draft>(std::move(draft));
-    m_choice        = m_draft->suggested;
-    m_choice.resize(m_draft->seg.segments.size(), 0);
-    m_draft->suggested = m_choice;
-    m_tidy          = true;
-    m_show_original = false;
-    m_selected      = -1;
-    m_flash_until   = {};
-    m_raycaster     = std::make_unique<MeshRaycaster>(TriangleMesh(m_draft->mesh));
+    const SemanticPaintSettings &s       = m_settings;
+    const bool                   command = s.provider == "command", openai = s.provider == "openai";
+    const bool                   nowhere = semantic_paint_recipient(s).empty();
+    if (selected_parts().empty())
+        return _L("Select one object first.");
+    if (current_filaments().size() < 2)
+        return _L("Add at least two filaments first; there is nothing to choose between with one.");
+    if (s.provider.empty())
+        return _L("No AI service is set up, so nothing can be sent. Choose one under AI settings.");
+    if (command && nowhere)
+        return _L("No command is set. Enter one under AI settings.");
+    if (openai && nowhere)
+        return _L("No server address is set. Enter one under AI settings.");
+    if (openai && s.model.empty())
+        return _L("No model is set. Choose one under AI settings. It must be one that accepts pictures.");
+    if (!semantic_paint_not_ready(s).empty())
+        return _L("A server that takes an API key must be reached over HTTPS, so the key is never sent in the clear. Change this under AI settings.");
+    return {};
+}
+
+wxString GLGizmoAiPaint::goes_to() const
+{
+    const SemanticPaintSettings &s         = m_settings;
+    const wxString               recipient = from_u8(semantic_paint_recipient(s));
+    if (s.provider == "command" && !recipient.empty())
+        return s.model.empty() ?
+            format_wxstr(_L("Goes to: the program \"%1%\" on this computer. Where that program sends it, and which model answers, is "
+                            "decided by the program and how you have set it up."), recipient) :
+            format_wxstr(_L("Goes to: the program \"%1%\" on this computer, asked for the model \"%2%\". Where that program sends it is "
+                            "decided by the program and how you have set it up."), recipient, from_u8(s.model));
+    if (s.provider == "openai" && !recipient.empty())
+        return s.model.empty() ? format_wxstr(_L("Goes to: the server at %1%."), recipient) :
+                                 format_wxstr(_L("Goes to: the server at %1%, model \"%2%\"."), recipient, from_u8(s.model));
+    return _L("Goes to: nowhere yet.");
+}
+
+void GLGizmoAiPaint::prepare()
+{
+    if (m_busy || !not_ready().empty())
+        return;
+    int                              object_idx = -1;
+    const std::vector<ModelVolume *> volumes    = selected_parts(&object_idx);
+    if (volumes.empty())
+        return;
+    wxBusyCursor wait;
+    auto         draft = std::make_unique<Draft>();
+    draft->object_idx  = object_idx;
+    draft->object      = wxGetApp().model().objects[size_t(object_idx)];
+    draft->filaments   = current_filaments();
+    // All parts go into one mesh (volume transforms applied, instance ignored). Parts share no vertices, so a segment never
+    // spans two parts, and each part owns a contiguous range of faces that is used to split the answer back up.
+    for (const ModelVolume *volume : volumes) {
+        TriangleMesh mesh = volume->mesh();
+        mesh.transform(volume->get_matrix());
+        const int offset = int(draft->mesh.vertices.size());
+        draft->first_face.push_back(draft->mesh.indices.size());
+        draft->mesh.vertices.insert(draft->mesh.vertices.end(), mesh.its.vertices.begin(), mesh.its.vertices.end());
+        for (const stl_triangle_vertex_indices &t : mesh.its.indices)
+            draft->mesh.indices.emplace_back(t(0) + offset, t(1) + offset, t(2) + offset);
+    }
+    draft->first_face.push_back(draft->mesh.indices.size());
+    draft->seg = SP::segment_mesh(draft->mesh);
+    auto png   = std::make_shared<std::vector<std::string>>();
+    for (const SP::View &view : SP::default_views()) {
+        draft->labelled.emplace_back();
+        draft->images.push_back(SP::render_view(draft->mesh, draft->seg, view, 768, &draft->labelled.back()));
+        draft->view_names.push_back(view.name);
+        png->push_back(SP::encode_png(draft->images.back()));
+    }
+    draft->png = std::move(png);
+    // The question with the standing guidance and the user's own hint; the hint is said to come first.
+    const std::string hint = into_u8(from_u8(m_hint).Trim().Trim(false));
+    draft->prompt = SP::build_prompt(draft->seg, draft->filaments, draft->object->name, draft->view_names,
+                                     hint.empty() ? std::string(k_guidance) : std::string(k_guidance) + "\n" + hint, draft->labelled);
+    m_textures.clear();
+    m_draft = std::move(draft);
+    m_status.clear();
+    m_step = Step::Review;
+}
+
+void GLGizmoAiPaint::send()
+{
+    if (m_busy || m_draft == nullptr || m_step != Step::Review || !semantic_paint_not_ready(m_settings).empty())
+        return;
+    m_busy = true;
+    m_status.clear();
+    const unsigned asked = ++m_asked;
+    auto           cancel = std::make_shared<std::atomic<bool>>(false);
+    m_cancel              = cancel;
+    // The thread holds nothing of this tool but what it was given; the answer comes back on the main thread and is
+    // dropped when the tool is gone or the question was given up meanwhile.
+    std::thread([this, alive = m_alive, cancel, asked, settings = m_settings, text = m_draft->prompt, png = m_draft->png] {
+        SemanticPaintReply reply = semantic_paint_query(settings, text, *png, cancel.get());
+        wxGetApp().CallAfter([this, alive, asked, reply = std::move(reply)] {
+            if (alive->load() && asked == m_asked)
+                on_reply(reply);
+        });
+    }).detach();
+}
+
+void GLGizmoAiPaint::stop_waiting()
+{
+    ++m_asked;
+    if (m_cancel)
+        m_cancel->store(true);
+    m_busy = false;
+}
+
+void GLGizmoAiPaint::on_reply(const SemanticPaintReply &reply)
+{
+    m_busy = false;
+    m_parent.set_as_dirty();
+    m_parent.request_extra_frame();
+    if (m_draft == nullptr || m_step != Step::Review)
+        return;
+    if (!reply.ok) {
+        m_status = format_wxstr(_L("Failed: %1%"), from_u8(reply.error));
+        return;
+    }
+    auto parsed = SP::parse_suggestion(reply.text, m_draft->seg.segments.size(), m_draft->filaments.size());
+    if (!parsed) {
+        m_status = _L("The answer could not be understood. Try again or choose another model under AI settings.");
+        return;
+    }
+    // A part that no picture numbers was not asked about: it takes the filament of the part around it.
+    m_draft->suggested = SP::follow_neighbours(m_draft->mesh, m_draft->seg, std::move(parsed->filament),
+                                               SP::unseen_segments(m_draft->seg.segments.size(), m_draft->labelled));
+    m_draft->suggested.resize(m_draft->seg.segments.size(), 0);
+    m_draft->names   = std::move(parsed->name);
+    m_draft->unsure  = std::move(parsed->unsure);
+    m_draft->subject = std::move(parsed->object);
+    m_choice         = m_draft->suggested;
+    m_tidy           = true;
+    m_show_original  = false;
+    m_show_views     = false;
+    m_selected       = -1;
+    m_flash_until    = {};
+    m_raycaster      = std::make_unique<MeshRaycaster>(TriangleMesh(m_draft->mesh));
     m_selectors.clear();
     m_dirty = true;
+    m_step  = Step::Draft;
+}
+
+void GLGizmoAiPaint::open_settings()
+{
+    // The settings are a window of their own, opened once this frame is drawn. They can rebuild the whole interface
+    // (a language change does), so this tool is touched afterwards only if it is still there.
+    wxGetApp().CallAfter([this, alive = m_alive] {
+        wxGetApp().open_preferences(PreferencesTab::AI, "ai_services_provider");
+        if (alive->load()) {
+            m_settings = semantic_paint_load_settings(*wxGetApp().app_config);
+            m_parent.set_as_dirty();
+        }
+    });
 }
 
 std::vector<ModelVolume *> GLGizmoAiPaint::parts() const
@@ -146,16 +345,22 @@ void GLGizmoAiPaint::on_set_state()
 {
     if (m_state == Off) {
         m_parent.toggle_model_objects_visibility(true);
+        stop_waiting();
         m_selectors.clear();
         m_raycaster.reset();
+        m_textures.clear();
         m_draft.reset();
-        m_pressed = false;
+        m_hint.clear();
+        m_status.clear();
+        m_step       = Step::Ask;
+        m_show_views = false;
+        m_pressed    = false;
     } else if (m_state == On) {
-        m_dirty = true;
+        // It opens at its first step, with the AI settings as they are now.
+        m_step     = Step::Ask;
+        m_settings = semantic_paint_load_settings(*wxGetApp().app_config);
+        m_dirty    = true;
         m_parent.set_as_dirty();
-        // Opened from its button, there is no draft yet: the window that asks is shown once this event is handled.
-        if (m_draft == nullptr)
-            wxGetApp().CallAfter([]() { run_semantic_paint(); });
     }
 }
 
@@ -178,7 +383,7 @@ void GLGizmoAiPaint::close()
 
 void GLGizmoAiPaint::on_render()
 {
-    if (m_draft == nullptr)
+    if (m_draft == nullptr || m_step != Step::Draft)
         return;
     const std::vector<ModelVolume *> volumes = parts();
     if (volumes.empty())
@@ -236,7 +441,7 @@ void GLGizmoAiPaint::on_render()
 bool GLGizmoAiPaint::on_mouse(const wxMouseEvent &mouse_event)
 {
     // The view is left to turn and zoom as always. A press and release in one place is a click on a part.
-    if (m_draft == nullptr)
+    if (m_draft == nullptr || m_step != Step::Draft)
         return false;
     const Vec2d position(mouse_event.GetX(), mouse_event.GetY());
     if (mouse_event.LeftDown()) {
@@ -252,7 +457,7 @@ bool GLGizmoAiPaint::on_mouse(const wxMouseEvent &mouse_event)
 
 void GLGizmoAiPaint::pick(const Vec2d &mouse_position)
 {
-    if (m_raycaster == nullptr || parts().empty())
+    if (m_raycaster == nullptr || m_step != Step::Draft || parts().empty())
         return;
     const Camera &camera = wxGetApp().plater()->get_camera();
     for (const ModelInstance *instance : m_draft->object->instances) {
@@ -274,7 +479,7 @@ void GLGizmoAiPaint::pick(const Vec2d &mouse_position)
 void GLGizmoAiPaint::apply()
 {
     const std::vector<ModelVolume *> volumes = parts();
-    if (volumes.empty()) {
+    if (volumes.empty() || m_step != Step::Draft) {
         close();
         return;
     }
@@ -298,25 +503,174 @@ void GLGizmoAiPaint::apply()
 
 void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit)
 {
-    if (m_draft == nullptr)
-        return;
-    if (parts().empty()) {
+    if (m_draft != nullptr && parts().empty()) {
         close();
         return;
     }
     const float scale = m_parent.get_scale();
-    y = std::min(y, bottom_limit - ImGui::GetFrameHeight() * 22.f);
-    GizmoImguiSetNextWIndowPos(x, std::max(y, 0.f), ImGuiCond_Always, 0.0f, 0.0f);
+    y = std::max(std::min(y, bottom_limit - ImGui::GetFrameHeight() * 22.f), 0.f);
+    GizmoImguiSetNextWIndowPos(x, y, ImGuiCond_Always, 0.0f, 0.0f);
+    // Never taller than the room under it: on a small screen the panel scrolls instead of running off the plate.
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0.f, 0.f), ImVec2(FLT_MAX, std::max(bottom_limit - y, ImGui::GetFrameHeight() * 8.f)));
     ImGuiWrapper::push_toolbar_style(scale);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f * scale));
     GizmoImguiBegin(get_name(), ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                                     ImGuiWindowFlags_NoTitleBar);
 
-    bool       changed = false, do_apply = false, do_close = false;
-    const auto &segments = m_draft->seg.segments;
-    const float wrap     = m_imgui->scaled(29.f);
+    const float wrap = m_imgui->scaled(29.f);
+    m_action         = Action::Nothing;
+    const int number = m_step == Step::Ask ? 1 : m_step == Step::Review ? 2 : 3;
+    m_imgui->text(format_wxstr(_L("AI auto-paint: step %1% of 3"), number));
+    if (m_step == Step::Ask)
+        render_ask(wrap);
+    else if (m_step == Step::Review)
+        render_review(wrap);
+    else
+        render_draft(wrap);
 
-    m_imgui->text(_L("AI auto-paint draft"));
+    GizmoImguiEnd();
+    ImGui::PopStyleVar(1);
+    ImGuiWrapper::pop_toolbar_style();
+
+    // Acted on after the panel is finished: some of these end the tool or change what the panel holds.
+    switch (m_action) {
+    case Action::Prepare: prepare(); break;
+    case Action::Send: send(); break;
+    case Action::StopWaiting: stop_waiting(); break;
+    case Action::Back:
+        stop_waiting();
+        m_draft.reset();
+        m_textures.clear();
+        m_status.clear();
+        m_step = Step::Ask;
+        break;
+    case Action::Settings: open_settings(); break;
+    case Action::Apply: apply(); break;
+    case Action::Close: close(); break;
+    default: break;
+    }
+    if (m_action != Action::Nothing)
+        m_parent.set_as_dirty();
+}
+
+void GLGizmoAiPaint::render_ask(float wrap)
+{
+    ImGui::PushTextWrapPos(wrap);
+    m_imgui->text(_L("The model's surface is split into numbered parts by its shape. They are not guaranteed to be its meaningful parts. "
+                     "You see the exact pictures and text before anything is sent, and the answer comes back as a draft on the model, to "
+                     "check and correct before applying."));
+    const std::vector<ModelVolume *> volumes = selected_parts();
+    if (std::any_of(volumes.begin(), volumes.end(), [](const ModelVolume *v) { return !v->mmu_segmentation_facets.empty(); }))
+        m_imgui->text_colored(k_warning, _L("This object already has colour painting. In the draft, a part given a filament loses the "
+                                            "painting it has, and a part kept as it is keeps it."));
+    m_imgui->text(goes_to());
+    ImGui::PopTextWrapPos();
+    if (m_imgui->button(_L("AI settings")))
+        m_action = Action::Settings;
+
+    m_imgui->text(_L("Hint (optional)"));
+    ImGui::SetNextItemWidth(wrap - ImGui::GetStyle().WindowPadding.x);
+    ImGui::InputTextWithHint("##hint", _u8L("e.g. a goldfish, orange body, black eyes").c_str(), &m_hint);
+
+    const wxString why = not_ready();
+    if (!why.empty()) {
+        ImGui::PushTextWrapPos(wrap);
+        m_imgui->text_colored(k_warning, why);
+        ImGui::PopTextWrapPos();
+    }
+    m_imgui->disabled_begin(!why.empty());
+    ImGuiWrapper::push_confirm_button_style();
+    if (m_imgui->button(_L("Show what will be sent")))
+        m_action = Action::Prepare;
+    ImGuiWrapper::pop_confirm_button_style();
+    m_imgui->disabled_end();
+    ImGui::SameLine();
+    ImGuiWrapper::push_cancel_button_style();
+    if (m_imgui->button(_L("Close")))
+        m_action = Action::Close;
+    ImGuiWrapper::pop_cancel_button_style();
+}
+
+void GLGizmoAiPaint::render_views(float wrap)
+{
+    const std::vector<SP::Image> &images = m_draft->images;
+    if (m_textures.size() != images.size()) {
+        m_textures.clear();
+        for (const SP::Image &image : images) {
+            std::vector<unsigned char> rgba(size_t(image.width) * size_t(image.height) * 4, 255);
+            for (size_t i = 0, n = size_t(image.width) * size_t(image.height); i < n; ++i)
+                std::copy_n(image.rgb.begin() + i * 3, 3, rgba.begin() + i * 4);
+            auto texture = std::make_unique<GLTexture>();
+            // With smaller copies of itself: the pictures are drawn far smaller than they are sent.
+            texture->load_from_raw_data(std::move(rgba), unsigned(image.width), unsigned(image.height), false, true);
+            m_textures.push_back(std::move(texture));
+        }
+    }
+    const float gap  = ImGui::GetStyle().ItemSpacing.x;
+    const float side = std::floor((wrap - ImGui::GetStyle().WindowPadding.x - 2.f * gap) / 3.f);
+    for (size_t i = 0; i < m_textures.size(); ++i) {
+        if (i % 3 != 0)
+            ImGui::SameLine();
+        ImGui::BeginGroup();
+        const auto id = ImTextureID(intptr_t(m_textures[i]->get_id()));
+        ImGui::Image(id, ImVec2(side, side));
+        // Pointed at, a picture is shown large enough to read its numbers.
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::Image(id, ImVec2(side * 4.f, side * 4.f));
+            ImGui::EndTooltip();
+        }
+        ImGui::TextUnformatted(m_draft->view_names[i].c_str());
+        ImGui::EndGroup();
+    }
+}
+
+void GLGizmoAiPaint::render_review(float wrap)
+{
+    ImGui::PushTextWrapPos(wrap);
+    m_imgui->text(_L("These pictures and the text under them are what will be sent, and nothing else. Nothing is sent until you press Send. "
+                     "Point at a picture to see it larger."));
+    ImGui::PopTextWrapPos();
+    render_views(wrap);
+    ImGui::PushTextWrapPos(wrap);
+    m_imgui->text(format_wxstr(_L_PLURAL("%1% numbered part.", "%1% numbered parts.", m_draft->seg.segments.size()), m_draft->seg.segments.size()));
+    m_imgui->text(goes_to());
+    m_imgui->text(_L("The text that is sent:"));
+    ImGui::PopTextWrapPos();
+    ImGui::InputTextMultiline("##prompt", &m_draft->prompt, ImVec2(wrap - ImGui::GetStyle().WindowPadding.x, ImGui::GetFrameHeight() * 5.f),
+                              ImGuiInputTextFlags_ReadOnly);
+    ImGui::PushTextWrapPos(wrap);
+    if (m_settings.provider == "command")
+        m_imgui->text(_L("The pictures are written to a temporary folder and their file names are added to this text."));
+    if (m_busy)
+        m_imgui->text(_L("Waiting for the answer... this can take up to a few minutes."));
+    else if (!m_status.empty())
+        m_imgui->text_colored(k_warning, m_status);
+    ImGui::PopTextWrapPos();
+
+    m_imgui->disabled_begin(m_busy);
+    ImGuiWrapper::push_confirm_button_style();
+    if (m_imgui->button(format_wxstr(_L_PLURAL("Send this %1% picture", "Send these %1% pictures", m_draft->images.size()), m_draft->images.size())))
+        m_action = Action::Send;
+    ImGuiWrapper::pop_confirm_button_style();
+    m_imgui->disabled_end();
+    ImGui::SameLine();
+    ImGuiWrapper::push_cancel_button_style();
+    if (m_busy) {
+        if (m_imgui->button(_L("Stop waiting")))
+            m_action = Action::StopWaiting;
+    } else if (m_imgui->button(_L("Back")))
+        m_action = Action::Back;
+    ImGuiWrapper::pop_cancel_button_style();
+    if (m_busy)
+        m_parent.request_extra_frame(); // so the answer is shown when it comes, without the pointer having to move
+}
+
+void GLGizmoAiPaint::render_draft(float wrap)
+{
+    bool        changed  = false;
+    const auto &segments = m_draft->seg.segments;
+
     ImGui::PushTextWrapPos(wrap);
     if (!m_draft->subject.empty())
         m_imgui->text(format_wxstr(_L("The service took the object to be: %1%"), from_u8(m_draft->subject)));
@@ -330,6 +684,10 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
                                    unsure));
     ImGui::PopTextWrapPos();
 
+    // The numbers in the list are the numbers in the pictures that were sent.
+    m_imgui->bbl_checkbox(_L("Show the numbered pictures"), m_show_views);
+    if (m_show_views)
+        render_views(wrap);
     if (m_imgui->bbl_checkbox(_L("Compare with original"), m_show_original))
         changed = true;
     if (m_imgui->bbl_checkbox(_L("Boundary cleanup"), m_tidy))
@@ -409,27 +767,18 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
 
     ImGuiWrapper::push_confirm_button_style();
     if (m_imgui->button(_L("Apply as paint")))
-        do_apply = true;
+        m_action = Action::Apply;
     ImGuiWrapper::pop_confirm_button_style();
     ImGui::SameLine();
     ImGuiWrapper::push_cancel_button_style();
     if (m_imgui->button(_L("Discard")))
-        do_close = true;
+        m_action = Action::Close;
     ImGuiWrapper::pop_cancel_button_style();
-
-    GizmoImguiEnd();
-    ImGui::PopStyleVar(1);
-    ImGuiWrapper::pop_toolbar_style();
 
     if (changed) {
         m_dirty = true;
         m_parent.set_as_dirty();
     }
-    // Acted on after the panel is finished, since both end the tool.
-    if (do_apply)
-        apply();
-    else if (do_close)
-        close();
 }
 
 } // namespace GUI

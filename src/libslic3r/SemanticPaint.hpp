@@ -4,6 +4,7 @@
 // GUI; the provider round trip lives in slic3r/Utils/SemanticPaintClient.
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -69,6 +70,19 @@ std::vector<View> default_views();
 
 // Renders flat-shaded orthographic views, each segment in its own colour with its id drawn on it.
 Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size = 384);
+
+// The colour one face is drawn in.
+using FaceColor = std::array<unsigned char, 3>;
+
+// The views a painted draft is shown in: the six above and one from underneath, which nothing else shows.
+std::vector<View> draft_views();
+
+// The colour of every face for a per-face filament list (0 = kept as it is, drawn in a neutral grey): each
+// filament's own colour. A filament without a readable colour is drawn in the same grey.
+std::vector<FaceColor> draft_face_colors(const std::vector<int> &face_filament, const std::vector<struct FilamentInfo> &filaments);
+
+// The same flat-shaded view as render_view, each face in the colour given and no numbers: how a proposal would look.
+Image render_draft(const indexed_triangle_set &its, const View &view, const std::vector<FaceColor> &face_colors, int size = 384);
 
 // PNG bytes of an image (empty on failure).
 std::string encode_png(const Image &image);

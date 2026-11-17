@@ -38,6 +38,12 @@ TEST_CASE("AI auto-paint says what a chosen provider still lacks", "[SemanticPai
     s.model = "llava";
     CHECK(semantic_paint_not_ready(s).empty());
 
+    // A key is never sent in the clear.
+    s.api_key = "secret";
+    CHECK(semantic_paint_not_ready(s) == "A server that takes an API key must use HTTPS.");
+    s.endpoint = " HTTPS://example.invalid/v1";
+    CHECK(semantic_paint_not_ready(s).empty());
+
     s.provider = "other";
     CHECK(semantic_paint_not_ready(s) == "Unknown provider: other");
 }

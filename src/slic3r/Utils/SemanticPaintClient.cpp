@@ -9,7 +9,9 @@
 #include <sstream>
 #include <thread>
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/process.hpp>
@@ -25,7 +27,7 @@ const char *const k_semantic_paint_claude_code_command = "claude -p --output-for
 
 namespace {
 
-constexpr int kTimeoutSeconds = 240;
+constexpr int kTimeoutSeconds = 300;
 
 std::string read_file(const fs::path &p)
 {
@@ -119,11 +121,8 @@ SemanticPaintReply run_command(const SemanticPaintSettings &s, const std::string
         const std::string body = read_file(out_file);
         out.text = SemanticPaint::command_reply_text(body);
         if (child.exit_code() != 0 || out.text.find_first_not_of(" \t\r\n") == std::string::npos) {
-            const std::string err = read_file(err_file);
-            out.error = "The command returned no answer (exit " + std::to_string(child.exit_code()) + ")." +
-                        (err.empty() ? std::string() : " " + err.substr(0, 400));
-            if (err.empty() && !body.empty())
-                out.error += " " + body.substr(0, 400);
+            // What the command printed is not shown: it is not ours, and it can repeat a key or private data.
+            out.error = "The command returned no answer (exit " + std::to_string(child.exit_code()) + ").";
             out.text.clear();
             return out;
         }
@@ -158,7 +157,9 @@ SemanticPaintReply run_openai(const SemanticPaintSettings &s, const std::string 
         .on_complete([&](std::string resp, unsigned) { reply = std::move(resp); })
         .on_error([&](std::string resp, std::string err, unsigned status) {
             failed    = true;
-            out.error = err + " (HTTP " + std::to_string(status) + ")" + (resp.empty() ? std::string() : ": " + resp.substr(0, 400));
+            // The server's own error text is not shown: it is not ours, and it can repeat the key or private data.
+            (void) resp;
+            out.error = status != 0 ? "The server answered HTTP " + std::to_string(status) + "." : "The server could not be reached: " + err;
         })
         .perform_sync();
     if (failed)
@@ -201,7 +202,8 @@ std::string semantic_paint_not_ready(const SemanticPaintSettings &s)
     if (s.provider == "command")
         return blank(s.command) ? "No command set." : "";
     if (s.provider == "openai")
-        return blank(s.endpoint) ? "No server address set." : blank(s.model) ? "No model set." : "";
+        return blank(s.endpoint) ? "No server address set." : blank(s.model) ? "No model set." :
+               !blank(s.api_key) && !boost::istarts_with(boost::trim_left_copy(s.endpoint), "https://") ? "A server that takes an API key must use HTTPS." : "";
     return s.provider.empty() ? "No provider chosen." : "Unknown provider: " + s.provider;
 }
 

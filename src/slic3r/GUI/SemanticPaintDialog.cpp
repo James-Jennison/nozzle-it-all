@@ -77,11 +77,13 @@ wxImage to_wx(const SP::Image &img, int display)
 class SemanticPaintDialog : public DPIDialog
 {
 public:
-    SemanticPaintDialog(wxWindow *parent, const std::string &object_name, SP::Segmentation seg, std::vector<SP::Image> images,
-                        std::vector<std::string> view_names, std::vector<SP::FilamentInfo> filaments)
+    SemanticPaintDialog(wxWindow *parent, const std::string &object_name, indexed_triangle_set mesh, SP::Segmentation seg,
+                        std::vector<SP::Image> images, std::vector<std::string> view_names, std::vector<SP::FilamentInfo> filaments,
+                        bool has_paint)
         : DPIDialog(parent ? parent : static_cast<wxWindow *>(wxGetApp().mainframe), wxID_ANY, _L("AI auto-paint"), wxDefaultPosition, wxDefaultSize,
                     wxCAPTION | wxCLOSE_BOX | wxRESIZE_BORDER)
         , m_object_name(object_name)
+        , m_mesh(std::move(mesh))
         , m_seg(std::move(seg))
         , m_view_names(std::move(view_names))
         , m_filaments(std::move(filaments))
@@ -107,6 +109,17 @@ public:
                                "you press Send, and nothing is set up to receive it until you choose where it goes."),
                             LB_AUTO_WRAP, wxSize(width, -1)),
                   0, wxEXPAND | wxALL, edge);
+        body->Add(new Label(m_body,
+                            _L("The numbered parts are found from the model's shape. They are not guaranteed to be its meaningful parts, so look "
+                               "at the pictures before sending and at the painted draft before applying."),
+                            LB_AUTO_WRAP, wxSize(width, -1)),
+                  0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, edge);
+        if (has_paint)
+            body->Add(new Label(m_body,
+                                _L("This object already has colour painting. A part you give a filament loses the painting it has; a part left "
+                                   "at \"Keep as it is\" keeps it."),
+                                LB_AUTO_WRAP, wxSize(width, -1)),
+                      0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, edge);
 
         auto *images_sizer = new wxGridSizer(3, gap, gap);
         for (size_t i = 0; i < images.size(); ++i) {
@@ -175,17 +188,50 @@ public:
                             LB_AUTO_WRAP, wxSize(width, -1)),
                   0, wxEXPAND | wxALL, edge);
 
-        // The answer: one choice per segment, shown once there is one.
+        // The answer, shown once there is one: the painted draft in pictures, then one choice per part.
+        m_draft_box = new wxBoxSizer(wxVERTICAL);
+        m_draft_box->Add(new Label(m_body, Label::Head_14, _L("The painted draft")), 0, wxBOTTOM, gap);
+        m_draft_box->Add(new Label(m_body,
+                                   _L("How the model would be painted, seen from each side and from underneath. Grey is kept as it is. The model "
+                                      "itself is unchanged until you apply."),
+                                   LB_AUTO_WRAP, wxSize(width, -1)),
+                         0, wxEXPAND | wxBOTTOM, gap);
+        auto *draft_grid = new wxGridSizer(3, gap, gap);
+        for (const SP::View &view : SP::draft_views()) {
+            auto *box    = new wxBoxSizer(wxVERTICAL);
+            auto *bitmap = new wxStaticBitmap(m_body, wxID_ANY, wxBitmap(FromDIP(120), FromDIP(120)));
+            m_draft_bitmaps.push_back(bitmap);
+            box->Add(bitmap, 0, wxALIGN_CENTER);
+            box->Add(new Label(m_body, from_u8(view.name)), 0, wxALIGN_CENTER);
+            draft_grid->Add(box, 0, wxALIGN_CENTER);
+        }
+        m_draft_box->Add(draft_grid, 0, wxEXPAND | wxBOTTOM, gap);
+        auto *draft_buttons = new wxBoxSizer(wxHORIZONTAL);
+        auto *keep_all      = new ::Button(m_body, _L("Keep all as it is"));
+        keep_all->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+        auto *reset = new ::Button(m_body, _L("Back to the suggestion"));
+        reset->SetStyle(ButtonStyle::Regular, ButtonType::Window);
+        draft_buttons->Add(keep_all, 0, wxRIGHT, gap);
+        draft_buttons->Add(reset, 0);
+        m_draft_box->Add(draft_buttons, 0);
+        keep_all->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { choose(std::vector<int>(m_seg.segments.size(), 0)); });
+        reset->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { choose(m_suggested); });
+        body->Add(m_draft_box, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, edge);
+        body->Show(m_draft_box, false);
+
         m_result_sizer = new wxFlexGridSizer(3, gap, edge);
         m_result_sizer->AddGrowableCol(2, 1);
         body->Add(m_result_sizer, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, edge);
         m_tidy_row = new wxBoxSizer(wxHORIZONTAL);
         m_tidy     = new ::CheckBox(m_body);
         m_tidy->SetValue(true);
-        auto *tidy_label = new Label(m_body, _L("Tidy the colour boundaries: take back single triangles that poke into another colour"),
-                                     LB_AUTO_WRAP, wxSize(width - FromDIP(30), -1));
+        m_tidy_label = new Label(m_body, wxEmptyString, LB_AUTO_WRAP, wxSize(width - FromDIP(30), -1));
         m_tidy_row->Add(m_tidy, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, gap);
-        m_tidy_row->Add(tidy_label, 1, wxALIGN_CENTER_VERTICAL);
+        m_tidy_row->Add(m_tidy_label, 1, wxALIGN_CENTER_VERTICAL);
+        m_tidy->Bind(wxEVT_TOGGLEBUTTON, [this](wxCommandEvent &event) {
+            event.Skip(); // the box redraws itself in its own handler
+            CallAfter([this] { refresh_draft(); });
+        });
         body->Add(m_tidy_row, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, edge);
         body->Show(m_tidy_row, false);
 
@@ -208,7 +254,7 @@ public:
             update_state();
             event.Skip();
         });
-        for (::TextInput *field : {m_command, m_endpoint, m_model, m_hint})
+        for (::TextInput *field : {m_command, m_endpoint, m_key, m_model, m_hint})
             field->GetTextCtrl()->Bind(wxEVT_TEXT, [this](wxCommandEvent &event) {
                 update_state();
                 event.Skip();
@@ -241,7 +287,21 @@ public:
         return out;
     }
 
-    bool tidy() const { return m_tidy->GetValue(); }
+    // The filament of every face as it would be applied (0 = keep as it is), boundary cleanup included when it is on.
+    std::vector<int> faces(size_t *tidied = nullptr) const
+    {
+        std::vector<int> out = SP::face_filaments(m_seg, assignments());
+        size_t           changed = 0;
+        if (m_tidy->GetValue()) {
+            const std::vector<int> cleaned = SP::clean_paint_boundaries(m_mesh, out);
+            for (size_t f = 0; f < out.size(); ++f)
+                changed += cleaned[f] != out[f];
+            out = cleaned;
+        }
+        if (tidied != nullptr)
+            *tidied = changed;
+        return out;
+    }
 
 protected:
     void on_dpi_changed(const wxRect &) override
@@ -305,9 +365,47 @@ private:
         return s;
     }
 
+    // The question with the standing guidance and the user's own hint; the hint is said to come first.
     std::string prompt() const
     {
-        return SP::build_prompt(m_seg, m_filaments, m_object_name, m_view_names, into_u8(m_hint->GetTextCtrl()->GetValue()));
+        const std::string guidance =
+            "Prefer a coherent, natural palette. Segment tints are identification labels, not suggested paint colours. Do not use every "
+            "available filament merely because it is available. Use accent colours only when the views clearly support them; do not invent "
+            "decorative patches. A geometric segment may cross a semantic feature: when uncertain keep the dominant body colour. Keep "
+            "matching features consistent across all views. The user's requested style takes precedence.";
+        const std::string hint = into_u8(m_hint->GetTextCtrl()->GetValue().Trim().Trim(false));
+        return SP::build_prompt(m_seg, m_filaments, m_object_name, m_view_names, hint.empty() ? guidance : guidance + "\n" + hint);
+    }
+
+    // Sets every part's choice at once, as "Keep all" and "Back to the suggestion" do.
+    void choose(const std::vector<int> &slots)
+    {
+        for (size_t i = 0; i < m_choices.size() && i < slots.size(); ++i)
+            m_choices[i]->SetSelection(slots[i]);
+        refresh_draft();
+    }
+
+    // The draft pictures and the cleanup's count, from the choices as they stand.
+    void refresh_draft()
+    {
+        if (m_choices.empty())
+            return;
+        size_t                           tidied = 0;
+        const std::vector<SP::FaceColor> colors = SP::draft_face_colors(faces(&tidied), m_filaments);
+        const std::vector<SP::View>      views  = SP::draft_views();
+        for (size_t i = 0; i < views.size() && i < m_draft_bitmaps.size(); ++i)
+            m_draft_bitmaps[i]->SetBitmap(wxBitmap(to_wx(SP::render_draft(m_mesh, views[i], colors), FromDIP(120))));
+        m_tidy_label->SetLabel(m_tidy->GetValue() ?
+            format_wxstr(_L_PLURAL("Boundary cleanup is on: %1% face adjusted. It takes back single triangles that poke into another colour and "
+                                   "keeps small details and sharp edges; it cannot correct a part that was found wrongly.",
+                                   "Boundary cleanup is on: %1% faces adjusted. It takes back single triangles that poke into another colour "
+                                   "and keeps small details and sharp edges; it cannot correct a part that was found wrongly.", tidied), tidied) :
+            _L("Boundary cleanup is off."));
+        m_tidy_label->Wrap(-1);
+        m_tidy_label->Wrap(FromDIP(400));
+        m_body->Layout();
+        m_body->FitInside();
+        m_body->Refresh();
     }
 
     // What can be typed into, where the data would go, the exact text, and whether Send can be pressed, with the reason when not.
@@ -331,7 +429,9 @@ private:
         else if (openai && recipient.empty())
             why = _L("Enter the server's address.");
         else if (openai && s.model.empty())
-            why = _L("Enter the name of the model to ask.");
+            why = _L("Enter the name of the model to ask. It must be one that accepts pictures.");
+        else if (!semantic_paint_not_ready(s).empty())
+            why = _L("A server that takes an API key must be reached over HTTPS, so the key is never sent in the clear.");
         if (command && !recipient.empty())
             goes_to = s.model.empty() ?
                 format_wxstr(_L("Goes to: the program \"%1%\" on this computer. Where that program sends it, and which model answers, is "
@@ -403,7 +503,8 @@ private:
             set_status(_L("The answer could not be understood. Try again or pick another model."));
             return;
         }
-        m_answered = true;
+        m_answered  = true;
+        m_suggested = *parsed;
         populate(*parsed);
         m_apply->Enable();
         set_status(_L("Review the suggestion and change anything you like, then apply it. A part left at \"Keep as it is\" keeps the paint "
@@ -431,19 +532,29 @@ private:
                 choice->Append(wxString::Format("%d  %s  %s", f.index, from_u8(f.color_hex), from_u8(SP::color_name(f.color_hex))), colour);
             }
             choice->SetSelection(s.id >= 0 && s.id < int(assignment.size()) ? assignment[s.id] : 0);
+            choice->Bind(wxEVT_COMBOBOX, [this](wxCommandEvent &event) {
+                event.Skip();
+                CallAfter([this] { refresh_draft(); });
+            });
             m_choices.push_back(choice);
             m_result_sizer->Add(choice, 1, wxEXPAND);
         }
+        m_body->GetSizer()->Show(m_draft_box, true);
         m_body->GetSizer()->Show(m_tidy_row, true);
+        refresh_draft();
         wxGetApp().UpdateDarkUIWin(m_body);
         m_body->Layout();
         m_body->FitInside();
-        // The answer is brought into view: it is below what was on screen while waiting.
-        m_body->Scroll(0, m_body->GetVirtualSize().GetHeight());
+        // The draft is brought into view: it is below what was on screen while waiting.
+        int unit = 1;
+        m_body->GetScrollPixelsPerUnit(nullptr, &unit);
+        m_body->Scroll(0, (m_draft_bitmaps.front()->GetPosition().y + m_body->GetViewStart().y * unit - FromDIP(90)) / std::max(1, unit));
     }
 
     std::string                        m_object_name;
+    indexed_triangle_set               m_mesh;
     SP::Segmentation                   m_seg;
+    std::vector<int>                   m_suggested;
     std::vector<std::string>           m_png;
     std::vector<std::string>           m_view_names;
     std::vector<SP::FilamentInfo>      m_filaments;
@@ -458,7 +569,9 @@ private:
     ::ComboBox       *m_provider{nullptr};
     ::TextInput      *m_model{nullptr}, *m_command{nullptr}, *m_endpoint{nullptr}, *m_key{nullptr}, *m_hint{nullptr};
     ::CheckBox       *m_remember{nullptr}, *m_tidy{nullptr};
-    Label            *m_status{nullptr}, *m_recipient{nullptr};
+    Label            *m_status{nullptr}, *m_recipient{nullptr}, *m_tidy_label{nullptr};
+    wxBoxSizer       *m_draft_box{nullptr};
+    std::vector<wxStaticBitmap *> m_draft_bitmaps;
     wxTextCtrl       *m_prompt{nullptr};
     ::Button         *m_send{nullptr}, *m_apply{nullptr}, *m_fill_claude{nullptr};
     wxFlexGridSizer  *m_result_sizer{nullptr};
@@ -516,13 +629,12 @@ void run_semantic_paint()
         names.push_back(v.name);
     }
 
-    SemanticPaintDialog dlg(plater, object->name, seg, std::move(images), std::move(names), filaments);
+    const bool has_paint = std::any_of(parts.begin(), parts.end(), [](const ModelVolume *v) { return !v->mmu_segmentation_facets.empty(); });
+    SemanticPaintDialog dlg(plater, object->name, combined, seg, std::move(images), std::move(names), filaments, has_paint);
     if (dlg.ShowModal() != wxID_OK)
         return;
 
-    std::vector<int> faces = SP::face_filaments(seg, dlg.assignments());
-    if (dlg.tidy())
-        faces = SP::clean_paint_boundaries(combined, faces);
+    const std::vector<int> faces = dlg.faces();
     {
         Plater::TakeSnapshot snapshot(plater, _u8L("AI auto-paint"));
         for (size_t p = 0; p < parts.size(); ++p) {

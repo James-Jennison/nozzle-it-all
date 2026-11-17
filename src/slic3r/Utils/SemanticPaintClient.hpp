@@ -36,7 +36,7 @@ SemanticPaintReply semantic_paint_query(const SemanticPaintSettings &settings, c
                                         const std::vector<std::string> &png_files, const std::atomic<bool> *cancel = nullptr);
 
 // Why nothing can be sent with these settings, in English for the log and tests ("" when they can be used):
-// no provider chosen, no command, no server address or no model. The dialog says the same in its own words.
+// no provider chosen, no command, no server address, no model, or an API key for a server that is not reached over HTTPS. The dialog says the same in its own words.
 std::string semantic_paint_not_ready(const SemanticPaintSettings &settings);
 
 // Where the data goes with these settings, for showing before anything is sent: the program a command line starts

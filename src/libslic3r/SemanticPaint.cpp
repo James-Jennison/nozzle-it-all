@@ -277,7 +277,54 @@ void draw_number(Image &img, int number, int cx, int cy, int scale)
 
 } // namespace
 
+namespace {
+Image render(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, const std::vector<FaceColor> *face_colors);
+}
+
+std::vector<View> draft_views()
+{
+    std::vector<View> views = default_views();
+    views.push_back({"underneath", Vec3d(0, 0, 1), Vec3d(0, 1, 0)});
+    return views;
+}
+
+std::vector<FaceColor> draft_face_colors(const std::vector<int> &face_filament, const std::vector<FilamentInfo> &filaments)
+{
+    const FaceColor kept{200, 200, 200};
+    std::vector<FaceColor> by_slot(1, kept);
+    for (const FilamentInfo &f : filaments) {
+        if (f.index < 1)
+            continue;
+        if (by_slot.size() <= size_t(f.index))
+            by_slot.resize(size_t(f.index) + 1, kept);
+        const std::string &hex = f.color_hex;
+        if (hex.size() >= 7 && hex[0] == '#' && hex.find_first_not_of("0123456789abcdefABCDEF", 1) >= 7) {
+            const unsigned long rgb = std::strtoul(hex.substr(1, 6).c_str(), nullptr, 16);
+            by_slot[size_t(f.index)] = FaceColor{(unsigned char) (rgb >> 16), (unsigned char) (rgb >> 8), (unsigned char) rgb};
+        }
+    }
+    std::vector<FaceColor> out(face_filament.size(), kept);
+    for (size_t i = 0; i < face_filament.size(); ++i)
+        if (face_filament[i] > 0 && size_t(face_filament[i]) < by_slot.size())
+            out[i] = by_slot[size_t(face_filament[i])];
+    return out;
+}
+
 Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size)
+{
+    return render(its, seg, view, size, nullptr);
+}
+
+Image render_draft(const indexed_triangle_set &its, const View &view, const std::vector<FaceColor> &face_colors, int size)
+{
+    Segmentation one; // the renderer wants a segment for every face; the draft has no numbers to draw
+    one.face_segment.assign(its.indices.size(), 0);
+    one.segments.resize(1);
+    return face_colors.size() == its.indices.size() ? render(its, one, view, size, &face_colors) : render(its, one, view, size, nullptr);
+}
+
+namespace {
+Image render(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, const std::vector<FaceColor> *face_colors)
 {
     Image img;
     img.width = img.height = size;
@@ -347,10 +394,15 @@ Image render_view(const indexed_triangle_set &its, const Segmentation &seg, cons
                                 .cross((its.vertices[its.indices[t](2)] - its.vertices[its.indices[t](0)]).cast<double>());
             const double shade = 0.55 + 0.45 * std::fabs(n.norm() > 1e-12 ? n.normalized().dot(light) : 0.);
             unsigned char col[3];
-            segment_color(s, col);
+            if (face_colors != nullptr)
+                std::copy((*face_colors)[t].begin(), (*face_colors)[t].end(), col);
+            else
+                segment_color(s, col);
             put_pixel(img, x, y, (unsigned char) (col[0] * shade), (unsigned char) (col[1] * shade), (unsigned char) (col[2] * shade));
             sumx[s] += x; sumy[s] += y; ++cnt[s];
         }
+    if (face_colors != nullptr)
+        return img; // a painted draft carries no segment numbers
     std::vector<double> best_d(nseg, 1e300);
     std::vector<std::pair<int, int>> anchor(nseg, {-1, -1});
     for (int y = 0; y < size; ++y)
@@ -373,6 +425,7 @@ Image render_view(const indexed_triangle_set &its, const Segmentation &seg, cons
             draw_number(img, int(s), anchor[s].first, anchor[s].second, label_scale);
     return img;
 }
+} // namespace
 
 std::string encode_png(const Image &image)
 {

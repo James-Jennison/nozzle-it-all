@@ -215,3 +215,33 @@ TEST_CASE("Boundary cleanup returns its input when the list does not match the m
     const indexed_triangle_set its = sheet();
     CHECK(SP::clean_paint_boundaries(its, {1, 2, 3}) == std::vector<int>{1, 2, 3});
 }
+
+TEST_CASE("A painted draft is drawn in the filaments' own colours, kept faces in grey", "[SemanticPaint]")
+{
+    const std::vector<SP::FilamentInfo> filaments = {{1, "PLA", "#FF0000", ""}, {2, "PLA", "#0000ff", ""}, {3, "PLA", "not a colour", ""}};
+    const std::vector<SP::FaceColor>    colors = SP::draft_face_colors({0, 1, 2, 3, 9}, filaments);
+    const SP::FaceColor                 grey{200, 200, 200};
+    REQUIRE(colors.size() == 5);
+    CHECK(colors[0] == grey);
+    CHECK(colors[1] == SP::FaceColor{255, 0, 0});
+    CHECK(colors[2] == SP::FaceColor{0, 0, 255});
+    CHECK(colors[3] == grey);
+    CHECK(colors[4] == grey);
+}
+
+TEST_CASE("A draft view shows the model in the colours given, and there is a view from underneath", "[SemanticPaint]")
+{
+    const TriangleMesh cube = make_cube(10., 10., 10.);
+    const auto         views = SP::draft_views();
+    REQUIRE(views.size() == SP::default_views().size() + 1);
+    CHECK(views.back().name == "underneath");
+
+    const std::vector<SP::FaceColor> red(cube.its.indices.size(), SP::FaceColor{255, 0, 0});
+    const SP::Image                  img = SP::render_draft(cube.its, views.back(), red, 64);
+    REQUIRE(img.rgb.size() == size_t(64) * 64 * 3);
+    // The middle of the picture is the cube's underside: red, shaded, with no green or blue in it.
+    const size_t mid = (size_t(32) * 64 + 32) * 3;
+    CHECK(img.rgb[mid] > 100);
+    CHECK(img.rgb[mid + 1] == 0);
+    CHECK(img.rgb[mid + 2] == 0);
+}

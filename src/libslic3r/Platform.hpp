@@ -41,6 +41,10 @@ std::string     platform_architecture();
 std::string platform_to_string(Platform platform);
 std::string platform_flavor_to_string(PlatformFlavor pf);
 
+// The driver branch named in the text of /proc/driver/nvidia/version (580 for "... Kernel Module  580.178.04 ..."),
+// for the proprietary and the open module's wording alike. 0 when the text names none.
+int nvidia_driver_branch(const std::string &version_text);
+
 } // namespace Slic3r
 
 #endif // SLIC3R_Platform_HPP

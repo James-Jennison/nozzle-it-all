@@ -1242,9 +1242,19 @@ int CLI::run(int argc, char **argv)
         // NVIDIA's proprietary driver cannot back WebKitGTK's DMABUF renderer.
         // Force the shared-memory transport, which keeps compositing and threaded
         // scrolling; the second variable clears Debian/Ubuntu/openSUSE's isNVIDIA().
+        //
+        // Only from driver branch 610 on. On the 580 branch the composited web process leaks one fence
+        // handle (sync_file) for each composited frame, so a page that redraws steadily (a camera's video)
+        // fills its 1024 file handles within a minute and its process ends. Below 610, and when the version
+        // cannot be read, nothing is set: WebKitGTK then keeps accelerated compositing off on NVIDIA, as it
+        // does by itself. 610 is the first branch seen without the leak, not a documented correction.
         if (::access("/proc/driver/nvidia/version", F_OK) == 0 && WebView::SupportsForceSharedMemory()) {
-            ::setenv("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1", /* replace */ false);
-            ::setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", /* replace */ false);
+            std::ifstream  version_file("/proc/driver/nvidia/version");
+            const std::string version_text((std::istreambuf_iterator<char>(version_file)), std::istreambuf_iterator<char>());
+            if (Slic3r::nvidia_driver_branch(version_text) >= 610) {
+                ::setenv("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1", /* replace */ false);
+                ::setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", /* replace */ false);
+            }
         }
 
         if (is_hypervisor_guest() && WebView::SupportsForceSharedMemory())

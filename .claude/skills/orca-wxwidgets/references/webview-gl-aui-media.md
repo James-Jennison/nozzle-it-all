@@ -569,12 +569,15 @@ vue-resize workaround script and sets a persistent SQLite cookie store on the vi
 
 **Mechanism.** `CLI::run` (`src/OrcaSlicer.cpp`, under `#ifdef __WXGTK__`, before GTK initialises)
 sets the DMABUF workarounds and then branches on `GDK_BACKEND`:
-- **Both paths**, before the split: when `/proc/driver/nvidia/version` exists and the linked WebKitGTK
+- **Both paths**, before the split: when `/proc/driver/nvidia/version` exists, names driver branch 610 or
+  newer (`Slic3r::nvidia_driver_branch()`) and the linked WebKitGTK
   honours the switch (>= 2.44, `WebView::SupportsForceSharedMemory()`), it sets
   `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` and `WEBKIT_FORCE_DMABUF_RENDERER=1` non-replacing. The
   proprietary driver cannot back WebKit's hardware DMABUF renderer, so the shared-memory transport keeps
   accelerated compositing instead of dropping it; `WEBKIT_FORCE_DMABUF_RENDERER` clears the
   Debian/Ubuntu/openSUSE `isNVIDIA()` early return, which otherwise returns before the FORCE_SHM check.
+  Below branch 610, or when the version cannot be read, it sets neither: WebKitGTK then keeps accelerated
+  compositing off on NVIDIA by itself (`isNVIDIA()`).
 - **Hypervisor guests**, same position: when `is_hypervisor_guest()` (the `hypervisor` flag in
   `/proc/cpuinfo`) and WebKitGTK >= 2.44, it sets `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` non-replacing.
   Virtual GPUs (VirtualBox VMSVGA, VMware, QEMU) cannot back the hardware DMABUF path either, and
@@ -617,12 +620,21 @@ Runtime backend detection elsewhere uses Orca's `is_running_on_wayland()` / `is_
   ```cpp
   // Wrong: kills compositing and threaded scrolling (and can crash on modern WebKit)
   ::setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1", false);
-  // Right: keep compositing, skip only the hardware DMABUF path
-  if (::access("/proc/driver/nvidia/version", F_OK) == 0 && WebView::SupportsForceSharedMemory()) {
+  // Right: keep compositing, skip only the hardware DMABUF path, on a driver that does not leak fences
+  if (::access("/proc/driver/nvidia/version", F_OK) == 0 && WebView::SupportsForceSharedMemory()
+      && Slic3r::nvidia_driver_branch(version_text) >= 610) {
       ::setenv("WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1", /*replace*/ false);
       ::setenv("WEBKIT_FORCE_DMABUF_RENDERER", "1", /*replace*/ false);
   }
   ```
+- **Rule:** Do not force compositing on an NVIDIA driver older than branch 610. **Why:** on the 580 branch a
+  composited web process leaks one fence handle (`anon_inode:sync_file` in `/proc/<pid>/fd`) for each
+  composited frame; a page that redraws steadily (a `<video>`, a WebRTC camera) reaches the 1024 open-file
+  limit within a minute, the kernel logs `nv_drm_semsurf_fence_wait_ioctl ... invalid sync FD: -24`, and the
+  web process ends or stalls. Neither CPU rasterisation (`WEBKIT_SKIA_ENABLE_CPU_RENDERING`), nor
+  `WEBKIT_GST_DISABLE_GL_SINK`, nor `__NV_DISABLE_EXPLICIT_SYNC`, nor ranking out NVIDIA's video decoder
+  stops it; only leaving compositing off does. 610 is the first branch observed without the leak, not a
+  documented correction. A GPU fault of this kind does not show on a machine that renders in software.
   Cite: WebKit 2.52.6 `Source/WebKit/UIProcess/gtk/AcceleratedBackingStore.cpp`
   (`rendererBufferTransportMode()`), Debian `disable-nvidia-dmabuf.patch`, WebKit bug 262607.
 - **Rule:** Set `WEBKIT_DISABLE_COMPOSITING_MODE` only on the default path, in the branch where wx

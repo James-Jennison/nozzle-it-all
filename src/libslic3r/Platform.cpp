@@ -174,4 +174,25 @@ std::string platform_flavor_to_string(PlatformFlavor pf)
 }
 
 
+int nvidia_driver_branch(const std::string &version_text)
+{
+    // The version is the first word that starts with a digit and holds a dot ("x86_64" starts with a letter).
+    const std::string first_line = version_text.substr(0, version_text.find('\n'));
+    std::size_t at = 0;
+    while (at < first_line.size()) {
+        const std::size_t begin = first_line.find_first_not_of(" \t", at);
+        if (begin == std::string::npos)
+            break;
+        std::size_t end = first_line.find_first_of(" \t", begin);
+        if (end == std::string::npos)
+            end = first_line.size();
+        const std::string word = first_line.substr(begin, end - begin);
+        const std::size_t dot = word.find('.');
+        if (dot != std::string::npos && dot > 0 && word.find_first_not_of("0123456789") == dot)
+            return std::atoi(word.substr(0, dot).c_str());
+        at = end;
+    }
+    return 0;
+}
+
 } // namespace Slic3r

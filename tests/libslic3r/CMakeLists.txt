@@ -83,6 +83,7 @@ add_executable(${_TEST_NAME}_tests
     test_model.cpp
     test_utils.cpp
     test_miniz_extension.cpp
+    test_platform.cpp
     test_timeutils.cpp
     test_semver.cpp
     test_voronoi.cpp

@@ -96,13 +96,13 @@ public:
         FuzzySkin,
         MmSegmentation,
         TextureDisplacement,
+        AiPaint, // NIA: AI auto-paint and the on-plate draft of its answer, with the other painting tools
         Emboss,
         Svg,
         Measure,
         Assembly,
         Simplify,
         BrimEars,
-        AiPaint, // NIA: the on-plate draft of an AI auto-paint answer; opened by its command, not from this toolbar
         //SlaSupports,
         // BBS
         //FaceRecognition,

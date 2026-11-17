@@ -53,8 +53,9 @@ public:
 protected:
     bool               on_init() override { return true; }
     std::string        on_get_name() const override;
-    bool               on_is_activable() const override { return m_draft != nullptr; }
-    bool               on_is_selectable() const override { return false; } // reached from its toolbar button and menu entry
+    // Its button is with the painting tools. Pressed with an object selected, it opens the window that asks; the
+    // answer comes back here as a draft.
+    bool               on_is_activable() const override;
     void               on_set_state() override;
     CommonGizmosDataID on_get_requirements() const override;
     void               on_render() override;

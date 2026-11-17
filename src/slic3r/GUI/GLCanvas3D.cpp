@@ -65,7 +65,6 @@
 #include <string_view>
 #include "slic3r/GUI/Selection.hpp"
 #include "GLCanvas3D.hpp"
-#include "SemanticPaintDialog.hpp"
 #include "SequentialPrintClearance.hpp"
 #ifdef SLIC3R_CAD
 #include "slic3r/GUI/CAD/DesignSketchTool.hpp"   // Design tab: interactive 2D sketch tool
@@ -7730,8 +7729,8 @@ bool GLCanvas3D::_init_main_toolbar()
     if (!m_main_toolbar.add_item(item))
         return false;
 
-    // NIA: Fix Model and AI auto-paint are also in the object's Modify menu; here they are in plain sight. Each opens
-    // windows of its own, so it runs after this mouse event has been handled, never on its stack.
+    // NIA: Fix Model is also in the object's Modify menu; here it is in plain sight. It opens windows of its own, so it
+    // runs after this mouse event has been handled, never on its stack. (AI auto-paint is with the painting tools.)
     if (!m_main_toolbar.add_separator())
         return false;
 
@@ -7742,15 +7741,6 @@ bool GLCanvas3D::_init_main_toolbar()
     tool.sprite_id = item.sprite_id + 1;
     tool.left.action_callback = []() { wxGetApp().CallAfter([]() { if (wxGetApp().plater()->can_fix_through_cgal()) wxGetApp().obj_list()->fix_through_cgal(); }); };
     tool.enabling_callback = []()->bool { return wxGetApp().plater()->can_fix_through_cgal(); };
-    if (!m_main_toolbar.add_item(tool))
-        return false;
-
-    tool.name = "aipaint";
-    tool.icon_filename = m_is_dark ? "toolbar_ai_paint_dark.svg" : "toolbar_ai_paint.svg";
-    tool.tooltip = _utf8(L("AI auto-paint"));
-    tool.sprite_id++;
-    tool.left.action_callback = []() { wxGetApp().CallAfter([]() { if (can_run_semantic_paint()) run_semantic_paint(); }); };
-    tool.enabling_callback = []()->bool { return can_run_semantic_paint(); };
     if (!m_main_toolbar.add_item(tool))
         return false;
 

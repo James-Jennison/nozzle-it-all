@@ -431,6 +431,13 @@ bool can_run_semantic_paint()
 void run_semantic_paint()
 {
     Plater *plater = wxGetApp().plater();
+    // Whatever tool is open is closed first, this one included (opened from its button it has no draft yet), and it is
+    // opened again only with an answer to show.
+    GLGizmosManager &open_tools = plater->get_view3D_canvas3D()->get_gizmos_manager();
+    if (open_tools.get_current_type() != GLGizmosManager::EType::Undefined) {
+        open_tools.reset_all_states();
+        plater->get_view3D_canvas3D()->set_as_dirty();
+    }
     const int obj_idx = wxGetApp().obj_list()->get_selected_obj_idx();
     Model &model = plater->model();
     if (obj_idx < 0 || obj_idx >= int(model.objects.size())) {
@@ -495,8 +502,6 @@ void run_semantic_paint()
     draft.seg        = seg;
     draft.filaments  = filaments;
     draft.suggested  = std::move(suggested);
-    if (gizmos.get_current_type() != GLGizmosManager::EType::Undefined)
-        gizmos.reset_all_states();
     tool->start(std::move(draft));
     gizmos.open_gizmo(GLGizmosManager::EType::AiPaint);
     plater->get_view3D_canvas3D()->set_as_dirty();

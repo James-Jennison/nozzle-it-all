@@ -11,6 +11,7 @@
 #include "slic3r/GUI/ImGuiWrapper.hpp"
 #include "slic3r/GUI/MeshUtils.hpp"
 #include "slic3r/GUI/Plater.hpp"
+#include "slic3r/GUI/SemanticPaintDialog.hpp"
 #include "slic3r/GUI/format.hpp"
 
 #include "libslic3r/Color.hpp"
@@ -41,7 +42,9 @@ GLGizmoAiPaint::GLGizmoAiPaint(GLCanvas3D &parent, const std::string &icon_filen
 
 GLGizmoAiPaint::~GLGizmoAiPaint() = default;
 
-std::string GLGizmoAiPaint::on_get_name() const { return _u8L("AI auto-paint draft"); }
+std::string GLGizmoAiPaint::on_get_name() const { return _u8L("AI auto-paint"); }
+
+bool GLGizmoAiPaint::on_is_activable() const { return m_draft != nullptr || can_run_semantic_paint(); }
 
 CommonGizmosDataID GLGizmoAiPaint::on_get_requirements() const { return CommonGizmosDataID(int(CommonGizmosDataID::SelectionInfo)); }
 
@@ -150,6 +153,9 @@ void GLGizmoAiPaint::on_set_state()
     } else if (m_state == On) {
         m_dirty = true;
         m_parent.set_as_dirty();
+        // Opened from its button, there is no draft yet: the window that asks is shown once this event is handled.
+        if (m_draft == nullptr)
+            wxGetApp().CallAfter([]() { run_semantic_paint(); });
     }
 }
 

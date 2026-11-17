@@ -316,7 +316,7 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
     const auto &segments = m_draft->seg.segments;
     const float wrap     = m_imgui->scaled(26.f);
 
-    m_imgui->text(_L("AI auto-paint draft"));
+    m_imgui->text(_L("Step 3 of 3: check the draft"));
     ImGui::PushTextWrapPos(wrap);
     m_imgui->text(format_wxstr(_L("%1% of %2% faces get a filament. This is a draft: the model is unchanged until you apply. Turn the view to "
                                   "look at every side, underneath too."), m_assigned, m_draft->seg.face_segment.size()));

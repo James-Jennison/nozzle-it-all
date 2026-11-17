@@ -175,12 +175,6 @@ public:
                             LB_AUTO_WRAP, wxSize(width, -1)),
                   0, wxEXPAND | wxALL, edge);
 
-        m_send = new ::Button(m_body, _L("Send"));
-        m_send->SetStyle(ButtonStyle::Confirm, ButtonType::Window);
-        body->Add(m_send, 0, wxLEFT | wxRIGHT | wxBOTTOM, edge);
-        m_status = new Label(m_body, wxEmptyString, LB_AUTO_WRAP, wxSize(width, -1));
-        body->Add(m_status, 0, wxLEFT | wxRIGHT | wxBOTTOM | wxEXPAND, edge);
-
         // The answer: one choice per segment, shown once there is one.
         m_result_sizer = new wxFlexGridSizer(3, gap, edge);
         m_result_sizer->AddGrowableCol(2, 1);
@@ -198,8 +192,12 @@ public:
         m_body->SetSizer(body);
         auto *sizer = new wxBoxSizer(wxVERTICAL);
         sizer->Add(m_body, 1, wxEXPAND);
-        auto *buttons = new DialogButtons(this, {L("Apply as paint"), "Cancel"}, _L("Apply as paint"));
-        m_apply       = buttons->GetButtonFromIndex(0);
+        // Below the scrolled part and always in view: what is going on or why Send cannot be pressed, then the buttons.
+        m_status = new Label(this, wxEmptyString, LB_AUTO_WRAP, wxSize(width, -1));
+        sizer->Add(m_status, 0, wxLEFT | wxRIGHT | wxTOP | wxEXPAND, edge);
+        auto *buttons = new DialogButtons(this, {L("Send"), L("Apply as paint"), "Cancel"}, _L("Apply as paint"), 1);
+        m_send        = buttons->GetButtonFromIndex(0);
+        m_apply       = buttons->GetButtonFromIndex(1);
         m_apply->Disable();
         m_apply->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { EndModal(wxID_OK); });
         buttons->GetCANCEL()->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { EndModal(wxID_CANCEL); });
@@ -253,7 +251,6 @@ protected:
         m_provider->Rescale();
         for (::ComboBox *choice : m_choices)
             choice->Rescale();
-        m_send->Rescale();
         m_fill_claude->Rescale();
         fit_to_screen();
         GetSizer()->SetSizeHints(this);
@@ -266,7 +263,7 @@ private:
     {
         const wxSize content = m_body->GetSizer()->GetMinSize();
         const int    room    = wxDisplay(wxGetApp().mainframe ? static_cast<wxWindow *>(wxGetApp().mainframe) : this).GetClientArea().GetHeight() -
-                               FromDIP(190);
+                               FromDIP(230);
         m_body->SetMinSize(wxSize(content.GetWidth() + wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_body),
                                   std::max(FromDIP(200), std::min(content.GetHeight(), room))));
         m_body->FitInside();
@@ -361,6 +358,8 @@ private:
         m_status->SetLabel(text);
         m_status->Wrap(-1);
         m_status->Wrap(m_status->GetSize().GetWidth() > 0 ? m_status->GetSize().GetWidth() : FromDIP(430));
+        if (GetSizer() != nullptr)
+            Layout();
         m_body->Layout();
         m_body->FitInside();
     }

@@ -511,7 +511,8 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
     y = std::max(std::min(y, bottom_limit - ImGui::GetFrameHeight() * 22.f), 0.f);
     GizmoImguiSetNextWIndowPos(x, y, ImGuiCond_Always, 0.0f, 0.0f);
     // Never taller than the room under it: on a small screen the panel scrolls instead of running off the plate.
-    ImGui::SetNextWindowSizeConstraints(ImVec2(0.f, 0.f), ImVec2(FLT_MAX, std::max(bottom_limit - y, ImGui::GetFrameHeight() * 8.f)));
+    const float room = float(m_parent.get_canvas_size().get_height()) - y - ImGui::GetFrameHeight();
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0.f, 0.f), ImVec2(FLT_MAX, std::max(room, ImGui::GetFrameHeight() * 8.f)));
     ImGuiWrapper::push_toolbar_style(scale);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f * scale));
     GizmoImguiBegin(get_name(), ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |

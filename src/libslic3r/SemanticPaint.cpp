@@ -687,8 +687,8 @@ std::optional<int> as_int(const nlohmann::json &v)
 } // namespace
 
 namespace {
-// A part name as it may be shown: printable, single-line, short.
-std::string shown_name(const std::string &raw)
+// A name from the answer as it may be shown: printable, single-line, and no longer than `limit` bytes.
+std::string shown_name(const std::string &raw, size_t limit = 40)
 {
     std::string out;
     for (const char c : raw) {
@@ -696,7 +696,7 @@ std::string shown_name(const std::string &raw)
         if (u < 0x20 || u == 0x7f)
             continue;
         // A new character is begun only while there is room for all of it, so the cut never falls inside one.
-        if ((u & 0xC0) != 0x80 && out.size() >= 37)
+        if ((u & 0xC0) != 0x80 && out.size() + 3 >= limit)
             break;
         out += c;
     }
@@ -735,7 +735,7 @@ std::optional<Suggestion> parse_suggestion(const std::string &text, size_t segme
         out.name.assign(segment_count, std::string());
         out.unsure.assign(segment_count, 0);
         if (j.contains("object") && j["object"].is_string())
-            out.object = shown_name(j["object"].get<std::string>());
+            out.object = shown_name(j["object"].get<std::string>(), 160);
         for (const auto &a : j[list]) {
             if (!a.is_object() || !a.contains("segment"))
                 continue;

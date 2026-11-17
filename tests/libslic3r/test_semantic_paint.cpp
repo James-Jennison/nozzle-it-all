@@ -337,6 +337,11 @@ TEST_CASE("SemanticPaint: an answer with part names and doubts is read, and so i
     CHECK(cut->name[0].size() <= 40);
     CHECK(cut->name[0].size() % 2 == 0);
     CHECK(cut->name[0].size() >= 30);
+    // What the object is taken to be has room for a sentence, and a limit too.
+    const auto long_object = SP::parse_suggestion("{\"object\":\"" + std::string(100, 'a') + std::string(100, 'b') + "\",\"parts\":[]}", 1, 1);
+    REQUIRE(long_object.has_value());
+    CHECK(long_object->object.size() > 100);
+    CHECK(long_object->object.size() <= 160);
 }
 
 TEST_CASE("SemanticPaint: a part no view numbers is not asked about and follows the part around it", "[SemanticPaint]")

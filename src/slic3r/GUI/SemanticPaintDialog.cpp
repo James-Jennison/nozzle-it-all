@@ -284,7 +284,7 @@ private:
     {
         const wxSize content = m_body->GetSizer()->GetMinSize();
         const int    room    = wxDisplay(wxGetApp().mainframe ? static_cast<wxWindow *>(wxGetApp().mainframe) : this).GetClientArea().GetHeight() -
-                               FromDIP(230);
+                               FromDIP(320);
         m_body->SetMinSize(wxSize(content.GetWidth() + wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_body),
                                   std::min(content.GetHeight(), std::max(FromDIP(200), room))));
         m_body->Layout();
@@ -325,6 +325,9 @@ private:
         m_body->Scroll(0, 0);
         update_state();
         refit();
+        // The steps differ in height. Where the system lets a window place itself, it stays in the middle and on the screen.
+        if (GetSizer() != nullptr)
+            CenterOnParent();
     }
 
     void load_settings()

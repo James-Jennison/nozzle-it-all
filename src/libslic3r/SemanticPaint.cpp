@@ -1,6 +1,7 @@
 #include "SemanticPaint.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <utility>
 
 #include <miniz.h>
 #include <nlohmann/json.hpp>
@@ -603,6 +605,101 @@ std::vector<int> face_filaments(const Segmentation &seg, const std::vector<int> 
         const int s = seg.face_segment[f];
         if (s >= 0 && size_t(s) < seg_to_filament.size())
             out[f] = seg_to_filament[s];
+    }
+    return out;
+}
+
+std::vector<int> clean_paint_boundaries(const indexed_triangle_set &its, const std::vector<int> &face_filament)
+{
+    const size_t n = its.indices.size();
+    std::vector<int> out = face_filament;
+    if (face_filament.size() != n)
+        return out;
+
+    // Vertices at the same position count as one, so that a mesh stored as loose triangles has the same neighbours.
+    std::map<std::array<float, 3>, int> by_position;
+    std::vector<int> same(its.vertices.size());
+    for (size_t i = 0; i < its.vertices.size(); ++i) {
+        const stl_vertex &v = its.vertices[i];
+        same[i] = by_position.emplace(std::array<float, 3>{v.x(), v.y(), v.z()}, int(i)).first->second;
+    }
+
+    struct Side { int face; int edge; };
+    std::map<std::pair<int, int>, std::vector<Side>> edge_faces;
+    std::vector<std::array<double, 3>> lengths(n);
+    std::vector<Vec3d> normals(n, Vec3d::Zero());
+    for (size_t f = 0; f < n; ++f) {
+        const stl_triangle_vertex_indices &t = its.indices[f];
+        const Vec3d a = its.vertices[t(0)].cast<double>(), b = its.vertices[t(1)].cast<double>(), c = its.vertices[t(2)].cast<double>();
+        const Vec3d normal = (b - a).cross(c - a);
+        if (normal.norm() > 0.)
+            normals[f] = normal.normalized();
+        for (int e = 0; e < 3; ++e) {
+            const int p = t(e), q = t((e + 1) % 3);
+            lengths[f][e] = (its.vertices[p].cast<double>() - its.vertices[q].cast<double>()).norm();
+            edge_faces[std::minmax(same[p], same[q])].push_back({int(f), e});
+        }
+    }
+    std::vector<std::array<int, 3>> neighbors(n, std::array<int, 3>{-1, -1, -1});
+    for (const auto &entry : edge_faces) {
+        const std::vector<Side> &sides = entry.second;
+        if (sides.size() == 2 && sides[0].face != sides[1].face) {
+            neighbors[sides[0].face][sides[0].edge] = sides[1].face;
+            neighbors[sides[1].face][sides[1].edge] = sides[0].face;
+        }
+    }
+
+    // Connected patches of one filament, to leave small ones alone.
+    std::vector<int>    patch(n, -1);
+    std::vector<size_t> patch_size;
+    std::vector<int>    queue;
+    for (size_t seed = 0; seed < n; ++seed) {
+        if (patch[seed] >= 0)
+            continue;
+        const int id = int(patch_size.size());
+        queue.assign(1, int(seed));
+        patch[seed] = id;
+        size_t count = 0;
+        while (!queue.empty()) {
+            const int f = queue.back();
+            queue.pop_back();
+            ++count;
+            for (int g : neighbors[f])
+                if (g >= 0 && patch[g] < 0 && face_filament[g] == face_filament[f]) {
+                    patch[g] = id;
+                    queue.push_back(g);
+                }
+        }
+        patch_size.push_back(count);
+    }
+
+    constexpr size_t k_detail_faces = 8;    // a patch this small is kept as it is
+    constexpr double k_smooth_cos   = 0.94; // neighbours further apart than this are across a crease
+    constexpr double k_shorter_by   = 1.1;  // the boundary must get this much shorter
+    for (size_t f = 0; f < n; ++f) {
+        const std::array<int, 3> &nb = neighbors[f];
+        if (face_filament[f] <= 0 || patch_size[patch[f]] <= k_detail_faces || nb[0] < 0 || nb[1] < 0 || nb[2] < 0)
+            continue;
+        bool smooth = true;
+        for (int g : nb)
+            smooth = smooth && normals[f].dot(normals[g]) >= k_smooth_cos;
+        if (!smooth)
+            continue;
+        int candidate = 0;
+        for (int i = 0; i < 3 && candidate == 0; ++i)
+            for (int j = i + 1; j < 3; ++j)
+                if (face_filament[nb[i]] > 0 && face_filament[nb[i]] != face_filament[f] && face_filament[nb[i]] == face_filament[nb[j]])
+                    candidate = face_filament[nb[i]];
+        if (candidate == 0)
+            continue;
+        double removed = 0., total = 0.;
+        for (int e = 0; e < 3; ++e) {
+            total += lengths[f][e];
+            if (face_filament[nb[e]] == candidate)
+                removed += lengths[f][e];
+        }
+        if (removed > (total - removed) * k_shorter_by)
+            out[f] = candidate;
     }
     return out;
 }

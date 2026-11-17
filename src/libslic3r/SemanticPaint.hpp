@@ -110,4 +110,12 @@ std::optional<std::vector<int>> parse_assignments(const std::string &reply_text,
 // Per-face painted filament (0 = unpainted) for a segment -> filament map.
 std::vector<int> face_filaments(const Segmentation &seg, const std::vector<int> &seg_to_filament);
 
+// One conservative pass over the colour boundaries of a per-face filament list (0 = left as it is). A face is given
+// its neighbours' filament only when two of its three neighbours agree on another filament and the boundary gets
+// shorter by it; that takes back a single triangle poking into another colour. Never changed: faces at 0, faces
+// next to a 0 or to an open or non-manifold edge, faces across a crease (normals more than about 20 degrees apart),
+// and connected patches of one filament of eight faces or fewer, which are taken as intended detail. Neighbours are
+// found by vertex position, so a mesh with repeated vertices gives the same answer. The input is not changed.
+std::vector<int> clean_paint_boundaries(const indexed_triangle_set &its, const std::vector<int> &face_filament);
+
 }} // namespace Slic3r::SemanticPaint

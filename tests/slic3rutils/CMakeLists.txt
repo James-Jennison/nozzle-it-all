@@ -28,6 +28,7 @@ add_executable(${_TEST_NAME}_tests
     test_fleet_status.cpp
     test_camera_relay.cpp
     test_mjpeg_stream.cpp
+    test_semantic_paint_client.cpp
     test_u1_job_journal.cpp
     test_printer_discovery.cpp
     test_spool_jobs.cpp

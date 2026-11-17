@@ -21,7 +21,7 @@ namespace process = boost::process;
 
 namespace Slic3r {
 
-const char *const k_semantic_paint_default_command = "claude -p --output-format json --allowedTools Read --add-dir {dir} --no-session-persistence";
+const char *const k_semantic_paint_claude_code_command = "claude -p --output-format json --allowedTools Read --add-dir {dir} --no-session-persistence";
 
 namespace {
 
@@ -144,7 +144,7 @@ SemanticPaintReply run_openai(const SemanticPaintSettings &s, const std::string 
     std::vector<std::string> b64;
     for (const std::string &p : png_files)
         b64.push_back(SemanticPaint::base64_encode(p));
-    std::string base = s.endpoint.empty() ? "http://localhost:11434/v1" : s.endpoint;
+    std::string base = s.endpoint;
     while (!base.empty() && base.back() == '/')
         base.pop_back();
 
@@ -195,9 +195,37 @@ std::string semantic_paint_find_claude()
     return {};
 }
 
+std::string semantic_paint_not_ready(const SemanticPaintSettings &s)
+{
+    const auto blank = [](const std::string &t) { return t.find_first_not_of(" \t") == std::string::npos; };
+    if (s.provider == "command")
+        return blank(s.command) ? "No command set." : "";
+    if (s.provider == "openai")
+        return blank(s.endpoint) ? "No server address set." : blank(s.model) ? "No model set." : "";
+    return s.provider.empty() ? "No provider chosen." : "Unknown provider: " + s.provider;
+}
+
+std::string semantic_paint_recipient(const SemanticPaintSettings &s)
+{
+    if (s.provider == "openai")
+        return s.endpoint;
+    if (s.provider != "command")
+        return {};
+    const size_t from = s.command.find_first_not_of(" \t");
+    if (from == std::string::npos)
+        return {};
+    const size_t to = s.command.find_first_of(" \t", from);
+    return s.command.substr(from, to == std::string::npos ? std::string::npos : to - from);
+}
+
 SemanticPaintReply semantic_paint_query(const SemanticPaintSettings &settings, const std::string &prompt,
                                         const std::vector<std::string> &png_files, const std::atomic<bool> *cancel)
 {
+    if (const std::string why = semantic_paint_not_ready(settings); !why.empty()) {
+        SemanticPaintReply r;
+        r.error = why;
+        return r;
+    }
     if (settings.provider == "command")
         return run_command(settings, prompt, png_files, cancel);
     if (settings.provider == "openai")

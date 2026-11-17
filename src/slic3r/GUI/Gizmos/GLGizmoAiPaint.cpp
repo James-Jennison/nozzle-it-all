@@ -314,13 +314,19 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
 
     bool       changed = false, do_apply = false, do_close = false;
     const auto &segments = m_draft->seg.segments;
-    const float wrap     = m_imgui->scaled(26.f);
+    const float wrap     = m_imgui->scaled(29.f);
 
-    m_imgui->text(_L("Step 3 of 3: check the draft"));
+    m_imgui->text(_L("AI auto-paint draft"));
     ImGui::PushTextWrapPos(wrap);
+    if (!m_draft->subject.empty())
+        m_imgui->text(format_wxstr(_L("The service took the object to be: %1%"), from_u8(m_draft->subject)));
     m_imgui->text(format_wxstr(_L("%1% of %2% faces get a filament. This is a draft: the model is unchanged until you apply. Turn the view to "
                                   "look at every side, underneath too."), m_assigned, m_draft->seg.face_segment.size()));
     m_imgui->text(_L("Click a part on the model to find it in the list."));
+    if (const size_t unsure = size_t(std::count(m_draft->unsure.begin(), m_draft->unsure.end(), 1)); unsure > 0)
+        m_imgui->text(format_wxstr(_L_PLURAL("The service was unsure about %1% part. It is marked with a question mark: look at it first.",
+                                             "The service was unsure about %1% parts. They are marked with a question mark: look at them first.", unsure),
+                                   unsure));
     ImGui::PopTextWrapPos();
 
     if (m_imgui->bbl_checkbox(_L("Compare with original"), m_show_original))
@@ -364,19 +370,27 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
             m_scroll_to_selected = false;
         }
         ImGui::AlignTextToFramePadding();
-        const std::string label = "#" + std::to_string(segments[i].id) + "  " + (boost::format("%.1f%%") % (segments[i].area_fraction * 100.)).str();
+        // The part's number as in the pictures and the name the service gave it; without a name, its share of the surface.
+        const std::string share  = (boost::format("%.1f%%") % (segments[i].area_fraction * 100.)).str();
+        const std::string name   = i < m_draft->names.size() ? m_draft->names[i] : std::string();
+        const bool        unsure = i < m_draft->unsure.size() && m_draft->unsure[i] != 0;
+        const std::string label  = "#" + std::to_string(segments[i].id) + (unsure ? " ?  " : "  ") + (name.empty() ? share : name);
         if (selected)
             ImGui::TextColored(ImVec4(k_highlight.r(), k_highlight.g(), k_highlight.b(), 1.f), "%s", label.c_str());
+        else if (unsure)
+            ImGui::TextColored(ImVec4(0.95f, 0.6f, 0.1f, 1.f), "%s", label.c_str());
         else
             ImGui::TextUnformatted(label.c_str());
-        ImGui::SameLine(m_imgui->scaled(7.f));
+        if (ImGui::IsItemHovered() && !name.empty())
+            m_imgui->tooltip(from_u8(name + "  " + share), wrap);
+        ImGui::SameLine(m_imgui->scaled(12.f));
         const int   slot = m_choice[i];
         const ImVec4 swatch = slot > 0 && size_t(slot) <= extruders.size() ?
             ImVec4(extruders[size_t(slot - 1)].r(), extruders[size_t(slot - 1)].g(), extruders[size_t(slot - 1)].b(), 1.f) : ImVec4(0.5f, 0.5f, 0.5f, 0.35f);
         ImGui::ColorButton("##swatch", swatch, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoDragDrop,
                            ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(m_imgui->scaled(14.f));
+        ImGui::SetNextItemWidth(m_imgui->scaled(12.f));
         if (ImGui::BeginCombo("##filament", slot_name(slot).c_str())) {
             for (int option = 0; option <= int(m_draft->filaments.size()); ++option) {
                 const int value = option == 0 ? 0 : m_draft->filaments[size_t(option - 1)].index;

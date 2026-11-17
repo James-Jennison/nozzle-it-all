@@ -6,6 +6,11 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <set>
+#include <string>
+#include <vector>
+
 
 using namespace Slic3r;
 namespace SP = Slic3r::SemanticPaint;
@@ -244,4 +249,92 @@ TEST_CASE("A draft view shows the model in the colours given, and there is a vie
     CHECK(img.rgb[mid] > 100);
     CHECK(img.rgb[mid + 1] == 0);
     CHECK(img.rgb[mid + 2] == 0);
+}
+
+TEST_CASE("SemanticPaint: a view says which numbers it carries, and each is a black-on-white badge", "[SemanticPaint]")
+{
+    const TriangleMesh cube = make_cube(10., 20., 30.);
+    const auto         seg  = SP::segment_mesh(cube.its);
+    REQUIRE(seg.segments.size() == 6);
+    const std::vector<SP::View> views = SP::default_views();
+    std::set<int>               seen;
+    for (const SP::View &view : views) {
+        std::vector<int> labelled{99}; // overwritten, never appended to
+        const SP::Image  img = SP::render_view(cube.its, seg, view, 256, &labelled);
+        // A straight-on view of a box shows one face, the isometric view three.
+        CHECK(labelled.size() == (view.name == "isometric" ? 3u : 1u));
+        CHECK(std::is_sorted(labelled.begin(), labelled.end()));
+        seen.insert(labelled.begin(), labelled.end());
+        size_t white = 0;
+        for (size_t i = 0; i < img.rgb.size(); i += 3)
+            white += img.rgb[i] == 255 && img.rgb[i + 1] == 255 && img.rgb[i + 2] == 255;
+        CHECK(white > 20 * labelled.size());
+    }
+    // Every face of the box is numbered in some view except the one nothing looks at: the underside.
+    CHECK(seen.size() == 5);
+
+    const std::vector<SP::FilamentInfo> fil = {{1, "PLA", "#FF0000", "Red"}, {2, "PLA", "#FFFFFF", "White"}};
+    const std::string prompt = SP::build_prompt(seg, fil, "box", {"front", "top"}, {}, {{2}, {}});
+    CHECK(prompt.find("Numbers drawn in each view") != std::string::npos);
+    CHECK(prompt.find("  front: 2\n") != std::string::npos);
+    CHECK(prompt.find("  top: none\n") != std::string::npos);
+    CHECK(prompt.find("\"parts\":[{\"segment\":0,\"name\"") != std::string::npos);
+    // A list that does not match the views is left out, not shown wrongly.
+    CHECK(SP::build_prompt(seg, fil, "box", {"front", "top"}, {}, {{2}}).find("Numbers drawn") == std::string::npos);
+}
+
+TEST_CASE("SemanticPaint: a crowded view drops badges before it lets them cover each other", "[SemanticPaint]")
+{
+    // Thirty thin strips side by side: at this size only some of their numbers fit.
+    indexed_triangle_set its;
+    SP::Segmentation     seg;
+    seg.segments.resize(30);
+    for (int i = 0; i < 30; ++i) {
+        const float x0 = float(i), x1 = float(i) + 1.f;
+        const int   v  = int(its.vertices.size());
+        its.vertices.emplace_back(x0, 0.f, 0.f);
+        its.vertices.emplace_back(x1, 0.f, 0.f);
+        its.vertices.emplace_back(x1, 0.f, 30.f);
+        its.vertices.emplace_back(x0, 0.f, 30.f);
+        its.indices.emplace_back(v, v + 1, v + 2);
+        its.indices.emplace_back(v, v + 2, v + 3);
+        seg.face_segment.push_back(i);
+        seg.face_segment.push_back(i);
+        seg.segments[size_t(i)].id = i;
+    }
+    std::vector<int> labelled;
+    SP::render_view(its, seg, SP::default_views().front(), 256, &labelled);
+    CHECK(!labelled.empty());
+    CHECK(labelled.size() < 30);
+}
+
+TEST_CASE("SemanticPaint: an answer with part names and doubts is read, and so is the earlier shape", "[SemanticPaint]")
+{
+    const std::string reply = "Here you go:\n```json\n{\"object\":\"a cat\",\"parts\":[{\"segment\":0,\"name\":\"body\",\"filament\":2,\"sure\":true},"
+                              "{\"segment\":1,\"name\":\"left\\near\\u0007\",\"filament\":1,\"sure\":false},"
+                              "{\"segment\":2,\"name\":\"tail\",\"filament\":9},{\"segment\":7,\"name\":\"nothing\",\"filament\":1}]}\n```";
+    const auto out = SP::parse_suggestion(reply, 3, 2);
+    REQUIRE(out.has_value());
+    CHECK(out->object == "a cat");
+    CHECK(out->filament == std::vector<int>{2, 1, 0}); // a filament that does not exist leaves the part as it is
+    CHECK(out->name[0] == "body");
+    CHECK(out->name[1] == "leftear"); // control characters never reach the screen
+    CHECK(out->name[2] == "tail");
+    CHECK(out->unsure == std::vector<char>{0, 1, 0});
+
+    const auto old = SP::parse_suggestion("{\"assignments\":[{\"segment\":1,\"filament\":2}]}", 3, 2);
+    REQUIRE(old.has_value());
+    CHECK(old->filament == std::vector<int>{0, 2, 0});
+    CHECK(old->name[1].empty());
+    CHECK_FALSE(SP::parse_suggestion("{\"foo\":1}", 3, 2).has_value());
+
+    // A long name is cut, and never inside a character.
+    std::string longname;
+    for (int i = 0; i < 30; ++i)
+        longname += "\xC3\xA9"; // é
+    const auto cut = SP::parse_suggestion("{\"parts\":[{\"segment\":0,\"name\":\"" + longname + "\",\"filament\":1}]}", 1, 1);
+    REQUIRE(cut.has_value());
+    CHECK(cut->name[0].size() <= 40);
+    CHECK(cut->name[0].size() % 2 == 0);
+    CHECK(cut->name[0].size() >= 30);
 }

@@ -251,34 +251,48 @@ void put_pixel(Image &img, int x, int y, unsigned char r, unsigned char g, unsig
     p[0] = r; p[1] = g; p[2] = b;
 }
 
+// The box a number's badge takes, centred on (cx, cy): the digits, a white margin and a black frame.
+struct Badge
+{
+    int x0, y0, x1, y1; // inclusive
+    bool overlaps(const Badge &o, int gap) const { return x0 - gap <= o.x1 && o.x0 - gap <= x1 && y0 - gap <= o.y1 && o.y0 - gap <= y1; }
+};
+
+Badge badge_box(int number, int cx, int cy, int scale)
+{
+    const int digits = int(std::to_string(number).size());
+    const int w = digits * 4 * scale - scale, h = 5 * scale, pad = scale + 1;
+    const int x0 = cx - w / 2 - pad, y0 = cy - h / 2 - pad;
+    return {x0, y0, x0 + w + 2 * pad - 1, y0 + h + 2 * pad - 1};
+}
+
+// Black digits on a white box with a black frame: readable on any tint and at a reduced size.
 void draw_number(Image &img, int number, int cx, int cy, int scale)
 {
     const std::string digits = std::to_string(number);
-    const int         w      = int(digits.size()) * 4 * scale - scale;
-    const int         h      = 5 * scale;
-    const int         x0     = cx - w / 2, y0 = cy - h / 2;
-    for (int pass = 0; pass < 2; ++pass)
-        for (size_t d = 0; d < digits.size(); ++d)
-            for (int row = 0; row < 5; ++row)
-                for (int col = 0; col < 3; ++col)
-                    if (k_font[digits[d] - '0'][row] & (4 >> col)) {
-                        const int px = x0 + int(d) * 4 * scale + col * scale, py = y0 + row * scale;
-                        for (int dy = 0; dy < scale; ++dy)
-                            for (int dx = 0; dx < scale; ++dx) {
-                                if (pass == 0)
-                                    for (int ox = -1; ox <= 1; ++ox)
-                                        for (int oy = -1; oy <= 1; ++oy)
-                                            put_pixel(img, px + dx + ox, py + dy + oy, 0, 0, 0);
-                                else
-                                    put_pixel(img, px + dx, py + dy, 255, 255, 255);
-                            }
-                    }
+    const Badge       box    = badge_box(number, cx, cy, scale);
+    for (int y = box.y0; y <= box.y1; ++y)
+        for (int x = box.x0; x <= box.x1; ++x) {
+            const bool frame = x == box.x0 || x == box.x1 || y == box.y0 || y == box.y1;
+            put_pixel(img, x, y, frame ? 0 : 255, frame ? 0 : 255, frame ? 0 : 255);
+        }
+    const int x0 = box.x0 + scale + 1, y0 = box.y0 + scale + 1;
+    for (size_t d = 0; d < digits.size(); ++d)
+        for (int row = 0; row < 5; ++row)
+            for (int col = 0; col < 3; ++col)
+                if (k_font[digits[d] - '0'][row] & (4 >> col)) {
+                    const int px = x0 + int(d) * 4 * scale + col * scale, py = y0 + row * scale;
+                    for (int dy = 0; dy < scale; ++dy)
+                        for (int dx = 0; dx < scale; ++dx)
+                            put_pixel(img, px + dx, py + dy, 0, 0, 0);
+                }
 }
 
 } // namespace
 
 namespace {
-Image render(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, const std::vector<FaceColor> *face_colors);
+Image render(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, const std::vector<FaceColor> *face_colors,
+             std::vector<int> *labelled = nullptr);
 }
 
 std::vector<View> draft_views()
@@ -310,9 +324,9 @@ std::vector<FaceColor> draft_face_colors(const std::vector<int> &face_filament, 
     return out;
 }
 
-Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size)
+Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, std::vector<int> *labelled)
 {
-    return render(its, seg, view, size, nullptr);
+    return render(its, seg, view, size, nullptr, labelled);
 }
 
 Image render_draft(const indexed_triangle_set &its, const View &view, const std::vector<FaceColor> &face_colors, int size)
@@ -324,8 +338,11 @@ Image render_draft(const indexed_triangle_set &its, const View &view, const std:
 }
 
 namespace {
-Image render(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, const std::vector<FaceColor> *face_colors)
+Image render(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, const std::vector<FaceColor> *face_colors,
+             std::vector<int> *labelled)
 {
+    if (labelled != nullptr)
+        labelled->clear();
     Image img;
     img.width = img.height = size;
     img.rgb.assign(size_t(size) * size * 3, 235); // light background
@@ -403,26 +420,57 @@ Image render(const indexed_triangle_set &its, const Segmentation &seg, const Vie
         }
     if (face_colors != nullptr)
         return img; // a painted draft carries no segment numbers
-    std::vector<double> best_d(nseg, 1e300);
-    std::vector<std::pair<int, int>> anchor(nseg, {-1, -1});
-    for (int y = 0; y < size; ++y)
-        for (int x = 0; x < size; ++x) {
-            const int t = idbuf[size_t(y) * size + x];
+    // A dark line where two segments meet, so that a segment's extent does not rest on telling two tints apart.
+    for (int y = 0; y + 1 < size; ++y)
+        for (int x = 0; x + 1 < size; ++x) {
+            const int t = idbuf[size_t(y) * size + x], r = idbuf[size_t(y) * size + x + 1], d = idbuf[size_t(y + 1) * size + x];
             if (t < 0)
                 continue;
             const int s = seg.face_segment[t];
-            if (cnt[s] < 60)
-                continue;
-            const double d = std::pow(x - sumx[s] / cnt[s], 2) + std::pow(y - sumy[s] / cnt[s], 2);
-            if (d < best_d[s]) {
-                best_d[s]  = d;
-                anchor[s] = {x, y};
-            }
+            if ((r >= 0 && seg.face_segment[r] != s) || (d >= 0 && seg.face_segment[d] != s))
+                put_pixel(img, x, y, 30, 30, 30);
         }
-    const int label_scale = std::max(3, size / 64);
+
+    // Badges, largest showing segment first. A segment showing too little here gets none in this view, and neither
+    // does one whose badge would cover another: fewer, clear numbers are read better than many crowded ones.
+    const int    label_scale = std::max(3, size / 128);
+    const size_t too_little  = size_t(size) * size / 2500;
+    std::vector<size_t> order;
     for (size_t s = 0; s < nseg; ++s)
-        if (anchor[s].first >= 0)
-            draw_number(img, int(s), anchor[s].first, anchor[s].second, label_scale);
+        if (cnt[s] >= too_little && cnt[s] > 0)
+            order.push_back(s);
+    std::sort(order.begin(), order.end(), [&cnt](size_t a, size_t b) { return cnt[a] != cnt[b] ? cnt[a] > cnt[b] : a < b; });
+    // Candidate places for each segment: its own pixels on a coarse grid, the one nearest its centre first.
+    const int step = std::max(2, label_scale);
+    std::vector<std::vector<std::pair<int, int>>> places(nseg);
+    for (int y = 0; y < size; y += step)
+        for (int x = 0; x < size; x += step) {
+            const int t = idbuf[size_t(y) * size + x];
+            if (t >= 0)
+                places[seg.face_segment[t]].emplace_back(x, y);
+        }
+    std::vector<Badge> drawn;
+    std::vector<int>   numbers;
+    for (size_t s : order) {
+        const double mx = sumx[s] / cnt[s], my = sumy[s] / cnt[s];
+        std::sort(places[s].begin(), places[s].end(), [mx, my](const std::pair<int, int> &a, const std::pair<int, int> &b) {
+            return std::pow(a.first - mx, 2) + std::pow(a.second - my, 2) < std::pow(b.first - mx, 2) + std::pow(b.second - my, 2);
+        });
+        for (const std::pair<int, int> &p : places[s]) {
+            const Badge box = badge_box(int(s), p.first, p.second, label_scale);
+            if (box.x0 < 0 || box.y0 < 0 || box.x1 >= size || box.y1 >= size)
+                continue;
+            if (std::any_of(drawn.begin(), drawn.end(), [&box, label_scale](const Badge &o) { return box.overlaps(o, label_scale); }))
+                continue;
+            draw_number(img, int(s), p.first, p.second, label_scale);
+            drawn.push_back(box);
+            numbers.push_back(int(s));
+            break;
+        }
+    }
+    std::sort(numbers.begin(), numbers.end());
+    if (labelled != nullptr)
+        *labelled = numbers;
     return img;
 }
 } // namespace
@@ -518,7 +566,8 @@ std::string facing_words(const Vec3d &n)
 } // namespace
 
 std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo> &filaments, const std::string &object_name,
-                         const std::vector<std::string> &view_names, const std::string &user_hint)
+                         const std::vector<std::string> &view_names, const std::string &user_hint,
+                         const std::vector<std::vector<int>> &labelled_per_view)
 {
     std::ostringstream o;
     o << "You are helping colour a 3D-printable model for a multi-filament printer.\n";
@@ -526,7 +575,17 @@ std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo
       << " is shown in " << view_names.size() << " rendered views, in this order:";
     for (size_t i = 0; i < view_names.size(); ++i)
         o << (i ? ", " : " ") << view_names[i];
-    o << ".\nIts surface has been split into numbered segments; each segment has its own tint and its number drawn on it.\n";
+    o << ".\nIts surface has been split into numbered segments. Each segment has its own tint, a dark line where it meets another "
+         "segment, and its number in a white box drawn on it. The split follows the shape, so a segment is not always one meaningful part.\n";
+    if (labelled_per_view.size() == view_names.size() && !view_names.empty()) {
+        o << "Numbers drawn in each view (a segment that shows too little in a view has no number there):\n";
+        for (size_t i = 0; i < view_names.size(); ++i) {
+            o << "  " << view_names[i] << ":";
+            for (size_t k = 0; k < labelled_per_view[i].size(); ++k)
+                o << (k ? ", " : " ") << labelled_per_view[i][k];
+            o << (labelled_per_view[i].empty() ? " none\n" : "\n");
+        }
+    }
     o << "Coordinates below are relative to the model: x 0=left..1=right, y 0=front..1=back, z 0=bottom..1=top.\n\n";
     o << "Segments:\n";
     for (const Segment &s : seg.segments) {
@@ -540,13 +599,16 @@ std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo
     for (const FilamentInfo &f : filaments)
         o << "  " << f.index << ": " << (f.type.empty() ? "filament" : f.type) << ", " << f.color_hex << " (" << color_name(f.color_hex) << ")"
           << (f.name.empty() ? std::string() : ", " + f.name) << "\n";
-    o << "\nTask: decide what the object is, then give every segment the filament slot that makes a sensible, attractive coloured "
-         "print. Use only the slots listed above. Use 0 for a segment that should stay the base colour. "
-         "Keep related parts (for example both eyes, or all petals) the same colour.\n";
+    o << "\nTask, in this order: decide what the object is. Then, for every segment, find its number in the views and name the part "
+         "of the object it covers (for example \"left ear\", \"body\", \"base\"). Only then give it the filament slot that makes a "
+         "sensible, attractive coloured print. Use only the slots listed above. Use 0 for a segment that should stay the base colour. "
+         "Keep related parts (for example both eyes, or all petals) the same colour. Set \"sure\" to false for a segment whose number "
+         "you could not find or read, or whose part you are guessing.\n";
     if (!user_hint.empty())
         o << "Extra instruction from the user: " << user_hint << "\n";
     o << "\nAnswer with JSON only, exactly in this shape: "
-         "{\"object\":\"short description\",\"assignments\":[{\"segment\":0,\"filament\":1}],\"notes\":\"one sentence\"}\n";
+         "{\"object\":\"short description\",\"parts\":[{\"segment\":0,\"name\":\"part name\",\"filament\":1,\"sure\":true}],"
+         "\"notes\":\"one sentence\"}\n";
     return o.str();
 }
 
@@ -614,7 +676,25 @@ std::optional<int> as_int(const nlohmann::json &v)
 
 } // namespace
 
-std::optional<std::vector<int>> parse_assignments(const std::string &text, size_t segment_count, size_t filament_count)
+namespace {
+// A part name as it may be shown: printable, single-line, short.
+std::string shown_name(const std::string &raw)
+{
+    std::string out;
+    for (const char c : raw) {
+        const unsigned char u = static_cast<unsigned char>(c);
+        if (u < 0x20 || u == 0x7f)
+            continue;
+        // A new character is begun only while there is room for all of it, so the cut never falls inside one.
+        if ((u & 0xC0) != 0x80 && out.size() >= 37)
+            break;
+        out += c;
+    }
+    return out;
+}
+} // namespace
+
+std::optional<Suggestion> parse_suggestion(const std::string &text, size_t segment_count, size_t filament_count)
 {
     for (size_t pos = text.find('{'); pos != std::string::npos; pos = text.find('{', pos + 1)) {
         // Find the matching close brace, ignoring braces inside strings.
@@ -634,20 +714,41 @@ std::optional<std::vector<int>> parse_assignments(const std::string &text, size_
         if (end == std::string::npos)
             continue;
         const nlohmann::json j = nlohmann::json::parse(text.substr(pos, end - pos + 1), nullptr, false);
-        if (j.is_discarded() || !j.is_object() || !j.contains("assignments") || !j["assignments"].is_array())
+        if (j.is_discarded() || !j.is_object())
             continue;
-        std::vector<int> out(segment_count, 0);
-        for (const auto &a : j["assignments"]) {
-            if (!a.is_object() || !a.contains("segment") || !a.contains("filament"))
+        const char *list = j.contains("parts") && j["parts"].is_array() ? "parts" :
+                           j.contains("assignments") && j["assignments"].is_array() ? "assignments" : nullptr;
+        if (list == nullptr)
+            continue;
+        Suggestion out;
+        out.filament.assign(segment_count, 0);
+        out.name.assign(segment_count, std::string());
+        out.unsure.assign(segment_count, 0);
+        if (j.contains("object") && j["object"].is_string())
+            out.object = shown_name(j["object"].get<std::string>());
+        for (const auto &a : j[list]) {
+            if (!a.is_object() || !a.contains("segment"))
                 continue;
             const auto s = as_int(a["segment"]);
-            const auto f = as_int(a["filament"]);
-            if (!s || !f || *s < 0 || size_t(*s) >= segment_count || *f < 1 || size_t(*f) > filament_count)
+            if (!s || *s < 0 || size_t(*s) >= segment_count)
                 continue;
-            out[*s] = *f;
+            if (a.contains("name") && a["name"].is_string())
+                out.name[*s] = shown_name(a["name"].get<std::string>());
+            if (a.contains("sure") && a["sure"].is_boolean())
+                out.unsure[*s] = a["sure"].get<bool>() ? 0 : 1;
+            const auto f = a.contains("filament") ? as_int(a["filament"]) : std::nullopt;
+            if (f && *f >= 1 && size_t(*f) <= filament_count)
+                out.filament[*s] = *f;
         }
         return out;
     }
+    return std::nullopt;
+}
+
+std::optional<std::vector<int>> parse_assignments(const std::string &text, size_t segment_count, size_t filament_count)
+{
+    if (auto parsed = parse_suggestion(text, segment_count, filament_count))
+        return std::move(parsed->filament);
     return std::nullopt;
 }
 

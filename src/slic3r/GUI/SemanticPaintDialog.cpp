@@ -85,12 +85,14 @@ class SemanticPaintDialog : public DPIDialog
 {
 public:
     SemanticPaintDialog(wxWindow *parent, const std::string &object_name, SP::Segmentation seg, std::vector<SP::Image> images,
-                        std::vector<std::string> view_names, std::vector<SP::FilamentInfo> filaments, bool has_paint)
+                        std::vector<std::string> view_names, std::vector<std::vector<int>> labelled, std::vector<SP::FilamentInfo> filaments,
+                        bool has_paint)
         : DPIDialog(parent ? parent : static_cast<wxWindow *>(wxGetApp().mainframe), wxID_ANY, _L("AI auto-paint"), wxDefaultPosition, wxDefaultSize,
                     wxCAPTION | wxCLOSE_BOX | wxRESIZE_BORDER)
         , m_object_name(object_name)
         , m_seg(std::move(seg))
         , m_view_names(std::move(view_names))
+        , m_labelled(std::move(labelled))
         , m_filaments(std::move(filaments))
         , m_settings(semantic_paint_load_settings(*wxGetApp().app_config))
         , m_alive(std::make_shared<std::atomic<bool>>(true))
@@ -191,8 +193,8 @@ public:
             m_worker.join();
     }
 
-    // The filament suggested for each part (0 = keep as it is), once an answer was read.
-    const std::vector<int> &suggested() const { return m_suggested; }
+    // What the model answered for each part, once an answer was read.
+    const SP::Suggestion &suggested() const { return m_suggested; }
     std::string             hint() const { return into_u8(m_hint->GetTextCtrl()->GetValue().Trim().Trim(false)); }
 
 protected:
@@ -226,7 +228,7 @@ private:
             "decorative patches. A geometric segment may cross a semantic feature: when uncertain keep the dominant body colour. Keep "
             "matching features consistent across all views. The user's requested style takes precedence.";
         const std::string words = hint();
-        return SP::build_prompt(m_seg, m_filaments, m_object_name, m_view_names, words.empty() ? guidance : guidance + "\n" + words);
+        return SP::build_prompt(m_seg, m_filaments, m_object_name, m_view_names, words.empty() ? guidance : guidance + "\n" + words, m_labelled);
     }
 
     // Where the data would go, the exact text, and whether Send can be pressed, with the reason when not.
@@ -315,19 +317,20 @@ private:
             set_status(format_wxstr(_L("Failed: %1%"), from_u8(r.error)));
             return;
         }
-        const auto parsed = SP::parse_assignments(r.text, m_seg.segments.size(), m_filaments.size());
+        auto parsed = SP::parse_suggestion(r.text, m_seg.segments.size(), m_filaments.size());
         if (!parsed) {
             set_status(_L("The answer could not be understood. Try again or choose another model under AI settings."));
             return;
         }
         // The answer goes to the plate: the window closes and the draft is shown on the model itself.
-        m_suggested = *parsed;
+        m_suggested = std::move(*parsed);
         EndModal(wxID_OK);
     }
 
     std::string                        m_object_name;
     SP::Segmentation                   m_seg;
-    std::vector<int>                   m_suggested;
+    SP::Suggestion                     m_suggested;
+    std::vector<std::vector<int>>      m_labelled;
     std::vector<std::string>           m_png;
     std::vector<std::string>           m_view_names;
     std::vector<SP::FilamentInfo>      m_filaments;
@@ -400,15 +403,17 @@ void run_semantic_paint()
     const SP::Segmentation seg = SP::segment_mesh(combined);
     std::vector<SP::Image>   images;
     std::vector<std::string> names;
+    std::vector<std::vector<int>> labelled;
     for (const SP::View &v : SP::default_views()) {
-        images.push_back(SP::render_view(combined, seg, v));
+        labelled.emplace_back();
+        images.push_back(SP::render_view(combined, seg, v, 768, &labelled.back()));
         names.push_back(v.name);
     }
 
     const bool has_paint = std::any_of(parts.begin(), parts.end(), [](const ModelVolume *v) { return !v->mmu_segmentation_facets.empty(); });
-    std::vector<int> suggested;
+    SP::Suggestion suggested;
     {
-        SemanticPaintDialog dlg(plater, object->name, seg, std::move(images), std::move(names), filaments, has_paint);
+        SemanticPaintDialog dlg(plater, object->name, seg, std::move(images), std::move(names), std::move(labelled), filaments, has_paint);
         const int           answer = dlg.ShowModal();
         s_kept_hint                = answer == wxID_PREFERENCES ? dlg.hint() : std::string();
         if (answer == wxID_PREFERENCES) {
@@ -440,7 +445,10 @@ void run_semantic_paint()
     draft.first_face = std::move(first_face);
     draft.seg        = seg;
     draft.filaments  = filaments;
-    draft.suggested  = std::move(suggested);
+    draft.suggested  = std::move(suggested.filament);
+    draft.names      = std::move(suggested.name);
+    draft.unsure     = std::move(suggested.unsure);
+    draft.subject    = std::move(suggested.object);
     tool->start(std::move(draft));
     gizmos.open_gizmo(GLGizmosManager::EType::AiPaint);
     plater->get_view3D_canvas3D()->set_as_dirty();

@@ -68,8 +68,10 @@ struct View
 // Front, back, left, right, top and an isometric view.
 std::vector<View> default_views();
 
-// Renders flat-shaded orthographic views, each segment in its own colour with its id drawn on it.
-Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size = 384);
+// Renders a flat-shaded orthographic view: each segment in its own tint, a dark line where two segments meet, and
+// the segment's number in a white badge on it. A badge is left out where the segment shows too little in this view
+// or its badge would cover another one; `labelled`, when given, receives the numbers that were drawn, in order.
+Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size = 768, std::vector<int> *labelled = nullptr);
 
 // The colour one face is drawn in.
 using FaceColor = std::array<unsigned char, 3>;
@@ -100,9 +102,11 @@ std::vector<FaceColor> draft_face_colors(const std::vector<int> &face_filament, 
 // Plain-English name of a colour ("dark red", "light blue", ...).
 std::string color_name(const std::string &hex);
 
-// Text of the question put to the model.
+// Text of the question put to the model. `labelled_per_view`, when it has one entry per view, tells the model which
+// numbers each picture carries, so that a number it cannot find is known to be missing and is not guessed.
 std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo> &filaments, const std::string &object_name,
-                         const std::vector<std::string> &view_names, const std::string &user_hint = {});
+                         const std::vector<std::string> &view_names, const std::string &user_hint = {},
+                         const std::vector<std::vector<int>> &labelled_per_view = {});
 
 // Command provider: any program that reads the prompt on stdin and prints the answer on stdout (Claude Code's
 // `claude -p`, `ollama run`, `llm`, a script...). Command-line tools cannot take inline images, so the views are
@@ -120,6 +124,19 @@ std::string openai_reply_text(const std::string &body);
 // seg_to_filament[i] is the 1-based filament slot for segment i, or 0 for "leave unpainted". Segments the reply
 // does not mention, or maps outside 1..filament_count, stay 0. std::nullopt when no assignment could be read.
 std::optional<std::vector<int>> parse_assignments(const std::string &reply_text, size_t segment_count, size_t filament_count);
+
+// What the model answered, per segment: the filament (0 = leave as it is), the name it gave the part ("left ear"),
+// and whether it said it was unsure. `object` is what it took the model to be.
+struct Suggestion
+{
+    std::vector<int>         filament;
+    std::vector<std::string> name;
+    std::vector<char>        unsure;
+    std::string              object;
+};
+// Reads an answer in the shape build_prompt asks for ("parts"), or in the earlier one ("assignments"). Names are cut
+// to a short length and stripped of control characters: they are shown to the user. std::nullopt when neither is found.
+std::optional<Suggestion> parse_suggestion(const std::string &reply_text, size_t segment_count, size_t filament_count);
 
 // Per-face painted filament (0 = unpainted) for a segment -> filament map.
 std::vector<int> face_filaments(const Segmentation &seg, const std::vector<int> &seg_to_filament);

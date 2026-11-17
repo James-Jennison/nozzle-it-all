@@ -36,6 +36,11 @@ public:
         SemanticPaint::Segmentation              seg;
         std::vector<SemanticPaint::FilamentInfo> filaments;
         std::vector<int>                         suggested;
+        // From the answer, per part and possibly empty: the name it gave the part and whether it said it was unsure;
+        // and what it took the object to be. Shown to the user as plain text, never acted on.
+        std::vector<std::string>                 names;
+        std::vector<char>                        unsure;
+        std::string                              subject;
     };
 
     GLGizmoAiPaint(GLCanvas3D &parent, const std::string &icon_filename, unsigned int sprite_id);

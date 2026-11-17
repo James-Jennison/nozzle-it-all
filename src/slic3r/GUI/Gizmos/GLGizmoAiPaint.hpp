@@ -44,6 +44,9 @@ public:
     // Takes a draft to show; the tool is opened right after.
     void start(Draft draft);
 
+    // Escape drops the draft, as Discard does.
+    void on_esc_key_down() { close(); }
+
     bool on_mouse(const wxMouseEvent &mouse_event) override;
     void data_changed(bool is_serializing) override;
 

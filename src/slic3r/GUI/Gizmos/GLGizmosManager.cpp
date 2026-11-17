@@ -1072,6 +1072,12 @@ bool GLGizmosManager::on_key(wxKeyEvent& evt)
             if (simplify != nullptr)
                 processed = simplify->on_esc_key_down();
         }
+        else if (m_current == AiPaint && keyCode == WXK_ESCAPE) {
+            if (auto *draft = dynamic_cast<GLGizmoAiPaint *>(get_current()); draft != nullptr) {
+                draft->on_esc_key_down();
+                processed = true;
+            }
+        }
         // BBS
         else if (m_current == MmSegmentation) {
             GLGizmoMmuSegmentation* mmu_seg = dynamic_cast<GLGizmoMmuSegmentation*>(get_current());

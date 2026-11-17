@@ -3127,6 +3127,11 @@ void GLCanvas3D::select_all()
 
 void GLCanvas3D::deselect_all()
 {
+    // NIA: while an AI auto-paint draft shows, the object under it is not drawn by the scene, so a click on it (to pick a
+    // part) or beside it would count as a click on nothing and end the tool with the draft. The draft is ended by
+    // Apply, Discard or Escape.
+    if (m_gizmos.get_current_type() == GLGizmosManager::AiPaint)
+        return;
     m_selection.remove_all();
     // BBS
     //wxGetApp().obj_manipul()->set_dirty();

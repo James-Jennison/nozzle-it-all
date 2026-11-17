@@ -3,6 +3,7 @@
 #include "slic3r/Utils/SemanticPaintClient.hpp"
 
 #include <string>
+#include <vector>
 
 using namespace Slic3r;
 

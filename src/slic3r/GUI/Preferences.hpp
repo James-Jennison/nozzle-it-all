@@ -123,6 +123,7 @@ public:
     wxBoxSizer *create_item_network_plugin_version(wxString title, wxString tooltip);
 #ifdef WIN32
     wxBoxSizer *create_item_ai_services();
+    wxBoxSizer *create_item_ai_services();
     wxBoxSizer *create_item_link_association(wxString url_prefix, wxString website_name);
 #endif // WIN32
 

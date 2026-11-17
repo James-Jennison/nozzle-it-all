@@ -102,6 +102,7 @@ public:
         Assembly,
         Simplify,
         BrimEars,
+        AiPaint, // NIA: the on-plate draft of an AI auto-paint answer; opened by its command, not from this toolbar
         //SlaSupports,
         // BBS
         //FaceRecognition,

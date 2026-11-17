@@ -56,6 +56,7 @@ src/slic3r/GUI/DeviceTab/wgtDeviceNozzleRackUpdate.h
 src/slic3r/GUI/DeviceTab/wgtDeviceNozzleRackUpdate.cpp
 src/slic3r/GUI/DeviceTab/wgtDeviceNozzleSelect.h
 src/slic3r/GUI/DeviceTab/wgtDeviceNozzleSelect.cpp
+src/slic3r/GUI/Gizmos/GLGizmoAiPaint.cpp
 src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp
 src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.hpp
 src/slic3r/GUI/Gizmos/GLGizmoFlatten.cpp
@@ -402,3 +403,4 @@ src/slic3r/GUI/PostProcessor.cpp
 src/slic3r/GUI/TaskManager.cpp
 src/slic3r/GUI/Widgets/ProgressDialog.hpp
 src/slic3r/GUI/Widgets/StepCtrl.cpp
+src/slic3r/GUI/SemanticPaintDialog.cpp

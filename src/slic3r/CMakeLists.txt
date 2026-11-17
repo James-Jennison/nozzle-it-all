@@ -213,6 +213,8 @@ set(SLIC3R_GUI_SOURCES
     GUI/Gizmos/GLGizmosCommon.hpp
     GUI/Gizmos/GLGizmoSeam.cpp
     GUI/Gizmos/GLGizmoSeam.hpp
+    GUI/Gizmos/GLGizmoAiPaint.cpp
+    GUI/Gizmos/GLGizmoAiPaint.hpp
     GUI/Gizmos/GLGizmoSimplify.cpp
     GUI/Gizmos/GLGizmoSimplify.hpp
     GUI/Gizmos/GLGizmosManager.cpp

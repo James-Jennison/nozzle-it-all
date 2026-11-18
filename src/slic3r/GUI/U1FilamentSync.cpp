@@ -223,7 +223,9 @@ std::vector<Slot> parse_lane_data_impl(const nlohmann::json& value)
     if (!value.is_object())
         return slots;
     std::vector<bool> seen(capacity, false);
-    for (const auto& [name, lane] : value.items()) {
+    for (const auto& item : value.items()) {
+        // Named, not bound: a lambda below reads the lane, and a bound name cannot be captured before C++20.
+        const auto& lane = item.value();
         if (!lane.is_object())
             continue;
         // "lane" is the tool the lane is mapped to, as a string ("0" for T0). A lane without one is not a slot
@@ -967,11 +969,11 @@ wxImage recolored_plate(const ThumbnailData& lit, const ThumbnailData& flat, con
                         const int y = int(row) + dy, x = int(column) + dx;
                         if ((dx == 0 && dy == 0) || y < 0 || x < 0 || y >= int(h) || x >= int(w))
                             continue;
-                        const size_t near = size_t(y) * w + size_t(x);
-                        if (edge[near] || lit.pixels[4 * near + 3] == 0)
+                        const size_t beside = size_t(y) * w + size_t(x); // not "near": a macro on Windows
+                        if (edge[beside] || lit.pixels[4 * beside + 3] == 0)
                             continue;
                         for (int channel = 0; channel < 3; ++channel)
-                            sum[channel] += out[4 * near + channel];
+                            sum[channel] += out[4 * beside + channel];
                         ++count;
                     }
                 if (count > 0)

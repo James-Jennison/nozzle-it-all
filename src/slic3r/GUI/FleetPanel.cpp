@@ -339,7 +339,9 @@ void FleetPanel::read_printers()
                     } else
                         ++it;
                 }
-                for (const auto &[host, url] : streams) {
+                for (const auto &entry : streams) {
+                    // Named, not bound: the lambdas below take the address, and a bound name cannot be captured before C++20.
+                    const std::string &host = entry.first, &url = entry.second;
                     if (url.empty() || panel->m_streams.count(host) != 0)
                         continue;
                     auto pending = std::make_shared<std::atomic<bool>>(false);

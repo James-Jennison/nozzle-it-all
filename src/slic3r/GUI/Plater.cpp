@@ -3403,9 +3403,9 @@ Sidebar::Sidebar(Plater *parent)
     auto* find_btn = new ScalableButton(p->m_panel_filament_title, wxID_ANY, "search", wxEmptyString, wxDefaultSize, wxDefaultPosition,
                                         wxBU_EXACTFIT | wxNO_BORDER, false, 16);
     find_btn->SetToolTip(_L("Find a filament in the 3D Filament Profiles catalogue"));
-    find_btn->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
+    find_btn->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
         // Not on the stack of the click: the dialog is modal.
-        wxGetApp().CallAfter([this] {
+        wxGetApp().CallAfter([] {
             if (!wxGetApp().is_closing())
                 find_filament_in_catalog(wxGetApp().mainframe); // over the middle of the window, not the sidebar
         });

@@ -180,8 +180,9 @@ constexpr double k_spot_fill_angle = 30.; // degrees; the fill tool's own defaul
 // get the mark's filament and name. Returned in the order they are to be painted: a later one goes over an earlier
 // one. A mark that lies on no surface gives nothing.
 // `skip`, when given, has one entry per spot: those marked are left out (a close-up has taken their place).
+// `not_placed`, when given, receives how many of the other marks lay on no surface.
 std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views,
-                                   int size = 768, const std::vector<char> *skip = nullptr);
+                                   int size = 768, const std::vector<char> *skip = nullptr, int *not_placed = nullptr);
 
 // A close look at one marked place, for a second question. In the whole-model views a small feature (an eye) is a
 // few dozen pixels wide, and the model cannot see what it is made of. Around the place the surface is split the way
@@ -221,6 +222,7 @@ struct CloseUpAnswer
 {
     std::vector<std::vector<PieceChoice>> pieces; // per close-up, per piece (index = number - 1)
     std::string                           notes;
+    int                                   left_out{0}; // filaments the answer gave to an `around` piece, which were not taken
 };
 // std::nullopt when the answer has no "closeups" list. Pieces it does not mention, or gives a filament that does not exist, stay 0,
 // and so does a close-up's `around` piece whatever the answer gives it.

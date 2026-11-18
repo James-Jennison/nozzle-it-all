@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -249,6 +250,10 @@ TEST_CASE("A Start on a printer fed from AFC lanes is refused unless printer and
         CHECK(blocker.kind == Kind::NozzleMismatch);
         CHECK(blocker.sliced == 0.4);
         CHECK(blocker.fitted == 0.6);
+        // A nozzle line that holds no number matches nothing: a mismatch, not a pass.
+        auto unread    = carbon;
+        unread.nozzles = {std::nan("")};
+        CHECK(U1Jobs::afc_start_blocker(unread, idle_carbon(), map, true, model).kind == Kind::NozzleMismatch);
         // A file that names no nozzle is not compared.
         CHECK(U1Jobs::afc_start_blocker({model, {}}, status, map, true, model).kind == Kind::None);
     }

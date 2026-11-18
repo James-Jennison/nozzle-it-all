@@ -111,6 +111,7 @@
 #include "Gizmos/GLGizmoUtils.hpp"
 
 #include "slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp"
+#include "slic3r/GUI/Gizmos/GLGizmoAiPaint.hpp"
 #include "slic3r/Utils/UndoRedo.hpp"
 #include "slic3r/Utils/MacDarkMode.hpp"
 #include "slic3r/plugin/PluginManager.hpp"
@@ -2757,6 +2758,10 @@ void GLCanvas3D::_render_frame(bool scene_dirty, bool only_init)
             right_margin = SLIDER_RIGHT_MARGIN * scale_factor * GCODE_VIEWER_SLIDER_SCALE;
             bottom_margin = SLIDER_BOTTOM_MARGIN * scale_factor * GCODE_VIEWER_SLIDER_SCALE;
         }
+        // NIA: while the AI auto-paint panel is open the notices are drawn beside it, not over its buttons.
+        if (m_gizmos.get_current_type() == GLGizmosManager::AiPaint)
+            if (const auto *tool = dynamic_cast<const GLGizmoAiPaint *>(m_gizmos.get_current()); tool != nullptr)
+                right_margin = std::max(right_margin, tool->notices_right_margin());
         wxGetApp().plater()->get_notification_manager()->render_notifications(*this, get_overlay_window_width(), bottom_margin, right_margin);
         wxGetApp().plater()->get_dailytips()->render();
     }

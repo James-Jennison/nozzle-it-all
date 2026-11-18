@@ -90,6 +90,13 @@ SemanticPaintReply run_command(const SemanticPaintSettings &s, const std::string
         in << SemanticPaint::command_prompt(prompt, paths);
     }
 
+#ifdef _WIN32
+    // cmd.exe cannot be given a double quote inside a quoted word, so the name could only be passed altered.
+    if (s.model.find('"') != std::string::npos) {
+        out.error = "A model name cannot hold a double quote.";
+        return out;
+    }
+#endif
     std::string cmd = s.command;
     // A GUI app often starts without the user's PATH additions; fall back to the usual Claude Code install folders.
     if (cmd.compare(0, 7, "claude ") == 0 && process::search_path("claude").empty()) {

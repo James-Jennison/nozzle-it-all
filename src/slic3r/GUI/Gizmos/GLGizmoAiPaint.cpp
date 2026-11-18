@@ -91,15 +91,30 @@ std::vector<ModelVolume *> selected_parts(int *object_idx = nullptr)
 } // namespace
 
 GLGizmoAiPaint::GLGizmoAiPaint(GLCanvas3D &parent, const std::string &icon_filename, unsigned int sprite_id)
-    : GLGizmoBase(parent, icon_filename, sprite_id), m_alive(std::make_shared<std::atomic<bool>>(true))
+    : GLGizmoBase(parent, icon_filename, sprite_id), m_shared(std::make_shared<Shared>()), m_alive(std::make_shared<std::atomic<bool>>(true))
 {}
 
 GLGizmoAiPaint::~GLGizmoAiPaint()
 {
     // A question still out is told to stop, and its answer finds nobody to give it to.
     m_alive->store(false);
+    {
+        std::lock_guard<std::mutex> lock(m_shared->gate);
+        m_shared->alive = false;
+    }
     if (m_cancel)
         m_cancel->store(true);
+    // Its thread is given a moment to end what it started (a command and its temporary folder, a request), so that
+    // closing the application does not leave them behind. A command is ended within a tenth of a second of being
+    // told, a request within about a second.
+    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (m_shared->running.load() > 0 && std::chrono::steady_clock::now() < until)
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+}
+
+float GLGizmoAiPaint::notices_right_margin() const
+{
+    return m_panel_left < 0.f ? 0.f : std::max(0.f, float(m_parent.get_canvas_size().get_width()) - m_panel_left);
 }
 
 std::string GLGizmoAiPaint::on_get_name() const { return _u8L("AI auto-paint"); }
@@ -212,16 +227,22 @@ void GLGizmoAiPaint::send()
     m_cancel              = cancel;
     // The thread holds nothing of this tool but what it was given; the answer comes back on the main thread and is
     // dropped when the tool is gone or the question was given up meanwhile.
-    std::thread([this, alive = m_alive, cancel, asked, settings = m_settings, text = second ? m_draft->close_prompt : m_draft->prompt,
+    m_shared->running.fetch_add(1);
+    std::thread([this, shared = m_shared, cancel, asked, settings = m_settings, text = second ? m_draft->close_prompt : m_draft->prompt,
                  png = second ? m_draft->close_png : m_draft->png] {
         SemanticPaintReply reply = semantic_paint_query(settings, text, *png, cancel.get());
-        // With the tool gone nobody takes the answer, and the application may be closing: it is not touched then.
-        if (!alive->load())
-            return;
-        wxGetApp().CallAfter([this, alive, asked, reply = std::move(reply)] {
-            if (alive->load() && asked == m_asked)
-                on_reply(reply);
-        });
+        {
+            // With the tool gone nobody takes the answer, and the application may be closing: it is not touched then.
+            // The tool cannot go between this look and the hand-over, for its destructor waits at the same gate.
+            std::lock_guard<std::mutex> lock(shared->gate);
+            if (shared->alive)
+                wxGetApp().CallAfter([this, shared, asked, reply = std::move(reply)] {
+                    // On the main thread, where the tool is also destroyed: `alive` up means `this` is there.
+                    if (shared->alive && asked == m_asked)
+                        on_reply(reply);
+                });
+        }
+        shared->running.fetch_sub(1);
     }).detach();
 }
 
@@ -310,13 +331,17 @@ void GLGizmoAiPaint::finish_draft(const SP::CloseUpAnswer *answer)
     if (answer != nullptr) {
         // Where the close-ups' answer colours a place's pieces, they stand in for the marks at that place.
         const std::vector<char> replaced = SP::spots_replaced(suggestion.spots.size(), m_draft->closeups, *answer);
-        m_draft->patches = SP::apply_spots(m_draft->mesh, m_draft->seg, suggestion, SP::default_views(), k_view_size, &replaced);
+        m_draft->patches = SP::apply_spots(m_draft->mesh, m_draft->seg, suggestion, SP::default_views(), k_view_size, &replaced, &m_draft->not_placed);
+        m_draft->left_out = answer->left_out;
         std::vector<SP::SpotPatch> pieces = SP::apply_closeups(m_draft->mesh, m_draft->seg, suggestion, m_draft->closeups, *answer);
         m_draft->patches.insert(m_draft->patches.end(), std::make_move_iterator(pieces.begin()), std::make_move_iterator(pieces.end()));
         if (!answer->notes.empty())
             suggestion.notes += (suggestion.notes.empty() ? "" : " ") + answer->notes;
     } else
-        m_draft->patches = SP::apply_spots(m_draft->mesh, m_draft->seg, suggestion, SP::default_views(), k_view_size);
+    {
+        m_draft->patches  = SP::apply_spots(m_draft->mesh, m_draft->seg, suggestion, SP::default_views(), k_view_size, nullptr, &m_draft->not_placed);
+        m_draft->left_out = 0;
+    }
     m_draft->suggested = std::move(suggestion.filament);
     m_draft->suggested.resize(m_draft->seg.segments.size(), 0);
     m_draft->notes   = std::move(suggestion.notes);
@@ -652,6 +677,7 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
     const float wrap = std::min(m_imgui->scaled(29.f), canvas_w * 0.55f);
     y = std::max(std::min(y, bottom_limit - ImGui::GetFrameHeight() * 22.f), 0.f);
     x = std::max(std::min(x, canvas_w - std::max(last_input_window_width, wrap + 4.f * ImGui::GetStyle().WindowPadding.x)), 0.f);
+    m_panel_left = x;
     GizmoImguiSetNextWIndowPos(x, y, ImGuiCond_Always, 0.0f, 0.0f);
     // Never taller than the room under it: on a small screen the panel scrolls instead of running off the plate.
     const float room = canvas_h - y - ImGui::GetFrameHeight();
@@ -902,6 +928,14 @@ void GLGizmoAiPaint::render_draft(float wrap)
                                              "none: adjust them with the painting tools after applying.", spots), spots));
     if (!m_draft->notes.empty())
         m_imgui->text_colored(k_warning, format_wxstr(_L("The service's note: %1%"), from_u8(m_draft->notes)));
+    // What of the answer was not used, so that nothing asked for goes missing without a word.
+    if (m_draft->not_placed > 0)
+        m_imgui->text_colored(k_warning, format_wxstr(_L_PLURAL("%1% mark of the service lies on nothing in its picture and was left out.",
+                                                                "%1% marks of the service lie on nothing in their pictures and were left out.",
+                                                                m_draft->not_placed), m_draft->not_placed));
+    if (m_draft->left_out > 0)
+        m_imgui->text_colored(k_warning, _L("The service gave a filament to the surface around a feature in a close-up. It was not taken, because it "
+                                            "would end in a ragged line where the close-up stops. That surface has the colour of its part in the list."));
     ImGui::PopTextWrapPos();
     // The numbers in the list are the numbers in the pictures that were sent.
     if (m_imgui->bbl_checkbox(_L("Show the numbered pictures"), m_show_views))

@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,8 @@ public:
         // What the service had to say, e.g. what of the request it could not do; and where the marked features
         // (spots) begin among the segments: they come after the numbered ones and carry no number in the pictures.
         std::string                              notes;
+        int                                      not_placed{0}; // marks that lay on nothing
+        int                                      left_out{0};   // filaments given to the surface around a feature, not taken
         size_t                                   first_spot{0};
         // For the second question, when the first answer marked features that have pieces of their own: the parts as
         // split before any feature was marked, the first answer, the close-ups, and their pictures and text as sent.
@@ -78,6 +81,9 @@ public:
 
     GLGizmoAiPaint(GLCanvas3D &parent, const std::string &icon_filename, unsigned int sprite_id);
     ~GLGizmoAiPaint() override;
+    // How far from the plate's right edge the application's notices are to stay while the panel is open: they are drawn
+    // beside it and not over its buttons. 0 when there is no panel.
+    float notices_right_margin() const;
 
     // Escape closes the tool and drops the draft, as Discard does.
     void on_esc_key_down() { close(); }
@@ -132,8 +138,18 @@ private:
     bool                                                m_show_views{false};
     int                                                 m_settle{0};       // frames still to draw: a panel that changed takes its new size a frame later
     unsigned                                            m_asked{0};        // counts questions, so a late answer to an abandoned one is dropped
-    std::shared_ptr<std::atomic<bool>>                  m_alive;
+    // What a question's thread shares with the tool. The thread hands its answer over while holding `gate`, and the
+    // tool's destructor takes `gate` to clear `alive`: a thread is either done handing over or will not hand over.
+    struct Shared
+    {
+        std::mutex       gate;
+        bool             alive{true};
+        std::atomic<int> running{0}; // questions' threads that have not ended
+    };
+    std::shared_ptr<Shared>                             m_shared;
+    std::shared_ptr<std::atomic<bool>>                  m_alive; // for work the tool hands to itself on the main thread
     std::shared_ptr<std::atomic<bool>>                  m_cancel;
+    float                                               m_panel_left{-1.f}; // where the panel begins on the plate, to keep the notices beside it
     std::vector<std::unique_ptr<GLTexture>>             m_textures;        // the views, for the panel
     std::vector<std::unique_ptr<GLTexture>>             m_close_textures;  // the close-ups, for the panel
     std::unique_ptr<Draft>                              m_draft;

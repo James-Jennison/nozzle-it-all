@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include <ctime>
+#include <limits>
 #include <set>
 #include <string>
 #include <thread>
@@ -309,6 +310,13 @@ TEST_CASE("A Start is refused unless the printer shows it is ready for this file
         CHECK(mismatch.sliced == Catch::Approx(0.4));
         CHECK(mismatch.fitted == Catch::Approx(0.6));
         CHECK(U1Jobs::start_blocker({"Snapmaker U1", {0.6}}, idle_u1(), {3}, true).kind == Kind::None);
+        // A file whose nozzle line holds no number ("nan", "inf") matches nothing: it is a mismatch, not a pass.
+        ScratchJournal scratch;
+        scratch.write("nan.gcode", "G1 X1\n; nozzle_diameter = nan\n; printer_model = Snapmaker U1\n");
+        const auto unread = U1Jobs::read_gcode_facts(scratch.dir / "nan.gcode");
+        REQUIRE(unread.nozzles.size() == 1);
+        CHECK(U1Jobs::start_blocker(unread, idle_u1(), {0}, true).kind == Kind::NozzleMismatch);
+        CHECK(U1Jobs::start_blocker({"Snapmaker U1", {std::numeric_limits<double>::infinity()}}, idle_u1(), {0}, true).kind == Kind::NozzleMismatch);
 
         auto status = idle_u1();
         status["extruder1"].erase("nozzle_diameter");

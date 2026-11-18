@@ -212,6 +212,21 @@ TEST_CASE("Boundary cleanup gives the same answer for a mesh stored as loose tri
     CHECK(SP::clean_paint_boundaries(its, slots) == SP::clean_paint_boundaries(soup, slots));
 }
 
+TEST_CASE("Boundary cleanup decides each face from the paint as it was, whatever order the faces are stored in", "[SemanticPaint]")
+{
+    const indexed_triangle_set its = sheet();
+    int                        tip = 0;
+    std::vector<int>           slots = halves_with_tip(its, tip);
+    // A second single triangle beside the first: neither is judged by what became of the other.
+    slots[size_t(tip) + 2] = 1;
+    indexed_triangle_set turned = its;
+    std::reverse(turned.indices.begin(), turned.indices.end());
+    std::vector<int> turned_slots(slots.rbegin(), slots.rend());
+    std::vector<int> cleaned = SP::clean_paint_boundaries(its, slots);
+    std::reverse(cleaned.begin(), cleaned.end());
+    CHECK(SP::clean_paint_boundaries(turned, turned_slots) == cleaned);
+}
+
 TEST_CASE("Boundary cleanup never moves a colour across a sharp crease", "[SemanticPaint]")
 {
     indexed_triangle_set folded = sheet();
@@ -427,7 +442,10 @@ TEST_CASE("SemanticPaint: spots are read from the answer and become parts of the
     CHECK(parsed->notes == "No filament is tan.So the body stays as it is.");
 
     // "nose" marked in two views, near each other, is one patch; "pupil", listed later, goes over it; the mark off the model gives nothing.
-    const std::vector<SP::SpotPatch> patches = SP::apply_spots(sphere.its, seg, *parsed, views);
+    int                              not_placed = -1;
+    const std::vector<SP::SpotPatch> patches    = SP::apply_spots(sphere.its, seg, *parsed, views, 768, nullptr, &not_placed);
+    // The mark off the model lies on nothing, and is counted so that the user can be told.
+    CHECK(not_placed == 1);
     REQUIRE(patches.size() == 2);
     CHECK(patches[0].segment == int(before));
     CHECK(patches[1].segment == int(before + 1));
@@ -623,6 +641,11 @@ TEST_CASE("SemanticPaint: a marked place with pieces of its own gets a close-up,
     CHECK(kept_out->pieces[0][0].filament == 0);
     CHECK(kept_out->pieces[0][0].name == "surface");
     CHECK(kept_out->pieces[0][1].filament == 2);
+    CHECK(kept_out->left_out == 1);
+    CHECK(answer->left_out == 0);
+    // The question names that piece, so that the service is not asked for a colour that will not be used.
+    CHECK(SP::build_closeup_prompt(with_surface, {shown}, {{1, "PLA", "#000000", ""}, {2, "PLA", "#FFFFFF", ""}}, "a box").find("Number 1 is the surface around the feature") != std::string::npos);
+    CHECK(question.find("is the surface around the feature, cut off") == std::string::npos);
 
     // The close-up stands in for the mark at its place: the mark makes no patch, the coloured piece makes one, painted by its faces.
     const std::vector<char> replaced = SP::spots_replaced(parsed->spots.size(), closeups, *answer);

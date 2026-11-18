@@ -493,7 +493,14 @@ Topology topology(const indexed_triangle_set &its)
     out.normal.assign(faces, Vec3d::Zero());
     out.area.assign(faces, 0.);
     out.across.assign(faces, std::array<int, 3>{-1, -1, -1});
-    std::map<std::pair<int, int>, std::pair<int, int>> edge_first; // an edge's first face and which of its edges it is
+    // Every use of an edge by a face, sorted so that the uses of one edge lie together, lowest face first. Sorting a
+    // flat list is several times faster on a mesh of millions of faces than a map of edges.
+    struct EdgeUse
+    {
+        int u, v, face, edge;
+    };
+    std::vector<EdgeUse> uses;
+    uses.reserve(faces * 3);
     for (size_t t = 0; t < faces; ++t) {
         const Vec3d a = its.vertices[its.indices[t](0)].cast<double>(), b = its.vertices[its.indices[t](1)].cast<double>(),
                     c = its.vertices[its.indices[t](2)].cast<double>();
@@ -504,16 +511,22 @@ Topology topology(const indexed_triangle_set &its)
         out.total += out.area[t];
         for (int k = 0; k < 3; ++k) {
             const int u = its.indices[t](k), v = its.indices[t]((k + 1) % 3);
-            const auto key   = std::make_pair(std::min(u, v), std::max(u, v));
-            const auto found = edge_first.find(key);
-            if (found == edge_first.end())
-                edge_first.emplace(key, std::make_pair(int(t), k));
-            else if (found->second.first >= 0) {
-                out.across[t][size_t(k)]                                             = found->second.first;
-                out.across[size_t(found->second.first)][size_t(found->second.second)] = int(t);
-                found->second.first = -1; // a third face on this edge is joined to neither
-            }
+            uses.push_back({std::min(u, v), std::max(u, v), int(t), k});
         }
+    }
+    std::sort(uses.begin(), uses.end(), [](const EdgeUse &l, const EdgeUse &r) {
+        return l.u != r.u ? l.u < r.u : l.v != r.v ? l.v < r.v : l.face != r.face ? l.face < r.face : l.edge < r.edge;
+    });
+    for (size_t i = 0; i < uses.size();) {
+        size_t j = i + 1;
+        while (j < uses.size() && uses[j].u == uses[i].u && uses[j].v == uses[i].v)
+            ++j;
+        // The first two faces on an edge are joined across it; a third and further are joined to neither.
+        if (j - i >= 2) {
+            out.across[size_t(uses[i].face)][size_t(uses[i].edge)]         = uses[i + 1].face;
+            out.across[size_t(uses[i + 1].face)][size_t(uses[i + 1].edge)] = uses[i].face;
+        }
+        i = j;
     }
     return out;
 }
@@ -522,9 +535,11 @@ const double k_bend_limit = std::cos(k_spot_fill_angle * M_PI / 180.) - 1e-9;
 } // namespace
 
 std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views, int size,
-                                   const std::vector<char> *skip)
+                                   const std::vector<char> *skip, int *not_placed)
 {
     std::vector<SpotPatch> patches;
+    if (not_placed != nullptr)
+        *not_placed = 0;
     if (seg.face_segment.size() != its.indices.size() || suggestion.spots.empty() || size <= 0)
         return patches;
 
@@ -539,8 +554,14 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
     std::vector<Place>     places; // one per patch, in the order first marked
     const std::vector<Hit> hits = spot_hits(its, suggestion, views, size);
     for (size_t i = 0; i < hits.size(); ++i) {
-        if (!hits[i].ok || (skip != nullptr && i < skip->size() && (*skip)[i]))
+        if (skip != nullptr && i < skip->size() && (*skip)[i])
             continue;
+        if (!hits[i].ok) {
+            // The mark lies on nothing: outside the picture, in a view that is not there, or beside the model.
+            if (not_placed != nullptr)
+                ++*not_placed;
+            continue;
+        }
         const Spot  &spot   = suggestion.spots[i];
         const Vec3d  point  = hits[i].point;
         const double radius = hits[i].radius;
@@ -608,15 +629,7 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
     std::map<std::string, int> part_of; // the part made for a name
     for (const Place &place : places) {
         // The face the painting starts from: the one nearest to where the first mark landed.
-        size_t seed = 0;
-        double best = std::numeric_limits<double>::max();
-        for (size_t t = 0; t < faces; ++t) {
-            const double d = (middle[t] - place.hits.front()).squaredNorm();
-            if (d < best) {
-                best = d;
-                seed = t;
-            }
-        }
+        const size_t seed = topo.nearest_face(place.hits.front());
         // One mark: a ball of its size on the surface. Marks from several views: a ball around their mean that holds
         // them all. That mean lies inside the model (the marks are round the corner from each other), so the ball takes
         // the whole end of what they are on: a nose is the tip of the snout, not a disc on one side of it.
@@ -1580,9 +1593,12 @@ std::string build_closeup_prompt(const std::vector<CloseUp> &closeups, const std
         if (c < labelled_per_closeup.size())
             for (size_t n = 0; n < labelled_per_closeup[c].size(); ++n)
                 o << (n ? ", " : " ") << labelled_per_closeup[c][n];
+        if (closeups[c].around >= 0)
+            o << ". Number " << closeups[c].around + 1 << " is the surface around the feature, cut off where the close-up ends: it is not painted "
+                                                         "from this answer, so give it 0";
         o << "\n";
     }
-    o << "One of the pieces is usually the surface around the feature (the head around an eye), cut off where the close-up ends: give it 0.\n";
+    o << "Where no number is named as that surface, one of the pieces may still be it (the head around an eye): give it 0.\n";
     o << "\nAvailable filaments (slot: type, colour):\n";
     for (const FilamentInfo &f : filaments)
         o << "  " << f.index << ": " << (f.type.empty() ? "filament" : f.type) << ", " << f.color_hex << " (" << color_name(f.color_hex) << ")"
@@ -1643,8 +1659,12 @@ std::optional<CloseUpAnswer> parse_closeups(const std::string &text, const std::
                 if (b.contains("name") && b["name"].is_string())
                     choice.name = shown_name(b["name"].get<std::string>());
                 const auto f = b.contains("filament") ? as_int(b["filament"]) : std::nullopt;
-                if (f && *f >= 1 && size_t(*f) <= filament_count && *k - 1 != closeups[size_t(*c - 1)].around)
-                    choice.filament = *f;
+                if (f && *f >= 1 && size_t(*f) <= filament_count) {
+                    if (*k - 1 != closeups[size_t(*c - 1)].around)
+                        choice.filament = *f;
+                    else
+                        ++out.left_out;
+                }
             }
         }
         return out;

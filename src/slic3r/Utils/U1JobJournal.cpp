@@ -880,7 +880,8 @@ Blocker start_blocker(const GcodeFacts &facts, const json &status, const std::ve
         }
         blocker.sliced = facts.nozzles[filament];
         blocker.fitted = (*extruder)["nozzle_diameter"].get<double>();
-        if (std::abs(blocker.fitted - blocker.sliced) > 0.01) {
+        // Written so that a size that is no number (a file whose nozzle line says "nan") does not pass as a match.
+        if (!(std::abs(blocker.fitted - blocker.sliced) <= 0.01)) {
             blocker.kind = Blocker::Kind::NozzleMismatch;
             return blocker;
         }
@@ -1055,7 +1056,8 @@ Blocker afc_start_blocker(const GcodeFacts &facts, const json &status, const std
         }
         blocker.sliced = facts.nozzles.front();
         blocker.fitted = (*extruder)["nozzle_diameter"].get<double>();
-        if (std::abs(blocker.fitted - blocker.sliced) > 0.01) {
+        // Written so that a size that is no number (a file whose nozzle line says "nan") does not pass as a match.
+        if (!(std::abs(blocker.fitted - blocker.sliced) <= 0.01)) {
             blocker.kind = Blocker::Kind::NozzleMismatch;
             return blocker;
         }

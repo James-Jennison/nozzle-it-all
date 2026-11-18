@@ -84,7 +84,7 @@ private:
         std::chrono::steady_clock::time_point read;
     };
     std::map<std::string, Listed> m_listed; ///< by printer origin
-    int                           m_listener = -1;
+    [[maybe_unused]] int          m_listener = -1; ///< used on Linux only: the relay is not built for other systems
     std::set<int>                 m_sockets; ///< connections being answered, so that stop() can end them
     std::atomic<bool>             m_stop{false};
     std::atomic<int>              m_open{0};

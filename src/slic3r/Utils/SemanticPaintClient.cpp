@@ -55,7 +55,12 @@ struct TempDir
 std::string quote(const std::string &s)
 {
 #ifdef _WIN32
-    return "\"" + s + "\"";
+    // cmd.exe has no way to keep a double quote inside a quoted word: one in the text is left out.
+    std::string out = "\"";
+    for (char c : s)
+        if (c != '"')
+            out += c;
+    return out + "\"";
 #else
     std::string out = "'";
     for (char c : s)
@@ -92,8 +97,9 @@ SemanticPaintReply run_command(const SemanticPaintSettings &s, const std::string
         if (!found.empty())
             cmd = quote(found) + cmd.substr(6);
     }
+    // Both are put in as one quoted word each: a model name is the user's own text, and the shell must not read it.
     boost::replace_all(cmd, "{dir}", quote(tmp.path.string()));
-    boost::replace_all(cmd, "{model}", s.model);
+    boost::replace_all(cmd, "{model}", quote(s.model));
     if (!s.model.empty() && s.command.find("{model}") == std::string::npos && cmd.compare(0, 7, "claude ") == 0)
         cmd += " --model " + quote(s.model);
 

@@ -613,6 +613,16 @@ TEST_CASE("SemanticPaint: a marked place with pieces of its own gets a close-up,
     CHECK(answer->pieces[0][2].filament == 0);
     CHECK(answer->notes == "done");
     CHECK(!SP::parse_closeups(R"({"parts":[]})", closeups, 2));
+    // No piece of the corner is most of what was looked at, so none is taken to be the surface around a feature.
+    CHECK(closeups.front().around == -1);
+    // Where one is, a filament the answer gives it is not taken: painted, it would end where the looking stopped.
+    auto with_surface = closeups;
+    with_surface.front().around = 0;
+    const auto kept_out = SP::parse_closeups(R"({"closeups":[{"closeup":1,"pieces":[{"piece":1,"name":"surface","filament":2},{"piece":2,"name":"detail","filament":2}]}]})", with_surface, 2);
+    REQUIRE(kept_out);
+    CHECK(kept_out->pieces[0][0].filament == 0);
+    CHECK(kept_out->pieces[0][0].name == "surface");
+    CHECK(kept_out->pieces[0][1].filament == 2);
 
     // The close-up stands in for the mark at its place: the mark makes no patch, the coloured piece makes one, painted by its faces.
     const std::vector<char> replaced = SP::spots_replaced(parsed->spots.size(), closeups, *answer);

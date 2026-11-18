@@ -195,6 +195,10 @@ struct CloseUp
     Vec3d                         center{Vec3d::Zero()};
     double                        half{1.}; // the close-up shows this far to each side of `center`
     std::vector<std::vector<int>> pieces;   // each piece's faces; piece number = index + 1
+    // The piece that is the surface around the feature (index into `pieces`), or -1: one piece that is most of what was
+    // looked at and goes on past its edge. It is shown and numbered, and an answer's filament for it is not taken:
+    // painted, it would end in the ragged line where the looking stopped.
+    int                           around{-1};
 };
 // The marked places that have pieces of their own: at least three (two of the feature and what lies around it).
 // A place with none, such as a nose on a smooth snout, gets no close-up and stays a round patch. At most six.
@@ -218,7 +222,8 @@ struct CloseUpAnswer
     std::vector<std::vector<PieceChoice>> pieces; // per close-up, per piece (index = number - 1)
     std::string                           notes;
 };
-// std::nullopt when the answer has no "closeups" list. Pieces it does not mention, or gives a filament that does not exist, stay 0.
+// std::nullopt when the answer has no "closeups" list. Pieces it does not mention, or gives a filament that does not exist, stay 0,
+// and so does a close-up's `around` piece whatever the answer gives it.
 std::optional<CloseUpAnswer> parse_closeups(const std::string &reply_text, const std::vector<CloseUp> &closeups, size_t filament_count);
 
 // Which spots a close-up's answer replaces (1) and which stay (0): those of every close-up in which a piece got a filament.

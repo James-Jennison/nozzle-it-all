@@ -824,6 +824,11 @@ std::vector<CloseUp> find_closeups(const indexed_triangle_set &its, const Sugges
             // When one piece is most of what was looked at, it is the surface around the feature: the close-up then
             // shows the other pieces, with some of it around them, and not mostly it.
             if (areas[size_t(order.front())] > 0.5 * ball_area) {
+                // It is that surface for the answer too when it goes on past what was looked at.
+                for (const int t : closeup.pieces.front())
+                    for (const int other : topo.across[size_t(t)])
+                        if (other >= 0 && !inside[size_t(other)])
+                            closeup.around = 0;
                 Vec3d  middle = Vec3d::Zero();
                 double weight = 0.;
                 for (size_t k = 1; k < closeup.pieces.size(); ++k)
@@ -1638,7 +1643,7 @@ std::optional<CloseUpAnswer> parse_closeups(const std::string &text, const std::
                 if (b.contains("name") && b["name"].is_string())
                     choice.name = shown_name(b["name"].get<std::string>());
                 const auto f = b.contains("filament") ? as_int(b["filament"]) : std::nullopt;
-                if (f && *f >= 1 && size_t(*f) <= filament_count)
+                if (f && *f >= 1 && size_t(*f) <= filament_count && *k - 1 != closeups[size_t(*c - 1)].around)
                     choice.filament = *f;
             }
         }

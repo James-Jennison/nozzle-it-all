@@ -215,6 +215,9 @@ void GLGizmoAiPaint::send()
     std::thread([this, alive = m_alive, cancel, asked, settings = m_settings, text = second ? m_draft->close_prompt : m_draft->prompt,
                  png = second ? m_draft->close_png : m_draft->png] {
         SemanticPaintReply reply = semantic_paint_query(settings, text, *png, cancel.get());
+        // With the tool gone nobody takes the answer, and the application may be closing: it is not touched then.
+        if (!alive->load())
+            return;
         wxGetApp().CallAfter([this, alive, asked, reply = std::move(reply)] {
             if (alive->load() && asked == m_asked)
                 on_reply(reply);

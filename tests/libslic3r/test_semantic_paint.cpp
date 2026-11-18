@@ -549,3 +549,87 @@ TEST_CASE("SemanticPaint: one feature marked in several views is one patch that 
     CHECK(named->name[before] == "left eye pupil");
     CHECK(named->name[before + 1] == "eye white");
 }
+
+TEST_CASE("SemanticPaint: a marked place with pieces of its own gets a close-up, whose answer colours the pieces", "[SemanticPaint]")
+{
+    const auto               views = SP::default_views();
+    std::vector<std::string> names;
+    for (const auto &v : views)
+        names.push_back(v.name);
+    // A cube's corner, seen from the isometric view in the middle of the picture: three sides meet there, each a piece.
+    const TriangleMesh cube   = make_cube(10., 10., 10.);
+    auto               seg    = SP::segment_mesh(cube.its);
+    const size_t       before = seg.segments.size();
+    auto parsed = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"isometric","name":"corner","x":384,"y":384,"r":110,"filament":2}]})", before, 2, names);
+    REQUIRE(parsed);
+    const auto closeups = SP::find_closeups(cube.its, *parsed, views);
+    REQUIRE(closeups.size() == 1);
+    CHECK(closeups[0].name == "corner");
+    CHECK(closeups[0].spots == std::vector<int>{0});
+    REQUIRE(closeups[0].pieces.size() == 3);
+    // No face is in two pieces, and a piece's faces all face one way.
+    std::set<int> all;
+    for (const auto &piece : closeups[0].pieces) {
+        REQUIRE(!piece.empty());
+        const auto normal = [&cube](int t) {
+            const auto &tri = cube.its.indices[size_t(t)];
+            return (cube.its.vertices[tri(1)] - cube.its.vertices[tri(0)]).cross(cube.its.vertices[tri(2)] - cube.its.vertices[tri(0)]).normalized();
+        };
+        for (const int t : piece) {
+            CHECK(all.insert(t).second);
+            CHECK(double(normal(t).dot(normal(piece.front()))) == Catch::Approx(1.).margin(1e-6));
+        }
+    }
+    // It is looked at straight on, and its second picture carries the three numbers.
+    CHECK(double(closeups[0].view.view_dir.normalized().dot(views[5].view_dir.normalized())) > 0.9);
+    std::vector<int> shown;
+    const auto [bare, numbered] = SP::render_closeup(cube.its, closeups[0], 256, &shown);
+    CHECK(shown == std::vector<int>{1, 2, 3});
+    CHECK(bare.rgb.size() == size_t(256) * 256 * 3);
+    CHECK(numbered.rgb != bare.rgb);
+    CHECK(SP::encode_png(numbered).size() > 100);
+
+    const std::string question = SP::build_closeup_prompt(closeups, {shown}, {{1, "PLA", "#000000", ""}, {2, "PLA", "#FFFFFF", ""}}, "a box", "a white top");
+    CHECK(question.find("close-up 1 (marked as: corner): pictures 1 and 2") != std::string::npos);
+    CHECK(question.find("Numbers in close-up 1: 1, 2, 3") != std::string::npos);
+    CHECK(question.find("a white top") != std::string::npos);
+    CHECK(question.find("\"closeups\"") != std::string::npos);
+
+    // The answer: piece 1 white, piece 2 left as it is, a piece that does not exist and a filament that does not exist are passed over.
+    const std::string reply = R"(Here: {"closeups":[{"closeup":1,"pieces":[{"piece":1,"name":"top","filament":2},{"piece":2,"name":"side","filament":0},
+        {"piece":7,"name":"none","filament":1},{"piece":3,"name":"front","filament":9}]},{"closeup":4,"pieces":[{"piece":1,"filament":1}]}],"notes":"done"})";
+    const auto answer = SP::parse_closeups(reply, closeups, 2);
+    REQUIRE(answer);
+    REQUIRE(answer->pieces.size() == 1);
+    REQUIRE(answer->pieces[0].size() == 3);
+    CHECK(answer->pieces[0][0].filament == 2);
+    CHECK(answer->pieces[0][0].name == "top");
+    CHECK(answer->pieces[0][1].filament == 0);
+    CHECK(answer->pieces[0][2].filament == 0);
+    CHECK(answer->notes == "done");
+    CHECK(!SP::parse_closeups(R"({"parts":[]})", closeups, 2));
+
+    // The close-up stands in for the mark at its place: the mark makes no patch, the coloured piece makes one, painted by its faces.
+    const std::vector<char> replaced = SP::spots_replaced(parsed->spots.size(), closeups, *answer);
+    CHECK(replaced == std::vector<char>{1});
+    CHECK(SP::apply_spots(cube.its, seg, *parsed, views, 768, &replaced).empty());
+    const auto patches = SP::apply_closeups(cube.its, seg, *parsed, closeups, *answer);
+    REQUIRE(patches.size() == 1);
+    CHECK(patches[0].by_faces);
+    CHECK(patches[0].faces == closeups[0].pieces[0]);
+    REQUIRE(seg.segments.size() == before + 1);
+    CHECK(parsed->name[before] == "top");
+    CHECK(parsed->filament[before] == 2);
+    for (const int t : patches[0].faces)
+        CHECK(seg.face_segment[size_t(t)] == int(before));
+    // An answer that colours nothing leaves the marks as they were.
+    SP::CloseUpAnswer nothing;
+    nothing.pieces.assign(1, std::vector<SP::PieceChoice>(3));
+    CHECK(SP::spots_replaced(parsed->spots.size(), closeups, nothing) == std::vector<char>{0});
+
+    // A ball has no edges: a mark on it has no pieces, and gets no close-up.
+    const TriangleMesh sphere = make_sphere(10., 0.1);
+    auto on_ball = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"front","name":"nose","x":384,"y":384,"r":60,"filament":2}]})", 1, 2, names);
+    REQUIRE(on_ball);
+    CHECK(SP::find_closeups(sphere.its, *on_ball, views).empty());
+}

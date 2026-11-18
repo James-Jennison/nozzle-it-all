@@ -35,6 +35,7 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdint>
+#include <iterator>
 #include <thread>
 
 namespace Slic3r {
@@ -181,9 +182,11 @@ void GLGizmoAiPaint::prepare()
     draft->png = std::move(png);
     // The question with the standing guidance and the user's own hint; the hint is said to come first.
     const std::string hint = into_u8(from_u8(m_hint).Trim().Trim(false));
-    draft->prompt = SP::build_prompt(draft->seg, draft->filaments, draft->object->name, draft->view_names,
-                                     hint.empty() ? std::string(k_guidance) : std::string(k_guidance) + "\n" + hint, draft->labelled, k_view_size);
+    draft->hint     = hint.empty() ? std::string(k_guidance) : std::string(k_guidance) + "\n" + hint;
+    draft->base_seg = draft->seg;
+    draft->prompt   = SP::build_prompt(draft->seg, draft->filaments, draft->object->name, draft->view_names, draft->hint, draft->labelled, k_view_size);
     m_textures.clear();
+    m_close_textures.clear();
     m_draft = std::move(draft);
     m_status.clear();
     m_step = Step::Review;
@@ -191,7 +194,10 @@ void GLGizmoAiPaint::prepare()
 
 void GLGizmoAiPaint::send()
 {
-    if (m_busy || m_draft == nullptr || m_step != Step::Review || !semantic_paint_not_ready(m_settings).empty())
+    if (m_busy || m_draft == nullptr || (m_step != Step::Review && m_step != Step::CloseUps) || !semantic_paint_not_ready(m_settings).empty())
+        return;
+    const bool second = m_step == Step::CloseUps;
+    if (second && (m_draft->close_png == nullptr || m_draft->close_prompt.empty()))
         return;
     m_busy = true;
     m_status.clear();
@@ -200,7 +206,8 @@ void GLGizmoAiPaint::send()
     m_cancel              = cancel;
     // The thread holds nothing of this tool but what it was given; the answer comes back on the main thread and is
     // dropped when the tool is gone or the question was given up meanwhile.
-    std::thread([this, alive = m_alive, cancel, asked, settings = m_settings, text = m_draft->prompt, png = m_draft->png] {
+    std::thread([this, alive = m_alive, cancel, asked, settings = m_settings, text = second ? m_draft->close_prompt : m_draft->prompt,
+                 png = second ? m_draft->close_png : m_draft->png] {
         SemanticPaintReply reply = semantic_paint_query(settings, text, *png, cancel.get());
         wxGetApp().CallAfter([this, alive, asked, reply = std::move(reply)] {
             if (alive->load() && asked == m_asked)
@@ -223,10 +230,19 @@ void GLGizmoAiPaint::on_reply(const SemanticPaintReply &reply)
     m_settle = 3;
     m_parent.set_as_dirty();
     m_parent.request_extra_frame();
-    if (m_draft == nullptr || m_step != Step::Review)
+    if (m_draft == nullptr || (m_step != Step::Review && m_step != Step::CloseUps))
         return;
     if (!reply.ok) {
         m_status = format_wxstr(_L("Failed: %1%"), from_u8(reply.error));
+        return;
+    }
+    if (m_step == Step::CloseUps) {
+        const auto answer = SP::parse_closeups(reply.text, m_draft->closeups, m_draft->filaments.size());
+        if (!answer) {
+            m_status = _L("The answer could not be understood. Try again, or go on without the close-ups.");
+            return;
+        }
+        finish_draft(&*answer);
         return;
     }
     auto parsed = SP::parse_suggestion(reply.text, m_draft->seg.segments.size(), m_draft->filaments.size(), m_draft->view_names);
@@ -237,16 +253,67 @@ void GLGizmoAiPaint::on_reply(const SemanticPaintReply &reply)
     // A part that no picture numbers was not asked about: it takes the filament of the part around it.
     parsed->filament = SP::follow_neighbours(m_draft->mesh, m_draft->seg, std::move(parsed->filament),
                                              SP::unseen_segments(m_draft->seg.segments.size(), m_draft->labelled));
-    // A feature the service marked in the pictures becomes a part of its own, after the numbered ones.
+    m_draft->first = std::move(*parsed);
+    // Marked features that have pieces of their own (an eye with a pupil) are too small in the whole-model pictures
+    // for the service to have seen the pieces. Close-ups of them make a second question, which is shown before it is sent.
+    m_draft->closeups.clear();
+    m_draft->close_images.clear();
+    m_draft->close_names.clear();
+    m_close_textures.clear();
+    std::vector<std::vector<int>> numbers;
+    auto                          png = std::make_shared<std::vector<std::string>>();
+    {
+        wxBusyCursor wait;
+        for (SP::CloseUp &closeup : SP::find_closeups(m_draft->mesh, m_draft->first, SP::default_views(), k_view_size)) {
+            std::vector<int> shown;
+            auto [bare, numbered] = SP::render_closeup(m_draft->mesh, closeup, k_view_size, &shown);
+            if (shown.size() < 2)
+                continue; // nothing to tell apart in it
+            const std::string number = std::to_string(m_draft->closeups.size() + 1);
+            // TRN the name under a close-up picture; %1% is the close-up's number
+            m_draft->close_names.push_back(into_u8(format_wxstr(_L("%1%: shape"), number)));
+            m_draft->close_names.push_back(into_u8(format_wxstr(_L("%1%: pieces"), number)));
+            png->push_back(SP::encode_png(bare));
+            png->push_back(SP::encode_png(numbered));
+            m_draft->close_images.push_back(std::move(bare));
+            m_draft->close_images.push_back(std::move(numbered));
+            numbers.push_back(std::move(shown));
+            m_draft->closeups.push_back(std::move(closeup));
+        }
+    }
+    if (m_draft->closeups.empty()) {
+        finish_draft(nullptr);
+        return;
+    }
+    m_draft->close_png    = std::move(png);
+    m_draft->close_prompt = SP::build_closeup_prompt(m_draft->closeups, numbers, m_draft->filaments, m_draft->first.object, m_draft->hint);
+    m_status.clear();
+    m_step = Step::CloseUps;
+}
+
+void GLGizmoAiPaint::finish_draft(const SP::CloseUpAnswer *answer)
+{
+    SP::Suggestion suggestion = m_draft->first;
+    m_draft->seg              = m_draft->base_seg;
+    // A feature the service marked becomes a part of its own, after the numbered ones.
     m_draft->first_spot = m_draft->seg.segments.size();
     m_draft->face_part  = m_draft->seg.face_segment;
-    m_draft->patches    = SP::apply_spots(m_draft->mesh, m_draft->seg, *parsed, SP::default_views(), k_view_size);
-    m_draft->suggested = std::move(parsed->filament);
+    if (answer != nullptr) {
+        // Where the close-ups' answer colours a place's pieces, they stand in for the marks at that place.
+        const std::vector<char> replaced = SP::spots_replaced(suggestion.spots.size(), m_draft->closeups, *answer);
+        m_draft->patches = SP::apply_spots(m_draft->mesh, m_draft->seg, suggestion, SP::default_views(), k_view_size, &replaced);
+        std::vector<SP::SpotPatch> pieces = SP::apply_closeups(m_draft->mesh, m_draft->seg, suggestion, m_draft->closeups, *answer);
+        m_draft->patches.insert(m_draft->patches.end(), std::make_move_iterator(pieces.begin()), std::make_move_iterator(pieces.end()));
+        if (!answer->notes.empty())
+            suggestion.notes += (suggestion.notes.empty() ? "" : " ") + answer->notes;
+    } else
+        m_draft->patches = SP::apply_spots(m_draft->mesh, m_draft->seg, suggestion, SP::default_views(), k_view_size);
+    m_draft->suggested = std::move(suggestion.filament);
     m_draft->suggested.resize(m_draft->seg.segments.size(), 0);
-    m_draft->notes = std::move(parsed->notes);
-    m_draft->names   = std::move(parsed->name);
-    m_draft->unsure  = std::move(parsed->unsure);
-    m_draft->subject = std::move(parsed->object);
+    m_draft->notes   = std::move(suggestion.notes);
+    m_draft->names   = std::move(suggestion.name);
+    m_draft->unsure  = std::move(suggestion.unsure);
+    m_draft->subject = std::move(suggestion.object);
     m_choice         = m_draft->suggested;
     m_tidy           = true;
     m_show_original  = false;
@@ -255,8 +322,11 @@ void GLGizmoAiPaint::on_reply(const SemanticPaintReply &reply)
     m_flash_until    = {};
     m_raycaster      = std::make_unique<MeshRaycaster>(TriangleMesh(m_draft->mesh));
     m_selectors.clear();
-    m_dirty = true;
-    m_step  = Step::Draft;
+    m_status.clear();
+    m_dirty  = true;
+    m_settle = 3;
+    m_step   = Step::Draft;
+    m_parent.set_as_dirty();
 }
 
 void GLGizmoAiPaint::open_settings()
@@ -361,14 +431,17 @@ void GLGizmoAiPaint::rebuild()
         no_move.translation()       = Vec3d::Zero();
         const size_t      last      = m_draft->first_face[p + 1];
         for (const SP::SpotPatch &patch : m_draft->patches) {
-            if (patch.seed_face < int(first) || patch.seed_face >= int(last) || size_t(patch.segment) >= m_choice.size())
+            if (patch.faces.empty() || size_t(patch.segment) >= m_choice.size())
+                continue;
+            // A feature painted by its faces can lie on any part; a ball is started from its seed face's part.
+            if (!patch.by_faces && (patch.seed_face < int(first) || patch.seed_face >= int(last)))
                 continue;
             const int  slot  = m_choice[size_t(patch.segment)];
             const bool shown = flash && patch.segment == m_selected;
             if (!shown && (m_show_original || slot <= 0 || size_t(slot) > slots))
                 continue;
             const auto state = EnforcerBlockerType(shown ? highlight_state : size_t(slot));
-            if (!patch.excluded.empty()) {
+            if (patch.by_faces) {
                 for (const int f : patch.faces)
                     if (f >= int(first) && f < int(last))
                         selector->set_facet(f - int(first), state);
@@ -393,6 +466,7 @@ void GLGizmoAiPaint::on_set_state()
         m_selectors.clear();
         m_raycaster.reset();
         m_textures.clear();
+        m_close_textures.clear();
         m_draft.reset();
         m_hint.clear();
         m_status.clear();
@@ -579,12 +653,16 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
                                     ImGuiWindowFlags_NoTitleBar);
 
     m_action         = Action::Nothing;
-    const int number = m_step == Step::Ask ? 1 : m_step == Step::Review ? 2 : 3;
-    m_imgui->text(format_wxstr(_L("AI auto-paint: step %1% of 3"), number));
+    // A fourth step, the close-ups, comes in only when the first answer marked features that have pieces of their own.
+    const int steps  = m_draft != nullptr && !m_draft->closeups.empty() ? 4 : 3;
+    const int number = m_step == Step::Ask ? 1 : m_step == Step::Review ? 2 : m_step == Step::CloseUps ? 3 : steps;
+    m_imgui->text(format_wxstr(_L("AI auto-paint: step %1% of %2%"), number, steps));
     if (m_step == Step::Ask)
         render_ask(wrap);
     else if (m_step == Step::Review)
         render_review(wrap);
+    else if (m_step == Step::CloseUps)
+        render_closeups(wrap);
     else
         render_draft(wrap);
 
@@ -601,12 +679,17 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
         stop_waiting();
         m_draft.reset();
         m_textures.clear();
+        m_close_textures.clear();
         m_status.clear();
         m_step = Step::Ask;
         break;
     case Action::Settings: open_settings(); break;
     case Action::Apply: apply(); break;
     case Action::Close: close(); break;
+    case Action::SkipCloseUps:
+        stop_waiting();
+        finish_draft(nullptr);
+        break;
     default: break;
     }
     if (m_action != Action::Nothing)
@@ -656,11 +739,13 @@ void GLGizmoAiPaint::render_ask(float wrap)
     ImGuiWrapper::pop_cancel_button_style();
 }
 
-void GLGizmoAiPaint::render_views(float wrap)
+void GLGizmoAiPaint::render_views(float wrap) { render_pictures(wrap, m_draft->images, m_draft->view_names, m_textures); }
+
+void GLGizmoAiPaint::render_pictures(float wrap, const std::vector<SP::Image> &images, const std::vector<std::string> &names,
+                                     std::vector<std::unique_ptr<GLTexture>> &textures)
 {
-    const std::vector<SP::Image> &images = m_draft->images;
-    if (m_textures.size() != images.size()) {
-        m_textures.clear();
+    if (textures.size() != images.size()) {
+        textures.clear();
         for (const SP::Image &image : images) {
             std::vector<unsigned char> rgba(size_t(image.width) * size_t(image.height) * 4, 255);
             for (size_t i = 0, n = size_t(image.width) * size_t(image.height); i < n; ++i)
@@ -668,16 +753,16 @@ void GLGizmoAiPaint::render_views(float wrap)
             auto texture = std::make_unique<GLTexture>();
             // With smaller copies of itself: the pictures are drawn far smaller than they are sent.
             texture->load_from_raw_data(std::move(rgba), unsigned(image.width), unsigned(image.height), false, true);
-            m_textures.push_back(std::move(texture));
+            textures.push_back(std::move(texture));
         }
     }
     const float gap  = ImGui::GetStyle().ItemSpacing.x;
     const float side = std::floor((wrap - ImGui::GetStyle().WindowPadding.x - 2.f * gap) / 3.f);
-    for (size_t i = 0; i < m_textures.size(); ++i) {
+    for (size_t i = 0; i < textures.size(); ++i) {
         if (i % 3 != 0)
             ImGui::SameLine();
         ImGui::BeginGroup();
-        const auto id = ImTextureID(intptr_t(m_textures[i]->get_id()));
+        const auto id = ImTextureID(intptr_t(textures[i]->get_id()));
         ImGui::Image(id, ImVec2(side, side));
         // Pointed at, a picture is shown large enough to read its numbers.
         if (ImGui::IsItemHovered()) {
@@ -686,9 +771,56 @@ void GLGizmoAiPaint::render_views(float wrap)
             ImGui::Image(id, ImVec2(side * 4.f, side * 4.f));
             ImGui::EndTooltip();
         }
-        ImGui::TextUnformatted(m_draft->view_names[i].c_str());
+        if (i < names.size())
+            ImGui::TextUnformatted(names[i].c_str());
         ImGui::EndGroup();
     }
+}
+
+void GLGizmoAiPaint::render_closeups(float wrap)
+{
+    const size_t count = m_draft->closeups.size();
+    ImGui::PushTextWrapPos(wrap);
+    m_imgui->text(format_wxstr(_L_PLURAL("The answer marked a feature that has pieces of its own in the model, too small to make out in the pictures of the "
+                                         "whole model. To give each piece its filament, %1% close-up of it can be sent as a second question.",
+                                         "The answer marked features that have pieces of their own in the model, too small to make out in the pictures of the "
+                                         "whole model. To give each piece its filament, %1% close-ups of them can be sent as a second question.", count), count));
+    m_imgui->text(_L("These pictures and the text under them are what will be sent, and nothing else. Nothing is sent until you press Send. "
+                     "Point at a picture to see it larger."));
+    ImGui::PopTextWrapPos();
+    render_pictures(wrap, m_draft->close_images, m_draft->close_names, m_close_textures);
+    ImGui::PushTextWrapPos(wrap);
+    m_imgui->text(goes_to());
+    m_imgui->text(_L("The text that is sent:"));
+    ImGui::PopTextWrapPos();
+    ImGui::InputTextMultiline("##closeprompt", &m_draft->close_prompt, ImVec2(wrap - ImGui::GetStyle().WindowPadding.x, ImGui::GetFrameHeight() * 5.f),
+                              ImGuiInputTextFlags_ReadOnly);
+    ImGui::PushTextWrapPos(wrap);
+    if (m_settings.provider == "command")
+        m_imgui->text(_L("The pictures are written to a temporary folder and their file names are added to this text."));
+    if (m_busy)
+        m_imgui->text(_L("Waiting for the answer... this can take up to a few minutes."));
+    else if (!m_status.empty())
+        m_imgui->text_colored(k_warning, m_status);
+    ImGui::PopTextWrapPos();
+
+    const size_t pictures = m_draft->close_images.size();
+    m_imgui->disabled_begin(m_busy);
+    ImGuiWrapper::push_confirm_button_style();
+    if (m_imgui->button(format_wxstr(_L_PLURAL("Send this %1% picture", "Send these %1% pictures", pictures), pictures)))
+        m_action = Action::Send;
+    ImGuiWrapper::pop_confirm_button_style();
+    m_imgui->disabled_end();
+    ImGui::SameLine();
+    ImGuiWrapper::push_cancel_button_style();
+    if (m_busy) {
+        if (m_imgui->button(_L("Stop waiting")))
+            m_action = Action::StopWaiting;
+    } else if (m_imgui->button(_L("Go on without them")))
+        m_action = Action::SkipCloseUps;
+    ImGuiWrapper::pop_cancel_button_style();
+    if (m_busy)
+        m_parent.request_extra_frame(); // so the answer is shown when it comes, without the pointer having to move
 }
 
 void GLGizmoAiPaint::render_review(float wrap)

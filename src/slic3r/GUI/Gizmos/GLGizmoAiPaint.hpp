@@ -31,8 +31,8 @@ class MeshRaycaster;
 class GLGizmoAiPaint : public GLGizmoBase
 {
 public:
-    enum class Step { Ask, Review, Draft };
-    enum class Action { Nothing, Prepare, Send, Back, StopWaiting, Settings, Apply, Close };
+    enum class Step { Ask, Review, CloseUps, Draft };
+    enum class Action { Nothing, Prepare, Send, Back, StopWaiting, Settings, Apply, Close, SkipCloseUps };
 
     // What is prepared for sending and, once answered, the draft: the object, its parts joined into one mesh (volume
     // transforms applied, each part a run of faces from first_face), the numbered segments, the pictures and text
@@ -60,6 +60,16 @@ public:
         // (spots) begin among the segments: they come after the numbered ones and carry no number in the pictures.
         std::string                              notes;
         size_t                                   first_spot{0};
+        // For the second question, when the first answer marked features that have pieces of their own: the parts as
+        // split before any feature was marked, the first answer, the close-ups, and their pictures and text as sent.
+        SemanticPaint::Segmentation                     base_seg;
+        SemanticPaint::Suggestion                       first;
+        std::string                                     hint; // the standing guidance and the user's own words, as sent
+        std::vector<SemanticPaint::CloseUp>             closeups;
+        std::vector<SemanticPaint::Image>               close_images;
+        std::vector<std::string>                        close_names;
+        std::shared_ptr<const std::vector<std::string>> close_png;
+        std::string                                     close_prompt;
         // The marked features as they are painted, in order: round patches, drawn with the round brush's own means.
         std::vector<SemanticPaint::SpotPatch>    patches;
         // Which part every face belonged to before the features were marked: what shows under a feature kept as it is.
@@ -103,7 +113,12 @@ private:
     void             render_ask(float wrap);
     void             render_review(float wrap);
     void             render_draft(float wrap);
+    void             render_closeups(float wrap);
+    // The draft from the first answer, with the close-ups' answer worked in when there is one.
+    void             finish_draft(const SemanticPaint::CloseUpAnswer *answer);
     void             render_views(float wrap);
+    void             render_pictures(float wrap, const std::vector<SemanticPaint::Image> &images, const std::vector<std::string> &names,
+                                     std::vector<std::unique_ptr<GLTexture>> &textures);
     void             pick(const Vec2d &mouse_position);
     void             apply();
     void             close();
@@ -120,6 +135,7 @@ private:
     std::shared_ptr<std::atomic<bool>>                  m_alive;
     std::shared_ptr<std::atomic<bool>>                  m_cancel;
     std::vector<std::unique_ptr<GLTexture>>             m_textures;        // the views, for the panel
+    std::vector<std::unique_ptr<GLTexture>>             m_close_textures;  // the close-ups, for the panel
     std::unique_ptr<Draft>                              m_draft;
     std::vector<int>                                    m_choice;          // per segment, 0 = keep as it is
     std::vector<std::unique_ptr<TriangleSelectorPatch>> m_selectors;       // per part, what is drawn

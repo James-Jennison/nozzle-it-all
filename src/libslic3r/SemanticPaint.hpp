@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Point.hpp"
@@ -166,6 +167,7 @@ struct SpotPatch
     int              seed_face{-1}; // a face inside the ball, where the painting starts
     std::vector<int> faces;    // the feature's faces
     std::vector<int> excluded; // faces inside the ball that the fill did not reach, when edges held it back; else empty
+    bool             by_faces{false}; // painted as its faces, whole: its outline is the model's own edges. Else as the ball.
 };
 constexpr double k_spot_fill_angle = 30.; // degrees; the fill tool's own default
 
@@ -175,8 +177,55 @@ constexpr double k_spot_fill_angle = 30.; // degrees; the fill tool's own defaul
 // eyes) give several patches of one part. The new parts come after the existing ones, which lose the faces inside the balls; they
 // get the mark's filament and name. Returned in the order they are to be painted: a later one goes over an earlier
 // one. A mark that lies on no surface gives nothing.
+// `skip`, when given, has one entry per spot: those marked are left out (a close-up has taken their place).
 std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views,
-                                   int size = 768);
+                                   int size = 768, const std::vector<char> *skip = nullptr);
+
+// A close look at one marked place, for a second question. In the whole-model views a small feature (an eye) is a
+// few dozen pixels wide, and the model cannot see what it is made of. Around the place the surface is split the way
+// the fill tool splits it, along the model's own edges, into pieces; a close-up shows them numbered from 1, so that
+// each can be given a filament and its outline is the model's own.
+struct CloseUp
+{
+    std::string                   name;   // what the marks at the place were called
+    std::vector<int>              spots;  // the suggestion's spots at the place
+    View                          view;   // looking straight at the place
+    Vec3d                         center{Vec3d::Zero()};
+    double                        half{1.}; // the close-up shows this far to each side of `center`
+    std::vector<std::vector<int>> pieces;   // each piece's faces; piece number = index + 1
+};
+// The marked places that have pieces of their own: at least three (two of the feature and what lies around it).
+// A place with none, such as a nose on a smooth snout, gets no close-up and stays a round patch. At most six.
+std::vector<CloseUp> find_closeups(const indexed_triangle_set &its, const Suggestion &suggestion, const std::vector<View> &views, int size = 768);
+
+// A close-up's two pictures: the bare shape, and the same with the pieces tinted and numbered. `labelled` receives
+// the numbers the second picture carries.
+std::pair<Image, Image> render_closeup(const indexed_triangle_set &its, const CloseUp &closeup, int size = 768, std::vector<int> *labelled = nullptr);
+
+// The second question: what each numbered piece of each close-up is, and its filament. Pictures go two per close-up, in order.
+std::string build_closeup_prompt(const std::vector<CloseUp> &closeups, const std::vector<std::vector<int>> &labelled_per_closeup,
+                                 const std::vector<FilamentInfo> &filaments, const std::string &object, const std::string &user_hint = {});
+
+struct PieceChoice
+{
+    std::string name;
+    int         filament{0}; // 0 = leave as the surface around it is
+};
+struct CloseUpAnswer
+{
+    std::vector<std::vector<PieceChoice>> pieces; // per close-up, per piece (index = number - 1)
+    std::string                           notes;
+};
+// std::nullopt when the answer has no "closeups" list. Pieces it does not mention, or gives a filament that does not exist, stay 0.
+std::optional<CloseUpAnswer> parse_closeups(const std::string &reply_text, const std::vector<CloseUp> &closeups, size_t filament_count);
+
+// Which spots a close-up's answer replaces (1) and which stay (0): those of every close-up in which a piece got a filament.
+std::vector<char> spots_replaced(size_t spot_count, const std::vector<CloseUp> &closeups, const CloseUpAnswer &answer);
+
+// Makes a part of its own for every piece that got a filament, after the existing ones, with the piece's name. To be
+// called after apply_spots() with spots_replaced() as its `skip`. The patches are painted by their faces.
+std::vector<SpotPatch> apply_closeups(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<CloseUp> &closeups,
+                                      const CloseUpAnswer &answer);
 
 // Which segments carry a number in no view at all (1) and which in at least one (0): the first cannot be seen by
 // the model, so they are not asked about.

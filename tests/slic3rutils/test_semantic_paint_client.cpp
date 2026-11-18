@@ -4,7 +4,10 @@
 
 #include "libslic3r/AppConfig.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace Slic3r;
@@ -145,4 +148,80 @@ TEST_CASE("A command and a server each keep their own model name", "[SemanticPai
     config.set("semantic_paint", "provider", "something-else");
     CHECK(semantic_paint_load_settings(config).provider.empty());
     CHECK(semantic_paint_not_ready(semantic_paint_load_settings(config)) == "No provider chosen.");
+}
+
+namespace {
+// Commands every system of its kind has: one that gives back what it is given, one that says its argument, one that waits.
+#ifdef _WIN32
+const char *const k_gives_back = "findstr \"^\"";
+const char *const k_says_model = "echo {model}";
+const char *const k_waits      = "ping -n 30 127.0.0.1";
+#else
+const char *const k_gives_back = "cat";
+const char *const k_says_model = "printf %s {model}";
+const char *const k_waits      = "sleep 30";
+#endif
+
+SemanticPaintSettings command(const char *line)
+{
+    SemanticPaintSettings s;
+    s.provider = "command";
+    s.command  = line;
+    return s;
+}
+} // namespace
+
+TEST_CASE("A command gets the question on its input, and what it prints is the answer", "[SemanticPaintClient]")
+{
+    const SemanticPaintReply reply = semantic_paint_query(command(k_gives_back), "which filament for part 7?", {"stands in for a picture"});
+    REQUIRE(reply.ok);
+    CHECK(reply.text.find("which filament for part 7?") != std::string::npos);
+    // The picture was written beside the question and its file is named in it.
+    CHECK(reply.text.find("view1.png") != std::string::npos);
+
+    const SemanticPaintReply none = semantic_paint_query(command("no-such-program-of-nia"), "anything", {});
+    CHECK_FALSE(none.ok);
+    CHECK(none.error.find("The command returned no answer") == 0);
+}
+
+TEST_CASE("A model name reaches a command as one word, whatever it holds", "[SemanticPaintClient]")
+{
+    // A name the shell would otherwise read as a second command.
+    SemanticPaintSettings s = command(k_says_model);
+#ifdef _WIN32
+    s.model = "first & echo SECOND";
+    const SemanticPaintReply reply = semantic_paint_query(s, "anything", {});
+    REQUIRE(reply.ok);
+    CHECK(reply.text.find("first & echo SECOND") != std::string::npos);
+    // Printed once, as part of the name: no second command ran and printed it on a line of its own.
+    CHECK(reply.text.find("SECOND") == reply.text.rfind("SECOND"));
+    CHECK(reply.text.find("\nSECOND") == std::string::npos);
+    // A double quote cannot be kept inside a quoted word there, so the name is refused and nothing is run.
+    s.model = "first\" & echo SECOND & \"";
+    const SemanticPaintReply refused = semantic_paint_query(s, "anything", {});
+    CHECK_FALSE(refused.ok);
+    CHECK(refused.error == "A model name cannot hold a double quote.");
+#else
+    s.model = "first; echo SECOND $(echo third) 'quoted' \"too\"";
+    const SemanticPaintReply reply = semantic_paint_query(s, "anything", {});
+    REQUIRE(reply.ok);
+    CHECK(reply.text == s.model);
+#endif
+}
+
+TEST_CASE("A question to a command that was given up ends at once", "[SemanticPaintClient]")
+{
+    std::atomic<bool> cancel{false};
+    std::thread       gives_up([&cancel] {
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        cancel.store(true);
+    });
+    const auto               began = std::chrono::steady_clock::now();
+    const SemanticPaintReply reply = semantic_paint_query(command(k_waits), "anything", {}, &cancel);
+    const double             took  = std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+    gives_up.join();
+    CHECK_FALSE(reply.ok);
+    CHECK(reply.error == "Cancelled.");
+    // The command would have waited half a minute.
+    CHECK(took < 10.);
 }

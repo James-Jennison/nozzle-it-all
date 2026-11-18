@@ -9054,7 +9054,7 @@ TEST_CASE("Restoring a selection undoes an import that failed part-way", "[Prese
 TEST_CASE("Filaments added to fill a tool changer go in front of the project's mixed filament", "[Preset][Bundle][Mixed]")
 {
     const size_t tool_count = 4;
-    auto project = [tool_count] {
+    auto project = [] {
         DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
         config.opt<ConfigOptionStrings>("filament_colour")->values = { "#FF0000", "#00FF00", "#808000" };
         config.option<ConfigOptionBools>("filament_is_mixed", true)->values = { false, false, true };

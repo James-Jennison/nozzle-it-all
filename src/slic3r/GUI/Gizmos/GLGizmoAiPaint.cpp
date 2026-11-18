@@ -352,20 +352,14 @@ void GLGizmoAiPaint::rebuild()
             else if (!m_show_original && face_filament[f] > 0 && size_t(face_filament[f]) <= slots)
                 selector->set_facet(int(f - first), EnforcerBlockerType(face_filament[f]));
         }
-        // The marked features, in order: a later one goes over an earlier one. Each is painted as a ball with the round
-        // brush's own means, which split triangles along its edge, so that an outline with no edge of the model under
-        // it is a circle and not the triangles' zigzag. Where the fill was held back by the model's edges, the faces
-        // in the ball that it did not reach are then given back what they had.
+        // The marked features, in order: a later one goes over an earlier one. A feature the fill found edges for is
+        // painted face by face: its outline is the model's own edges, and nothing beside it is touched. One with no
+        // edges is painted as a ball with the round brush's own means, which split triangles along its edge, so that
+        // its outline is a circle and not the triangles' zigzag.
         const Transform3d to_object = volume->get_matrix();
         Transform3d       no_move   = to_object;
         no_move.translation()       = Vec3d::Zero();
-        const bool        has_paint = !volume->mmu_segmentation_facets.empty();
         const size_t      last      = m_draft->first_face[p + 1];
-        const auto base_state = [&](size_t f) {
-            if (flash_part && m_draft->face_part[f] == m_selected)
-                return EnforcerBlockerType(highlight_state);
-            return !m_show_original && face_filament[f] > 0 && size_t(face_filament[f]) <= slots ? EnforcerBlockerType(face_filament[f]) : EnforcerBlockerType::NONE;
-        };
         for (const SP::SpotPatch &patch : m_draft->patches) {
             if (patch.seed_face < int(first) || patch.seed_face >= int(last) || size_t(patch.segment) >= m_choice.size())
                 continue;
@@ -374,9 +368,7 @@ void GLGizmoAiPaint::rebuild()
             if (!shown && (m_show_original || slot <= 0 || size_t(slot) > slots))
                 continue;
             const auto state = EnforcerBlockerType(shown ? highlight_state : size_t(slot));
-            // A part that has painting of its own keeps it on the faces around a filled feature: there the feature is
-            // painted face by face, and nothing else is touched.
-            if (has_paint && !patch.excluded.empty()) {
+            if (!patch.excluded.empty()) {
                 for (const int f : patch.faces)
                     if (f >= int(first) && f < int(last))
                         selector->set_facet(f - int(first), state);
@@ -387,9 +379,6 @@ void GLGizmoAiPaint::rebuild()
                                    std::make_unique<TriangleSelector::Sphere>(center, Vec3f(center + Vec3f::UnitZ()), patch.radius, to_object,
                                                                               TriangleSelector::ClippingPlane()),
                                    state, no_move, true);
-            for (const int f : patch.excluded)
-                if (f >= int(first) && f < int(last))
-                    selector->set_facet(f - int(first), base_state(size_t(f)));
         }
         selector->request_update_render_data();
         m_selectors.push_back(std::move(selector));

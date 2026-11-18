@@ -602,6 +602,9 @@ void GLGizmoAiPaint::render_ask(float wrap)
     m_imgui->text(_L("Hint (optional)"));
     ImGui::SetNextItemWidth(wrap - ImGui::GetStyle().WindowPadding.x);
     ImGui::InputTextWithHint("##hint", _u8L("e.g. a goldfish, orange body, black eyes").c_str(), &m_hint);
+    // While it is typed into, the panel is drawn again and again: otherwise the last letters show only when the pointer moves.
+    if (ImGui::IsItemActive())
+        m_settle = std::max(m_settle, 2);
 
     const wxString why = not_ready();
     if (!why.empty()) {

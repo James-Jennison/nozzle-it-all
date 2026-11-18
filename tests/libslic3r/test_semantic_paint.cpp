@@ -469,6 +469,10 @@ TEST_CASE("SemanticPaint: the question asks for spots and for what could not be 
     CHECK(text.find("\"spots\"") != std::string::npos);
     CHECK(text.find("512 by 512 pixels") != std::string::npos);
     CHECK(text.find("None is passed over in silence") != std::string::npos);
+    // The base filament is said only when it is known.
+    CHECK(text.find("The object is printed in slot") == std::string::npos);
+    const std::string based = SP::build_prompt(seg, {{1, "PLA", "#000000", ""}, {2, "PLA", "#FFFFFF", ""}}, "cube", {"front", "back"}, "black eyes", {}, 512, 2);
+    CHECK(based.find("The object is printed in slot 2 (white) wherever it is not painted") != std::string::npos);
 }
 
 TEST_CASE("SemanticPaint: a marked feature is filled up to the model's edges, and is a ball where there are none", "[SemanticPaint]")

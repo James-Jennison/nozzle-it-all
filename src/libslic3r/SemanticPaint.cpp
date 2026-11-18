@@ -1138,7 +1138,7 @@ std::string facing_words(const Vec3d &n)
 
 std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo> &filaments, const std::string &object_name,
                          const std::vector<std::string> &view_names, const std::string &user_hint,
-                         const std::vector<std::vector<int>> &labelled_per_view, int view_size)
+                         const std::vector<std::vector<int>> &labelled_per_view, int view_size, int base_filament)
 {
     std::ostringstream o;
     o << "You are helping colour a 3D-printable model for a multi-filament printer.\n";
@@ -1180,6 +1180,10 @@ std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo
     for (const FilamentInfo &f : filaments)
         o << "  " << f.index << ": " << (f.type.empty() ? "filament" : f.type) << ", " << f.color_hex << " (" << color_name(f.color_hex) << ")"
           << (f.name.empty() ? std::string() : ", " + f.name) << "\n";
+    for (const FilamentInfo &f : filaments)
+        if (base_filament > 0 && f.index == base_filament)
+            o << "The object is printed in slot " << f.index << " (" << color_name(f.color_hex) << ") wherever it is not painted: a segment given 0 "
+                 "stays that colour, and so does everything around a spot. Do not take the base to be any other colour.\n";
     o << "\nTask, in this order: decide what the object is. Then, for every segment, find its number in the views and name the part "
          "of the object it covers (for example \"left ear\", \"body\", \"base\"). Only then give it the filament slot that makes a "
          "sensible, attractive coloured print. Use only the slots listed above. Use 0 for a segment that should stay the base colour. "

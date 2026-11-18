@@ -184,7 +184,13 @@ void GLGizmoAiPaint::prepare()
     const std::string hint = into_u8(from_u8(m_hint).Trim().Trim(false));
     draft->hint     = hint.empty() ? std::string(k_guidance) : std::string(k_guidance) + "\n" + hint;
     draft->base_seg = draft->seg;
-    draft->prompt   = SP::build_prompt(draft->seg, draft->filaments, draft->object->name, draft->view_names, draft->hint, draft->labelled, k_view_size);
+    // The filament the object is printed in where it is not painted, when all its parts have the same one.
+    int base = volumes.front()->extruder_id();
+    for (const ModelVolume *volume : volumes)
+        if (volume->extruder_id() != base)
+            base = 0;
+    draft->prompt = SP::build_prompt(draft->seg, draft->filaments, draft->object->name, draft->view_names, draft->hint, draft->labelled, k_view_size,
+                                     std::max(base, 0));
     m_textures.clear();
     m_close_textures.clear();
     m_draft = std::move(draft);

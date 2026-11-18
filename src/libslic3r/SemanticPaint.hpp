@@ -105,9 +105,11 @@ std::string color_name(const std::string &hex);
 
 // Text of the question put to the model. `labelled_per_view`, when it has one entry per view, tells the model which
 // numbers each picture carries, so that a number it cannot find is known to be missing and is not guessed.
+// `base_filament` is the slot the object is printed in where it is not painted (0 = not said): what a segment left
+// at 0 will look like, which the model otherwise has to guess.
 std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo> &filaments, const std::string &object_name,
                          const std::vector<std::string> &view_names, const std::string &user_hint = {},
-                         const std::vector<std::vector<int>> &labelled_per_view = {}, int view_size = 768);
+                         const std::vector<std::vector<int>> &labelled_per_view = {}, int view_size = 768, int base_filament = 0);
 
 // Command provider: any program that reads the prompt on stdin and prints the answer on stdout (Claude Code's
 // `claude -p`, `ollama run`, `llm`, a script...). Command-line tools cannot take inline images, so the views are

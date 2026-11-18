@@ -170,9 +170,9 @@ struct SpotPatch
 constexpr double k_spot_fill_angle = 30.; // degrees; the fill tool's own default
 
 // Makes a part of its own for every feature marked in the suggestion. A mark is taken to the surface point under
-// its middle in its view; marks of one name that land close together are one place (the same nose seen from the
-// front and from above) and give one patch there, of their mean size; marks of one name far apart (two eyes) give
-// several patches of one part. The new parts come after the existing ones, which lose the faces inside the balls; they
+// its middle in its view; marks of one filament that land close together are one place (the same nose seen from the
+// front and from above, whatever it was called in each) and give one patch there; marks of one name far apart (two
+// eyes) give several patches of one part. The new parts come after the existing ones, which lose the faces inside the balls; they
 // get the mark's filament and name. Returned in the order they are to be painted: a later one goes over an earlier
 // one. A mark that lies on no surface gives nothing.
 std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views,

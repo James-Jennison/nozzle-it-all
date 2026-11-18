@@ -536,4 +536,16 @@ TEST_CASE("SemanticPaint: one feature marked in several views is one patch that 
     CHECK(double(patches[0].radius) > 40. * 20. / (768. * 0.88));
     CHECK(double(patches[0].center.cast<double>().normalized().dot(views[0].view_dir.normalized())) < -0.9);
     CHECK(patches[0].faces.size() > patches[1].faces.size());
+
+    // A feature is known by where it is and its filament, not by its name, which changes from view to view: two marks
+    // of one filament at one place are one patch, and a mark of another filament at the same place is another.
+    auto again = SP::segment_mesh(sphere.its);
+    auto named = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"front","name":"left eye pupil","x":384,"y":384,"r":20,"filament":1},
+        {"view":"front","name":"eye pupil","x":390,"y":380,"r":20,"filament":1},{"view":"front","name":"eye white","x":384,"y":384,"r":20,"filament":2}]})", before, 2, names);
+    REQUIRE(named);
+    const auto two = SP::apply_spots(sphere.its, again, *named, views);
+    REQUIRE(two.size() == 2);
+    CHECK(again.segments.size() == before + 2);
+    CHECK(named->name[before] == "left eye pupil");
+    CHECK(named->name[before + 1] == "eye white");
 }

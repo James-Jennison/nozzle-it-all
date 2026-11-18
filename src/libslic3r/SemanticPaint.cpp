@@ -446,11 +446,12 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
             continue;
         const Vec3d  point  = raster.point(hit_x, hit_y);
         const double radius = spot.r / raster.scale;
-        // The same feature seen in another view lands near by, a little round the corner: one place. Two features of
-        // one name (two eyes) lie several of their own sizes apart.
+        // The same feature seen in another view lands near by, a little round the corner: one place. It is known by
+        // its filament and not by its name, which the model does not keep the same from view to view ("left eye pupil"
+        // in one, "eye pupil" in the next). Two features of one kind (two eyes) lie several of their own sizes apart.
         Place *same = nullptr;
         for (Place &place : places)
-            if (place.name == spot.name && (place.point - point).norm() < 3. * std::max(place.radius, radius)) {
+            if (place.filament == spot.filament && (place.point - point).norm() < 3. * std::max(place.radius, radius)) {
                 same = &place;
                 break;
             }

@@ -37,7 +37,7 @@ struct ScratchJournal
     }
     void write(const std::string &name, const std::string &text) const
     {
-        boost::nowide::ofstream out((dir / name).string());
+        boost::nowide::ofstream out((dir / name).string(), std::ios::binary);
         out << text;
     }
 };
@@ -115,7 +115,7 @@ TEST_CASE("A failed write leaves the job in memory as it was", "[U1Jobs]")
     REQUIRE(U1Jobs::save(job, U1Jobs::State::Verifying));
     // A file where the folder should be makes every write fail.
     const fs::path blocked = scratch.dir / "not-a-folder";
-    { boost::nowide::ofstream out(blocked.string()); out << "x"; }
+    { boost::nowide::ofstream out(blocked.string(), std::ios::binary); out << "x"; }
     U1Jobs::set_journal_dir_for_tests(blocked);
     job.start_sent = true;
     CHECK_FALSE(U1Jobs::save(job, U1Jobs::State::Starting));

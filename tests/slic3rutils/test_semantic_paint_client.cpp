@@ -109,10 +109,16 @@ TEST_CASE("Testing a connection sends nothing when there is nowhere to send", "[
     s.command = "no-such-program-nia-test --flag";
     CHECK(semantic_paint_check(s).error == "The program was not found.");
     // A program that every system has is found, and only looked up, not run.
+#ifdef _WIN32
+    s.command = "cmd /c exit 9";
+    const char *const program = "cmd";
+#else
     s.command = "sh -c 'exit 9'";
+    const char *const program = "sh";
+#endif
     const SemanticPaintCheck found = semantic_paint_check(s);
     CHECK(found.ok);
-    CHECK(found.found.find("sh") != std::string::npos);
+    CHECK(found.found.find(program) != std::string::npos);
 
     s.provider = "openai";
     s.endpoint = " ";

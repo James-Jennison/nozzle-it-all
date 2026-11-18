@@ -122,7 +122,10 @@ SemanticPaintReply run_command(const SemanticPaintSettings &s, const std::string
 #ifdef _WIN32
         const char *comspec = std::getenv("COMSPEC");
         const std::string shell = comspec ? comspec : "cmd.exe";
-        process::child child(shell, process::args({"/c", cmd}), process::std_in < in_file, process::std_out > out_file,
+        // The whole line is given as it is to be read. Given as arguments, the library would escape the quotes in it
+        // a second time, in a way cmd.exe does not read: a quoted word would fall apart, and an & in it would start
+        // another command. With /s, cmd.exe drops the first and the last quote and takes everything between as typed.
+        process::child child(process::cmd = "\"" + shell + "\" /s /c \"" + cmd + "\"", process::std_in < in_file, process::std_out > out_file,
                              process::std_err > err_file, process::start_dir(tmp.path.string()), group);
 #else
         process::child child(process::search_path("sh"), process::args({"-c", cmd}), process::std_in < in_file, process::std_out > out_file,

@@ -373,7 +373,7 @@ void GLGizmoAiPaint::rebuild()
             const bool shown = flash && patch.segment == m_selected;
             if (!shown && (m_show_original || slot <= 0 || size_t(slot) > slots))
                 continue;
-            const EnforcerBlockerType state(shown ? highlight_state : size_t(slot));
+            const auto state = EnforcerBlockerType(shown ? highlight_state : size_t(slot));
             // A part that has painting of its own keeps it on the faces around a filled feature: there the feature is
             // painted face by face, and nothing else is touched.
             if (has_paint && !patch.excluded.empty()) {

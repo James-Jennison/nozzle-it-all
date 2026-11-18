@@ -509,8 +509,12 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
         close();
         return;
     }
-    const float scale = m_parent.get_scale();
+    const float scale    = m_parent.get_scale();
+    const float canvas_w = float(m_parent.get_canvas_size().get_width());
+    // On a small screen the panel is narrower, and it is always wholly on the plate: its button can be far to the right.
+    const float wrap = std::min(m_imgui->scaled(29.f), canvas_w * 0.55f);
     y = std::max(std::min(y, bottom_limit - ImGui::GetFrameHeight() * 22.f), 0.f);
+    x = std::max(std::min(x, canvas_w - std::max(last_input_window_width, wrap + 4.f * ImGui::GetStyle().WindowPadding.x)), 0.f);
     GizmoImguiSetNextWIndowPos(x, y, ImGuiCond_Always, 0.0f, 0.0f);
     // Never taller than the room under it: on a small screen the panel scrolls instead of running off the plate.
     const float room = float(m_parent.get_canvas_size().get_height()) - y - ImGui::GetFrameHeight();
@@ -520,7 +524,6 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
     GizmoImguiBegin(get_name(), ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
                                     ImGuiWindowFlags_NoTitleBar);
 
-    const float wrap = m_imgui->scaled(29.f);
     m_action         = Action::Nothing;
     const int number = m_step == Step::Ask ? 1 : m_step == Step::Review ? 2 : 3;
     m_imgui->text(format_wxstr(_L("AI auto-paint: step %1% of 3"), number));

@@ -161,9 +161,9 @@ std::optional<Suggestion> parse_suggestion(const std::string &reply_text, size_t
 struct SpotPatch
 {
     int              segment{-1};  // the part made for the feature, an index into Segmentation::segments
-    Vec3f            center{Vec3f::Zero()};
+    Vec3f            center{Vec3f::Zero()}; // of the ball: on the surface for one mark, inside the model for marks from several views
     float            radius{0.f};  // of the ball
-    int              seed_face{-1}; // the face `center` lies on
+    int              seed_face{-1}; // a face inside the ball, where the painting starts
     std::vector<int> faces;    // the feature's faces
     std::vector<int> excluded; // faces inside the ball that the fill did not reach, when edges held it back; else empty
 };

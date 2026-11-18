@@ -426,23 +426,23 @@ TEST_CASE("SemanticPaint: spots are read from the answer and become parts of the
     CHECK(parsed->spots[1].view == 4);
     CHECK(parsed->notes == "No filament is tan.So the body stays as it is.");
 
-    // "nose" marked in two places is one part with two balls; "pupil", listed later, goes over the nose; the mark off the model gives nothing.
+    // "nose" marked in two views, near each other, is one patch; "pupil", listed later, goes over it; the mark off the model gives nothing.
     const std::vector<SP::SpotPatch> patches = SP::apply_spots(sphere.its, seg, *parsed, views);
-    REQUIRE(patches.size() == 3);
+    REQUIRE(patches.size() == 2);
     CHECK(patches[0].segment == int(before));
-    CHECK(patches[1].segment == int(before));
-    CHECK(patches[2].segment == int(before + 1));
-    // A ball sits on the surface, at the middle of its seed face, and is as large as the mark was in its picture.
+    CHECK(patches[1].segment == int(before + 1));
+    // Each starts from a face inside its ball, which belongs to a marked part.
     for (const SP::SpotPatch &patch : patches) {
         REQUIRE((patch.seed_face >= 0 && size_t(patch.seed_face) < sphere.its.indices.size()));
         const auto &t = sphere.its.indices[size_t(patch.seed_face)];
-        CHECK((patch.center - (sphere.its.vertices[t(0)] + sphere.its.vertices[t(1)] + sphere.its.vertices[t(2)]) / 3.f).norm() < 1e-4f);
+        CHECK((patch.center - (sphere.its.vertices[t(0)] + sphere.its.vertices[t(1)] + sphere.its.vertices[t(2)]) / 3.f).norm() <= patch.radius);
         CHECK(seg.face_segment[size_t(patch.seed_face)] >= int(before));
     }
-    // The front view looks at the ball's front: the nose's first ball is there, 60 pixels of a 768-pixel picture that shows 20 units across 88% of its width.
+    // The front view looks at the ball's front: the nose is there. The pupil, one mark of 20 pixels in a 768-pixel picture that shows
+    // 20 units across 88% of its width, is a ball of that size on the surface.
     CHECK(double(patches[0].center.cast<double>().normalized().dot(views[0].view_dir.normalized())) < -0.95);
-    CHECK(double(patches[0].radius) == Catch::Approx(60. * 20. / (768. * 0.88)).epsilon(0.02));
-    CHECK(patches[2].radius < patches[0].radius);
+    CHECK(double(patches[1].radius) == Catch::Approx(20. * 20. / (768. * 0.88)).epsilon(0.02));
+    CHECK(patches[1].radius < patches[0].radius);
     REQUIRE(seg.segments.size() == before + 2);
     REQUIRE(parsed->filament.size() == before + 2);
     CHECK(parsed->name[before] == "nose");
@@ -509,4 +509,31 @@ TEST_CASE("SemanticPaint: a marked feature is filled up to the model's edges, an
     CHECK(on_ball[0].excluded.empty());
     CHECK(on_ball[0].faces.size() > 1);
     CHECK(double(on_ball[0].radius) == Catch::Approx(60. * 20. / (768. * 0.88)).epsilon(0.02));
+}
+
+TEST_CASE("SemanticPaint: one feature marked in several views is one patch that holds all its marks", "[SemanticPaint]")
+{
+    const auto               views = SP::default_views();
+    std::vector<std::string> names;
+    for (const auto &v : views)
+        names.push_back(v.name);
+    // The front of a ball, marked from the front and, a little round the corner, from above and from the left.
+    const TriangleMesh sphere = make_sphere(10., 0.1);
+    auto               seg    = SP::segment_mesh(sphere.its);
+    const size_t       before = seg.segments.size();
+    auto parsed = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"front","name":"nose","x":384,"y":384,"r":40,"filament":2},
+        {"view":"top","name":"nose","x":384,"y":710,"r":40,"filament":2},{"view":"left","name":"nose","x":710,"y":384,"r":40,"filament":2},
+        {"view":"back","name":"nose","x":384,"y":384,"r":40,"filament":2}]})", before, 2, names);
+    REQUIRE(parsed);
+    REQUIRE(parsed->spots.size() == 4);
+    const auto patches = SP::apply_spots(sphere.its, seg, *parsed, views);
+    // The three at the front are one patch; the one at the back, far from them, is another of the same part.
+    REQUIRE(patches.size() == 2);
+    CHECK(seg.segments.size() == before + 1);
+    CHECK(patches[0].segment == patches[1].segment);
+    // Its ball is around the marks' mean, which lies inside the model, and is larger than one mark.
+    CHECK(double(patches[0].center.norm()) < 9.9);
+    CHECK(double(patches[0].radius) > 40. * 20. / (768. * 0.88));
+    CHECK(double(patches[0].center.cast<double>().normalized().dot(views[0].view_dir.normalized())) < -0.9);
+    CHECK(patches[0].faces.size() > patches[1].faces.size());
 }

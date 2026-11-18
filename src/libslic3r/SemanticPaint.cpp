@@ -412,10 +412,10 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
     struct Place
     {
         std::string name;
-        Vec3d       point{Vec3d::Zero()};
-        double      radius{0.};
-        int         filament{0};
-        int         count{1};
+        Vec3d              point{Vec3d::Zero()}; // the mean of where its marks landed
+        double             radius{0.};           // the mean size of its marks
+        int                filament{0};
+        std::vector<Vec3d> hits;                 // where each mark landed
     };
     std::vector<Place>                 places; // one per ball, in the order first marked
     std::map<int, Raster>              rasters;
@@ -446,19 +446,21 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
             continue;
         const Vec3d  point  = raster.point(hit_x, hit_y);
         const double radius = spot.r / raster.scale;
-        // The same feature seen in another view lands close by: one place, at the mean.
+        // The same feature seen in another view lands near by, a little round the corner: one place. Two features of
+        // one name (two eyes) lie several of their own sizes apart.
         Place *same = nullptr;
         for (Place &place : places)
-            if (place.name == spot.name && (place.point - point).norm() < 1.5 * std::max(place.radius, radius)) {
+            if (place.name == spot.name && (place.point - point).norm() < 3. * std::max(place.radius, radius)) {
                 same = &place;
                 break;
             }
         if (same != nullptr) {
-            same->point  = (same->point * same->count + point) / double(same->count + 1);
-            same->radius = (same->radius * same->count + radius) / double(same->count + 1);
-            ++same->count;
+            const double n = double(same->hits.size());
+            same->point    = (same->point * n + point) / (n + 1.);
+            same->radius   = (same->radius * n + radius) / (n + 1.);
+            same->hits.push_back(point);
         } else
-            places.push_back({spot.name, point, radius, spot.filament, 1});
+            places.push_back({spot.name, point, radius, spot.filament, {point}});
     }
     if (places.empty())
         return patches;
@@ -495,7 +497,7 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
     // The faces reached from a seed without leaving a ball around it, and, with `bend` under 1, without crossing an
     // edge where the surface bends by more than that (as a cosine): the fill tool's rule.
     std::vector<char> seen(faces, 0);
-    const auto reach = [&](size_t seed, double radius, double bend) {
+    const auto reach = [&](size_t seed, const Vec3d &center, double radius, double bend) {
         std::vector<int> out{int(seed)}, queue{int(seed)};
         std::fill(seen.begin(), seen.end(), 0);
         seen[seed] = 1;
@@ -503,7 +505,7 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
             const int t = queue.back();
             queue.pop_back();
             for (const int other : across[size_t(t)])
-                if (other >= 0 && !seen[size_t(other)] && (middle[size_t(other)] - middle[seed]).norm() <= radius &&
+                if (other >= 0 && !seen[size_t(other)] && (middle[size_t(other)] - center).norm() <= radius &&
                     (bend >= 1. || normal[size_t(t)].dot(normal[size_t(other)]) >= bend)) {
                     seen[size_t(other)] = 1;
                     queue.push_back(other);
@@ -512,10 +514,10 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
         }
         return out;
     };
-    const auto area_of = [&](const std::vector<int> &list, size_t seed, double within) {
+    const auto area_of = [&](const std::vector<int> &list, const Vec3d &center, double within) {
         double sum = 0.;
         for (const int t : list)
-            if ((middle[size_t(t)] - middle[seed]).norm() <= within)
+            if ((middle[size_t(t)] - center).norm() <= within)
                 sum += area[size_t(t)];
         return sum;
     };
@@ -529,16 +531,29 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
 
     std::map<std::string, int> part_of; // the part made for a name
     for (const Place &place : places) {
-        // The ball sits on the surface: at the middle of the face nearest to where the marks landed.
+        // The face the painting starts from: the one nearest to where the first mark landed.
         size_t seed = 0;
         double best = std::numeric_limits<double>::max();
         for (size_t t = 0; t < faces; ++t) {
-            const double d = (middle[t] - place.point).squaredNorm();
+            const double d = (middle[t] - place.hits.front()).squaredNorm();
             if (d < best) {
                 best = d;
                 seed = t;
             }
         }
+        // One mark: a ball of its size on the surface. Marks from several views: a ball around their mean that holds
+        // them all. That mean lies inside the model (the marks are round the corner from each other), so the ball takes
+        // the whole end of what they are on: a nose is the tip of the snout, not a disc on one side of it.
+        Vec3d  center = middle[seed];
+        double radius = place.radius;
+        if (place.hits.size() > 1) {
+            center        = place.point;
+            double spread = 0.;
+            for (const Vec3d &hit : place.hits)
+                spread = std::max(spread, (hit - center).norm());
+            radius = spread + 0.5 * place.radius;
+        }
+        radius = std::max(radius, (middle[seed] - center).norm() * 1.05);
         auto known = part_of.find(place.name);
         if (known == part_of.end()) {
             Segment s;
@@ -551,18 +566,18 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
         }
         SpotPatch patch;
         patch.segment   = known->second;
-        patch.center    = middle[seed].cast<float>();
-        patch.radius    = float(place.radius);
+        patch.center    = center.cast<float>();
+        patch.radius    = float(radius);
         patch.seed_face = int(seed);
         // Filled like the fill tool, in a ball somewhat larger than the mark. When the model's edges hold the fill
         // back there (it takes well under what the ball holds beyond the mark's own size), the feature has an outline
         // of its own and is what was filled. Otherwise it has none, and the feature is the ball of the mark's size.
-        const double           wide   = 1.6 * place.radius;
-        std::vector<int>       ball   = reach(seed, place.radius, 1.);
-        const std::vector<int> around = reach(seed, wide, 1.);
-        std::vector<int>       filled = reach(seed, wide, bend_limit);
-        const double ball_area = area_of(ball, seed, place.radius), filled_inside = area_of(filled, seed, place.radius);
-        const double ring = area_of(around, seed, wide) - area_of(around, seed, place.radius), filled_ring = area_of(filled, seed, wide) - filled_inside;
+        const double           wide   = 1.6 * radius;
+        std::vector<int>       ball   = reach(seed, center, radius, 1.);
+        const std::vector<int> around = reach(seed, center, wide, 1.);
+        std::vector<int>       filled = reach(seed, center, wide, bend_limit);
+        const double ball_area = area_of(ball, center, radius), filled_inside = area_of(filled, center, radius);
+        const double ring = area_of(around, center, wide) - area_of(around, center, radius), filled_ring = area_of(filled, center, wide) - filled_inside;
         if (ring > 0. && filled_ring < 0.6 * ring && filled_inside >= 0.3 * ball_area) {
             std::fill(seen.begin(), seen.end(), 0);
             for (const int t : filled)

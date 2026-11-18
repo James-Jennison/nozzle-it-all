@@ -56,6 +56,10 @@ public:
         std::vector<std::string>                 names;
         std::vector<char>                        unsure;
         std::string                              subject;
+        // What the service had to say, e.g. what of the request it could not do; and where the marked features
+        // (spots) begin among the segments: they come after the numbered ones and carry no number in the pictures.
+        std::string                              notes;
+        size_t                                   first_spot{0};
     };
 
     GLGizmoAiPaint(GLCanvas3D &parent, const std::string &icon_filename, unsigned int sprite_id);

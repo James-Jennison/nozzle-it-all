@@ -46,6 +46,7 @@ namespace {
 constexpr auto k_flash = std::chrono::milliseconds(1200); // how long a picked part is shown in the highlight colour
 const ColorRGBA k_highlight{1.f, 0.f, 0.9f, 1.f};
 const ImVec4    k_warning{0.95f, 0.6f, 0.1f, 1.f};
+constexpr int   k_view_size = 768; // the pictures' side in pixels; the service gives a marked feature's place in these
 
 // Standing guidance that goes with every question, ahead of the user's own hint.
 const char *const k_guidance =
@@ -173,7 +174,7 @@ void GLGizmoAiPaint::prepare()
     auto png   = std::make_shared<std::vector<std::string>>();
     for (const SP::View &view : SP::default_views()) {
         draft->labelled.emplace_back();
-        draft->images.push_back(SP::render_view(draft->mesh, draft->seg, view, 768, &draft->labelled.back()));
+        draft->images.push_back(SP::render_view(draft->mesh, draft->seg, view, k_view_size, &draft->labelled.back()));
         draft->view_names.push_back(view.name);
         png->push_back(SP::encode_png(draft->images.back()));
     }
@@ -181,7 +182,7 @@ void GLGizmoAiPaint::prepare()
     // The question with the standing guidance and the user's own hint; the hint is said to come first.
     const std::string hint = into_u8(from_u8(m_hint).Trim().Trim(false));
     draft->prompt = SP::build_prompt(draft->seg, draft->filaments, draft->object->name, draft->view_names,
-                                     hint.empty() ? std::string(k_guidance) : std::string(k_guidance) + "\n" + hint, draft->labelled);
+                                     hint.empty() ? std::string(k_guidance) : std::string(k_guidance) + "\n" + hint, draft->labelled, k_view_size);
     m_textures.clear();
     m_draft = std::move(draft);
     m_status.clear();
@@ -228,15 +229,20 @@ void GLGizmoAiPaint::on_reply(const SemanticPaintReply &reply)
         m_status = format_wxstr(_L("Failed: %1%"), from_u8(reply.error));
         return;
     }
-    auto parsed = SP::parse_suggestion(reply.text, m_draft->seg.segments.size(), m_draft->filaments.size());
+    auto parsed = SP::parse_suggestion(reply.text, m_draft->seg.segments.size(), m_draft->filaments.size(), m_draft->view_names);
     if (!parsed) {
         m_status = _L("The answer could not be understood. Try again or choose another model under AI settings.");
         return;
     }
     // A part that no picture numbers was not asked about: it takes the filament of the part around it.
-    m_draft->suggested = SP::follow_neighbours(m_draft->mesh, m_draft->seg, std::move(parsed->filament),
-                                               SP::unseen_segments(m_draft->seg.segments.size(), m_draft->labelled));
+    parsed->filament = SP::follow_neighbours(m_draft->mesh, m_draft->seg, std::move(parsed->filament),
+                                             SP::unseen_segments(m_draft->seg.segments.size(), m_draft->labelled));
+    // A feature the service marked in the pictures becomes a part of its own, after the numbered ones.
+    m_draft->first_spot = m_draft->seg.segments.size();
+    SP::apply_spots(m_draft->mesh, m_draft->seg, *parsed, SP::default_views(), k_view_size);
+    m_draft->suggested = std::move(parsed->filament);
     m_draft->suggested.resize(m_draft->seg.segments.size(), 0);
+    m_draft->notes = std::move(parsed->notes);
     m_draft->names   = std::move(parsed->name);
     m_draft->unsure  = std::move(parsed->unsure);
     m_draft->subject = std::move(parsed->object);
@@ -710,6 +716,16 @@ void GLGizmoAiPaint::render_draft(float wrap)
                                    unsure));
     ImGui::PopTextWrapPos();
 
+    const size_t spots = segments.size() - std::min(m_draft->first_spot, segments.size());
+    ImGui::PushTextWrapPos(wrap);
+    if (spots > 0)
+        m_imgui->text(format_wxstr(_L_PLURAL("The service marked %1% feature in the pictures that is no part of its own (the row with a star). Its outline is rough: "
+                                             "finish it with the painting tools after applying.",
+                                             "The service marked %1% features in the pictures that are no parts of their own (the rows with a star). Their "
+                                             "outlines are rough: finish them with the painting tools after applying.", spots), spots));
+    if (!m_draft->notes.empty())
+        m_imgui->text_colored(k_warning, format_wxstr(_L("The service's note: %1%"), from_u8(m_draft->notes)));
+    ImGui::PopTextWrapPos();
     // The numbers in the list are the numbers in the pictures that were sent.
     if (m_imgui->bbl_checkbox(_L("Show the numbered pictures"), m_show_views))
         m_settle = 3;
@@ -760,7 +776,9 @@ void GLGizmoAiPaint::render_draft(float wrap)
         const std::string share  = (boost::format("%.1f%%") % (segments[i].area_fraction * 100.)).str();
         const std::string name   = i < m_draft->names.size() ? m_draft->names[i] : std::string();
         const bool        unsure = i < m_draft->unsure.size() && m_draft->unsure[i] != 0;
-        const std::string label  = "#" + std::to_string(segments[i].id) + (unsure ? " ?  " : "  ") + (name.empty() ? share : name);
+        // A marked feature has no number in the pictures: its row begins with a star.
+        const std::string label  = i >= m_draft->first_spot ? "*  " + (name.empty() ? share : name) :
+                                   "#" + std::to_string(segments[i].id) + (unsure ? " ?  " : "  ") + (name.empty() ? share : name);
         if (selected)
             ImGui::TextColored(ImVec4(k_highlight.r(), k_highlight.g(), k_highlight.b(), 1.f), "%s", label.c_str());
         else if (unsure)

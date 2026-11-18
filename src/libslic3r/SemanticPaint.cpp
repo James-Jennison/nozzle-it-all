@@ -324,6 +324,158 @@ std::vector<FaceColor> draft_face_colors(const std::vector<int> &face_filament, 
     return out;
 }
 
+namespace {
+// A view of the mesh as the pictures show it: every vertex on the screen (x, y in pixels, z its depth), and for
+// every pixel the nearest face and its depth. Shared by the pictures and by the search for the faces under a spot,
+// so that a position in a picture means the same place for both.
+struct Raster
+{
+    Vec3d              f, right, up;
+    std::vector<Vec3d> screen;
+    std::vector<float> zbuf;
+    std::vector<int>   idbuf;
+    double             scale{1.};
+};
+
+Raster rasterize(const indexed_triangle_set &its, const View &view, int size)
+{
+    Raster out;
+    out.f     = view.view_dir.normalized();
+    out.right = out.f.cross(view.up).normalized();
+    out.up    = out.right.cross(out.f);
+
+    std::vector<Vec3d> &proj = out.screen;
+    proj.resize(its.vertices.size());
+    double minx = 1e300, maxx = -1e300, miny = 1e300, maxy = -1e300;
+    for (size_t i = 0; i < its.vertices.size(); ++i) {
+        const Vec3d p = its.vertices[i].cast<double>();
+        proj[i]       = Vec3d(p.dot(out.right), p.dot(out.up), p.dot(out.f));
+        minx = std::min(minx, proj[i].x()); maxx = std::max(maxx, proj[i].x());
+        miny = std::min(miny, proj[i].y()); maxy = std::max(maxy, proj[i].y());
+    }
+    const double margin = size * 0.06;
+    const double range  = std::max({maxx - minx, maxy - miny, 1e-9});
+    const double scale  = (size - 2 * margin) / range;
+    const double cx = 0.5 * (minx + maxx), cy = 0.5 * (miny + maxy);
+    out.scale = scale;
+    for (Vec3d &p : proj)
+        p = Vec3d((p.x() - cx) * scale + size * 0.5, size * 0.5 - (p.y() - cy) * scale, p.z());
+
+    out.zbuf.assign(size_t(size) * size, std::numeric_limits<float>::max());
+    out.idbuf.assign(size_t(size) * size, -1);
+    for (size_t t = 0; t < its.indices.size(); ++t) {
+        const Vec3d &a = proj[its.indices[t](0)], &b = proj[its.indices[t](1)], &c = proj[its.indices[t](2)];
+        const double ax = a.x(), ay = a.y(), bx = b.x(), by = b.y(), cxs = c.x(), cys = c.y();
+        const double det = (bx - ax) * (cys - ay) - (cxs - ax) * (by - ay);
+        if (std::fabs(det) < 1e-9)
+            continue;
+        const int x0 = std::max(0, int(std::floor(std::min({ax, bx, cxs})))), x1 = std::min(size - 1, int(std::ceil(std::max({ax, bx, cxs}))));
+        const int y0 = std::max(0, int(std::floor(std::min({ay, by, cys})))), y1 = std::min(size - 1, int(std::ceil(std::max({ay, by, cys}))));
+        for (int y = y0; y <= y1; ++y)
+            for (int x = x0; x <= x1; ++x) {
+                const double px = x + 0.5, py = y + 0.5;
+                const double w1 = ((px - ax) * (cys - ay) - (cxs - ax) * (py - ay)) / det;
+                const double w2 = ((bx - ax) * (py - ay) - (px - ax) * (by - ay)) / det;
+                const double w0 = 1. - w1 - w2;
+                if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6)
+                    continue;
+                const float z = float(w0 * a.z() + w1 * b.z() + w2 * c.z());
+                const size_t idx = size_t(y) * size + x;
+                if (z < out.zbuf[idx]) {
+                    out.zbuf[idx]  = z;
+                    out.idbuf[idx] = int(t);
+                }
+            }
+    }
+    return out;
+}
+} // namespace
+
+std::vector<int> faces_under_spot(const indexed_triangle_set &its, const View &view, int size, double x, double y, double r)
+{
+    std::vector<int> out, turned_away; // the second for a mesh whose faces are wound the other way round
+    if (its.indices.empty() || size <= 0 || !(r > 0.))
+        return out;
+    const Raster raster = rasterize(its, view, size);
+    // A face counts as seen when its middle is no further behind the nearest surface at its pixel than a few pixels' worth of depth.
+    const double behind = 3. / raster.scale;
+    for (size_t t = 0; t < its.indices.size(); ++t) {
+        const Vec3d &a = raster.screen[its.indices[t](0)], &b = raster.screen[its.indices[t](1)], &c = raster.screen[its.indices[t](2)];
+        const Vec3d  m = (a + b + c) / 3.;
+        if ((m.x() - x) * (m.x() - x) + (m.y() - y) * (m.y() - y) > r * r)
+            continue;
+        const Vec3d n = ((its.vertices[its.indices[t](1)] - its.vertices[its.indices[t](0)]).cast<double>())
+                            .cross((its.vertices[its.indices[t](2)] - its.vertices[its.indices[t](0)]).cast<double>());
+        const int px = int(std::floor(m.x())), py = int(std::floor(m.y()));
+        if (px < 0 || py < 0 || px >= size || py >= size)
+            continue;
+        if (m.z() <= double(raster.zbuf[size_t(py) * size + px]) + behind)
+            (n.dot(raster.f) < 0. ? out : turned_away).push_back(int(t));
+    }
+    return out.empty() ? turned_away : out;
+}
+
+size_t apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views, int size)
+{
+    if (seg.face_segment.size() != its.indices.size() || suggestion.spots.empty())
+        return 0;
+    std::vector<double> area(its.indices.size(), 0.);
+    double              total = 0.;
+    for (size_t t = 0; t < its.indices.size(); ++t) {
+        area[t] = 0.5 * ((its.vertices[its.indices[t](1)] - its.vertices[its.indices[t](0)]).cast<double>())
+                            .cross((its.vertices[its.indices[t](2)] - its.vertices[its.indices[t](0)]).cast<double>()).norm();
+        total += area[t];
+    }
+    int next_id = 0;
+    for (const Segment &s : seg.segments)
+        next_id = std::max(next_id, s.id + 1);
+    suggestion.filament.resize(seg.segments.size(), 0);
+    suggestion.name.resize(seg.segments.size());
+    suggestion.unsure.resize(seg.segments.size(), 0);
+
+    size_t                     made = 0;
+    std::vector<std::string>   names;   // of the segments made, in order
+    std::vector<size_t>        indices; // their places in seg.segments
+    for (const Spot &spot : suggestion.spots) {
+        if (spot.view < 0 || size_t(spot.view) >= views.size() || spot.filament <= 0)
+            continue;
+        const std::vector<int> faces = faces_under_spot(its, views[size_t(spot.view)], size, spot.x, spot.y, spot.r);
+        if (faces.empty())
+            continue;
+        size_t at = 0;
+        const auto known = std::find(names.begin(), names.end(), spot.name);
+        if (known != names.end())
+            at = indices[size_t(known - names.begin())];
+        else {
+            Segment s;
+            s.id = next_id++;
+            at   = seg.segments.size();
+            seg.segments.push_back(s);
+            suggestion.filament.push_back(spot.filament);
+            suggestion.name.push_back(spot.name);
+            suggestion.unsure.push_back(0);
+            names.push_back(spot.name);
+            indices.push_back(at);
+            ++made;
+        }
+        for (const int t : faces)
+            seg.face_segment[size_t(t)] = int(at);
+    }
+    // What the list shows of a spot is its share of the surface.
+    for (const size_t at : indices) {
+        Segment &s = seg.segments[at];
+        s.faces = 0;
+        s.area  = 0.;
+        for (size_t t = 0; t < seg.face_segment.size(); ++t)
+            if (seg.face_segment[t] == int(at)) {
+                ++s.faces;
+                s.area += area[t];
+            }
+        s.area_fraction = total > 0. ? s.area / total : 0.;
+    }
+    return made;
+}
+
 Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, std::vector<int> *labelled)
 {
     return render(its, seg, view, size, nullptr, labelled);
@@ -349,53 +501,10 @@ Image render(const indexed_triangle_set &its, const Segmentation &seg, const Vie
     if (its.indices.empty() || seg.face_segment.size() != its.indices.size())
         return img;
 
-    const Vec3d f     = view.view_dir.normalized();
-    const Vec3d right = f.cross(view.up).normalized();
-    const Vec3d up    = right.cross(f);
-
-    std::vector<Vec3d> proj(its.vertices.size()); // x, y on screen, z depth
-    double minx = 1e300, maxx = -1e300, miny = 1e300, maxy = -1e300;
-    for (size_t i = 0; i < its.vertices.size(); ++i) {
-        const Vec3d p = its.vertices[i].cast<double>();
-        proj[i]       = Vec3d(p.dot(right), p.dot(up), p.dot(f));
-        minx = std::min(minx, proj[i].x()); maxx = std::max(maxx, proj[i].x());
-        miny = std::min(miny, proj[i].y()); maxy = std::max(maxy, proj[i].y());
-    }
-    const double margin = size * 0.06;
-    const double range  = std::max({maxx - minx, maxy - miny, 1e-9});
-    const double scale  = (size - 2 * margin) / range;
-    const double cx = 0.5 * (minx + maxx), cy = 0.5 * (miny + maxy);
-    auto sx = [&](double x) { return (x - cx) * scale + size * 0.5; };
-    auto sy = [&](double y) { return size * 0.5 - (y - cy) * scale; };
-
-    std::vector<float> zbuf(size_t(size) * size, std::numeric_limits<float>::max());
-    std::vector<int>   idbuf(size_t(size) * size, -1);
-    const Vec3d        light = (-f + 0.4 * up + 0.3 * right).normalized();
-
-    for (size_t t = 0; t < its.indices.size(); ++t) {
-        const Vec3d &a = proj[its.indices[t](0)], &b = proj[its.indices[t](1)], &c = proj[its.indices[t](2)];
-        const double ax = sx(a.x()), ay = sy(a.y()), bx = sx(b.x()), by = sy(b.y()), cxs = sx(c.x()), cys = sy(c.y());
-        const double det = (bx - ax) * (cys - ay) - (cxs - ax) * (by - ay);
-        if (std::fabs(det) < 1e-9)
-            continue;
-        const int x0 = std::max(0, int(std::floor(std::min({ax, bx, cxs})))), x1 = std::min(size - 1, int(std::ceil(std::max({ax, bx, cxs}))));
-        const int y0 = std::max(0, int(std::floor(std::min({ay, by, cys})))), y1 = std::min(size - 1, int(std::ceil(std::max({ay, by, cys}))));
-        for (int y = y0; y <= y1; ++y)
-            for (int x = x0; x <= x1; ++x) {
-                const double px = x + 0.5, py = y + 0.5;
-                const double w1 = ((px - ax) * (cys - ay) - (cxs - ax) * (py - ay)) / det;
-                const double w2 = ((bx - ax) * (py - ay) - (px - ax) * (by - ay)) / det;
-                const double w0 = 1. - w1 - w2;
-                if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6)
-                    continue;
-                const float z = float(w0 * a.z() + w1 * b.z() + w2 * c.z());
-                const size_t idx = size_t(y) * size + x;
-                if (z < zbuf[idx]) {
-                    zbuf[idx]  = z;
-                    idbuf[idx] = int(t);
-                }
-            }
-    }
+    const Raster             raster = rasterize(its, view, size);
+    const Vec3d             &f = raster.f, &right = raster.right, &up = raster.up;
+    const std::vector<int>  &idbuf = raster.idbuf;
+    const Vec3d              light = (-f + 0.4 * up + 0.3 * right).normalized();
 
     // Shade and collect label anchors.
     const size_t nseg = seg.segments.size();
@@ -528,16 +637,22 @@ std::string color_name(const std::string &hex)
         h *= 60.;
         if (h < 0) h += 360.;
     }
+    // Browns and tans are dull reds, oranges and yellows: named as such, a brown filament is not called "dark red"
+    // nor a tan one "light yellow".
+    if ((h < 50 || h >= 345) && v < 0.68 && (s < 0.72 || (h >= 15 && h < 50)))
+        return "brown";
+    if (h >= 20 && h < 65 && s < 0.5)
+        return v > 0.8 && s < 0.3 ? "beige" : "tan";
     std::string name;
     if (h < 15 || h >= 345) name = "red";
-    else if (h < 40) name = (v < 0.6 ? "brown" : "orange");
+    else if (h < 40) name = "orange";
     else if (h < 70) name = "yellow";
     else if (h < 160) name = "green";
     else if (h < 200) name = "cyan";
     else if (h < 255) name = "blue";
     else if (h < 290) name = "purple";
     else name = "pink";
-    if (name != "brown" && v < 0.5) name = "dark " + name;
+    if (v < 0.5) name = "dark " + name;
     else if (s < 0.45 && v > 0.8) name = "light " + name;
     return name;
 }
@@ -567,7 +682,7 @@ std::string facing_words(const Vec3d &n)
 
 std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo> &filaments, const std::string &object_name,
                          const std::vector<std::string> &view_names, const std::string &user_hint,
-                         const std::vector<std::vector<int>> &labelled_per_view)
+                         const std::vector<std::vector<int>> &labelled_per_view, int view_size)
 {
     std::ostringstream o;
     o << "You are helping colour a 3D-printable model for a multi-filament printer.\n";
@@ -614,11 +729,19 @@ std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo
          "sensible, attractive coloured print. Use only the slots listed above. Use 0 for a segment that should stay the base colour. "
          "Keep related parts (for example both eyes, or all petals) the same colour. Set \"sure\" to false for a segment whose number "
          "you could not find or read, or whose part you are guessing.\n";
+    o << "The user may ask for a feature that is no segment of its own (an eye, a nose, a paw at the end of a leg). Do not give its "
+         "colour to a whole segment. List it under \"spots\" instead, once for every view that shows it: the view's name, the pixel "
+         "position of its centre in that view (x from the left edge, y from the top edge; every view is " << view_size << " by " << view_size
+      << " pixels), the radius in pixels of a circle that just covers it, its name (the same in every view) and its filament slot. A "
+         "spot listed later is painted over an earlier one, so a pupil comes after the white of its eye. Give spots only for what the "
+         "user asked for, and none for a feature the views do not show. In \"notes\", say what of the user's request could not be done "
+         "and why, for example a colour that no filament has.\n";
     if (!user_hint.empty())
         o << "Extra instruction from the user: " << user_hint << "\n";
     o << "\nAnswer with JSON only, exactly in this shape: "
          "{\"object\":\"short description\",\"parts\":[{\"segment\":0,\"name\":\"part name\",\"filament\":1,\"sure\":true}],"
-         "\"notes\":\"one sentence\"}\n";
+         "\"spots\":[{\"view\":\"front\",\"name\":\"feature name\",\"x\":0,\"y\":0,\"r\":0,\"filament\":1}],"
+         "\"notes\":\"one or two sentences\"}\n";
     return o.str();
 }
 
@@ -704,7 +827,35 @@ std::string shown_name(const std::string &raw, size_t limit = 40)
 }
 } // namespace
 
-std::optional<Suggestion> parse_suggestion(const std::string &text, size_t segment_count, size_t filament_count)
+namespace {
+std::optional<double> as_number(const nlohmann::json &v)
+{
+    if (v.is_number())
+        return v.get<double>();
+    return std::nullopt;
+}
+
+// Which view an answer means: its name, its file name ("view2.png") or its number from 1. -1 when none.
+int view_index(const nlohmann::json &v, const std::vector<std::string> &view_names)
+{
+    const auto in_range = [&](long n) { return n >= 1 && size_t(n) <= view_names.size() ? int(n - 1) : -1; };
+    if (v.is_number_integer())
+        return in_range(v.get<long>());
+    if (!v.is_string())
+        return -1;
+    std::string word = v.get<std::string>();
+    std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    for (size_t i = 0; i < view_names.size(); ++i)
+        if (word == view_names[i])
+            return int(i);
+    if (word.rfind("view", 0) == 0)
+        return in_range(std::strtol(word.c_str() + 4, nullptr, 10));
+    return -1;
+}
+} // namespace
+
+std::optional<Suggestion> parse_suggestion(const std::string &text, size_t segment_count, size_t filament_count,
+                                           const std::vector<std::string> &view_names)
 {
     for (size_t pos = text.find('{'); pos != std::string::npos; pos = text.find('{', pos + 1)) {
         // Find the matching close brace, ignoring braces inside strings.
@@ -750,6 +901,26 @@ std::optional<Suggestion> parse_suggestion(const std::string &text, size_t segme
             if (f && *f >= 1 && size_t(*f) <= filament_count)
                 out.filament[*s] = *f;
         }
+        if (j.contains("notes") && j["notes"].is_string())
+            out.notes = shown_name(j["notes"].get<std::string>(), 400);
+        // Spots: at most a few dozen, each a circle that lies in its view and a filament that exists.
+        if (!view_names.empty() && j.contains("spots") && j["spots"].is_array())
+            for (const auto &a : j["spots"]) {
+                if (out.spots.size() >= 48 || !a.is_object() || !a.contains("view") || !a.contains("x") || !a.contains("y") || !a.contains("r"))
+                    continue;
+                Spot spot;
+                spot.view = view_index(a["view"], view_names);
+                const auto x = as_number(a["x"]), y = as_number(a["y"]), r = as_number(a["r"]);
+                const auto f = a.contains("filament") ? as_int(a["filament"]) : std::nullopt;
+                if (spot.view < 0 || !x || !y || !r || !(*r >= 1.) || *r > 400. || *x < 0. || *y < 0. || *x > 4096. || *y > 4096. || !f || *f < 1 ||
+                    size_t(*f) > filament_count)
+                    continue;
+                spot.x = *x; spot.y = *y; spot.r = *r; spot.filament = *f;
+                spot.name = a.contains("name") && a["name"].is_string() ? shown_name(a["name"].get<std::string>()) : std::string();
+                if (spot.name.empty())
+                    spot.name = "spot";
+                out.spots.push_back(std::move(spot));
+            }
         return out;
     }
     return std::nullopt;

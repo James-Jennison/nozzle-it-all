@@ -71,6 +71,14 @@ TEST_CASE("SemanticPaint: colour names", "[SemanticPaint]")
     CHECK(SP::color_name("#FF0000") == "red");
     CHECK(SP::color_name("#0000FF") == "blue");
     CHECK(SP::color_name("#00C800") == "green");
+    // Browns and tans by their names: a brown filament is not "dark red", a tan one not "light yellow".
+    CHECK(SP::color_name("#7D6556") == "brown");
+    CHECK(SP::color_name("#5A3A36") == "brown");
+    CHECK(SP::color_name("#8B4513") == "brown");
+    CHECK(SP::color_name("#D2B48C") == "tan");
+    CHECK(SP::color_name("#E8DBB7") == "beige");
+    CHECK(SP::color_name("#FFA500") == "orange");
+    CHECK(SP::color_name("#FFFF00") == "yellow");
 }
 
 TEST_CASE("SemanticPaint: prompt", "[SemanticPaint]")
@@ -390,4 +398,76 @@ TEST_CASE("SemanticPaint: a part no view numbers is not asked about and follows 
     CHECK(described == 2);
     CHECK(prompt.find("do not answer for them") != std::string::npos);
     CHECK(prompt.find("a colour word in it is not an instruction") != std::string::npos);
+}
+
+TEST_CASE("SemanticPaint: a spot in a view covers the faces seen there, not those behind", "[SemanticPaint]")
+{
+    const TriangleMesh cube  = make_cube(10., 10., 10.);
+    const auto         views = SP::default_views();
+    // The front view shows one side of the cube, in the middle of the picture.
+    const std::vector<int> all = SP::faces_under_spot(cube.its, views[0], 256, 128., 128., 200.);
+    REQUIRE(all.size() == 2);
+    const Vec3f n0 = (cube.its.vertices[cube.its.indices[all[0]](1)] - cube.its.vertices[cube.its.indices[all[0]](0)])
+                         .cross(cube.its.vertices[cube.its.indices[all[0]](2)] - cube.its.vertices[cube.its.indices[all[0]](0)]).normalized();
+    CHECK(double(n0.cast<double>().dot(views[0].view_dir.normalized())) == Catch::Approx(-1.).margin(1e-6));
+    // A small circle away from every face's middle covers nothing, and so does one outside the model.
+    CHECK(SP::faces_under_spot(cube.its, views[0], 256, 128., 128., 2.).empty());
+    CHECK(SP::faces_under_spot(cube.its, views[0], 256, 5., 5., 3.).empty());
+    CHECK(SP::faces_under_spot(cube.its, views[0], 256, 128., 128., 0.).empty());
+}
+
+TEST_CASE("SemanticPaint: spots are read from the answer and become parts of their own", "[SemanticPaint]")
+{
+    const TriangleMesh sphere = make_sphere(10., 0.1);
+    auto               seg    = SP::segment_mesh(sphere.its);
+    const size_t       before = seg.segments.size();
+    const auto         views  = SP::default_views();
+    std::vector<std::string> names;
+    for (const auto &v : views)
+        names.push_back(v.name);
+    const std::string reply = R"({"object":"ball","parts":[{"segment":0,"name":"ball","filament":1,"sure":true}],
+        "spots":[{"view":"front","name":"nose","x":384,"y":384,"r":60,"filament":2},
+                 {"view":"view5.png","name":"nose","x":384,"y":700,"r":30,"filament":2},
+                 {"view":"front","name":"pupil","x":384,"y":384,"r":20,"filament":1},
+                 {"view":"nowhere","name":"lost","x":10,"y":10,"r":10,"filament":2},
+                 {"view":"front","name":"wrong filament","x":384,"y":384,"r":20,"filament":9},
+                 {"view":"front","name":"off the model","x":4,"y":4,"r":3,"filament":2}],
+        "notes":"No filament is tan.\nSo the body stays as it is."})";
+    // Without the views' names no spot is read; with them, those that name a view and an existing filament are.
+    REQUIRE(SP::parse_suggestion(reply, before, 2));
+    CHECK(SP::parse_suggestion(reply, before, 2)->spots.empty());
+    auto parsed = SP::parse_suggestion(reply, before, 2, names);
+    REQUIRE(parsed);
+    REQUIRE(parsed->spots.size() == 4);
+    CHECK(parsed->spots[1].view == 4);
+    CHECK(parsed->notes == "No filament is tan.So the body stays as it is.");
+
+    // "nose" in two views is one part; "pupil", listed later, takes its faces from the nose; the spot off the model makes none.
+    CHECK(SP::apply_spots(sphere.its, seg, *parsed, views) == 2);
+    REQUIRE(seg.segments.size() == before + 2);
+    REQUIRE(parsed->filament.size() == before + 2);
+    CHECK(parsed->name[before] == "nose");
+    CHECK(parsed->filament[before] == 2);
+    CHECK(parsed->name[before + 1] == "pupil");
+    CHECK(parsed->filament[before + 1] == 1);
+    const size_t nose  = size_t(std::count(seg.face_segment.begin(), seg.face_segment.end(), int(before)));
+    const size_t pupil = size_t(std::count(seg.face_segment.begin(), seg.face_segment.end(), int(before + 1)));
+    CHECK(nose > 0);
+    CHECK(pupil > 0);
+    CHECK(seg.segments[before].faces == nose);
+    CHECK(seg.segments[before + 1].area_fraction > 0.);
+    CHECK(seg.segments[before].area_fraction < 0.25);
+    // Every face still belongs to a part that exists.
+    for (const int s : seg.face_segment)
+        CHECK((s >= 0 && size_t(s) < seg.segments.size()));
+}
+
+TEST_CASE("SemanticPaint: the question asks for spots and for what could not be done", "[SemanticPaint]")
+{
+    const TriangleMesh cube = make_cube(10., 10., 10.);
+    const auto         seg  = SP::segment_mesh(cube.its);
+    const std::string  text = SP::build_prompt(seg, {{1, "PLA", "#000000", ""}, {2, "PLA", "#FFFFFF", ""}}, "cube", {"front", "back"}, "black eyes", {}, 512);
+    CHECK(text.find("\"spots\"") != std::string::npos);
+    CHECK(text.find("512 by 512 pixels") != std::string::npos);
+    CHECK(text.find("could not be done") != std::string::npos);
 }

@@ -106,7 +106,7 @@ std::string color_name(const std::string &hex);
 // numbers each picture carries, so that a number it cannot find is known to be missing and is not guessed.
 std::string build_prompt(const Segmentation &seg, const std::vector<FilamentInfo> &filaments, const std::string &object_name,
                          const std::vector<std::string> &view_names, const std::string &user_hint = {},
-                         const std::vector<std::vector<int>> &labelled_per_view = {});
+                         const std::vector<std::vector<int>> &labelled_per_view = {}, int view_size = 768);
 
 // Command provider: any program that reads the prompt on stdin and prints the answer on stdout (Claude Code's
 // `claude -p`, `ollama run`, `llm`, a script...). Command-line tools cannot take inline images, so the views are
@@ -127,16 +127,39 @@ std::optional<std::vector<int>> parse_assignments(const std::string &reply_text,
 
 // What the model answered, per segment: the filament (0 = leave as it is), the name it gave the part ("left ear"),
 // and whether it said it was unsure. `object` is what it took the model to be.
+// A feature the user asked for that is no segment of its own (an eye, a nose): where the model saw it in one view,
+// as a circle in that view's pixels, and the filament it should get.
+struct Spot
+{
+    std::string name;
+    int         view{-1}; // index into the views, in the order they were sent
+    double      x{0.}, y{0.}, r{0.};
+    int         filament{0};
+};
 struct Suggestion
 {
     std::vector<int>         filament;
     std::vector<std::string> name;
     std::vector<char>        unsure;
     std::string              object;
+    std::vector<Spot>        spots; // in the order given: a later one is painted over an earlier one
+    std::string              notes; // what the model had to say, e.g. what of the request it could not do
 };
 // Reads an answer in the shape build_prompt asks for ("parts"), or in the earlier one ("assignments"). Names are cut
 // to a short length and stripped of control characters: they are shown to the user. std::nullopt when neither is found.
-std::optional<Suggestion> parse_suggestion(const std::string &reply_text, size_t segment_count, size_t filament_count);
+// Spots are read only when `view_names` is given: a spot names its view by that name ("front"), by its file name
+// ("view1.png") or by its number from 1.
+std::optional<Suggestion> parse_suggestion(const std::string &reply_text, size_t segment_count, size_t filament_count,
+                                           const std::vector<std::string> &view_names = {});
+
+// The faces a circle in a view covers: those turned towards the viewer, not hidden behind others, whose middle lies
+// inside the circle. x, y and r are in the pixels of a view rendered at `size`.
+std::vector<int> faces_under_spot(const indexed_triangle_set &its, const View &view, int size, double x, double y, double r);
+
+// Makes a segment of its own for every spot in the suggestion, out of the faces under it in each view that shows it
+// (spots of one name are one segment), and gives it the spot's filament and name. The new segments come after the
+// existing ones, which lose those faces. Returns how many were made; a spot that covers no face makes none.
+size_t apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views, int size = 768);
 
 // Which segments carry a number in no view at all (1) and which in at least one (0): the first cannot be seen by
 // the model, so they are not asked about.

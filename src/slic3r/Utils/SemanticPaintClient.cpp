@@ -146,7 +146,8 @@ SemanticPaintReply run_command(const SemanticPaintSettings &s, const std::string
     return out;
 }
 
-SemanticPaintReply run_openai(const SemanticPaintSettings &s, const std::string &prompt, const std::vector<std::string> &png_files)
+SemanticPaintReply run_openai(const SemanticPaintSettings &s, const std::string &prompt, const std::vector<std::string> &png_files,
+                              const std::atomic<bool> *cancel)
 {
     SemanticPaintReply out;
     if (s.model.empty()) {
@@ -160,8 +161,14 @@ SemanticPaintReply run_openai(const SemanticPaintSettings &s, const std::string 
 
     Http http = Http::post(base + "/chat/completions");
     http.header("Content-Type", "application/json").timeout_connect(15).timeout_max(kTimeoutSeconds);
+    // With a key, the request is never passed on to an address that is not HTTPS.
     if (!s.api_key.empty())
-        http.header("Authorization", "Bearer " + s.api_key);
+        http.header("Authorization", "Bearer " + s.api_key).redirect_https_only();
+    // A question that was given up is taken off the wire, not left to run to its time limit.
+    http.on_progress([cancel](Http::Progress, bool &stop) {
+        if (cancel && cancel->load())
+            stop = true;
+    });
     bool        failed = false;
     std::string reply;
     http.set_post_body(SemanticPaint::openai_request_json(s.model, prompt, b64))
@@ -173,6 +180,10 @@ SemanticPaintReply run_openai(const SemanticPaintSettings &s, const std::string 
             out.error = status != 0 ? "The server answered HTTP " + std::to_string(status) + "." : "The server could not be reached: " + err;
         })
         .perform_sync();
+    if (cancel && cancel->load()) {
+        out.error = "Cancelled.";
+        return out;
+    }
     if (failed)
         return out;
     out.text = SemanticPaint::openai_reply_text(reply);
@@ -242,7 +253,7 @@ SemanticPaintReply semantic_paint_query(const SemanticPaintSettings &settings, c
     if (settings.provider == "command")
         return run_command(settings, prompt, png_files, cancel);
     if (settings.provider == "openai")
-        return run_openai(settings, prompt, png_files);
+        return run_openai(settings, prompt, png_files, cancel);
     SemanticPaintReply r;
     r.error = "Unknown provider: " + settings.provider;
     return r;
@@ -314,7 +325,7 @@ SemanticPaintCheck semantic_paint_check(const SemanticPaintSettings &s)
     Http http = Http::get(base + "/models");
     http.timeout_connect(10).timeout_max(20);
     if (!s.api_key.empty())
-        http.header("Authorization", "Bearer " + s.api_key);
+        http.header("Authorization", "Bearer " + s.api_key).redirect_https_only();
     std::string body;
     http.on_complete([&](std::string resp, unsigned) { body = std::move(resp); })
         .on_error([&](std::string, std::string err, unsigned status) {

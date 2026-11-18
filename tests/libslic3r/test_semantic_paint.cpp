@@ -660,6 +660,13 @@ TEST_CASE("SemanticPaint: a marked place with pieces of its own gets a close-up,
     CHECK(parsed->filament[before] == 2);
     for (const int t : patches[0].faces)
         CHECK(seg.face_segment[size_t(t)] == int(before));
+    // A mark gives way only where the coloured pieces hold a fair share of what it covers: with nine tenths of it on
+    // a piece that got no filament (a nose on a smooth snout, a strip of the mouth's edge under it), the mark stays.
+    auto mostly_elsewhere = closeups;
+    mostly_elsewhere[0].cover = {{0.1f, 0.9f, 0.f}};
+    CHECK(SP::spots_replaced(parsed->spots.size(), mostly_elsewhere, *answer) == std::vector<char>{0});
+    mostly_elsewhere[0].cover = {{0.6f, 0.4f, 0.f}};
+    CHECK(SP::spots_replaced(parsed->spots.size(), mostly_elsewhere, *answer) == std::vector<char>{1});
     // An answer that colours nothing leaves the marks as they were.
     SP::CloseUpAnswer nothing;
     nothing.pieces.assign(1, std::vector<SP::PieceChoice>(3));

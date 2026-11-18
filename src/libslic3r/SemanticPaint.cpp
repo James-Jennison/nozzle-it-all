@@ -825,6 +825,24 @@ std::vector<CloseUp> find_closeups(const indexed_triangle_set &its, const Sugges
             for (size_t k = 0; k < found.size(); ++k)
                 if (kept_as[k] >= 0)
                     closeup.pieces[size_t(kept_as[k])].insert(closeup.pieces[size_t(kept_as[k])].end(), found[k].begin(), found[k].end());
+            // How much of what each mark covers lies in each piece.
+            for (const int spot : group.spots) {
+                std::vector<float> share(closeup.pieces.size(), 0.f);
+                double             all = 0.;
+                for (const int t : ball)
+                    if ((topo.middle[size_t(t)] - hits[size_t(spot)].point).norm() <= hits[size_t(spot)].radius) {
+                        all += topo.area[size_t(t)];
+                        if (piece[size_t(t)] >= 0 && kept_as[size_t(piece[size_t(t)])] >= 0)
+                            share[size_t(kept_as[size_t(piece[size_t(t)])])] += float(topo.area[size_t(t)]);
+                    }
+                // A mark smaller than the faces under it covers none of them by their middles: nothing is known of it.
+                if (all > 0.)
+                    for (float &s : share)
+                        s = float(s / all);
+                else
+                    share.clear();
+                closeup.cover.push_back(std::move(share));
+            }
             // Looked at straight on: against the way the surface faces there, taken over all of it, so that pieces round
             // a corner from each other are all in view.
             Vec3d facing = Vec3d::Zero();
@@ -890,11 +908,26 @@ std::pair<Image, Image> render_closeup(const indexed_triangle_set &its, const Cl
 std::vector<char> spots_replaced(size_t spot_count, const std::vector<CloseUp> &closeups, const CloseUpAnswer &answer)
 {
     std::vector<char> out(spot_count, 0);
-    for (size_t c = 0; c < closeups.size() && c < answer.pieces.size(); ++c)
-        if (std::any_of(answer.pieces[c].begin(), answer.pieces[c].end(), [](const PieceChoice &p) { return p.filament > 0; }))
-            for (const int spot : closeups[c].spots)
-                if (spot >= 0 && size_t(spot) < spot_count)
-                    out[size_t(spot)] = 1;
+    for (size_t c = 0; c < closeups.size() && c < answer.pieces.size(); ++c) {
+        const CloseUp &closeup = closeups[c];
+        if (!std::any_of(answer.pieces[c].begin(), answer.pieces[c].end(), [](const PieceChoice &p) { return p.filament > 0; }))
+            continue;
+        for (size_t i = 0; i < closeup.spots.size(); ++i) {
+            const int spot = closeup.spots[i];
+            if (spot < 0 || size_t(spot) >= spot_count)
+                continue;
+            if (i >= closeup.cover.size() || closeup.cover[i].empty()) {
+                out[size_t(spot)] = 1;
+                continue;
+            }
+            float painted = 0.f;
+            for (size_t k = 0; k < closeup.cover[i].size() && k < answer.pieces[c].size(); ++k)
+                if (answer.pieces[c][k].filament > 0)
+                    painted += closeup.cover[i][k];
+            if (painted >= 0.3f)
+                out[size_t(spot)] = 1;
+        }
+    }
     return out;
 }
 

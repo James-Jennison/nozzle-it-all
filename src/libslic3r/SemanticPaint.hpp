@@ -200,6 +200,10 @@ struct CloseUp
     // looked at and goes on past its edge. It is shown and numbered, and an answer's filament for it is not taken:
     // painted, it would end in the ragged line where the looking stopped.
     int                           around{-1};
+    // For each of `spots`, and each piece: the share of the surface the mark covers that lies in that piece. A mark
+    // gives way to the close-up's answer only where the pieces that got a filament hold a fair share of it; a nose
+    // on a smooth snout, with only a strip of the mouth's edge under it, stays the round patch it was.
+    std::vector<std::vector<float>> cover;
 };
 // The marked places that have pieces of their own: at least three (two of the feature and what lies around it).
 // A place with none, such as a nose on a smooth snout, gets no close-up and stays a round patch. At most six.
@@ -228,7 +232,8 @@ struct CloseUpAnswer
 // and so does a close-up's `around` piece whatever the answer gives it.
 std::optional<CloseUpAnswer> parse_closeups(const std::string &reply_text, const std::vector<CloseUp> &closeups, size_t filament_count);
 
-// Which spots a close-up's answer replaces (1) and which stay (0): those of every close-up in which a piece got a filament.
+// Which spots a close-up's answer replaces (1) and which stay (0): those of which the pieces that got a filament hold at
+// least three tenths (see CloseUp::cover). A close-up without `cover` replaces all its spots once any piece got a filament.
 std::vector<char> spots_replaced(size_t spot_count, const std::vector<CloseUp> &closeups, const CloseUpAnswer &answer);
 
 // Makes a part of its own for every piece that got a filament, after the existing ones, with the piece's name. To be

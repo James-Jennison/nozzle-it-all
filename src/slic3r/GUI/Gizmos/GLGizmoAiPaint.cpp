@@ -990,12 +990,16 @@ void GLGizmoAiPaint::render_draft(float wrap)
         // A marked feature has no number in the pictures: its row begins with a star.
         const std::string label  = i >= m_draft->first_spot ? "*  " + (name.empty() ? share : name) :
                                    "#" + std::to_string(segments[i].id) + (unsure ? " ?  " : "  ") + (name.empty() ? share : name);
+        // A long name ends where its column ends and does not run under the colour and the list; pointing at it shows all of it.
+        const ImVec2 at = ImGui::GetCursorScreenPos();
+        ImGui::PushClipRect(at, ImVec2(ImGui::GetWindowPos().x + wrap * 0.41f - ImGui::GetStyle().ItemSpacing.x, at.y + ImGui::GetFrameHeight()), true);
         if (selected)
             ImGui::TextColored(ImVec4(k_highlight.r(), k_highlight.g(), k_highlight.b(), 1.f), "%s", label.c_str());
         else if (unsure)
             ImGui::TextColored(ImVec4(0.95f, 0.6f, 0.1f, 1.f), "%s", label.c_str());
         else
             ImGui::TextUnformatted(label.c_str());
+        ImGui::PopClipRect();
         if (ImGui::IsItemHovered() && !name.empty())
             m_imgui->tooltip(from_u8(name + "  " + share), wrap);
         ImGui::SameLine(wrap * 0.41f); // the columns follow the panel, which is narrower on a small screen

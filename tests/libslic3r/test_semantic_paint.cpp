@@ -470,3 +470,43 @@ TEST_CASE("SemanticPaint: the question asks for spots and for what could not be 
     CHECK(text.find("512 by 512 pixels") != std::string::npos);
     CHECK(text.find("could not be done") != std::string::npos);
 }
+
+TEST_CASE("SemanticPaint: a marked feature is filled up to the model's edges, and is a ball where there are none", "[SemanticPaint]")
+{
+    const auto               views = SP::default_views();
+    std::vector<std::string> names;
+    for (const auto &v : views)
+        names.push_back(v.name);
+    // A cube seen from the front fills 88% of a 768-pixel picture with one of its sides: a mark in the middle, 300 pixels in radius.
+    const TriangleMesh cube = make_cube(10., 10., 10.);
+    auto               seg  = SP::segment_mesh(cube.its);
+    const size_t       before = seg.segments.size();
+    auto parsed = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"front","name":"door","x":384,"y":384,"r":300,"filament":2}]})", before, 2, names);
+    REQUIRE(parsed);
+    const auto patches = SP::apply_spots(cube.its, seg, *parsed, views);
+    REQUIRE(patches.size() == 1);
+    // The fill stops at the side's four edges: the feature is the side's two faces, and the faces round the corner are named as not reached.
+    REQUIRE(patches[0].faces.size() == 2);
+    CHECK(!patches[0].excluded.empty());
+    for (const int t : patches[0].faces) {
+        const auto &tri = cube.its.indices[size_t(t)];
+        const Vec3f n   = (cube.its.vertices[tri(1)] - cube.its.vertices[tri(0)]).cross(cube.its.vertices[tri(2)] - cube.its.vertices[tri(0)]).normalized();
+        CHECK(double(n.cast<double>().dot(views[0].view_dir.normalized())) == Catch::Approx(-1.).margin(1e-6));
+        CHECK(seg.face_segment[size_t(t)] == int(before));
+    }
+    CHECK(std::count(seg.face_segment.begin(), seg.face_segment.end(), int(before)) == 2);
+    // The ball is wider than the mark there, to let the fill reach the edges.
+    CHECK(double(patches[0].radius) == Catch::Approx(1.6 * 300. * 10. / (768. * 0.88)).epsilon(0.02));
+
+    // A ball has no edges: the feature is the ball of the mark's own size, and no face is named as not reached.
+    const TriangleMesh sphere = make_sphere(10., 0.1);
+    auto               round  = SP::segment_mesh(sphere.its);
+    const size_t       parts  = round.segments.size();
+    auto marked = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"front","name":"nose","x":384,"y":384,"r":60,"filament":2}]})", parts, 2, names);
+    REQUIRE(marked);
+    const auto on_ball = SP::apply_spots(sphere.its, round, *marked, views);
+    REQUIRE(on_ball.size() == 1);
+    CHECK(on_ball[0].excluded.empty());
+    CHECK(on_ball[0].faces.size() > 1);
+    CHECK(double(on_ball[0].radius) == Catch::Approx(60. * 20. / (768. * 0.88)).epsilon(0.02));
+}

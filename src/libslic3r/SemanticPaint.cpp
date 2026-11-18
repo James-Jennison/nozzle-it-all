@@ -467,16 +467,59 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
     std::vector<Vec3d>  middle(faces);
     std::vector<double> area(faces, 0.);
     double              total = 0.;
-    std::vector<std::vector<int>> at_vertex(its.vertices.size());
+    std::vector<Vec3d>  normal(faces, Vec3d::Zero());
+    // The faces across each face's three edges (-1 where there is none or more than one).
+    std::vector<std::array<int, 3>>                    across(faces, std::array<int, 3>{-1, -1, -1});
+    std::map<std::pair<int, int>, std::pair<int, int>> edge_first; // an edge's first face and which of its edges it is
     for (size_t t = 0; t < faces; ++t) {
         const Vec3d a = its.vertices[its.indices[t](0)].cast<double>(), b = its.vertices[its.indices[t](1)].cast<double>(),
                     c = its.vertices[its.indices[t](2)].cast<double>();
         middle[t] = (a + b + c) / 3.;
-        area[t]   = 0.5 * (b - a).cross(c - a).norm();
+        const Vec3d n = (b - a).cross(c - a);
+        area[t]   = 0.5 * n.norm();
+        normal[t] = area[t] > 0. ? Vec3d(n / (2. * area[t])) : Vec3d::Zero();
         total += area[t];
-        for (int k = 0; k < 3; ++k)
-            at_vertex[size_t(its.indices[t](k))].push_back(int(t));
+        for (int k = 0; k < 3; ++k) {
+            const int u = its.indices[t](k), v = its.indices[t]((k + 1) % 3);
+            const auto key   = std::make_pair(std::min(u, v), std::max(u, v));
+            const auto found = edge_first.find(key);
+            if (found == edge_first.end())
+                edge_first.emplace(key, std::make_pair(int(t), k));
+            else if (found->second.first >= 0) {
+                across[t][size_t(k)]                                             = found->second.first;
+                across[size_t(found->second.first)][size_t(found->second.second)] = int(t);
+                found->second.first = -1; // a third face on this edge is joined to neither
+            }
+        }
     }
+    // The faces reached from a seed without leaving a ball around it, and, with `bend` under 1, without crossing an
+    // edge where the surface bends by more than that (as a cosine): the fill tool's rule.
+    std::vector<char> seen(faces, 0);
+    const auto reach = [&](size_t seed, double radius, double bend) {
+        std::vector<int> out{int(seed)}, queue{int(seed)};
+        std::fill(seen.begin(), seen.end(), 0);
+        seen[seed] = 1;
+        while (!queue.empty()) {
+            const int t = queue.back();
+            queue.pop_back();
+            for (const int other : across[size_t(t)])
+                if (other >= 0 && !seen[size_t(other)] && (middle[size_t(other)] - middle[seed]).norm() <= radius &&
+                    (bend >= 1. || normal[size_t(t)].dot(normal[size_t(other)]) >= bend)) {
+                    seen[size_t(other)] = 1;
+                    queue.push_back(other);
+                    out.push_back(other);
+                }
+        }
+        return out;
+    };
+    const auto area_of = [&](const std::vector<int> &list, size_t seed, double within) {
+        double sum = 0.;
+        for (const int t : list)
+            if ((middle[size_t(t)] - middle[seed]).norm() <= within)
+                sum += area[size_t(t)];
+        return sum;
+    };
+    const double bend_limit = std::cos(k_spot_fill_angle * M_PI / 180.) - 1e-9;
     int next_id = 0;
     for (const Segment &s : seg.segments)
         next_id = std::max(next_id, s.id + 1);
@@ -485,7 +528,6 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
     suggestion.unsure.resize(seg.segments.size(), 0);
 
     std::map<std::string, int> part_of; // the part made for a name
-    std::vector<char>          seen(faces, 0);
     for (const Place &place : places) {
         // The ball sits on the surface: at the middle of the face nearest to where the marks landed.
         size_t seed = 0;
@@ -512,22 +554,29 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
         patch.center    = middle[seed].cast<float>();
         patch.radius    = float(place.radius);
         patch.seed_face = int(seed);
-        // Its faces: those within the ball that hang together with the seed, so that a ball never reaches through to another side.
-        std::fill(seen.begin(), seen.end(), 0);
-        std::vector<int> queue{int(seed)};
-        seen[seed] = 1;
-        while (!queue.empty()) {
-            const int t = queue.back();
-            queue.pop_back();
+        // Filled like the fill tool, in a ball somewhat larger than the mark. When the model's edges hold the fill
+        // back there (it takes well under what the ball holds beyond the mark's own size), the feature has an outline
+        // of its own and is what was filled. Otherwise it has none, and the feature is the ball of the mark's size.
+        const double           wide   = 1.6 * place.radius;
+        std::vector<int>       ball   = reach(seed, place.radius, 1.);
+        const std::vector<int> around = reach(seed, wide, 1.);
+        std::vector<int>       filled = reach(seed, wide, bend_limit);
+        const double ball_area = area_of(ball, seed, place.radius), filled_inside = area_of(filled, seed, place.radius);
+        const double ring = area_of(around, seed, wide) - area_of(around, seed, place.radius), filled_ring = area_of(filled, seed, wide) - filled_inside;
+        if (ring > 0. && filled_ring < 0.6 * ring && filled_inside >= 0.3 * ball_area) {
+            std::fill(seen.begin(), seen.end(), 0);
+            for (const int t : filled)
+                seen[size_t(t)] = 1;
+            for (const int t : around)
+                if (!seen[size_t(t)])
+                    patch.excluded.push_back(t);
+            patch.radius = float(wide);
+            patch.faces  = std::move(filled);
+        } else
+            patch.faces = std::move(ball);
+        for (const int t : patch.faces)
             seg.face_segment[size_t(t)] = patch.segment;
-            for (int k = 0; k < 3; ++k)
-                for (const int other : at_vertex[size_t(its.indices[size_t(t)](k))])
-                    if (!seen[size_t(other)] && (middle[size_t(other)] - middle[seed]).norm() <= place.radius) {
-                        seen[size_t(other)] = 1;
-                        queue.push_back(other);
-                    }
-        }
-        patches.push_back(patch);
+        patches.push_back(std::move(patch));
     }
     // What the list shows of a marked feature is its share of the surface.
     for (const auto &[name, at] : part_of) {

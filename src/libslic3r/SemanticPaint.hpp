@@ -152,20 +152,27 @@ struct Suggestion
 std::optional<Suggestion> parse_suggestion(const std::string &reply_text, size_t segment_count, size_t filament_count,
                                            const std::vector<std::string> &view_names = {});
 
-// A marked feature as it is painted: a ball around a point on the surface. What lies inside the ball and hangs
-// together with the face at its middle is the feature, so its outline is round whatever the triangles are.
+// A marked feature as it is painted. It is filled from the face at its middle the way the slicer's fill tool does:
+// across neighbouring faces for as long as the surface bends by no more than k_spot_fill_angle from one to the
+// next, so the fill stops at the model's own edges (the rim of an eye). The fill never leaves a ball around the
+// middle. Where the model has edges that hold the fill back, the feature is the filled faces and the ball is larger
+// than the mark, to let the fill reach those edges; where it has none, the feature is the ball itself, as large as
+// the mark, and its outline is round whatever the triangles are.
 struct SpotPatch
 {
-    int   segment{-1};  // the part made for the feature, an index into Segmentation::segments
-    Vec3f center{Vec3f::Zero()};
-    float radius{0.f};
-    int   seed_face{-1}; // the face `center` lies on
+    int              segment{-1};  // the part made for the feature, an index into Segmentation::segments
+    Vec3f            center{Vec3f::Zero()};
+    float            radius{0.f};  // of the ball
+    int              seed_face{-1}; // the face `center` lies on
+    std::vector<int> faces;    // the feature's faces
+    std::vector<int> excluded; // faces inside the ball that the fill did not reach, when edges held it back; else empty
 };
+constexpr double k_spot_fill_angle = 30.; // degrees; the fill tool's own default
 
 // Makes a part of its own for every feature marked in the suggestion. A mark is taken to the surface point under
 // its middle in its view; marks of one name that land close together are one place (the same nose seen from the
-// front and from above) and give one ball there, of their mean size; marks of one name far apart (two eyes) give
-// several balls of one part. The new parts come after the existing ones, which lose the faces inside the balls; they
+// front and from above) and give one patch there, of their mean size; marks of one name far apart (two eyes) give
+// several patches of one part. The new parts come after the existing ones, which lose the faces inside the balls; they
 // get the mark's filament and name. Returned in the order they are to be painted: a later one goes over an earlier
 // one. A mark that lies on no surface gives nothing.
 std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views,

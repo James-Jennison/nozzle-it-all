@@ -823,7 +823,9 @@ if (SLIC3R_CAD)
 endif ()
 
 if(WIN32)
-    target_link_libraries(libslic3r PRIVATE Psapi.lib bcrypt.lib)
+    # NIA: crypt32 for the static OpenSSL, whose digest code (used by NIASettingsMigration) reaches the system's
+    # certificate store functions; without it whatever links libslic3r alone, the unit tests among it, does not link.
+    target_link_libraries(libslic3r PRIVATE Psapi.lib bcrypt.lib crypt32.lib)
 endif()
 
 if(SLIC3R_PROFILE)

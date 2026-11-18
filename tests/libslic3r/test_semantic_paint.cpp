@@ -593,6 +593,7 @@ TEST_CASE("SemanticPaint: a marked place with pieces of its own gets a close-up,
     CHECK(question.find("close-up 1 (marked as: corner): pictures 1 and 2") != std::string::npos);
     CHECK(question.find("Numbers in close-up 1: 1, 2, 3") != std::string::npos);
     CHECK(question.find("a white top") != std::string::npos);
+    CHECK(question.find("must stay visible") != std::string::npos);
     CHECK(question.find("\"closeups\"") != std::string::npos);
 
     // The answer: piece 1 white, piece 2 left as it is, a piece that does not exist and a filament that does not exist are passed over.

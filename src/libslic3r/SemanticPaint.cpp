@@ -1581,7 +1581,8 @@ std::string build_closeup_prompt(const std::vector<CloseUp> &closeups, const std
     o << "\nTask: for every numbered piece of every close-up, say what it is (for example \"pupil\", \"white of the eye\", \"glint\", "
          "\"surface around the eye\") and give it the filament slot that fits the user's request and makes a sensible, attractive print. "
          "Use only the slots listed above. Use 0 for a piece that should stay as the surface around it is. Colour the same feature the "
-         "same way in every close-up (both eyes alike).\n";
+         "same way in every close-up (both eyes alike). A piece that sits on another piece (a pupil, a glint or a spot on an eyeball) "
+         "is a detail the designer sculpted: it must stay visible, so never give it the filament of the piece it sits on.\n";
     if (!user_hint.empty())
         o << "Extra instruction from the user: " << user_hint << "\n";
     o << "\nAnswer with JSON only, exactly in this shape: "

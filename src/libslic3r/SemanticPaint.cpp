@@ -812,15 +812,35 @@ std::vector<CloseUp> find_closeups(const indexed_triangle_set &its, const Sugges
             for (size_t k = 0; k < found.size(); ++k)
                 if (kept_as[k] >= 0)
                     closeup.pieces[size_t(kept_as[k])].insert(closeup.pieces[size_t(kept_as[k])].end(), found[k].begin(), found[k].end());
-            // Looked at straight on: against the way the surface faces at the place.
+            // Looked at straight on: against the way the surface faces there, taken over all of it, so that pieces round
+            // a corner from each other are all in view.
             Vec3d facing = Vec3d::Zero();
             for (const int t : ball)
-                if ((topo.middle[size_t(t)] - group.point).norm() <= 1.5 * group.radius)
-                    facing += topo.normal[size_t(t)] * topo.area[size_t(t)];
+                facing += topo.normal[size_t(t)] * topo.area[size_t(t)];
             if (facing.norm() < 1e-9)
                 facing = topo.normal[seed];
             facing.normalize();
             closeup.view = View{"close-up", Vec3d(-facing), std::fabs(facing.z()) < 0.9 ? Vec3d(0, 0, 1) : Vec3d(0, 1, 0)};
+            // When one piece is most of what was looked at, it is the surface around the feature: the close-up then
+            // shows the other pieces, with some of it around them, and not mostly it.
+            if (areas[size_t(order.front())] > 0.5 * ball_area) {
+                Vec3d  middle = Vec3d::Zero();
+                double weight = 0.;
+                for (size_t k = 1; k < closeup.pieces.size(); ++k)
+                    for (const int t : closeup.pieces[k]) {
+                        middle += topo.middle[size_t(t)] * topo.area[size_t(t)];
+                        weight += topo.area[size_t(t)];
+                    }
+                if (weight > 0.) {
+                    middle /= weight;
+                    double extent = 0.;
+                    for (size_t k = 1; k < closeup.pieces.size(); ++k)
+                        for (const int t : closeup.pieces[k])
+                            extent = std::max(extent, (topo.middle[size_t(t)] - middle).norm());
+                    closeup.center = middle;
+                    closeup.half   = std::min(closeup.half, std::max(1.6 * extent, 0.35 * reach));
+                }
+            }
             out.push_back(std::move(closeup));
         }
         for (const int t : ball) {

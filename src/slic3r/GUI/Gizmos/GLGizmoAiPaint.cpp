@@ -26,7 +26,9 @@
 #include <boost/format.hpp>
 #include <imgui/imgui.h>
 #include <imgui/imgui_stdlib.h> // std::string for text fields
+#include <wx/display.h>
 #include <wx/event.h>
+#include <wx/glcanvas.h>
 #include <wx/utils.h>
 
 #include <algorithm>
@@ -510,14 +512,26 @@ void GLGizmoAiPaint::on_render_input_window(float x, float y, float bottom_limit
         return;
     }
     const float scale    = m_parent.get_scale();
-    const float canvas_w = float(m_parent.get_canvas_size().get_width());
+    // The part of the plate that is on the screen: the application's window can be larger than a small screen, and the
+    // panel is kept where it can be seen and reached.
+    float canvas_w = float(m_parent.get_canvas_size().get_width()), canvas_h = float(m_parent.get_canvas_size().get_height());
+    if (const wxGLCanvas *canvas = m_parent.get_wxglcanvas(); canvas != nullptr) {
+        const float   factor = m_parent.get_canvas_size().get_scale_factor();
+        const wxRect  screen = wxDisplay(canvas).GetClientArea();
+        const wxPoint origin = canvas->GetScreenPosition();
+        const float   seen_w = float(screen.GetRight() + 1 - origin.x) * factor, seen_h = float(screen.GetBottom() + 1 - origin.y) * factor;
+        if (seen_w > m_imgui->scaled(15.f))
+            canvas_w = std::min(canvas_w, seen_w);
+        if (seen_h > m_imgui->scaled(15.f))
+            canvas_h = std::min(canvas_h, seen_h);
+    }
     // On a small screen the panel is narrower, and it is always wholly on the plate: its button can be far to the right.
     const float wrap = std::min(m_imgui->scaled(29.f), canvas_w * 0.55f);
     y = std::max(std::min(y, bottom_limit - ImGui::GetFrameHeight() * 22.f), 0.f);
     x = std::max(std::min(x, canvas_w - std::max(last_input_window_width, wrap + 4.f * ImGui::GetStyle().WindowPadding.x)), 0.f);
     GizmoImguiSetNextWIndowPos(x, y, ImGuiCond_Always, 0.0f, 0.0f);
     // Never taller than the room under it: on a small screen the panel scrolls instead of running off the plate.
-    const float room = float(m_parent.get_canvas_size().get_height()) - y - ImGui::GetFrameHeight();
+    const float room = canvas_h - y - ImGui::GetFrameHeight();
     ImGui::SetNextWindowSizeConstraints(ImVec2(0.f, 0.f), ImVec2(FLT_MAX, std::max(room, ImGui::GetFrameHeight() * 8.f)));
     ImGuiWrapper::push_toolbar_style(scale);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f * scale));

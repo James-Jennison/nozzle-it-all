@@ -667,10 +667,20 @@ std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation
         std::vector<int>       filled = reach(seed, center, wide, bend_limit);
         const double ball_area = area_of(ball, center, radius), filled_inside = area_of(filled, center, radius);
         const double ring = area_of(around, center, wide) - area_of(around, center, radius), filled_ring = area_of(filled, center, wide) - filled_inside;
-        if (ring > 0. && filled_ring < 0.6 * ring && filled_inside >= 0.3 * ball_area) {
-            std::fill(seen.begin(), seen.end(), 0);
-            for (const int t : filled)
-                seen[size_t(t)] = 1;
+        // The fill must also have been stopped by the model's edges all the way round. Where it was stopped only by how
+        // far it may go (it would have gone on over smooth surface), its end there is a ragged line of whole faces,
+        // not an outline: such a feature is painted as the ball, whose edge the round brush makes smooth.
+        std::fill(seen.begin(), seen.end(), 0);
+        for (const int t : filled)
+            seen[size_t(t)] = 1;
+        bool ran_out = false;
+        for (size_t f = 0; f < filled.size() && !ran_out; ++f)
+            for (const int other : across[size_t(filled[f])])
+                if (other >= 0 && !seen[size_t(other)] && normal[size_t(filled[f])].dot(normal[size_t(other)]) >= bend_limit) {
+                    ran_out = true;
+                    break;
+                }
+        if (!ran_out && ring > 0. && filled_ring < 0.6 * ring && filled_inside >= 0.3 * ball_area) {
             for (const int t : around)
                 if (!seen[size_t(t)])
                     patch.excluded.push_back(t);

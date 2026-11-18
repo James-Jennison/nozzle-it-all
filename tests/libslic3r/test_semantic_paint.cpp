@@ -7,6 +7,8 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -162,6 +164,42 @@ std::vector<int> halves_with_tip(const indexed_triangle_set &its, int &tip)
     tip        = (10 * 20 + 10) * 2 + 1;
     slots[tip] = 1;
     return slots;
+}
+
+// A cube from 0 to `size` with every side cut into n by n squares of two faces each, sharing their corners.
+indexed_triangle_set gridded_cube(double size, int n)
+{
+    indexed_triangle_set          its;
+    std::map<std::array<int, 3>, int> at;
+    const auto corner = [&](int i, int j, int k) {
+        const auto found = at.find({i, j, k});
+        if (found != at.end())
+            return found->second;
+        its.vertices.emplace_back(float(size * i / n), float(size * j / n), float(size * k / n));
+        return at[{i, j, k}] = int(its.vertices.size()) - 1;
+    };
+    // For each axis and each of its two sides: the squares, wound so that the faces look outwards.
+    for (int axis = 0; axis < 3; ++axis)
+        for (int side = 0; side < 2; ++side)
+            for (int u = 0; u < n; ++u)
+                for (int v = 0; v < n; ++v) {
+                    const auto point = [&](int a, int b) {
+                        std::array<int, 3> p{};
+                        p[size_t(axis)]           = side * n;
+                        p[size_t((axis + 1) % 3)] = a;
+                        p[size_t((axis + 2) % 3)] = b;
+                        return corner(p[0], p[1], p[2]);
+                    };
+                    const int a = point(u, v), b = point(u + 1, v), c = point(u + 1, v + 1), d = point(u, v + 1);
+                    if (side == 1) {
+                        its.indices.emplace_back(a, b, c);
+                        its.indices.emplace_back(a, c, d);
+                    } else {
+                        its.indices.emplace_back(a, c, b);
+                        its.indices.emplace_back(a, d, c);
+                    }
+                }
+    return its;
 }
 
 } // namespace
@@ -519,6 +557,28 @@ TEST_CASE("SemanticPaint: a marked feature is filled up to the model's edges, an
     CHECK(std::count(seg.face_segment.begin(), seg.face_segment.end(), int(before)) == 2);
     // The ball is wider than the mark there, to let the fill reach the edges.
     CHECK(double(patches[0].radius) == Catch::Approx(1.6 * 300. * 10. / (768. * 0.88)).epsilon(0.02));
+
+    // The same cube with every side cut into a grid, and a mark whose wider ball reaches the side's edges in the
+    // middle of each but not at its corners: there the fill is stopped only by how far it may go. Its end is then no
+    // outline, and the feature is the ball, for the round brush to paint with a smooth edge.
+    {
+        const indexed_triangle_set cut     = gridded_cube(10., 24);
+        auto                       cut_seg = SP::segment_mesh(cut);
+        auto knob = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"front","name":"knob","x":384,"y":384,"r":237,"filament":2}]})", cut_seg.segments.size(), 2, names);
+        REQUIRE(knob);
+        const auto patch = SP::apply_spots(cut, cut_seg, *knob, views);
+        REQUIRE(patch.size() == 1);
+        CHECK(!patch[0].by_faces);
+        CHECK(patch[0].excluded.empty());
+        // With a mark large enough for the wider ball to hold the whole side, the edges stop the fill all the way round.
+        auto door = SP::parse_suggestion(R"({"parts":[],"spots":[{"view":"front","name":"door","x":384,"y":384,"r":300,"filament":2}]})", cut_seg.segments.size(), 2, names);
+        REQUIRE(door);
+        auto       again = SP::segment_mesh(cut);
+        const auto whole = SP::apply_spots(cut, again, *door, views);
+        REQUIRE(whole.size() == 1);
+        CHECK(whole[0].by_faces);
+        CHECK(whole[0].faces.size() == size_t(2 * 24 * 24));
+    }
 
     // A ball has no edges: the feature is the ball of the mark's own size, and no face is named as not reached.
     const TriangleMesh sphere = make_sphere(10., 0.1);

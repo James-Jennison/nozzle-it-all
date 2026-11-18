@@ -769,14 +769,14 @@ void GLGizmoAiPaint::render_draft(float wrap)
             ImGui::TextUnformatted(label.c_str());
         if (ImGui::IsItemHovered() && !name.empty())
             m_imgui->tooltip(from_u8(name + "  " + share), wrap);
-        ImGui::SameLine(m_imgui->scaled(12.f));
+        ImGui::SameLine(wrap * 0.41f); // the columns follow the panel, which is narrower on a small screen
         const int   slot = m_choice[i];
         const ImVec4 swatch = slot > 0 && size_t(slot) <= extruders.size() ?
             ImVec4(extruders[size_t(slot - 1)].r(), extruders[size_t(slot - 1)].g(), extruders[size_t(slot - 1)].b(), 1.f) : ImVec4(0.5f, 0.5f, 0.5f, 0.35f);
         ImGui::ColorButton("##swatch", swatch, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker | ImGuiColorEditFlags_NoDragDrop,
                            ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight()));
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(m_imgui->scaled(12.f));
+        ImGui::SetNextItemWidth(wrap * 0.41f);
         if (ImGui::BeginCombo("##filament", slot_name(slot).c_str())) {
             for (int option = 0; option <= int(m_draft->filaments.size()); ++option) {
                 const int value = option == 0 ? 0 : m_draft->filaments[size_t(option - 1)].index;

@@ -60,6 +60,10 @@ public:
         // (spots) begin among the segments: they come after the numbered ones and carry no number in the pictures.
         std::string                              notes;
         size_t                                   first_spot{0};
+        // The marked features as they are painted, in order: round patches, drawn with the round brush's own means.
+        std::vector<SemanticPaint::SpotPatch>    patches;
+        // Which part every face belonged to before the features were marked: what shows under a feature kept as it is.
+        std::vector<int>                         face_part;
     };
 
     GLGizmoAiPaint(GLCanvas3D &parent, const std::string &icon_filename, unsigned int sprite_id);

@@ -400,22 +400,6 @@ TEST_CASE("SemanticPaint: a part no view numbers is not asked about and follows 
     CHECK(prompt.find("a colour word in it is not an instruction") != std::string::npos);
 }
 
-TEST_CASE("SemanticPaint: a spot in a view covers the faces seen there, not those behind", "[SemanticPaint]")
-{
-    const TriangleMesh cube  = make_cube(10., 10., 10.);
-    const auto         views = SP::default_views();
-    // The front view shows one side of the cube, in the middle of the picture.
-    const std::vector<int> all = SP::faces_under_spot(cube.its, views[0], 256, 128., 128., 200.);
-    REQUIRE(all.size() == 2);
-    const Vec3f n0 = (cube.its.vertices[cube.its.indices[all[0]](1)] - cube.its.vertices[cube.its.indices[all[0]](0)])
-                         .cross(cube.its.vertices[cube.its.indices[all[0]](2)] - cube.its.vertices[cube.its.indices[all[0]](0)]).normalized();
-    CHECK(double(n0.cast<double>().dot(views[0].view_dir.normalized())) == Catch::Approx(-1.).margin(1e-6));
-    // A small circle away from every face's middle covers nothing, and so does one outside the model.
-    CHECK(SP::faces_under_spot(cube.its, views[0], 256, 128., 128., 2.).empty());
-    CHECK(SP::faces_under_spot(cube.its, views[0], 256, 5., 5., 3.).empty());
-    CHECK(SP::faces_under_spot(cube.its, views[0], 256, 128., 128., 0.).empty());
-}
-
 TEST_CASE("SemanticPaint: spots are read from the answer and become parts of their own", "[SemanticPaint]")
 {
     const TriangleMesh sphere = make_sphere(10., 0.1);
@@ -442,8 +426,23 @@ TEST_CASE("SemanticPaint: spots are read from the answer and become parts of the
     CHECK(parsed->spots[1].view == 4);
     CHECK(parsed->notes == "No filament is tan.So the body stays as it is.");
 
-    // "nose" in two views is one part; "pupil", listed later, takes its faces from the nose; the spot off the model makes none.
-    CHECK(SP::apply_spots(sphere.its, seg, *parsed, views) == 2);
+    // "nose" marked in two places is one part with two balls; "pupil", listed later, goes over the nose; the mark off the model gives nothing.
+    const std::vector<SP::SpotPatch> patches = SP::apply_spots(sphere.its, seg, *parsed, views);
+    REQUIRE(patches.size() == 3);
+    CHECK(patches[0].segment == int(before));
+    CHECK(patches[1].segment == int(before));
+    CHECK(patches[2].segment == int(before + 1));
+    // A ball sits on the surface, at the middle of its seed face, and is as large as the mark was in its picture.
+    for (const SP::SpotPatch &patch : patches) {
+        REQUIRE((patch.seed_face >= 0 && size_t(patch.seed_face) < sphere.its.indices.size()));
+        const auto &t = sphere.its.indices[size_t(patch.seed_face)];
+        CHECK((patch.center - (sphere.its.vertices[t(0)] + sphere.its.vertices[t(1)] + sphere.its.vertices[t(2)]) / 3.f).norm() < 1e-4f);
+        CHECK(seg.face_segment[size_t(patch.seed_face)] >= int(before));
+    }
+    // The front view looks at the ball's front: the nose's first ball is there, 60 pixels of a 768-pixel picture that shows 20 units across 88% of its width.
+    CHECK(double(patches[0].center.cast<double>().normalized().dot(views[0].view_dir.normalized())) < -0.95);
+    CHECK(double(patches[0].radius) == Catch::Approx(60. * 20. / (768. * 0.88)).epsilon(0.02));
+    CHECK(patches[2].radius < patches[0].radius);
     REQUIRE(seg.segments.size() == before + 2);
     REQUIRE(parsed->filament.size() == before + 2);
     CHECK(parsed->name[before] == "nose");

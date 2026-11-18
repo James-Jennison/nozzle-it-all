@@ -239,7 +239,8 @@ void GLGizmoAiPaint::on_reply(const SemanticPaintReply &reply)
                                              SP::unseen_segments(m_draft->seg.segments.size(), m_draft->labelled));
     // A feature the service marked in the pictures becomes a part of its own, after the numbered ones.
     m_draft->first_spot = m_draft->seg.segments.size();
-    SP::apply_spots(m_draft->mesh, m_draft->seg, *parsed, SP::default_views(), k_view_size);
+    m_draft->face_part  = m_draft->seg.face_segment;
+    m_draft->patches    = SP::apply_spots(m_draft->mesh, m_draft->seg, *parsed, SP::default_views(), k_view_size);
     m_draft->suggested = std::move(parsed->filament);
     m_draft->suggested.resize(m_draft->seg.segments.size(), 0);
     m_draft->notes = std::move(parsed->notes);
@@ -294,7 +295,11 @@ std::vector<ModelVolume *> GLGizmoAiPaint::parts() const
 
 std::vector<int> GLGizmoAiPaint::faces(size_t *tidied) const
 {
-    std::vector<int> out = SP::face_filaments(m_draft->seg, m_choice);
+    // The parts as they were split, without the marked features: those are painted over this as round patches.
+    std::vector<int> out(m_draft->face_part.size(), 0);
+    for (size_t f = 0; f < out.size(); ++f)
+        if (const int part = m_draft->face_part[f]; part >= 0 && size_t(part) < m_choice.size())
+            out[f] = m_choice[size_t(part)];
     size_t           changed = 0;
     if (m_tidy) {
         const std::vector<int> cleaned = SP::clean_paint_boundaries(m_draft->mesh, out);
@@ -340,11 +345,30 @@ void GLGizmoAiPaint::rebuild()
         if (!volume->mmu_segmentation_facets.empty())
             selector->deserialize(volume->mmu_segmentation_facets.get_data(), false, EnforcerBlockerType(slots));
         const size_t first = m_draft->first_face[p];
+        const bool flash_part = flash && size_t(m_selected) < m_draft->first_spot;
         for (size_t f = first; f < m_draft->first_face[p + 1]; ++f) {
-            if (flash && m_draft->seg.face_segment[f] == m_selected)
+            if (flash_part && m_draft->face_part[f] == m_selected)
                 selector->set_facet(int(f - first), EnforcerBlockerType(highlight_state));
             else if (!m_show_original && face_filament[f] > 0 && size_t(face_filament[f]) <= slots)
                 selector->set_facet(int(f - first), EnforcerBlockerType(face_filament[f]));
+        }
+        // The marked features, each a round patch painted as the round brush paints: triangles are split along its
+        // edge, so the outline is a circle and not the triangles' own zigzag. In order: a later one goes over an earlier one.
+        const Transform3d to_object = volume->get_matrix();
+        Transform3d       no_move   = to_object;
+        no_move.translation()       = Vec3d::Zero();
+        for (const SP::SpotPatch &patch : m_draft->patches) {
+            if (patch.seed_face < int(first) || patch.seed_face >= int(m_draft->first_face[p + 1]) || size_t(patch.segment) >= m_choice.size())
+                continue;
+            const int  slot  = m_choice[size_t(patch.segment)];
+            const bool shown = flash && patch.segment == m_selected;
+            if (!shown && (m_show_original || slot <= 0 || size_t(slot) > slots))
+                continue;
+            const Vec3f center = (to_object.inverse() * patch.center.cast<double>()).cast<float>();
+            selector->select_patch(patch.seed_face - int(first),
+                                   std::make_unique<TriangleSelector::Sphere>(center, Vec3f(center + Vec3f::UnitZ()), patch.radius, to_object,
+                                                                              TriangleSelector::ClippingPlane()),
+                                   EnforcerBlockerType(shown ? highlight_state : size_t(slot)), no_move, true);
         }
         selector->request_update_render_data();
         m_selectors.push_back(std::move(selector));
@@ -719,10 +743,10 @@ void GLGizmoAiPaint::render_draft(float wrap)
     const size_t spots = segments.size() - std::min(m_draft->first_spot, segments.size());
     ImGui::PushTextWrapPos(wrap);
     if (spots > 0)
-        m_imgui->text(format_wxstr(_L_PLURAL("The service marked %1% feature in the pictures that is no part of its own (the row with a star). Its outline is rough: "
-                                             "finish it with the painting tools after applying.",
-                                             "The service marked %1% features in the pictures that are no parts of their own (the rows with a star). Their "
-                                             "outlines are rough: finish them with the painting tools after applying.", spots), spots));
+        m_imgui->text(format_wxstr(_L_PLURAL("The service marked %1% feature in the pictures that is no part of its own (the row with a star). It is a round "
+                                             "patch where the service pointed: adjust it with the painting tools after applying.",
+                                             "The service marked %1% features in the pictures that are no parts of their own (the rows with a star). Each "
+                                             "is a round patch where the service pointed: adjust them with the painting tools after applying.", spots), spots));
     if (!m_draft->notes.empty())
         m_imgui->text_colored(k_warning, format_wxstr(_L("The service's note: %1%"), from_u8(m_draft->notes)));
     ImGui::PopTextWrapPos();

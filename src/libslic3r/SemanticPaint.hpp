@@ -152,14 +152,24 @@ struct Suggestion
 std::optional<Suggestion> parse_suggestion(const std::string &reply_text, size_t segment_count, size_t filament_count,
                                            const std::vector<std::string> &view_names = {});
 
-// The faces a circle in a view covers: those turned towards the viewer, not hidden behind others, whose middle lies
-// inside the circle. x, y and r are in the pixels of a view rendered at `size`.
-std::vector<int> faces_under_spot(const indexed_triangle_set &its, const View &view, int size, double x, double y, double r);
+// A marked feature as it is painted: a ball around a point on the surface. What lies inside the ball and hangs
+// together with the face at its middle is the feature, so its outline is round whatever the triangles are.
+struct SpotPatch
+{
+    int   segment{-1};  // the part made for the feature, an index into Segmentation::segments
+    Vec3f center{Vec3f::Zero()};
+    float radius{0.f};
+    int   seed_face{-1}; // the face `center` lies on
+};
 
-// Makes a segment of its own for every spot in the suggestion, out of the faces under it in each view that shows it
-// (spots of one name are one segment), and gives it the spot's filament and name. The new segments come after the
-// existing ones, which lose those faces. Returns how many were made; a spot that covers no face makes none.
-size_t apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views, int size = 768);
+// Makes a part of its own for every feature marked in the suggestion. A mark is taken to the surface point under
+// its middle in its view; marks of one name that land close together are one place (the same nose seen from the
+// front and from above) and give one ball there, of their mean size; marks of one name far apart (two eyes) give
+// several balls of one part. The new parts come after the existing ones, which lose the faces inside the balls; they
+// get the mark's filament and name. Returned in the order they are to be painted: a later one goes over an earlier
+// one. A mark that lies on no surface gives nothing.
+std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views,
+                                   int size = 768);
 
 // Which segments carry a number in no view at all (1) and which in at least one (0): the first cannot be seen by
 // the model, so they are not asked about.

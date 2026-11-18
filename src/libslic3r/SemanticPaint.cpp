@@ -334,7 +334,15 @@ struct Raster
     std::vector<Vec3d> screen;
     std::vector<float> zbuf;
     std::vector<int>   idbuf;
-    double             scale{1.};
+    double             scale{1.}, cx{0.}, cy{0.};
+    int                size{0};
+
+    // The point of the model that a pixel shows, from the pixel's place and the depth kept for it.
+    Vec3d point(int px, int py) const
+    {
+        return right * ((px + 0.5 - size * 0.5) / scale + cx) + up * ((size * 0.5 - (py + 0.5)) / scale + cy) +
+               f * double(zbuf[size_t(py) * size + px]);
+    }
 };
 
 Raster rasterize(const indexed_triangle_set &its, const View &view, int size)
@@ -358,6 +366,9 @@ Raster rasterize(const indexed_triangle_set &its, const View &view, int size)
     const double scale  = (size - 2 * margin) / range;
     const double cx = 0.5 * (minx + maxx), cy = 0.5 * (miny + maxy);
     out.scale = scale;
+    out.cx    = cx;
+    out.cy    = cy;
+    out.size  = size;
     for (Vec3d &p : proj)
         p = Vec3d((p.x() - cx) * scale + size * 0.5, size * 0.5 - (p.y() - cy) * scale, p.z());
 
@@ -391,40 +402,80 @@ Raster rasterize(const indexed_triangle_set &its, const View &view, int size)
 }
 } // namespace
 
-std::vector<int> faces_under_spot(const indexed_triangle_set &its, const View &view, int size, double x, double y, double r)
+std::vector<SpotPatch> apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views, int size)
 {
-    std::vector<int> out, turned_away; // the second for a mesh whose faces are wound the other way round
-    if (its.indices.empty() || size <= 0 || !(r > 0.))
-        return out;
-    const Raster raster = rasterize(its, view, size);
-    // A face counts as seen when its middle is no further behind the nearest surface at its pixel than a few pixels' worth of depth.
-    const double behind = 3. / raster.scale;
-    for (size_t t = 0; t < its.indices.size(); ++t) {
-        const Vec3d &a = raster.screen[its.indices[t](0)], &b = raster.screen[its.indices[t](1)], &c = raster.screen[its.indices[t](2)];
-        const Vec3d  m = (a + b + c) / 3.;
-        if ((m.x() - x) * (m.x() - x) + (m.y() - y) * (m.y() - y) > r * r)
-            continue;
-        const Vec3d n = ((its.vertices[its.indices[t](1)] - its.vertices[its.indices[t](0)]).cast<double>())
-                            .cross((its.vertices[its.indices[t](2)] - its.vertices[its.indices[t](0)]).cast<double>());
-        const int px = int(std::floor(m.x())), py = int(std::floor(m.y()));
-        if (px < 0 || py < 0 || px >= size || py >= size)
-            continue;
-        if (m.z() <= double(raster.zbuf[size_t(py) * size + px]) + behind)
-            (n.dot(raster.f) < 0. ? out : turned_away).push_back(int(t));
-    }
-    return out.empty() ? turned_away : out;
-}
+    std::vector<SpotPatch> patches;
+    if (seg.face_segment.size() != its.indices.size() || suggestion.spots.empty() || size <= 0)
+        return patches;
 
-size_t apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestion &suggestion, const std::vector<View> &views, int size)
-{
-    if (seg.face_segment.size() != its.indices.size() || suggestion.spots.empty())
-        return 0;
-    std::vector<double> area(its.indices.size(), 0.);
+    // Where each mark lands on the surface, and how large it is there.
+    struct Place
+    {
+        std::string name;
+        Vec3d       point{Vec3d::Zero()};
+        double      radius{0.};
+        int         filament{0};
+        int         count{1};
+    };
+    std::vector<Place>                 places; // one per ball, in the order first marked
+    std::map<int, Raster>              rasters;
+    for (const Spot &spot : suggestion.spots) {
+        if (spot.view < 0 || size_t(spot.view) >= views.size() || spot.filament <= 0 || !(spot.r > 0.))
+            continue;
+        auto found = rasters.find(spot.view);
+        if (found == rasters.end())
+            found = rasters.emplace(spot.view, rasterize(its, views[size_t(spot.view)], size)).first;
+        const Raster &raster = found->second;
+        // The pixel under the mark's middle, or the nearest one inside the mark that shows the model.
+        int    hit_x = -1, hit_y = -1;
+        double best  = spot.r * spot.r;
+        const int reach = int(std::ceil(spot.r));
+        for (int dy = -reach; dy <= reach; ++dy)
+            for (int dx = -reach; dx <= reach; ++dx) {
+                const int px = int(std::floor(spot.x)) + dx, py = int(std::floor(spot.y)) + dy;
+                if (px < 0 || py < 0 || px >= size || py >= size || raster.idbuf[size_t(py) * size + px] < 0)
+                    continue;
+                const double d = double(dx) * dx + double(dy) * dy;
+                if (d <= best && (hit_x < 0 || d < best)) {
+                    best  = d;
+                    hit_x = px;
+                    hit_y = py;
+                }
+            }
+        if (hit_x < 0)
+            continue;
+        const Vec3d  point  = raster.point(hit_x, hit_y);
+        const double radius = spot.r / raster.scale;
+        // The same feature seen in another view lands close by: one place, at the mean.
+        Place *same = nullptr;
+        for (Place &place : places)
+            if (place.name == spot.name && (place.point - point).norm() < 1.5 * std::max(place.radius, radius)) {
+                same = &place;
+                break;
+            }
+        if (same != nullptr) {
+            same->point  = (same->point * same->count + point) / double(same->count + 1);
+            same->radius = (same->radius * same->count + radius) / double(same->count + 1);
+            ++same->count;
+        } else
+            places.push_back({spot.name, point, radius, spot.filament, 1});
+    }
+    if (places.empty())
+        return patches;
+
+    const size_t        faces = its.indices.size();
+    std::vector<Vec3d>  middle(faces);
+    std::vector<double> area(faces, 0.);
     double              total = 0.;
-    for (size_t t = 0; t < its.indices.size(); ++t) {
-        area[t] = 0.5 * ((its.vertices[its.indices[t](1)] - its.vertices[its.indices[t](0)]).cast<double>())
-                            .cross((its.vertices[its.indices[t](2)] - its.vertices[its.indices[t](0)]).cast<double>()).norm();
+    std::vector<std::vector<int>> at_vertex(its.vertices.size());
+    for (size_t t = 0; t < faces; ++t) {
+        const Vec3d a = its.vertices[its.indices[t](0)].cast<double>(), b = its.vertices[its.indices[t](1)].cast<double>(),
+                    c = its.vertices[its.indices[t](2)].cast<double>();
+        middle[t] = (a + b + c) / 3.;
+        area[t]   = 0.5 * (b - a).cross(c - a).norm();
         total += area[t];
+        for (int k = 0; k < 3; ++k)
+            at_vertex[size_t(its.indices[t](k))].push_back(int(t));
     }
     int next_id = 0;
     for (const Segment &s : seg.segments)
@@ -433,47 +484,64 @@ size_t apply_spots(const indexed_triangle_set &its, Segmentation &seg, Suggestio
     suggestion.name.resize(seg.segments.size());
     suggestion.unsure.resize(seg.segments.size(), 0);
 
-    size_t                     made = 0;
-    std::vector<std::string>   names;   // of the segments made, in order
-    std::vector<size_t>        indices; // their places in seg.segments
-    for (const Spot &spot : suggestion.spots) {
-        if (spot.view < 0 || size_t(spot.view) >= views.size() || spot.filament <= 0)
-            continue;
-        const std::vector<int> faces = faces_under_spot(its, views[size_t(spot.view)], size, spot.x, spot.y, spot.r);
-        if (faces.empty())
-            continue;
-        size_t at = 0;
-        const auto known = std::find(names.begin(), names.end(), spot.name);
-        if (known != names.end())
-            at = indices[size_t(known - names.begin())];
-        else {
-            Segment s;
-            s.id = next_id++;
-            at   = seg.segments.size();
-            seg.segments.push_back(s);
-            suggestion.filament.push_back(spot.filament);
-            suggestion.name.push_back(spot.name);
-            suggestion.unsure.push_back(0);
-            names.push_back(spot.name);
-            indices.push_back(at);
-            ++made;
+    std::map<std::string, int> part_of; // the part made for a name
+    std::vector<char>          seen(faces, 0);
+    for (const Place &place : places) {
+        // The ball sits on the surface: at the middle of the face nearest to where the marks landed.
+        size_t seed = 0;
+        double best = std::numeric_limits<double>::max();
+        for (size_t t = 0; t < faces; ++t) {
+            const double d = (middle[t] - place.point).squaredNorm();
+            if (d < best) {
+                best = d;
+                seed = t;
+            }
         }
-        for (const int t : faces)
-            seg.face_segment[size_t(t)] = int(at);
+        auto known = part_of.find(place.name);
+        if (known == part_of.end()) {
+            Segment s;
+            s.id  = next_id++;
+            known = part_of.emplace(place.name, int(seg.segments.size())).first;
+            seg.segments.push_back(s);
+            suggestion.filament.push_back(place.filament);
+            suggestion.name.push_back(place.name);
+            suggestion.unsure.push_back(0);
+        }
+        SpotPatch patch;
+        patch.segment   = known->second;
+        patch.center    = middle[seed].cast<float>();
+        patch.radius    = float(place.radius);
+        patch.seed_face = int(seed);
+        // Its faces: those within the ball that hang together with the seed, so that a ball never reaches through to another side.
+        std::fill(seen.begin(), seen.end(), 0);
+        std::vector<int> queue{int(seed)};
+        seen[seed] = 1;
+        while (!queue.empty()) {
+            const int t = queue.back();
+            queue.pop_back();
+            seg.face_segment[size_t(t)] = patch.segment;
+            for (int k = 0; k < 3; ++k)
+                for (const int other : at_vertex[size_t(its.indices[size_t(t)](k))])
+                    if (!seen[size_t(other)] && (middle[size_t(other)] - middle[seed]).norm() <= place.radius) {
+                        seen[size_t(other)] = 1;
+                        queue.push_back(other);
+                    }
+        }
+        patches.push_back(patch);
     }
-    // What the list shows of a spot is its share of the surface.
-    for (const size_t at : indices) {
-        Segment &s = seg.segments[at];
+    // What the list shows of a marked feature is its share of the surface.
+    for (const auto &[name, at] : part_of) {
+        Segment &s = seg.segments[size_t(at)];
         s.faces = 0;
         s.area  = 0.;
-        for (size_t t = 0; t < seg.face_segment.size(); ++t)
-            if (seg.face_segment[t] == int(at)) {
+        for (size_t t = 0; t < faces; ++t)
+            if (seg.face_segment[t] == at) {
                 ++s.faces;
                 s.area += area[t];
             }
         s.area_fraction = total > 0. ? s.area / total : 0.;
     }
-    return made;
+    return patches;
 }
 
 Image render_view(const indexed_triangle_set &its, const Segmentation &seg, const View &view, int size, std::vector<int> *labelled)

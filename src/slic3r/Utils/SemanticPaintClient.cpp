@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <system_error>
 #include <thread>
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -97,30 +98,39 @@ SemanticPaintReply run_command(const SemanticPaintSettings &s, const std::string
         cmd += " --model " + quote(s.model);
 
     try {
+        // The command runs in a group of its own: the shell usually starts the real program as a child of its own, and
+        // stopping only the shell would leave that program running, and asking its service, with nobody to read the answer.
+        process::group group;
+        const auto     stop = [&group](process::child &child) {
+            std::error_code ec;
+            group.terminate(ec);
+            child.wait(ec);
+        };
 #ifdef _WIN32
         const char *comspec = std::getenv("COMSPEC");
         const std::string shell = comspec ? comspec : "cmd.exe";
         process::child child(shell, process::args({"/c", cmd}), process::std_in < in_file, process::std_out > out_file,
-                             process::std_err > err_file, process::start_dir(tmp.path.string()));
+                             process::std_err > err_file, process::start_dir(tmp.path.string()), group);
 #else
         process::child child(process::search_path("sh"), process::args({"-c", cmd}), process::std_in < in_file, process::std_out > out_file,
-                             process::std_err > err_file, process::start_dir(tmp.path.string()));
+                             process::std_err > err_file, process::start_dir(tmp.path.string()), group);
 #endif
         const auto start = std::chrono::steady_clock::now();
         while (child.running()) {
             if (cancel && cancel->load()) {
-                child.terminate();
+                stop(child);
                 out.error = "Cancelled.";
                 return out;
             }
             if (std::chrono::steady_clock::now() - start > std::chrono::seconds(kTimeoutSeconds)) {
-                child.terminate();
+                stop(child);
                 out.error = "The command did not answer in time.";
                 return out;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         child.wait();
+        group.detach();
         const std::string body = read_file(out_file);
         out.text = SemanticPaint::command_reply_text(body);
         if (child.exit_code() != 0 || out.text.find_first_not_of(" \t\r\n") == std::string::npos) {

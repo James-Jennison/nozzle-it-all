@@ -8,22 +8,44 @@ Nozzle It All Desktop is an independent fork of [OrcaSlicer](https://github.com/
 
 ## What it adds to OrcaSlicer
 
-- **A checked send for the Snapmaker U1.** The printer is read before a print is sent, the uploaded file is read back and compared, and each print is started once. A Start whose answer is lost is never repeated; the printer's own state settles what happened.
-- **One Printer tab** with a live monitor, the printer's own web interface, the history of the jobs sent from the app, and a list of every printer with an address.
+**Sending a print**
+
+- **A checked send.** The printer is read before a print is sent, the uploaded file is read back and compared, and each print is started once. A Start whose answer is lost is never repeated; the printer's own state settles what happened. This works for the Snapmaker U1 and for the Elegoo Centauri Carbon running COSMOS.
+- **One print to several printers**, with the same check for each.
+- **A queue of prints** that you release one at a time. Nothing in it starts on its own.
+
+**Printers**
+
+- **One Printer tab** with a live monitor, the printer's own web interface, and the history of the jobs sent from the app.
+- **A Printers view** of every saved printer with its state and live camera. Opening a printer there only shows it; it does not change the printer you are slicing for.
+- **Adding a printer** from a search of your own network.
 - **Printer controls that ask before they move or heat**, and a Resume that reads the printer first.
-- **A filament sync with a review step**: you choose which toolhead or slot each project filament takes before anything in the project changes. It reads a Snapmaker U1's toolheads, and the lanes of an AFC filament changer such as a CANVAS on COSMOS.
+- **A notice** when a print ends or pauses.
 - **Job history** kept apart from your own verdict on each print, with printing a job again as a new job.
+
+**Filament**
+
+- **A filament sync with a review step**: you choose which toolhead or slot each project filament takes before anything in the project changes. It reads a Snapmaker U1's toolheads, and the lanes of an AFC filament changer such as a CANVAS on COSMOS.
+- **A search of the 3dfilamentprofiles.com catalogue**, with your own key.
+- **A memory of the preset you chose for a tagged spool**, as the printer's own reader reports it.
+- **A list of your spools** with an estimate of what is left on each.
+
+**Models and profiles**
+
+- **AI auto-paint**: a draft of colours for a model, made by an AI service that you set up yourself in Preferences (a command on your computer, or a server that speaks the OpenAI protocol). You see the pictures and the question before they are sent, and the draft is yours to keep, change or discard. No service is contacted unless you set one up and press Send.
 - **Profiles for the Elegoo Centauri Carbon running COSMOS**, with and without a CANVAS driven by AFC.
 - **Importing a preset bundle from a link.**
 
-Everything else, including slicing, profiles for other printers and the Prepare and Preview tabs, is OrcaSlicer's.
+Everything else, including slicing, profiles for other printers and the Prepare and Preview tabs, is OrcaSlicer's. OrcaSlicer's cloud account and its links to the Orca wiki are hidden in this build.
+
+In development: more AI assistance, model discovery, and a phone companion.
 
 ## Printers
 
 | Printer | What works here |
 |---|---|
 | Snapmaker U1 | Checked send, monitor, controls, history, filament sync |
-| Elegoo Centauri Carbon on COSMOS | Profiles, upload, monitor, filament sync from a CANVAS |
+| Elegoo Centauri Carbon on COSMOS | Profiles, checked send, monitor, controls, filament sync from a CANVAS |
 | Other Klipper (Moonraker) printers | Monitor and controls as far as the printer reports them; OrcaSlicer's upload |
 | Everything else OrcaSlicer supports | As in OrcaSlicer |
 

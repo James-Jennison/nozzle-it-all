@@ -38,8 +38,6 @@ Nozzle It All Desktop is an independent fork of [OrcaSlicer](https://github.com/
 
 Everything else, including slicing, profiles for other printers and the Prepare and Preview tabs, is OrcaSlicer's. OrcaSlicer's cloud account and its links to the Orca wiki are hidden in this build.
 
-In development: more AI assistance, model discovery, and a phone companion.
-
 ## Printers
 
 | Printer | What works here |
@@ -48,6 +46,27 @@ In development: more AI assistance, model discovery, and a phone companion.
 | Elegoo Centauri Carbon on COSMOS | Profiles, checked send, monitor, controls, filament sync from a CANVAS |
 | Other Klipper (Moonraker) printers | Monitor and controls as far as the printer reports them; OrcaSlicer's upload |
 | Everything else OrcaSlicer supports | As in OrcaSlicer |
+
+## To be added
+
+Planned and not in the source yet. There are no dates, and nothing here is promised for a particular build.
+
+**Before the first release**
+
+- **The rest of the slicer list**: the Care view, exchange with other slicers with a statement of what is lost on import, first-launch choices, a text size setting from 100% to 200%, and a project library with search, trash and revisions.
+- **Models from a description or from pictures**, made by Meshy with your own key, with the cost shown before anything is sent and a history of what was generated.
+- **AI assistance**: settings advice and failure diagnosis that run on your own computer, then settings search, slice comparison, print-time tradeoffs, orientation and support comparison, a print notebook, and a first-layer photo review. AI is never in the way: everything works without it.
+- **Windows**, held to the same checks as Linux.
+
+**After the first release**
+
+- **Model discovery**, with MyMiniFactory as a model source.
+- **Environment monitoring**: optional sensors, rooms and history, as warnings only.
+- **Tippy**, an animated assistant you can switch on.
+- **Discord**: a private, read-only view of what is printing, then webhooks you opt into.
+- **A phone companion and NIA Web**, through a connector. The desktop works fully without them.
+- **Guided maintenance**: step-by-step care and repair guides for each printer.
+- **Precision CAD**: looking at whether an AI service can drive OrcaSlicer's own Design tab to make dimensioned parts. It is built only if a measurement shows it works well enough.
 
 ## Building
 
